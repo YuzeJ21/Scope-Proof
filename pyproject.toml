@@ -24,7 +24,7 @@ packages = ["scopeproof_core", "apps"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers"
+addopts = "--strict-markers --import-mode=importlib"
 markers = ["live: opt-in test that calls public GitHub"]
 
 [tool.ruff]
