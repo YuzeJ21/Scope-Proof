@@ -1,0 +1,1 @@
+{"repository":"scopeproof/bench","pr_number":104,"title":"Export CSV","html_url":"https://github.com/scopeproof/bench/pull/104","base_sha":"base-error","head_sha":"head-error-001","check_state":"passing","fetched_at":"2026-07-11T12:00:00Z","files":[{"path":"src/export.py","status":"modified","lines":[{"change_type":"added","line_number":10,"content":"def export_csv(rows):"}]}]}
