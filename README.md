@@ -183,3 +183,5 @@ Large or truncated diffs are labeled partial and force human review. Missing Git
 ## Product status
 
 This is a public-repository MVP for validating the requirement-to-evidence workflow. The next product decision should be based on repeat use with real pull requests and confirmed gaps found before merge—not the number of files scanned or comments generated.
+
+For safe public-alpha operations, see the [public PR dogfood protocol](docs/dogfood/public-pr-protocol.md) and the [60-second demo script](docs/launch/demo-script.md). The protocol distinguishes deliberately constructed demos, technical smokes, and confirmed dogfood reviews so launch material does not overclaim validation.
