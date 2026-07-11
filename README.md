@@ -180,6 +180,10 @@ The application does not persist credentials or execute repository code. Review 
 
 Large or truncated diffs are labeled partial and force human review. Missing GitHub checks are represented as unavailable, never passing. A parser or retrieval failure must fail safely rather than produce Ready.
 
+The [privacy-readiness design](docs/privacy-readiness.md) documents current
+local-only retention, deletion responsibility, fork protection, and the future
+read-only private-repository boundary. It does not claim private support exists.
+
 ## Product status
 
 This is a public-repository MVP for validating the requirement-to-evidence workflow. The next product decision should be based on repeat use with real pull requests and confirmed gaps found before merge—not the number of files scanned or comments generated.
