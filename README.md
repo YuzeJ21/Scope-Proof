@@ -72,6 +72,18 @@ The five review steps are:
 4. Criterion Detail and human resolution.
 5. Summary and Markdown, JSON, or CSV export.
 
+### Durable local review workflow
+
+The workbench keeps criteria revisions and append-only resolution history. Adding, removing,
+splitting, reordering, or editing criteria invalidates the previous analysis and requires explicit
+reconfirmation before another review run. Human decisions and final acceptance are recorded as
+history rather than silently replacing earlier decisions.
+
+Use **Local review storage folder** to save a versioned JSON record, then reopen it by review ID.
+Records preserve the review SHAs, criteria revisions, evidence, findings, resolution history, and
+gate decision. They never contain the optional GitHub token. A reopened review reports a changed
+head SHA rather than silently reusing old evidence.
+
 ## Deliberately constructed demo
 
 The bundled CSV export case is a deliberately constructed demo, not a real incident. Its PR-shaped fixture implements CSV export, one active filter, and a happy-path test. It intentionally omits another filter, the error state, and the `research_exported` event.
@@ -102,7 +114,11 @@ Run the labeled regression benchmark:
 python -m scopeproof_core.evals.runner
 ```
 
-The benchmark prints False Ready, False Blocker, mismatch, and declared scenario-coverage information. It exits nonzero when a known must-have False Ready or label mismatch is present.
+The benchmark executes 12 executable benchmark cases, rather than treating a static category list
+as coverage. It reports executed case and criterion counts, False Ready, False Blocker,
+case-level mismatches, immutable evidence-link errors, and unexecuted required categories. It exits
+nonzero when a known must-have False Ready, label mismatch, evidence-link error, or unexecuted
+category is present.
 
 Run the opt-in live public GitHub smoke test:
 
@@ -137,6 +153,11 @@ Markdown / JSON / CSV
 `scopeproof_core` contains Pydantic contracts, ingestion, retrieval, verification, gates, reporting, fixtures, and evaluation. It has no Streamlit dependency. `apps/web/app.py` is a thin local interface over those core services.
 
 Every evidence item contains a file, line, immutable head SHA, GitHub permalink, excerpt, matching rule, relevance reason, deterministic score, and limitations. Deleted lines cannot become current implementation evidence. Partial ingestion cannot produce Ready.
+
+GitHub file and commit ingestion follows pagination and has explicit file, patch, and total-diff
+limits. ScopeProof can also inspect a bounded unchanged candidate file when a caller explicitly
+justifies it. This evidence is labeled `unchanged_candidate`, anchored to the head SHA, and never
+means that the repository was scanned broadly.
 
 ## Repository layout
 

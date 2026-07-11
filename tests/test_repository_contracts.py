@@ -38,3 +38,13 @@ def test_readme_documents_operating_commands() -> None:
     assert "streamlit run apps/web/app.py" in readme
     assert "RUN_LIVE_GITHUB_TESTS=1" in readme
     assert "scopeproof_core.evals.runner" in readme
+
+
+def test_readme_documents_actual_stage_2a_durability_behavior() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "12 executable benchmark cases" in readme
+    assert "criteria revisions" in readme
+    assert "resolution history" in readme
+    assert "Local review storage" in readme
+    assert "unchanged candidate" in readme
