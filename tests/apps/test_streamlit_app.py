@@ -85,3 +85,25 @@ def test_final_acceptance_control_is_visible_only_after_analysis() -> None:
     app = app.button(key="run_analysis").click().run()
 
     assert app.button(key="record_final_acceptance").disabled is False
+
+
+def test_criteria_can_be_added_and_removed_before_reconfirmation() -> None:
+    app = load_demo(new_app())
+    app = app.text_input(key="new_criterion_text").set_value("Document export format").run()
+    app = app.button(key="add_criterion_ui").click().run()
+
+    assert len(app.session_state["criteria"]) == 5
+    assert app.session_state["criteria"][-1].criterion_id == "AC-05"
+    assert app.session_state["criteria_confirmed"] is False
+
+    app = app.button(key="remove_AC-05").click().run()
+    assert len(app.session_state["criteria"]) == 4
+
+
+def test_evidence_matrix_exposes_status_and_priority_filters() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    assert app.multiselect(key="status_filter").value == []
+    assert app.multiselect(key="priority_filter").value == []

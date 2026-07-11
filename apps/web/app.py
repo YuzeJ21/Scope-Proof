@@ -6,7 +6,13 @@ from pathlib import Path
 
 import streamlit as st
 
-from scopeproof_core.criteria.service import parse_criteria, validate_criteria
+from scopeproof_core.criteria.service import (
+    add_criterion,
+    parse_criteria,
+    remove_criterion,
+    reorder_criteria,
+    validate_criteria,
+)
 from scopeproof_core.demo import load_demo_labels, load_demo_snapshot
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
@@ -185,9 +191,19 @@ criteria: list[Criterion] = st.session_state["criteria"]
 if not criteria:
     st.info("Load the demo or prepare at least one criterion to continue.")
 else:
+    new_criterion_text = st.text_input("Add criterion", key="new_criterion_text")
+    if st.button(
+        "Add criterion",
+        key="add_criterion_ui",
+        disabled=not new_criterion_text.strip(),
+    ):
+        st.session_state["criteria"] = add_criterion(criteria, new_criterion_text)
+        _reset_analysis()
+        st.success("Criterion added. Confirm the updated set before analysis.")
+        st.rerun()
     edited_criteria: list[Criterion] = []
-    for criterion in criteria:
-        text_column, priority_column, level_column = st.columns([5, 2, 2])
+    for position, criterion in enumerate(criteria):
+        text_column, priority_column, level_column, actions_column = st.columns([5, 2, 2, 2])
         with text_column:
             edited_text = st.text_input(
                 criterion.criterion_id,
@@ -211,6 +227,19 @@ else:
                 ),
                 key=f"criterion_level_{criterion.criterion_id}",
             )
+        with actions_column:
+            if st.button("Remove", key=f"remove_{criterion.criterion_id}"):
+                st.session_state["criteria"] = remove_criterion(criteria, criterion.criterion_id)
+                _reset_analysis()
+                st.success("Criterion removed. Confirm the updated set before analysis.")
+                st.rerun()
+            if position > 0 and st.button("Move up", key=f"move_up_{criterion.criterion_id}"):
+                order = [item.criterion_id for item in criteria]
+                order[position - 1], order[position] = order[position], order[position - 1]
+                st.session_state["criteria"] = reorder_criteria(criteria, order)
+                _reset_analysis()
+                st.success("Criterion order changed. Confirm the updated set before analysis.")
+                st.rerun()
         edited_criteria.append(
             Criterion(
                 criterion_id=criterion.criterion_id,
@@ -263,9 +292,25 @@ if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
 else:
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
+    status_filter = st.multiselect(
+        "Filter status",
+        options=["evidence_found", "partial", "missing", "needs_review"],
+        format_func=_status_label,
+        key="status_filter",
+    )
+    priority_filter = st.multiselect(
+        "Filter priority",
+        options=list(Priority),
+        format_func=lambda item: _status_label(item.value),
+        key="priority_filter",
+    )
     matrix = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
+        if status_filter and finding.status.value not in status_filter:
+            continue
+        if priority_filter and criterion.priority not in priority_filter:
+            continue
         matrix.append(
             {
                 "Criterion": criterion.criterion_id,
