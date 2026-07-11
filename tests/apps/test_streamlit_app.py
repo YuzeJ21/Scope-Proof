@@ -120,3 +120,16 @@ def test_compound_criterion_can_be_split_in_workbench() -> None:
         ("AC-01", "Export CSV"),
         ("AC-02", "Record analytics"),
     ]
+
+
+def test_human_decision_and_final_acceptance_append_history() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    app = app.button(key="save_resolution").click().run()
+    app = app.button(key="record_final_acceptance").click().run()
+
+    state = app.session_state["review_state"]
+    assert len(state.resolution_events) == 2
+    assert state.review.final_acceptance is True
+    assert "Resolution history" in "\n".join(markdown.value for markdown in app.markdown)
