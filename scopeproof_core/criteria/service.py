@@ -54,3 +54,51 @@ def validate_criteria(criteria: list[Criterion]) -> list[CriterionWarning]:
                 )
             )
     return warnings
+
+
+def _next_identifier(criteria: list[Criterion]) -> str:
+    highest = max((int(item.criterion_id.removeprefix("AC-")) for item in criteria), default=0)
+    return f"AC-{highest + 1:02d}"
+
+
+def add_criterion(criteria: list[Criterion], text: str) -> list[Criterion]:
+    """Append a user-authored criterion without renumbering existing audit IDs."""
+    return [*criteria, Criterion(criterion_id=_next_identifier(criteria), text=text)]
+
+
+def remove_criterion(criteria: list[Criterion], criterion_id: str) -> list[Criterion]:
+    """Remove one criterion while preserving every other stable identifier."""
+    updated = [item for item in criteria if item.criterion_id != criterion_id]
+    if len(updated) == len(criteria):
+        raise ValueError(f"Unknown criterion {criterion_id}")
+    return updated
+
+
+def split_criterion(
+    criteria: list[Criterion], criterion_id: str, texts: list[str]
+) -> list[Criterion]:
+    """Keep the original ID for the first split and assign new IDs to later parts."""
+    if len(texts) < 2 or any(not text.strip() for text in texts):
+        raise ValueError("splitting requires at least two non-empty criterion texts")
+    target_index = next(
+        (index for index, item in enumerate(criteria) if item.criterion_id == criterion_id), None
+    )
+    if target_index is None:
+        raise ValueError(f"Unknown criterion {criterion_id}")
+    original = criteria[target_index]
+    replacement = [original.model_copy(update={"text": texts[0].strip()})]
+    working = [*criteria]
+    for text in texts[1:]:
+        identifier = _next_identifier(working + replacement)
+        replacement.append(
+            original.model_copy(update={"criterion_id": identifier, "text": text.strip()})
+        )
+    return [*criteria[:target_index], *replacement, *criteria[target_index + 1 :]]
+
+
+def reorder_criteria(criteria: list[Criterion], ordered_ids: list[str]) -> list[Criterion]:
+    """Apply an explicit complete order so accidental drops cannot be hidden."""
+    existing = {item.criterion_id: item for item in criteria}
+    if len(ordered_ids) != len(criteria) or set(ordered_ids) != set(existing):
+        raise ValueError("ordered_ids must contain every criterion identifier exactly once")
+    return [existing[criterion_id] for criterion_id in ordered_ids]
