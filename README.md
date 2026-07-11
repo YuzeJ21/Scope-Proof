@@ -193,3 +193,12 @@ starter workflow. It is non-blocking by default, needs an explicit checked-in
 requirements file, never uses `pull_request_target`, and makes no GitHub write
 request. Its fork-safe, idempotent publication plan is tested locally before a
 separate publication adapter can be considered.
+
+## Explicit local Definition-of-Done packs
+
+`scopeproof_core.rule_packs` offers opt-in local prompts for error, loading,
+empty, analytics, authorization, API documentation, and migration coverage.
+They are never inferred or added to a review automatically. Each is labelled
+`Implicit local rule` and has an `implicit_rule_pack` source so it cannot
+masquerade as a user-confirmed source requirement; a reviewer must explicitly
+include and confirm it before analysis.

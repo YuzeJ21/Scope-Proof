@@ -30,6 +30,13 @@ class CriterionType(StringEnum):
     NON_FUNCTIONAL = "non_functional"
 
 
+class CriterionSource(StringEnum):
+    """Whether a criterion came from the user or an explicit local rule pack."""
+
+    USER_CONFIRMED = "user_confirmed"
+    IMPLICIT_RULE_PACK = "implicit_rule_pack"
+
+
 class EvidenceType(StringEnum):
     IMPLEMENTATION = "implementation"
     TEST = "test"
@@ -114,6 +121,7 @@ class Criterion(BaseModel):
     text: str = Field(min_length=1)
     priority: Priority = Priority.MUST_HAVE
     criterion_type: CriterionType = CriterionType.BEHAVIOR
+    criterion_source: CriterionSource = CriterionSource.USER_CONFIRMED
     source_span: str | None = None
     required_evidence_level: EvidenceLevel = EvidenceLevel.E1
 
