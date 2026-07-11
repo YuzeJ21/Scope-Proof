@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import re
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 import httpx
@@ -16,6 +18,7 @@ from scopeproof_core.schemas.models import (
     IngestionState,
     LineChangeType,
     PullRequestSnapshot,
+    RetrievedFile,
 )
 
 _PR_PATH = re.compile(r"^/([^/]+)/([^/]+)/pull/(\d+)/?$")
@@ -120,6 +123,8 @@ class GitHubClient:
         max_files: int = 100,
         max_patch_bytes: int = 200_000,
         max_total_diff_bytes: int = 1_000_000,
+        max_candidate_files: int = 8,
+        max_candidate_bytes: int = 200_000,
         timeout_seconds: float = 15.0,
     ) -> None:
         headers = {
@@ -138,6 +143,8 @@ class GitHubClient:
         self.max_files = max_files
         self.max_patch_bytes = max_patch_bytes
         self.max_total_diff_bytes = max_total_diff_bytes
+        self.max_candidate_files = max_candidate_files
+        self.max_candidate_bytes = max_candidate_bytes
         self.last_request_authorized = "Authorization" in headers
 
     def _get(self, path: str) -> httpx.Response:
@@ -163,6 +170,58 @@ class GitHubClient:
         except httpx.HTTPStatusError as error:
             raise GitHubIngestionError(f"GitHub returned HTTP {response.status_code}.") from error
 
+    def _get_all(self, path: str) -> list[dict]:
+        """Follow GitHub pagination while retaining normal HTTP error handling."""
+        response = self._get(path)
+        self._raise_for_pr(response)
+        items = list(response.json())
+        while next_link := response.links.get("next", {}).get("url"):
+            response = self._get(next_link)
+            self._raise_for_pr(response)
+            items.extend(response.json())
+        return items
+
+    @staticmethod
+    def _validate_candidate_path(path: str) -> str:
+        candidate = PurePosixPath(path)
+        if candidate.is_absolute() or ".." in candidate.parts or path != candidate.as_posix():
+            raise ValueError("candidate paths must be repository-relative paths")
+        return path
+
+    def fetch_candidate_files(
+        self, repository: str, head_sha: str, paths: list[str]
+    ) -> list[RetrievedFile]:
+        """Read a small justified set of unchanged files without scanning the repository."""
+        if not re.fullmatch(r"[^/]+/[^/]+", repository):
+            raise ValueError("repository must be owner/name")
+        if len(paths) > self.max_candidate_files:
+            raise DiffLimitExceeded("Candidate file count exceeds the configured safety limit.")
+        total_bytes = 0
+        candidates: list[RetrievedFile] = []
+        for path in paths:
+            path = self._validate_candidate_path(path)
+            response = self._get(f"/repos/{repository}/contents/{path}?ref={head_sha}")
+            self._raise_for_pr(response)
+            payload = response.json()
+            if payload.get("type") != "file" or payload.get("encoding") != "base64":
+                raise GitHubIngestionError(f"Candidate {path} is not a readable text file.")
+            try:
+                content = base64.b64decode(payload.get("content", "")).decode("utf-8")
+            except (UnicodeDecodeError, ValueError) as error:
+                raise GitHubIngestionError(f"Candidate {path} is not UTF-8 text.") from error
+            total_bytes += len(content.encode("utf-8"))
+            if total_bytes > self.max_candidate_bytes:
+                raise DiffLimitExceeded("Candidate file bytes exceed the configured safety limit.")
+            candidates.append(
+                RetrievedFile(
+                    path=path,
+                    content=content,
+                    commit_sha=head_sha,
+                    retrieval_reason=f"Requested bounded unchanged candidate: {path}",
+                )
+            )
+        return candidates
+
     @staticmethod
     def _check_state(check_runs: dict, commit_status: dict) -> CheckState:
         runs = check_runs.get("check_runs", [])
@@ -184,11 +243,8 @@ class GitHubClient:
         self._raise_for_pr(pr_response)
         pr_data = pr_response.json()
 
-        files_response = self._get(f"{root}/pulls/{pr_number}/files?per_page=100")
-        self._raise_for_pr(files_response)
-        raw_files = files_response.json()
-        commits_response = self._get(f"{root}/pulls/{pr_number}/commits?per_page=100")
-        self._raise_for_pr(commits_response)
+        raw_files = self._get_all(f"{root}/pulls/{pr_number}/files?per_page=100")
+        raw_commits = self._get_all(f"{root}/pulls/{pr_number}/commits?per_page=100")
 
         head_sha = pr_data["head"]["sha"]
         check_response = self._get(f"{root}/commits/{head_sha}/check-runs")
@@ -243,7 +299,7 @@ class GitHubClient:
                 message=item.get("commit", {}).get("message", ""),
                 html_url=item.get("html_url", ""),
             )
-            for item in commits_response.json()
+            for item in raw_commits
         ]
         return PullRequestSnapshot(
             repository=f"{owner}/{repository}",

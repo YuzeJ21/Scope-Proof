@@ -40,6 +40,11 @@ class EvidenceType(StringEnum):
     HUMAN = "human"
 
 
+class EvidenceSourceScope(StringEnum):
+    CHANGED_FILE = "changed_file"
+    UNCHANGED_CANDIDATE = "unchanged_candidate"
+
+
 class EvidenceLevel(StringEnum):
     E0 = "E0"
     E1 = "E1"
@@ -152,6 +157,16 @@ class CommitInfo(BaseModel):
     html_url: str
 
 
+class RetrievedFile(BaseModel):
+    """A bounded unchanged-file candidate fetched at one immutable commit SHA."""
+
+    path: str = Field(min_length=1)
+    content: str
+    commit_sha: str = Field(min_length=1)
+    retrieval_reason: str = Field(min_length=1)
+    source_scope: EvidenceSourceScope = EvidenceSourceScope.UNCHANGED_CANDIDATE
+
+
 class PullRequestSnapshot(BaseModel):
     repository: str = Field(pattern=r"^[^/]+/[^/]+$")
     pr_number: int = Field(gt=0)
@@ -196,6 +211,7 @@ class EvidenceItem(BaseModel):
     criterion_id: str
     evidence_type: EvidenceType
     evidence_level: EvidenceLevel
+    source_scope: EvidenceSourceScope = EvidenceSourceScope.CHANGED_FILE
     file_path: str = Field(min_length=1)
     line_start: int = Field(ge=1)
     line_end: int = Field(ge=1)

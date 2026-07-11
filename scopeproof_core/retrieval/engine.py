@@ -7,12 +7,15 @@ from pathlib import PurePosixPath
 
 from scopeproof_core.schemas.models import (
     ChangedFile,
+    ChangedLine,
     Criterion,
     EvidenceItem,
     EvidenceLevel,
+    EvidenceSourceScope,
     EvidenceType,
     LineChangeType,
     PullRequestSnapshot,
+    RetrievedFile,
 )
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
@@ -88,15 +91,30 @@ def _evidence_type(file: ChangedFile) -> EvidenceType:
     return EvidenceType.IMPLEMENTATION
 
 
-def _permalink(snapshot: PullRequestSnapshot, file_path: str, line_number: int) -> str:
+def _permalink(
+    snapshot: PullRequestSnapshot, file_path: str, line_number: int, commit_sha: str
+) -> str:
     return (
-        f"https://github.com/{snapshot.repository}/blob/{snapshot.head_sha}/"
+        f"https://github.com/{snapshot.repository}/blob/{commit_sha}/"
         f"{file_path}#L{line_number}-L{line_number}"
     )
 
 
+def _candidate_file(retrieved: RetrievedFile) -> ChangedFile:
+    return ChangedFile(
+        path=retrieved.path,
+        status="unchanged_candidate",
+        lines=[
+            ChangedLine(change_type=LineChangeType.CONTEXT, line_number=index, content=content)
+            for index, content in enumerate(retrieved.content.splitlines(), start=1)
+        ],
+    )
+
+
 def retrieve_evidence(
-    snapshot: PullRequestSnapshot, criteria: list[Criterion]
+    snapshot: PullRequestSnapshot,
+    criteria: list[Criterion],
+    unchanged_files: list[RetrievedFile] | None = None,
 ) -> list[EvidenceItem]:
     """Return ordered line candidates with fully explainable matching metadata."""
     evidence: list[EvidenceItem] = []
@@ -104,8 +122,18 @@ def retrieve_evidence(
         criterion_terms, identifiers = _criterion_terms(criterion.text)
         if not criterion_terms:
             continue
-        matches: list[tuple[float, ChangedFile, int, str, set[str], bool]] = []
-        for changed_file in snapshot.files:
+        matches: list[
+            tuple[float, ChangedFile, int, str, set[str], bool, EvidenceSourceScope, str]
+        ] = []
+        inputs = [
+            (file, EvidenceSourceScope.CHANGED_FILE, snapshot.head_sha)
+            for file in snapshot.files
+        ]
+        inputs.extend(
+            (_candidate_file(file), EvidenceSourceScope.UNCHANGED_CANDIDATE, file.commit_sha)
+            for file in (unchanged_files or [])
+        )
+        for changed_file, source_scope, commit_sha in inputs:
             kind = _evidence_type(changed_file)
             for line in changed_file.lines:
                 if line.change_type is LineChangeType.REMOVED or line.line_number is None:
@@ -132,15 +160,28 @@ def retrieve_evidence(
                         line.content,
                         matched,
                         exact_identifier,
+                        source_scope,
+                        commit_sha,
                     )
                 )
         matches.sort(key=lambda item: (-item[0], item[1].path, item[2]))
-        for index, (score, changed_file, line_number, content, matched, exact) in enumerate(
+        for index, (
+            score,
+            changed_file,
+            line_number,
+            content,
+            matched,
+            exact,
+            source_scope,
+            commit_sha,
+        ) in enumerate(
             matches[:8], start=1
         ):
             kind = _evidence_type(changed_file)
             level = EvidenceLevel.E2 if kind is EvidenceType.TEST else EvidenceLevel.E1
             limitations = ["Candidate evidence does not prove the criterion is satisfied"]
+            if source_scope is EvidenceSourceScope.UNCHANGED_CANDIDATE:
+                limitations.insert(0, "Evidence comes from a bounded unchanged candidate file")
             if kind is EvidenceType.TEST:
                 limitations.append("Candidate test evidence requires reviewer confirmation")
             evidence.append(
@@ -149,11 +190,12 @@ def retrieve_evidence(
                     criterion_id=criterion.criterion_id,
                     evidence_type=kind,
                     evidence_level=level,
+                    source_scope=source_scope,
                     file_path=changed_file.path,
                     line_start=line_number,
                     line_end=line_number,
-                    commit_sha=snapshot.head_sha,
-                    permalink=_permalink(snapshot, changed_file.path, line_number),
+                    commit_sha=commit_sha,
+                    permalink=_permalink(snapshot, changed_file.path, line_number, commit_sha),
                     excerpt=content.strip(),
                     matching_rule="exact_identifier" if exact else "keyword_overlap",
                     relevance_reason=f"Matched terms: {', '.join(sorted(matched))}",
