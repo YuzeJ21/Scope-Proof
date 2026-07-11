@@ -1,0 +1,261 @@
+"""Pydantic contracts for reviews, evidence, findings, and reports."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from enum import StrEnum
+from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
+
+RULESET_VERSION = "1.0.0"
+
+
+class StringEnum(StrEnum):
+    """A JSON-friendly enum with readable values."""
+
+
+class Priority(StringEnum):
+    MUST_HAVE = "must_have"
+    SHOULD_HAVE = "should_have"
+
+
+class CriterionType(StringEnum):
+    BEHAVIOR = "behavior"
+    ERROR_STATE = "error_state"
+    ANALYTICS = "analytics"
+    PERMISSION = "permission"
+    DOCUMENTATION = "documentation"
+    MIGRATION = "migration"
+    NON_FUNCTIONAL = "non_functional"
+
+
+class EvidenceType(StringEnum):
+    IMPLEMENTATION = "implementation"
+    TEST = "test"
+    CI = "ci"
+    DOCUMENTATION = "documentation"
+    CONTRACT = "contract"
+    RUNTIME = "runtime"
+    HUMAN = "human"
+
+
+class EvidenceLevel(StringEnum):
+    E0 = "E0"
+    E1 = "E1"
+    E2 = "E2"
+    E3 = "E3"
+    E4 = "E4"
+
+    @property
+    def rank(self) -> int:
+        return int(self.value[1:])
+
+
+class FindingStatus(StringEnum):
+    EVIDENCE_FOUND = "evidence_found"
+    PARTIAL = "partial"
+    MISSING = "missing"
+    NEEDS_REVIEW = "needs_review"
+    ACCEPTED = "accepted"
+    ACCEPTED_EXCEPTION = "accepted_exception"
+
+
+class HumanDecision(StringEnum):
+    ACCEPTED = "accepted"
+    ACCEPTED_EXCEPTION = "accepted_exception"
+    CHANGE_REQUIRED = "change_required"
+    REJECTED_FINDING = "rejected_finding"
+    MANUALLY_VERIFIED = "manually_verified"
+    NOT_IN_SCOPE = "not_in_scope"
+
+
+class GateVerdict(StringEnum):
+    READY = "ready"
+    CONDITIONAL = "conditional"
+    BLOCKED = "blocked"
+    NEEDS_REVIEW = "needs_review"
+
+
+class CheckState(StringEnum):
+    PASSING = "passing"
+    FAILING = "failing"
+    PENDING = "pending"
+    UNAVAILABLE = "unavailable"
+
+
+class IngestionState(StringEnum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
+class ConfidenceBand(StringEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class LineChangeType(StringEnum):
+    ADDED = "added"
+    REMOVED = "removed"
+    CONTEXT = "context"
+
+
+class Criterion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    criterion_id: str = Field(pattern=r"^AC-\d{2,}$")
+    text: str = Field(min_length=1)
+    priority: Priority = Priority.MUST_HAVE
+    criterion_type: CriterionType = CriterionType.BEHAVIOR
+    source_span: str | None = None
+    required_evidence_level: EvidenceLevel = EvidenceLevel.E1
+
+    @field_validator("text")
+    @classmethod
+    def trim_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class CriterionDraft(BaseModel):
+    criterion_id: str
+    text: str
+
+
+class CriterionWarning(BaseModel):
+    criterion_id: str
+    code: str
+    message: str
+
+
+class ChangedLine(BaseModel):
+    change_type: LineChangeType
+    content: str
+    line_number: int | None = Field(default=None, ge=1)
+
+
+class ChangedFile(BaseModel):
+    path: str = Field(min_length=1)
+    status: str
+    additions: int = Field(default=0, ge=0)
+    deletions: int = Field(default=0, ge=0)
+    changes: int = Field(default=0, ge=0)
+    patch: str = ""
+    lines: list[ChangedLine] = Field(default_factory=list)
+    truncated: bool = False
+
+
+class CommitInfo(BaseModel):
+    sha: str = Field(min_length=1)
+    message: str
+    html_url: str
+
+
+class PullRequestSnapshot(BaseModel):
+    repository: str = Field(pattern=r"^[^/]+/[^/]+$")
+    pr_number: int = Field(gt=0)
+    title: str
+    description: str = ""
+    html_url: str
+    base_sha: str = Field(min_length=1)
+    head_sha: str = Field(min_length=1)
+    check_state: CheckState = CheckState.UNAVAILABLE
+    ingestion_state: IngestionState = IngestionState.COMPLETE
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    files: list[ChangedFile] = Field(default_factory=list)
+    commits: list[CommitInfo] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    skipped_files: list[str] = Field(default_factory=list)
+
+
+class Review(BaseModel):
+    review_id: str = Field(default_factory=lambda: str(uuid4()))
+    repository: str = Field(pattern=r"^[^/]+/[^/]+$")
+    pr_number: int = Field(gt=0)
+    base_sha: str = Field(min_length=1)
+    head_sha: str = Field(min_length=1)
+    check_state: CheckState = CheckState.UNAVAILABLE
+    criteria_confirmed: bool = False
+    ingestion_state: IngestionState = IngestionState.COMPLETE
+    final_acceptance: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    tool_version: str = "0.1.0"
+    ruleset_version: str = RULESET_VERSION
+
+    @computed_field
+    @property
+    def can_analyze(self) -> bool:
+        return self.criteria_confirmed and self.ingestion_state is not IngestionState.FAILED
+
+
+class EvidenceItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_id: str = Field(min_length=1)
+    criterion_id: str
+    evidence_type: EvidenceType
+    evidence_level: EvidenceLevel
+    file_path: str = Field(min_length=1)
+    line_start: int = Field(ge=1)
+    line_end: int = Field(ge=1)
+    commit_sha: str = Field(min_length=1)
+    permalink: str
+    excerpt: str = Field(min_length=1)
+    matching_rule: str = Field(min_length=1)
+    relevance_reason: str = Field(min_length=1)
+    relevance_score: float = Field(ge=0, le=1)
+    limitations: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_line_range(self) -> EvidenceItem:
+        if self.line_end < self.line_start:
+            raise ValueError("line_end must be greater than or equal to line_start")
+        return self
+
+
+class Finding(BaseModel):
+    criterion_id: str
+    status: FindingStatus
+    evidence_level: EvidenceLevel = EvidenceLevel.E0
+    confidence_band: ConfidenceBand = ConfidenceBand.LOW
+    reason: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    contradictions: list[str] = Field(default_factory=list)
+    recommended_action: str
+
+
+class HumanResolution(BaseModel):
+    criterion_id: str
+    decision: HumanDecision
+    comment: str = ""
+    evidence_url: str | None = None
+    claimed_evidence_level: EvidenceLevel | None = None
+    reviewer: str = "Local reviewer"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="after")
+    def manual_verification_needs_level(self) -> HumanResolution:
+        if self.decision is HumanDecision.MANUALLY_VERIFIED and self.claimed_evidence_level is None:
+            raise ValueError("manually verified decisions require a claimed evidence level")
+        return self
+
+
+class GateDecision(BaseModel):
+    verdict: GateVerdict
+    blocking_criteria: list[str] = Field(default_factory=list)
+    conditional_criteria: list[str] = Field(default_factory=list)
+    unresolved_criteria: list[str] = Field(default_factory=list)
+    resolved_exceptions: list[str] = Field(default_factory=list)
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class ReviewBundle(BaseModel):
+    review: Review
+    source_text: str
+    criteria: list[Criterion]
+    evidence: list[EvidenceItem]
+    findings: list[Finding]
+    resolutions: list[HumanResolution] = Field(default_factory=list)
+    gate: GateDecision
