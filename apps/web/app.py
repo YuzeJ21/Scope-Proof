@@ -11,6 +11,7 @@ from scopeproof_core.criteria.service import (
     parse_criteria,
     remove_criterion,
     reorder_criteria,
+    split_criterion,
     validate_criteria,
 )
 from scopeproof_core.demo import load_demo_labels, load_demo_snapshot
@@ -200,6 +201,25 @@ else:
         st.session_state["criteria"] = add_criterion(criteria, new_criterion_text)
         _reset_analysis()
         st.success("Criterion added. Confirm the updated set before analysis.")
+        st.rerun()
+    split_target = st.selectbox(
+        "Split criterion",
+        options=[item.criterion_id for item in criteria],
+        key="split_criterion_id",
+    )
+    split_text = st.text_area(
+        "Split criterion into one behavior per line",
+        key="split_criterion_text",
+    )
+    if st.button(
+        "Split criterion",
+        key="split_criterion_ui",
+        disabled=len([line for line in split_text.splitlines() if line.strip()]) < 2,
+    ):
+        split_texts = [line.strip() for line in split_text.splitlines() if line.strip()]
+        st.session_state["criteria"] = split_criterion(criteria, split_target, split_texts)
+        _reset_analysis()
+        st.success("Criterion split. Confirm the updated set before analysis.")
         st.rerun()
     edited_criteria: list[Criterion] = []
     for position, criterion in enumerate(criteria):

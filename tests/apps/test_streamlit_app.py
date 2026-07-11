@@ -107,3 +107,16 @@ def test_evidence_matrix_exposes_status_and_priority_filters() -> None:
 
     assert app.multiselect(key="status_filter").value == []
     assert app.multiselect(key="priority_filter").value == []
+
+
+def test_compound_criterion_can_be_split_in_workbench() -> None:
+    app = new_app()
+    app = app.text_area(key="requirements_input").set_value("Export CSV and record analytics").run()
+    app = app.button(key="prepare_criteria").click().run()
+    app = app.text_area(key="split_criterion_text").set_value("Export CSV\nRecord analytics").run()
+    app = app.button(key="split_criterion_ui").click().run()
+
+    assert [(item.criterion_id, item.text) for item in app.session_state["criteria"]] == [
+        ("AC-01", "Export CSV"),
+        ("AC-02", "Record analytics"),
+    ]
