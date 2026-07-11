@@ -5,6 +5,15 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from scopeproof_core.evals.runner import BenchmarkResult
+from scopeproof_core.schemas.models import FindingStatus, HumanDecision, ReviewBundle
+
+_OVERRIDE_DECISIONS = {
+    HumanDecision.ACCEPTED_EXCEPTION,
+    HumanDecision.CHANGE_REQUIRED,
+    HumanDecision.MANUALLY_VERIFIED,
+    HumanDecision.NOT_IN_SCOPE,
+    HumanDecision.REJECTED_FINDING,
+}
 
 
 class EvidenceQualityMetrics(BaseModel):
@@ -45,4 +54,35 @@ class EvidenceQualityMetrics(BaseModel):
             criterion_agreement_rate=criterion_agreement_rate,
             must_have_false_ready=benchmark.must_have_false_ready,
             false_blocker=benchmark.false_blocker,
+        )
+
+    @classmethod
+    def from_benchmark_and_reviews(
+        cls, benchmark: BenchmarkResult, reviews: list[ReviewBundle]
+    ) -> EvidenceQualityMetrics:
+        """Add human rates from selected persisted-review-shaped bundles only."""
+
+        metrics = cls.from_benchmark(benchmark)
+        criteria_count = sum(len(bundle.criteria) for bundle in reviews)
+        resolutions = [resolution for bundle in reviews for resolution in bundle.resolutions]
+        unresolved = sum(
+            len(bundle.criteria)
+            if not bundle.review.criteria_confirmed
+            else sum(
+                finding.status is FindingStatus.NEEDS_REVIEW for finding in bundle.findings
+            )
+            for bundle in reviews
+        )
+        overrides = sum(resolution.decision in _OVERRIDE_DECISIONS for resolution in resolutions)
+        exceptions = sum(
+            resolution.decision is HumanDecision.ACCEPTED_EXCEPTION for resolution in resolutions
+        )
+        if not criteria_count:
+            return metrics
+        return metrics.model_copy(
+            update={
+                "human_override_rate": overrides / criteria_count,
+                "accepted_exception_rate": (exceptions / len(resolutions)) if resolutions else 0.0,
+                "unresolved_ambiguity_rate": unresolved / criteria_count,
+            }
         )
