@@ -1,0 +1,1 @@
+"""ScopeProof application adapters."""
