@@ -7,17 +7,28 @@ import io
 import json
 from collections import defaultdict
 
-from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle
+from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewState
+
+ExportableReview = ReviewBundle | ReviewState
 
 
-def export_json(bundle: ReviewBundle) -> str:
+def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewState | None]:
+    if isinstance(value, ReviewState):
+        if value.bundle is None:
+            raise ValueError("A confirmed analysis is required before exporting a review state")
+        return value.bundle, value
+    return value, None
+
+
+def export_json(bundle: ExportableReview) -> str:
     """Return canonical, diff-friendly JSON without adapter state or credentials."""
     payload = bundle.model_dump(mode="json")
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
-def export_markdown(bundle: ReviewBundle) -> str:
+def export_markdown(bundle: ExportableReview) -> str:
     """Return a PR-comment-friendly report with evidence and limitations."""
+    bundle, state = _bundle_and_state(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
@@ -41,6 +52,8 @@ def export_markdown(bundle: ReviewBundle) -> str:
         "| Criterion | Priority | Status | Level | Human decision |",
         "|---|---|---|---|---|",
     ]
+    if state is not None:
+        lines.insert(7, f"**Criteria revision: {state.criteria_revision.number}**")
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
@@ -91,6 +104,17 @@ def export_markdown(bundle: ReviewBundle) -> str:
         lines.extend(
             ["## Gate Reasons", "", *[f"- `{code}`" for code in bundle.gate.reason_codes], ""]
         )
+    if state is not None:
+        lines.extend(["## Resolution History", ""])
+        for event in state.resolution_events:
+            target = event.criterion_id or "Final acceptance"
+            outcome = (
+                event.decision.value
+                if event.decision
+                else str(event.final_acceptance).lower()
+            )
+            lines.append(f"- {target}: {outcome} — {event.comment or 'No note provided'}")
+        lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -98,8 +122,9 @@ def _links(items: list[EvidenceItem]) -> str:
     return " | ".join(item.permalink for item in items)
 
 
-def export_csv(bundle: ReviewBundle) -> str:
+def export_csv(bundle: ExportableReview) -> str:
     """Return one flat audit row per criterion."""
+    bundle, state = _bundle_and_state(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     evidence_by_criterion: dict[str, list[EvidenceItem]] = defaultdict(list)
@@ -112,6 +137,7 @@ def export_csv(bundle: ReviewBundle) -> str:
         "pr_number",
         "head_sha",
         "ruleset_version",
+        "criteria_revision",
         "verdict",
         "criterion_id",
         "criterion",
@@ -138,6 +164,7 @@ def export_csv(bundle: ReviewBundle) -> str:
                 "pr_number": bundle.review.pr_number,
                 "head_sha": bundle.review.head_sha,
                 "ruleset_version": bundle.review.ruleset_version,
+                "criteria_revision": state.criteria_revision.number if state else 1,
                 "verdict": bundle.gate.verdict.value,
                 "criterion_id": criterion.criterion_id,
                 "criterion": criterion.text,
