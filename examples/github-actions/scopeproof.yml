@@ -1,0 +1,29 @@
+name: ScopeProof
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+env:
+  SCOPEPROOF_REQUIRED_CHECK: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install scopeproof
+      - run: |
+          scopeproof review \
+            --pr "${{ github.event.pull_request.html_url }}" \
+            --requirements .scopeproof/requirements.txt \
+            --storage-dir .scopeproof/reviews
+      - run: echo "Keep SCOPEPROOF_REQUIRED_CHECK=false until local dogfood is complete."

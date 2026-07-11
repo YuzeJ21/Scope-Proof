@@ -185,3 +185,11 @@ Large or truncated diffs are labeled partial and force human review. Missing Git
 This is a public-repository MVP for validating the requirement-to-evidence workflow. The next product decision should be based on repeat use with real pull requests and confirmed gaps found before merge—not the number of files scanned or comments generated.
 
 For safe public-alpha operations, see the [public PR dogfood protocol](docs/dogfood/public-pr-protocol.md) and the [60-second demo script](docs/launch/demo-script.md). The protocol distinguishes deliberately constructed demos, technical smokes, and confirmed dogfood reviews so launch material does not overclaim validation.
+
+## GitHub Actions safe preview
+
+The checked-in [GitHub Actions guide](docs/github-action.md) explains the local
+starter workflow. It is non-blocking by default, needs an explicit checked-in
+requirements file, never uses `pull_request_target`, and makes no GitHub write
+request. Its fork-safe, idempotent publication plan is tested locally before a
+separate publication adapter can be considered.

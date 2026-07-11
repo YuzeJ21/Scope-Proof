@@ -1,0 +1,50 @@
+name: ScopeProof
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+env:
+  # Keep this informational until the repository owner intentionally promotes it.
+  SCOPEPROOF_REQUIRED_CHECK: false
+
+jobs:
+  review:
+    name: ScopeProof evidence review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install ScopeProof
+        run: pip install .
+      - name: Emit a fork-safe non-mutating publication plan
+        run: |
+          if [ -f .scopeproof/requirements.txt ]; then
+            python -m scopeproof_core.github_action_runner \
+              --event-path "$GITHUB_EVENT_PATH" --requirements-confirmed
+          else
+            python -m scopeproof_core.github_action_runner \
+              --event-path "$GITHUB_EVENT_PATH" \
+              --content "Checked-in .scopeproof/requirements.txt is missing."
+          fi
+      - name: Review public PR evidence (informational)
+        continue-on-error: true
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if [ -f .scopeproof/requirements.txt ]; then
+            scopeproof review --pr "$PR_URL" \
+              --requirements .scopeproof/requirements.txt \
+              --storage-dir .scopeproof/reviews
+          fi
+      - name: Publication boundary
+        run: |
+          echo "This starter emits a tested plan only; it makes no GitHub write request."
+          echo "Fork pull requests never receive a write plan."
