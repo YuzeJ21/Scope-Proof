@@ -1,0 +1,164 @@
+# ScopeProof
+
+**Prove the PR matches the product intent.**
+
+ScopeProof reviews a public GitHub pull request against user-confirmed product requirements. It maps each atomic acceptance criterion to auditable code and test candidates, makes missing or partial evidence visible, records human decisions, and produces a deterministic release recommendation.
+
+ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
+
+## Why this exists
+
+AI coding agents can produce pull requests quickly, but a green CI check does not establish that every ticket promise was implemented. Product reviewers still need to answer questions such as:
+
+- Did export include every active filter?
+- Is the failure state visible to the user?
+- Was the required analytics event added?
+- Does a test exercise the requested behavior, or does a similarly named test merely exist?
+- Did the pull request expand scope beyond the approved requirement?
+
+ScopeProof turns that review into a requirement-to-evidence matrix. It shows why each candidate matched and what remains unverified.
+
+## MVP boundaries
+
+- No paid LLM API and no model-generated verdicts.
+- Supports public repositories only.
+- Anonymous GitHub access works without a token.
+- An optional GitHub token can increase free rate limits; it remains in Streamlit session memory and is never exported or saved.
+- Users author and confirm criteria. ScopeProof does not invent product requirements.
+- Pull-request code is never executed.
+- Static candidates cannot be presented as runtime verification.
+- General bug review, security scanning, automatic fixes, private repositories, Jira, billing, and team accounts are outside this release.
+
+## Evidence and verdict language
+
+| Level | Meaning in this MVP |
+|---|---|
+| E0 | No candidate evidence found |
+| E1 | Candidate implementation or contract evidence |
+| E2 | Candidate test evidence that still requires reviewer confirmation |
+| E3 | Runtime verification recorded manually from an external check |
+| E4 | Explicit human acceptance |
+
+Criterion findings are `Evidence Found`, `Partial`, `Missing`, or `Needs Review`. These are provisional findings, not correctness claims.
+
+The release gate uses explicit precedence:
+
+1. `Blocked` for failed checks, change-required decisions, or unresolved must-have gaps.
+2. `Needs Review` for unconfirmed criteria, partial ingestion, unavailable checks, ambiguous evidence, or unresolved required decisions.
+3. `Conditional` for resolved must-haves with should-have gaps or accepted exceptions.
+4. `Ready` only after all requirements, checks, ingestion, resolution, and final human-acceptance conditions are met.
+
+## Quickstart
+
+Python 3.11 or newer is required.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+streamlit run apps/web/app.py
+```
+
+Open the displayed local URL, then choose either path:
+
+1. Select **Load deliberately constructed demo** for a complete offline walkthrough.
+2. Enter a public GitHub PR URL, optionally add a token, fetch the PR, paste one criterion per line, and confirm the criteria.
+
+The five review steps are:
+
+1. Start Review.
+2. Confirm Criteria.
+3. Evidence Matrix.
+4. Criterion Detail and human resolution.
+5. Summary and Markdown, JSON, or CSV export.
+
+## Deliberately constructed demo
+
+The bundled CSV export case is a deliberately constructed demo, not a real incident. Its PR-shaped fixture implements CSV export, one active filter, and a happy-path test. It intentionally omits another filter, the error state, and the `research_exported` event.
+
+Expected output:
+
+| Criterion | Expected finding |
+|---|---|
+| AC-01 Export CSV | Evidence Found |
+| AC-02 Respect all active filters | Partial |
+| AC-03 Show export failure | Missing |
+| AC-04 Record `research_exported` | Missing |
+
+The deterministic gate is `Blocked` because must-have gaps remain.
+
+## Verification
+
+Run lint and all offline tests:
+
+```bash
+python -m ruff check .
+python -m pytest -q
+```
+
+Run the labeled regression benchmark:
+
+```bash
+python -m scopeproof_core.evals.runner
+```
+
+The benchmark prints False Ready, False Blocker, mismatch, and declared scenario-coverage information. It exits nonzero when a known must-have False Ready or label mismatch is present.
+
+Run the opt-in live public GitHub smoke test:
+
+```bash
+RUN_LIVE_GITHUB_TESTS=1 python -m pytest tests/github/test_live_public_pr.py -q
+```
+
+Check the running Streamlit server:
+
+```bash
+curl --fail http://127.0.0.1:8501/_stcore/health
+```
+
+## Architecture
+
+```text
+Public GitHub PR
+      ↓
+Read-only ingestion
+      ↓
+User-confirmed criteria
+      ↓
+Deterministic candidate retrieval
+      ↓
+Provisional findings + human resolution
+      ↓
+Deterministic gate
+      ↓
+Markdown / JSON / CSV
+```
+
+`scopeproof_core` contains Pydantic contracts, ingestion, retrieval, verification, gates, reporting, fixtures, and evaluation. It has no Streamlit dependency. `apps/web/app.py` is a thin local interface over those core services.
+
+Every evidence item contains a file, line, immutable head SHA, GitHub permalink, excerpt, matching rule, relevance reason, deterministic score, and limitations. Deleted lines cannot become current implementation evidence. Partial ingestion cannot produce Ready.
+
+## Repository layout
+
+```text
+apps/web/                 Streamlit review workbench
+scopeproof_core/github/   Public GitHub ingestion
+scopeproof_core/criteria/ Manual criterion preparation
+scopeproof_core/retrieval/Deterministic evidence candidates
+scopeproof_core/verification/Provisional findings
+scopeproof_core/gates/    Release truth table
+scopeproof_core/reporting/Markdown, JSON, and CSV exports
+scopeproof_core/evals/    Regression runner
+evals/                    Controlled fixtures and labels
+tests/                    Unit, regression, AppTest, and live smoke tests
+```
+
+## Privacy and trust
+
+The application does not persist credentials or execute repository code. Review exports contain the repository, PR number, head SHA, ruleset version, criteria, evidence, findings, resolutions, and gate reasons. They do not contain the optional GitHub token.
+
+Large or truncated diffs are labeled partial and force human review. Missing GitHub checks are represented as unavailable, never passing. A parser or retrieval failure must fail safely rather than produce Ready.
+
+## Product status
+
+This is a public-repository MVP for validating the requirement-to-evidence workflow. The next product decision should be based on repeat use with real pull requests and confirmed gaps found before merge—not the number of files scanned or comments generated.
