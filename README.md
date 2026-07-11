@@ -202,3 +202,13 @@ They are never inferred or added to a review automatically. Each is labelled
 `Implicit local rule` and has an `implicit_rule_pack` source so it cannot
 masquerade as a user-confirmed source requirement; a reviewer must explicitly
 include and confirm it before analysis.
+
+## Evidence-quality metrics
+
+`scopeproof benchmark` emits `evidence_quality_metrics` alongside its executed
+fixture results: immutable evidence-link precision, incorrect-line-citation
+rate, criterion agreement, and False Ready/False Blocker totals. These measure
+only the checked-in, executed labels; they do not prove runtime correctness or
+market validation. Human override, accepted-exception, and unresolved-ambiguity
+rates are intentionally `null` unless calculated from selected persisted review
+histories.

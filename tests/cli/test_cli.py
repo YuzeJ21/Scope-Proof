@@ -8,6 +8,8 @@ def test_benchmark_command_prints_execution_derived_metrics(capsys) -> None:
     output = capsys.readouterr().out
     assert '"executed_case_count": 12' in output
     assert '"must_have_false_ready": 0' in output
+    assert '"evidence_quality_metrics"' in output
+    assert '"criterion_agreement_rate": 1.0' in output
 
 
 def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> None:

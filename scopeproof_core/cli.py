@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from scopeproof_core.criteria.service import parse_criteria
+from scopeproof_core.evals.metrics import EvidenceQualityMetrics
 from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubClient
@@ -117,7 +118,11 @@ def _parser() -> argparse.ArgumentParser:
 
 def _benchmark() -> int:
     result = run_bundled_benchmark()
-    print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+    payload = result.model_dump(mode="json")
+    payload["evidence_quality_metrics"] = EvidenceQualityMetrics.from_benchmark(result).model_dump(
+        mode="json"
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
     return int(
         bool(
             result.must_have_false_ready
