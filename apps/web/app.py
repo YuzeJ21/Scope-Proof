@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
 from scopeproof_core.criteria.service import parse_criteria, validate_criteria
@@ -10,15 +12,23 @@ from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
+from scopeproof_core.reviews.lifecycle import (
+    append_resolution,
+    confirm_criteria,
+    new_review_state,
+    revise_criteria,
+)
 from scopeproof_core.schemas.models import (
     Criterion,
     EvidenceLevel,
     HumanDecision,
-    HumanResolution,
     Priority,
+    ResolutionEvent,
     Review,
     ReviewBundle,
+    ReviewState,
 )
+from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
 
 st.set_page_config(page_title="ScopeProof", page_icon="🔎", layout="wide")
@@ -31,6 +41,8 @@ _STATE_DEFAULTS = {
     "active_step": 1,
     "source_text": "",
     "resolutions": [],
+    "review_state": None,
+    "review_storage_dir": ".scopeproof/reviews",
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -41,6 +53,7 @@ def _reset_analysis() -> None:
     st.session_state["criteria_confirmed"] = False
     st.session_state["bundle"] = None
     st.session_state["resolutions"] = []
+    st.session_state["review_state"] = None
 
 
 def _prepare_from_text(text: str) -> None:
@@ -161,6 +174,12 @@ if st.button(
     st.session_state["source_text"] = requirements_text
     _prepare_from_text(requirements_text)
 
+storage_directory = st.text_input(
+    "Local review storage folder",
+    help="Local-only JSON records. GitHub tokens are never stored.",
+    key="review_storage_dir",
+)
+
 st.header("2 · Confirm Criteria")
 criteria: list[Criterion] = st.session_state["criteria"]
 if not criteria:
@@ -210,9 +229,14 @@ else:
         key="confirm_criteria",
         disabled=any(not item.text.strip() for item in edited_criteria),
     ):
+        state: ReviewState | None = st.session_state["review_state"]
+        if state is not None:
+            state = revise_criteria(state, edited_criteria, st.session_state["source_text"])
+            state = confirm_criteria(state)
+            st.session_state["review_state"] = state
         st.session_state["criteria"] = edited_criteria
         st.session_state["criteria_confirmed"] = True
-        st.session_state["bundle"] = None
+        st.session_state["bundle"] = None if state is None else state.bundle
         st.session_state["active_step"] = 3
         st.success("Criteria confirmed. Analysis can now begin.")
 
@@ -227,10 +251,13 @@ analysis_disabled = not (
     and bool(st.session_state["criteria"])
 )
 if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis_disabled):
-    st.session_state["bundle"] = _analyze()
+    bundle = _analyze()
+    st.session_state["bundle"] = bundle
+    st.session_state["review_state"] = new_review_state(bundle)
     st.session_state["active_step"] = 3
 
-bundle: ReviewBundle | None = st.session_state["bundle"]
+review_state: ReviewState | None = st.session_state["review_state"]
+bundle: ReviewBundle | None = review_state.bundle if review_state else st.session_state["bundle"]
 st.header("3 · Evidence Matrix")
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
@@ -308,21 +335,65 @@ else:
             key="manual_evidence_level",
         )
     if st.button("Save resolution", key="save_resolution"):
-        resolution = HumanResolution(
-            criterion_id=selected_id,
-            decision=decision,
-            comment=resolution_note,
-            claimed_evidence_level=manual_level,
-        )
-        current = [item for item in bundle.resolutions if item.criterion_id != selected_id]
-        current.append(resolution)
-        st.session_state["resolutions"] = current
-        bundle.resolutions = current
-        bundle.gate = evaluate_gate(bundle.review, bundle.criteria, bundle.findings, current)
-        st.session_state["bundle"] = bundle
-        st.success("Human resolution saved in the local review record.")
+        if review_state is None:
+            st.error("Run analysis before recording a human resolution.")
+        else:
+            event = ResolutionEvent(
+                criterion_id=selected_id,
+                decision=decision,
+                comment=resolution_note,
+                claimed_evidence_level=manual_level,
+            )
+            review_state = append_resolution(review_state, event)
+            st.session_state["review_state"] = review_state
+            st.session_state["bundle"] = review_state.bundle
+            bundle = review_state.bundle
+            st.success("Human resolution appended to the local review history.")
+
+    if st.button("Record final acceptance", key="record_final_acceptance"):
+        if review_state is None:
+            st.error("Run analysis before recording final acceptance.")
+        else:
+            review_state = append_resolution(
+                review_state,
+                ResolutionEvent(
+                    final_acceptance=True,
+                    comment="Reviewer recorded final acceptance",
+                ),
+            )
+            st.session_state["review_state"] = review_state
+            st.session_state["bundle"] = review_state.bundle
+            bundle = review_state.bundle
+            st.success("Final acceptance appended to the local review history.")
+
+    if review_state is not None:
+        st.markdown("### Resolution history")
+        if review_state.resolution_events:
+            for event in review_state.resolution_events:
+                target = event.criterion_id or "Final acceptance"
+                outcome = event.decision.value if event.decision else str(event.final_acceptance)
+                st.markdown(f"- {target}: {outcome} — {event.comment or 'No note provided'}")
+        else:
+            st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
+    if review_state is not None:
+        store = JsonReviewStore(Path(storage_directory))
+        if st.button("Save local review", key="save_review"):
+            store.save(review_state)
+            st.success("Review saved locally.")
+        reopen_id = st.text_input("Review ID to reopen", key="reopen_review_id")
+        if st.button("Reopen local review", key="reopen_review", disabled=not reopen_id.strip()):
+            try:
+                review_state = store.load(reopen_id.strip())
+                st.session_state["review_state"] = review_state
+                st.session_state["bundle"] = review_state.bundle
+                st.session_state["criteria"] = review_state.criteria_revision.criteria
+                st.session_state["criteria_confirmed"] = review_state.review.criteria_confirmed
+                st.session_state["source_text"] = review_state.criteria_revision.source_text
+                st.success("Review reopened from local storage.")
+            except (OSError, ValueError) as error:
+                st.error(str(error))
     verdict = _status_label(bundle.gate.verdict.value)
     st.markdown(f"## Verdict: **{verdict}**")
     if bundle.gate.reason_codes:
@@ -331,9 +402,10 @@ else:
         f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
         "results are reproducible from the exported review"
     )
-    markdown_report = export_markdown(bundle)
-    json_report = export_json(bundle)
-    csv_report = export_csv(bundle)
+    export_source = review_state if review_state is not None else bundle
+    markdown_report = export_markdown(export_source)
+    json_report = export_json(export_source)
+    csv_report = export_csv(export_source)
     markdown_column, json_column, csv_column = st.columns(3)
     with markdown_column:
         st.download_button(

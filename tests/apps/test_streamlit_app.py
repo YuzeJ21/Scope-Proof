@@ -61,3 +61,27 @@ def test_optional_token_uses_password_input() -> None:
     app = new_app()
     token = app.text_input(key="github_token")
     assert token.proto.type == token.proto.PASSWORD
+
+
+def test_demo_can_save_and_reopen_durable_review_state() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    review_id = app.session_state["review_state"].review.review_id
+
+    app = app.button(key="save_review").click().run()
+    assert "Review saved locally" in "\n".join(message.value for message in app.success)
+    app = app.text_input(key="reopen_review_id").set_value(review_id).run()
+    app = app.button(key="reopen_review").click().run()
+
+    assert app.session_state["review_state"].review.review_id == review_id
+    success_text = "\n".join(message.value for message in app.success)
+    assert "Review reopened from local storage" in success_text
+
+
+def test_final_acceptance_control_is_visible_only_after_analysis() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    assert app.button(key="record_final_acceptance").disabled is False
