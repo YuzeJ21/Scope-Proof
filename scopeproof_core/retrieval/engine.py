@@ -113,6 +113,8 @@ def retrieve_evidence(
                 line_terms = _line_terms(line.content)
                 matched = criterion_terms & line_terms
                 exact_identifier = bool(identifiers & line_terms)
+                if identifiers and not exact_identifier:
+                    continue
                 if not matched:
                     continue
                 score = len(matched) / len(criterion_terms)
