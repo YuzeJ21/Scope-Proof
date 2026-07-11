@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
 from collections import defaultdict
@@ -180,3 +181,58 @@ def export_csv(bundle: ExportableReview) -> str:
             }
         )
     return output.getvalue()
+
+
+def export_html(value: ExportableReview) -> str:
+    """Render a self-contained local acceptance report without executable content."""
+    bundle, state = _bundle_and_state(value)
+    finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
+    evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
+    rows = []
+    for criterion in bundle.criteria:
+        finding = finding_by_id[criterion.criterion_id]
+        evidence = "<br>".join(
+            (
+                f'<a href="{html.escape(evidence_by_id[item_id].permalink, quote=True)}">'
+                f"{html.escape(evidence_by_id[item_id].file_path)}"
+                f":L{evidence_by_id[item_id].line_start}</a>"
+                f"<br><code>{html.escape(evidence_by_id[item_id].excerpt)}</code>"
+            )
+            for item_id in finding.evidence_ids
+        ) or "No candidate evidence"
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(criterion.criterion_id)}</td>"
+            f"<td>{html.escape(criterion.text)}</td>"
+            f"<td>{html.escape(criterion.priority.value)}</td>"
+            f"<td>{html.escape(finding.status.value)}</td>"
+            f"<td>{html.escape(finding.evidence_level.value)}</td>"
+            f"<td>{evidence}</td>"
+            "</tr>"
+        )
+    revision = state.criteria_revision.number if state else 1
+    verdict = html.escape(bundle.gate.verdict.value.replace("_", " ").title())
+    return "\n".join(
+        [
+            "<!doctype html>",
+            '<html lang="en"><head><meta charset="utf-8">',
+            "<title>ScopeProof Acceptance Review</title>",
+            "<style>body{font-family:system-ui;margin:2rem;color:#172033}"
+            "table{border-collapse:collapse;width:100%}td,th{border:1px solid #cbd5e1;"
+            "padding:.55rem;text-align:left}th{background:#eff6ff}.note{color:#475569}</style>",
+            "</head><body>",
+            "<h1>ScopeProof Acceptance Review</h1>",
+            f"<p><strong>Verdict:</strong> {verdict}</p>",
+            f"<p>Repository: <code>{html.escape(bundle.review.repository)}</code> · "
+            f"PR #{bundle.review.pr_number} · Head SHA "
+            f"<code>{html.escape(bundle.review.head_sha)}</code> · "
+            f"Criteria revision {revision}</p>",
+            "<p class=\"note\">ScopeProof surfaces auditable candidate evidence. "
+            "It does not replace QA or prove correctness.</p>",
+            "<table><thead><tr><th>ID</th><th>Criterion</th><th>Priority</th>"
+            "<th>Status</th><th>Level</th><th>Evidence</th></tr></thead><tbody>",
+            *rows,
+            "</tbody></table>",
+            "</body></html>",
+        ]
+    )

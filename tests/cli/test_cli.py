@@ -54,3 +54,24 @@ def test_export_command_reads_saved_review_without_credentials(tmp_path: Path, c
     output = capsys.readouterr().out
     assert "ScopeProof Acceptance Review" in output
     assert "ghp_" not in output
+
+
+def test_export_command_supports_self_contained_html(tmp_path: Path, capsys) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    storage = tmp_path / "reviews"
+    main(
+        [
+            "review",
+            "--fixture",
+            "evals/fixtures/complete_implementation_pr.json",
+            "--requirements",
+            str(requirements),
+            "--storage-dir",
+            str(storage),
+        ]
+    )
+    review_id = next(storage.glob("*.json")).stem
+
+    assert main(["export", review_id, "--storage-dir", str(storage), "--format", "html"]) == 0
+    assert "<!doctype html>" in capsys.readouterr().out.lower()

@@ -10,7 +10,12 @@ from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubClient
-from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
+from scopeproof_core.reporting.exporters import (
+    export_csv,
+    export_html,
+    export_json,
+    export_markdown,
+)
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import Criterion, PullRequestSnapshot, Review, ReviewBundle
@@ -77,7 +82,12 @@ def _review(args: argparse.Namespace) -> int:
 
 def _export(args: argparse.Namespace) -> int:
     state = JsonReviewStore(Path(args.storage_dir)).load(args.review_id)
-    renderers = {"json": export_json, "markdown": export_markdown, "csv": export_csv}
+    renderers = {
+        "json": export_json,
+        "markdown": export_markdown,
+        "csv": export_csv,
+        "html": export_html,
+    }
     print(renderers[args.format](state), end="")
     return 0
 
@@ -98,7 +108,7 @@ def _parser() -> argparse.ArgumentParser:
     export = commands.add_parser("export", help="Render a saved local review")
     export.add_argument("review_id")
     export.add_argument("--storage-dir", default=".scopeproof/reviews")
-    export.add_argument("--format", choices=["json", "markdown", "csv"], default="json")
+    export.add_argument("--format", choices=["json", "markdown", "csv", "html"], default="json")
     export.set_defaults(handler=_export)
     benchmark = commands.add_parser("benchmark", help="Run every labelled local benchmark case")
     benchmark.set_defaults(handler=lambda _: _benchmark())
