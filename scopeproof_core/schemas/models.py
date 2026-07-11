@@ -242,6 +242,48 @@ class HumanResolution(BaseModel):
         return self
 
 
+class ResolutionEvent(BaseModel):
+    """Append-only human decision or review-level final-acceptance event."""
+
+    event_id: str = Field(default_factory=lambda: str(uuid4()))
+    criterion_id: str | None = None
+    decision: HumanDecision | None = None
+    final_acceptance: bool | None = None
+    comment: str = ""
+    evidence_url: str | None = None
+    claimed_evidence_level: EvidenceLevel | None = None
+    reviewer: str = "Local reviewer"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    criteria_revision_number: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def validate_event_kind(self) -> ResolutionEvent:
+        is_criterion_event = self.criterion_id is not None and self.decision is not None
+        is_final_event = self.criterion_id is None and self.final_acceptance is not None
+        if is_criterion_event == is_final_event:
+            raise ValueError("event must be either a criterion decision or a final acceptance")
+        has_wrong_claimed_level = (
+            self.claimed_evidence_level is not None
+            and self.decision is not HumanDecision.MANUALLY_VERIFIED
+        )
+        if has_wrong_claimed_level:
+            raise ValueError("claimed evidence level is reserved for manually verified decisions")
+        if self.decision is HumanDecision.MANUALLY_VERIFIED and self.claimed_evidence_level is None:
+            raise ValueError("manually verified events require a claimed evidence level")
+        return self
+
+
+class CriteriaRevision(BaseModel):
+    """A user-owned criterion set that must be confirmed before analysis."""
+
+    number: int = Field(gt=0)
+    criteria: list[Criterion]
+    source_text: str
+    confirmed: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    confirmed_at: datetime | None = None
+
+
 class GateDecision(BaseModel):
     verdict: GateVerdict
     blocking_criteria: list[str] = Field(default_factory=list)
@@ -259,3 +301,13 @@ class ReviewBundle(BaseModel):
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
     gate: GateDecision
+
+
+class ReviewState(BaseModel):
+    """Validated local lifecycle state for one review and its audit history."""
+
+    review: Review
+    criteria_revision: CriteriaRevision
+    bundle: ReviewBundle | None = None
+    analysis_history: list[ReviewBundle] = Field(default_factory=list)
+    resolution_events: list[ResolutionEvent] = Field(default_factory=list)
