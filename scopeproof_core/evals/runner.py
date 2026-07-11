@@ -35,6 +35,9 @@ class BenchmarkCaseResult(BaseModel):
     expected_gate: str
     actual_gate: str
     human_review_required: bool
+    expected_status_count: int = Field(ge=0)
+    status_mismatch_count: int = Field(ge=0)
+    evidence_link_count: int = Field(ge=0)
     mismatches: list[str] = Field(default_factory=list)
     evidence_link_errors: list[str] = Field(default_factory=list)
     unmapped_changed_files: list[str] = Field(default_factory=list)
@@ -67,11 +70,12 @@ def _evaluate_case(fixture_path: Path, label_path: Path) -> tuple[BenchmarkCaseR
     bundle = build_review_from_paths(fixture_path, label_path)
     actual_statuses = {finding.criterion_id: finding.status.value for finding in bundle.findings}
     expected_statuses = labels["expected_statuses"]
-    case_mismatches = [
+    status_mismatches = [
         f"{criterion_id}: expected {expected}, got {actual_statuses.get(criterion_id)}"
         for criterion_id, expected in expected_statuses.items()
         if actual_statuses.get(criterion_id) != expected
     ]
+    case_mismatches = [*status_mismatches]
     if bundle.gate.verdict.value != labels["expected_gate"]:
         case_mismatches.append(
             f"gate: expected {labels['expected_gate']}, got {bundle.gate.verdict.value}"
@@ -129,6 +133,9 @@ def _evaluate_case(fixture_path: Path, label_path: Path) -> tuple[BenchmarkCaseR
         expected_gate=labels["expected_gate"],
         actual_gate=bundle.gate.verdict.value,
         human_review_required=labels["human_review_required"],
+        expected_status_count=len(expected_statuses),
+        status_mismatch_count=len(status_mismatches),
+        evidence_link_count=len(bundle.evidence),
         mismatches=case_mismatches,
         evidence_link_errors=sorted(set(evidence_link_errors)),
         unmapped_changed_files=actual_unmapped,
