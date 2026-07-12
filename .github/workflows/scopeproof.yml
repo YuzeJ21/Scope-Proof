@@ -32,7 +32,12 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
-          if [ -f .scopeproof/requirements.txt ]; then
+          echo "SCOPEPROOF_REQUIREMENTS_CONFIRMED=false" >> "$GITHUB_ENV"
+          if [ -f .scopeproof/requirements.txt ] && [ -f .scopeproof/requirements-confirmation.json ]; then
+            scopeproof validate-requirements-confirmation \
+              --requirements .scopeproof/requirements.txt \
+              --confirmation .scopeproof/requirements-confirmation.json
+            echo "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" >> "$GITHUB_ENV"
             scopeproof review --pr "$PR_URL" \
               --requirements .scopeproof/requirements.txt \
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
@@ -54,7 +59,7 @@ jobs:
           if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
             content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
           fi
-          if [ -f .scopeproof/requirements.txt ]; then
+          if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" = "true" ]; then
             python -m scopeproof_core.github_action_runner \
               --event-path "$GITHUB_EVENT_PATH" \
               --requirements-confirmed \
@@ -69,6 +74,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" != "true" ]; then
+            echo "ScopeProof: requirements confirmation is unavailable or does not match."
+            exit 0
+          fi
           content_args=()
           if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
             content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")

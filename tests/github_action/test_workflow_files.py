@@ -29,6 +29,8 @@ def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     assert "--publish-comment\n          fi" not in workflow
     assert "scopeproof review --pr" in workflow
     assert "scopeproof export \"$review_id\"" in workflow
+    assert "validate-requirements-confirmation" in workflow
+    assert "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" in workflow
     assert "--content-file \"$RUNNER_TEMP/scopeproof-report.md\"" in workflow
     assert "actions/upload-artifact@v4" in workflow
     assert "scopeproof-report.md" in workflow
