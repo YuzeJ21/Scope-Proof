@@ -40,6 +40,14 @@ jobs:
             review_id=$(python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
             scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.md"
           fi
+      - name: Upload ScopeProof report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scopeproof-report
+          path: ${{ runner.temp }}/scopeproof-report.md
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Emit fork-safe ScopeProof summary and comment plan
         run: |
           content_args=()

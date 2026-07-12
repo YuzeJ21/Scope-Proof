@@ -25,6 +25,9 @@ It is deliberately a **safe preview**, not an enforcement integration:
 The workflow's public-PR evidence command is informational and
 `continue-on-error`; GitHub API limits, temporary network failures, or an
 incomplete diff must remain visible for human review, not become a false pass.
+When a review completes, the workflow uploads its Markdown export as the
+`scopeproof-report` artifact for seven days. If no report was produced, the
+artifact step is explicitly ignored and the summary remains conservative.
 
 This trigger is intentionally privileged only for its narrowly scoped comment
 permission. Do not add a pull-request-head checkout, `git fetch`, `gh pr

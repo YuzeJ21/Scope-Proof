@@ -30,5 +30,8 @@ def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     assert "scopeproof review --pr" in workflow
     assert "scopeproof export \"$review_id\"" in workflow
     assert "--content-file \"$RUNNER_TEMP/scopeproof-report.md\"" in workflow
+    assert "actions/upload-artifact@v4" in workflow
+    assert "scopeproof-report.md" in workflow
+    assert "if-no-files-found: ignore" in workflow
     assert "--verdict \"$SCOPEPROOF_VERDICT\"" in workflow
     assert 'echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"' in workflow
