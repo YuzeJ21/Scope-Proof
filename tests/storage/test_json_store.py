@@ -80,3 +80,15 @@ def test_default_local_review_directory_is_confined_to_the_user_home(
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
     assert default_local_review_directory() == tmp_path / ".scopeproof" / "reviews"
+
+
+def test_load_rejects_a_review_record_symlink_that_escapes_the_store(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    saved_path = store.save(review_state())
+    outside_record = tmp_path.parent / "outside-review.json"
+    outside_record.write_text(saved_path.read_text(encoding="utf-8"), encoding="utf-8")
+    saved_path.unlink()
+    saved_path.symlink_to(outside_record)
+
+    with pytest.raises(FileNotFoundError):
+        store.load("review-1")
