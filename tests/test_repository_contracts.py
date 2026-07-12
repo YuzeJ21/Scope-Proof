@@ -28,6 +28,7 @@ def test_project_has_no_paid_llm_runtime_dependency() -> None:
 
 def test_ci_runs_lint_tests_and_benchmark() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "python -m pip install --upgrade pip" in workflow
     assert "ruff check" in workflow
     assert "pytest" in workflow
     assert "scopeproof_core.evals.runner" in workflow
