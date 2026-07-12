@@ -21,6 +21,7 @@ from scopeproof_core.reporting.exporters import export_csv, export_json, export_
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.reviews.lifecycle import (
     append_resolution,
+    append_runtime_evidence,
     confirm_criteria,
     new_review_state,
     revise_criteria,
@@ -34,6 +35,7 @@ from scopeproof_core.schemas.models import (
     Review,
     ReviewBundle,
     ReviewState,
+    RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
@@ -376,6 +378,55 @@ else:
             st.write(item.relevance_reason)
             for limitation in item.limitations:
                 st.caption(f"Limitation: {limitation}")
+
+    st.markdown("### Manual runtime evidence")
+    st.caption(
+        "Record a human-supplied observation only. ScopeProof does not run PR code "
+        "or infer runtime results."
+    )
+    runtime_artifact = st.text_input("Artifact or URL", key="runtime_artifact_reference")
+    runtime_scenario = st.text_area("Runtime scenario", key="runtime_scenario")
+    runtime_environment = st.text_input("Environment", key="runtime_environment")
+    runtime_result = st.text_input("Observed result", key="runtime_result")
+    runtime_reviewer = st.text_input("Runtime reviewer", key="runtime_reviewer")
+    runtime_limitations = st.text_area("Runtime limitations", key="runtime_limitations")
+    runtime_level = st.selectbox(
+        "Runtime evidence level",
+        options=[EvidenceLevel.E3, EvidenceLevel.E4],
+        key="runtime_evidence_level",
+    )
+    if st.button("Save manual runtime evidence", key="save_runtime_evidence"):
+        if review_state is None:
+            st.error("Run analysis before recording manual runtime evidence.")
+        else:
+            try:
+                runtime_evidence = RuntimeEvidence(
+                    criterion_id=selected_id,
+                    artifact_reference=runtime_artifact,
+                    scenario=runtime_scenario,
+                    environment=runtime_environment,
+                    result=runtime_result,
+                    reviewer=runtime_reviewer,
+                    evidence_level=runtime_level,
+                    limitations=[
+                        line.strip() for line in runtime_limitations.splitlines() if line.strip()
+                    ],
+                )
+                review_state = append_runtime_evidence(review_state, runtime_evidence)
+                st.session_state["review_state"] = review_state
+                st.session_state["bundle"] = review_state.bundle
+                bundle = review_state.bundle
+                st.success("Manual runtime evidence appended without changing static findings.")
+            except ValueError as error:
+                st.error(str(error))
+    selected_runtime = [
+        item for item in bundle.runtime_evidence if item.criterion_id == selected_id
+    ]
+    for item in selected_runtime:
+        st.markdown(
+            f"- [{item.artifact_reference}]({item.artifact_reference}) — {item.scenario} "
+            f"({item.environment}: {item.result}; {item.evidence_level.value})"
+        )
 
     decision_options = [
         HumanDecision.ACCEPTED,

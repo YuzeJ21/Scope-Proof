@@ -133,3 +133,20 @@ def test_human_decision_and_final_acceptance_append_history() -> None:
     assert len(state.resolution_events) == 2
     assert state.review.final_acceptance is True
     assert "Resolution history" in "\n".join(markdown.value for markdown in app.markdown)
+
+
+def test_manual_runtime_evidence_can_be_recorded_without_changing_static_findings() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    finding_status = app.session_state["review_state"].bundle.findings[0].status
+    app = app.text_input(key="runtime_artifact_reference").set_value("https://example.test/run/1").run()
+    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("passed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    bundle = app.session_state["review_state"].bundle
+    assert bundle.findings[0].status is finding_status
+    assert bundle.runtime_evidence[0].artifact_reference.endswith("/1")
