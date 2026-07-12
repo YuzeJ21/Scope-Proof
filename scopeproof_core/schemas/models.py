@@ -102,6 +102,36 @@ class IngestionState(StringEnum):
     FAILED = "failed"
 
 
+class ActionValidationRecord(BaseModel):
+    """Owner-supplied public Action evidence; validates shape, not GitHub truth."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repository: str = Field(pattern=r"^[^/]+/[^/]+$")
+    requirements_base_sha: str = Field(min_length=1)
+    non_fork_pr_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/pull/\d+$")
+    non_fork_head_sha: str = Field(min_length=1)
+    non_fork_run_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
+    non_fork_comment_count: int = Field(ge=1)
+    rerun_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
+    rerun_head_sha: str = Field(min_length=1)
+    rerun_comment_count: int = Field(ge=1)
+    fork_pr_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/pull/\d+$")
+    fork_run_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
+    fork_comment_count: int = Field(ge=0, le=0)
+    validated_by: str = Field(min_length=1)
+    validated_at: datetime
+    limitations: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_rerun_idempotency(self) -> ActionValidationRecord:
+        if self.rerun_head_sha != self.non_fork_head_sha:
+            raise ValueError("same head SHA is required for an idempotency rerun")
+        if self.rerun_comment_count != self.non_fork_comment_count:
+            raise ValueError("same comment count is required for an idempotency rerun")
+        return self
+
+
 class ConfidenceBand(StringEnum):
     HIGH = "high"
     MEDIUM = "medium"

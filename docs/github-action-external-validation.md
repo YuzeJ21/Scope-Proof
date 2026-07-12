@@ -71,3 +71,17 @@ of ScopeProof comments before/after rerun, and any sanitized error. Do not send
 tokens, private repository links, or customer source code. ScopeProof can then
 add a public, human-labeled regression fixture only if the source and expected
 outcome are suitable.
+
+## Optional local record validation
+
+After the owner has collected real public evidence, save it as JSON with the
+fields listed in the capture record plus `non_fork_comment_count`,
+`rerun_comment_count`, and `fork_comment_count`. Validate its shape locally:
+
+```bash
+scopeproof validate-action-evidence action-validation.json
+```
+
+The command checks that the rerun uses the same head SHA and did not increase
+the ScopeProof-comment count, and that the fork record has zero comments. It
+does not contact GitHub or independently prove the submitted URLs are real.

@@ -19,7 +19,13 @@ from scopeproof_core.reporting.exporters import (
 )
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.reviews.lifecycle import new_review_state
-from scopeproof_core.schemas.models import Criterion, PullRequestSnapshot, Review, ReviewBundle
+from scopeproof_core.schemas.models import (
+    ActionValidationRecord,
+    Criterion,
+    PullRequestSnapshot,
+    Review,
+    ReviewBundle,
+)
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
 
@@ -93,6 +99,16 @@ def _export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_action_evidence(args: argparse.Namespace) -> int:
+    """Validate owner-supplied external Action evidence without contacting GitHub."""
+
+    record = ActionValidationRecord.model_validate_json(
+        Path(args.record).read_text(encoding="utf-8")
+    )
+    print(json.dumps(record.model_dump(mode="json"), indent=2, sort_keys=True))
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scopeproof", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -113,6 +129,12 @@ def _parser() -> argparse.ArgumentParser:
     export.set_defaults(handler=_export)
     benchmark = commands.add_parser("benchmark", help="Run every labelled local benchmark case")
     benchmark.set_defaults(handler=lambda _: _benchmark())
+    action_evidence = commands.add_parser(
+        "validate-action-evidence",
+        help="Validate an owner-supplied external Action evidence record without networking",
+    )
+    action_evidence.add_argument("record", help="Path to action-validation JSON")
+    action_evidence.set_defaults(handler=_validate_action_evidence)
     return parser
 
 
