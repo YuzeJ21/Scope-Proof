@@ -48,3 +48,10 @@ def test_readme_documents_actual_stage_2a_durability_behavior() -> None:
     assert "resolution history" in readme
     assert "Local review storage" in readme
     assert "unchanged candidate" in readme
+
+
+def test_security_policy_uses_github_private_vulnerability_reporting() -> None:
+    policy = Path("SECURITY.md").read_text(encoding="utf-8")
+
+    assert "private vulnerability report" in policy.lower()
+    assert "Do not post security vulnerabilities in public issues" in policy
