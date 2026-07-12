@@ -15,6 +15,11 @@ RECORD_VERSION = 1
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 
 
+def default_local_review_directory() -> Path:
+    """Return the app-owned local directory for persisted review records."""
+    return Path.home() / ".scopeproof" / "reviews"
+
+
 class UnsupportedRecordVersion(ValueError):
     """Raised when a review record needs an unavailable migration."""
 

@@ -79,10 +79,13 @@ splitting, reordering, or editing criteria invalidates the previous analysis and
 reconfirmation before another review run. Human decisions and final acceptance are recorded as
 history rather than silently replacing earlier decisions.
 
-Use **Local review storage folder** to save a versioned JSON record, then reopen it by review ID.
-Records preserve the review SHAs, criteria revisions, evidence, findings, resolution history, and
-gate decision. They never contain the optional GitHub token. A reopened review reports a changed
-head SHA rather than silently reusing old evidence.
+### Local review storage
+
+The workbench stores versioned JSON records under `~/.scopeproof/reviews`, then reopens them by
+review ID. This app-owned local directory prevents a browser input from selecting arbitrary file
+paths. Records preserve the review SHAs, criteria revisions, evidence, findings, resolution
+history, and gate decision. They never contain the optional GitHub token. A reopened review
+reports a changed head SHA rather than silently reusing old evidence.
 
 ## Deliberately constructed demo
 
