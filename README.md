@@ -198,9 +198,13 @@ constructed-demo and technical-smoke boundaries explicit.
 
 The checked-in [GitHub Actions guide](docs/github-action.md) explains the local
 starter workflow. It is non-blocking by default, needs an explicit checked-in
-requirements file, never uses `pull_request_target`, and makes no GitHub write
-request. Its fork-safe, idempotent publication plan is tested locally before a
-separate publication adapter can be considered.
+requirements file, never uses `pull_request_target`, and permits a scoped,
+idempotent informational comment only for non-fork PRs with confirmed
+requirements. Its publication policy is fixture-tested locally.
+
+Use the [external validation runbook](docs/github-action-external-validation.md)
+only in an authorized public demo repository. It records the exact non-fork,
+same-head rerun, and fork evidence required before claiming a real Action run.
 
 ## Explicit local Definition-of-Done packs
 

@@ -12,9 +12,10 @@ It is deliberately a **safe preview**, not an enforcement integration:
   say Ready.
 - It uses the event's head-repository fork flag to create a non-mutating plan.
   Fork PRs receive no write plan.
-- It makes no GitHub write request in this starter. The pure planner provides
-  create/update/skip decisions and a head-SHA marker for a future, separately
-  reviewed publication adapter.
+- For a non-fork PR with checked-in confirmed requirements, it may create or
+  update one informational comment using GitHub's short-lived `github.token`.
+  The pure planner supplies create/update/skip decisions and a head-SHA marker;
+  fork, missing-requirements, and missing-token paths make no write request.
 - `SCOPEPROOF_REQUIRED_CHECK=false` is a documented non-blocking default. Do
   not make it a required check until confirmed dogfood reviews show that the
   requirements source and evidence rules fit the repository.
