@@ -10,6 +10,8 @@ def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> N
     assert "checks: write" in workflow
     assert "SCOPEPROOF_REQUIRED_CHECK: false" in workflow
     assert "pull_request_target" not in workflow
+    assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
+    assert "persist-credentials: false" in workflow
 
 
 def test_example_requires_checked_in_confirmed_requirements_file() -> None:
@@ -25,3 +27,4 @@ def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     assert "--publish-comment\n          fi" not in workflow
     assert "scopeproof review --pr" in workflow
     assert "--verdict \"$SCOPEPROOF_VERDICT\"" in workflow
+    assert 'echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"' in workflow

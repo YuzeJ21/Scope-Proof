@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -29,13 +32,12 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
+          echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
           if [ -f .scopeproof/requirements.txt ]; then
             scopeproof review --pr "$PR_URL" \
               --requirements .scopeproof/requirements.txt \
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
             python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
-          else
-            echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
           fi
       - name: Emit fork-safe ScopeProof summary and comment plan
         run: |
