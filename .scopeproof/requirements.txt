@@ -1,0 +1,1 @@
+The README must state that this repository is used for ScopeProof Action validation.

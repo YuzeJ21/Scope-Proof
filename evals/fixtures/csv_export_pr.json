@@ -1,0 +1,70 @@
+{
+  "repository": "scopeproof/demo-stock-research",
+  "pr_number": 17,
+  "title": "Add filtered CSV export",
+  "description": "Deliberately constructed demo: CSV export is incomplete by design.",
+  "html_url": "https://github.com/scopeproof/demo-stock-research/pull/17",
+  "base_sha": "base-demo-001",
+  "head_sha": "head-demo-002",
+  "check_state": "passing",
+  "ingestion_state": "complete",
+  "fetched_at": "2026-07-11T12:00:00Z",
+  "files": [
+    {
+      "path": "src/export.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "changes": 4,
+      "patch": "",
+      "lines": [
+        {
+          "change_type": "added",
+          "content": "def export_research_list_csv(rows, active_sector=None):",
+          "line_number": 42
+        },
+        {
+          "change_type": "added",
+          "content": "    filtered_rows = apply_filters(rows, sector=active_sector)",
+          "line_number": 43
+        },
+        {
+          "change_type": "added",
+          "content": "    return to_csv(filtered_rows)",
+          "line_number": 44
+        }
+      ],
+      "truncated": false
+    },
+    {
+      "path": "tests/test_export.py",
+      "status": "modified",
+      "additions": 3,
+      "deletions": 0,
+      "changes": 3,
+      "patch": "",
+      "lines": [
+        {
+          "change_type": "added",
+          "content": "def test_export_research_list_csv_uses_sector_filter():",
+          "line_number": 18
+        },
+        {
+          "change_type": "added",
+          "content": "    assert export_research_list_csv(rows, active_sector=\"energy\")",
+          "line_number": 19
+        }
+      ],
+      "truncated": false
+    }
+  ],
+  "commits": [
+    {
+      "sha": "head-demo-002",
+      "message": "Add CSV export",
+      "html_url": "https://github.com/scopeproof/demo-stock-research/commit/head-demo-002"
+    }
+  ],
+  "warnings": [],
+  "skipped_files": []
+}

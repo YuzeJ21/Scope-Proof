@@ -1,0 +1,56 @@
+{
+  "fixture": "csv_export_pr.json",
+  "deliberately_constructed_demo": true,
+  "source_text": "Users can export the filtered research list as CSV. The export must respect all active filters, show an error if export fails, and record a research_exported analytics event.",
+  "criteria": [
+    {
+      "criterion_id": "AC-01",
+      "text": "User can export the research list as CSV",
+      "priority": "must_have",
+      "criterion_type": "behavior",
+      "required_evidence_level": "E1"
+    },
+    {
+      "criterion_id": "AC-02",
+      "text": "Export respects all active filters",
+      "priority": "must_have",
+      "criterion_type": "behavior",
+      "required_evidence_level": "E1"
+    },
+    {
+      "criterion_id": "AC-03",
+      "text": "Failed export shows an error message",
+      "priority": "must_have",
+      "criterion_type": "error_state",
+      "required_evidence_level": "E1"
+    },
+    {
+      "criterion_id": "AC-04",
+      "text": "Successful export records research_exported",
+      "priority": "should_have",
+      "criterion_type": "analytics",
+      "required_evidence_level": "E1"
+    }
+  ],
+  "expected_statuses": {
+    "AC-01": "evidence_found",
+    "AC-02": "partial",
+    "AC-03": "missing",
+    "AC-04": "missing"
+  },
+  "expected_gate": "blocked",
+  "declared_case_coverage": [
+    "complete_implementation",
+    "implementation_without_tests",
+    "happy_path_only",
+    "missing_error_state",
+    "active_filter_omitted",
+    "analytics_omitted",
+    "permission_without_authorization_test",
+    "description_claim_not_in_code",
+    "test_checks_wrong_behavior",
+    "scope_expansion",
+    "ambiguous_criterion",
+    "unchanged_file_evidence"
+  ]
+}
