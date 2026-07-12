@@ -101,6 +101,21 @@ def export_markdown(bundle: ExportableReview) -> str:
             )
         lines.extend(["", f"**Recommended action:** {finding.recommended_action}", ""])
 
+    if bundle.runtime_evidence:
+        lines.extend(["## Manual Runtime Evidence", ""])
+        for item in bundle.runtime_evidence:
+            lines.extend(
+                [
+                    f"- **{item.criterion_id}** — "
+                    f"[{item.artifact_reference}]({item.artifact_reference})",
+                    f"  - Scenario: {item.scenario}",
+                    f"  - Environment: {item.environment}; result: {item.result}; "
+                    f"reviewer: {item.reviewer}; level: {item.evidence_level.value}",
+                    f"  - Limitations: {', '.join(item.limitations) or 'None recorded'}",
+                ]
+            )
+        lines.append("")
+
     if bundle.gate.reason_codes:
         lines.extend(
             ["## Gate Reasons", "", *[f"- `{code}`" for code in bundle.gate.reason_codes], ""]
@@ -151,6 +166,8 @@ def export_csv(bundle: ExportableReview) -> str:
         "human_decision",
         "reviewer_comment",
         "recommended_action",
+        "runtime_artifacts",
+        "runtime_result",
     ]
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
@@ -158,6 +175,9 @@ def export_csv(bundle: ExportableReview) -> str:
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
+        runtime_items = [
+            item for item in bundle.runtime_evidence if item.criterion_id == criterion.criterion_id
+        ]
         writer.writerow(
             {
                 "review_id": bundle.review.review_id,
@@ -178,6 +198,8 @@ def export_csv(bundle: ExportableReview) -> str:
                 "human_decision": resolution.decision.value if resolution else "",
                 "reviewer_comment": resolution.comment if resolution else "",
                 "recommended_action": finding.recommended_action,
+                "runtime_artifacts": " | ".join(item.artifact_reference for item in runtime_items),
+                "runtime_result": " | ".join(item.result for item in runtime_items),
             }
         )
     return output.getvalue()
@@ -233,6 +255,24 @@ def export_html(value: ExportableReview) -> str:
             "<th>Status</th><th>Level</th><th>Evidence</th></tr></thead><tbody>",
             *rows,
             "</tbody></table>",
+            *(
+                [
+                    "<h2>Manual Runtime Evidence</h2><ul>",
+                    *[
+                        "<li>"
+                        f"{html.escape(item.criterion_id)}: "
+                        f"<a href=\"{html.escape(item.artifact_reference, quote=True)}\">"
+                        f"{html.escape(item.artifact_reference)}</a> — "
+                        f"{html.escape(item.scenario)}; {html.escape(item.environment)}; "
+                        f"{html.escape(item.result)}; {html.escape(item.reviewer)}; "
+                        f"{html.escape(item.evidence_level.value)}</li>"
+                        for item in bundle.runtime_evidence
+                    ],
+                    "</ul>",
+                ]
+                if bundle.runtime_evidence
+                else []
+            ),
             "</body></html>",
         ]
     )

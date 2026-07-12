@@ -19,6 +19,7 @@ from scopeproof_core.schemas.models import (
     HumanResolution,
     Review,
     ReviewBundle,
+    RuntimeEvidence,
 )
 
 
@@ -76,6 +77,19 @@ def example_bundle() -> ReviewBundle:
         source_text="Failed export shows an error",
         criteria=[criterion],
         evidence=[evidence],
+        runtime_evidence=[
+            RuntimeEvidence(
+                criterion_id="AC-01",
+                artifact_reference="https://example.test/runs/7",
+                scenario="Failed export shows its error state",
+                environment="staging",
+                result="passed",
+                reviewer="QA reviewer",
+                evidence_level=EvidenceLevel.E3,
+                timestamp=datetime(2026, 7, 11, 12, 10, tzinfo=UTC),
+                limitations=["Manually supplied"],
+            )
+        ],
         findings=[finding],
         resolutions=[resolution],
         gate=gate,
@@ -112,6 +126,8 @@ def test_markdown_contains_disclaimer_and_human_resolution() -> None:
     assert "does not replace QA" in markdown
     assert "Must fix before merge" in markdown
     assert "Candidate evidence" in markdown
+    assert "Manual Runtime Evidence" in markdown
+    assert "https://example.test/runs/7" in markdown
 
 
 def test_exports_never_include_token_shaped_secret() -> None:
@@ -121,4 +137,11 @@ def test_exports_never_include_token_shaped_secret() -> None:
         export_csv(example_bundle()),
     ):
         assert "ghp_" not in output
-        assert "authorization" not in output.lower()
+    assert "authorization" not in output.lower()
+
+
+def test_csv_exposes_runtime_evidence_separately_from_static_candidates() -> None:
+    row = next(csv.DictReader(io.StringIO(export_csv(example_bundle()))))
+
+    assert row["runtime_artifacts"] == "https://example.test/runs/7"
+    assert row["runtime_result"] == "passed"
