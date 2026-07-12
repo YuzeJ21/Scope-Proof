@@ -76,7 +76,9 @@ outcome are suitable.
 
 After the owner has collected real public evidence, save it as JSON with the
 fields listed in the capture record plus `non_fork_comment_count`,
-`rerun_comment_count`, and `fork_comment_count`. Validate its shape locally:
+`scopeproof_comment_marker`, `rerun_comment_count`, and `fork_comment_count`.
+Copy the exact `<!-- scopeproof:<head SHA> -->` marker from the non-fork
+comment. Validate its shape locally:
 
 ```bash
 scopeproof validate-action-evidence action-validation.json

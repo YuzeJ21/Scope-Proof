@@ -113,6 +113,7 @@ class ActionValidationRecord(BaseModel):
     non_fork_head_sha: str = Field(min_length=1)
     non_fork_run_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
     non_fork_comment_count: int = Field(ge=1)
+    scopeproof_comment_marker: str = Field(pattern=r"^<!-- scopeproof:.+ -->$")
     rerun_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
     rerun_head_sha: str = Field(min_length=1)
     rerun_comment_count: int = Field(ge=1)
@@ -135,6 +136,8 @@ class ActionValidationRecord(BaseModel):
         ]
         if any(not url.startswith(repository_url) for url in evidence_urls):
             raise ValueError("all Action evidence links must reference the same repository")
+        if self.scopeproof_comment_marker != f"<!-- scopeproof:{self.non_fork_head_sha} -->":
+            raise ValueError("comment marker must reference the verified non-fork head SHA")
         if self.rerun_head_sha != self.non_fork_head_sha:
             raise ValueError("same head SHA is required for an idempotency rerun")
         if self.rerun_comment_count != self.non_fork_comment_count:

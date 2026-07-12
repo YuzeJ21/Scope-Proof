@@ -13,6 +13,7 @@ def record_data() -> dict:
         "non_fork_head_sha": "head123",
         "non_fork_run_url": "https://github.com/acme/demo/actions/runs/1",
         "non_fork_comment_count": 1,
+        "scopeproof_comment_marker": "<!-- scopeproof:head123 -->",
         "rerun_url": "https://github.com/acme/demo/actions/runs/2",
         "rerun_head_sha": "head123",
         "rerun_comment_count": 1,
@@ -48,3 +49,10 @@ def test_action_validation_record_rejects_links_from_another_repository() -> Non
 
     with pytest.raises(ValueError, match="same repository"):
         ActionValidationRecord.model_validate(mixed_repository)
+
+
+def test_action_validation_record_requires_marker_for_the_verified_head() -> None:
+    wrong_marker = record_data() | {"scopeproof_comment_marker": "<!-- scopeproof:old -->"}
+
+    with pytest.raises(ValueError, match="comment marker"):
+        ActionValidationRecord.model_validate(wrong_marker)
