@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
@@ -117,9 +118,12 @@ class ActionValidationRecord(BaseModel):
     rerun_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
     rerun_head_sha: str = Field(min_length=1)
     rerun_comment_count: int = Field(ge=1)
-    fork_pr_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/pull/\d+$")
-    fork_run_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
-    fork_comment_count: int = Field(ge=0, le=0)
+    fork_status: Literal["excluded", "validated"] = "validated"
+    fork_pr_url: str | None = Field(default=None, pattern=r"^https://github\.com/[^/]+/[^/]+/pull/\d+$")
+    fork_run_url: str | None = Field(
+        default=None, pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$"
+    )
+    fork_comment_count: int | None = Field(default=None, ge=0, le=0)
     validated_by: str = Field(min_length=1)
     validated_at: datetime
     limitations: list[str] = Field(min_length=1)
@@ -131,9 +135,16 @@ class ActionValidationRecord(BaseModel):
             self.non_fork_pr_url,
             self.non_fork_run_url,
             self.rerun_url,
-            self.fork_pr_url,
-            self.fork_run_url,
         ]
+        fork_evidence = [self.fork_pr_url, self.fork_run_url, self.fork_comment_count]
+        if self.fork_status == "validated":
+            if any(value is None for value in fork_evidence):
+                raise ValueError(
+                    "validated fork evidence requires PR URL, run URL, and comment count"
+                )
+            evidence_urls.extend([self.fork_pr_url, self.fork_run_url])
+        elif any(value is not None for value in fork_evidence):
+            raise ValueError("excluded fork evidence must not include fork run details")
         if any(not url.startswith(repository_url) for url in evidence_urls):
             raise ValueError("all Action evidence links must reference the same repository")
         if self.scopeproof_comment_marker != f"<!-- scopeproof:{self.non_fork_head_sha} -->":

@@ -40,7 +40,8 @@ def test_single_account_alpha_policy_explicitly_skips_external_fork_testing() ->
 
     normalized_runbook = " ".join(runbook.split())
     assert "Single-account public alpha policy" in runbook
-    assert "fork testing is optional and intentionally out of scope." in normalized_runbook
+    assert "fork testing is permanently excluded." in normalized_runbook
+    assert "Optional Test 3" not in runbook
     assert "single-account public alpha" in privacy
 
 
