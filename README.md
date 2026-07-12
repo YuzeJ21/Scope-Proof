@@ -6,6 +6,12 @@ ScopeProof reviews a public GitHub pull request against user-confirmed product r
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
+## ScopeProof Action validation demo
+
+This repository is used for ScopeProof Action validation. The public demo PRs
+exercise deterministic evidence review, informational comments, and fork-safe
+no-write behavior; they are not customer validation or a production incident.
+
 ## Why this exists
 
 AI coding agents can produce pull requests quickly, but a green CI check does not establish that every ticket promise was implemented. Product reviewers still need to answer questions such as:
