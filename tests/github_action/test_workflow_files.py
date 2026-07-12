@@ -11,6 +11,9 @@ def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> N
     assert "pull_request:" not in workflow
     assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
     assert "persist-credentials: false" in workflow
+    assert "pull_request.head.sha" not in workflow
+    assert "gh pr checkout" not in workflow
+    assert "git fetch" not in workflow
 
 
 def test_example_requires_checked_in_confirmed_requirements_file() -> None:
