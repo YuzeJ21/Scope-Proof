@@ -6,7 +6,8 @@
 | Benchmark | 12 executable fixture-label pairs | Regression coverage, 0 known must-have False Ready, link validation | Production precision/recall or market validation |
 | Public PR technical smoke | Public GitHub PR with proxy requirement | Public ingestion and local report generation can complete | User-confirmed requirement coverage or a confirmed product gap |
 | Streamlit workbench | AppTest and local health smoke | Local five-step review flow, persistence, resolution history, manual runtime records | Browser/runtime verification of the reviewed PR |
-| GitHub Action fixtures | Local payload and HTTP-mock tests | Fork no-write policy, idempotent marker planning, comment adapter behavior | A successful action run in a user-owned repository |
+| Local GitHub Action fixtures | Local payload and HTTP-mock tests | Fork no-write policy, idempotent marker planning, comment adapter behavior | A successful hosted Action run or external fork-run evidence |
+| Recorded same-repository Action run | [`docs/launch/non-fork-action-validation.md`](non-fork-action-validation.md) | A same-repository run and same-head rerun completed with hash-bound requirements and one idempotent informational comment | Source-owner-confirmed acceptance criteria, runtime correctness, customer usage, or external fork validation |
 | Privacy readiness design | `docs/privacy-readiness.md` | Local-only retention boundary and private-pilot constraints | Hosted or private-repository availability |
 
 ## Publishing rule
