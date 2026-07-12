@@ -17,3 +17,9 @@ def test_example_requires_checked_in_confirmed_requirements_file() -> None:
 
     assert ".scopeproof/requirements.txt" in example
     assert "SCOPEPROOF_REQUIRED_CHECK" in example
+
+
+def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
+    workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
+
+    assert "--publish-comment\n          fi" not in workflow

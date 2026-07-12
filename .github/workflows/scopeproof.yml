@@ -42,7 +42,6 @@ jobs:
             --event-path "$GITHUB_EVENT_PATH" \
             --requirements-confirmed \
             --publish-comment
-          fi
       - name: Review public PR evidence (informational)
         continue-on-error: true
         env:
