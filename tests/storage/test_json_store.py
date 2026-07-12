@@ -11,6 +11,7 @@ from scopeproof_core.schemas.models import PullRequestSnapshot
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
     UnsupportedRecordVersion,
+    default_local_review_directory,
 )
 
 
@@ -71,3 +72,11 @@ def test_review_id_cannot_escape_store_directory(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         store.load("../outside")
+
+
+def test_default_local_review_directory_is_confined_to_the_user_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+    assert default_local_review_directory() == tmp_path / ".scopeproof" / "reviews"

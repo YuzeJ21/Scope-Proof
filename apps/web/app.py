@@ -37,7 +37,7 @@ from scopeproof_core.schemas.models import (
     ReviewState,
     RuntimeEvidence,
 )
-from scopeproof_core.storage.json_store import JsonReviewStore
+from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
 from scopeproof_core.verification.service import build_findings
 
 st.set_page_config(page_title="ScopeProof", page_icon="🔎", layout="wide")
@@ -51,7 +51,6 @@ _STATE_DEFAULTS = {
     "source_text": "",
     "resolutions": [],
     "review_state": None,
-    "review_storage_dir": ".scopeproof/reviews",
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -183,10 +182,10 @@ if st.button(
     st.session_state["source_text"] = requirements_text
     _prepare_from_text(requirements_text)
 
-storage_directory = st.text_input(
-    "Local review storage folder",
-    help="Local-only JSON records. GitHub tokens are never stored.",
-    key="review_storage_dir",
+storage_directory = default_local_review_directory()
+st.caption(
+    f"Local review storage: `{storage_directory}`. Records stay under your user-owned "
+    "ScopeProof folder; GitHub tokens are never stored."
 )
 
 st.header("2 · Confirm Criteria")
