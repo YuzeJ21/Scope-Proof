@@ -26,6 +26,15 @@ def test_project_has_no_paid_llm_runtime_dependency() -> None:
     assert "anthropic" not in dependencies
 
 
+def test_wheel_includes_bundled_benchmark_data() -> None:
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
+
+    assert wheel["force-include"]["evals"] == "evals"
+    assert list(Path("evals/fixtures").glob("*.json"))
+    assert list(Path("evals/labels").glob("*.json"))
+
+
 def test_ci_runs_lint_tests_and_benchmark() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "python -m pip install --upgrade pip" in workflow
