@@ -208,8 +208,10 @@ never checks out or executes pull-request head code. Its publication policy is
 fixture-tested locally.
 
 Use the [external validation runbook](docs/github-action-external-validation.md)
-only in an authorized public demo repository. It records the exact non-fork,
-same-head rerun, and fork evidence required before claiming a real Action run.
+only in an authorized public demo repository. It records exact non-fork and
+same-head rerun evidence before claiming a real Action run. Fork testing is
+permanently excluded for this single-account public alpha; fork-safety remains
+covered by local fixture tests without any external fork-run claim.
 
 ## Confirmed-action validation revision
 

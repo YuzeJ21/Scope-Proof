@@ -38,7 +38,7 @@ may never use elevated credentials for fork-origin pull requests.
 | --- | --- | --- |
 | Token in records or reports | Tokens are excluded from schemas and exports | Redaction regression tests for every adapter/log path. |
 | PR code execution | ScopeProof only reads GitHub data | Preserve; runtime evidence needs its own isolated design. |
-| Fork credential exposure | Repository workflow uses the trusted base definition and never checks out or executes PR head code; planner returns no fork write plan | Continue payload fixture tests. External fork validation is optional and excluded for this single-account public alpha. |
+| Fork credential exposure | Repository workflow uses the trusted base definition and never checks out or executes PR head code; planner returns no fork write plan | Continue payload fixture tests. Fork testing is permanently excluded for this single-account public alpha, and no external fork-run claim is made. |
 | Stale/wrong evidence | Immutable head-SHA links and head-change detection | Mandatory stale-head warning for current claims. |
 | Residual source data | No hosted copy; local user-owned records | Test and document any future atomic local delete command. |
 
