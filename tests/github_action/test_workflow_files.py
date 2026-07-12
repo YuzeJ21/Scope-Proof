@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -35,7 +36,7 @@ def test_public_action_guidance_matches_the_trusted_base_workflow() -> None:
     assert "persist-credentials: false" in example
     assert "requirements-confirmation.json" in example
     assert "checks: write" not in example
-    assert "actions/upload-artifact@v4" in example
+    assert "actions/upload-artifact@" in example
     assert "Emit fork-safe ScopeProof summary and comment plan" in example
     assert "Fork pull requests never receive a write request." in example
 
@@ -49,8 +50,22 @@ def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     assert "validate-requirements-confirmation" in workflow
     assert "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" in workflow
     assert "--content-file \"$RUNNER_TEMP/scopeproof-report.md\"" in workflow
-    assert "actions/upload-artifact@v4" in workflow
+    assert "actions/upload-artifact@" in workflow
     assert "scopeproof-report.md" in workflow
     assert "if-no-files-found: ignore" in workflow
     assert "--verdict \"$SCOPEPROOF_VERDICT\"" in workflow
     assert 'echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"' in workflow
+
+
+def test_all_third_party_actions_are_pinned_to_immutable_commit_shas() -> None:
+    workflow_paths = (
+        Path(".github/workflows/ci.yml"),
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    )
+
+    for path in workflow_paths:
+        uses_references = re.findall(r"uses:\s+([^\s]+)", path.read_text(encoding="utf-8"))
+        assert uses_references
+        for reference in uses_references:
+            assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", reference), reference
