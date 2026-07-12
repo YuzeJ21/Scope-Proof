@@ -65,3 +65,10 @@ def test_contributing_guide_preserves_public_alpha_boundaries() -> None:
     assert "Do not include tokens" in guide
     assert "python -m pytest -q" in guide
     assert "private vulnerability report" in guide.lower()
+
+
+def test_external_validation_runbook_permanently_excludes_fork_testing() -> None:
+    runbook = Path("docs/github-action-external-validation.md").read_text(encoding="utf-8")
+
+    assert "fork testing is permanently excluded" in runbook.lower()
+    assert "optional test 3" not in runbook.lower()

@@ -32,6 +32,18 @@ def test_action_validation_record_requires_idempotent_same_head_rerun() -> None:
     assert record.rerun_comment_count == record.non_fork_comment_count
 
 
+def test_action_validation_record_allows_a_single_account_fork_exclusion() -> None:
+    non_fork_only = record_data() | {"fork_status": "excluded"}
+    non_fork_only.pop("fork_pr_url")
+    non_fork_only.pop("fork_run_url")
+    non_fork_only.pop("fork_comment_count")
+
+    record = ActionValidationRecord.model_validate(non_fork_only)
+
+    assert record.fork_status == "excluded"
+    assert record.fork_pr_url is None
+
+
 def test_action_validation_record_rejects_rerun_that_changes_head_or_comment_count() -> None:
     changed_head = record_data() | {"rerun_head_sha": "different"}
     with pytest.raises(ValueError, match="same head SHA"):
