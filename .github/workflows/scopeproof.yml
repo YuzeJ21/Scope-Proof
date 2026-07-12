@@ -24,7 +24,7 @@ jobs:
           python-version: '3.12'
       - name: Install ScopeProof
         run: pip install .
-      - name: Emit a fork-safe non-mutating publication plan
+      - name: Emit fork-safe ScopeProof summary and comment plan
         run: |
           if [ -f .scopeproof/requirements.txt ]; then
             python -m scopeproof_core.github_action_runner \
@@ -33,6 +33,15 @@ jobs:
             python -m scopeproof_core.github_action_runner \
               --event-path "$GITHUB_EVENT_PATH" \
               --content "Checked-in .scopeproof/requirements.txt is missing."
+      - name: Publish an idempotent informational comment
+        if: github.event.pull_request.head.repo.fork == false && hashFiles('.scopeproof/requirements.txt') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m scopeproof_core.github_action_runner \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --requirements-confirmed \
+            --publish-comment
           fi
       - name: Review public PR evidence (informational)
         continue-on-error: true
@@ -46,5 +55,5 @@ jobs:
           fi
       - name: Publication boundary
         run: |
-          echo "This starter emits a tested plan only; it makes no GitHub write request."
-          echo "Fork pull requests never receive a write plan."
+          echo "Fork pull requests never receive a write request."
+          echo "Comments are informational; required-check mode remains disabled."

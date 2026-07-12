@@ -5,10 +5,33 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from scopeproof_core.github_action import EventContext, plan_comment, render_check_summary
+from scopeproof_core.github_action import (
+    CommentMode,
+    CommentPlan,
+    EventContext,
+    plan_comment,
+    render_check_summary,
+)
+from scopeproof_core.github_action_publisher import publish_comment
+
+Publisher = Callable[[EventContext, str, str], CommentPlan]
+
+
+def _event_context(event_path: Path, requirements_confirmed: bool) -> EventContext:
+    payload = json.loads(event_path.read_text(encoding="utf-8"))
+    pull_request = payload["pull_request"]
+    head = pull_request["head"]
+    return EventContext(
+        repository=payload["repository"]["full_name"],
+        pr_number=pull_request["number"],
+        head_sha=head["sha"],
+        is_fork=bool(head.get("repo", {}).get("fork", False)),
+        requirements_confirmed=requirements_confirmed,
+    )
 
 
 def build_event_plan(
@@ -16,16 +39,7 @@ def build_event_plan(
 ) -> dict[str, Any]:
     """Build a serialisable plan from GitHub's event payload without HTTP calls."""
 
-    payload = json.loads(event_path.read_text(encoding="utf-8"))
-    pull_request = payload["pull_request"]
-    head = pull_request["head"]
-    context = EventContext(
-        repository=payload["repository"]["full_name"],
-        pr_number=pull_request["number"],
-        head_sha=head["sha"],
-        is_fork=bool(head.get("repo", {}).get("fork", False)),
-        requirements_confirmed=requirements_confirmed,
-    )
+    context = _event_context(event_path, requirements_confirmed)
     summary = render_check_summary(context, "needs_review", content)
     return {
         "context": context.model_dump(mode="json"),
@@ -34,12 +48,28 @@ def build_event_plan(
     }
 
 
+def publish_event_comment(
+    event_path: Path,
+    requirements_confirmed: bool,
+    summary: str,
+    token: str | None,
+    publisher: Publisher = publish_comment,
+) -> CommentMode:
+    """Publish only a non-fork, contract-confirmed Action event with a supplied token."""
+
+    context = _event_context(event_path, requirements_confirmed)
+    if context.is_fork or not context.requirements_confirmed or not token:
+        return CommentMode.SKIP
+    return publisher(context, summary, token).mode
+
+
 def main(argv: list[str] | None = None) -> int:
     """Emit a plan to stdout and GitHub's step summary, if available."""
 
     parser = argparse.ArgumentParser(description="Plan a safe ScopeProof GitHub Action run")
     parser.add_argument("--event-path", type=Path, required=True)
     parser.add_argument("--requirements-confirmed", action="store_true")
+    parser.add_argument("--publish-comment", action="store_true")
     parser.add_argument("--content", default="Evidence report is available in the workflow logs.")
     args = parser.parse_args(argv)
 
@@ -52,6 +82,14 @@ def main(argv: list[str] | None = None) -> int:
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if step_summary:
         Path(step_summary).write_text(f"{plan['summary']}\n", encoding="utf-8")
+    if args.publish_comment:
+        mode = publish_event_comment(
+            args.event_path,
+            args.requirements_confirmed,
+            plan["summary"],
+            os.environ.get("GITHUB_TOKEN"),
+        )
+        print(json.dumps({"comment_mode": mode}, sort_keys=True))
     return 0
 
 
