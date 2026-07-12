@@ -24,24 +24,6 @@ jobs:
           python-version: '3.12'
       - name: Install ScopeProof
         run: pip install .
-      - name: Emit fork-safe ScopeProof summary and comment plan
-        run: |
-          if [ -f .scopeproof/requirements.txt ]; then
-            python -m scopeproof_core.github_action_runner \
-              --event-path "$GITHUB_EVENT_PATH" --requirements-confirmed
-          else
-            python -m scopeproof_core.github_action_runner \
-              --event-path "$GITHUB_EVENT_PATH" \
-              --content "Checked-in .scopeproof/requirements.txt is missing."
-      - name: Publish an idempotent informational comment
-        if: github.event.pull_request.head.repo.fork == false && hashFiles('.scopeproof/requirements.txt') != ''
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python -m scopeproof_core.github_action_runner \
-            --event-path "$GITHUB_EVENT_PATH" \
-            --requirements-confirmed \
-            --publish-comment
       - name: Review public PR evidence (informational)
         continue-on-error: true
         env:
@@ -50,8 +32,33 @@ jobs:
           if [ -f .scopeproof/requirements.txt ]; then
             scopeproof review --pr "$PR_URL" \
               --requirements .scopeproof/requirements.txt \
-              --storage-dir .scopeproof/reviews
+              --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
+            python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
+          else
+            echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
           fi
+      - name: Emit fork-safe ScopeProof summary and comment plan
+        run: |
+          if [ -f .scopeproof/requirements.txt ]; then
+            python -m scopeproof_core.github_action_runner \
+              --event-path "$GITHUB_EVENT_PATH" \
+              --requirements-confirmed \
+              --verdict "$SCOPEPROOF_VERDICT"
+          else
+            python -m scopeproof_core.github_action_runner \
+              --event-path "$GITHUB_EVENT_PATH" \
+              --content "Checked-in .scopeproof/requirements.txt is missing."
+          fi
+      - name: Publish an idempotent informational comment
+        if: github.event.pull_request.head.repo.fork == false && hashFiles('.scopeproof/requirements.txt') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m scopeproof_core.github_action_runner \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --requirements-confirmed \
+            --verdict "$SCOPEPROOF_VERDICT" \
+            --publish-comment
       - name: Publication boundary
         run: |
           echo "Fork pull requests never receive a write request."

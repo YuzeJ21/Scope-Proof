@@ -35,12 +35,12 @@ def _event_context(event_path: Path, requirements_confirmed: bool) -> EventConte
 
 
 def build_event_plan(
-    event_path: Path, *, requirements_confirmed: bool, content: str
+    event_path: Path, *, requirements_confirmed: bool, content: str, verdict: str = "needs_review"
 ) -> dict[str, Any]:
     """Build a serialisable plan from GitHub's event payload without HTTP calls."""
 
     context = _event_context(event_path, requirements_confirmed)
-    summary = render_check_summary(context, "needs_review", content)
+    summary = render_check_summary(context, verdict, content)
     return {
         "context": context.model_dump(mode="json"),
         "summary": summary,
@@ -70,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event-path", type=Path, required=True)
     parser.add_argument("--requirements-confirmed", action="store_true")
     parser.add_argument("--publish-comment", action="store_true")
+    parser.add_argument("--verdict", default="needs_review")
     parser.add_argument("--content", default="Evidence report is available in the workflow logs.")
     args = parser.parse_args(argv)
 
@@ -77,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         args.event_path,
         requirements_confirmed=args.requirements_confirmed,
         content=args.content,
+        verdict=args.verdict,
     )
     print(json.dumps(plan, indent=2, sort_keys=True))
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")

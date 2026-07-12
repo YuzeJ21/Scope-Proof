@@ -23,3 +23,5 @@ def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
 
     assert "--publish-comment\n          fi" not in workflow
+    assert "scopeproof review --pr" in workflow
+    assert "--verdict \"$SCOPEPROOF_VERDICT\"" in workflow
