@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from scopeproof_core.github_action import CommentMode
-from scopeproof_core.github_action_runner import build_event_plan, publish_event_comment
+from scopeproof_core.github_action_runner import build_event_plan, main, publish_event_comment
 
 
 def test_build_event_plan_is_fork_safe_and_needs_review_without_requirements(
@@ -71,3 +71,30 @@ def test_runner_publishes_only_with_a_token_and_nonfork_context(tmp_path: Path) 
     )
     assert calls[0][0].repository == "acme/widget"
     assert publish_event_comment(event_path, True, "Summary", None, publisher) is CommentMode.SKIP
+
+
+def test_runner_uses_exported_report_file_as_summary_content(tmp_path: Path, capsys) -> None:
+    event_path = tmp_path / "event.json"
+    event_path.write_text(
+        json.dumps(
+            {
+                "repository": {"full_name": "acme/widget"},
+                "pull_request": {"number": 42, "head": {"sha": "head123", "repo": {"fork": False}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    report_path = tmp_path / "report.md"
+    report_path.write_text("# ScopeProof Acceptance Review\n\nEvidence details", encoding="utf-8")
+
+    assert main(
+        [
+            "--event-path",
+            str(event_path),
+            "--requirements-confirmed",
+            "--content-file",
+            str(report_path),
+        ]
+    ) == 0
+
+    assert "Evidence details" in capsys.readouterr().out

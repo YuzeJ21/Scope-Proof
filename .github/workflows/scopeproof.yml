@@ -37,14 +37,20 @@ jobs:
               --requirements .scopeproof/requirements.txt \
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
             python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
+            review_id=$(python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
+            scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.md"
           fi
       - name: Emit fork-safe ScopeProof summary and comment plan
         run: |
+          content_args=()
+          if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
+            content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
+          fi
           if [ -f .scopeproof/requirements.txt ]; then
             python -m scopeproof_core.github_action_runner \
               --event-path "$GITHUB_EVENT_PATH" \
               --requirements-confirmed \
-              --verdict "$SCOPEPROOF_VERDICT"
+              --verdict "$SCOPEPROOF_VERDICT" "${content_args[@]}"
           else
             python -m scopeproof_core.github_action_runner \
               --event-path "$GITHUB_EVENT_PATH" \
@@ -55,11 +61,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          content_args=()
+          if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
+            content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
+          fi
           python -m scopeproof_core.github_action_runner \
             --event-path "$GITHUB_EVENT_PATH" \
             --requirements-confirmed \
             --verdict "$SCOPEPROOF_VERDICT" \
-            --publish-comment
+            --publish-comment "${content_args[@]}"
       - name: Publication boundary
         run: |
           echo "Fork pull requests never receive a write request."

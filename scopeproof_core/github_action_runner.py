@@ -35,7 +35,11 @@ def _event_context(event_path: Path, requirements_confirmed: bool) -> EventConte
 
 
 def build_event_plan(
-    event_path: Path, *, requirements_confirmed: bool, content: str, verdict: str = "needs_review"
+    event_path: Path,
+    *,
+    requirements_confirmed: bool,
+    content: str,
+    verdict: str = "needs_review",
 ) -> dict[str, Any]:
     """Build a serialisable plan from GitHub's event payload without HTTP calls."""
 
@@ -72,12 +76,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--publish-comment", action="store_true")
     parser.add_argument("--verdict", default="needs_review")
     parser.add_argument("--content", default="Evidence report is available in the workflow logs.")
+    parser.add_argument("--content-file", type=Path)
     args = parser.parse_args(argv)
+    content = args.content_file.read_text(encoding="utf-8") if args.content_file else args.content
 
     plan = build_event_plan(
         args.event_path,
         requirements_confirmed=args.requirements_confirmed,
-        content=args.content,
+        content=content,
         verdict=args.verdict,
     )
     print(json.dumps(plan, indent=2, sort_keys=True))
