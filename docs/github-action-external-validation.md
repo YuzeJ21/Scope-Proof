@@ -7,9 +7,10 @@ run has occurred until the owner fills in the run URLs and preserves the output.
 
 1. Use a user-owned **public demo repository**; do not use a customer or private
    repository for first validation.
-2. Copy `.github/workflows/scopeproof.yml` and create
+2. Copy `.github/workflows/scopeproof.yml`, create
    `.scopeproof/requirements.txt` on the base branch with one confirmed
-   criterion per line.
+   criterion per line, and add the hash-bound confirmation record described in
+   [the Action guide](github-action.md#requirements-confirmation-record).
 3. Commit the workflow and requirements to the base branch before opening the
    test PR. The workflow deliberately runs from the trusted base definition and
    checks out the base SHA, never the PR head.

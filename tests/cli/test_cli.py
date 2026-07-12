@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -108,3 +109,30 @@ def test_action_evidence_command_validates_owner_supplied_record(tmp_path: Path,
 
     assert main(["validate-action-evidence", str(evidence_path)]) == 0
     assert '"repository": "acme/demo"' in capsys.readouterr().out
+
+
+def test_requirements_confirmation_command_validates_bound_record(tmp_path: Path, capsys) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Document the demo.\n", encoding="utf-8")
+    confirmation = tmp_path / "confirmation.json"
+    confirmation.write_text(
+        json.dumps(
+            {
+                "requirements_sha256": hashlib.sha256(requirements.read_bytes()).hexdigest(),
+                "confirmed_by": "Demo owner",
+                "confirmed_at": "2026-07-12T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert main(
+        [
+            "validate-requirements-confirmation",
+            "--requirements",
+            str(requirements),
+            "--confirmation",
+            str(confirmation),
+        ]
+    ) == 0
+    assert '"confirmed_by": "Demo owner"' in capsys.readouterr().out

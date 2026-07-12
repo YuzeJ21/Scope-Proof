@@ -9,9 +9,11 @@ It is deliberately a **safe preview**, not an enforcement integration:
 - It runs on `pull_request_target` so GitHub uses the trusted base-branch
   workflow definition. It checks out the immutable base SHA only and never
   checks out or executes the pull request head.
-- It needs a checked-in `.scopeproof/requirements.txt`, one confirmed criterion
-  per line. If it is missing, the step summary says **Needs Review** and cannot
-  say Ready.
+- It needs a checked-in `.scopeproof/requirements.txt` plus
+  `.scopeproof/requirements-confirmation.json`. The confirmation records the
+  exact SHA-256 of the requirements bytes, who confirmed them, and when. If
+  either file is missing or the hash differs, the step summary says **Needs
+  Review** and cannot say Ready or publish a comment.
 - It uses the event's head-repository fork flag to create a non-mutating plan.
   Fork PRs receive no write plan.
 - For a non-fork PR with checked-in confirmed requirements, it may create or
@@ -48,3 +50,33 @@ python -m scopeproof_core.github_action_runner \
 
 The JSON output includes the trusted event context, human-readable summary, and
 the proposed comment action. It contains no token and does not mutate GitHub.
+
+## Requirements confirmation record
+
+Generate the digest locally, then have the requirements owner fill in their
+identity and timestamp before committing the record:
+
+```bash
+# macOS
+shasum -a 256 .scopeproof/requirements.txt
+
+# Linux
+sha256sum .scopeproof/requirements.txt
+```
+
+```json
+{
+  "requirements_sha256": "<sha256 output>",
+  "confirmed_by": "Requirements owner or role",
+  "confirmed_at": "2026-07-12T00:00:00Z"
+}
+```
+
+Save it as `.scopeproof/requirements-confirmation.json`, then validate it
+before opening the PR:
+
+```bash
+scopeproof validate-requirements-confirmation \
+  --requirements .scopeproof/requirements.txt \
+  --confirmation .scopeproof/requirements-confirmation.json
+```

@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
 from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.evals.metrics import EvidenceQualityMetrics
 from scopeproof_core.evals.runner import run_bundled_benchmark
@@ -109,6 +110,16 @@ def _validate_action_evidence(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_requirements_confirmation(args: argparse.Namespace) -> int:
+    """Validate a hash-bound Action requirements confirmation without networking."""
+
+    confirmation = validate_requirements_confirmation(
+        Path(args.requirements), Path(args.confirmation)
+    )
+    print(json.dumps(confirmation.model_dump(mode="json"), indent=2, sort_keys=True))
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scopeproof", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -135,6 +146,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     action_evidence.add_argument("record", help="Path to action-validation JSON")
     action_evidence.set_defaults(handler=_validate_action_evidence)
+    requirements_confirmation = commands.add_parser(
+        "validate-requirements-confirmation",
+        help="Validate a hash-bound Action requirements confirmation without networking",
+    )
+    requirements_confirmation.add_argument("--requirements", required=True)
+    requirements_confirmation.add_argument("--confirmation", required=True)
+    requirements_confirmation.set_defaults(handler=_validate_requirements_confirmation)
     return parser
 
 
