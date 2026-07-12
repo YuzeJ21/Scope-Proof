@@ -98,3 +98,23 @@ def test_runner_uses_exported_report_file_as_summary_content(tmp_path: Path, cap
     ) == 0
 
     assert "Evidence details" in capsys.readouterr().out
+
+
+def test_action_summary_marks_large_report_as_truncated(tmp_path: Path) -> None:
+    event_path = tmp_path / "event.json"
+    event_path.write_text(
+        json.dumps(
+            {
+                "repository": {"full_name": "acme/widget"},
+                "pull_request": {"number": 42, "head": {"sha": "head123", "repo": {"fork": False}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    plan = build_event_plan(
+        event_path, requirements_confirmed=True, content="x" * 70_000, verdict="blocked"
+    )
+
+    assert len(plan["summary"]) <= 60_000
+    assert "truncated" in plan["summary"]

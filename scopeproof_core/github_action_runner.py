@@ -19,6 +19,10 @@ from scopeproof_core.github_action import (
 from scopeproof_core.github_action_publisher import publish_comment
 
 Publisher = Callable[[EventContext, str, str], CommentPlan]
+MAX_ACTION_SUMMARY_CHARS = 60_000
+_TRUNCATION_NOTICE = (
+    "\n\n> ScopeProof summary truncated; use the workflow artifact/log for full details."
+)
 
 
 def _event_context(event_path: Path, requirements_confirmed: bool) -> EventContext:
@@ -45,6 +49,8 @@ def build_event_plan(
 
     context = _event_context(event_path, requirements_confirmed)
     summary = render_check_summary(context, verdict, content)
+    if len(summary) > MAX_ACTION_SUMMARY_CHARS:
+        summary = summary[: MAX_ACTION_SUMMARY_CHARS - len(_TRUNCATION_NOTICE)] + _TRUNCATION_NOTICE
     return {
         "context": context.model_dump(mode="json"),
         "summary": summary,
