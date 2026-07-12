@@ -218,6 +218,9 @@ The pinned-action technical smoke verifies that the safe-preview workflow uses
 immutable third-party Action revisions without changing its non-blocking,
 informational review boundary.
 
+The Node-24 action smoke validates the upgraded immutable dependency revisions
+through the same public, trusted-base workflow path.
+
 ## Explicit local Definition-of-Done packs
 
 `scopeproof_core.rule_packs` offers opt-in local prompts for error, loading,
