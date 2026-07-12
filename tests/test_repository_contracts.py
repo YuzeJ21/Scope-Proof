@@ -72,3 +72,18 @@ def test_external_validation_runbook_permanently_excludes_fork_testing() -> None
 
     assert "fork testing is permanently excluded" in runbook.lower()
     assert "optional test 3" not in runbook.lower()
+
+
+def test_public_docs_do_not_require_or_offer_external_fork_validation() -> None:
+    public_docs = {
+        "README.md": Path("README.md").read_text(encoding="utf-8"),
+        "docs/privacy-readiness.md": Path("docs/privacy-readiness.md").read_text(
+            encoding="utf-8"
+        ),
+    }
+    combined = "\n".join(public_docs.values()).lower()
+
+    assert "fork evidence required" not in combined
+    assert "same-head rerun, and fork evidence" not in combined
+    assert "external fork validation is optional" not in combined
+    assert "fork testing is permanently excluded" in combined
