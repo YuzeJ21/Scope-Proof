@@ -1,29 +1,93 @@
 name: ScopeProof
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize]
 
 permissions:
   contents: read
   pull-requests: write
-  checks: write
 
 env:
+  # Keep this informational until confirmed dogfood validates the contract.
   SCOPEPROOF_REQUIRED_CHECK: false
 
 jobs:
   review:
+    name: ScopeProof evidence review
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install scopeproof
-      - run: |
-          scopeproof review \
-            --pr "${{ github.event.pull_request.html_url }}" \
-            --requirements .scopeproof/requirements.txt \
-            --storage-dir .scopeproof/reviews
-      - run: echo "Keep SCOPEPROOF_REQUIRED_CHECK=false until local dogfood is complete."
+      - name: Install ScopeProof
+        run: pip install scopeproof
+      - name: Review public PR evidence (informational)
+        continue-on-error: true
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
+          echo "SCOPEPROOF_REQUIREMENTS_CONFIRMED=false" >> "$GITHUB_ENV"
+          if [ -f .scopeproof/requirements.txt ] && [ -f .scopeproof/requirements-confirmation.json ]; then
+            scopeproof validate-requirements-confirmation \
+              --requirements .scopeproof/requirements.txt \
+              --confirmation .scopeproof/requirements-confirmation.json
+            echo "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" >> "$GITHUB_ENV"
+            scopeproof review --pr "$PR_URL" \
+              --requirements .scopeproof/requirements.txt \
+              --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
+            python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
+            review_id=$(python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
+            scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.md"
+          fi
+      - name: Upload ScopeProof report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scopeproof-report
+          path: ${{ runner.temp }}/scopeproof-report.md
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Emit fork-safe ScopeProof summary and comment plan
+        run: |
+          content_args=()
+          if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
+            content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
+          fi
+          if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" = "true" ]; then
+            python -m scopeproof_core.github_action_runner \
+              --event-path "$GITHUB_EVENT_PATH" \
+              --requirements-confirmed \
+              --verdict "$SCOPEPROOF_VERDICT" "${content_args[@]}"
+          else
+            python -m scopeproof_core.github_action_runner \
+              --event-path "$GITHUB_EVENT_PATH" \
+              --content "Checked-in .scopeproof/requirements.txt is missing."
+          fi
+      - name: Publish an idempotent informational comment
+        if: github.event.pull_request.head.repo.fork == false && hashFiles('.scopeproof/requirements.txt') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" != "true" ]; then
+            echo "ScopeProof: requirements confirmation is unavailable or does not match."
+            exit 0
+          fi
+          content_args=()
+          if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
+            content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
+          fi
+          python -m scopeproof_core.github_action_runner \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --requirements-confirmed \
+            --verdict "$SCOPEPROOF_VERDICT" \
+            --publish-comment "${content_args[@]}"
+      - name: Publication boundary
+        run: |
+          echo "Fork pull requests never receive a write request."
+          echo "Comments are informational; required-check mode remains disabled."

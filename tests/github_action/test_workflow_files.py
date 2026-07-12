@@ -23,6 +23,23 @@ def test_example_requires_checked_in_confirmed_requirements_file() -> None:
     assert "SCOPEPROOF_REQUIRED_CHECK" in example
 
 
+def test_public_action_guidance_matches_the_trusted_base_workflow() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    privacy = Path("docs/privacy-readiness.md").read_text(encoding="utf-8")
+    example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+
+    assert "never uses `pull_request_target`" not in readme
+    assert "workflow uses the trusted base definition" in privacy
+    assert "pull_request_target:" in example
+    assert "ref: ${{ github.event.pull_request.base.sha }}" in example
+    assert "persist-credentials: false" in example
+    assert "requirements-confirmation.json" in example
+    assert "checks: write" not in example
+    assert "actions/upload-artifact@v4" in example
+    assert "Emit fork-safe ScopeProof summary and comment plan" in example
+    assert "Fork pull requests never receive a write request." in example
+
+
 def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
 
