@@ -12,6 +12,10 @@ This repository is used for ScopeProof Action validation. The public demo PRs
 exercise deterministic evidence review, informational comments, and fork-safe
 no-write behavior; they are not customer validation or a production incident.
 
+The validation requirements are explicitly confirmed on the base branch and
+bound to their exact SHA-256 before the Action may publish an informational
+comment.
+
 ## Why this exists
 
 AI coding agents can produce pull requests quickly, but a green CI check does not establish that every ticket promise was implemented. Product reviewers still need to answer questions such as:
