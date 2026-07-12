@@ -55,3 +55,12 @@ def test_security_policy_uses_github_private_vulnerability_reporting() -> None:
 
     assert "private vulnerability report" in policy.lower()
     assert "Do not post security vulnerabilities in public issues" in policy
+
+
+def test_contributing_guide_preserves_public_alpha_boundaries() -> None:
+    guide = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert "public repository" in guide.lower()
+    assert "Do not include tokens" in guide
+    assert "python -m pytest -q" in guide
+    assert "private vulnerability report" in guide.lower()
