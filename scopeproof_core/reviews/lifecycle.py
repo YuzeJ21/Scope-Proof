@@ -12,6 +12,7 @@ from scopeproof_core.schemas.models import (
     ResolutionEvent,
     ReviewBundle,
     ReviewState,
+    RuntimeEvidence,
 )
 
 
@@ -118,3 +119,15 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
     updated_events = [*state.resolution_events, bound_event]
     updated = state.model_copy(update={"resolution_events": updated_events})
     return _recalculate(updated)
+
+
+def append_runtime_evidence(state: ReviewState, evidence: RuntimeEvidence) -> ReviewState:
+    """Append a manual runtime record without upgrading static findings or gate truth."""
+
+    if state.bundle is None:
+        raise ValueError("Run a confirmed analysis before recording runtime evidence")
+    if evidence.criterion_id not in {criterion.criterion_id for criterion in state.bundle.criteria}:
+        raise ValueError("runtime evidence must reference a criterion in the active review")
+    bundle = state.bundle.model_copy(deep=True)
+    bundle.runtime_evidence.append(evidence)
+    return state.model_copy(update={"bundle": bundle})

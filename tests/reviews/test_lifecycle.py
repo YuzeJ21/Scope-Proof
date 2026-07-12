@@ -1,5 +1,6 @@
 from scopeproof_core.reviews.lifecycle import (
     append_resolution,
+    append_runtime_evidence,
     confirm_criteria,
     current_resolutions,
     new_review_state,
@@ -17,6 +18,7 @@ from scopeproof_core.schemas.models import (
     ResolutionEvent,
     Review,
     ReviewBundle,
+    RuntimeEvidence,
 )
 
 
@@ -120,3 +122,24 @@ def test_final_acceptance_event_allows_ready_after_criterion_resolution() -> Non
     assert state.review.final_acceptance is True
     assert state.bundle is not None
     assert state.bundle.gate.verdict is GateVerdict.READY
+
+
+def test_runtime_evidence_is_append_only_and_does_not_change_gate() -> None:
+    state = initial_state()
+    updated = append_runtime_evidence(
+        state,
+        RuntimeEvidence(
+            criterion_id="AC-01",
+            artifact_reference="https://example.test/run/1",
+            scenario="Export CSV",
+            environment="staging",
+            result="passed",
+            reviewer="QA",
+            evidence_level=EvidenceLevel.E3,
+        ),
+    )
+
+    assert state.bundle is not None and state.bundle.runtime_evidence == []
+    assert updated.bundle is not None
+    assert updated.bundle.runtime_evidence[0].artifact_reference.endswith("/1")
+    assert updated.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
