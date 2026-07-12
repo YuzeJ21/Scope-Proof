@@ -214,6 +214,10 @@ This same-repository pull request validates that the current base branch's
 hash-bound requirements confirmation controls ScopeProof's informational
 publication.
 
+The pinned-action technical smoke verifies that the safe-preview workflow uses
+immutable third-party Action revisions without changing its non-blocking,
+informational review boundary.
+
 ## Explicit local Definition-of-Done packs
 
 `scopeproof_core.rule_packs` offers opt-in local prompts for error, loading,
