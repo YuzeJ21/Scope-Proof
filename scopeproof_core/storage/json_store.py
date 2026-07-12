@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 from dataclasses import dataclass
@@ -32,16 +33,17 @@ class HeadChange:
 
 
 class JsonReviewStore:
-    """Store only validated review state in a user-selected local directory."""
+    """Store only validated review state in an app-owned local directory."""
 
     def __init__(self, directory: Path) -> None:
         self.directory = directory
 
     @staticmethod
     def _validate_review_id(review_id: str) -> str:
-        if not _REVIEW_ID.fullmatch(review_id):
+        basename = os.path.basename(review_id)
+        if basename != review_id or not _REVIEW_ID.fullmatch(basename):
             raise ValueError("review_id must be a simple local record identifier")
-        return review_id
+        return basename
 
     def _path(self, review_id: str) -> Path:
         return self.directory / f"{self._validate_review_id(review_id)}.json"
