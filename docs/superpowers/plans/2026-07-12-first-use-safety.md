@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Render the evidence matrix as a real table and prevent an implicit Accepted resolution from being saved.
+**Goal:** Render the evidence matrix as one real Markdown table and prevent an implicit Accepted resolution from being saved.
 
-**Architecture:** Keep the change inside the existing thin Streamlit layer. Use the already-built list of display rows as input to `st.table`, and represent the decision placeholder as `None` only in UI state so domain models and gate behavior remain unchanged.
+**Architecture:** Keep the change inside the existing thin Streamlit layer. Escape user-authored table cells and join the already-built display rows into one Markdown block, and represent the decision placeholder as `None` only in UI state so domain models and gate behavior remain unchanged.
 
 **Tech Stack:** Python 3.11+, Streamlit, Streamlit AppTest, pytest.
 
@@ -25,24 +25,32 @@
 
 **Interfaces:**
 - Consumes: `matrix: list[dict[str, str]]`, already filtered by status and priority.
-- Produces: one Streamlit static table plus the existing per-criterion summary Markdown.
+- Produces: one atomic Markdown table plus the existing per-criterion summary Markdown.
 
 - [ ] **Step 1: Write the failing AppTest**
 
-Add a test that loads the demo, confirms criteria, runs analysis, asserts `len(app.table) == 1`, and asserts the raw Markdown header is absent from `app.markdown`.
+Add a test that loads the demo, confirms criteria, runs analysis, and asserts exactly one Markdown block contains the header, separator, and final criterion row.
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
 Run: `.venv/bin/python -m pytest tests/apps/test_streamlit_app.py::test_evidence_matrix_renders_as_table -q`
 
-Expected: FAIL because no Streamlit table exists.
+Expected: FAIL because the table is split across separate Markdown calls.
 
 - [ ] **Step 3: Implement the static table**
 
-Replace the separate Markdown header, separator, and row calls with:
+Replace the separate Markdown header, separator, and row calls with one escaped block:
 
 ```python
-st.table(matrix)
+table_headers = ["Criterion", "Requirement", "Priority", "Status", "Evidence", "Confidence"]
+table_lines = [
+    "| " + " | ".join(table_headers) + " |",
+    "|" + "|".join("---" for _ in table_headers) + "|",
+]
+for row in matrix:
+    cells = [str(row[header]).replace("|", "\\|").replace("\n", " ") for header in table_headers]
+    table_lines.append("| " + " | ".join(cells) + " |")
+st.markdown("\n".join(table_lines))
 for row in matrix:
     st.markdown(f"**{row['Criterion']} — {row['Status']}** · {row['Requirement']}")
 ```
