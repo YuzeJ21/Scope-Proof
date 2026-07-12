@@ -48,6 +48,18 @@ class JsonReviewStore:
     def _path(self, review_id: str) -> Path:
         return self.directory / f"{self._validate_review_id(review_id)}.json"
 
+    def _existing_record_path(self, review_id: str) -> Path:
+        """Return a validated regular record file without following symlinks."""
+        validated_id = self._validate_review_id(review_id)
+        if not self.directory.is_dir():
+            raise FileNotFoundError(validated_id)
+        for candidate in self.directory.glob("*.json"):
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            if candidate.stem == validated_id and _REVIEW_ID.fullmatch(candidate.stem):
+                return candidate
+        raise FileNotFoundError(validated_id)
+
     def save(self, state: ReviewState) -> Path:
         """Atomically save a versioned record without accepting credential fields."""
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -68,7 +80,7 @@ class JsonReviewStore:
 
     def load(self, review_id: str) -> ReviewState:
         """Load a known record format and validate all nested models."""
-        payload = json.loads(self._path(review_id).read_text(encoding="utf-8"))
+        payload = json.loads(self._existing_record_path(review_id).read_text(encoding="utf-8"))
         if payload.get("record_version") != RECORD_VERSION:
             raise UnsupportedRecordVersion(
                 f"Unsupported review record version {payload.get('record_version')!r}"
