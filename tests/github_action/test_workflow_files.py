@@ -69,3 +69,22 @@ def test_all_third_party_actions_are_pinned_to_immutable_commit_shas() -> None:
         assert uses_references
         for reference in uses_references:
             assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", reference), reference
+
+
+def test_workflows_use_the_vetted_node24_action_revisions() -> None:
+    expected_references = {
+        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+        "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    }
+
+    for path in (
+        Path(".github/workflows/ci.yml"),
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        contents = path.read_text(encoding="utf-8")
+        for reference in expected_references:
+            if "upload-artifact" in reference and path.name == "ci.yml":
+                continue
+            assert reference in contents, f"{path}: {reference}"
