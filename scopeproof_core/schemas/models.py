@@ -238,6 +238,28 @@ class EvidenceItem(BaseModel):
         return self
 
 
+class RuntimeEvidence(BaseModel):
+    """Human-supplied runtime observation; never inferred from static code."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    criterion_id: str
+    artifact_reference: str = Field(min_length=1)
+    scenario: str = Field(min_length=1)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    environment: str = Field(min_length=1)
+    result: str = Field(min_length=1)
+    reviewer: str = Field(min_length=1)
+    evidence_level: EvidenceLevel
+    limitations: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_manual_level(self) -> RuntimeEvidence:
+        if self.evidence_level not in {EvidenceLevel.E3, EvidenceLevel.E4}:
+            raise ValueError("runtime evidence requires E3 or E4")
+        return self
+
+
 class Finding(BaseModel):
     criterion_id: str
     status: FindingStatus
@@ -322,6 +344,7 @@ class ReviewBundle(BaseModel):
     source_text: str
     criteria: list[Criterion]
     evidence: list[EvidenceItem]
+    runtime_evidence: list[RuntimeEvidence] = Field(default_factory=list)
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
     gate: GateDecision
