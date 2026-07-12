@@ -190,6 +190,10 @@ This is a public-repository MVP for validating the requirement-to-evidence workf
 
 For safe public-alpha operations, see the [public PR dogfood protocol](docs/dogfood/public-pr-protocol.md) and the [60-second demo script](docs/launch/demo-script.md). The protocol distinguishes deliberately constructed demos, technical smokes, and confirmed dogfood reviews so launch material does not overclaim validation.
 
+The [launch evidence matrix](docs/launch/evidence-matrix.md) and
+[review-before-posting LinkedIn draft](docs/launch/linkedin-draft.md) keep the
+constructed-demo and technical-smoke boundaries explicit.
+
 ## GitHub Actions safe preview
 
 The checked-in [GitHub Actions guide](docs/github-action.md) explains the local
