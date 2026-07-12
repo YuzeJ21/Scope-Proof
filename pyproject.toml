@@ -26,6 +26,9 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["scopeproof_core", "apps"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"evals" = "evals"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers --import-mode=importlib"
