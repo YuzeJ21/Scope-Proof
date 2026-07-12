@@ -49,6 +49,7 @@ _STATE_DEFAULTS = {
     "bundle": None,
     "active_step": 1,
     "source_text": "",
+    "requirements_input": "",
     "resolutions": [],
     "review_state": None,
 }
@@ -169,7 +170,6 @@ with fetch_column:
 
 requirements_text = st.text_area(
     "Product requirements or acceptance criteria",
-    value=st.session_state["source_text"],
     height=150,
     key="requirements_input",
     help="Use one independently judgeable behavior per line. ScopeProof will not invent criteria.",
