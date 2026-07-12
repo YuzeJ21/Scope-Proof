@@ -24,6 +24,16 @@ def test_example_requires_checked_in_confirmed_requirements_file() -> None:
     assert "SCOPEPROOF_REQUIRED_CHECK" in example
 
 
+def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
+    example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+
+    assert "pip install scopeproof" not in example
+    assert (
+        "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@"
+        "6bbd20008acc62ff4fa9d98378e6c652fc1c5abe"
+    ) in example
+
+
 def test_public_action_guidance_matches_the_trusted_base_workflow() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     privacy = Path("docs/privacy-readiness.md").read_text(encoding="utf-8")

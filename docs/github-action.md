@@ -31,6 +31,11 @@ When a review completes, the workflow uploads its Markdown export as the
 `scopeproof-report` artifact for seven days. If no report was produced, the
 artifact step is explicitly ignored and the summary remains conservative.
 
+The copyable example installs ScopeProof from a public, full-SHA-pinned source
+revision because ScopeProof is not distributed on PyPI. Review and update that
+pin deliberately when adopting a newer public release; do not replace it with
+an unpinned package or branch reference.
+
 This trigger is intentionally privileged only for its narrowly scoped comment
 permission. Do not add a pull-request-head checkout, `git fetch`, `gh pr
 checkout`, downloaded artifact execution, cache writes, or arbitrary PR text in
