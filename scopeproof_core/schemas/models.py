@@ -125,6 +125,16 @@ class ActionValidationRecord(BaseModel):
 
     @model_validator(mode="after")
     def validate_rerun_idempotency(self) -> ActionValidationRecord:
+        repository_url = f"https://github.com/{self.repository}/"
+        evidence_urls = [
+            self.non_fork_pr_url,
+            self.non_fork_run_url,
+            self.rerun_url,
+            self.fork_pr_url,
+            self.fork_run_url,
+        ]
+        if any(not url.startswith(repository_url) for url in evidence_urls):
+            raise ValueError("all Action evidence links must reference the same repository")
         if self.rerun_head_sha != self.non_fork_head_sha:
             raise ValueError("same head SHA is required for an idempotency rerun")
         if self.rerun_comment_count != self.non_fork_comment_count:

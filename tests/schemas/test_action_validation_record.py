@@ -39,3 +39,12 @@ def test_action_validation_record_rejects_rerun_that_changes_head_or_comment_cou
     duplicated_comment = record_data() | {"rerun_comment_count": 2}
     with pytest.raises(ValueError, match="same comment count"):
         ActionValidationRecord.model_validate(duplicated_comment)
+
+
+def test_action_validation_record_rejects_links_from_another_repository() -> None:
+    mixed_repository = record_data() | {
+        "fork_run_url": "https://github.com/other/demo/actions/runs/3"
+    }
+
+    with pytest.raises(ValueError, match="same repository"):
+        ActionValidationRecord.model_validate(mixed_repository)
