@@ -3,6 +3,14 @@
 This runbook is for a repository owner. It is not evidence that a real Action
 run has occurred until the owner fills in the run URLs and preserves the output.
 
+## Single-account public alpha policy
+
+For a public alpha operated entirely from one GitHub user account, fork testing
+is optional and intentionally out of scope. Do not create an organization,
+second account, billing arrangement, or synthetic fork solely to satisfy this
+runbook. Keep the workflow's local fork-safety tests, but state clearly that no
+external fork-run claim is being made.
+
 ## Preconditions
 
 1. Use a user-owned **public demo repository**; do not use a customer or private
@@ -28,7 +36,7 @@ repository: owner/demo-repository
 requirements commit: <base SHA>
 non-fork run URL: <pending>
 rerun URL: <pending>
-fork run URL: <pending>
+fork status: excluded for single-account public alpha | <run URL if performed>
 validated by: <name or role>
 validated at: <timestamp>
 limitations: public demo only; no customer validation claimed
@@ -55,7 +63,11 @@ not prove the requirement is correct, runtime behavior, or customer value.
 
 Expected: one marker comment for that head SHA.
 
-## Test 3 — fork PR
+## Optional Test 3 — fork PR
+
+Run this only when a separately owned public fork already exists for a reason
+independent of ScopeProof validation. It is not required for a single-account
+public alpha.
 
 1. Open a PR from a fork with the same demo workflow base branch.
 2. Preserve the run URL.
@@ -75,7 +87,7 @@ outcome are suitable.
 
 ## Optional local record validation
 
-After the owner has collected real public evidence, save it as JSON with the
+After the owner has collected real evidence for all three tests, save it as JSON with the
 fields listed in the capture record plus `non_fork_comment_count`,
 `scopeproof_comment_marker`, `rerun_comment_count`, and `fork_comment_count`.
 Copy the exact `<!-- scopeproof:<head SHA> -->` marker from the non-fork
@@ -88,3 +100,5 @@ scopeproof validate-action-evidence action-validation.json
 The command checks that the rerun uses the same head SHA and did not increase
 the ScopeProof-comment count, and that the fork record has zero comments. It
 does not contact GitHub or independently prove the submitted URLs are real.
+It is not applicable to a single-account alpha that deliberately excluded the
+fork test; preserve the non-fork record and limitation instead.

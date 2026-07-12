@@ -34,6 +34,16 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
     ) in example
 
 
+def test_single_account_alpha_policy_explicitly_skips_external_fork_testing() -> None:
+    runbook = Path("docs/github-action-external-validation.md").read_text(encoding="utf-8")
+    privacy = Path("docs/privacy-readiness.md").read_text(encoding="utf-8")
+
+    normalized_runbook = " ".join(runbook.split())
+    assert "Single-account public alpha policy" in runbook
+    assert "fork testing is optional and intentionally out of scope." in normalized_runbook
+    assert "single-account public alpha" in privacy
+
+
 def test_public_action_guidance_matches_the_trusted_base_workflow() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     privacy = Path("docs/privacy-readiness.md").read_text(encoding="utf-8")
