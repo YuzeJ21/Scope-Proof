@@ -4,12 +4,11 @@ from pathlib import Path
 def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> None:
     workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
 
-    assert "pull_request:" in workflow
+    assert "pull_request_target:" in workflow
     assert "contents: read" in workflow
     assert "pull-requests: write" in workflow
-    assert "checks: write" in workflow
     assert "SCOPEPROOF_REQUIRED_CHECK: false" in workflow
-    assert "pull_request_target" not in workflow
+    assert "pull_request:" not in workflow
     assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
     assert "persist-credentials: false" in workflow
 

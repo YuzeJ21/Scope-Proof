@@ -6,7 +6,9 @@ ScopeProof includes a repository-local workflow starter at
 
 It is deliberately a **safe preview**, not an enforcement integration:
 
-- It runs only on `pull_request`; it never uses `pull_request_target`.
+- It runs on `pull_request_target` so GitHub uses the trusted base-branch
+  workflow definition. It checks out the immutable base SHA only and never
+  checks out or executes the pull request head.
 - It needs a checked-in `.scopeproof/requirements.txt`, one confirmed criterion
   per line. If it is missing, the step summary says **Needs Review** and cannot
   say Ready.
@@ -23,6 +25,12 @@ It is deliberately a **safe preview**, not an enforcement integration:
 The workflow's public-PR evidence command is informational and
 `continue-on-error`; GitHub API limits, temporary network failures, or an
 incomplete diff must remain visible for human review, not become a false pass.
+
+This trigger is intentionally privileged only for its narrowly scoped comment
+permission. Do not add a pull-request-head checkout, `git fetch`, `gh pr
+checkout`, downloaded artifact execution, cache writes, or arbitrary PR text in
+shell commands. GitHub's guidance warns that those changes would defeat the
+trusted-base isolation.
 
 ## Local fixture check
 

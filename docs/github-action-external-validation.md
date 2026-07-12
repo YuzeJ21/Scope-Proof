@@ -10,7 +10,9 @@ run has occurred until the owner fills in the run URLs and preserves the output.
 2. Copy `.github/workflows/scopeproof.yml` and create
    `.scopeproof/requirements.txt` on the base branch with one confirmed
    criterion per line.
-3. Commit the workflow and requirements before opening the test PR.
+3. Commit the workflow and requirements to the base branch before opening the
+   test PR. The workflow deliberately runs from the trusted base definition and
+   checks out the base SHA, never the PR head.
 4. Confirm the workflow remains informational:
    `SCOPEPROOF_REQUIRED_CHECK: false`.
 5. Do not add personal access tokens. The workflow uses GitHub's short-lived
