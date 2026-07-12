@@ -206,6 +206,12 @@ Use the [external validation runbook](docs/github-action-external-validation.md)
 only in an authorized public demo repository. It records the exact non-fork,
 same-head rerun, and fork evidence required before claiming a real Action run.
 
+## Confirmed-action validation revision
+
+This same-repository pull request validates that the current base branch's
+hash-bound requirements confirmation controls ScopeProof's informational
+publication.
+
 ## Explicit local Definition-of-Done packs
 
 `scopeproof_core.rule_packs` offers opt-in local prompts for error, loading,
