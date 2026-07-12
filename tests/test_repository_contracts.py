@@ -74,6 +74,15 @@ def test_external_validation_runbook_permanently_excludes_fork_testing() -> None
     assert "optional test 3" not in runbook.lower()
 
 
+def test_launch_matrix_distinguishes_local_action_fixtures_from_recorded_run() -> None:
+    matrix = Path("docs/launch/evidence-matrix.md").read_text(encoding="utf-8")
+
+    assert "Local GitHub Action fixtures" in matrix
+    assert "same-repository run and same-head rerun" in matrix
+    assert "docs/launch/non-fork-action-validation.md" in matrix
+    assert "source-owner-confirmed acceptance criteria" in matrix.lower()
+
+
 def test_public_docs_do_not_require_or_offer_external_fork_validation() -> None:
     public_docs = {
         "README.md": Path("README.md").read_text(encoding="utf-8"),
