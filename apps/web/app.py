@@ -342,13 +342,19 @@ else:
                 "Confidence": finding.confidence_band.value.title(),
             }
         )
-    st.markdown("| Criterion | Requirement | Priority | Status | Evidence | Confidence |")
-    st.markdown("|---|---|---|---|---|---|")
+    table_headers = ["Criterion", "Requirement", "Priority", "Status", "Evidence", "Confidence"]
+    table_lines = [
+        "| " + " | ".join(table_headers) + " |",
+        "|" + "|".join("---" for _ in table_headers) + "|",
+    ]
     for row in matrix:
-        st.markdown(
-            f"| {row['Criterion']} | {row['Requirement']} | {row['Priority']} | "
-            f"{row['Status']} | {row['Evidence']} | {row['Confidence']} |"
-        )
+        cells = [
+            str(row[header]).replace("|", "\\|").replace("\n", " ")
+            for header in table_headers
+        ]
+        table_lines.append("| " + " | ".join(cells) + " |")
+    st.markdown("\n".join(table_lines))
+    for row in matrix:
         st.markdown(f"**{row['Criterion']} — {row['Status']}** · {row['Requirement']}")
 
     st.header("4 · Criterion Detail")
@@ -438,6 +444,8 @@ else:
     decision = st.selectbox(
         "Human decision",
         options=decision_options,
+        index=None,
+        placeholder="Select a decision",
         format_func=lambda item: _status_label(item.value),
         key="resolution_decision",
     )
@@ -449,10 +457,15 @@ else:
             options=[EvidenceLevel.E2, EvidenceLevel.E3, EvidenceLevel.E4],
             key="manual_evidence_level",
         )
-    if st.button("Save resolution", key="save_resolution"):
+    if st.button(
+        "Save resolution",
+        key="save_resolution",
+        disabled=decision is None,
+    ):
         if review_state is None:
             st.error("Run analysis before recording a human resolution.")
         else:
+            assert decision is not None
             event = ResolutionEvent(
                 criterion_id=selected_id,
                 decision=decision,

@@ -2,6 +2,8 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
+from scopeproof_core.schemas.models import HumanDecision
+
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
 
 
@@ -49,12 +51,13 @@ def test_demo_flow_reaches_blocked_summary() -> None:
     assert app.session_state["bundle"] is not None
 
 
-def test_demo_summary_has_three_exports_and_resolution_control() -> None:
+def test_demo_summary_requires_explicit_resolution_decision() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
     assert len(app.download_button) == 3
-    assert app.button(key="save_resolution").disabled is False
+    assert app.selectbox(key="resolution_decision").value is None
+    assert app.button(key="save_resolution").disabled is True
 
 
 def test_optional_token_uses_password_input() -> None:
@@ -109,6 +112,21 @@ def test_evidence_matrix_exposes_status_and_priority_filters() -> None:
     assert app.multiselect(key="priority_filter").value == []
 
 
+def test_evidence_matrix_renders_as_one_markdown_table() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    table_blocks = [
+        markdown.value
+        for markdown in app.markdown
+        if markdown.value.startswith("| Criterion | Requirement | Priority |")
+    ]
+    assert len(table_blocks) == 1
+    assert "|---|---|---|---|---|---|" in table_blocks[0]
+    assert "| AC-04 | Successful export records research_exported |" in table_blocks[0]
+
+
 def test_compound_criterion_can_be_split_in_workbench() -> None:
     app = new_app()
     app = app.text_area(key="requirements_input").set_value("Export CSV and record analytics").run()
@@ -126,6 +144,7 @@ def test_human_decision_and_final_acceptance_append_history() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
+    app = app.selectbox(key="resolution_decision").set_value(HumanDecision.ACCEPTED).run()
     app = app.button(key="save_resolution").click().run()
     app = app.button(key="record_final_acceptance").click().run()
 
