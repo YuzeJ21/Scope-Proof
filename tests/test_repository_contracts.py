@@ -93,6 +93,18 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
     assert "scopeproof web" not in readme
 
 
+def test_readme_documents_optional_release_checksum_verification() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    wheel_name = "scopeproof-0.1.12-py3-none-any.whl"
+
+    assert f"releases/download/v0.1.12/{wheel_name}" in readme
+    assert f"releases/download/v0.1.12/{wheel_name}.sha256" in readme
+    assert f"shasum -a 256 -c {wheel_name}.sha256" in readme
+    assert f"sha256sum -c {wheel_name}.sha256" in readme
+    assert f"python -m pip install ./{wheel_name}" in readme
+    assert "does not provide code-signing or product-correctness assurance" in readme
+
+
 def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 

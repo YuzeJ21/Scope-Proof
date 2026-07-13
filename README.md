@@ -64,6 +64,28 @@ scopeproof benchmark
 scopeproof-web
 ```
 
+To verify the release bytes before installation, download the wheel and its checksum:
+
+```bash
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.12/scopeproof-0.1.12-py3-none-any.whl
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.12/scopeproof-0.1.12-py3-none-any.whl.sha256
+```
+
+Use the command for your platform, then install the verified local file:
+
+```bash
+# macOS
+shasum -a 256 -c scopeproof-0.1.12-py3-none-any.whl.sha256
+
+# Linux
+sha256sum -c scopeproof-0.1.12-py3-none-any.whl.sha256
+
+python -m pip install ./scopeproof-0.1.12-py3-none-any.whl
+```
+
+A matching checksum verifies the downloaded bytes against the digest published with this release.
+It does not provide code-signing or product-correctness assurance.
+
 The offline benchmark verifies that the installed package and bundled regression corpus execute.
 It is not runtime evidence for any pull request. `scopeproof-web` starts the packaged local
 workbench; stop it with `Ctrl+C`. Continue with the public-PR CLI workflow below to review
