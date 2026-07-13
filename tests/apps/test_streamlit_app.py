@@ -1,8 +1,10 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.schemas.models import HumanDecision
 
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
@@ -187,6 +189,67 @@ def test_reopening_clears_an_unrelated_loaded_snapshot(
     assert app.button(key="run_analysis").disabled is True
     sidebar_text = "\n".join(item.value for item in app.sidebar.markdown)
     assert "Next — Reload source to rerun analysis" in sidebar_text
+
+
+def test_reopened_review_reports_changed_head_before_invalidating_analysis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    saved_head = saved.session_state["review_state"].review.head_sha
+    changed_head = "changed-head-for-regression"
+    changed_snapshot = load_demo_snapshot().model_copy(update={"head_sha": changed_head})
+
+    fresh = new_app()
+    fresh = fresh.text_input(key="reopen_review_id").set_value(review_id).run()
+    fresh = fresh.button(key="reopen_review").click().run()
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=changed_snapshot):
+        fresh = fresh.button(key="load_demo").click().run()
+
+    warning_text = "\n".join(item.value for item in fresh.warning)
+    assert saved_head in warning_text
+    assert changed_head in warning_text
+    assert "saved evidence remains anchored" in warning_text
+    assert fresh.session_state["review_state"] is None
+    assert fresh.session_state["bundle"] is None
+    assert fresh.session_state["criteria_confirmed"] is False
+    assert fresh.button(key="run_analysis").disabled is True
+
+
+def test_reopened_review_reports_same_head_before_reanalysis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    saved_head = saved.session_state["review_state"].review.head_sha
+
+    fresh = new_app()
+    fresh = fresh.text_input(key="reopen_review_id").set_value(review_id).run()
+    fresh = fresh.button(key="reopen_review").click().run()
+    fresh = fresh.button(key="load_demo").click().run()
+
+    info_text = "\n".join(item.value for item in fresh.info)
+    assert f"same head SHA: {saved_head}" in info_text
+    assert fresh.session_state["review_state"] is None
+    assert fresh.session_state["criteria_confirmed"] is False
+    assert fresh.button(key="run_analysis").disabled is True
+
+
+def test_reopened_review_does_not_compare_a_different_pull_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    unrelated_snapshot = load_demo_snapshot().model_copy(update={"pr_number": 999})
+
+    fresh = new_app()
+    fresh = fresh.text_input(key="reopen_review_id").set_value(review_id).run()
+    fresh = fresh.button(key="reopen_review").click().run()
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=unrelated_snapshot):
+        fresh = fresh.button(key="load_demo").click().run()
+
+    assert fresh.session_state.filtered_state.get("source_reload_notice", "missing") is None
+    assert not any("PR head changed" in item.value for item in fresh.warning)
 
 
 def test_missing_saved_review_has_safe_recovery_copy(
