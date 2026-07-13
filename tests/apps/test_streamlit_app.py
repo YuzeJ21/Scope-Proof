@@ -317,6 +317,32 @@ def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -
     assert state_after.bundle.gate.verdict is GateVerdict.BLOCKED
     assert state_after.bundle.gate.blocking_criteria == gate_before.blocking_criteria
     assert state_after.bundle.gate.unresolved_criteria == gate_before.unresolved_criteria
+    assert len(state_after.resolution_events) == 1
+    assert app.button(key="record_final_acceptance").disabled is True
+    assert "Final acceptance appended to the local review history." in [
+        item.value for item in app.success
+    ]
+    history = [item.value for item in app.markdown if "Final acceptance:" in item.value]
+    assert history == [
+        "- **Current · revision 1** — Final acceptance: Recorded — "
+        "Reviewer recorded final acceptance"
+    ]
+
+
+def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> None:
+    app = analyzed_demo(new_app())
+    app = app.button(key="record_final_acceptance").click().run()
+    assert app.button(key="record_final_acceptance").disabled is True
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "User can export the research list as a downloadable CSV"
+    ).run()
+
+    app = app.button(key="confirm_criteria").click().run()
+    assert app.session_state["review_state"].review.final_acceptance is False
+    assert app.session_state["review_state"].bundle is None
+    app = app.button(key="run_analysis").click().run()
+    assert app.button(key="record_final_acceptance").disabled is False
 
 
 def test_criteria_can_be_added_and_removed_before_reconfirmation() -> None:
