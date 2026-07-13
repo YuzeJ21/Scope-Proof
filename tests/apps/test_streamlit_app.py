@@ -557,3 +557,31 @@ def test_manual_runtime_evidence_can_be_recorded_without_changing_static_finding
     bundle = app.session_state["review_state"].bundle
     assert bundle.findings[0].status is finding_status
     assert bundle.runtime_evidence[0].artifact_reference.endswith("/1")
+
+
+def test_successful_runtime_evidence_save_clears_form_and_prevents_accidental_repeat() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/run/reset"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value("Fixture scenario").run()
+    app = app.text_input(key="runtime_environment").set_value("Fixture environment").run()
+    app = app.text_input(key="runtime_result").set_value("Fixture result").run()
+    app = app.text_input(key="runtime_reviewer").set_value("Fixture reviewer").run()
+    app = app.text_area(key="runtime_limitations").set_value("Fixture limitation").run()
+    app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()
+
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    assert len(app.session_state["review_state"].bundle.runtime_evidence) == 1
+    assert app.text_input(key="runtime_artifact_reference").value == ""
+    assert app.text_area(key="runtime_scenario").value == ""
+    assert app.text_input(key="runtime_environment").value == ""
+    assert app.text_input(key="runtime_result").value == ""
+    assert app.text_input(key="runtime_reviewer").value == ""
+    assert app.text_area(key="runtime_limitations").value == ""
+    assert app.selectbox(key="runtime_evidence_level").value is EvidenceLevel.E3
+    assert app.button(key="save_runtime_evidence").disabled is True
+    assert "Manual runtime evidence appended without changing static findings." in [
+        item.value for item in app.success
+    ]
