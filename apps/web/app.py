@@ -543,9 +543,14 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
+    if review_state is not None:
+        st.caption(
+            "Current review ID — save this review before using the ID in a future session."
+        )
+        st.code(review_state.review.review_id, language=None)
     if review_state is not None and st.button("Save local review", key="save_review"):
         review_store.save(review_state)
-        st.success("Review saved locally.")
+        st.success(f"Review saved locally. ID: {review_state.review.review_id}.")
     verdict = _status_label(bundle.gate.verdict.value)
     st.markdown(f"## Verdict: **{verdict}**")
     if bundle.gate.reason_codes:

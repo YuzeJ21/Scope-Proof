@@ -45,7 +45,7 @@ def test_current_review_id_is_copyable_and_used_in_save_confirmation(
     assert "Save this review before using the ID in a future session" in caption_text
 
     app = app.button(key="save_review").click().run()
-    assert f"Review {review_id} saved locally." in [item.value for item in app.success]
+    assert f"Review saved locally. ID: {review_id}." in [item.value for item in app.success]
 ```
 
 Extend `test_saved_review_can_be_reopened_from_a_fresh_session` after reopen with:
@@ -81,7 +81,7 @@ In Summary & Export, immediately after `st.header("5 · Summary & Export")`, add
 Change the save success call to:
 
 ```python
-        st.success(f"Review {review_state.review.review_id} saved locally.")
+        st.success(f"Review saved locally. ID: {review_state.review.review_id}.")
 ```
 
 - [ ] **Step 4: Run focused AppTests and Ruff**

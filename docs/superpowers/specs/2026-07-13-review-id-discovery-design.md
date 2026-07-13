@@ -15,7 +15,8 @@ exact validated UUID with `st.code(..., language=None)` so Streamlit supplies a 
 affordance without adding clipboard JavaScript. Add a caption stating that the operator should save
 the review before using the ID in a future session.
 
-After a successful save, include the same UUID in the confirmation: `Review <id> saved locally.`
+After a successful save, include the same UUID while preserving the established confirmation copy:
+`Review saved locally. ID: <id>.`
 The ID remains visible after reruns because it comes from the validated active ReviewState rather
 than transient UI state.
 
