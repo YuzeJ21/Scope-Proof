@@ -15,6 +15,12 @@ def load_demo(app: AppTest) -> AppTest:
     return app.button(key="load_demo").click().run()
 
 
+def analyzed_demo(app: AppTest) -> AppTest:
+    app = load_demo(app)
+    app = app.button(key="confirm_criteria").click().run()
+    return app.button(key="run_analysis").click().run()
+
+
 def test_analysis_is_disabled_before_criteria_confirmation() -> None:
     app = new_app()
     assert app.button(key="run_analysis").disabled is True
@@ -184,6 +190,33 @@ def test_human_decision_and_final_acceptance_append_history() -> None:
     assert len(state.resolution_events) == 2
     assert state.review.final_acceptance is True
     assert "Resolution history" in "\n".join(markdown.value for markdown in app.markdown)
+
+
+def test_runtime_evidence_save_requires_all_required_fields() -> None:
+    app = analyzed_demo(new_app())
+    assert app.button(key="save_runtime_evidence").disabled is True
+
+    app = app.text_input(key="runtime_artifact_reference").set_value("   ").run()
+    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("passed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+    assert app.button(key="save_runtime_evidence").disabled is True
+
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/run/1"
+    ).run()
+    assert app.button(key="save_runtime_evidence").disabled is False
+
+
+def test_runtime_evidence_prerequisite_guidance_is_visible() -> None:
+    app = analyzed_demo(new_app())
+    caption_text = "\n".join(caption.value for caption in app.caption)
+    assert (
+        "Artifact, scenario, environment, observed result, and reviewer are required"
+        in caption_text
+    )
+    assert "Limitations are optional" in caption_text
 
 
 def test_manual_runtime_evidence_can_be_recorded_without_changing_static_findings() -> None:

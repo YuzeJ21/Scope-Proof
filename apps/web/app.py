@@ -385,7 +385,25 @@ else:
         options=[EvidenceLevel.E3, EvidenceLevel.E4],
         key="runtime_evidence_level",
     )
-    if st.button("Save manual runtime evidence", key="save_runtime_evidence"):
+    st.caption(
+        "Artifact, scenario, environment, observed result, and reviewer are required. "
+        "Limitations are optional."
+    )
+    runtime_evidence_ready = all(
+        value.strip()
+        for value in (
+            runtime_artifact,
+            runtime_scenario,
+            runtime_environment,
+            runtime_result,
+            runtime_reviewer,
+        )
+    )
+    if st.button(
+        "Save manual runtime evidence",
+        key="save_runtime_evidence",
+        disabled=not runtime_evidence_ready,
+    ):
         if review_state is None:
             st.error("Run analysis before recording manual runtime evidence.")
         else:
@@ -407,8 +425,11 @@ else:
                 st.session_state["bundle"] = review_state.bundle
                 bundle = review_state.bundle
                 st.success("Manual runtime evidence appended without changing static findings.")
-            except ValueError as error:
-                st.error(str(error))
+            except ValueError:
+                st.error(
+                    "Runtime evidence could not be saved. Check every required field and "
+                    "select E3 or E4."
+                )
     selected_runtime = [
         item for item in bundle.runtime_evidence if item.criterion_id == selected_id
     ]
