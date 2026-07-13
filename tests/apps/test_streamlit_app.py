@@ -71,6 +71,18 @@ def test_demo_flow_reaches_blocked_summary() -> None:
     assert app.session_state["bundle"] is not None
 
 
+def test_demo_summary_explains_non_prescriptive_next_actions() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    visible_text = "\n".join(markdown.value for markdown in app.markdown)
+    assert "What to do next" in visible_text
+    assert "unresolved criteria: AC-01" in visible_text
+    assert "ScopeProof does not decide them" in visible_text
+    assert "blocking_criteria" in visible_text
+
+
 def test_demo_summary_requires_explicit_resolution_decision() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()

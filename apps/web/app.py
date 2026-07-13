@@ -16,6 +16,7 @@ from scopeproof_core.criteria.service import (
 )
 from scopeproof_core.demo import load_demo_labels, load_demo_snapshot
 from scopeproof_core.gates.evaluator import evaluate_gate
+from scopeproof_core.gates.guidance import gate_guidance
 from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
@@ -510,6 +511,11 @@ else:
     st.markdown(f"## Verdict: **{verdict}**")
     if bundle.gate.reason_codes:
         st.write("Gate reasons: " + ", ".join(bundle.gate.reason_codes))
+    guidance = gate_guidance(bundle.gate)
+    if guidance:
+        st.markdown("### What to do next")
+        for message in guidance:
+            st.markdown(f"- {message}")
     st.caption(
         f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
         "results are reproducible from the exported review"
