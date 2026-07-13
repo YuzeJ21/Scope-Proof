@@ -9,6 +9,14 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.version import __version__
 
 
+def test_cli_reports_shared_version_without_a_subcommand(capsys) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["--version"])
+
+    assert raised.value.code == 0
+    assert capsys.readouterr().out == f"scopeproof {__version__}\n"
+
+
 def test_benchmark_command_prints_execution_derived_metrics(capsys) -> None:
     assert main(["benchmark"]) == 0
     output = capsys.readouterr().out

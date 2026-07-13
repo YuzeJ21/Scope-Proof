@@ -7,6 +7,8 @@ import subprocess
 import sys
 from importlib import resources
 
+from scopeproof_core.version import __version__
+
 
 def _port(value: str) -> int:
     try:
@@ -20,6 +22,11 @@ def _port(value: str) -> int:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Launch the packaged ScopeProof workbench")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"scopeproof-web {__version__}",
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=_port, default=8501)
     parser.add_argument(
