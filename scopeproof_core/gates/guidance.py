@@ -1,10 +1,39 @@
 """Deterministic operator guidance derived from validated gate reasons."""
 
-from scopeproof_core.schemas.models import GateDecision
+from scopeproof_core.schemas.models import GateDecision, HumanDecision
+
+_DECISION_GUIDANCE = {
+    HumanDecision.ACCEPTED: (
+        "Records reviewer acceptance and treats this criterion as resolved."
+    ),
+    HumanDecision.ACCEPTED_EXCEPTION: (
+        "Records an explicit exception and makes the review conditional."
+    ),
+    HumanDecision.CHANGE_REQUIRED: (
+        "Makes this criterion blocking until a later decision replaces it."
+    ),
+    HumanDecision.REJECTED_FINDING: (
+        "Rejects the provisional finding but does not resolve this criterion; its finding status "
+        "continues to control the gate."
+    ),
+    HumanDecision.MANUALLY_VERIFIED: (
+        "Records external manual verification at the selected evidence level and treats this "
+        "criterion as resolved."
+    ),
+    HumanDecision.NOT_IN_SCOPE: (
+        "Records a scope exception, removes this criterion from active blocking and unresolved "
+        "checks, and can leave the review conditional."
+    ),
+}
 
 
 def _criterion_ids(values: list[str]) -> str:
     return ", ".join(sorted(values)) or "none recorded"
+
+
+def decision_guidance(decision: HumanDecision) -> str:
+    """Explain a human decision's existing deterministic gate effect."""
+    return _DECISION_GUIDANCE[decision]
 
 
 def gate_guidance(gate: GateDecision) -> list[str]:

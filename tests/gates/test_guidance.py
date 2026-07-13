@@ -1,7 +1,45 @@
 import pytest
 
-from scopeproof_core.gates.guidance import gate_guidance
-from scopeproof_core.schemas.models import GateDecision, GateVerdict
+from scopeproof_core.gates.guidance import decision_guidance, gate_guidance
+from scopeproof_core.schemas.models import GateDecision, GateVerdict, HumanDecision
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected_text"),
+    [
+        (
+            HumanDecision.ACCEPTED,
+            "Records reviewer acceptance and treats this criterion as resolved.",
+        ),
+        (
+            HumanDecision.ACCEPTED_EXCEPTION,
+            "Records an explicit exception and makes the review conditional.",
+        ),
+        (
+            HumanDecision.CHANGE_REQUIRED,
+            "Makes this criterion blocking until a later decision replaces it.",
+        ),
+        (
+            HumanDecision.REJECTED_FINDING,
+            "Rejects the provisional finding but does not resolve this criterion; its finding "
+            "status continues to control the gate.",
+        ),
+        (
+            HumanDecision.MANUALLY_VERIFIED,
+            "Records external manual verification at the selected evidence level and treats this "
+            "criterion as resolved.",
+        ),
+        (
+            HumanDecision.NOT_IN_SCOPE,
+            "Records a scope exception, removes this criterion from active blocking and "
+            "unresolved checks, and can leave the review conditional.",
+        ),
+    ],
+)
+def test_decision_guidance_maps_every_human_decision(
+    decision: HumanDecision, expected_text: str
+) -> None:
+    assert decision_guidance(decision) == expected_text
 
 
 @pytest.mark.parametrize(

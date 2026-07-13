@@ -16,7 +16,7 @@ from scopeproof_core.criteria.service import (
 )
 from scopeproof_core.demo import load_demo_labels, load_demo_snapshot
 from scopeproof_core.gates.evaluator import evaluate_gate
-from scopeproof_core.gates.guidance import gate_guidance
+from scopeproof_core.gates.guidance import decision_guidance, gate_guidance
 from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
@@ -568,6 +568,10 @@ else:
         format_func=lambda item: _status_label(item.value),
         key="resolution_decision",
     )
+    if decision is None:
+        st.caption("Select a decision to see its deterministic gate impact.")
+    else:
+        st.caption(f"Decision impact: {decision_guidance(decision)}")
     resolution_note = st.text_area("Reviewer note", key="resolution_note")
     manual_level = None
     if decision is HumanDecision.MANUALLY_VERIFIED:
