@@ -84,4 +84,3 @@ test, runtime, or external validation evidence.
 - AppTest: reopening a validated record starts in the saved state.
 - Full tests, Ruff, deterministic benchmark, clean-installed wheel benchmark,
   HTTP health smoke, and live browser verification.
-

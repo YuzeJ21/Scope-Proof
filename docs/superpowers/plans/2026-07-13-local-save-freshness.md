@@ -53,4 +53,3 @@ Commit the reviewed slice, push `codex/local-save-freshness`, open a pull reques
 without reviewers or comments, wait for every required check, merge only when
 green, verify merged-main CI and CodeQL, synchronize local `main`, and remove the
 worktree and branches.
-
