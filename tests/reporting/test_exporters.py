@@ -102,10 +102,19 @@ def example_bundle() -> ReviewBundle:
     )
 
 
-def test_exports_agree_on_verdict_head_sha_and_criteria() -> None:
+def test_exports_agree_on_review_identity_verdict_and_criteria() -> None:
     bundle = example_bundle()
-    outputs = [export_json(bundle), export_markdown(bundle), export_csv(bundle)]
+    created_at = bundle.review.model_dump(mode="json")["created_at"]
+    outputs = [
+        export_json(bundle),
+        export_markdown(bundle),
+        export_csv(bundle),
+        export_html(bundle),
+    ]
     for output in outputs:
+        assert bundle.review.review_id in output
+        assert bundle.review.base_sha in output
+        assert created_at in output
         assert "blocked" in output.lower()
         assert "head123" in output
         assert "AC-01" in output
@@ -132,6 +141,13 @@ def test_human_readable_exports_keep_historical_tool_version() -> None:
         assert "0.1.0" in output
 
 
+def test_repeated_exports_preserve_deterministic_review_identity() -> None:
+    bundle = example_bundle()
+
+    for exporter in (export_json, export_markdown, export_csv, export_html):
+        assert exporter(bundle) == exporter(bundle)
+
+
 def test_markdown_groups_version_provenance_before_criteria_revision() -> None:
     markdown = export_markdown(new_review_state(example_bundle()))
 
@@ -150,6 +166,10 @@ def test_csv_emits_one_flattened_row_per_criterion() -> None:
     bundle = example_bundle()
     rows = list(csv.DictReader(io.StringIO(export_csv(bundle))))
     assert len(rows) == 1
+    assert rows[0]["review_id"] == bundle.review.review_id
+    assert rows[0]["base_sha"] == bundle.review.base_sha
+    assert rows[0]["head_sha"] == bundle.review.head_sha
+    assert rows[0]["review_created_at"] == bundle.review.model_dump(mode="json")["created_at"]
     assert rows[0]["tool_version"] == bundle.review.tool_version
     assert rows[0]["ruleset_version"] == bundle.review.ruleset_version
     assert rows[0]["criterion_id"] == "AC-01"
@@ -188,6 +208,19 @@ def test_html_keeps_gate_reasons_and_adds_escaped_recovery_guidance() -> None:
     assert "What To Do Next" in report
     assert "blocking criteria: AC-01" in report
     assert "Review gate reason `future_&lt;reason&gt;` before acceptance." in report
+
+
+def test_html_escapes_review_identity_values() -> None:
+    bundle = example_bundle()
+    bundle.review.review_id = "review-<identity>"
+    bundle.review.base_sha = "base<&>"
+
+    report = export_html(bundle)
+
+    assert "review-&lt;identity&gt;" in report
+    assert "base&lt;&amp;&gt;" in report
+    assert "review-<identity>" not in report
+    assert "base<&>" not in report
 
 
 def test_exports_never_include_token_shaped_secret() -> None:
