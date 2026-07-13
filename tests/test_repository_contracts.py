@@ -43,6 +43,16 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "scopeproof_core.evals.runner" in workflow
 
 
+def test_ci_builds_and_executes_installed_wheel() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "Installed wheel smoke" in workflow
+    assert "python -m pip wheel . --no-deps" in workflow
+    assert "python -m pip install --force-reinstall --no-deps" in workflow
+    assert 'cd "$RUNNER_TEMP"' in workflow
+    assert "scopeproof benchmark" in workflow
+
+
 def test_readme_documents_operating_commands() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     assert "streamlit run apps/web/app.py" in readme

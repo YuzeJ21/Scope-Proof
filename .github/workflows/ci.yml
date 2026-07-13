@@ -26,3 +26,10 @@ jobs:
         run: python -m pytest -q
       - name: Deterministic benchmark
         run: python -m scopeproof_core.evals.runner
+      - name: Installed wheel smoke
+        run: |
+          wheel_dir="$RUNNER_TEMP/scopeproof-wheel"
+          python -m pip wheel . --no-deps --wheel-dir "$wheel_dir"
+          wheel="$(find "$wheel_dir" -type f -name 'scopeproof-*.whl' -print -quit)"
+          python -m pip install --force-reinstall --no-deps "$wheel"
+          (cd "$RUNNER_TEMP" && scopeproof benchmark)
