@@ -52,20 +52,22 @@ The release gate uses explicit precedence:
 
 Python 3.11 or newer is required.
 
-Install the verified v0.1.11 release wheel in an isolated environment. This path does not require
+Install the verified v0.1.12 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install \
-  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.11/scopeproof-0.1.11-py3-none-any.whl
+  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.12/scopeproof-0.1.12-py3-none-any.whl
 scopeproof benchmark
+scopeproof-web
 ```
 
 The offline benchmark verifies that the installed package and bundled regression corpus execute.
-It is not runtime evidence for any pull request. Continue with the public-PR CLI workflow below to
-review reviewer-confirmed criteria against a real public PR.
+It is not runtime evidence for any pull request. `scopeproof-web` starts the packaged local
+workbench; stop it with `Ctrl+C`. Continue with the public-PR CLI workflow below to review
+reviewer-confirmed criteria against a real public PR.
 
 ### Public PR CLI workflow
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scopeproof"
-version = "0.1.11"
+version = "0.1.12"
 description = "Auditable acceptance evidence for public GitHub pull requests"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 scopeproof = "scopeproof_core.cli:main"
+scopeproof-web = "apps.web.launcher:main"
 
 [project.optional-dependencies]
 dev = [
