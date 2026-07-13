@@ -18,7 +18,12 @@ from scopeproof_core.criteria.service import (
 from scopeproof_core.demo import load_demo_labels, load_demo_snapshot
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.guidance import decision_guidance, gate_guidance
-from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
+from scopeproof_core.github.client import (
+    GitHubClient,
+    GitHubIngestionError,
+    InvalidPullRequestUrl,
+    parse_pr_url,
+)
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.reviews.lifecycle import (
@@ -230,6 +235,17 @@ pr_url = st.text_input(
     placeholder="https://github.com/owner/repository/pull/123",
     key="pr_url",
 )
+pr_url_is_valid = False
+if pr_url.strip():
+    try:
+        parse_pr_url(pr_url)
+    except InvalidPullRequestUrl:
+        st.warning(
+            "Enter a public GitHub pull request URL in this format: "
+            "`https://github.com/OWNER/REPO/pull/NUMBER`."
+        )
+    else:
+        pr_url_is_valid = True
 github_token = st.text_input(
     "Optional GitHub token",
     type="password",
@@ -259,7 +275,7 @@ with fetch_column:
     if st.button(
         "Fetch public PR",
         key="fetch_pr",
-        disabled=not bool(pr_url.strip()) or replacement_blocked,
+        disabled=not pr_url_is_valid or replacement_blocked,
         use_container_width=True,
     ):
         try:
