@@ -332,6 +332,12 @@ criteria: list[Criterion] = st.session_state["criteria"]
 if not criteria:
     st.info("Load the demo or prepare at least one criterion to continue.")
 else:
+    st.caption(
+        "Evidence levels set the minimum proof needed for each criterion: "
+        "E1 = implementation or contract candidate; E2 = test candidate; "
+        "E3 = manually recorded runtime verification. Static PR analysis can produce "
+        "only E1 or E2."
+    )
     new_criterion_text = st.text_input("Add criterion", key="new_criterion_text")
     if st.button(
         "Add criterion",
@@ -462,6 +468,12 @@ st.header("3 · Evidence Matrix")
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
 else:
+    st.caption(
+        "Evidence levels: E0 = no candidate found; "
+        "E1 = implementation or contract candidate; E2 = test candidate; "
+        "E3 = manually recorded runtime verification; E4 = explicit human acceptance. "
+        "Levels describe evidence type, not correctness."
+    )
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {
         resolution.criterion_id: resolution for resolution in bundle.resolutions
