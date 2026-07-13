@@ -39,6 +39,26 @@ def test_demo_loads_confirmable_criteria() -> None:
     assert app.button(key="confirm_criteria").disabled is False
 
 
+def test_sidebar_reports_confirmation_and_next_action_in_same_run() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+
+    sidebar_text = "\n".join(markdown.value for markdown in app.sidebar.markdown)
+    assert "Complete — Criteria confirmed" in sidebar_text
+    assert "Next — Run deterministic analysis" in sidebar_text
+    assert "active_step" not in app.session_state.filtered_state
+
+
+def test_sidebar_reports_analysis_and_review_availability() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    sidebar_text = "\n".join(markdown.value for markdown in app.sidebar.markdown)
+    assert "Complete — Analysis generated" in sidebar_text
+    assert "Complete — Review and export available" in sidebar_text
+
+
 def test_demo_flow_reaches_blocked_summary() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()

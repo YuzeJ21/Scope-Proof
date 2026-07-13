@@ -47,7 +47,6 @@ _STATE_DEFAULTS = {
     "criteria": [],
     "criteria_confirmed": False,
     "bundle": None,
-    "active_step": 1,
     "source_text": "",
     "requirements_input": "",
     "resolutions": [],
@@ -71,7 +70,6 @@ def _prepare_from_text(text: str) -> None:
         Criterion(criterion_id=draft.criterion_id, text=draft.text) for draft in drafts
     ]
     _reset_analysis()
-    st.session_state["active_step"] = 2
 
 
 def _analyze() -> ReviewBundle:
@@ -105,21 +103,6 @@ def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
 
 
-with st.sidebar:
-    st.header("Review workflow")
-    steps = [
-        "1. Start Review",
-        "2. Confirm Criteria",
-        "3. Evidence Matrix",
-        "4. Criterion Detail",
-        "5. Summary & Export",
-    ]
-    for index, label in enumerate(steps, start=1):
-        marker = "●" if index == st.session_state["active_step"] else "○"
-        st.markdown(f"{marker} {label}")
-    st.divider()
-    st.caption("Ruleset 1.0.0 · local-first · public repositories only")
-
 st.title("ScopeProof")
 st.subheader("Prove the PR matches the product intent.")
 st.markdown(
@@ -151,7 +134,6 @@ with load_column:
             Criterion.model_validate(item) for item in labels["criteria"]
         ]
         _reset_analysis()
-        st.session_state["active_step"] = 2
 with fetch_column:
     if st.button(
         "Fetch public PR",
@@ -233,7 +215,7 @@ else:
             )
         with priority_column:
             priority = st.selectbox(
-                "Priority",
+                f"Priority for {criterion.criterion_id}",
                 options=list(Priority),
                 index=list(Priority).index(criterion.priority),
                 format_func=lambda item: _status_label(item.value),
@@ -241,7 +223,7 @@ else:
             )
         with level_column:
             level = st.selectbox(
-                "Required evidence",
+                f"Required evidence for {criterion.criterion_id}",
                 options=[EvidenceLevel.E1, EvidenceLevel.E2, EvidenceLevel.E3],
                 index=[EvidenceLevel.E1, EvidenceLevel.E2, EvidenceLevel.E3].index(
                     criterion.required_evidence_level
@@ -249,12 +231,16 @@ else:
                 key=f"criterion_level_{criterion.criterion_id}",
             )
         with actions_column:
-            if st.button("Remove", key=f"remove_{criterion.criterion_id}"):
+            if st.button(
+                f"Remove {criterion.criterion_id}", key=f"remove_{criterion.criterion_id}"
+            ):
                 st.session_state["criteria"] = remove_criterion(criteria, criterion.criterion_id)
                 _reset_analysis()
                 st.success("Criterion removed. Confirm the updated set before analysis.")
                 st.rerun()
-            if position > 0 and st.button("Move up", key=f"move_up_{criterion.criterion_id}"):
+            if position > 0 and st.button(
+                f"Move {criterion.criterion_id} up", key=f"move_up_{criterion.criterion_id}"
+            ):
                 order = [item.criterion_id for item in criteria]
                 order[position - 1], order[position] = order[position], order[position - 1]
                 st.session_state["criteria"] = reorder_criteria(criteria, order)
@@ -287,7 +273,6 @@ else:
         st.session_state["criteria"] = edited_criteria
         st.session_state["criteria_confirmed"] = True
         st.session_state["bundle"] = None if state is None else state.bundle
-        st.session_state["active_step"] = 3
         st.success("Criteria confirmed. Analysis can now begin.")
 
 if st.session_state["criteria_confirmed"]:
@@ -304,7 +289,6 @@ if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis
     bundle = _analyze()
     st.session_state["bundle"] = bundle
     st.session_state["review_state"] = new_review_state(bundle)
-    st.session_state["active_step"] = 3
 
 review_state: ReviewState | None = st.session_state["review_state"]
 bundle: ReviewBundle | None = review_state.bundle if review_state else st.session_state["bundle"]
@@ -562,3 +546,40 @@ st.caption(
     "The bundled CSV export case is a deliberately constructed demo, "
     "not a real production incident."
 )
+
+has_source = st.session_state["snapshot"] is not None
+has_criteria = bool(st.session_state["criteria"])
+criteria_are_confirmed = st.session_state["criteria_confirmed"]
+has_analysis = bundle is not None
+
+with st.sidebar:
+    st.header("Review status")
+    st.markdown(
+        "Complete — Source loaded" if has_source else "Next — Load a public PR or demo"
+    )
+    st.markdown(
+        "Complete — Criteria prepared"
+        if has_criteria
+        else "Locked — Prepare at least one criterion"
+    )
+    st.markdown(
+        "Complete — Criteria confirmed"
+        if criteria_are_confirmed
+        else ("Next — Confirm criteria" if has_criteria else "Locked — Confirm criteria")
+    )
+    st.markdown(
+        "Complete — Analysis generated"
+        if has_analysis
+        else (
+            "Next — Run deterministic analysis"
+            if criteria_are_confirmed
+            else "Locked — Run deterministic analysis"
+        )
+    )
+    st.markdown(
+        "Complete — Review and export available"
+        if has_analysis
+        else "Locked — Review and export"
+    )
+    st.divider()
+    st.caption("Ruleset 1.0.0 · local-first · public repositories only")
