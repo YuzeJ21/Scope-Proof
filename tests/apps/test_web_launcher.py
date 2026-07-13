@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def load_launcher():
     launcher_path = Path("apps/web/launcher.py")
@@ -27,11 +29,24 @@ def test_packaged_web_launcher_uses_current_interpreter_without_shell(monkeypatc
 
     monkeypatch.setattr(launcher.subprocess, "run", fake_run)
 
-    assert launcher.main() == 7
+    assert (
+        launcher.main(
+            ["--host", "127.0.0.2", "--port", "8765", "--no-headless"]
+        )
+        == 7
+    )
     assert len(calls) == 1
     command, check = calls[0]
-    assert command[:4] == [sys.executable, "-m", "streamlit", "run"]
-    assert Path(command[4]).resolve() == Path("apps/web/app.py").resolve()
+    assert command[:7] == [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        "--server.address=127.0.0.2",
+        "--server.port=8765",
+        "--server.headless=false",
+    ]
+    assert Path(command[7]).resolve() == Path("apps/web/app.py").resolve()
     assert check is False
 
 
@@ -43,4 +58,51 @@ def test_packaged_web_launcher_exits_cleanly_on_keyboard_interrupt(monkeypatch) 
 
     monkeypatch.setattr(launcher.subprocess, "run", interrupted_run)
 
-    assert launcher.main() == 130
+    assert launcher.main([]) == 130
+
+
+@pytest.mark.parametrize("port", ["0", "65536"])
+def test_packaged_web_launcher_rejects_out_of_range_port_before_launch(
+    monkeypatch, capsys, port: str
+) -> None:
+    launcher = load_launcher()
+    launched = False
+
+    def unexpected_run(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        nonlocal launched
+        launched = True
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(launcher.subprocess, "run", unexpected_run)
+
+    with pytest.raises(SystemExit) as raised:
+        launcher.main(["--port", port])
+
+    assert raised.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "1..65535" in stderr
+    assert "Traceback" not in stderr
+    assert launched is False
+
+
+def test_packaged_web_launcher_rejects_unknown_option_before_launch(
+    monkeypatch, capsys
+) -> None:
+    launcher = load_launcher()
+    launched = False
+
+    def unexpected_run(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        nonlocal launched
+        launched = True
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(launcher.subprocess, "run", unexpected_run)
+
+    with pytest.raises(SystemExit) as raised:
+        launcher.main(["--unknown-option"])
+
+    assert raised.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "unrecognized arguments" in stderr
+    assert "Traceback" not in stderr
+    assert launched is False
