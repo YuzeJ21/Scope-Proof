@@ -1,9 +1,11 @@
 from scopeproof_core.reviews.lifecycle import (
+    ResolutionEventStatus,
     append_resolution,
     append_runtime_evidence,
     confirm_criteria,
     current_resolutions,
     new_review_state,
+    resolution_event_statuses,
     revise_criteria,
 )
 from scopeproof_core.schemas.models import (
@@ -103,6 +105,62 @@ def test_resolution_events_preserve_history_and_latest_decision_controls_gate() 
     assert current[0].decision is HumanDecision.ACCEPTED
     assert state.bundle is not None
     assert state.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+
+
+def test_resolution_event_statuses_identify_latest_event_for_each_target() -> None:
+    events = [
+        ResolutionEvent(
+            event_id="criterion-old",
+            criterion_id="AC-01",
+            decision=HumanDecision.REJECTED_FINDING,
+            criteria_revision_number=1,
+        ),
+        ResolutionEvent(
+            event_id="acceptance-old",
+            final_acceptance=False,
+            criteria_revision_number=1,
+        ),
+        ResolutionEvent(
+            event_id="criterion-current",
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            criteria_revision_number=1,
+        ),
+        ResolutionEvent(
+            event_id="acceptance-current",
+            final_acceptance=True,
+            criteria_revision_number=1,
+        ),
+    ]
+
+    assert resolution_event_statuses(events, active_revision_number=1) == [
+        ResolutionEventStatus.SUPERSEDED,
+        ResolutionEventStatus.SUPERSEDED,
+        ResolutionEventStatus.CURRENT,
+        ResolutionEventStatus.CURRENT,
+    ]
+
+
+def test_resolution_event_statuses_separate_prior_revisions() -> None:
+    events = [
+        ResolutionEvent(
+            event_id="revision-1",
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            criteria_revision_number=1,
+        ),
+        ResolutionEvent(
+            event_id="revision-2",
+            criterion_id="AC-01",
+            decision=HumanDecision.CHANGE_REQUIRED,
+            criteria_revision_number=2,
+        ),
+    ]
+
+    assert resolution_event_statuses(events, active_revision_number=2) == [
+        ResolutionEventStatus.PRIOR_REVISION,
+        ResolutionEventStatus.CURRENT,
+    ]
 
 
 def test_final_acceptance_event_allows_ready_after_criterion_resolution() -> None:

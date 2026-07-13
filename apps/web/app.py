@@ -21,10 +21,12 @@ from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.reviews.lifecycle import (
+    ResolutionEventStatus,
     append_resolution,
     append_runtime_evidence,
     confirm_criteria,
     new_review_state,
+    resolution_event_statuses,
     revise_criteria,
 )
 from scopeproof_core.schemas.models import (
@@ -626,10 +628,43 @@ else:
     if review_state is not None:
         st.markdown("### Resolution history")
         if review_state.resolution_events:
-            for event in review_state.resolution_events:
+            st.caption(
+                "Current events are the latest recorded inputs for the active revision. "
+                "Superseded and prior-revision events remain audit history and do not "
+                "independently control the gate."
+            )
+            event_statuses = resolution_event_statuses(
+                review_state.resolution_events,
+                active_revision_number=review_state.criteria_revision.number,
+            )
+            status_labels = {
+                ResolutionEventStatus.CURRENT: "Current",
+                ResolutionEventStatus.SUPERSEDED: "Superseded",
+                ResolutionEventStatus.PRIOR_REVISION: "Prior revision",
+            }
+            for event, event_status in zip(
+                review_state.resolution_events, event_statuses, strict=True
+            ):
                 target = event.criterion_id or "Final acceptance"
-                outcome = event.decision.value if event.decision else str(event.final_acceptance)
-                st.markdown(f"- {target}: {outcome} — {event.comment or 'No note provided'}")
+                outcome = (
+                    _status_label(event.decision.value)
+                    if event.decision
+                    else "Recorded"
+                    if event.final_acceptance
+                    else "Not recorded"
+                )
+                status = (
+                    f"**Current · revision {event.criteria_revision_number}**"
+                    if event_status is ResolutionEventStatus.CURRENT
+                    else (
+                        f"{status_labels[event_status]} · revision "
+                        f"{event.criteria_revision_number}"
+                    )
+                )
+                st.markdown(
+                    f"- {status} — {target}: {outcome} — "
+                    f"{event.comment or 'No note provided'}"
+                )
         else:
             st.caption("No human decisions have been recorded yet.")
 
