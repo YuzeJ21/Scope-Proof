@@ -50,6 +50,16 @@ def test_readme_documents_operating_commands() -> None:
     assert "scopeproof_core.evals.runner" in readme
 
 
+def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "scopeproof review --pr" in readme
+    assert "--requirements requirements.txt" in readme
+    assert "scopeproof export" in readme
+    assert "reviewer-confirmed criteria" in readme
+    assert "not required or persisted" in readme
+
+
 def test_readme_documents_actual_stage_2a_durability_behavior() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 

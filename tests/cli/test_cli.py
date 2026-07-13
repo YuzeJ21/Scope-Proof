@@ -2,6 +2,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from scopeproof_core.cli import main
 
 
@@ -34,6 +36,41 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     output = capsys.readouterr().out
     assert '"review_id"' in output
     assert list((tmp_path / "reviews").glob("*.json"))
+
+
+def test_review_reports_invalid_pr_url_without_traceback(tmp_path: Path, capsys) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(["review", "--pr", "not-a-github-pr", "--requirements", str(requirements)])
+
+    assert raised.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "scopeproof: error:" in stderr
+    assert "Expected https://github.com/OWNER/REPO/pull/NUMBER" in stderr
+    assert "Traceback" not in stderr
+
+
+def test_review_reports_missing_requirements_without_traceback(tmp_path: Path, capsys) -> None:
+    missing = tmp_path / "missing-requirements.txt"
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "review",
+                "--pr",
+                "https://github.com/YuzeJ21/Scope-Proof/pull/22",
+                "--requirements",
+                str(missing),
+            ]
+        )
+
+    assert raised.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "scopeproof: error:" in stderr
+    assert str(missing) in stderr
+    assert "Traceback" not in stderr
 
 
 def test_export_command_reads_saved_review_without_credentials(tmp_path: Path, capsys) -> None:
