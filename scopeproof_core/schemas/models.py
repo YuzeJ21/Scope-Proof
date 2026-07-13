@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
+from scopeproof_core.version import __version__
+
 RULESET_VERSION = "1.0.0"
 
 
@@ -257,7 +259,7 @@ class Review(BaseModel):
     ingestion_state: IngestionState = IngestionState.COMPLETE
     final_acceptance: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    tool_version: str = "0.1.0"
+    tool_version: str = Field(default_factory=lambda: __version__)
     ruleset_version: str = RULESET_VERSION
 
     @computed_field
