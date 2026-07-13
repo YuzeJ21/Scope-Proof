@@ -8,6 +8,7 @@ import io
 import json
 from collections import defaultdict
 
+from scopeproof_core.gates.guidance import gate_guidance
 from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewState
 
 ExportableReview = ReviewBundle | ReviewState
@@ -120,6 +121,9 @@ def export_markdown(bundle: ExportableReview) -> str:
         lines.extend(
             ["## Gate Reasons", "", *[f"- `{code}`" for code in bundle.gate.reason_codes], ""]
         )
+    guidance = gate_guidance(bundle.gate)
+    if guidance:
+        lines.extend(["## What To Do Next", "", *[f"- {message}" for message in guidance], ""])
     if state is not None:
         lines.extend(["## Resolution History", ""])
         for event in state.resolution_events:
@@ -234,6 +238,7 @@ def export_html(value: ExportableReview) -> str:
         )
     revision = state.criteria_revision.number if state else 1
     verdict = html.escape(bundle.gate.verdict.value.replace("_", " ").title())
+    guidance = gate_guidance(bundle.gate)
     return "\n".join(
         [
             "<!doctype html>",
@@ -255,6 +260,27 @@ def export_html(value: ExportableReview) -> str:
             "<th>Status</th><th>Level</th><th>Evidence</th></tr></thead><tbody>",
             *rows,
             "</tbody></table>",
+            *(
+                [
+                    "<h2>Gate Reasons</h2><ul>",
+                    *[
+                        f"<li><code>{html.escape(code)}</code></li>"
+                        for code in bundle.gate.reason_codes
+                    ],
+                    "</ul>",
+                ]
+                if bundle.gate.reason_codes
+                else []
+            ),
+            *(
+                [
+                    "<h2>What To Do Next</h2><ul>",
+                    *[f"<li>{html.escape(message)}</li>" for message in guidance],
+                    "</ul>",
+                ]
+                if guidance
+                else []
+            ),
             *(
                 [
                     "<h2>Manual Runtime Evidence</h2><ul>",

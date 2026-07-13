@@ -3,7 +3,12 @@ import io
 import json
 from datetime import UTC, datetime
 
-from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
+from scopeproof_core.reporting.exporters import (
+    export_csv,
+    export_html,
+    export_json,
+    export_markdown,
+)
 from scopeproof_core.schemas.models import (
     CheckState,
     ConfidenceBand,
@@ -128,6 +133,29 @@ def test_markdown_contains_disclaimer_and_human_resolution() -> None:
     assert "Candidate evidence" in markdown
     assert "Manual Runtime Evidence" in markdown
     assert "https://example.test/runs/7" in markdown
+
+
+def test_markdown_keeps_gate_reasons_and_adds_recovery_guidance() -> None:
+    markdown = export_markdown(example_bundle())
+
+    assert "## Gate Reasons" in markdown
+    assert "`blocking_criteria`" in markdown
+    assert "## What To Do Next" in markdown
+    assert "blocking criteria: AC-01" in markdown
+
+
+def test_html_keeps_gate_reasons_and_adds_escaped_recovery_guidance() -> None:
+    bundle = example_bundle()
+    bundle.gate.reason_codes.append("future_<reason>")
+
+    report = export_html(bundle)
+
+    assert "Gate Reasons" in report
+    assert "blocking_criteria" in report
+    assert "future_&lt;reason&gt;" in report
+    assert "What To Do Next" in report
+    assert "blocking criteria: AC-01" in report
+    assert "Review gate reason `future_&lt;reason&gt;` before acceptance." in report
 
 
 def test_exports_never_include_token_shaped_secret() -> None:
