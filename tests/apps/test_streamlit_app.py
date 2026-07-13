@@ -55,6 +55,14 @@ def test_product_disclaimer_is_visible() -> None:
     assert "No paid LLM API" in visible_text
 
 
+def test_blank_public_pr_url_remains_neutral_and_disables_fetch() -> None:
+    app = new_app()
+
+    warning_text = "\n".join(item.value for item in app.warning)
+    assert "Enter a public GitHub pull request URL" not in warning_text
+    assert app.button(key="fetch_pr").disabled is True
+
+
 def test_malformed_public_pr_url_shows_format_guidance_and_disables_fetch() -> None:
     app = new_app()
     app = app.text_input(key="pr_url").set_value(
