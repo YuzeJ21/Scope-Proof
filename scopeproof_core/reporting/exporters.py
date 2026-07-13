@@ -35,13 +35,17 @@ def export_markdown(bundle: ExportableReview) -> str:
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
     verdict = bundle.gate.verdict.value.replace("_", " ").title()
+    review_created_at = bundle.review.model_dump(mode="json")["created_at"]
     lines = [
         "# ScopeProof Acceptance Review",
         "",
         f"**Verdict:** {verdict}",
+        f"**Review ID:** `{bundle.review.review_id}`",
         f"**Repository:** `{bundle.review.repository}`",
         f"**Pull request:** #{bundle.review.pr_number}",
+        f"**Base SHA:** `{bundle.review.base_sha}`",
         f"**Head SHA:** `{bundle.review.head_sha}`",
+        f"**Review created:** `{review_created_at}`",
         f"**Tool version:** `{bundle.review.tool_version}`",
         f"**Ruleset:** `{bundle.review.ruleset_version}`",
         *([f"**Criteria revision: {state.criteria_revision.number}**"] if state else []),
@@ -155,7 +159,9 @@ def export_csv(bundle: ExportableReview) -> str:
         "review_id",
         "repository",
         "pr_number",
+        "base_sha",
         "head_sha",
+        "review_created_at",
         "tool_version",
         "ruleset_version",
         "criteria_revision",
@@ -188,7 +194,9 @@ def export_csv(bundle: ExportableReview) -> str:
                 "review_id": bundle.review.review_id,
                 "repository": bundle.review.repository,
                 "pr_number": bundle.review.pr_number,
+                "base_sha": bundle.review.base_sha,
                 "head_sha": bundle.review.head_sha,
+                "review_created_at": bundle.review.model_dump(mode="json")["created_at"],
                 "tool_version": bundle.review.tool_version,
                 "ruleset_version": bundle.review.ruleset_version,
                 "criteria_revision": state.criteria_revision.number if state else 1,
@@ -240,6 +248,7 @@ def export_html(value: ExportableReview) -> str:
         )
     revision = state.criteria_revision.number if state else 1
     verdict = html.escape(bundle.gate.verdict.value.replace("_", " ").title())
+    review_created_at = bundle.review.model_dump(mode="json")["created_at"]
     guidance = gate_guidance(bundle.gate)
     return "\n".join(
         [
@@ -252,9 +261,12 @@ def export_html(value: ExportableReview) -> str:
             "</head><body>",
             "<h1>ScopeProof Acceptance Review</h1>",
             f"<p><strong>Verdict:</strong> {verdict}</p>",
-            f"<p>Repository: <code>{html.escape(bundle.review.repository)}</code> · "
-            f"PR #{bundle.review.pr_number} · Head SHA "
+            f"<p>Review ID: <code>{html.escape(bundle.review.review_id)}</code> · "
+            f"Repository: <code>{html.escape(bundle.review.repository)}</code> · "
+            f"PR #{bundle.review.pr_number} · Base SHA "
+            f"<code>{html.escape(bundle.review.base_sha)}</code> · Head SHA "
             f"<code>{html.escape(bundle.review.head_sha)}</code> · "
+            f"Review created <code>{html.escape(review_created_at)}</code> · "
             f"Tool <code>{html.escape(bundle.review.tool_version)}</code> · "
             f"Ruleset <code>{html.escape(bundle.review.ruleset_version)}</code> · "
             f"Criteria revision {revision}</p>",

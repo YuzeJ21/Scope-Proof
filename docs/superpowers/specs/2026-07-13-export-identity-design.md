@@ -21,9 +21,9 @@ Expose the existing validated review identity consistently in every export:
 - CSV adds `base_sha` and `review_created_at` columns alongside the existing identity columns.
 - HTML adds review ID, base SHA, and `created_at` labeled as `Review created` in its identity summary.
 
-Serialize the timestamp with `datetime.isoformat()`. Reuse the stored review timestamp instead of
-calling the clock during export. This keeps repeated exports of the same validated review byte-for-byte
-deterministic and preserves historical identity when a review is reopened.
+Serialize the timestamp through Pydantic's JSON mode, matching the canonical JSON export. Reuse the
+stored review timestamp instead of calling the clock during export. This keeps repeated exports of the
+same validated review byte-for-byte deterministic and preserves historical identity when reopened.
 
 ## Alternatives Considered
 
