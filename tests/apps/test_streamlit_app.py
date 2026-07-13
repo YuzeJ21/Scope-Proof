@@ -5,7 +5,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.demo import load_demo_snapshot
-from scopeproof_core.schemas.models import EvidenceLevel, HumanDecision
+from scopeproof_core.schemas.models import EvidenceLevel, GateVerdict, HumanDecision
 
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
 
@@ -281,6 +281,27 @@ def test_final_acceptance_control_is_visible_only_after_analysis() -> None:
     app = app.button(key="run_analysis").click().run()
 
     assert app.button(key="record_final_acceptance").disabled is False
+
+
+def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -> None:
+    app = analyzed_demo(new_app())
+    state_before = app.session_state["review_state"]
+    gate_before = state_before.bundle.gate
+
+    markdown_text = "\n".join(item.value for item in app.markdown)
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "Final review acceptance" in markdown_text
+    assert "records a review-level acceptance event" in caption_text
+    assert "does not resolve individual criteria or override the deterministic gate" in caption_text
+    assert "Review every criterion and its evidence before recording" in caption_text
+
+    app = app.button(key="record_final_acceptance").click().run()
+    state_after = app.session_state["review_state"]
+
+    assert state_after.review.final_acceptance is True
+    assert state_after.bundle.gate.verdict is GateVerdict.BLOCKED
+    assert state_after.bundle.gate.blocking_criteria == gate_before.blocking_criteria
+    assert state_after.bundle.gate.unresolved_criteria == gate_before.unresolved_criteria
 
 
 def test_criteria_can_be_added_and_removed_before_reconfirmation() -> None:
