@@ -7,7 +7,7 @@ _DECISION_GUIDANCE = {
         "Records reviewer acceptance and treats this criterion as resolved."
     ),
     HumanDecision.ACCEPTED_EXCEPTION: (
-        "Records an explicit exception and makes the review conditional."
+        "Records an explicit exception and marks this criterion conditional."
     ),
     HumanDecision.CHANGE_REQUIRED: (
         "Makes this criterion blocking until a later decision replaces it."
@@ -22,7 +22,7 @@ _DECISION_GUIDANCE = {
     ),
     HumanDecision.NOT_IN_SCOPE: (
         "Records a scope exception, removes this criterion from active blocking and unresolved "
-        "checks, and can leave the review conditional."
+        "checks, and contributes a Conditional outcome when no higher-severity reason exists."
     ),
 }
 

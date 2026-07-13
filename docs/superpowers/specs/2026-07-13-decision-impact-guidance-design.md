@@ -23,14 +23,14 @@ Add deterministic selected-decision guidance:
 ## Decision Meanings
 
 - `accepted`: records reviewer acceptance and treats the criterion as resolved.
-- `accepted_exception`: records an explicit exception and makes the review conditional.
+- `accepted_exception`: records an explicit exception and marks the criterion conditional.
 - `change_required`: makes the criterion blocking until a later decision replaces it.
 - `rejected_finding`: rejects the provisional finding but does not resolve the criterion; the
   finding continues to control the gate.
 - `manually_verified`: records external manual verification at the selected evidence level and
   treats the criterion as resolved.
 - `not_in_scope`: records a scope exception, removes the criterion from active blocking/unresolved
-  checks, and can leave the review conditional.
+  checks, and contributes a Conditional outcome when no higher-severity reason exists.
 
 ## Alternatives Considered
 

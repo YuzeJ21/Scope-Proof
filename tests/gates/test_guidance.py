@@ -13,7 +13,7 @@ from scopeproof_core.schemas.models import GateDecision, GateVerdict, HumanDecis
         ),
         (
             HumanDecision.ACCEPTED_EXCEPTION,
-            "Records an explicit exception and makes the review conditional.",
+            "Records an explicit exception and marks this criterion conditional.",
         ),
         (
             HumanDecision.CHANGE_REQUIRED,
@@ -32,7 +32,8 @@ from scopeproof_core.schemas.models import GateDecision, GateVerdict, HumanDecis
         (
             HumanDecision.NOT_IN_SCOPE,
             "Records a scope exception, removes this criterion from active blocking and "
-            "unresolved checks, and can leave the review conditional.",
+            "unresolved checks, and contributes a Conditional outcome when no higher-severity "
+            "reason exists.",
         ),
     ],
 )
