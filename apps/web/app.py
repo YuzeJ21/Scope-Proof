@@ -383,12 +383,27 @@ else:
         format_func=lambda item: _status_label(item.value),
         key="priority_filter",
     )
+    blocking_only = st.checkbox(
+        "Show blocking criteria only",
+        key="blocking_only",
+    )
+    evidence_level_filter = st.multiselect(
+        "Filter evidence level",
+        options=list(EvidenceLevel),
+        format_func=lambda item: item.value,
+        key="evidence_level_filter",
+    )
+    blocking_criteria = set(bundle.gate.blocking_criteria)
     matrix = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         if status_filter and finding.status.value not in status_filter:
             continue
         if priority_filter and criterion.priority not in priority_filter:
+            continue
+        if blocking_only and criterion.criterion_id not in blocking_criteria:
+            continue
+        if evidence_level_filter and finding.evidence_level not in evidence_level_filter:
             continue
         matrix.append(
             {
@@ -429,6 +444,8 @@ else:
         ]
         table_lines.append("| " + " | ".join(cells) + " |")
     st.markdown("\n".join(table_lines))
+    if not matrix:
+        st.info("No criteria match the current filters.")
     for row in matrix:
         st.markdown(f"**{row['Criterion']} — {row['Status']}** · {row['Requirement']}")
 
