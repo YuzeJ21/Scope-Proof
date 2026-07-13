@@ -633,13 +633,24 @@ else:
             )
             st.rerun()
 
+    final_acceptance_save_notice = st.session_state.pop(
+        "final_acceptance_save_notice", None
+    )
+    final_acceptance_recorded = bool(
+        review_state is not None and review_state.review.final_acceptance
+    )
+
     st.markdown("### Final review acceptance")
     st.caption(
         "This records a review-level acceptance event. It does not resolve individual criteria "
         "or override the deterministic gate. Review every criterion and its evidence before "
         "recording final acceptance."
     )
-    if st.button("Record final acceptance", key="record_final_acceptance"):
+    if st.button(
+        "Record final acceptance",
+        key="record_final_acceptance",
+        disabled=final_acceptance_recorded,
+    ):
         if review_state is None:
             st.error("Run analysis before recording final acceptance.")
         else:
@@ -653,7 +664,12 @@ else:
             st.session_state["review_state"] = review_state
             st.session_state["bundle"] = review_state.bundle
             bundle = review_state.bundle
-            st.success("Final acceptance appended to the local review history.")
+            st.session_state["final_acceptance_save_notice"] = (
+                "Final acceptance appended to the local review history."
+            )
+            st.rerun()
+    if final_acceptance_save_notice is not None:
+        st.success(final_acceptance_save_notice)
 
     if review_state is not None:
         st.markdown("### Resolution history")

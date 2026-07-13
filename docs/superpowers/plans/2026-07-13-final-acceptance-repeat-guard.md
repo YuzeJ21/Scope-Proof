@@ -70,9 +70,9 @@ def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> No
         "User can export the research list as a downloadable CSV"
     ).run()
 
+    app = app.button(key="confirm_criteria").click().run()
     assert app.session_state["review_state"].review.final_acceptance is False
     assert app.session_state["review_state"].bundle is None
-    app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
     assert app.button(key="record_final_acceptance").disabled is False
 ```
