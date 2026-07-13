@@ -404,6 +404,35 @@ def test_evidence_matrix_shows_current_human_resolution() -> None:
     assert ac_01_row.endswith("| Accepted |")
 
 
+def test_successful_resolution_save_clears_form_and_prevents_accidental_repeat() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="resolution_decision").set_value(HumanDecision.ACCEPTED).run()
+    app = app.text_area(key="resolution_note").set_value("Evidence reviewed").run()
+    app = app.button(key="save_resolution").click().run()
+
+    state = app.session_state["review_state"]
+    assert len(state.resolution_events) == 1
+    assert app.selectbox(key="resolution_decision").value is None
+    assert app.text_area(key="resolution_note").value == ""
+    assert app.button(key="save_resolution").disabled is True
+    assert "Human resolution appended to the local review history." in [
+        message.value for message in app.success
+    ]
+
+
+def test_successful_manual_verification_clears_conditional_evidence_level() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.MANUALLY_VERIFIED
+    ).run()
+    app = app.selectbox(key="manual_evidence_level").set_value(EvidenceLevel.E4).run()
+    app = app.button(key="save_resolution").click().run()
+
+    assert len(app.session_state["review_state"].resolution_events) == 1
+    assert app.selectbox(key="resolution_decision").value is None
+    assert "manual_evidence_level" not in app.session_state.filtered_state
+
+
 def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> None:
     app = analyzed_demo(new_app())
     bundle = app.session_state["review_state"].bundle

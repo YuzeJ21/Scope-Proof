@@ -554,6 +554,12 @@ else:
             f"({item.environment}: {item.result}; {item.evidence_level.value})"
         )
 
+    if st.session_state.pop("resolution_form_reset_pending", False):
+        st.session_state["resolution_decision"] = None
+        st.session_state["resolution_note"] = ""
+        st.session_state.pop("manual_evidence_level", None)
+    resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
+
     decision_options = [
         HumanDecision.ACCEPTED,
         HumanDecision.CHANGE_REQUIRED,
@@ -575,6 +581,8 @@ else:
     else:
         st.caption(f"Decision impact: {decision_guidance(decision)}")
     resolution_note = st.text_area("Reviewer note", key="resolution_note")
+    if resolution_save_notice is not None:
+        st.success(resolution_save_notice)
     manual_level = None
     if decision is HumanDecision.MANUALLY_VERIFIED:
         manual_level = st.selectbox(
@@ -601,7 +609,11 @@ else:
             st.session_state["review_state"] = review_state
             st.session_state["bundle"] = review_state.bundle
             bundle = review_state.bundle
-            st.success("Human resolution appended to the local review history.")
+            st.session_state["resolution_form_reset_pending"] = True
+            st.session_state["resolution_save_notice"] = (
+                "Human resolution appended to the local review history."
+            )
+            st.rerun()
 
     st.markdown("### Final review acceptance")
     st.caption(
