@@ -96,7 +96,7 @@ Create `scopeproof_core/version.py`:
 ```python
 """Single checked-in source for ScopeProof package and review provenance."""
 
-__version__ = "0.1.14"
+__version__ = "0.1.15.dev0"
 ```
 
 Update `scopeproof_core/__init__.py`:
@@ -224,13 +224,13 @@ rm -rf /tmp/scopeproof-version-wheel /tmp/scopeproof-version-install
 mkdir -p /tmp/scopeproof-version-wheel /tmp/scopeproof-version-install
 ../../.venv/bin/python -m pip wheel . --no-deps --wheel-dir /tmp/scopeproof-version-wheel
 ../../.venv/bin/python -m pip install --no-deps --target /tmp/scopeproof-version-install \
-  /tmp/scopeproof-version-wheel/scopeproof-0.1.14-py3-none-any.whl
+  /tmp/scopeproof-version-wheel/scopeproof-0.1.15.dev0-py3-none-any.whl
 PYTHONPATH=/tmp/scopeproof-version-install ../../.venv/bin/python -c '
 from importlib.metadata import version
 from scopeproof_core import __version__
 from scopeproof_core.schemas.models import Review
 review = Review(repository="acme/repo", pr_number=1, base_sha="base", head_sha="head")
-assert version("scopeproof") == __version__ == review.tool_version == "0.1.14"
+assert version("scopeproof") == __version__ == review.tool_version == "0.1.15.dev0"
 '
 ```
 
@@ -240,7 +240,7 @@ Expected: wheel build and install succeed and the assertion exits zero.
 
 Use a temporary requirements file and storage directory, run `scopeproof_core.cli review`, and
 inspect both the persisted record and JSON export. Confirm each validated `review.tool_version` is
-`0.1.14`. This is controlled local product evidence, not PR runtime evidence.
+`0.1.15.dev0`. This is controlled local product evidence, not PR runtime evidence.
 
 - [ ] **Step 7: Commit packaging provenance coverage**
 

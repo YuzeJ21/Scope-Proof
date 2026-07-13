@@ -21,9 +21,15 @@ constant when constructing new `Review` models.
 This makes the packaged distribution version and new review provenance derive from one checked-in
 source without adding a dependency or reading repository files at runtime.
 
+Because `main` already contains unreleased changes after the published v0.1.14 tag, the checked-in
+source version becomes `0.1.15.dev0`. This prevents source-checkout reviews from impersonating the
+published v0.1.14 wheel. README installation guidance and the existing release remain v0.1.14.
+
 ## Data and Compatibility Contract
 
 - New `Review` objects default `tool_version` from `scopeproof_core.version.__version__`.
+- The current unreleased main line reports `0.1.15.dev0`; a future release changes the same single
+  source to its final release version.
 - CLI, Streamlit, demo, persistence, and every export continue using the validated `Review` model,
   so no UI-specific or command-specific version override is added.
 - Explicitly supplied `tool_version` values remain valid. Loading an older saved review preserves
