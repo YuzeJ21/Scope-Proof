@@ -96,6 +96,29 @@ def test_demo_loads_confirmable_criteria() -> None:
     assert app.button(key="confirm_criteria").disabled is False
 
 
+def test_criteria_confirmation_explains_required_evidence_levels() -> None:
+    app = load_demo(new_app())
+    caption_text = "\n".join(item.value for item in app.caption)
+
+    assert (
+        "Evidence levels set the minimum proof needed for each criterion: "
+        "E1 = implementation or contract candidate; E2 = test candidate; "
+        "E3 = manually recorded runtime verification. Static PR analysis can produce "
+        "only E1 or E2."
+    ) in caption_text
+
+
+def test_evidence_matrix_explains_observed_evidence_levels() -> None:
+    app = analyzed_demo(new_app())
+    caption_text = "\n".join(item.value for item in app.caption)
+
+    assert (
+        "Evidence levels: E0 = no candidate found; E1 = implementation or contract candidate; "
+        "E2 = test candidate; E3 = manually recorded runtime verification; "
+        "E4 = explicit human acceptance. Levels describe evidence type, not correctness."
+    ) in caption_text
+
+
 def test_sidebar_reports_confirmation_and_next_action_in_same_run() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
