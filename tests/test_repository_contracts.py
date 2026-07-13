@@ -64,14 +64,25 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert (
-        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.11/"
-        "scopeproof-0.1.11-py3-none-any.whl"
+        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.12/"
+        "scopeproof-0.1.12-py3-none-any.whl"
     ) in readme
     assert "scopeproof benchmark" in readme
+    assert "scopeproof-web" in readme
     assert "## Contributor setup" in readme
     assert "python -m pip install -e '.[dev]'" in readme
     assert "streamlit run apps/web/app.py" in readme
     assert "scopeproof web" not in readme
+
+
+def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert config["project"]["version"] == "0.1.12"
+    assert config["project"]["scripts"]["scopeproof-web"] == "apps.web.launcher:main"
+    core_cli = Path("scopeproof_core/cli.py").read_text(encoding="utf-8")
+    assert "streamlit" not in core_cli
+    assert "apps.web" not in core_cli
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
