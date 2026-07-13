@@ -116,6 +116,21 @@ def test_demo_summary_requires_explicit_resolution_decision() -> None:
     assert app.button(key="save_resolution").disabled is True
 
 
+def test_human_decision_explains_selected_gate_impact() -> None:
+    app = analyzed_demo(new_app())
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "Select a decision to see its deterministic gate impact." in caption_text
+
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.REJECTED_FINDING
+    ).run()
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert (
+        "Decision impact: Rejects the provisional finding but does not resolve this criterion; "
+        "its finding status continues to control the gate."
+    ) in caption_text
+
+
 def test_optional_token_uses_password_input() -> None:
     app = new_app()
     token = app.text_input(key="github_token")
