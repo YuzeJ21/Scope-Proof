@@ -64,6 +64,10 @@ _STATE_DEFAULTS = {
     "source_reload_notice": None,
     "saved_review_fingerprint": None,
     "review_save_notice": None,
+    "replace_unsaved_review_confirmed": False,
+    "replace_unsaved_review_reset_pending": False,
+    "review_reopen_notice": None,
+    "source_load_notice": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -78,11 +82,17 @@ def _reset_analysis() -> None:
     st.session_state["reopened_review_id"] = None
     st.session_state["saved_review_fingerprint"] = None
     st.session_state["review_save_notice"] = None
+    st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
 def _review_state_fingerprint(state: ReviewState) -> str:
     """Return a deterministic session-only identity for a validated review state."""
     return sha256(state.model_dump_json().encode("utf-8")).hexdigest()
+
+
+def _review_matches_local_save(state: ReviewState) -> bool:
+    saved_fingerprint = st.session_state["saved_review_fingerprint"]
+    return bool(saved_fingerprint and saved_fingerprint == _review_state_fingerprint(state))
 
 
 def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
@@ -123,6 +133,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["source_reload_notice"] = None
     st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(state)
     st.session_state["review_save_notice"] = None
+    st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
 def _analyze() -> ReviewBundle:
@@ -156,6 +167,10 @@ def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
 
 
+if st.session_state["replace_unsaved_review_reset_pending"]:
+    st.session_state["replace_unsaved_review_confirmed"] = False
+    st.session_state["replace_unsaved_review_reset_pending"] = False
+
 st.title("ScopeProof")
 st.subheader("Prove the PR matches the product intent.")
 st.markdown(
@@ -164,11 +179,33 @@ st.markdown(
 )
 st.caption("No paid LLM API. Deterministic rules. Human acceptance stays visible.")
 
+current_review_state: ReviewState | None = st.session_state["review_state"]
+has_unsaved_review = bool(
+    current_review_state is not None
+    and not _review_matches_local_save(current_review_state)
+)
+if has_unsaved_review:
+    st.warning(
+        "The current review has unsaved changes. Replacing it will discard unsaved changes."
+    )
+    replace_unsaved_review_confirmed = st.checkbox(
+        "Allow replacing the unsaved current review",
+        key="replace_unsaved_review_confirmed",
+    )
+else:
+    st.session_state["replace_unsaved_review_confirmed"] = False
+    replace_unsaved_review_confirmed = False
+replacement_blocked = has_unsaved_review and not replace_unsaved_review_confirmed
+
 storage_directory = default_local_review_directory()
 review_store = JsonReviewStore(Path(storage_directory))
 st.markdown("### Reopen saved review")
 reopen_id = st.text_input("Review ID", key="reopen_review_id")
-if st.button("Reopen local review", key="reopen_review", disabled=not reopen_id.strip()):
+if st.button(
+    "Reopen local review",
+    key="reopen_review",
+    disabled=not reopen_id.strip() or replacement_blocked,
+):
     try:
         reopened_state = review_store.load(reopen_id.strip())
     except FileNotFoundError:
@@ -179,7 +216,13 @@ if st.button("Reopen local review", key="reopen_review", disabled=not reopen_id.
         st.error("The saved review could not be opened. Verify its ID and record integrity.")
     else:
         _hydrate_reopened_review(reopened_state)
-        st.success("Review reopened from local storage after validation.")
+        st.session_state["review_reopen_notice"] = (
+            "Review reopened from local storage after validation."
+        )
+        st.rerun()
+review_reopen_notice = st.session_state.pop("review_reopen_notice", None)
+if review_reopen_notice is not None:
+    st.success(review_reopen_notice)
 
 st.header("1 · Start Review")
 pr_url = st.text_input(
@@ -195,7 +238,12 @@ github_token = st.text_input(
 )
 load_column, fetch_column = st.columns(2)
 with load_column:
-    if st.button("Load deliberately constructed demo", key="load_demo", use_container_width=True):
+    if st.button(
+        "Load deliberately constructed demo",
+        key="load_demo",
+        disabled=replacement_blocked,
+        use_container_width=True,
+    ):
         labels = load_demo_labels()
         snapshot = load_demo_snapshot()
         _record_reopened_source_reload(snapshot)
@@ -206,11 +254,12 @@ with load_column:
             Criterion.model_validate(item) for item in labels["criteria"]
         ]
         _reset_analysis()
+        st.rerun()
 with fetch_column:
     if st.button(
         "Fetch public PR",
         key="fetch_pr",
-        disabled=not bool(pr_url.strip()),
+        disabled=not bool(pr_url.strip()) or replacement_blocked,
         use_container_width=True,
     ):
         try:
@@ -218,9 +267,16 @@ with fetch_column:
             _record_reopened_source_reload(snapshot)
             st.session_state["snapshot"] = snapshot
             _reset_analysis()
-            st.success("Public PR loaded. Add and confirm criteria before analysis.")
+            st.session_state["source_load_notice"] = (
+                "Public PR loaded. Add and confirm criteria before analysis."
+            )
+            st.rerun()
         except GitHubIngestionError as error:
             st.error(str(error))
+
+source_load_notice = st.session_state.pop("source_load_notice", None)
+if source_load_notice is not None:
+    st.success(source_load_notice)
 
 source_reload_notice = st.session_state["source_reload_notice"]
 if source_reload_notice is not None and source_reload_notice.changed:
@@ -244,10 +300,11 @@ requirements_text = st.text_area(
 if st.button(
     "Prepare criteria",
     key="prepare_criteria",
-    disabled=not bool(requirements_text.strip()),
+    disabled=not bool(requirements_text.strip()) or replacement_blocked,
 ):
     st.session_state["source_text"] = requirements_text
     _prepare_from_text(requirements_text)
+    st.rerun()
 
 st.caption(
     f"Local review storage: `{storage_directory}`. Records stay under your user-owned "
@@ -263,7 +320,7 @@ else:
     if st.button(
         "Add criterion",
         key="add_criterion_ui",
-        disabled=not new_criterion_text.strip(),
+        disabled=not new_criterion_text.strip() or replacement_blocked,
     ):
         st.session_state["criteria"] = add_criterion(criteria, new_criterion_text)
         _reset_analysis()
@@ -281,7 +338,10 @@ else:
     if st.button(
         "Split criterion",
         key="split_criterion_ui",
-        disabled=len([line for line in split_text.splitlines() if line.strip()]) < 2,
+        disabled=(
+            len([line for line in split_text.splitlines() if line.strip()]) < 2
+            or replacement_blocked
+        ),
     ):
         split_texts = [line.strip() for line in split_text.splitlines() if line.strip()]
         st.session_state["criteria"] = split_criterion(criteria, split_target, split_texts)
@@ -316,14 +376,18 @@ else:
             )
         with actions_column:
             if st.button(
-                f"Remove {criterion.criterion_id}", key=f"remove_{criterion.criterion_id}"
+                f"Remove {criterion.criterion_id}",
+                key=f"remove_{criterion.criterion_id}",
+                disabled=replacement_blocked,
             ):
                 st.session_state["criteria"] = remove_criterion(criteria, criterion.criterion_id)
                 _reset_analysis()
                 st.success("Criterion removed. Confirm the updated set before analysis.")
                 st.rerun()
             if position > 0 and st.button(
-                f"Move {criterion.criterion_id} up", key=f"move_up_{criterion.criterion_id}"
+                f"Move {criterion.criterion_id} up",
+                key=f"move_up_{criterion.criterion_id}",
+                disabled=replacement_blocked,
             ):
                 order = [item.criterion_id for item in criteria]
                 order[position - 1], order[position] = order[position], order[position - 1]
@@ -374,6 +438,7 @@ if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis
     st.session_state["bundle"] = bundle
     st.session_state["review_state"] = new_review_state(bundle)
     st.session_state["source_reload_notice"] = None
+    st.rerun()
 
 review_state: ReviewState | None = st.session_state["review_state"]
 bundle: ReviewBundle | None = review_state.bundle if review_state else st.session_state["bundle"]
@@ -729,9 +794,7 @@ else:
     st.header("5 · Summary & Export")
     review_save_notice = st.session_state.pop("review_save_notice", None)
     review_matches_local_save = bool(
-        review_state is not None
-        and st.session_state["saved_review_fingerprint"]
-        == _review_state_fingerprint(review_state)
+        review_state is not None and _review_matches_local_save(review_state)
     )
     if review_state is not None:
         st.caption(
