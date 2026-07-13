@@ -55,6 +55,31 @@ def test_product_disclaimer_is_visible() -> None:
     assert "No paid LLM API" in visible_text
 
 
+def test_malformed_public_pr_url_shows_format_guidance_and_disables_fetch() -> None:
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/widget/pull/not-a-number"
+    ).run()
+
+    warning_text = "\n".join(item.value for item in app.warning)
+    assert (
+        "Enter a public GitHub pull request URL in this format: "
+        "`https://github.com/OWNER/REPO/pull/NUMBER`."
+    ) in warning_text
+    assert app.button(key="fetch_pr").disabled is True
+
+
+def test_canonical_public_pr_url_enables_fetch_without_format_warning() -> None:
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/widget/pull/42"
+    ).run()
+
+    warning_text = "\n".join(item.value for item in app.warning)
+    assert "Enter a public GitHub pull request URL" not in warning_text
+    assert app.button(key="fetch_pr").disabled is False
+
+
 def test_demo_loads_confirmable_criteria() -> None:
     app = load_demo(new_app())
     assert app.session_state["snapshot"] is not None
