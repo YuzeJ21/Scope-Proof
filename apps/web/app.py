@@ -591,6 +591,9 @@ else:
 
     st.markdown("### Manual runtime evidence")
     st.caption(
+        f"This record will be attached to {selected_id} — {selected_criterion.text}."
+    )
+    st.caption(
         "Record a human-supplied observation only. ScopeProof does not run PR code "
         "or infer runtime results."
     )
@@ -604,6 +607,11 @@ else:
         "Runtime evidence level",
         options=[EvidenceLevel.E3, EvidenceLevel.E4],
         key="runtime_evidence_level",
+    )
+    st.caption(
+        "E3 means manually recorded external runtime verification. "
+        "E4 means explicit human acceptance. Saving this record does not resolve the "
+        "criterion or record final review acceptance."
     )
     st.caption(
         "Artifact, scenario, environment, observed result, and reviewer are required. "

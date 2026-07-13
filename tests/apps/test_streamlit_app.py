@@ -681,6 +681,31 @@ def test_runtime_evidence_prerequisite_guidance_is_visible() -> None:
     assert "Limitations are optional" in caption_text
 
 
+def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> None:
+    app = analyzed_demo(new_app())
+    caption_text = "\n".join(caption.value for caption in app.caption)
+
+    assert (
+        "This record will be attached to AC-01 — User can export the research list as CSV."
+        in caption_text
+    )
+    assert (
+        "E3 means manually recorded external runtime verification. "
+        "E4 means explicit human acceptance. Saving this record does not resolve the criterion "
+        "or record final review acceptance."
+    ) in caption_text
+
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+    target_captions = [
+        caption.value
+        for caption in app.caption
+        if caption.value.startswith("This record will be attached to")
+    ]
+    assert target_captions == [
+        "This record will be attached to AC-03 — Failed export shows an error message."
+    ]
+
+
 def test_manual_runtime_evidence_can_be_recorded_without_changing_static_findings() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
