@@ -42,7 +42,9 @@ def export_markdown(bundle: ExportableReview) -> str:
         f"**Repository:** `{bundle.review.repository}`",
         f"**Pull request:** #{bundle.review.pr_number}",
         f"**Head SHA:** `{bundle.review.head_sha}`",
+        f"**Tool version:** `{bundle.review.tool_version}`",
         f"**Ruleset:** `{bundle.review.ruleset_version}`",
+        *([f"**Criteria revision: {state.criteria_revision.number}**"] if state else []),
         "",
         (
             "> ScopeProof surfaces auditable candidate evidence. "
@@ -54,8 +56,6 @@ def export_markdown(bundle: ExportableReview) -> str:
         "| Criterion | Priority | Status | Level | Human decision |",
         "|---|---|---|---|---|",
     ]
-    if state is not None:
-        lines.insert(7, f"**Criteria revision: {state.criteria_revision.number}**")
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
@@ -156,6 +156,7 @@ def export_csv(bundle: ExportableReview) -> str:
         "repository",
         "pr_number",
         "head_sha",
+        "tool_version",
         "ruleset_version",
         "criteria_revision",
         "verdict",
@@ -188,6 +189,7 @@ def export_csv(bundle: ExportableReview) -> str:
                 "repository": bundle.review.repository,
                 "pr_number": bundle.review.pr_number,
                 "head_sha": bundle.review.head_sha,
+                "tool_version": bundle.review.tool_version,
                 "ruleset_version": bundle.review.ruleset_version,
                 "criteria_revision": state.criteria_revision.number if state else 1,
                 "verdict": bundle.gate.verdict.value,
@@ -253,6 +255,8 @@ def export_html(value: ExportableReview) -> str:
             f"<p>Repository: <code>{html.escape(bundle.review.repository)}</code> · "
             f"PR #{bundle.review.pr_number} · Head SHA "
             f"<code>{html.escape(bundle.review.head_sha)}</code> · "
+            f"Tool <code>{html.escape(bundle.review.tool_version)}</code> · "
+            f"Ruleset <code>{html.escape(bundle.review.ruleset_version)}</code> · "
             f"Criteria revision {revision}</p>",
             "<p class=\"note\">ScopeProof surfaces auditable candidate evidence. "
             "It does not replace QA or prove correctness.</p>",
