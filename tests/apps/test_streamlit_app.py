@@ -191,6 +191,61 @@ def test_post_save_resolution_marks_review_unsaved_again(
     assert app.button(key="save_review").disabled is False
 
 
+def test_unsaved_review_requires_explicit_approval_before_replacement() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="reopen_review_id").set_value("another-review").run()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/example/pull/7"
+    ).run()
+    app = app.text_input(key="new_criterion_text").set_value("A new behavior").run()
+    app = app.text_area(key="split_criterion_text").set_value(
+        "First behavior\nSecond behavior"
+    ).run()
+
+    warning_text = "\n".join(item.value for item in app.warning)
+    assert "Replacing it will discard unsaved changes." in warning_text
+    assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
+    assert app.button(key="reopen_review").disabled is True
+    assert app.button(key="load_demo").disabled is True
+    assert app.button(key="fetch_pr").disabled is True
+    assert app.button(key="prepare_criteria").disabled is True
+    assert app.button(key="add_criterion_ui").disabled is True
+    assert app.button(key="split_criterion_ui").disabled is True
+    assert all(
+        button.disabled
+        for button in app.button
+        if button.key.startswith(("remove_", "move_up_"))
+    )
+
+    app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
+
+    assert app.button(key="reopen_review").disabled is False
+    assert app.button(key="load_demo").disabled is False
+    assert app.button(key="fetch_pr").disabled is False
+    assert app.button(key="prepare_criteria").disabled is False
+    assert app.button(key="add_criterion_ui").disabled is False
+    assert app.button(key="split_criterion_ui").disabled is False
+    assert all(
+        not button.disabled
+        for button in app.button
+        if button.key.startswith(("remove_", "move_up_"))
+    )
+
+
+def test_replacing_unsaved_review_consumes_replacement_approval() -> None:
+    app = analyzed_demo(new_app())
+    app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
+    app = app.button(key="load_demo").click().run()
+
+    assert app.session_state["review_state"] is None
+    assert app.session_state["replace_unsaved_review_confirmed"] is False
+    assert not [
+        item
+        for item in app.checkbox
+        if item.key == "replace_unsaved_review_confirmed"
+    ]
+
+
 def test_saved_review_can_be_reopened_from_a_fresh_session(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

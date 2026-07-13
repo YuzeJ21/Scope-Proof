@@ -15,9 +15,10 @@ after a permitted replacement.
 ## Task 1: Add failing replacement-guard tests
 
 Extend `tests/apps/test_streamlit_app.py` to assert the warning, checkbox, and
-disabled state for reopen, demo load, public-PR fetch, and criteria preparation
-when a validated review is unsaved. Assert that explicit approval enables these
-actions, and that replacement resets the approval.
+disabled state for reopen, demo load, public-PR fetch, criteria preparation,
+and criterion-set reset controls when a validated review is unsaved. Assert
+that explicit approval enables these actions, and that replacement resets the
+approval.
 
 Retain the focused RED output before implementation.
 
@@ -28,7 +29,7 @@ Update `apps/web/app.py`:
 1. add a `replace_unsaved_review_confirmed` session default;
 2. add helpers for current save equality and replacement authorization;
 3. render the warning and approval before reopen/start controls;
-4. include replacement authorization in the four button disabled conditions;
+4. include replacement authorization in every analysis-reset button condition;
 5. clear the approval inside each successful replacement path and analysis reset;
 6. keep all review-internal controls unchanged.
 

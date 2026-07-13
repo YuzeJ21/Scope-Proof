@@ -4,9 +4,9 @@
 
 ScopeProof now identifies when the current validated review differs from its
 last local save. However, `Reopen local review`, `Load deliberately constructed
-demo`, `Fetch public PR`, and `Prepare criteria` can still replace that unsaved
-state immediately. A reviewer can lose recorded decisions or runtime evidence
-with one navigation action.
+demo`, `Fetch public PR`, `Prepare criteria`, and criterion-set reset actions can
+still replace that unsaved state immediately. A reviewer can lose recorded
+decisions or runtime evidence with one navigation or reset action.
 
 ## Product boundary
 
@@ -25,8 +25,8 @@ When the current review is unsaved:
   current review will discard unsaved changes;
 - show an unchecked `Allow replacing the unsaved current review` checkbox;
 - disable `Reopen local review`, `Load deliberately constructed demo`,
-  `Fetch public PR`, and `Prepare criteria` until the reviewer explicitly
-  checks it;
+  `Fetch public PR`, `Prepare criteria`, and criterion add, split, remove, or
+  reorder actions until the reviewer explicitly checks it;
 - retain ordinary in-review actions such as criterion confirmation,
   resolutions, runtime evidence, final acceptance, exports, and local save.
 
@@ -38,9 +38,10 @@ authorize a later replacement.
 
 ## Why one shared approval
 
-The four actions have the same consequence: they replace the current in-memory
-review. One visible approval keeps the decision explicit without placing four
-separate confirmation controls across the page.
+These actions have the same consequence: they reset the current in-memory
+review instead of creating a lifecycle revision. One visible approval keeps the
+decision explicit without placing separate confirmation controls across the
+page.
 
 ## Rejected alternatives
 
