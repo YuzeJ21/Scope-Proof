@@ -55,17 +55,22 @@ def export_markdown(bundle: ExportableReview) -> str:
             "It does not replace QA or prove correctness."
         ),
         "",
+        "## Confirmed Requirements Source",
+        "",
+        *[f"> {line}" for line in (bundle.source_text.splitlines() or [""])],
+        "",
         "## Evidence Matrix",
         "",
-        "| Criterion | Priority | Status | Level | Human decision |",
-        "|---|---|---|---|---|",
+        "| Criterion | Source | Priority | Status | Level | Human decision |",
+        "|---|---|---|---|---|---|",
     ]
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
         decision = resolution.decision.value if resolution else "Unresolved"
         lines.append(
-            f"| {criterion.criterion_id}: {criterion.text} | {criterion.priority.value} | "
+            f"| {criterion.criterion_id}: {criterion.text} | "
+            f"{criterion.criterion_source.value} | {criterion.priority.value} | "
             f"{finding.status.value} | {finding.evidence_level.value} | {decision} |"
         )
 
@@ -165,9 +170,11 @@ def export_csv(bundle: ExportableReview) -> str:
         "tool_version",
         "ruleset_version",
         "criteria_revision",
+        "requirements_source_text",
         "verdict",
         "criterion_id",
         "criterion",
+        "criterion_source",
         "priority",
         "status",
         "evidence_level",
@@ -200,9 +207,11 @@ def export_csv(bundle: ExportableReview) -> str:
                 "tool_version": bundle.review.tool_version,
                 "ruleset_version": bundle.review.ruleset_version,
                 "criteria_revision": state.criteria_revision.number if state else 1,
+                "requirements_source_text": bundle.source_text,
                 "verdict": bundle.gate.verdict.value,
                 "criterion_id": criterion.criterion_id,
                 "criterion": criterion.text,
+                "criterion_source": criterion.criterion_source.value,
                 "priority": criterion.priority.value,
                 "status": finding.status.value,
                 "evidence_level": finding.evidence_level.value,
@@ -240,6 +249,7 @@ def export_html(value: ExportableReview) -> str:
             "<tr>"
             f"<td>{html.escape(criterion.criterion_id)}</td>"
             f"<td>{html.escape(criterion.text)}</td>"
+            f"<td>{html.escape(criterion.criterion_source.value)}</td>"
             f"<td>{html.escape(criterion.priority.value)}</td>"
             f"<td>{html.escape(finding.status.value)}</td>"
             f"<td>{html.escape(finding.evidence_level.value)}</td>"
@@ -257,7 +267,8 @@ def export_html(value: ExportableReview) -> str:
             "<title>ScopeProof Acceptance Review</title>",
             "<style>body{font-family:system-ui;margin:2rem;color:#172033}"
             "table{border-collapse:collapse;width:100%}td,th{border:1px solid #cbd5e1;"
-            "padding:.55rem;text-align:left}th{background:#eff6ff}.note{color:#475569}</style>",
+            "padding:.55rem;text-align:left}th{background:#eff6ff}.note{color:#475569}"
+            "pre{white-space:pre-wrap}</style>",
             "</head><body>",
             "<h1>ScopeProof Acceptance Review</h1>",
             f"<p><strong>Verdict:</strong> {verdict}</p>",
@@ -272,7 +283,9 @@ def export_html(value: ExportableReview) -> str:
             f"Criteria revision {revision}</p>",
             "<p class=\"note\">ScopeProof surfaces auditable candidate evidence. "
             "It does not replace QA or prove correctness.</p>",
-            "<table><thead><tr><th>ID</th><th>Criterion</th><th>Priority</th>"
+            "<h2>Confirmed Requirements Source</h2>",
+            f"<pre>{html.escape(bundle.source_text)}</pre>",
+            "<table><thead><tr><th>ID</th><th>Criterion</th><th>Source</th><th>Priority</th>"
             "<th>Status</th><th>Level</th><th>Evidence</th></tr></thead><tbody>",
             *rows,
             "</tbody></table>",
