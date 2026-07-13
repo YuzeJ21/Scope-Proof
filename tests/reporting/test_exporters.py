@@ -9,6 +9,7 @@ from scopeproof_core.reporting.exporters import (
     export_json,
     export_markdown,
 )
+from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import (
     CheckState,
     ConfidenceBand,
@@ -129,6 +130,13 @@ def test_human_readable_exports_keep_historical_tool_version() -> None:
 
     for output in (export_markdown(bundle), export_csv(bundle), export_html(bundle)):
         assert "0.1.0" in output
+
+
+def test_markdown_groups_version_provenance_before_criteria_revision() -> None:
+    markdown = export_markdown(new_review_state(example_bundle()))
+
+    assert markdown.index("**Tool version:**") < markdown.index("**Ruleset:**")
+    assert markdown.index("**Ruleset:**") < markdown.index("**Criteria revision:")
 
 
 def test_json_is_stable_and_contains_ruleset_version() -> None:

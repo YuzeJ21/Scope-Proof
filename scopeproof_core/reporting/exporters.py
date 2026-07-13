@@ -44,6 +44,7 @@ def export_markdown(bundle: ExportableReview) -> str:
         f"**Head SHA:** `{bundle.review.head_sha}`",
         f"**Tool version:** `{bundle.review.tool_version}`",
         f"**Ruleset:** `{bundle.review.ruleset_version}`",
+        *([f"**Criteria revision: {state.criteria_revision.number}**"] if state else []),
         "",
         (
             "> ScopeProof surfaces auditable candidate evidence. "
@@ -55,8 +56,6 @@ def export_markdown(bundle: ExportableReview) -> str:
         "| Criterion | Priority | Status | Level | Human decision |",
         "|---|---|---|---|---|",
     ]
-    if state is not None:
-        lines.insert(7, f"**Criteria revision: {state.criteria_revision.number}**")
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
