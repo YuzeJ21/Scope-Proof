@@ -60,6 +60,20 @@ def test_readme_documents_operating_commands() -> None:
     assert "scopeproof_core.evals.runner" in readme
 
 
+def test_readme_separates_release_install_from_contributor_setup() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert (
+        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.11/"
+        "scopeproof-0.1.11-py3-none-any.whl"
+    ) in readme
+    assert "scopeproof benchmark" in readme
+    assert "## Contributor setup" in readme
+    assert "python -m pip install -e '.[dev]'" in readme
+    assert "streamlit run apps/web/app.py" in readme
+    assert "scopeproof web" not in readme
+
+
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 

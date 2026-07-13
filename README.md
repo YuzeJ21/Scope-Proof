@@ -52,25 +52,20 @@ The release gate uses explicit precedence:
 
 Python 3.11 or newer is required.
 
+Install the verified v0.1.11 release wheel in an isolated environment. This path does not require
+cloning the repository.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
-streamlit run apps/web/app.py
+python -m pip install \
+  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.11/scopeproof-0.1.11-py3-none-any.whl
+scopeproof benchmark
 ```
 
-Open the displayed local URL, then choose either path:
-
-1. Select **Load deliberately constructed demo** for a complete offline walkthrough.
-2. Enter a public GitHub PR URL, optionally add a token, fetch the PR, paste one criterion per line, and confirm the criteria.
-
-The five review steps are:
-
-1. Start Review.
-2. Confirm Criteria.
-3. Evidence Matrix.
-4. Criterion Detail and human resolution.
-5. Summary and Markdown, JSON, or CSV export.
+The offline benchmark verifies that the installed package and bundled regression corpus execute.
+It is not runtime evidence for any pull request. Continue with the public-PR CLI workflow below to
+review reviewer-confirmed criteria against a real public PR.
 
 ### Public PR CLI workflow
 
@@ -97,6 +92,30 @@ scopeproof export REVIEW_ID \
 Anonymous public-repository access is the default. `--token` is optional and can increase GitHub's
 free rate limit, but it is not required or persisted. The CLI never comments on the pull request,
 executes its code, or converts static candidates into runtime verification.
+
+## Contributor setup
+
+Clone the repository to run the Streamlit workbench or contribute changes:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+streamlit run apps/web/app.py
+```
+
+Open the displayed local URL, then choose either path:
+
+1. Select **Load deliberately constructed demo** for a complete offline walkthrough.
+2. Enter a public GitHub PR URL, optionally add a token, fetch the PR, paste one criterion per line, and confirm the criteria.
+
+The five review steps are:
+
+1. Start Review.
+2. Confirm Criteria.
+3. Evidence Matrix.
+4. Criterion Detail and human resolution.
+5. Summary and Markdown, JSON, or CSV export.
 
 ### Durable local review workflow
 
