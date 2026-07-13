@@ -467,6 +467,25 @@ def test_human_decision_and_final_acceptance_append_history() -> None:
     assert "Resolution history" in "\n".join(markdown.value for markdown in app.markdown)
 
 
+def test_resolution_history_distinguishes_current_and_superseded_decisions() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.REJECTED_FINDING
+    ).run()
+    app = app.button(key="save_resolution").click().run()
+    app = app.selectbox(key="resolution_decision").set_value(HumanDecision.ACCEPTED).run()
+    app = app.button(key="save_resolution").click().run()
+
+    markdown_text = "\n".join(item.value for item in app.markdown)
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "Superseded · revision 1 — AC-01: Rejected Finding" in markdown_text
+    assert "Current · revision 1** — AC-01: Accepted" in markdown_text
+    assert (
+        "Current events are the latest recorded inputs for the active revision. Superseded and "
+        "prior-revision events remain audit history and do not independently control the gate."
+    ) in caption_text
+
+
 def test_runtime_evidence_save_requires_all_required_fields() -> None:
     app = analyzed_demo(new_app())
     assert app.button(key="save_runtime_evidence").disabled is True
