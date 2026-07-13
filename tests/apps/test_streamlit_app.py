@@ -5,7 +5,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.demo import load_demo_snapshot
-from scopeproof_core.schemas.models import HumanDecision
+from scopeproof_core.schemas.models import EvidenceLevel, HumanDecision
 
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
 
@@ -29,6 +29,14 @@ def saved_demo_review(app: AppTest) -> tuple[AppTest, str]:
     review_id = app.session_state["review_state"].review.review_id
     app = app.button(key="save_review").click().run()
     return app, review_id
+
+
+def evidence_matrix_table(app: AppTest) -> str:
+    return next(
+        markdown.value
+        for markdown in app.markdown
+        if markdown.value.startswith("| Criterion | Requirement | Priority |")
+    )
 
 
 def test_analysis_is_disabled_before_criteria_confirmation() -> None:
@@ -295,6 +303,34 @@ def test_evidence_matrix_exposes_status_and_priority_filters() -> None:
 
     assert app.multiselect(key="status_filter").value == []
     assert app.multiselect(key="priority_filter").value == []
+
+
+def test_evidence_matrix_exposes_blocker_and_evidence_level_filters() -> None:
+    app = analyzed_demo(new_app())
+
+    assert app.checkbox(key="blocking_only").value is False
+    assert app.multiselect(key="evidence_level_filter").value == []
+
+
+def test_evidence_matrix_combines_blocker_and_evidence_level_filters() -> None:
+    app = analyzed_demo(new_app())
+    app = app.checkbox(key="blocking_only").check().run()
+    app = app.multiselect(key="evidence_level_filter").select(EvidenceLevel.E2).run()
+
+    table = evidence_matrix_table(app)
+    assert "| AC-02 |" in table
+    assert "| AC-01 |" not in table
+    assert "| AC-03 |" not in table
+    assert "| AC-04 |" not in table
+
+
+def test_evidence_matrix_reports_empty_filter_results() -> None:
+    app = analyzed_demo(new_app())
+    app = app.checkbox(key="blocking_only").check().run()
+    app = app.multiselect(key="evidence_level_filter").select(EvidenceLevel.E4).run()
+
+    assert "| AC-" not in evidence_matrix_table(app)
+    assert "No criteria match the current filters." in [item.value for item in app.info]
 
 
 def test_evidence_matrix_renders_as_one_markdown_table() -> None:
