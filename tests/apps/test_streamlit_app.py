@@ -368,6 +368,42 @@ def test_evidence_matrix_shows_current_human_resolution() -> None:
     assert ac_01_row.endswith("| Accepted |")
 
 
+def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> None:
+    app = analyzed_demo(new_app())
+    bundle = app.session_state["review_state"].bundle
+    finding = next(item for item in bundle.findings if item.criterion_id == "AC-01")
+    evidence = next(item for item in bundle.evidence if item.evidence_id in finding.evidence_ids)
+
+    markdown_text = "\n".join(item.value for item in app.markdown)
+    caption_text = "\n".join(item.value for item in app.caption)
+    info_text = "\n".join(item.value for item in app.info)
+
+    assert "Recommended next action" in markdown_text
+    assert finding.recommended_action in info_text
+    assert "Candidate evidence" in markdown_text
+    assert f"**Matching rationale:** {evidence.relevance_reason}" in markdown_text
+    assert f"Matching rule: {evidence.matching_rule}" in caption_text
+    assert f"Limitation: {evidence.limitations[0]}" in caption_text
+    assert evidence.excerpt in [item.value for item in app.code]
+    assert "Open immutable GitHub evidence" in markdown_text
+
+
+def test_missing_criterion_detail_shows_action_and_no_candidate_state() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+    bundle = app.session_state["review_state"].bundle
+    finding = next(item for item in bundle.findings if item.criterion_id == "AC-03")
+
+    markdown_text = "\n".join(item.value for item in app.markdown)
+    info_text = "\n".join(item.value for item in app.info)
+    caption_text = "\n".join(item.value for item in app.caption)
+
+    assert "Recommended next action" in markdown_text
+    assert finding.recommended_action in info_text
+    assert "Candidate evidence" in markdown_text
+    assert "No candidate evidence is linked to this provisional finding." in caption_text
+
+
 def test_compound_criterion_can_be_split_in_workbench() -> None:
     app = new_app()
     app = app.text_area(key="requirements_input").set_value("Export CSV and record analytics").run()
