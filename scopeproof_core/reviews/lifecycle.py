@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import StrEnum
 
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.schemas.models import (
@@ -14,6 +15,14 @@ from scopeproof_core.schemas.models import (
     ReviewState,
     RuntimeEvidence,
 )
+
+
+class ResolutionEventStatus(StrEnum):
+    """Whether an append-only event currently supplies active-revision state."""
+
+    CURRENT = "current"
+    SUPERSEDED = "superseded"
+    PRIOR_REVISION = "prior_revision"
 
 
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
@@ -85,6 +94,32 @@ def current_resolutions(
         )
         for _, event in sorted(latest.items())
     ]
+
+
+def resolution_event_statuses(
+    events: list[ResolutionEvent], active_revision_number: int
+) -> list[ResolutionEventStatus]:
+    """Classify events without changing their append-only order or gate semantics."""
+    latest_by_target: dict[tuple[bool, str | None], int] = {}
+    for index, event in enumerate(events):
+        if event.criteria_revision_number != active_revision_number:
+            continue
+        target = (event.criterion_id is None, event.criterion_id)
+        latest_by_target[target] = index
+
+    statuses: list[ResolutionEventStatus] = []
+    for index, event in enumerate(events):
+        if event.criteria_revision_number != active_revision_number:
+            statuses.append(ResolutionEventStatus.PRIOR_REVISION)
+            continue
+        target = (event.criterion_id is None, event.criterion_id)
+        status = (
+            ResolutionEventStatus.CURRENT
+            if latest_by_target[target] == index
+            else ResolutionEventStatus.SUPERSEDED
+        )
+        statuses.append(status)
+    return statuses
 
 
 def _final_acceptance(events: list[ResolutionEvent], revision_number: int) -> bool:

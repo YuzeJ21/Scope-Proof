@@ -40,7 +40,7 @@ and assert every revision-1 event is `PRIOR_REVISION`.
 Run:
 
 ```bash
-.venv/bin/python -m pytest tests/reviews/test_lifecycle.py -q
+../../.venv/bin/python -m pytest tests/reviews/test_lifecycle.py -q
 ```
 
 Expected: import failure because `ResolutionEventStatus` and `resolution_event_statuses` do not yet
