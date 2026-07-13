@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from scopeproof_core.cli import main
+from scopeproof_core.storage.json_store import JsonReviewStore
+from scopeproof_core.version import __version__
 
 
 def test_benchmark_command_prints_execution_derived_metrics(capsys) -> None:
@@ -36,7 +38,11 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     output = capsys.readouterr().out
     assert '"review_id"' in output
     assert '"report"' not in output
-    assert list((tmp_path / "reviews").glob("*.json"))
+    record = next((tmp_path / "reviews").glob("*.json"))
+    state = JsonReviewStore(tmp_path / "reviews").load(record.stem)
+    assert state.review.tool_version == __version__
+    assert state.bundle is not None
+    assert state.bundle.review.tool_version == __version__
 
 
 def test_review_can_write_markdown_report_in_one_command(tmp_path: Path, capsys) -> None:
