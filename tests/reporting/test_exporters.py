@@ -133,6 +133,24 @@ def test_exports_preserve_tool_and_ruleset_provenance() -> None:
         assert bundle.review.ruleset_version in output
 
 
+def test_exports_preserve_confirmed_requirement_source() -> None:
+    bundle = example_bundle()
+    bundle.source_text = "Confirmed requirement source:\nFailed export shows an error"
+    json_report = export_json(bundle)
+    markdown_report = export_markdown(bundle)
+    csv_report = export_csv(bundle)
+    html_report = export_html(bundle)
+
+    assert json.loads(json_report)["source_text"] == bundle.source_text
+    assert "> Confirmed requirement source:" in markdown_report
+    assert "> Failed export shows an error" in markdown_report
+    csv_row = next(csv.DictReader(io.StringIO(csv_report)))
+    assert csv_row["requirements_source_text"] == bundle.source_text
+    assert bundle.source_text in html_report
+    for output in (json_report, markdown_report, csv_report, html_report):
+        assert bundle.criteria[0].criterion_source.value in output
+
+
 def test_human_readable_exports_keep_historical_tool_version() -> None:
     bundle = example_bundle()
     bundle.review.tool_version = "0.1.0"
@@ -170,6 +188,8 @@ def test_csv_emits_one_flattened_row_per_criterion() -> None:
     assert rows[0]["base_sha"] == bundle.review.base_sha
     assert rows[0]["head_sha"] == bundle.review.head_sha
     assert rows[0]["review_created_at"] == bundle.review.model_dump(mode="json")["created_at"]
+    assert rows[0]["requirements_source_text"] == bundle.source_text
+    assert rows[0]["criterion_source"] == bundle.criteria[0].criterion_source.value
     assert rows[0]["tool_version"] == bundle.review.tool_version
     assert rows[0]["ruleset_version"] == bundle.review.ruleset_version
     assert rows[0]["criterion_id"] == "AC-01"
@@ -221,6 +241,16 @@ def test_html_escapes_review_identity_values() -> None:
     assert "base&lt;&amp;&gt;" in report
     assert "review-<identity>" not in report
     assert "base<&>" not in report
+
+
+def test_html_escapes_confirmed_requirement_source_text() -> None:
+    bundle = example_bundle()
+    bundle.source_text = "User requires <safe & auditable> output"
+
+    report = export_html(bundle)
+
+    assert "User requires &lt;safe &amp; auditable&gt; output" in report
+    assert bundle.source_text not in report
 
 
 def test_exports_never_include_token_shaped_secret() -> None:
