@@ -50,6 +50,8 @@ def test_ci_builds_and_executes_installed_wheel() -> None:
     assert "python -m pip wheel . --no-deps" in workflow
     assert "python -m pip install --force-reinstall --no-deps" in workflow
     assert 'cd "$RUNNER_TEMP"' in workflow
+    assert "from scopeproof_core import __version__" in workflow
+    assert 'version("scopeproof") == __version__ == review.tool_version' in workflow
     assert "scopeproof benchmark" in workflow
 
 
@@ -107,11 +109,18 @@ def test_readme_documents_optional_release_checksum_verification() -> None:
 def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
-    assert config["project"]["version"] == "0.1.14"
     assert config["project"]["scripts"]["scopeproof-web"] == "apps.web.launcher:main"
     core_cli = Path("scopeproof_core/cli.py").read_text(encoding="utf-8")
     assert "streamlit" not in core_cli
     assert "apps.web" not in core_cli
+
+
+def test_hatch_and_reviews_share_one_version_source() -> None:
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert config["project"]["dynamic"] == ["version"]
+    assert "version" not in config["project"]
+    assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:

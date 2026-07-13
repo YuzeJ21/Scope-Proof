@@ -14,6 +14,7 @@ from scopeproof_core.schemas.models import (
     PullRequestSnapshot,
     Review,
 )
+from scopeproof_core.version import __version__
 
 
 def test_evidence_rejects_line_range_without_sha() -> None:
@@ -77,6 +78,30 @@ def test_confirmed_complete_review_can_analyze() -> None:
         ingestion_state=IngestionState.COMPLETE,
     )
     assert review.can_analyze is True
+
+
+def test_new_review_records_current_package_version() -> None:
+    review = Review(
+        repository="acme/repo",
+        pr_number=7,
+        base_sha="base",
+        head_sha="head",
+    )
+
+    assert review.tool_version == __version__
+
+
+def test_review_round_trip_preserves_historical_tool_version() -> None:
+    historical = Review(
+        repository="acme/repo",
+        pr_number=7,
+        base_sha="base",
+        head_sha="head",
+        tool_version="0.1.0",
+    )
+
+    reopened = Review.model_validate_json(historical.model_dump_json())
+    assert reopened.tool_version == "0.1.0"
 
 
 def test_snapshot_round_trip_preserves_changed_lines() -> None:

@@ -32,6 +32,7 @@ jobs:
           python -m pip wheel . --no-deps --wheel-dir "$wheel_dir"
           wheel="$(find "$wheel_dir" -type f -name 'scopeproof-*.whl' -print -quit)"
           python -m pip install --force-reinstall --no-deps "$wheel"
+          (cd "$RUNNER_TEMP" && python -c 'from importlib.metadata import version; from scopeproof_core import __version__; from scopeproof_core.schemas.models import Review; review = Review(repository="acme/repo", pr_number=1, base_sha="base", head_sha="head"); assert version("scopeproof") == __version__ == review.tool_version')
           (cd "$RUNNER_TEMP" && scopeproof benchmark)
 
           web_log="$RUNNER_TEMP/scopeproof-web.log"

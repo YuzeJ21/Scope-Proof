@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scopeproof"
-version = "0.1.14"
+dynamic = ["version"]
 description = "Auditable acceptance evidence for public GitHub pull requests"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,9 @@ dev = [
   "pytest>=9.0.3,<10",
   "ruff>=0.5,<1",
 ]
+
+[tool.hatch.version]
+path = "scopeproof_core/version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["scopeproof_core", "apps"]
