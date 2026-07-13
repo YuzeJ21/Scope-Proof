@@ -32,6 +32,7 @@ from scopeproof_core.schemas.models import (
     EvidenceLevel,
     HumanDecision,
     Priority,
+    PullRequestSnapshot,
     ResolutionEvent,
     Review,
     ReviewBundle,
@@ -56,6 +57,8 @@ _STATE_DEFAULTS = {
     "requirements_input": "",
     "resolutions": [],
     "review_state": None,
+    "reopened_review_id": None,
+    "source_reload_notice": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -67,6 +70,23 @@ def _reset_analysis() -> None:
     st.session_state["bundle"] = None
     st.session_state["resolutions"] = []
     st.session_state["review_state"] = None
+    st.session_state["reopened_review_id"] = None
+
+
+def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
+    """Compare a reopened review with the same PR before invalidating its analysis."""
+    state: ReviewState | None = st.session_state["review_state"]
+    reopened_id: str | None = st.session_state["reopened_review_id"]
+    st.session_state["source_reload_notice"] = None
+    if (
+        state is not None
+        and reopened_id == state.review.review_id
+        and state.review.repository == snapshot.repository
+        and state.review.pr_number == snapshot.pr_number
+    ):
+        st.session_state["source_reload_notice"] = JsonReviewStore.detect_head_change(
+            state, snapshot
+        )
 
 
 def _prepare_from_text(text: str) -> None:
@@ -87,6 +107,8 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["requirements_input"] = state.criteria_revision.source_text
     st.session_state["resolutions"] = []
     st.session_state["review_state"] = state
+    st.session_state["reopened_review_id"] = state.review.review_id
+    st.session_state["source_reload_notice"] = None
 
 
 def _analyze() -> ReviewBundle:
@@ -161,7 +183,9 @@ load_column, fetch_column = st.columns(2)
 with load_column:
     if st.button("Load deliberately constructed demo", key="load_demo", use_container_width=True):
         labels = load_demo_labels()
-        st.session_state["snapshot"] = load_demo_snapshot()
+        snapshot = load_demo_snapshot()
+        _record_reopened_source_reload(snapshot)
+        st.session_state["snapshot"] = snapshot
         st.session_state["source_text"] = labels["source_text"]
         st.session_state["requirements_input"] = labels["source_text"]
         st.session_state["criteria"] = [
@@ -176,13 +200,26 @@ with fetch_column:
         use_container_width=True,
     ):
         try:
-            st.session_state["snapshot"] = GitHubClient(
-                token=github_token or None
-            ).fetch_pull_request(pr_url)
+            snapshot = GitHubClient(token=github_token or None).fetch_pull_request(pr_url)
+            _record_reopened_source_reload(snapshot)
+            st.session_state["snapshot"] = snapshot
             _reset_analysis()
             st.success("Public PR loaded. Add and confirm criteria before analysis.")
         except GitHubIngestionError as error:
             st.error(str(error))
+
+source_reload_notice = st.session_state["source_reload_notice"]
+if source_reload_notice is not None and source_reload_notice.changed:
+    st.warning(
+        f"PR head changed from {source_reload_notice.saved_head_sha} to "
+        f"{source_reload_notice.current_head_sha}. Prior saved evidence remains anchored "
+        "to the old head. Reconfirm criteria and run a new review; do not reuse old evidence."
+    )
+elif source_reload_notice is not None:
+    st.info(
+        f"PR source reloaded at the same head SHA: {source_reload_notice.current_head_sha}. "
+        "Reconfirm criteria and run a new review before relying on current results."
+    )
 
 requirements_text = st.text_area(
     "Product requirements or acceptance criteria",
@@ -322,6 +359,7 @@ if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis
     bundle = _analyze()
     st.session_state["bundle"] = bundle
     st.session_state["review_state"] = new_review_state(bundle)
+    st.session_state["source_reload_notice"] = None
 
 review_state: ReviewState | None = st.session_state["review_state"]
 bundle: ReviewBundle | None = review_state.bundle if review_state else st.session_state["bundle"]
