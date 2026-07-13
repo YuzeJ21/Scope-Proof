@@ -597,6 +597,12 @@ else:
             bundle = review_state.bundle
             st.success("Human resolution appended to the local review history.")
 
+    st.markdown("### Final review acceptance")
+    st.caption(
+        "This records a review-level acceptance event. It does not resolve individual criteria "
+        "or override the deterministic gate. Review every criterion and its evidence before "
+        "recording final acceptance."
+    )
     if st.button("Record final acceptance", key="record_final_acceptance"):
         if review_state is None:
             st.error("Run analysis before recording final acceptance.")
