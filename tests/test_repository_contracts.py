@@ -85,8 +85,8 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert (
-        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.14/"
-        "scopeproof-0.1.14-py3-none-any.whl"
+        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.15/"
+        "scopeproof-0.1.15-py3-none-any.whl"
     ) in readme
     assert "scopeproof benchmark" in readme
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in readme
@@ -98,10 +98,10 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
 
 def test_readme_documents_optional_release_checksum_verification() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    wheel_name = "scopeproof-0.1.14-py3-none-any.whl"
+    wheel_name = "scopeproof-0.1.15-py3-none-any.whl"
 
-    assert f"releases/download/v0.1.14/{wheel_name}" in readme
-    assert f"releases/download/v0.1.14/{wheel_name}.sha256" in readme
+    assert f"releases/download/v0.1.15/{wheel_name}" in readme
+    assert f"releases/download/v0.1.15/{wheel_name}.sha256" in readme
     assert f"shasum -a 256 -c {wheel_name}.sha256" in readme
     assert f"sha256sum -c {wheel_name}.sha256" in readme
     assert f"python -m pip install ./{wheel_name}" in readme
@@ -119,10 +119,12 @@ def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
 
 def test_hatch_and_reviews_share_one_version_source() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    version_source = Path("scopeproof_core/version.py").read_text(encoding="utf-8")
 
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
+    assert '__version__ = "0.1.15"' in version_source
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
