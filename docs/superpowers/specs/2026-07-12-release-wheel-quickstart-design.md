@@ -8,7 +8,7 @@ The v0.1.11 release notes describe a validated release wheel, but the GitHub Rel
 
 Publish the wheel built from the exact v0.1.11 tag as a GitHub Release asset, then make that immutable versioned asset the primary user installation path. Keep the editable `.[dev]` installation in a separate contributor section.
 
-The user path creates a virtual environment, installs the versioned wheel URL, verifies the installed offline benchmark, and launches the packaged Streamlit entry point with `scopeproof web`. The contributor path retains the current editable setup and repository-local app command.
+The user path creates a virtual environment, installs the versioned wheel URL, verifies the installed offline benchmark, and continues into the existing public-PR CLI workflow. The contributor path retains the current editable setup and repository-local Streamlit command. The README must not advertise a `scopeproof web` command because v0.1.11 does not provide one.
 
 ## Alternatives
 
@@ -29,6 +29,5 @@ The user path creates a virtual environment, installs the versioned wheel URL, v
 1. The v0.1.11 release exposes the wheel at its versioned GitHub download URL.
 2. A newly downloaded asset has SHA-256 `d9a92c047e901b7370b3a09b0480b9cae527ec4dc2e302ec7546cf8832234634`.
 3. A clean environment installs the asset and runs all 12 benchmark cases with no mismatch, False Ready, or false blocker.
-4. README Quickstart uses the release wheel and installed `scopeproof` commands without requiring a source checkout.
-5. README clearly separates contributor editable installation from user installation.
-
+4. README Quickstart uses the release wheel and installed CLI without requiring a source checkout.
+5. README clearly separates contributor editable and Streamlit setup from user CLI installation.

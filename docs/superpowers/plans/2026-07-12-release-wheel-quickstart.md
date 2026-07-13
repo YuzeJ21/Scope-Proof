@@ -30,7 +30,7 @@
 
 - [ ] **Step 1: Add the failing README contract**
 
-Require the versioned release-wheel URL, `scopeproof benchmark`, `scopeproof web`, a `Contributor setup` heading, and the editable `.[dev]` command.
+Require the versioned release-wheel URL, `scopeproof benchmark`, a `Contributor setup` heading, the editable `.[dev]` command, and the repository-local Streamlit command. Reject the nonexistent `scopeproof web` command.
 
 - [ ] **Step 2: Verify RED**
 
@@ -40,7 +40,7 @@ Expected: fail because the release-wheel URL and contributor heading are absent.
 
 - [ ] **Step 3: Rewrite the Quickstart minimally**
 
-Make the release wheel the default installation, launch through `scopeproof web`, retain the two first-use paths and five review steps, and move editable installation into `Contributor setup`.
+Make the release wheel the default CLI installation, point directly to the public-PR CLI workflow, retain the review-flow explanation, and move editable installation plus Streamlit startup into `Contributor setup`.
 
 - [ ] **Step 4: Verify GREEN**
 
