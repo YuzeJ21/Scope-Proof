@@ -484,6 +484,18 @@ else:
             for limitation in item.limitations:
                 st.caption(f"Limitation: {limitation}")
 
+    if st.session_state.pop("runtime_evidence_form_reset_pending", False):
+        st.session_state["runtime_artifact_reference"] = ""
+        st.session_state["runtime_scenario"] = ""
+        st.session_state["runtime_environment"] = ""
+        st.session_state["runtime_result"] = ""
+        st.session_state["runtime_reviewer"] = ""
+        st.session_state["runtime_limitations"] = ""
+        st.session_state["runtime_evidence_level"] = EvidenceLevel.E3
+    runtime_evidence_save_notice = st.session_state.pop(
+        "runtime_evidence_save_notice", None
+    )
+
     st.markdown("### Manual runtime evidence")
     st.caption(
         "Record a human-supplied observation only. ScopeProof does not run PR code "
@@ -504,6 +516,8 @@ else:
         "Artifact, scenario, environment, observed result, and reviewer are required. "
         "Limitations are optional."
     )
+    if runtime_evidence_save_notice is not None:
+        st.success(runtime_evidence_save_notice)
     runtime_evidence_ready = all(
         value.strip()
         for value in (
@@ -539,7 +553,11 @@ else:
                 st.session_state["review_state"] = review_state
                 st.session_state["bundle"] = review_state.bundle
                 bundle = review_state.bundle
-                st.success("Manual runtime evidence appended without changing static findings.")
+                st.session_state["runtime_evidence_form_reset_pending"] = True
+                st.session_state["runtime_evidence_save_notice"] = (
+                    "Manual runtime evidence appended without changing static findings."
+                )
+                st.rerun()
             except ValueError:
                 st.error(
                     "Runtime evidence could not be saved. Check every required field and "

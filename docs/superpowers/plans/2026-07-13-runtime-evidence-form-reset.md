@@ -187,4 +187,3 @@ Push `codex/runtime-evidence-form-reset`, open one ready PR with verification ev
 - [ ] **Step 5: Merge only after all checks pass and synchronize main**
 
 Wait for required `verify`, ScopeProof, and CodeQL checks. If they pass, merge normally, verify merged-main CI and CodeQL at the exact merge SHA, fast-forward local `main`, remove the worktree, prune the branch, and confirm a clean checkout.
-
