@@ -305,11 +305,31 @@ def test_evidence_matrix_renders_as_one_markdown_table() -> None:
     table_blocks = [
         markdown.value
         for markdown in app.markdown
-        if markdown.value.startswith("| Criterion | Requirement | Priority |")
+        if markdown.value.startswith(
+            "| Criterion | Requirement | Priority | Status | Evidence | Confidence | Count |"
+        )
     ]
     assert len(table_blocks) == 1
-    assert "|---|---|---|---|---|---|" in table_blocks[0]
+    assert "|---|---|---|---|---|---|---|---|---|" in table_blocks[0]
+    assert "| AC-01 | User can export the research list as CSV |" in table_blocks[0]
+    assert "| High | 4 | Strong candidate evidence was found;" in table_blocks[0]
+    assert "| Unresolved |" in table_blocks[0]
     assert "| AC-04 | Successful export records research_exported |" in table_blocks[0]
+
+
+def test_evidence_matrix_shows_current_human_resolution() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="resolution_decision").set_value(HumanDecision.ACCEPTED).run()
+    app = app.button(key="save_resolution").click().run()
+    app = app.run()
+
+    table = next(
+        markdown.value
+        for markdown in app.markdown
+        if markdown.value.startswith("| Criterion | Requirement | Priority |")
+    )
+    ac_01_row = next(line for line in table.splitlines() if line.startswith("| AC-01 |"))
+    assert ac_01_row.endswith("| Accepted |")
 
 
 def test_compound_criterion_can_be_split_in_workbench() -> None:

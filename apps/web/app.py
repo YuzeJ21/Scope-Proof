@@ -368,6 +368,9 @@ if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
 else:
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
+    resolution_by_id = {
+        resolution.criterion_id: resolution for resolution in bundle.resolutions
+    }
     status_filter = st.multiselect(
         "Filter status",
         options=["evidence_found", "partial", "missing", "needs_review"],
@@ -395,9 +398,26 @@ else:
                 "Status": _status_label(finding.status.value),
                 "Evidence": finding.evidence_level.value,
                 "Confidence": finding.confidence_band.value.title(),
+                "Count": len(finding.evidence_ids),
+                "Concern": finding.reason,
+                "Human resolution": (
+                    _status_label(resolution_by_id[criterion.criterion_id].decision.value)
+                    if criterion.criterion_id in resolution_by_id
+                    else "Unresolved"
+                ),
             }
         )
-    table_headers = ["Criterion", "Requirement", "Priority", "Status", "Evidence", "Confidence"]
+    table_headers = [
+        "Criterion",
+        "Requirement",
+        "Priority",
+        "Status",
+        "Evidence",
+        "Confidence",
+        "Count",
+        "Concern",
+        "Human resolution",
+    ]
     table_lines = [
         "| " + " | ".join(table_headers) + " |",
         "|" + "|".join("---" for _ in table_headers) + "|",

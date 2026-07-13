@@ -61,17 +61,23 @@ def export_markdown(bundle: ExportableReview) -> str:
         "",
         "## Evidence Matrix",
         "",
-        "| Criterion | Source | Priority | Status | Level | Human decision |",
-        "|---|---|---|---|---|---|",
+        (
+            "| Criterion | Source | Priority | Status | Level | Confidence | Count | "
+            "Concern | Human decision |"
+        ),
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
         decision = resolution.decision.value if resolution else "Unresolved"
+        concern = finding.reason.replace("|", "\\|").replace("\n", " ")
         lines.append(
             f"| {criterion.criterion_id}: {criterion.text} | "
             f"{criterion.criterion_source.value} | {criterion.priority.value} | "
-            f"{finding.status.value} | {finding.evidence_level.value} | {decision} |"
+            f"{finding.status.value} | {finding.evidence_level.value} | "
+            f"{finding.confidence_band.value} | {len(finding.evidence_ids)} | "
+            f"{concern} | {decision} |"
         )
 
     lines.extend(["", "## Criterion Details", ""])
@@ -179,6 +185,8 @@ def export_csv(bundle: ExportableReview) -> str:
         "status",
         "evidence_level",
         "confidence_band",
+        "evidence_count",
+        "concern",
         "evidence_links",
         "missing_evidence",
         "human_decision",
@@ -216,6 +224,8 @@ def export_csv(bundle: ExportableReview) -> str:
                 "status": finding.status.value,
                 "evidence_level": finding.evidence_level.value,
                 "confidence_band": finding.confidence_band.value,
+                "evidence_count": len(finding.evidence_ids),
+                "concern": finding.reason,
                 "evidence_links": _links(evidence_by_criterion[criterion.criterion_id]),
                 "missing_evidence": " | ".join(finding.missing_evidence),
                 "human_decision": resolution.decision.value if resolution else "",
@@ -233,9 +243,11 @@ def export_html(value: ExportableReview) -> str:
     bundle, state = _bundle_and_state(value)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
+    resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     rows = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
+        resolution = resolution_by_id.get(criterion.criterion_id)
         evidence = "<br>".join(
             (
                 f'<a href="{html.escape(evidence_by_id[item_id].permalink, quote=True)}">'
@@ -253,6 +265,10 @@ def export_html(value: ExportableReview) -> str:
             f"<td>{html.escape(criterion.priority.value)}</td>"
             f"<td>{html.escape(finding.status.value)}</td>"
             f"<td>{html.escape(finding.evidence_level.value)}</td>"
+            f"<td>{html.escape(finding.confidence_band.value)}</td>"
+            f"<td>{len(finding.evidence_ids)}</td>"
+            f"<td>{html.escape(finding.reason)}</td>"
+            f"<td>{html.escape(resolution.decision.value) if resolution else 'Unresolved'}</td>"
             f"<td>{evidence}</td>"
             "</tr>"
         )
@@ -286,7 +302,8 @@ def export_html(value: ExportableReview) -> str:
             "<h2>Confirmed Requirements Source</h2>",
             f"<pre>{html.escape(bundle.source_text)}</pre>",
             "<table><thead><tr><th>ID</th><th>Criterion</th><th>Source</th><th>Priority</th>"
-            "<th>Status</th><th>Level</th><th>Evidence</th></tr></thead><tbody>",
+            "<th>Status</th><th>Level</th><th>Confidence</th><th>Count</th><th>Concern</th>"
+            "<th>Human resolution</th><th>Evidence</th></tr></thead><tbody>",
             *rows,
             "</tbody></table>",
             *(
