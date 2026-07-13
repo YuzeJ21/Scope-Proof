@@ -679,6 +679,11 @@ else:
         st.session_state.pop("manual_evidence_level", None)
     resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
 
+    st.markdown("### Criterion resolution")
+    st.caption(
+        f"This decision will be recorded for {selected_id} — {selected_criterion.text}. "
+        "It does not record final review acceptance."
+    )
     decision_options = [
         HumanDecision.ACCEPTED,
         HumanDecision.CHANGE_REQUIRED,

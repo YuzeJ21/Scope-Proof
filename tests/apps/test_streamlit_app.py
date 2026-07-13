@@ -572,6 +572,30 @@ def test_successful_manual_verification_clears_conditional_evidence_level() -> N
     assert "manual_evidence_level" not in app.session_state.filtered_state
 
 
+def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
+    app = analyzed_demo(new_app())
+    markdown_text = "\n".join(markdown.value for markdown in app.markdown)
+    caption_text = "\n".join(caption.value for caption in app.caption)
+
+    assert "Criterion resolution" in markdown_text
+    assert (
+        "This decision will be recorded for AC-01 — User can export the research list as CSV. "
+        "It does not record final review acceptance."
+    ) in caption_text
+    assert "Select a decision to see its deterministic gate impact." in caption_text
+
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+    target_captions = [
+        caption.value
+        for caption in app.caption
+        if caption.value.startswith("This decision will be recorded for")
+    ]
+    assert target_captions == [
+        "This decision will be recorded for AC-03 — Failed export shows an error message. "
+        "It does not record final review acceptance."
+    ]
+
+
 def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> None:
     app = analyzed_demo(new_app())
     bundle = app.session_state["review_state"].bundle
