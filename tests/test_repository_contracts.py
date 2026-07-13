@@ -56,11 +56,10 @@ def test_ci_builds_and_executes_installed_wheel() -> None:
 def test_ci_starts_and_cleans_up_installed_web_workbench() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "setsid env" in workflow
-    assert "STREAMLIT_SERVER_HEADLESS=true" in workflow
-    assert "STREAMLIT_SERVER_ADDRESS=127.0.0.1" in workflow
-    assert "STREAMLIT_SERVER_PORT=8512" in workflow
-    assert "scopeproof-web" in workflow
+    assert "setsid scopeproof-web" in workflow
+    assert "STREAMLIT_SERVER_ADDRESS" not in workflow
+    assert "STREAMLIT_SERVER_PORT" not in workflow
+    assert "scopeproof-web --host 127.0.0.1 --port 8512" in workflow
     assert "http://127.0.0.1:8512/_stcore/health" in workflow
     assert "for attempt in $(seq 1 30)" in workflow
     assert '[ "$response" = "ok" ]' in workflow
@@ -82,11 +81,11 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert (
-        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.13/"
-        "scopeproof-0.1.13-py3-none-any.whl"
+        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.14/"
+        "scopeproof-0.1.14-py3-none-any.whl"
     ) in readme
     assert "scopeproof benchmark" in readme
-    assert "scopeproof-web" in readme
+    assert "scopeproof-web --host 127.0.0.1 --port 8501" in readme
     assert "## Contributor setup" in readme
     assert "python -m pip install -e '.[dev]'" in readme
     assert "streamlit run apps/web/app.py" in readme
@@ -95,10 +94,10 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
 
 def test_readme_documents_optional_release_checksum_verification() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    wheel_name = "scopeproof-0.1.13-py3-none-any.whl"
+    wheel_name = "scopeproof-0.1.14-py3-none-any.whl"
 
-    assert f"releases/download/v0.1.13/{wheel_name}" in readme
-    assert f"releases/download/v0.1.13/{wheel_name}.sha256" in readme
+    assert f"releases/download/v0.1.14/{wheel_name}" in readme
+    assert f"releases/download/v0.1.14/{wheel_name}.sha256" in readme
     assert f"shasum -a 256 -c {wheel_name}.sha256" in readme
     assert f"sha256sum -c {wheel_name}.sha256" in readme
     assert f"python -m pip install ./{wheel_name}" in readme
@@ -108,7 +107,7 @@ def test_readme_documents_optional_release_checksum_verification() -> None:
 def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
-    assert config["project"]["version"] == "0.1.13"
+    assert config["project"]["version"] == "0.1.14"
     assert config["project"]["scripts"]["scopeproof-web"] == "apps.web.launcher:main"
     core_cli = Path("scopeproof_core/cli.py").read_text(encoding="utf-8")
     assert "streamlit" not in core_cli
