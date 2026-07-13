@@ -53,6 +53,24 @@ def test_ci_builds_and_executes_installed_wheel() -> None:
     assert "scopeproof benchmark" in workflow
 
 
+def test_ci_starts_and_cleans_up_installed_web_workbench() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "setsid env" in workflow
+    assert "STREAMLIT_SERVER_HEADLESS=true" in workflow
+    assert "STREAMLIT_SERVER_ADDRESS=127.0.0.1" in workflow
+    assert "STREAMLIT_SERVER_PORT=8512" in workflow
+    assert "scopeproof-web" in workflow
+    assert "http://127.0.0.1:8512/_stcore/health" in workflow
+    assert "for attempt in $(seq 1 30)" in workflow
+    assert '[ "$response" = "ok" ]' in workflow
+    assert 'if ! kill -0 "$web_pid"' in workflow
+    assert 'kill -- -"$web_pid"' in workflow
+    assert 'wait "$web_pid"' in workflow
+    assert "trap cleanup EXIT" in workflow
+    assert 'cat "$web_log"' in workflow
+
+
 def test_readme_documents_operating_commands() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     assert "streamlit run apps/web/app.py" in readme

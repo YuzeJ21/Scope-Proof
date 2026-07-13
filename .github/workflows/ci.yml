@@ -33,3 +33,42 @@ jobs:
           wheel="$(find "$wheel_dir" -type f -name 'scopeproof-*.whl' -print -quit)"
           python -m pip install --force-reinstall --no-deps "$wheel"
           (cd "$RUNNER_TEMP" && scopeproof benchmark)
+
+          web_log="$RUNNER_TEMP/scopeproof-web.log"
+          web_pid=""
+          cleanup() {
+            if [ -n "$web_pid" ]; then
+              kill -- -"$web_pid" 2>/dev/null || true
+              wait "$web_pid" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          setsid env \
+            STREAMLIT_SERVER_HEADLESS=true \
+            STREAMLIT_SERVER_ADDRESS=127.0.0.1 \
+            STREAMLIT_SERVER_PORT=8512 \
+            scopeproof-web > "$web_log" 2>&1 &
+          web_pid=$!
+
+          healthy=0
+          for attempt in $(seq 1 30); do
+            if ! kill -0 "$web_pid" 2>/dev/null; then
+              echo "Installed ScopeProof workbench exited before becoming healthy."
+              cat "$web_log"
+              exit 1
+            fi
+            if response="$(curl --fail --silent http://127.0.0.1:8512/_stcore/health 2>/dev/null)"; then
+              if [ "$response" = "ok" ]; then
+                healthy=1
+                break
+              fi
+            fi
+            sleep 1
+          done
+
+          if [ "$healthy" -ne 1 ]; then
+            echo "Installed ScopeProof workbench did not become healthy within 30 seconds."
+            cat "$web_log"
+            exit 1
+          fi
