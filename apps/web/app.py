@@ -466,13 +466,19 @@ else:
         st.markdown("**Missing evidence**")
         for missing in selected_finding.missing_evidence:
             st.markdown(f"- {missing}")
+    st.markdown("**Recommended next action**")
+    st.info(selected_finding.recommended_action)
+    st.markdown("### Candidate evidence")
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
+    if not selected_finding.evidence_ids:
+        st.caption("No candidate evidence is linked to this provisional finding.")
     for evidence_id in selected_finding.evidence_ids:
         item = evidence_by_id[evidence_id]
         with st.expander(f"{item.file_path}:L{item.line_start} · {item.evidence_type.value}"):
             st.code(item.excerpt)
             st.markdown(f"[Open immutable GitHub evidence]({item.permalink})")
-            st.write(item.relevance_reason)
+            st.markdown(f"**Matching rationale:** {item.relevance_reason}")
+            st.caption(f"Matching rule: {item.matching_rule}")
             for limitation in item.limitations:
                 st.caption(f"Limitation: {limitation}")
 
