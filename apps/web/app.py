@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 
 import streamlit as st
@@ -61,6 +62,8 @@ _STATE_DEFAULTS = {
     "review_state": None,
     "reopened_review_id": None,
     "source_reload_notice": None,
+    "saved_review_fingerprint": None,
+    "review_save_notice": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -73,6 +76,13 @@ def _reset_analysis() -> None:
     st.session_state["resolutions"] = []
     st.session_state["review_state"] = None
     st.session_state["reopened_review_id"] = None
+    st.session_state["saved_review_fingerprint"] = None
+    st.session_state["review_save_notice"] = None
+
+
+def _review_state_fingerprint(state: ReviewState) -> str:
+    """Return a deterministic session-only identity for a validated review state."""
+    return sha256(state.model_dump_json().encode("utf-8")).hexdigest()
 
 
 def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
@@ -111,6 +121,8 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["review_state"] = state
     st.session_state["reopened_review_id"] = state.review.review_id
     st.session_state["source_reload_notice"] = None
+    st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(state)
+    st.session_state["review_save_notice"] = None
 
 
 def _analyze() -> ReviewBundle:
@@ -715,14 +727,36 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
+    review_save_notice = st.session_state.pop("review_save_notice", None)
+    review_matches_local_save = bool(
+        review_state is not None
+        and st.session_state["saved_review_fingerprint"]
+        == _review_state_fingerprint(review_state)
+    )
     if review_state is not None:
         st.caption(
             "Current review ID — save this review before using the ID in a future session."
         )
         st.code(review_state.review.review_id, language=None)
-    if review_state is not None and st.button("Save local review", key="save_review"):
+        if review_matches_local_save:
+            st.caption("Saved locally — current review matches the last local save.")
+        else:
+            st.caption("Unsaved changes — save locally before relying on this review ID.")
+    if review_state is not None and st.button(
+        "Save local review",
+        key="save_review",
+        disabled=review_matches_local_save,
+    ):
         review_store.save(review_state)
-        st.success(f"Review saved locally. ID: {review_state.review.review_id}.")
+        st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(
+            review_state
+        )
+        st.session_state["review_save_notice"] = (
+            f"Review saved locally. ID: {review_state.review.review_id}."
+        )
+        st.rerun()
+    if review_save_notice is not None:
+        st.success(review_save_notice)
     verdict = _status_label(bundle.gate.verdict.value)
     st.markdown(f"## Verdict: **{verdict}**")
     if bundle.gate.reason_codes:

@@ -164,9 +164,31 @@ def test_current_review_id_is_copyable_and_used_in_save_confirmation(
     caption_text = "\n".join(item.value for item in app.caption)
     assert "Current review ID" in caption_text
     assert "save this review before using the ID in a future session" in caption_text
+    assert "Unsaved changes — save locally before relying on this review ID." in caption_text
+    assert app.button(key="save_review").disabled is False
 
     app = app.button(key="save_review").click().run()
     assert f"Review saved locally. ID: {review_id}." in [item.value for item in app.success]
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "Saved locally — current review matches the last local save." in caption_text
+    assert app.button(key="save_review").disabled is True
+
+
+def test_post_save_resolution_marks_review_unsaved_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    assert app.button(key="save_review").disabled is True
+
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+    app = app.button(key="save_resolution").click().run()
+
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "Unsaved changes — save locally before relying on this review ID." in caption_text
+    assert app.button(key="save_review").disabled is False
 
 
 def test_saved_review_can_be_reopened_from_a_fresh_session(
@@ -195,6 +217,9 @@ def test_saved_review_can_be_reopened_from_a_fresh_session(
     assert fresh.button(key="run_analysis").disabled is True
     assert len(fresh.download_button) == 3
     assert review_id in [item.value for item in fresh.code]
+    caption_text = "\n".join(item.value for item in fresh.caption)
+    assert "Saved locally — current review matches the last local save." in caption_text
+    assert fresh.button(key="save_review").disabled is True
 
 
 def test_reopening_clears_an_unrelated_loaded_snapshot(
