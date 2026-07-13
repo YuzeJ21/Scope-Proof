@@ -11,7 +11,7 @@ from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.evals.metrics import EvidenceQualityMetrics
 from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
-from scopeproof_core.github.client import GitHubClient
+from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
 from scopeproof_core.reporting.exporters import (
     export_csv,
     export_html,
@@ -175,8 +175,12 @@ def _benchmark() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     """Run a ScopeProof command and return a shell-safe status code."""
-    args = _parser().parse_args(argv)
-    return args.handler(args)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    try:
+        return args.handler(args)
+    except (GitHubIngestionError, OSError, ValueError) as error:
+        parser.error(str(error))
 
 
 if __name__ == "__main__":

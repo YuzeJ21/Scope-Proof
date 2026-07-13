@@ -72,6 +72,32 @@ The five review steps are:
 4. Criterion Detail and human resolution.
 5. Summary and Markdown, JSON, or CSV export.
 
+### Public PR CLI workflow
+
+After installation, the CLI provides the same read-only public-PR ingestion and deterministic
+core without starting Streamlit. First create `requirements.txt` with one atomic criterion per
+line. Every line must contain reviewer-confirmed criteria; running the command is an explicit
+confirmation that this normalized set is ready for analysis.
+
+```bash
+scopeproof review --pr https://github.com/OWNER/REPOSITORY/pull/123 \
+  --requirements requirements.txt \
+  --storage-dir .scopeproof/reviews
+```
+
+The command prints JSON containing the local `review_id`, record path, head SHA, and provisional
+gate verdict. Use that identifier to render an export:
+
+```bash
+scopeproof export REVIEW_ID \
+  --storage-dir .scopeproof/reviews \
+  --format markdown
+```
+
+Anonymous public-repository access is the default. `--token` is optional and can increase GitHub's
+free rate limit, but it is not required or persisted. The CLI never comments on the pull request,
+executes its code, or converts static candidates into runtime verification.
+
 ### Durable local review workflow
 
 The workbench keeps criteria revisions and append-only resolution history. Adding, removing,
