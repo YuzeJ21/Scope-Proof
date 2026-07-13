@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.schemas.models import HumanDecision
@@ -19,6 +20,13 @@ def analyzed_demo(app: AppTest) -> AppTest:
     app = load_demo(app)
     app = app.button(key="confirm_criteria").click().run()
     return app.button(key="run_analysis").click().run()
+
+
+def saved_demo_review(app: AppTest) -> tuple[AppTest, str]:
+    app = analyzed_demo(app)
+    review_id = app.session_state["review_state"].review.review_id
+    app = app.button(key="save_review").click().run()
+    return app, review_id
 
 
 def test_analysis_is_disabled_before_criteria_confirmation() -> None:
@@ -118,6 +126,65 @@ def test_demo_can_save_and_reopen_durable_review_state() -> None:
     assert app.session_state["review_state"].review.review_id == review_id
     success_text = "\n".join(message.value for message in app.success)
     assert "Review reopened from local storage" in success_text
+
+
+def test_saved_review_can_be_reopened_from_a_fresh_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    saved_state = saved.session_state["review_state"]
+
+    fresh = new_app()
+    assert fresh.text_input(key="reopen_review_id").value == ""
+    fresh = fresh.text_input(key="reopen_review_id").set_value(review_id).run()
+    fresh = fresh.button(key="reopen_review").click().run()
+
+    reopened = fresh.session_state["review_state"]
+    assert reopened == saved_state
+    assert fresh.session_state["bundle"] == saved_state.bundle
+    assert fresh.session_state["criteria"] == saved_state.criteria_revision.criteria
+    assert fresh.session_state["criteria_confirmed"] is True
+    assert fresh.session_state["source_text"] == saved_state.criteria_revision.source_text
+    assert (
+        fresh.text_area(key="requirements_input").value
+        == saved_state.criteria_revision.source_text
+    )
+    assert fresh.session_state["snapshot"] is None
+    assert fresh.button(key="run_analysis").disabled is True
+    assert len(fresh.download_button) == 3
+
+
+def test_reopening_clears_an_unrelated_loaded_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+
+    app = load_demo(new_app())
+    assert app.session_state["snapshot"] is not None
+    app = app.text_input(key="reopen_review_id").set_value(review_id).run()
+    app = app.button(key="reopen_review").click().run()
+
+    assert app.session_state["snapshot"] is None
+    assert app.button(key="run_analysis").disabled is True
+    sidebar_text = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Next — Reload source to rerun analysis" in sidebar_text
+
+
+def test_missing_saved_review_has_safe_recovery_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = new_app()
+    app = app.text_input(key="reopen_review_id").set_value("missing-review").run()
+    app = app.button(key="reopen_review").click().run()
+
+    assert [item.value for item in app.error] == [
+        "No saved review was found for that review ID."
+    ]
+    assert app.session_state["review_state"] is None
+    assert app.session_state["bundle"] is None
 
 
 def test_final_acceptance_control_is_visible_only_after_analysis() -> None:

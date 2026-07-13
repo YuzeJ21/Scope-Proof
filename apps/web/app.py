@@ -38,7 +38,11 @@ from scopeproof_core.schemas.models import (
     ReviewState,
     RuntimeEvidence,
 )
-from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
+from scopeproof_core.storage.json_store import (
+    JsonReviewStore,
+    UnsupportedRecordVersion,
+    default_local_review_directory,
+)
 from scopeproof_core.verification.service import build_findings
 
 st.set_page_config(page_title="ScopeProof", page_icon="🔎", layout="wide")
@@ -71,6 +75,18 @@ def _prepare_from_text(text: str) -> None:
         Criterion(criterion_id=draft.criterion_id, text=draft.text) for draft in drafts
     ]
     _reset_analysis()
+
+
+def _hydrate_reopened_review(state: ReviewState) -> None:
+    """Restore persisted review state without claiming its source snapshot is loaded."""
+    st.session_state["snapshot"] = None
+    st.session_state["criteria"] = state.criteria_revision.criteria
+    st.session_state["criteria_confirmed"] = state.review.criteria_confirmed
+    st.session_state["bundle"] = state.bundle
+    st.session_state["source_text"] = state.criteria_revision.source_text
+    st.session_state["requirements_input"] = state.criteria_revision.source_text
+    st.session_state["resolutions"] = []
+    st.session_state["review_state"] = state
 
 
 def _analyze() -> ReviewBundle:
@@ -111,6 +127,23 @@ st.markdown(
     "It does not replace QA or prove correctness."
 )
 st.caption("No paid LLM API. Deterministic rules. Human acceptance stays visible.")
+
+storage_directory = default_local_review_directory()
+review_store = JsonReviewStore(Path(storage_directory))
+st.markdown("### Reopen saved review")
+reopen_id = st.text_input("Review ID", key="reopen_review_id")
+if st.button("Reopen local review", key="reopen_review", disabled=not reopen_id.strip()):
+    try:
+        reopened_state = review_store.load(reopen_id.strip())
+    except FileNotFoundError:
+        st.error("No saved review was found for that review ID.")
+    except UnsupportedRecordVersion:
+        st.error("This saved review requires a different ScopeProof record version.")
+    except (OSError, ValueError):
+        st.error("The saved review could not be opened. Verify its ID and record integrity.")
+    else:
+        _hydrate_reopened_review(reopened_state)
+        st.success("Review reopened from local storage after validation.")
 
 st.header("1 · Start Review")
 pr_url = st.text_input(
@@ -165,7 +198,6 @@ if st.button(
     st.session_state["source_text"] = requirements_text
     _prepare_from_text(requirements_text)
 
-storage_directory = default_local_review_directory()
 st.caption(
     f"Local review storage: `{storage_directory}`. Records stay under your user-owned "
     "ScopeProof folder; GitHub tokens are never stored."
@@ -511,23 +543,9 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
-    if review_state is not None:
-        store = JsonReviewStore(Path(storage_directory))
-        if st.button("Save local review", key="save_review"):
-            store.save(review_state)
-            st.success("Review saved locally.")
-        reopen_id = st.text_input("Review ID to reopen", key="reopen_review_id")
-        if st.button("Reopen local review", key="reopen_review", disabled=not reopen_id.strip()):
-            try:
-                review_state = store.load(reopen_id.strip())
-                st.session_state["review_state"] = review_state
-                st.session_state["bundle"] = review_state.bundle
-                st.session_state["criteria"] = review_state.criteria_revision.criteria
-                st.session_state["criteria_confirmed"] = review_state.review.criteria_confirmed
-                st.session_state["source_text"] = review_state.criteria_revision.source_text
-                st.success("Review reopened from local storage.")
-            except (OSError, ValueError) as error:
-                st.error(str(error))
+    if review_state is not None and st.button("Save local review", key="save_review"):
+        review_store.save(review_state)
+        st.success("Review saved locally.")
     verdict = _status_label(bundle.gate.verdict.value)
     st.markdown(f"## Verdict: **{verdict}**")
     if bundle.gate.reason_codes:
@@ -582,7 +600,13 @@ has_analysis = bundle is not None
 with st.sidebar:
     st.header("Review status")
     st.markdown(
-        "Complete — Source loaded" if has_source else "Next — Load a public PR or demo"
+        "Complete — Source loaded"
+        if has_source
+        else (
+            "Next — Reload source to rerun analysis"
+            if has_analysis
+            else "Next — Load a public PR or demo"
+        )
     )
     st.markdown(
         "Complete — Criteria prepared"
