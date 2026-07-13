@@ -52,14 +52,14 @@ The release gate uses explicit precedence:
 
 Python 3.11 or newer is required.
 
-Install the verified v0.1.12 release wheel in an isolated environment. This path does not require
+Install the verified v0.1.13 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install \
-  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.12/scopeproof-0.1.12-py3-none-any.whl
+  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.13/scopeproof-0.1.13-py3-none-any.whl
 scopeproof benchmark
 scopeproof-web
 ```
@@ -67,20 +67,20 @@ scopeproof-web
 To verify the release bytes before installation, download the wheel and its checksum:
 
 ```bash
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.12/scopeproof-0.1.12-py3-none-any.whl
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.12/scopeproof-0.1.12-py3-none-any.whl.sha256
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.13/scopeproof-0.1.13-py3-none-any.whl
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.13/scopeproof-0.1.13-py3-none-any.whl.sha256
 ```
 
 Use the command for your platform, then install the verified local file:
 
 ```bash
 # macOS
-shasum -a 256 -c scopeproof-0.1.12-py3-none-any.whl.sha256
+shasum -a 256 -c scopeproof-0.1.13-py3-none-any.whl.sha256
 
 # Linux
-sha256sum -c scopeproof-0.1.12-py3-none-any.whl.sha256
+sha256sum -c scopeproof-0.1.13-py3-none-any.whl.sha256
 
-python -m pip install ./scopeproof-0.1.12-py3-none-any.whl
+python -m pip install ./scopeproof-0.1.13-py3-none-any.whl
 ```
 
 A matching checksum verifies the downloaded bytes against the digest published with this release.
@@ -101,11 +101,13 @@ confirmation that this normalized set is ready for analysis.
 ```bash
 scopeproof review --pr https://github.com/OWNER/REPOSITORY/pull/123 \
   --requirements requirements.txt \
-  --storage-dir .scopeproof/reviews
+  --storage-dir .scopeproof/reviews \
+  --report scopeproof-review.md
 ```
 
 The command prints JSON containing the local `review_id`, record path, head SHA, and provisional
-gate verdict. Use that identifier to render an export:
+gate verdict, plus the requested report path. ScopeProof refuses to overwrite an existing report.
+Use the review identifier later to repeat the export or choose another format:
 
 ```bash
 scopeproof export REVIEW_ID \

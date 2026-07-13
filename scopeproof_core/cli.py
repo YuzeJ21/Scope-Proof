@@ -30,6 +30,32 @@ from scopeproof_core.schemas.models import (
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
 
+EXPORT_RENDERERS = {
+    "json": export_json,
+    "markdown": export_markdown,
+    "csv": export_csv,
+    "html": export_html,
+}
+
+REPORT_SUFFIX_FORMATS = {
+    ".md": "markdown",
+    ".json": "json",
+    ".csv": "csv",
+    ".html": "html",
+}
+
+
+def _report_target(value: str | None):
+    if value is None:
+        return None
+    path = Path(value)
+    report_format = REPORT_SUFFIX_FORMATS.get(path.suffix.lower())
+    if report_format is None:
+        raise ValueError("report path must end in .md, .json, .csv, or .html")
+    if path.exists():
+        raise FileExistsError(f"report path already exists: {path}")
+    return path, EXPORT_RENDERERS[report_format]
+
 
 def _criteria_from_file(path: Path) -> list[Criterion]:
     drafts = parse_criteria(path.read_text(encoding="utf-8"))
@@ -64,6 +90,7 @@ def _build_bundle(
 
 
 def _review(args: argparse.Namespace) -> int:
+    report_target = _report_target(args.report)
     requirements_path = Path(args.requirements)
     criteria = _criteria_from_file(requirements_path)
     if args.fixture:
@@ -74,29 +101,23 @@ def _review(args: argparse.Namespace) -> int:
     bundle = _build_bundle(snapshot, criteria, requirements_path.read_text(encoding="utf-8"))
     state = new_review_state(bundle)
     path = JsonReviewStore(Path(args.storage_dir)).save(state)
-    print(
-        json.dumps(
-            {
-                "review_id": state.review.review_id,
-                "record": str(path),
-                "verdict": bundle.gate.verdict.value,
-                "head_sha": bundle.review.head_sha,
-            },
-            sort_keys=True,
-        )
-    )
+    metadata = {
+        "review_id": state.review.review_id,
+        "record": str(path),
+        "verdict": bundle.gate.verdict.value,
+        "head_sha": bundle.review.head_sha,
+    }
+    if report_target is not None:
+        report_path, renderer = report_target
+        report_path.write_text(renderer(state), encoding="utf-8")
+        metadata["report"] = str(report_path)
+    print(json.dumps(metadata, sort_keys=True))
     return 0
 
 
 def _export(args: argparse.Namespace) -> int:
     state = JsonReviewStore(Path(args.storage_dir)).load(args.review_id)
-    renderers = {
-        "json": export_json,
-        "markdown": export_markdown,
-        "csv": export_csv,
-        "html": export_html,
-    }
-    print(renderers[args.format](state), end="")
+    print(EXPORT_RENDERERS[args.format](state), end="")
     return 0
 
 
@@ -132,6 +153,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     review.add_argument("--storage-dir", default=".scopeproof/reviews")
     review.add_argument("--token", help="Optional GitHub token; never persisted or printed")
+    review.add_argument(
+        "--report", help="Write .md, .json, .csv, or .html without overwriting an existing file"
+    )
     review.set_defaults(handler=_review)
     export = commands.add_parser("export", help="Render a saved local review")
     export.add_argument("review_id")
