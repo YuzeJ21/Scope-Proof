@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from scopeproof_core.version import __version__
+
 
 def load_launcher():
     launcher_path = Path("apps/web/launcher.py")
@@ -17,6 +19,23 @@ def load_launcher():
     launcher = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(launcher)
     return launcher
+
+
+def test_web_launcher_reports_shared_version_without_starting_streamlit(
+    monkeypatch, capsys
+) -> None:
+    launcher = load_launcher()
+
+    def unexpected_run(*args, **kwargs):
+        raise AssertionError("Streamlit must not start for --version")
+
+    monkeypatch.setattr(launcher.subprocess, "run", unexpected_run)
+
+    with pytest.raises(SystemExit) as raised:
+        launcher.main(["--version"])
+
+    assert raised.value.code == 0
+    assert capsys.readouterr().out == f"scopeproof-web {__version__}\n"
 
 
 def test_packaged_web_launcher_uses_current_interpreter_without_shell(monkeypatch) -> None:

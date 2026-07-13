@@ -29,6 +29,7 @@ from scopeproof_core.schemas.models import (
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
+from scopeproof_core.version import __version__
 
 EXPORT_RENDERERS = {
     "json": export_json,
@@ -143,6 +144,7 @@ def _validate_requirements_confirmation(args: argparse.Namespace) -> int:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scopeproof", description=__doc__)
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     review = commands.add_parser("review", help="Review a public PR or local fixture")
     source = review.add_mutually_exclusive_group(required=True)

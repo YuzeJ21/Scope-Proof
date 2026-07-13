@@ -52,6 +52,8 @@ def test_ci_builds_and_executes_installed_wheel() -> None:
     assert 'cd "$RUNNER_TEMP"' in workflow
     assert "from scopeproof_core import __version__" in workflow
     assert 'version("scopeproof") == __version__ == review.tool_version' in workflow
+    assert "scopeproof --version" in workflow
+    assert "scopeproof-web --version" in workflow
     assert "scopeproof benchmark" in workflow
 
 
