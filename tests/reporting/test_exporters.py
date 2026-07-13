@@ -194,6 +194,8 @@ def test_csv_emits_one_flattened_row_per_criterion() -> None:
     assert rows[0]["ruleset_version"] == bundle.review.ruleset_version
     assert rows[0]["criterion_id"] == "AC-01"
     assert rows[0]["status"] == "partial"
+    assert rows[0]["evidence_count"] == "1"
+    assert rows[0]["concern"] == bundle.findings[0].reason
     assert "Failure-path test" in rows[0]["missing_evidence"]
     assert "src/export.py#L42-L42" in rows[0]["evidence_links"]
 
@@ -205,6 +207,38 @@ def test_markdown_contains_disclaimer_and_human_resolution() -> None:
     assert "Candidate evidence" in markdown
     assert "Manual Runtime Evidence" in markdown
     assert "https://example.test/runs/7" in markdown
+
+
+def test_human_readable_exports_complete_the_evidence_matrix_contract() -> None:
+    bundle = example_bundle()
+    markdown = export_markdown(bundle)
+    html_report = export_html(bundle)
+
+    assert "| Confidence | Count | Concern | Human decision |" in markdown
+    assert "| medium | 1 | Only the export path was found. | change_required |" in markdown
+    assert "<th>Confidence</th><th>Count</th><th>Concern</th>" in html_report
+    assert "<th>Human resolution</th>" in html_report
+    assert "<td>medium</td><td>1</td>" in html_report
+    assert "<td>Only the export path was found.</td>" in html_report
+    assert "<td>change_required</td>" in html_report
+
+
+def test_candidate_evidence_count_excludes_manual_runtime_evidence() -> None:
+    bundle = example_bundle()
+    assert len(bundle.evidence) == 1
+    assert len(bundle.runtime_evidence) == 1
+
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    assert csv_row["evidence_count"] == "1"
+
+
+def test_human_readable_exports_label_unresolved_human_decision() -> None:
+    bundle = example_bundle().model_copy(update={"resolutions": []})
+
+    assert "Unresolved" in export_markdown(bundle)
+    assert "Unresolved" in export_html(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    assert csv_row["human_decision"] == ""
 
 
 def test_markdown_keeps_gate_reasons_and_adds_recovery_guidance() -> None:
@@ -251,6 +285,16 @@ def test_html_escapes_confirmed_requirement_source_text() -> None:
 
     assert "User requires &lt;safe &amp; auditable&gt; output" in report
     assert bundle.source_text not in report
+
+
+def test_html_escapes_evidence_matrix_concern() -> None:
+    bundle = example_bundle()
+    bundle.findings[0].reason = "Concern <script>alert('unsafe')</script>"
+
+    report = export_html(bundle)
+
+    assert "Concern &lt;script&gt;alert(&#x27;unsafe&#x27;)&lt;/script&gt;" in report
+    assert "<script>alert('unsafe')</script>" not in report
 
 
 def test_exports_never_include_token_shaped_secret() -> None:
