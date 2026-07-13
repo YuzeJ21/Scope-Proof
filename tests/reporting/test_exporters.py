@@ -110,6 +110,27 @@ def test_exports_agree_on_verdict_head_sha_and_criteria() -> None:
         assert "AC-01" in output
 
 
+def test_exports_preserve_tool_and_ruleset_provenance() -> None:
+    bundle = example_bundle()
+
+    for output in (
+        export_json(bundle),
+        export_markdown(bundle),
+        export_csv(bundle),
+        export_html(bundle),
+    ):
+        assert bundle.review.tool_version in output
+        assert bundle.review.ruleset_version in output
+
+
+def test_human_readable_exports_keep_historical_tool_version() -> None:
+    bundle = example_bundle()
+    bundle.review.tool_version = "0.1.0"
+
+    for output in (export_markdown(bundle), export_csv(bundle), export_html(bundle)):
+        assert "0.1.0" in output
+
+
 def test_json_is_stable_and_contains_ruleset_version() -> None:
     payload = json.loads(export_json(example_bundle()))
     assert payload["review"]["ruleset_version"] == "1.0.0"
@@ -118,8 +139,11 @@ def test_json_is_stable_and_contains_ruleset_version() -> None:
 
 
 def test_csv_emits_one_flattened_row_per_criterion() -> None:
-    rows = list(csv.DictReader(io.StringIO(export_csv(example_bundle()))))
+    bundle = example_bundle()
+    rows = list(csv.DictReader(io.StringIO(export_csv(bundle))))
     assert len(rows) == 1
+    assert rows[0]["tool_version"] == bundle.review.tool_version
+    assert rows[0]["ruleset_version"] == bundle.review.ruleset_version
     assert rows[0]["criterion_id"] == "AC-01"
     assert rows[0]["status"] == "partial"
     assert "Failure-path test" in rows[0]["missing_evidence"]

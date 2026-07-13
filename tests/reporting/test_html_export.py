@@ -17,3 +17,14 @@ def test_html_export_escapes_evidence_excerpt() -> None:
     html = export_html(bundle)
     assert "&lt;script&gt;" in html
     assert "<script>alert" not in html
+
+
+def test_html_export_escapes_review_provenance() -> None:
+    bundle = build_demo_review()
+    bundle.review.tool_version = "dev<unsafe>"
+    bundle.review.ruleset_version = "rules<unsafe>"
+
+    html = export_html(bundle)
+    assert "dev&lt;unsafe&gt;" in html
+    assert "rules&lt;unsafe&gt;" in html
+    assert "dev<unsafe>" not in html
