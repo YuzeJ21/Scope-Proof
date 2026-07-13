@@ -82,8 +82,8 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert (
-        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.12/"
-        "scopeproof-0.1.12-py3-none-any.whl"
+        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.13/"
+        "scopeproof-0.1.13-py3-none-any.whl"
     ) in readme
     assert "scopeproof benchmark" in readme
     assert "scopeproof-web" in readme
@@ -95,10 +95,10 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
 
 def test_readme_documents_optional_release_checksum_verification() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    wheel_name = "scopeproof-0.1.12-py3-none-any.whl"
+    wheel_name = "scopeproof-0.1.13-py3-none-any.whl"
 
-    assert f"releases/download/v0.1.12/{wheel_name}" in readme
-    assert f"releases/download/v0.1.12/{wheel_name}.sha256" in readme
+    assert f"releases/download/v0.1.13/{wheel_name}" in readme
+    assert f"releases/download/v0.1.13/{wheel_name}.sha256" in readme
     assert f"shasum -a 256 -c {wheel_name}.sha256" in readme
     assert f"sha256sum -c {wheel_name}.sha256" in readme
     assert f"python -m pip install ./{wheel_name}" in readme
@@ -108,7 +108,7 @@ def test_readme_documents_optional_release_checksum_verification() -> None:
 def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
-    assert config["project"]["version"] == "0.1.12"
+    assert config["project"]["version"] == "0.1.13"
     assert config["project"]["scripts"]["scopeproof-web"] == "apps.web.launcher:main"
     core_cli = Path("scopeproof_core/cli.py").read_text(encoding="utf-8")
     assert "streamlit" not in core_cli
@@ -123,6 +123,14 @@ def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
     assert "scopeproof export" in readme
     assert "reviewer-confirmed criteria" in readme
     assert "not required or persisted" in readme
+
+
+def test_readme_documents_one_command_report_without_removing_repeat_export() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "--report scopeproof-review.md" in readme
+    assert "refuses to overwrite" in readme
+    assert "scopeproof export REVIEW_ID" in readme
 
 
 def test_readme_documents_actual_stage_2a_durability_behavior() -> None:

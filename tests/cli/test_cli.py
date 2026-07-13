@@ -35,7 +35,119 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     assert result == 0
     output = capsys.readouterr().out
     assert '"review_id"' in output
+    assert '"report"' not in output
     assert list((tmp_path / "reviews").glob("*.json"))
+
+
+def test_review_can_write_markdown_report_in_one_command(tmp_path: Path, capsys) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "scopeproof-review.md"
+
+    assert (
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--storage-dir",
+                str(tmp_path / "reviews"),
+                "--report",
+                str(report),
+            ]
+        )
+        == 0
+    )
+
+    metadata = json.loads(capsys.readouterr().out)
+    assert metadata["report"] == str(report)
+    assert "ScopeProof Acceptance Review" in report.read_text(encoding="utf-8")
+    assert list((tmp_path / "reviews").glob("*.json"))
+
+
+@pytest.mark.parametrize(
+    ("suffix", "expected"),
+    [(".json", '"review"'), (".csv", "review_id"), (".html", "<!doctype html>")],
+)
+def test_review_report_suffix_selects_existing_exporter(
+    tmp_path: Path, capsys, suffix: str, expected: str
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / f"scopeproof-review{suffix}"
+
+    assert (
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--storage-dir",
+                str(tmp_path / "reviews"),
+                "--report",
+                str(report),
+            ]
+        )
+        == 0
+    )
+
+    capsys.readouterr()
+    assert expected in report.read_text(encoding="utf-8").lower()
+
+
+def test_review_refuses_to_overwrite_report_before_reading_inputs(
+    tmp_path: Path, capsys
+) -> None:
+    report = tmp_path / "existing.md"
+    report.write_text("keep me", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "review",
+                "--fixture",
+                str(tmp_path / "missing-fixture.json"),
+                "--requirements",
+                str(tmp_path / "missing-requirements.txt"),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert raised.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "report path already exists" in stderr
+    assert "Traceback" not in stderr
+    assert report.read_text(encoding="utf-8") == "keep me"
+
+
+def test_review_rejects_unsupported_report_suffix_before_reading_inputs(
+    tmp_path: Path, capsys
+) -> None:
+    report = tmp_path / "report.txt"
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "review",
+                "--fixture",
+                str(tmp_path / "missing-fixture.json"),
+                "--requirements",
+                str(tmp_path / "missing-requirements.txt"),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert raised.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "report path must end in .md, .json, .csv, or .html" in stderr
+    assert "Traceback" not in stderr
+    assert not report.exists()
 
 
 def test_review_reports_invalid_pr_url_without_traceback(tmp_path: Path, capsys) -> None:
