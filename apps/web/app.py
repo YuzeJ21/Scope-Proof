@@ -627,17 +627,24 @@ if not analysis_disabled and analysis_continuation_placeholder is not None:
     )
 st.markdown("### Run deterministic analysis")
 if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis_disabled):
-    bundle = _analyze()
-    existing_state = st.session_state["review_state"]
-    state = (
-        new_review_state(bundle)
-        if existing_state is None
-        else attach_analysis(existing_state, bundle)
-    )
-    st.session_state["review_state"] = state
-    st.session_state["bundle"] = state.bundle
-    st.session_state["source_reload_notice"] = None
-    st.rerun()
+    try:
+        bundle = _analyze()
+        existing_state = st.session_state["review_state"]
+        state = (
+            new_review_state(bundle)
+            if existing_state is None
+            else attach_analysis(existing_state, bundle)
+        )
+    except ValueError:
+        st.error(
+            "Analysis could not be completed. No review state was changed. Verify the "
+            "confirmed criteria and loaded source, then try again."
+        )
+    else:
+        st.session_state["review_state"] = state
+        st.session_state["bundle"] = state.bundle
+        st.session_state["source_reload_notice"] = None
+        st.rerun()
 
 review_state: ReviewState | None = st.session_state["review_state"]
 bundle: ReviewBundle | None = review_state.bundle if review_state else st.session_state["bundle"]

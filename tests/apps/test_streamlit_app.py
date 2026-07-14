@@ -543,6 +543,64 @@ def test_sidebar_reports_analysis_and_review_availability() -> None:
     assert "Complete — Review and export available" in sidebar_text
 
 
+@pytest.mark.parametrize(
+    ("existing_review", "transition_name"),
+    [(False, "new_review_state"), (True, "attach_analysis")],
+)
+def test_analysis_transition_failure_preserves_retryable_state_without_raw_details(
+    existing_review: bool,
+    transition_name: str,
+) -> None:
+    if existing_review:
+        app = analyzed_demo(new_app())
+        app = app.text_input(key="criterion_text_AC-01").set_value(
+            "User can export the revised research list as CSV"
+        ).run()
+        app = app.button(key="confirm_criteria").click().run()
+    else:
+        app = load_demo(new_app())
+        app = app.button(key="confirm_criteria").click().run()
+    current_state = app.session_state["review_state"]
+    review_state = current_state.model_copy(deep=True) if current_state is not None else None
+    bundle = app.session_state["bundle"]
+    source_reload_notice = app.session_state["source_reload_notice"]
+    raw_error = f"invalid analysis transition at /private/secret/{transition_name}.json"
+
+    with patch(
+        f"scopeproof_core.reviews.lifecycle.{transition_name}",
+        side_effect=ValueError(raw_error),
+    ):
+        app = app.button(key="run_analysis").click().run()
+
+    recovery = (
+        "Analysis could not be completed. No review state was changed. Verify the confirmed "
+        "criteria and loaded source, then try again."
+    )
+    assert recovery in [item.value for item in app.error]
+    assert not app.exception
+    rendered = "\n".join(
+        item.value
+        for item in [
+            *app.error,
+            *app.warning,
+            *app.info,
+            *app.success,
+            *app.caption,
+            *app.markdown,
+            *app.code,
+        ]
+    )
+    assert raw_error not in rendered
+    assert "/private/secret/" not in rendered
+    assert app.session_state["review_state"] == review_state
+    assert app.session_state["bundle"] == bundle
+    assert app.session_state["source_reload_notice"] == source_reload_notice
+    assert app.session_state["criteria_confirmed"] is True
+    assert app.button(key="run_analysis").disabled is False
+    sidebar_text = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Complete — Analysis generated" not in sidebar_text
+
+
 @pytest.mark.parametrize("text", ["", "   ", "\t\n"])
 def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: str) -> None:
     app = analyzed_demo(new_app())
