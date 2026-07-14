@@ -200,8 +200,7 @@ def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
 
 
-def _clear_criterion_detail_drafts() -> bool:
-    """Clear unsaved target-specific inputs and report whether any draft existed."""
+def _criterion_detail_draft_pending() -> bool:
     runtime_text_keys = (
         "runtime_artifact_reference",
         "runtime_scenario",
@@ -210,25 +209,43 @@ def _clear_criterion_detail_drafts() -> bool:
         "runtime_reviewer",
         "runtime_limitations",
     )
-    had_pending_input = any(
+    return any(
         bool(str(st.session_state.get(key, ""))) for key in runtime_text_keys
-    )
-    had_pending_input = had_pending_input or (
+    ) or (
         st.session_state.get("runtime_evidence_level", EvidenceLevel.E3)
         != EvidenceLevel.E3
-    )
-    had_pending_input = had_pending_input or (
+    ) or (
         st.session_state.get("resolution_decision") is not None
         or bool(str(st.session_state.get("resolution_note", "")))
         or "manual_evidence_level" in st.session_state
     )
 
+
+def _clear_runtime_evidence_draft() -> None:
+    runtime_text_keys = (
+        "runtime_artifact_reference",
+        "runtime_scenario",
+        "runtime_environment",
+        "runtime_result",
+        "runtime_reviewer",
+        "runtime_limitations",
+    )
     for key in runtime_text_keys:
         st.session_state[key] = ""
     st.session_state["runtime_evidence_level"] = EvidenceLevel.E3
+
+
+def _clear_resolution_draft() -> None:
     st.session_state["resolution_decision"] = None
     st.session_state["resolution_note"] = ""
     st.session_state.pop("manual_evidence_level", None)
+
+
+def _clear_criterion_detail_drafts() -> bool:
+    """Clear unsaved target-specific inputs and report whether any draft existed."""
+    had_pending_input = _criterion_detail_draft_pending()
+    _clear_runtime_evidence_draft()
+    _clear_resolution_draft()
     return had_pending_input
 
 
@@ -281,6 +298,10 @@ if st.session_state["delete_saved_review_reset_pending"]:
     st.session_state["delete_saved_review_reset_pending"] = False
     st.session_state["saved_reopen_review_id"] = None
     st.session_state["delete_saved_review_confirmed"] = False
+if st.session_state.pop("runtime_evidence_form_reset_pending", False):
+    _clear_runtime_evidence_draft()
+if st.session_state.pop("resolution_form_reset_pending", False):
+    _clear_resolution_draft()
 
 st.title("ScopeProof")
 st.subheader("Prove the PR matches the product intent.")
@@ -291,9 +312,13 @@ st.markdown(
 st.caption("No paid LLM API. Deterministic rules. Human acceptance stays visible.")
 
 current_review_state: ReviewState | None = st.session_state["review_state"]
+has_pending_criterion_detail_draft = _criterion_detail_draft_pending()
 has_unsaved_review = bool(
     current_review_state is not None
-    and not _review_matches_local_save(current_review_state)
+    and (
+        not _review_matches_local_save(current_review_state)
+        or has_pending_criterion_detail_draft
+    )
 )
 if has_unsaved_review:
     st.warning(
@@ -817,21 +842,42 @@ else:
     previous_criterion_detail_target = st.session_state.get(
         "criterion_detail_form_target"
     )
-    if (
+    criterion_detail_target_changed_with_draft = (
         previous_criterion_detail_target is not None
         and previous_criterion_detail_target != criterion_detail_target
         and _clear_criterion_detail_drafts()
-    ):
+    )
+    st.session_state["criterion_detail_form_target"] = criterion_detail_target
+    if criterion_detail_target_changed_with_draft:
         st.session_state["criterion_detail_form_reset_notice"] = (
             "Unsaved runtime evidence or resolution inputs were cleared because the review "
             f"target changed. Re-enter them for {selected_id} before saving."
         )
-    st.session_state["criterion_detail_form_target"] = criterion_detail_target
+        st.rerun()
     criterion_detail_form_reset_notice = st.session_state.pop(
         "criterion_detail_form_reset_notice", None
     )
     if criterion_detail_form_reset_notice is not None:
         st.info(criterion_detail_form_reset_notice)
+    criterion_detail_draft_clear_notice = st.session_state.pop(
+        "criterion_detail_draft_clear_notice", None
+    )
+    if criterion_detail_draft_clear_notice is not None:
+        st.success(criterion_detail_draft_clear_notice)
+    if _criterion_detail_draft_pending():
+        st.warning(
+            "Pending criterion inputs are not part of the review, local save, or exports. "
+            "Submit them through the matching form or clear them before continuing."
+        )
+        if st.button(
+            "Clear pending criterion inputs",
+            key="clear_criterion_detail_drafts",
+        ):
+            _clear_criterion_detail_drafts()
+            st.session_state["criterion_detail_draft_clear_notice"] = (
+                "Pending criterion inputs cleared without changing the review."
+            )
+            st.rerun()
     selected_criterion = next(
         criterion for criterion in bundle.criteria if criterion.criterion_id == selected_id
     )
@@ -871,14 +917,6 @@ else:
             for limitation in item.limitations:
                 st.caption(f"Limitation: {limitation}")
 
-    if st.session_state.pop("runtime_evidence_form_reset_pending", False):
-        st.session_state["runtime_artifact_reference"] = ""
-        st.session_state["runtime_scenario"] = ""
-        st.session_state["runtime_environment"] = ""
-        st.session_state["runtime_result"] = ""
-        st.session_state["runtime_reviewer"] = ""
-        st.session_state["runtime_limitations"] = ""
-        st.session_state["runtime_evidence_level"] = EvidenceLevel.E3
     runtime_evidence_save_notice = st.session_state.pop(
         "runtime_evidence_save_notice", None
     )
@@ -983,10 +1021,6 @@ else:
             f"({item.environment}: {item.result}; {item.evidence_level.value})"
         )
 
-    if st.session_state.pop("resolution_form_reset_pending", False):
-        st.session_state["resolution_decision"] = None
-        st.session_state["resolution_note"] = ""
-        st.session_state.pop("manual_evidence_level", None)
     resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
 
     st.markdown(
@@ -1154,27 +1188,44 @@ else:
     st.header("5 · Summary & Export")
     review_save_notice = st.session_state.pop("review_save_notice", None)
     review_matches_local_save = bool(
-        review_state is not None and _review_matches_local_save(review_state)
+        review_state is not None
+        and _review_matches_local_save(review_state)
+        and not has_pending_criterion_detail_draft
     )
     if review_state is not None:
         st.caption(
             "Current review ID — save this review before using the ID in a future session."
         )
         st.code(review_state.review.review_id, language=None)
-        if review_matches_local_save:
+        if has_pending_criterion_detail_draft:
+            st.caption(
+                "Pending criterion-detail inputs are not saved or exported. Submit or clear "
+                "them before relying on this review ID."
+            )
+        elif review_matches_local_save:
             st.caption("Saved locally — current review matches the last local save.")
         else:
             st.caption("Unsaved changes — save locally before relying on this review ID.")
     if review_state is not None and not review_store_available:
+        export_availability = (
+            "exports remain unavailable until pending criterion inputs are submitted or "
+            "cleared."
+            if has_pending_criterion_detail_draft
+            else "exports remain available."
+        )
         st.warning(
             "Local saving is unavailable. The current review remains open as unsaved work, "
-            "and exports remain available. Verify that the ScopeProof review directory is a "
+            f"and {export_availability} Verify that the ScopeProof review directory is a "
             "regular local directory; ScopeProof will recheck it on the next interaction."
         )
     if review_state is not None and st.button(
         "Save local review",
         key="save_review",
-        disabled=review_matches_local_save or not review_store_available,
+        disabled=(
+            review_matches_local_save
+            or has_pending_criterion_detail_draft
+            or not review_store_available
+        ),
     ):
         try:
             review_store.save(review_state)
@@ -1219,6 +1270,7 @@ else:
             markdown_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.md",
             mime="text/markdown",
+            disabled=has_pending_criterion_detail_draft,
         )
     with json_column:
         st.download_button(
@@ -1226,6 +1278,7 @@ else:
             json_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.json",
             mime="application/json",
+            disabled=has_pending_criterion_detail_draft,
         )
     with csv_column:
         st.download_button(
@@ -1233,6 +1286,7 @@ else:
             csv_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.csv",
             mime="text/csv",
+            disabled=has_pending_criterion_detail_draft,
         )
 
 st.divider()
