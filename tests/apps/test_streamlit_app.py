@@ -601,6 +601,53 @@ def test_analysis_transition_failure_preserves_retryable_state_without_raw_detai
     assert "Complete — Analysis generated" not in sidebar_text
 
 
+@pytest.mark.parametrize("transition_name", ["revise_criteria", "confirm_criteria"])
+def test_criteria_confirmation_failure_preserves_pending_edit_without_raw_details(
+    transition_name: str,
+) -> None:
+    app = analyzed_demo(new_app())
+    edited_text = "User can export the safely revised research list as CSV"
+    app = app.text_input(key="criterion_text_AC-01").set_value(edited_text).run()
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    criteria = list(app.session_state["criteria"])
+    bundle = app.session_state["bundle"].model_copy(deep=True)
+    raw_error = f"invalid criteria transition at /private/secret/{transition_name}.json"
+
+    with patch(
+        f"scopeproof_core.reviews.lifecycle.{transition_name}",
+        side_effect=ValueError(raw_error),
+    ):
+        app = app.button(key="confirm_criteria").click().run()
+
+    recovery = (
+        "Criteria could not be confirmed. The current review remains unchanged. Verify the "
+        "edited criteria and try again."
+    )
+    assert recovery in [item.value for item in app.error]
+    assert not app.exception
+    rendered = "\n".join(
+        item.value
+        for item in [
+            *app.error,
+            *app.warning,
+            *app.info,
+            *app.success,
+            *app.caption,
+            *app.markdown,
+            *app.code,
+        ]
+    )
+    assert raw_error not in rendered
+    assert "/private/secret/" not in rendered
+    assert app.session_state["review_state"] == review_state
+    assert app.session_state["criteria"] == criteria
+    assert app.session_state["bundle"] == bundle
+    assert app.session_state["criteria_confirmed"] is True
+    assert app.text_input(key="criterion_text_AC-01").value == edited_text
+    assert app.button(key="confirm_criteria").disabled is False
+    assert app.button(key="run_analysis").disabled is True
+
+
 @pytest.mark.parametrize("text", ["", "   ", "\t\n"])
 def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: str) -> None:
     app = analyzed_demo(new_app())
