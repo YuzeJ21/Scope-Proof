@@ -28,6 +28,8 @@ from scopeproof_core.storage.json_store import (
     default_local_review_directory,
 )
 
+_MISSING_RECORD_VERSION = object()
+
 
 def review_state():
     bundle = build_demo_review()
@@ -511,11 +513,31 @@ def test_head_change_is_reported_without_mutating_old_evidence(tmp_path: Path) -
     assert state.bundle.review.head_sha == "head-demo-002"
 
 
-def test_unknown_record_version_is_rejected(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "record_version",
+    [
+        pytest.param(999, id="unknown-integer"),
+        pytest.param(True, id="true"),
+        pytest.param(False, id="false"),
+        pytest.param(1.0, id="float-one"),
+        pytest.param(2.0, id="float-two"),
+        pytest.param("1", id="string-one"),
+        pytest.param("2", id="string-two"),
+        pytest.param(None, id="null"),
+        pytest.param(_MISSING_RECORD_VERSION, id="missing"),
+    ],
+)
+def test_unsupported_or_coercive_record_version_is_rejected(
+    record_version: object,
+    tmp_path: Path,
+) -> None:
     store = JsonReviewStore(tmp_path)
     path = store.save(review_state())
     payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["record_version"] = 999
+    if record_version is _MISSING_RECORD_VERSION:
+        payload.pop("record_version")
+    else:
+        payload["record_version"] = record_version
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(UnsupportedRecordVersion):

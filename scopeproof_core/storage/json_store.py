@@ -111,7 +111,10 @@ class JsonReviewStore:
         """Load a known record format and validate all nested models."""
         payload = json.loads(self._existing_record_path(review_id).read_text(encoding="utf-8"))
         record_version = payload.get("record_version")
-        if record_version not in _SUPPORTED_RECORD_VERSIONS:
+        if (
+            type(record_version) is not int
+            or record_version not in _SUPPORTED_RECORD_VERSIONS
+        ):
             raise UnsupportedRecordVersion(
                 f"Unsupported review record version {record_version!r}"
             )
