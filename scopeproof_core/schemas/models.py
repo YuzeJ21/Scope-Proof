@@ -608,4 +608,18 @@ class ReviewState(BaseModel):
     def validate_active_review_identity(self) -> ReviewState:
         if self.bundle is not None and self.bundle.review != self.review:
             raise ValueError("active bundle review must match lifecycle review")
+        if self.review.criteria_confirmed != self.criteria_revision.confirmed:
+            raise ValueError("criteria confirmation must match the active revision")
+        if self.bundle is not None and not self.criteria_revision.confirmed:
+            raise ValueError("active bundle requires a confirmed criteria revision")
+        if (
+            self.bundle is not None
+            and self.bundle.criteria != self.criteria_revision.criteria
+        ):
+            raise ValueError("active bundle criteria must match the active revision")
+        if (
+            self.bundle is not None
+            and self.bundle.source_text != self.criteria_revision.source_text
+        ):
+            raise ValueError("active bundle source must match the active revision")
         return self

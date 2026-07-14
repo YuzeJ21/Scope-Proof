@@ -32,14 +32,19 @@ def _validated_state(state: ReviewState) -> ReviewState:
 
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
     """Initialize lifecycle state from an already validated analysis bundle."""
+    active_bundle = bundle.model_copy(deep=True)
     revision = CriteriaRevision(
         number=1,
-        criteria=bundle.criteria,
+        criteria=[criterion.model_copy(deep=True) for criterion in bundle.criteria],
         source_text=bundle.source_text,
         confirmed=bundle.review.criteria_confirmed,
         confirmed_at=datetime.now(UTC) if bundle.review.criteria_confirmed else None,
     )
-    return ReviewState(review=bundle.review, criteria_revision=revision, bundle=bundle)
+    return ReviewState(
+        review=bundle.review.model_copy(deep=True),
+        criteria_revision=revision,
+        bundle=active_bundle,
+    )
 
 
 def revise_criteria(
