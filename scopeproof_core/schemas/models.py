@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 from scopeproof_core.version import __version__
 
 RULESET_VERSION = "1.0.0"
+GITHUB_REPOSITORY_PATTERN = r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$"
 
 
 class StringEnum(StrEnum):
@@ -110,7 +111,7 @@ class ActionValidationRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    repository: str = Field(pattern=r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$")
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
     requirements_base_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     non_fork_pr_url: str = Field(
         pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/pull/\d+$"
@@ -259,7 +260,7 @@ class RetrievedFile(BaseModel):
 
 
 class PullRequestSnapshot(BaseModel):
-    repository: str = Field(pattern=r"^[^/]+/[^/]+$")
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
     pr_number: int = Field(gt=0)
     title: str
     description: str = ""
@@ -274,6 +275,13 @@ class PullRequestSnapshot(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     skipped_files: list[str] = Field(default_factory=list)
 
+    @field_validator("base_sha", "head_sha")
+    @classmethod
+    def require_non_blank_review_identity(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("review identity must contain non-whitespace text")
+        return value
+
     @model_validator(mode="after")
     def limitations_require_noncomplete_ingestion(self) -> PullRequestSnapshot:
         if self.ingestion_state is IngestionState.COMPLETE and (
@@ -285,7 +293,7 @@ class PullRequestSnapshot(BaseModel):
 
 class Review(BaseModel):
     review_id: str = Field(default_factory=lambda: str(uuid4()))
-    repository: str = Field(pattern=r"^[^/]+/[^/]+$")
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
     pr_number: int = Field(gt=0)
     base_sha: str = Field(min_length=1)
     head_sha: str = Field(min_length=1)
@@ -298,6 +306,13 @@ class Review(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tool_version: str = Field(default_factory=lambda: __version__)
     ruleset_version: str = RULESET_VERSION
+
+    @field_validator("base_sha", "head_sha")
+    @classmethod
+    def require_non_blank_review_identity(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("review identity must contain non-whitespace text")
+        return value
 
     @model_validator(mode="after")
     def limitations_require_noncomplete_ingestion(self) -> Review:
