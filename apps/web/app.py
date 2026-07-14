@@ -595,15 +595,25 @@ else:
         disabled=bool(blank_criterion_ids),
     ):
         state: ReviewState | None = st.session_state["review_state"]
-        if state is not None:
-            state = revise_criteria(state, edited_criteria, st.session_state["source_text"])
-            state = confirm_criteria(state)
-            st.session_state["review_state"] = state
-        st.session_state["criteria"] = edited_criteria
-        st.session_state["criteria_confirmed"] = True
-        st.session_state["bundle"] = None if state is None else state.bundle
-        criteria_edits_pending = False
-        st.rerun()
+        try:
+            if state is not None:
+                state = revise_criteria(
+                    state, edited_criteria, st.session_state["source_text"]
+                )
+                state = confirm_criteria(state)
+        except ValueError:
+            st.error(
+                "Criteria could not be confirmed. The current review remains unchanged. "
+                "Verify the edited criteria and try again."
+            )
+        else:
+            if state is not None:
+                st.session_state["review_state"] = state
+            st.session_state["criteria"] = edited_criteria
+            st.session_state["criteria_confirmed"] = True
+            st.session_state["bundle"] = None if state is None else state.bundle
+            criteria_edits_pending = False
+            st.rerun()
 
 if criteria_edits_pending:
     st.warning(
