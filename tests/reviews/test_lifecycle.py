@@ -20,6 +20,7 @@ from scopeproof_core.schemas.models import (
     FindingStatus,
     GateVerdict,
     HumanDecision,
+    HumanResolution,
     ResolutionEvent,
     Review,
     ReviewBundle,
@@ -73,6 +74,46 @@ def test_new_review_state_rejects_a_non_deterministic_gate() -> None:
 
     with pytest.raises(
         ValueError, match="analysis bundle gate must match deterministic evaluation"
+    ):
+        new_review_state(bundle)
+
+
+def test_new_review_state_rejects_preloaded_human_resolutions() -> None:
+    bundle = initial_state().bundle
+    assert bundle is not None
+    bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Preloaded decision",
+        )
+    ]
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match="initial analysis bundle must not contain human resolutions"
+    ):
+        new_review_state(bundle)
+
+
+def test_new_review_state_rejects_preloaded_final_acceptance() -> None:
+    bundle = initial_state().bundle
+    assert bundle is not None
+    bundle.review.final_acceptance = True
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match="initial analysis bundle must not contain final acceptance"
     ):
         new_review_state(bundle)
 
