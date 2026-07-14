@@ -314,6 +314,30 @@ class EvidenceItem(BaseModel):
     relevance_score: float = Field(ge=0, le=1)
     limitations: list[str] = Field(default_factory=list)
 
+    @field_validator(
+        "evidence_id",
+        "criterion_id",
+        "file_path",
+        "commit_sha",
+        "permalink",
+        "excerpt",
+        "matching_rule",
+        "relevance_reason",
+        mode="before",
+    )
+    @classmethod
+    def require_non_blank_candidate_context(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must contain non-whitespace text")
+        return value
+
+    @field_validator("limitations")
+    @classmethod
+    def require_non_blank_limitations(cls, value: list[str]) -> list[str]:
+        if any(not limitation.strip() for limitation in value):
+            raise ValueError("limitations must contain non-whitespace text")
+        return value
+
     @model_validator(mode="after")
     def validate_line_range(self) -> EvidenceItem:
         if self.line_end < self.line_start:
