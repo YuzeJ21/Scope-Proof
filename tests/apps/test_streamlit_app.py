@@ -5,7 +5,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.demo import load_demo_snapshot
-from scopeproof_core.schemas.models import EvidenceLevel, GateVerdict, HumanDecision
+from scopeproof_core.schemas.models import EvidenceLevel, GateVerdict, HumanDecision, Priority
 
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
 
@@ -159,6 +159,53 @@ def test_sidebar_reports_analysis_and_review_availability() -> None:
     sidebar_text = "\n".join(markdown.value for markdown in app.sidebar.markdown)
     assert "Complete — Analysis generated" in sidebar_text
     assert "Complete — Review and export available" in sidebar_text
+
+
+def test_pending_criterion_text_edit_requires_reconfirmation_before_analysis() -> None:
+    app = analyzed_demo(new_app())
+    confirmed_text = app.session_state["criteria"][0].text
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Changed visible criterion"
+    ).run()
+
+    assert app.text_input(key="criterion_text_AC-01").value == "Changed visible criterion"
+    assert app.session_state["criteria"][0].text == confirmed_text
+    assert app.session_state["bundle"].criteria[0].text == confirmed_text
+    assert app.button(key="run_analysis").disabled is True
+    assert (
+        "Criteria edits are pending confirmation. Visible evidence and verdict still use "
+        "the last confirmed criteria. Confirm the updated set before rerunning analysis."
+    ) in [item.value for item in app.warning]
+    sidebar_text = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Next — Confirm updated criteria" in sidebar_text
+    assert "Complete — Criteria confirmed" not in sidebar_text
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert app.session_state["criteria"][0].text == "Changed visible criterion"
+    assert app.session_state["criteria_confirmed"] is True
+    assert app.session_state["review_state"].bundle is None
+    assert app.session_state["bundle"] is None
+    assert app.button(key="run_analysis").disabled is False
+    sidebar_text = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Complete — Criteria confirmed" in sidebar_text
+    assert "Next — Run deterministic analysis" in sidebar_text
+
+
+def test_pending_criterion_priority_edit_uses_same_confirmation_boundary() -> None:
+    app = analyzed_demo(new_app())
+
+    app = app.selectbox(key="criterion_priority_AC-01").set_value(
+        Priority.SHOULD_HAVE
+    ).run()
+
+    assert app.session_state["criteria"][0].priority is Priority.MUST_HAVE
+    assert app.session_state["bundle"].criteria[0].priority is Priority.MUST_HAVE
+    assert app.button(key="run_analysis").disabled is True
+    assert "Next — Confirm updated criteria" in "\n".join(
+        item.value for item in app.sidebar.markdown
+    )
 
 
 def test_demo_flow_reaches_blocked_summary() -> None:

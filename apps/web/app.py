@@ -329,6 +329,8 @@ st.caption(
 
 st.header("2 · Confirm Criteria")
 criteria: list[Criterion] = st.session_state["criteria"]
+edited_criteria = criteria
+criteria_edits_pending = False
 if not criteria:
     st.info("Load the demo or prepare at least one criterion to continue.")
 else:
@@ -430,6 +432,7 @@ else:
     warnings = validate_criteria(edited_criteria)
     for warning in warnings:
         st.warning(f"{warning.criterion_id}: {warning.message}")
+    criteria_edits_pending = edited_criteria != criteria
     if st.button(
         "Confirm criteria",
         key="confirm_criteria",
@@ -443,8 +446,14 @@ else:
         st.session_state["criteria"] = edited_criteria
         st.session_state["criteria_confirmed"] = True
         st.session_state["bundle"] = None if state is None else state.bundle
+        criteria_edits_pending = False
 
-if st.session_state["criteria_confirmed"]:
+if criteria_edits_pending:
+    st.warning(
+        "Criteria edits are pending confirmation. Visible evidence and verdict still use "
+        "the last confirmed criteria. Confirm the updated set before rerunning analysis."
+    )
+elif st.session_state["criteria_confirmed"]:
     st.success("Criteria confirmed by the reviewer.")
 else:
     st.caption("Analysis remains locked until the criterion set is explicitly confirmed.")
@@ -453,6 +462,7 @@ analysis_disabled = not (
     st.session_state["snapshot"] is not None
     and st.session_state["criteria_confirmed"]
     and bool(st.session_state["criteria"])
+    and not criteria_edits_pending
 )
 if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis_disabled):
     bundle = _analyze()
@@ -913,7 +923,9 @@ st.caption(
 
 has_source = st.session_state["snapshot"] is not None
 has_criteria = bool(st.session_state["criteria"])
-criteria_are_confirmed = st.session_state["criteria_confirmed"]
+criteria_are_confirmed = (
+    st.session_state["criteria_confirmed"] and not criteria_edits_pending
+)
 has_analysis = bundle is not None
 
 with st.sidebar:
@@ -933,9 +945,13 @@ with st.sidebar:
         else "Locked — Prepare at least one criterion"
     )
     st.markdown(
-        "Complete — Criteria confirmed"
-        if criteria_are_confirmed
-        else ("Next — Confirm criteria" if has_criteria else "Locked — Confirm criteria")
+        "Next — Confirm updated criteria"
+        if criteria_edits_pending
+        else (
+            "Complete — Criteria confirmed"
+            if criteria_are_confirmed
+            else ("Next — Confirm criteria" if has_criteria else "Locked — Confirm criteria")
+        )
     )
     st.markdown(
         "Complete — Analysis generated"
