@@ -10,6 +10,7 @@ from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
+    UnsafeReviewStore,
     UnsupportedRecordVersion,
     default_local_review_directory,
 )
@@ -52,6 +53,41 @@ def test_list_review_ids_is_sorted_bounded_and_does_not_parse_records(
     (tmp_path / "linked-review.json").symlink_to(tmp_path / "a-review.json")
 
     assert store.list_review_ids() == ["a-review", "z-review"]
+
+
+def test_list_review_ids_rejects_a_symlinked_store_root(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "outside-review.json").write_text("{}", encoding="utf-8")
+    store_root = tmp_path / "reviews"
+    store_root.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(UnsafeReviewStore, match="store directory must not be a symbolic link"):
+        JsonReviewStore(store_root).list_review_ids()
+
+
+def test_load_rejects_a_symlinked_store_root(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_store = JsonReviewStore(outside)
+    outside_store.save(review_state())
+    store_root = tmp_path / "reviews"
+    store_root.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(UnsafeReviewStore, match="store directory must not be a symbolic link"):
+        JsonReviewStore(store_root).load("review-1")
+
+
+def test_save_rejects_a_symlinked_store_root(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    store_root = tmp_path / "reviews"
+    store_root.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(UnsafeReviewStore, match="store directory must not be a symbolic link"):
+        JsonReviewStore(store_root).save(review_state())
+
+    assert list(outside.iterdir()) == []
 
 
 def test_head_change_is_reported_without_mutating_old_evidence(tmp_path: Path) -> None:

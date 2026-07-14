@@ -49,6 +49,7 @@ from scopeproof_core.schemas.models import (
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
+    UnsafeReviewStore,
     UnsupportedRecordVersion,
     default_local_review_directory,
 )
@@ -204,9 +205,21 @@ replacement_blocked = has_unsaved_review and not replace_unsaved_review_confirme
 
 storage_directory = default_local_review_directory()
 review_store = JsonReviewStore(Path(storage_directory))
-with st.expander("Reopen saved review", expanded=False):
+try:
     saved_review_ids = review_store.list_review_ids()
-    if saved_review_ids:
+except (OSError, UnsafeReviewStore):
+    saved_review_ids = []
+    review_store_available = False
+else:
+    review_store_available = True
+with st.expander("Reopen saved review", expanded=False):
+    if not review_store_available:
+        reopen_id = ""
+        st.error(
+            "Local review storage is unavailable. Verify that the ScopeProof review directory "
+            "is a regular local directory."
+        )
+    elif saved_review_ids:
         reopen_id = st.selectbox(
             "Saved review ID",
             options=saved_review_ids,
@@ -225,7 +238,7 @@ with st.expander("Reopen saved review", expanded=False):
     if st.button(
         "Reopen local review",
         key="reopen_review",
-        disabled=not reopen_id or replacement_blocked,
+        disabled=not reopen_id or replacement_blocked or not review_store_available,
     ):
         try:
             reopened_state = review_store.load(reopen_id.strip())
@@ -906,7 +919,7 @@ else:
     if review_state is not None and st.button(
         "Save local review",
         key="save_review",
-        disabled=review_matches_local_save,
+        disabled=review_matches_local_save or not review_store_available,
     ):
         review_store.save(review_state)
         st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(
