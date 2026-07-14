@@ -978,6 +978,27 @@ def test_runtime_evidence_save_requires_all_required_fields() -> None:
     assert app.button(key="save_runtime_evidence").disabled is False
 
 
+def test_runtime_evidence_fields_identify_required_and_optional_status() -> None:
+    app = analyzed_demo(new_app())
+
+    assert app.text_input(key="runtime_artifact_reference").label == (
+        "Artifact or URL (required)"
+    )
+    assert app.text_area(key="runtime_scenario").label == "Runtime scenario (required)"
+    assert app.text_input(key="runtime_environment").label == "Environment (required)"
+    assert app.text_input(key="runtime_result").label == "Observed result (required)"
+    assert app.text_input(key="runtime_reviewer").label == "Runtime reviewer (required)"
+    assert app.text_area(key="runtime_limitations").label == (
+        "Runtime limitations (optional)"
+    )
+    assert app.button(key="save_runtime_evidence").disabled is True
+    assert (
+        "This records a review-level acceptance event. It does not resolve individual criteria "
+        "or override the deterministic gate. Review every criterion and its evidence before "
+        "recording final acceptance."
+    ) in [caption.value for caption in app.caption]
+
+
 def test_runtime_evidence_prerequisite_guidance_is_visible() -> None:
     app = analyzed_demo(new_app())
     caption_text = "\n".join(caption.value for caption in app.caption)

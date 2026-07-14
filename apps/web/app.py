@@ -671,12 +671,24 @@ else:
         "Record a human-supplied observation only. ScopeProof does not run PR code "
         "or infer runtime results."
     )
-    runtime_artifact = st.text_input("Artifact or URL", key="runtime_artifact_reference")
-    runtime_scenario = st.text_area("Runtime scenario", key="runtime_scenario")
-    runtime_environment = st.text_input("Environment", key="runtime_environment")
-    runtime_result = st.text_input("Observed result", key="runtime_result")
-    runtime_reviewer = st.text_input("Runtime reviewer", key="runtime_reviewer")
-    runtime_limitations = st.text_area("Runtime limitations", key="runtime_limitations")
+    runtime_artifact = st.text_input(
+        "Artifact or URL (required)", key="runtime_artifact_reference"
+    )
+    runtime_scenario = st.text_area(
+        "Runtime scenario (required)", key="runtime_scenario"
+    )
+    runtime_environment = st.text_input(
+        "Environment (required)", key="runtime_environment"
+    )
+    runtime_result = st.text_input(
+        "Observed result (required)", key="runtime_result"
+    )
+    runtime_reviewer = st.text_input(
+        "Runtime reviewer (required)", key="runtime_reviewer"
+    )
+    runtime_limitations = st.text_area(
+        "Runtime limitations (optional)", key="runtime_limitations"
+    )
     runtime_level = st.selectbox(
         "Runtime evidence level",
         options=[EvidenceLevel.E3, EvidenceLevel.E4],
