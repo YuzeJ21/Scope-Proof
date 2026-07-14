@@ -18,9 +18,9 @@ from scopeproof_core.storage.json_store import (
 
 
 def review_state():
-    state = new_review_state(build_demo_review())
-    state.review.review_id = "review-1"
-    return state
+    bundle = build_demo_review()
+    bundle.review.review_id = "review-1"
+    return new_review_state(bundle)
 
 
 def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
