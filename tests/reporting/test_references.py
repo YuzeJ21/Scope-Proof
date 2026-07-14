@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from markdown_it import MarkdownIt
 
 from scopeproof_core.reporting.references import (
     is_linkable_artifact_reference,
@@ -36,19 +35,16 @@ def test_inert_markdown_label_renders_as_the_exact_supplied_text() -> None:
     reference = r"artifact-&copy;_[run]*`result`\path"
 
     fragment = render_artifact_reference_markdown(reference)
-    children = MarkdownIt().parseInline(fragment)[0].children or []
 
-    assert [(token.type, token.content) for token in children] == [("text", reference)]
+    assert fragment == r"artifact-&amp;copy;\_\[run\]\*\`result\`\\path"
 
 
 def test_escaped_https_markdown_preserves_label_and_navigation_semantics() -> None:
     reference = "https://example.test/path\\*name?label=&copy;"
 
     fragment = render_artifact_reference_markdown(reference)
-    children = MarkdownIt().parseInline(fragment)[0].children or []
 
-    assert [token.type for token in children] == ["link_open", "text", "link_close"]
-    assert children[1].content == reference
-    assert children[0].attrs["href"] == "https://example.test/path%5C*name?label=&copy;"
-    assert "&amp;copy;" in fragment
-    assert "%5C" in fragment
+    assert fragment == (
+        r"[https://example.test/path\\\*name?label=&amp;copy;]"
+        r"(<https://example.test/path%5C*name?label=&amp;copy;>)"
+    )
