@@ -87,6 +87,10 @@ class JsonReviewStore:
             and _REVIEW_ID.fullmatch(candidate.stem)
         )
 
+    def delete(self, review_id: str) -> None:
+        """Delete one exact safe local record without parsing its contents."""
+        self._existing_record_path(review_id).unlink()
+
     def save(self, state: ReviewState) -> Path:
         """Atomically save a versioned record without accepting credential fields."""
         validated = validated_review_state(state)

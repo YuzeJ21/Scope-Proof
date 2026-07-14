@@ -31,9 +31,9 @@ from scopeproof_core.storage.json_store import (
 _MISSING_RECORD_VERSION = object()
 
 
-def review_state():
+def review_state(review_id: str = "review-1"):
     bundle = build_demo_review()
-    bundle.review.review_id = "review-1"
+    bundle.review.review_id = review_id
     return new_review_state(bundle)
 
 
@@ -428,6 +428,120 @@ def test_list_review_ids_is_sorted_bounded_and_does_not_parse_records(
     (tmp_path / "linked-review.json").symlink_to(tmp_path / "a-review.json")
 
     assert store.list_review_ids() == ["a-review", "z-review"]
+
+
+def test_delete_removes_only_the_exact_review_and_preserves_its_neighbor(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    first_state = review_state("review-1")
+    second_state = review_state("review-2")
+    store.save(first_state)
+    store.save(second_state)
+
+    store.delete("review-1")
+
+    assert not (tmp_path / "review-1.json").exists()
+    assert store.load("review-2") == second_state
+
+
+def test_delete_removes_a_corrupt_regular_record_without_parsing_it(
+    tmp_path: Path,
+) -> None:
+    corrupt_record = tmp_path / "corrupt.json"
+    corrupt_record.write_text("not valid JSON", encoding="utf-8")
+
+    JsonReviewStore(tmp_path).delete("corrupt")
+
+    assert not corrupt_record.exists()
+
+
+@pytest.mark.parametrize("review_id", ["../review-1", "review-1.json", "/tmp/review-1"])
+def test_delete_rejects_invalid_review_ids_without_changing_any_files(
+    review_id: str,
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    first_path = store.save(review_state("review-1"))
+    second_path = store.save(review_state("review-2"))
+    before = {path.name: path.read_bytes() for path in (first_path, second_path)}
+
+    with pytest.raises(ValueError):
+        store.delete(review_id)
+
+    assert {path.name: path.read_bytes() for path in (first_path, second_path)} == before
+
+
+def test_delete_missing_record_raises_without_changing_its_neighbor(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    neighbor = store.save(review_state("review-2"))
+    neighbor_contents = neighbor.read_bytes()
+
+    with pytest.raises(FileNotFoundError):
+        store.delete("missing")
+
+    assert neighbor.read_bytes() == neighbor_contents
+
+
+def test_delete_rejects_a_symlinked_store_root_without_changing_external_files(
+    tmp_path: Path,
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_store = JsonReviewStore(outside)
+    target = outside_store.save(review_state("review-1"))
+    neighbor = outside_store.save(review_state("review-2"))
+    external = outside / "external.txt"
+    external.write_text("keep external", encoding="utf-8")
+    before = {path.name: path.read_bytes() for path in (target, neighbor, external)}
+    store_root = tmp_path / "reviews"
+    store_root.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(UnsafeReviewStore, match="store directory must not be a symbolic link"):
+        JsonReviewStore(store_root).delete("review-1")
+
+    assert store_root.is_symlink()
+    assert {path.name: path.read_bytes() for path in (target, neighbor, external)} == before
+
+
+def test_delete_rejects_a_record_symlink_without_changing_any_files(
+    tmp_path: Path,
+) -> None:
+    store_root = tmp_path / "reviews"
+    store_root.mkdir()
+    store = JsonReviewStore(store_root)
+    external = tmp_path / "external-review.json"
+    external.write_text("keep external", encoding="utf-8")
+    target = store_root / "review-1.json"
+    target.symlink_to(external)
+    neighbor = store.save(review_state("review-2"))
+    neighbor_contents = neighbor.read_bytes()
+
+    with pytest.raises(FileNotFoundError):
+        store.delete("review-1")
+
+    assert target.is_symlink()
+    assert neighbor.read_bytes() == neighbor_contents
+    assert external.read_text(encoding="utf-8") == "keep external"
+
+
+def test_delete_rejects_a_directory_named_like_a_record_without_changing_files(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    target = tmp_path / "review-1.json"
+    target.mkdir()
+    external = target / "external.txt"
+    external.write_text("keep external", encoding="utf-8")
+    neighbor = store.save(review_state("review-2"))
+    neighbor_contents = neighbor.read_bytes()
+
+    with pytest.raises(FileNotFoundError):
+        store.delete("review-1")
+
+    assert target.is_dir()
+    assert neighbor.read_bytes() == neighbor_contents
+    assert external.read_text(encoding="utf-8") == "keep external"
 
 
 def test_list_review_ids_rejects_a_symlinked_store_root(tmp_path: Path) -> None:
