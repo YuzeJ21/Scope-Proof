@@ -112,17 +112,20 @@ class JsonReviewStore:
             raise UnsafeReviewStore("review store path must be a directory") from None
         try:
             record_name = f"{validated_id}.json"
-            try:
-                record_status = os.stat(
-                    record_name,
-                    dir_fd=directory_fd,
-                    follow_symlinks=False,
+            with os.scandir(directory_fd) as entries:
+                matching_entry = next(
+                    (
+                        entry
+                        for entry in entries
+                        if entry.name == record_name
+                        and entry.is_file(follow_symlinks=False)
+                        and stat.S_ISREG(entry.stat(follow_symlinks=False).st_mode)
+                    ),
+                    None,
                 )
-            except FileNotFoundError:
+            if matching_entry is None:
                 raise FileNotFoundError(validated_id) from None
-            if not stat.S_ISREG(record_status.st_mode):
-                raise FileNotFoundError(validated_id)
-            os.unlink(record_name, dir_fd=directory_fd)
+            os.unlink(matching_entry.name, dir_fd=directory_fd)
         finally:
             os.close(directory_fd)
 
