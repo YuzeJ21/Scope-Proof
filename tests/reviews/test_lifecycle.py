@@ -190,6 +190,59 @@ def test_resolution_events_preserve_history_and_latest_decision_controls_gate() 
     assert state.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
 
 
+def test_resolution_event_requires_an_active_analysis_bundle() -> None:
+    pending = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Updated requirements",
+    )
+    confirmed = confirm_criteria(pending)
+
+    with pytest.raises(
+        ValueError, match="Run a confirmed analysis before recording a resolution"
+    ):
+        append_resolution(
+            confirmed,
+            ResolutionEvent(final_acceptance=True, comment="Premature acceptance"),
+        )
+
+
+def test_resolution_event_must_reference_an_active_criterion() -> None:
+    with pytest.raises(
+        ValueError, match="resolution event must reference a criterion in the active review"
+    ):
+        append_resolution(
+            initial_state(),
+            ResolutionEvent(
+                criterion_id="AC-99",
+                decision=HumanDecision.ACCEPTED,
+                comment="Unknown criterion",
+            ),
+        )
+
+
+def test_resolution_event_is_revalidated_before_it_can_make_gate_ready() -> None:
+    state = append_resolution(
+        initial_state(),
+        ResolutionEvent(final_acceptance=True, comment="Final review complete"),
+    )
+    event = ResolutionEvent(
+        criterion_id="AC-01",
+        decision=HumanDecision.ACCEPTED,
+        comment="Reviewed candidate evidence",
+    )
+    event.claimed_evidence_level = EvidenceLevel.E4
+
+    with pytest.raises(
+        ValidationError,
+        match="claimed evidence level is reserved for manually verified decisions",
+    ):
+        append_resolution(state, event)
+
+    assert state.bundle is not None
+    assert state.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+
+
 def test_resolution_event_statuses_identify_latest_event_for_each_target() -> None:
     events = [
         ResolutionEvent(
