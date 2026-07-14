@@ -107,6 +107,32 @@ def test_evidence_permalink_is_anchored_to_head_sha_and_lines() -> None:
     )
 
 
+def test_evidence_permalink_encodes_repository_controlled_path_characters() -> None:
+    snapshot = snapshot_with_files(
+        [
+            ChangedFile(
+                path="src/export #unsafe>.py",
+                status="modified",
+                lines=[
+                    ChangedLine(
+                        change_type=LineChangeType.ADDED,
+                        line_number=42,
+                        content="def export_csv(rows):",
+                    )
+                ],
+            )
+        ]
+    )
+    criterion = Criterion(criterion_id="AC-01", text="Export CSV")
+
+    evidence = retrieve_evidence(snapshot, [criterion])
+
+    assert evidence[0].file_path == "src/export #unsafe>.py"
+    assert evidence[0].permalink == (
+        "https://github.com/acme/widget/blob/head123/src/export%20%23unsafe%3E.py#L42-L42"
+    )
+
+
 def test_ci_is_not_created_as_criterion_evidence() -> None:
     snapshot = snapshot_with_files([])
     evidence = retrieve_evidence(

@@ -2,25 +2,43 @@
 
 from __future__ import annotations
 
+import html
+import string
 from urllib.parse import urlsplit
+
+_MARKDOWN_PUNCTUATION = frozenset(set(string.punctuation) - {"&", ";"})
 
 
 def is_linkable_artifact_reference(value: str) -> bool:
     """Return whether an artifact reference is a safe absolute web URL."""
-    if any(character.isspace() for character in value) or "<" in value or ">" in value:
+    if (
+        not value.isprintable()
+        or any(character.isspace() for character in value)
+        or "<" in value
+        or ">" in value
+    ):
         return False
     try:
         parsed = urlsplit(value)
+        hostname = parsed.hostname
+        parsed_port = parsed.port
     except ValueError:
         return False
-    return parsed.scheme.lower() in {"http", "https"} and bool(parsed.netloc)
+    return (
+        parsed.scheme.lower() in {"http", "https"}
+        and bool(hostname)
+        and bool(hostname.strip("."))
+        and (parsed_port is None or parsed_port > 0)
+    )
 
 
 def _escape_markdown_text(value: str) -> str:
-    escaped = value.replace("&", "&amp;").replace("\\", "\\\\")
-    for character in ("`", "*", "_", "[", "]", "<", ">"):
-        escaped = escaped.replace(character, f"\\{character}")
-    return escaped
+    normalized = value.replace("\r", " ").replace("\n", " ")
+    escaped = html.escape(normalized, quote=False)
+    return "".join(
+        f"\\{character}" if character in _MARKDOWN_PUNCTUATION else character
+        for character in escaped
+    )
 
 
 def _escape_markdown_destination(value: str) -> str:

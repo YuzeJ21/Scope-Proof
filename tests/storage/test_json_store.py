@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from scopeproof_core.demo import build_demo_review
+from scopeproof_core.reporting.exporters import export_html, export_markdown
 from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot
 from scopeproof_core.storage.json_store import (
@@ -56,6 +57,24 @@ def test_historical_review_state_loads_without_ingestion_limitation_fields(
     assert loaded.bundle is not None
     assert loaded.bundle.review.ingestion_warnings == []
     assert loaded.bundle.review.skipped_files == []
+
+
+def test_version_one_record_with_legacy_permalink_loads_and_exports_inertly(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    legacy_permalink = "javascript:alert(1)"
+    payload["state"]["bundle"]["evidence"][0]["permalink"] = legacy_permalink
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load("review-1")
+
+    assert loaded.bundle is not None
+    assert loaded.bundle.evidence[0].permalink == legacy_permalink
+    assert f"]({legacy_permalink})" not in export_markdown(loaded)
+    assert f'href="{legacy_permalink}"' not in export_html(loaded)
 
 
 def test_list_review_ids_returns_empty_when_store_does_not_exist(tmp_path: Path) -> None:

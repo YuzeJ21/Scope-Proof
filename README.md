@@ -115,6 +115,11 @@ scopeproof export REVIEW_ID \
   --format markdown
 ```
 
+CSV exports neutralize leading spreadsheet-formula characters in scalar text cells. Fields that
+can contain multiple values (`ingestion_warnings`, `skipped_files`, `evidence_links`,
+`missing_evidence`, `runtime_artifacts`, and `runtime_result`) are JSON arrays inside their CSV
+cells so delimiters in repository or reviewer text do not destroy provenance.
+
 Anonymous public-repository access is the default. `--token` is optional and can increase GitHub's
 free rate limit, but it is not required or persisted. The CLI never comments on the pull request,
 executes its code, or converts static candidates into runtime verification.

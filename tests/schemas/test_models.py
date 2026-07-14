@@ -138,6 +138,14 @@ def test_candidate_evidence_context_allows_no_limitations() -> None:
     assert item.limitations == []
 
 
+def test_candidate_evidence_preserves_legacy_non_http_permalink_for_inert_recovery() -> None:
+    permalink = "relative/legacy-evidence"
+
+    item = EvidenceItem.model_validate(candidate_evidence_payload(permalink=permalink))
+
+    assert item.permalink == permalink
+
+
 @pytest.mark.parametrize("field", ["reason", "recommended_action"])
 @pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
 def test_finding_context_rejects_blank_required_text(field: str, blank: str) -> None:

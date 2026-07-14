@@ -113,12 +113,13 @@ def test_exports_agree_on_review_identity_verdict_and_criteria() -> None:
         export_html(bundle),
     ]
     for output in outputs:
-        assert bundle.review.review_id in output
-        assert bundle.review.base_sha in output
-        assert created_at in output
-        assert "blocked" in output.lower()
-        assert "head123" in output
-        assert "AC-01" in output
+        semantic_output = output.replace("\\", "")
+        assert bundle.review.review_id in semantic_output
+        assert bundle.review.base_sha in semantic_output
+        assert created_at in semantic_output
+        assert "blocked" in semantic_output.lower()
+        assert "head123" in semantic_output
+        assert "AC-01" in semantic_output
 
 
 def test_exports_preserve_tool_and_ruleset_provenance() -> None:
@@ -167,6 +168,84 @@ def test_exports_preserve_ingestion_limitations_and_escape_html() -> None:
     assert "src/<unsafe>" not in html_report
 
 
+def test_markdown_keeps_all_untrusted_review_text_inert() -> None:
+    bundle = example_bundle()
+    active_markdown = "![remote](https://example.invalid/pixel.png)"
+    bundle.source_text = active_markdown
+    bundle.criteria[0].text = active_markdown
+    bundle.findings[0].reason = active_markdown
+    bundle.findings[0].missing_evidence = [active_markdown]
+    bundle.findings[0].recommended_action = active_markdown
+    bundle.evidence[0].file_path = f"src/{active_markdown}.py"
+    bundle.evidence[0].excerpt = active_markdown
+    bundle.evidence[0].relevance_reason = active_markdown
+    bundle.evidence[0].limitations = [active_markdown]
+    bundle.resolutions[0].comment = active_markdown
+    bundle.runtime_evidence[0].scenario = active_markdown
+    bundle.runtime_evidence[0].environment = active_markdown
+    bundle.runtime_evidence[0].result = active_markdown
+    bundle.runtime_evidence[0].reviewer = active_markdown
+    bundle.runtime_evidence[0].limitations = [active_markdown]
+
+    report = export_markdown(bundle)
+
+    assert report.count(active_markdown) == 1
+    assert f"<code>{active_markdown}</code>" in report
+    assert r"\!\[remote\]\(" in report
+
+
+def test_markdown_neutralizes_links_html_formatting_and_autolinks() -> None:
+    bundle = example_bundle()
+    bundle.source_text = (
+        "[link](https://example.invalid/link) <img src=x> **bold** _emphasis_ "
+        "`code` ~~strike~~ https://example.invalid/plain"
+    )
+
+    report = export_markdown(bundle)
+
+    for active_syntax in (
+        "[link](https://example.invalid/link)",
+        "<img src=x>",
+        "**bold**",
+        "_emphasis_",
+        "`code`",
+        "~~strike~~",
+        "https://example.invalid/plain",
+    ):
+        assert active_syntax not in report
+
+
+def test_csv_neutralizes_formula_cells_and_serializes_lists_reversibly() -> None:
+    bundle = example_bundle()
+    bundle.review.review_id = '=HYPERLINK("https://example.invalid","review")'
+    bundle.review.base_sha = "+SUM(1,1)"
+    bundle.source_text = '-HYPERLINK("https://example.invalid","source")'
+    bundle.criteria[0].text = '@HYPERLINK("https://example.invalid","criterion")'
+    bundle.findings[0].reason = "\t=1+1"
+    bundle.findings[0].missing_evidence = ["=1+1", "literal | delimiter"]
+    bundle.findings[0].recommended_action = "\r=1+1"
+    bundle.resolutions[0].comment = "+1+1"
+    bundle.runtime_evidence[0].artifact_reference = "=1+1"
+    bundle.runtime_evidence[0].result = "@1+1"
+
+    row = next(csv.DictReader(io.StringIO(export_csv(bundle), newline="")))
+
+    for field in (
+        "review_id",
+        "base_sha",
+        "requirements_source_text",
+        "criterion",
+        "concern",
+        "reviewer_comment",
+        "recommended_action",
+    ):
+        assert row[field].startswith("'")
+        assert not row[field].startswith(("=", "+", "-", "@", "\t", "\r"))
+    assert json.loads(row["missing_evidence"]) == bundle.findings[0].missing_evidence
+    assert json.loads(row["runtime_artifacts"]) == ["=1+1"]
+    assert json.loads(row["runtime_result"]) == ["@1+1"]
+
+
 def test_exports_preserve_confirmed_requirement_source() -> None:
     bundle = example_bundle()
     bundle.source_text = "Confirmed requirement source:\nFailed export shows an error"
@@ -176,7 +255,7 @@ def test_exports_preserve_confirmed_requirement_source() -> None:
     html_report = export_html(bundle)
 
     assert json.loads(json_report)["source_text"] == bundle.source_text
-    assert "> Confirmed requirement source:" in markdown_report
+    assert "> Confirmed requirement source\\:" in markdown_report
     assert "> Failed export shows an error" in markdown_report
     csv_row = next(csv.DictReader(io.StringIO(csv_report)))
     assert csv_row["requirements_source_text"] == bundle.source_text
@@ -213,7 +292,7 @@ def test_runtime_artifact_identifiers_and_non_web_schemes_are_plain_text() -> No
         markdown_report = export_markdown(bundle)
         html_report = export_html(bundle)
 
-        assert reference in markdown_report
+        assert reference in markdown_report.replace("\\", "")
         assert f"[{reference}](" not in markdown_report
         assert reference in html_report
         assert f'href="{reference}"' not in html_report
@@ -224,8 +303,22 @@ def test_runtime_http_artifact_reference_remains_clickable() -> None:
     reference = "https://example.test/runs/7?case=(export)"
     bundle.runtime_evidence[0].artifact_reference = reference
 
-    assert f"[{reference}](<{reference}>)" in export_markdown(bundle)
+    assert f"](<{reference}>)" in export_markdown(bundle)
     assert f'<a href="{reference}">{reference}</a>' in export_html(bundle)
+
+
+def test_bypassed_unsafe_candidate_permalink_is_rendered_as_inert_text() -> None:
+    bundle = example_bundle()
+    unsafe = 'javascript:alert(1)\"><img src=x>'
+    bundle.evidence[0].permalink = unsafe
+
+    markdown = export_markdown(bundle)
+    html_report = export_html(bundle)
+
+    assert f"]({unsafe})" not in markdown
+    assert "javascript\\:alert\\(1\\)" in markdown
+    assert f'href="{unsafe}"' not in html_report
+    assert "javascript:alert(1)&quot;&gt;&lt;img src=x&gt;" in html_report
 
 
 def test_runtime_artifact_reference_stays_exact_in_json_and_csv() -> None:
@@ -235,7 +328,7 @@ def test_runtime_artifact_reference_stays_exact_in_json_and_csv() -> None:
 
     assert json.loads(export_json(bundle))["runtime_evidence"][0]["artifact_reference"] == reference
     csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
-    assert csv_row["runtime_artifacts"] == reference
+    assert json.loads(csv_row["runtime_artifacts"]) == [reference]
 
 
 def test_markdown_groups_version_provenance_before_criteria_revision() -> None:
@@ -287,7 +380,10 @@ def test_human_readable_exports_complete_the_evidence_matrix_contract() -> None:
     html_report = export_html(bundle)
 
     assert "| Confidence | Count | Concern | Human decision |" in markdown
-    assert "| medium | 1 | Only the export path was found. | change_required |" in markdown
+    assert (
+        "| medium | 1 | Only the export path was found. | change_required |"
+        in markdown.replace("\\", "")
+    )
     assert "<th>Confidence</th><th>Count</th><th>Concern</th>" in html_report
     assert "<th>Human resolution</th>" in html_report
     assert "<td>medium</td><td>1</td>" in html_report
@@ -317,9 +413,9 @@ def test_markdown_keeps_gate_reasons_and_adds_recovery_guidance() -> None:
     markdown = export_markdown(example_bundle())
 
     assert "## Gate Reasons" in markdown
-    assert "`blocking_criteria`" in markdown
+    assert "<code>blocking_criteria</code>" in markdown
     assert "## What To Do Next" in markdown
-    assert "blocking criteria: AC-01" in markdown
+    assert "blocking criteria: AC-01" in markdown.replace("\\", "")
 
 
 def test_html_keeps_gate_reasons_and_adds_escaped_recovery_guidance() -> None:
@@ -382,5 +478,5 @@ def test_exports_never_include_token_shaped_secret() -> None:
 def test_csv_exposes_runtime_evidence_separately_from_static_candidates() -> None:
     row = next(csv.DictReader(io.StringIO(export_csv(example_bundle()))))
 
-    assert row["runtime_artifacts"] == "https://example.test/runs/7"
-    assert row["runtime_result"] == "passed"
+    assert json.loads(row["runtime_artifacts"]) == ["https://example.test/runs/7"]
+    assert json.loads(row["runtime_result"]) == ["passed"]
