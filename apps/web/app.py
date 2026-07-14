@@ -181,6 +181,10 @@ def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
 
 
+def _render_sidebar_step(text: str, anchor: str | None = None) -> None:
+    st.markdown(f"[{text}]({anchor})" if anchor is not None else text)
+
+
 def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
     changed_file_count = len(snapshot.files)
     changed_file_label = "file" if changed_file_count == 1 else "files"
@@ -1142,42 +1146,37 @@ has_analysis = bundle is not None
 
 with st.sidebar:
     st.header("Review status")
-    st.markdown(
-        "Complete — Source loaded"
-        if has_source
-        else (
-            "Next — Reload source to rerun analysis"
-            if has_analysis
-            else "Next — Load a public PR or demo"
+    if has_source:
+        _render_sidebar_step("Complete — Source loaded", "#1-start-review")
+    elif has_analysis:
+        _render_sidebar_step(
+            "Next — Reload source to rerun analysis", "#1-start-review"
         )
-    )
-    st.markdown(
-        "Complete — Criteria prepared"
-        if has_criteria
-        else "Locked — Prepare at least one criterion"
-    )
-    st.markdown(
-        "Next — Confirm updated criteria"
-        if criteria_edits_pending
-        else (
-            "Complete — Criteria confirmed"
-            if criteria_are_confirmed
-            else ("Next — Confirm criteria" if has_criteria else "Locked — Confirm criteria")
+    else:
+        _render_sidebar_step("Next — Load a public PR or demo", "#1-start-review")
+    if has_criteria:
+        _render_sidebar_step("Complete — Criteria prepared", "#2-confirm-criteria")
+    else:
+        _render_sidebar_step("Locked — Prepare at least one criterion")
+    if criteria_edits_pending:
+        _render_sidebar_step("Next — Confirm updated criteria", "#2-confirm-criteria")
+    elif criteria_are_confirmed:
+        _render_sidebar_step("Complete — Criteria confirmed", "#2-confirm-criteria")
+    elif has_criteria:
+        _render_sidebar_step("Next — Confirm criteria", "#2-confirm-criteria")
+    else:
+        _render_sidebar_step("Locked — Confirm criteria")
+    if has_analysis:
+        _render_sidebar_step("Complete — Analysis generated", "#3-evidence-matrix")
+    elif criteria_are_confirmed:
+        _render_sidebar_step(
+            "Next — Run deterministic analysis", "#run-deterministic-analysis"
         )
-    )
-    st.markdown(
-        "Complete — Analysis generated"
-        if has_analysis
-        else (
-            "Next — Run deterministic analysis"
-            if criteria_are_confirmed
-            else "Locked — Run deterministic analysis"
-        )
-    )
-    st.markdown(
-        "Complete — Review and export available"
-        if has_analysis
-        else "Locked — Review and export"
-    )
+    else:
+        _render_sidebar_step("Locked — Run deterministic analysis")
+    if has_analysis:
+        _render_sidebar_step("Complete — Review and export available")
+    else:
+        _render_sidebar_step("Locked — Review and export")
     st.divider()
     st.caption("Ruleset 1.0.0 · local-first · public repositories only")
