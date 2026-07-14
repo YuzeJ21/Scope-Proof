@@ -25,6 +25,10 @@ class UnsupportedRecordVersion(ValueError):
     """Raised when a review record needs an unavailable migration."""
 
 
+class UnsafeReviewStore(ValueError):
+    """Raised when the configured store root is an unsafe filesystem object."""
+
+
 @dataclass(frozen=True)
 class HeadChange:
     changed: bool
@@ -37,6 +41,10 @@ class JsonReviewStore:
 
     def __init__(self, directory: Path) -> None:
         self.directory = directory
+
+    def _require_safe_directory(self) -> None:
+        if self.directory.is_symlink():
+            raise UnsafeReviewStore("review store directory must not be a symbolic link")
 
     @staticmethod
     def _validate_review_id(review_id: str) -> str:
@@ -51,6 +59,7 @@ class JsonReviewStore:
     def _existing_record_path(self, review_id: str) -> Path:
         """Return a validated regular record file without following symlinks."""
         validated_id = self._validate_review_id(review_id)
+        self._require_safe_directory()
         if not self.directory.is_dir():
             raise FileNotFoundError(validated_id)
         for candidate in self.directory.glob("*.json"):
@@ -62,6 +71,7 @@ class JsonReviewStore:
 
     def list_review_ids(self) -> list[str]:
         """Return deterministic candidate record IDs without parsing record contents."""
+        self._require_safe_directory()
         if not self.directory.is_dir():
             return []
         return sorted(
@@ -74,6 +84,7 @@ class JsonReviewStore:
 
     def save(self, state: ReviewState) -> Path:
         """Atomically save a versioned record without accepting credential fields."""
+        self._require_safe_directory()
         self.directory.mkdir(parents=True, exist_ok=True)
         target = self._path(state.review.review_id)
         payload = {
