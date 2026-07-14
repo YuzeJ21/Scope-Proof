@@ -36,10 +36,16 @@ def review_state():
 
 def attached_review_state():
     state = new_review_state(build_demo_review())
+    updated_criteria = [
+        item.model_copy(deep=True) for item in state.criteria_revision.criteria
+    ]
+    updated_criteria[0] = updated_criteria[0].model_copy(
+        update={"text": "Updated AC-01 requirement"}
+    )
     revised = confirm_criteria(
         revise_criteria(
             state,
-            state.criteria_revision.criteria,
+            updated_criteria,
             "Updated requirements",
         )
     )
@@ -84,16 +90,25 @@ def test_attached_analysis_round_trip_preserves_reanalysis_lineage(
 ) -> None:
     store = JsonReviewStore(tmp_path)
     attached = attached_review_state()
+    original = build_demo_review()
     stable_review_id = attached.review.review_id
 
     store.save(attached)
     loaded = store.load(stable_review_id)
 
+    assert loaded == attached
     assert loaded.criteria_revision.number == 2
     assert len(loaded.analysis_history) == 1
     assert loaded.review.review_id == stable_review_id
     assert loaded.bundle is not None
     assert loaded.bundle.review.review_id == stable_review_id
+    assert loaded.bundle.source_text == "Updated requirements"
+    assert loaded.bundle.criteria == loaded.criteria_revision.criteria
+    historical = loaded.analysis_history[0]
+    assert historical.source_text == original.source_text
+    assert historical.criteria == original.criteria
+    assert historical.source_text != loaded.bundle.source_text
+    assert historical.criteria != loaded.bundle.criteria
 
 
 def test_historical_review_state_loads_without_ingestion_limitation_fields(

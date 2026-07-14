@@ -35,10 +35,16 @@ def state_with_history():
 
 def attached_review_state():
     state = new_review_state(build_demo_review())
+    updated_criteria = [
+        item.model_copy(deep=True) for item in state.criteria_revision.criteria
+    ]
+    updated_criteria[0] = updated_criteria[0].model_copy(
+        update={"text": "Updated AC-01 requirement"}
+    )
     revised = confirm_criteria(
         revise_criteria(
             state,
-            state.criteria_revision.criteria,
+            updated_criteria,
             "Updated requirements",
         )
     )
@@ -86,14 +92,25 @@ def test_lifecycle_json_and_csv_preserve_review_state_without_secret() -> None:
 
 def test_lifecycle_json_preserves_attached_reanalysis_lineage() -> None:
     attached = attached_review_state()
+    original = build_demo_review()
     stable_review_id = attached.review.review_id
 
     payload = json.loads(export_json(attached))
 
+    assert payload == attached.model_dump(mode="json")
     assert payload["criteria_revision"]["number"] == 2
     assert len(payload["analysis_history"]) == 1
     assert payload["review"]["review_id"] == stable_review_id
     assert payload["bundle"]["review"]["review_id"] == stable_review_id
+    assert payload["bundle"]["source_text"] == "Updated requirements"
+    assert payload["bundle"]["criteria"] == payload["criteria_revision"]["criteria"]
+    historical = payload["analysis_history"][0]
+    assert historical["source_text"] == original.source_text
+    assert historical["criteria"] == [
+        item.model_dump(mode="json") for item in original.criteria
+    ]
+    assert historical["source_text"] != payload["bundle"]["source_text"]
+    assert historical["criteria"] != payload["bundle"]["criteria"]
 
 
 @pytest.mark.parametrize("exporter", [export_json, export_markdown])
