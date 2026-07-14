@@ -31,7 +31,16 @@ def _validated_state(state: ReviewState) -> ReviewState:
 
 
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
-    """Initialize lifecycle state from an already validated analysis bundle."""
+    """Initialize lifecycle state from a revalidated analysis bundle."""
+    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+    expected_gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+    if bundle.gate != expected_gate:
+        raise ValueError("analysis bundle gate must match deterministic evaluation")
     active_bundle = bundle.model_copy(deep=True)
     revision = CriteriaRevision(
         number=1,

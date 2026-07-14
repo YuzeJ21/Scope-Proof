@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     append_resolution,
@@ -17,7 +18,6 @@ from scopeproof_core.schemas.models import (
     EvidenceLevel,
     Finding,
     FindingStatus,
-    GateDecision,
     GateVerdict,
     HumanDecision,
     ResolutionEvent,
@@ -51,9 +51,48 @@ def initial_state():
         criteria=[criterion],
         evidence=[],
         findings=[finding],
-        gate=GateDecision(verdict=GateVerdict.NEEDS_REVIEW),
+        gate=evaluate_gate(review, [criterion], [finding], []),
     )
     return new_review_state(bundle)
+
+
+def test_new_review_state_revalidates_the_supplied_bundle() -> None:
+    bundle = initial_state().bundle
+    assert bundle is not None
+    bundle.criteria[0].text = ""
+
+    with pytest.raises(ValidationError, match="String should have at least 1 character"):
+        new_review_state(bundle)
+
+
+def test_new_review_state_rejects_a_non_deterministic_gate() -> None:
+    bundle = initial_state().bundle
+    assert bundle is not None
+    assert bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    bundle.gate = bundle.gate.model_copy(update={"verdict": GateVerdict.READY})
+
+    with pytest.raises(
+        ValueError, match="analysis bundle gate must match deterministic evaluation"
+    ):
+        new_review_state(bundle)
+
+
+def test_new_review_state_does_not_alias_the_supplied_bundle() -> None:
+    bundle = initial_state().bundle
+    assert bundle is not None
+
+    state = new_review_state(bundle)
+    bundle.review.review_id = "caller-mutation"
+    bundle.criteria[0].text = "Caller mutation"
+    bundle.source_text = "Caller mutation"
+
+    assert state.review.review_id == "review-1"
+    assert state.criteria_revision.criteria[0].text == "Export CSV"
+    assert state.criteria_revision.source_text == "Export CSV"
+    assert state.bundle is not None
+    assert state.bundle.review.review_id == "review-1"
+    assert state.bundle.criteria[0].text == "Export CSV"
+    assert state.bundle.source_text == "Export CSV"
 
 
 def test_editing_confirmed_criteria_creates_revision_and_invalidates_analysis() -> None:
