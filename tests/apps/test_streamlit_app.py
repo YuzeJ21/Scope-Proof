@@ -648,6 +648,86 @@ def test_criteria_confirmation_failure_preserves_pending_edit_without_raw_detail
     assert app.button(key="run_analysis").disabled is True
 
 
+@pytest.mark.parametrize(
+    ("operation_name", "button_key", "input_key", "input_value"),
+    [
+        (
+            "add_criterion",
+            "add_criterion_ui",
+            "new_criterion_text",
+            "Document the export format",
+        ),
+        (
+            "split_criterion",
+            "split_criterion_ui",
+            "split_criterion_text",
+            "Export CSV\nRecord analytics",
+        ),
+        ("remove_criterion", "remove_AC-01", None, None),
+        ("reorder_criteria", "move_up_AC-02", None, None),
+    ],
+)
+def test_criteria_edit_failure_preserves_review_and_retry_without_raw_details(
+    operation_name: str,
+    button_key: str,
+    input_key: str | None,
+    input_value: str | None,
+) -> None:
+    app = analyzed_demo(new_app())
+    app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
+    if input_key is not None and input_value is not None:
+        widget = (
+            app.text_area(key=input_key)
+            if input_key == "split_criterion_text"
+            else app.text_input(key=input_key)
+        )
+        app = widget.set_value(input_value).run()
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    bundle = app.session_state["bundle"].model_copy(deep=True)
+    criteria = [item.model_copy(deep=True) for item in app.session_state["criteria"]]
+    raw_error = f"invalid criteria edit at /private/secret/{operation_name}.json"
+
+    with patch(
+        f"scopeproof_core.criteria.service.{operation_name}",
+        side_effect=ValueError(raw_error),
+    ):
+        app = app.button(key=button_key).click().run()
+
+    recovery = (
+        "Criteria could not be updated. The current review remains unchanged. Verify the edit "
+        "and try again."
+    )
+    assert recovery in [item.value for item in app.error]
+    assert not app.exception
+    rendered = "\n".join(
+        item.value
+        for item in [
+            *app.error,
+            *app.warning,
+            *app.info,
+            *app.success,
+            *app.caption,
+            *app.markdown,
+            *app.code,
+        ]
+    )
+    assert raw_error not in rendered
+    assert "/private/secret/" not in rendered
+    assert app.session_state["review_state"] == review_state
+    assert app.session_state["bundle"] == bundle
+    assert app.session_state["criteria"] == criteria
+    assert app.session_state["criteria_confirmed"] is True
+    assert app.session_state["replace_unsaved_review_confirmed"] is True
+    if input_key is not None and input_value is not None:
+        widget = (
+            app.text_area(key=input_key)
+            if input_key == "split_criterion_text"
+            else app.text_input(key=input_key)
+        )
+        assert widget.value == input_value
+    assert app.button(key=button_key).disabled is False
+
+
 @pytest.mark.parametrize("text", ["", "   ", "\t\n"])
 def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: str) -> None:
     app = analyzed_demo(new_app())
