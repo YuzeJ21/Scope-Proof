@@ -166,6 +166,11 @@ revisions, evidence, findings, resolution history, and gate decision. They never
 optional GitHub token. A reopened review reports a changed head SHA rather than silently reusing
 old evidence.
 
+From the CLI, run `scopeproof list` to return the safe local review IDs in the default
+`.scopeproof/reviews` directory; add `--storage-dir PATH` only when earlier CLI commands used that
+same alternative directory. The command lists identifiers in deterministic order and does not parse review contents.
+This local inventory is not review, test, runtime, or correctness evidence.
+
 To delete one saved review in the workbench, select its listed ID, then check
 `Permanently delete the selected local review`. From the CLI, run
 `scopeproof delete REVIEW_ID`; add `--storage-dir PATH` only for a review saved

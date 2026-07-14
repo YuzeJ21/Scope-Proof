@@ -26,6 +26,7 @@ from scopeproof_core.schemas.models import (
     PullRequestSnapshot,
     Review,
     ReviewBundle,
+    SavedReviewListing,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
@@ -127,6 +128,16 @@ def _export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _list(args: argparse.Namespace) -> int:
+    storage_dir = Path(args.storage_dir)
+    listing = SavedReviewListing(
+        review_ids=JsonReviewStore(storage_dir).list_review_ids(),
+        storage_dir=str(storage_dir),
+    )
+    print(listing.model_dump_json())
+    return 0
+
+
 def _delete(args: argparse.Namespace) -> int:
     storage_dir = Path(args.storage_dir)
     JsonReviewStore(storage_dir).delete(args.review_id)
@@ -181,6 +192,9 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("--storage-dir", default=".scopeproof/reviews")
     export.add_argument("--format", choices=["json", "markdown", "csv", "html"], default="json")
     export.set_defaults(handler=_export)
+    list_reviews = commands.add_parser("list", help="List safe local saved review IDs")
+    list_reviews.add_argument("--storage-dir", default=".scopeproof/reviews")
+    list_reviews.set_defaults(handler=_list)
     delete = commands.add_parser("delete", help="Delete one saved local review")
     delete.add_argument("review_id")
     delete.add_argument("--storage-dir", default=".scopeproof/reviews")
