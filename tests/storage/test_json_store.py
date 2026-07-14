@@ -35,6 +35,29 @@ def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     assert "authorization" not in path.read_text(encoding="utf-8").lower()
 
 
+def test_historical_review_state_loads_without_ingestion_limitation_fields(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    for review in (
+        payload["state"]["review"],
+        payload["state"]["bundle"]["review"],
+    ):
+        review.pop("ingestion_warnings", None)
+        review.pop("skipped_files", None)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load("review-1")
+
+    assert loaded.review.ingestion_warnings == []
+    assert loaded.review.skipped_files == []
+    assert loaded.bundle is not None
+    assert loaded.bundle.review.ingestion_warnings == []
+    assert loaded.bundle.review.skipped_files == []
+
+
 def test_list_review_ids_returns_empty_when_store_does_not_exist(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path / "reviews")
 

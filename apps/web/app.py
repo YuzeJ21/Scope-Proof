@@ -185,13 +185,15 @@ def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -
         if isinstance(source, PullRequestSnapshot)
         else source.ingestion_warnings
     )
-    warning_lines = [
+    st.warning(
         "Partial PR ingestion: ScopeProof did not inspect every changed file. Results remain "
         "bounded to the files retrieved, and the gate cannot be Ready. Narrow or split the PR, "
-        "then reload it for a complete review.",
-        *ingestion_warnings,
-    ]
-    st.warning("\n\n".join(warning_lines))
+        "then reload it for a complete review."
+    )
+    if ingestion_warnings:
+        st.caption("Ingestion details reported by the repository adapter:")
+        for warning in ingestion_warnings:
+            st.code(warning, language=None)
     if source.skipped_files:
         with st.expander(f"Skipped changed files ({len(source.skipped_files)})"):
             st.caption("These paths were not inspected and are not evidence for any criterion.")

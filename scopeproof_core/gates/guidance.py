@@ -76,6 +76,11 @@ def gate_guidance(gate: GateDecision) -> list[str]:
                 "Check the public PR URL and access, then retry ingestion; ScopeProof does not "
                 "execute PR code."
             )
+        elif code == "ingestion_limitations_present":
+            message = (
+                "Treat the review as incomplete because ingestion limitations were recorded; "
+                "reload the PR before acceptance."
+            )
         elif code == "checks_not_passing":
             message = (
                 "Wait for required GitHub checks to pass or become available before acceptance."

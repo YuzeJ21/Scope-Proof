@@ -69,7 +69,10 @@ def test_partial_public_pr_fetch_shows_bounded_analysis_and_skipped_paths() -> N
     snapshot = load_demo_snapshot().model_copy(
         update={
             "ingestion_state": IngestionState.PARTIAL,
-            "warnings": ["File limit reached; skipped 2 changed files."],
+            "warnings": [
+                "File limit reached; skipped 2 changed files.",
+                "![remote image](https://example.invalid/pixel.png)",
+            ],
             "skipped_files": ["src/one.py", "src/two.py"],
         }
     )
@@ -86,11 +89,14 @@ def test_partial_public_pr_fetch_shows_bounded_analysis_and_skipped_paths() -> N
     warning_text = "\n".join(item.value for item in app.warning)
     assert "Partial PR ingestion" in warning_text
     assert "gate cannot be Ready" in warning_text
-    assert "File limit reached; skipped 2 changed files." in warning_text
+    assert "File limit reached; skipped 2 changed files." not in warning_text
+    code_text = "\n".join(item.value for item in app.code)
+    assert "File limit reached; skipped 2 changed files." in code_text
+    assert "![remote image](https://example.invalid/pixel.png)" in code_text
     assert [item.label for item in app.expander if "Skipped changed files" in item.label] == [
         "Skipped changed files (2)"
     ]
-    assert "src/one.py" in "\n".join(item.value for item in app.code)
+    assert "src/one.py" in code_text
 
 
 def test_reopened_partial_review_keeps_ingestion_recovery_details(
@@ -117,8 +123,9 @@ def test_reopened_partial_review_keeps_ingestion_recovery_details(
 
     warning_text = "\n".join(item.value for item in fresh.warning)
     assert "Partial PR ingestion" in warning_text
-    assert "File limit reached; skipped 1 changed files." in warning_text
-    assert "src/reopen-skipped.py" in "\n".join(item.value for item in fresh.code)
+    code_text = "\n".join(item.value for item in fresh.code)
+    assert "File limit reached; skipped 1 changed files." in code_text
+    assert "src/reopen-skipped.py" in code_text
 
 
 def test_reopen_review_is_a_collapsed_secondary_path_before_start_review(

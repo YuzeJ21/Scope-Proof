@@ -18,16 +18,10 @@ from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewSta
 ExportableReview = ReviewBundle | ReviewState
 
 
-def _escape_markdown_list_text(value: str) -> str:
-    """Keep untrusted repository text inert inside a Markdown list item."""
-    return (
-        value.replace("\\", "\\\\")
-        .replace("<", "\\<")
-        .replace(">", "\\>")
-        .replace("|", "\\|")
-        .replace("\r", " ")
-        .replace("\n", " ")
-    )
+def _render_markdown_code(value: str) -> str:
+    """Render untrusted repository text as inert HTML code within Markdown."""
+    normalized = value.replace("\r", " ").replace("\n", " ")
+    return f"<code>{html.escape(normalized, quote=True)}</code>"
 
 
 def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewState | None]:
@@ -77,7 +71,7 @@ def export_markdown(bundle: ExportableReview) -> str:
                 "## Ingestion Limitations",
                 "",
                 *[
-                    f"- {_escape_markdown_list_text(warning)}"
+                    f"- {_render_markdown_code(warning)}"
                     for warning in bundle.review.ingestion_warnings
                 ],
                 *(
@@ -85,7 +79,7 @@ def export_markdown(bundle: ExportableReview) -> str:
                         "",
                         "**Skipped changed files (not inspected):**",
                         *[
-                            f"- {_escape_markdown_list_text(path)}"
+                            f"- {_render_markdown_code(path)}"
                             for path in bundle.review.skipped_files
                         ],
                     ]
@@ -267,8 +261,10 @@ def export_csv(bundle: ExportableReview) -> str:
                 "tool_version": bundle.review.tool_version,
                 "ruleset_version": bundle.review.ruleset_version,
                 "ingestion_state": bundle.review.ingestion_state.value,
-                "ingestion_warnings": " | ".join(bundle.review.ingestion_warnings),
-                "skipped_files": " | ".join(bundle.review.skipped_files),
+                "ingestion_warnings": json.dumps(
+                    bundle.review.ingestion_warnings, ensure_ascii=False
+                ),
+                "skipped_files": json.dumps(bundle.review.skipped_files, ensure_ascii=False),
                 "criteria_revision": state.criteria_revision.number if state else 1,
                 "requirements_source_text": bundle.source_text,
                 "verdict": bundle.gate.verdict.value,

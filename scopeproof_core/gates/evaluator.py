@@ -37,6 +37,7 @@ def evaluate_gate(
     unresolved: set[str] = set()
     exceptions: set[str] = set()
     reason_codes: list[str] = []
+    ingestion_limitations_present = bool(review.ingestion_warnings or review.skipped_files)
 
     if review.check_state is CheckState.FAILING:
         reason_codes.append("required_checks_failing")
@@ -89,11 +90,14 @@ def evaluate_gate(
             reason_codes.append("ingestion_failed")
         if review.check_state in {CheckState.PENDING, CheckState.UNAVAILABLE}:
             reason_codes.append("checks_not_passing")
+        if ingestion_limitations_present and review.ingestion_state is IngestionState.COMPLETE:
+            reason_codes.append("ingestion_limitations_present")
 
         needs_review = bool(
             unresolved
             or not review.criteria_confirmed
             or review.ingestion_state is not IngestionState.COMPLETE
+            or ingestion_limitations_present
             or review.check_state in {CheckState.PENDING, CheckState.UNAVAILABLE}
         )
         if needs_review:

@@ -274,6 +274,14 @@ class PullRequestSnapshot(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     skipped_files: list[str] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def limitations_require_noncomplete_ingestion(self) -> PullRequestSnapshot:
+        if self.ingestion_state is IngestionState.COMPLETE and (
+            self.warnings or self.skipped_files
+        ):
+            raise ValueError("complete ingestion cannot include limitations")
+        return self
+
 
 class Review(BaseModel):
     review_id: str = Field(default_factory=lambda: str(uuid4()))
@@ -290,6 +298,14 @@ class Review(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tool_version: str = Field(default_factory=lambda: __version__)
     ruleset_version: str = RULESET_VERSION
+
+    @model_validator(mode="after")
+    def limitations_require_noncomplete_ingestion(self) -> Review:
+        if self.ingestion_state is IngestionState.COMPLETE and (
+            self.ingestion_warnings or self.skipped_files
+        ):
+            raise ValueError("complete ingestion cannot include limitations")
+        return self
 
     @computed_field
     @property
