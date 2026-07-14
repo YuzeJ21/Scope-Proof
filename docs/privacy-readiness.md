@@ -13,13 +13,15 @@ This is a readiness design, not a claim that private support exists.
 
 | Data | Location | Retention / deletion |
 | --- | --- | --- |
-| Public PR metadata, excerpts, evidence, findings, decisions | User-selected local JSON review directory after save | User deletes its review JSON or directory; ScopeProof has no hosted copy. |
+| Public PR metadata, excerpts, evidence, findings, decisions | User-selected local JSON review directory after save | Delete one exact app-owned record with `scopeproof delete REVIEW_ID` or the workbench; ScopeProof has no hosted copy. |
 | Optional GitHub token | Process/session memory | Cleared at process/session end. |
-| Requirements and reviewer notes | In memory and saved local review, if saved | Deleted with the local review record. |
+| Requirements and reviewer notes | In memory and saved local review, if saved | The saved copy is deleted with its local review record. An open review remains in session memory as unsaved work until replaced or the session ends. |
 | Action events/logs | Repository owner's GitHub environment | Owner controls retention; ScopeProof must not print tokens. |
 
 Saved records contain repository identity, immutable SHAs, excerpts, and human
 notes. Users control this local data and should use a protected directory.
+Deleting a local review record does not remove separately exported files,
+backups, or secure-media remnants; users must manage those copies separately.
 
 ## Future private posture
 
@@ -40,7 +42,7 @@ may never use elevated credentials for fork-origin pull requests.
 | PR code execution | ScopeProof only reads GitHub data | Preserve; runtime evidence needs its own isolated design. |
 | Fork credential exposure | Repository workflow uses the trusted base definition and never checks out or executes PR head code; planner returns no fork write plan | Continue payload fixture tests. Fork testing is permanently excluded for this single-account public alpha, and no external fork-run claim is made. |
 | Stale/wrong evidence | Immutable head-SHA links and head-change detection | Mandatory stale-head warning for current claims. |
-| Residual source data | No hosted copy; local user-owned records | Test and document any future atomic local delete command. |
+| Residual source data | No hosted copy; local user-owned records; tested deletion removes exactly one safely named regular record, requires explicit workbench confirmation, and leaves an open review only as unsaved session work | Preserve atomic-delete, neighboring-record, confirmation, and session-memory regression coverage. |
 
 ## Audit and operating rules
 

@@ -166,6 +166,117 @@ def test_saved_review_is_discoverable_and_selectable_in_a_fresh_session(
     )
 
 
+def test_delete_saved_review_requires_selection_and_confirmation_and_deletes_only_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, first_review_id = saved_demo_review(new_app())
+    _, second_review_id = saved_demo_review(new_app())
+
+    app = new_app()
+    assert not [item for item in app.button if item.key == "delete_saved_review"]
+    assert not [
+        item
+        for item in app.checkbox
+        if item.key == "delete_saved_review_confirmed"
+    ]
+
+    app = select_saved_review(app, first_review_id)
+    assert app.checkbox(key="delete_saved_review_confirmed").value is False
+    assert app.button(key="delete_saved_review").disabled is True
+
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    assert app.button(key="delete_saved_review").disabled is False
+    app = app.button(key="delete_saved_review").click().run()
+
+    assert app.selectbox(key="saved_reopen_review_id").options == [second_review_id]
+    assert app.selectbox(key="saved_reopen_review_id").value is None
+    assert app.session_state["delete_saved_review_confirmed"] is False
+
+
+def test_delete_selected_saved_review_preserves_other_open_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, first_review_id = saved_demo_review(new_app())
+    _, second_review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), first_review_id)
+    app = app.button(key="reopen_review").click().run()
+    open_state = app.session_state["review_state"]
+    saved_fingerprint = app.session_state["saved_review_fingerprint"]
+
+    app = select_saved_review(app, second_review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    app = app.button(key="delete_saved_review").click().run()
+
+    assert app.session_state["review_state"] == open_state
+    assert app.session_state["saved_review_fingerprint"] == saved_fingerprint
+    assert app.selectbox(key="saved_reopen_review_id").options == [first_review_id]
+    assert second_review_id not in app.selectbox(key="saved_reopen_review_id").options
+
+
+def test_delete_saved_review_controls_stay_hidden_for_manually_typed_missing_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = new_app()
+
+    app = app.text_input(key="reopen_review_id").set_value("missing-review").run()
+
+    assert not [
+        item
+        for item in app.checkbox
+        if item.key == "delete_saved_review_confirmed"
+    ]
+    assert not [item for item in app.button if item.key == "delete_saved_review"]
+
+
+def test_delete_saved_open_review_preserves_exact_state_as_unsaved_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+    app = app.button(key="reopen_review").click().run()
+    open_state = app.session_state["review_state"]
+
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    app = app.button(key="delete_saved_review").click().run()
+
+    assert app.session_state["review_state"] == open_state
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert (
+        "Saved review deleted. The open review remains available as unsaved work."
+        in [message.value for message in app.success]
+    )
+
+
+def test_delete_saved_review_race_uses_fixed_recovery_without_raw_details(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.delete",
+        side_effect=FileNotFoundError(review_id),
+    ):
+        app = app.button(key="delete_saved_review").click().run()
+
+    recovery = (
+        "The selected saved review was already removed. Refresh the saved review list."
+    )
+    assert recovery in [message.value for message in app.warning]
+    assert not app.exception
+    rendered_recovery = "\n".join(
+        message.value for message in [*app.warning, *app.error]
+    )
+    assert str(tmp_path) not in rendered_recovery
+
+
 def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

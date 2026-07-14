@@ -127,6 +127,18 @@ def _export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _delete(args: argparse.Namespace) -> int:
+    storage_dir = Path(args.storage_dir)
+    JsonReviewStore(storage_dir).delete(args.review_id)
+    print(
+        json.dumps(
+            {"deleted_review_id": args.review_id, "storage_dir": str(storage_dir)},
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _validate_action_evidence(args: argparse.Namespace) -> int:
     """Validate owner-supplied external Action evidence without contacting GitHub."""
 
@@ -169,6 +181,10 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("--storage-dir", default=".scopeproof/reviews")
     export.add_argument("--format", choices=["json", "markdown", "csv", "html"], default="json")
     export.set_defaults(handler=_export)
+    delete = commands.add_parser("delete", help="Delete one saved local review")
+    delete.add_argument("review_id")
+    delete.add_argument("--storage-dir", default=".scopeproof/reviews")
+    delete.set_defaults(handler=_delete)
     benchmark = commands.add_parser("benchmark", help="Run every labelled local benchmark case")
     benchmark.set_defaults(handler=lambda _: _benchmark())
     action_evidence = commands.add_parser(
