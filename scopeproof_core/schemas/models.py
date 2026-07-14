@@ -184,7 +184,10 @@ class Criterion(BaseModel):
     @field_validator("text")
     @classmethod
     def trim_text(cls, value: str) -> str:
-        return value.strip()
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("criterion text must contain non-whitespace text")
+        return normalized
 
 
 class CriterionDraft(BaseModel):

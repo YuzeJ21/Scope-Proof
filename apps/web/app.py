@@ -386,6 +386,7 @@ else:
         st.success("Criterion split. Confirm the updated set before analysis.")
         st.rerun()
     edited_criteria: list[Criterion] = []
+    blank_criterion_ids: list[str] = []
     for position, criterion in enumerate(criteria):
         text_column, priority_column, level_column, actions_column = st.columns([5, 2, 2, 2])
         with text_column:
@@ -432,24 +433,30 @@ else:
                 _reset_analysis()
                 st.success("Criterion order changed. Confirm the updated set before analysis.")
                 st.rerun()
-        edited_criteria.append(
-            Criterion(
-                criterion_id=criterion.criterion_id,
-                text=edited_text,
-                priority=priority,
-                criterion_type=criterion.criterion_type,
-                source_span=criterion.source_span,
-                required_evidence_level=level,
+        if not edited_text.strip():
+            blank_criterion_ids.append(criterion.criterion_id)
+            edited_criteria.append(criterion)
+        else:
+            edited_criteria.append(
+                Criterion(
+                    criterion_id=criterion.criterion_id,
+                    text=edited_text,
+                    priority=priority,
+                    criterion_type=criterion.criterion_type,
+                    source_span=criterion.source_span,
+                    required_evidence_level=level,
+                )
             )
-        )
+    for criterion_id in blank_criterion_ids:
+        st.warning(f"{criterion_id}: Criterion text cannot be blank.")
     warnings = validate_criteria(edited_criteria)
     for warning in warnings:
         st.warning(f"{warning.criterion_id}: {warning.message}")
-    criteria_edits_pending = edited_criteria != criteria
+    criteria_edits_pending = bool(blank_criterion_ids) or edited_criteria != criteria
     if st.button(
         "Confirm criteria",
         key="confirm_criteria",
-        disabled=any(not item.text.strip() for item in edited_criteria),
+        disabled=bool(blank_criterion_ids),
     ):
         state: ReviewState | None = st.session_state["review_state"]
         if state is not None:
