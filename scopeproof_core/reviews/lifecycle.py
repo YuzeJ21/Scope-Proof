@@ -165,8 +165,18 @@ def _recalculate(state: ReviewState) -> ReviewState:
 def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState:
     """Append an event, bind it to the active revision, and rerun the deterministic gate."""
     state = _validated_state(state)
-    bound_event = event.model_copy(
-        update={"criteria_revision_number": state.criteria_revision.number}
+    event = ResolutionEvent.model_validate(event.model_dump())
+    if state.bundle is None:
+        raise ValueError("Run a confirmed analysis before recording a resolution")
+    if event.criterion_id is not None and event.criterion_id not in {
+        criterion.criterion_id for criterion in state.bundle.criteria
+    }:
+        raise ValueError("resolution event must reference a criterion in the active review")
+    bound_event = ResolutionEvent.model_validate(
+        {
+            **event.model_dump(),
+            "criteria_revision_number": state.criteria_revision.number,
+        }
     )
     updated_events = [*state.resolution_events, bound_event]
     updated = state.model_copy(update={"resolution_events": updated_events})
