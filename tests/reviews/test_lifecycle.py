@@ -122,6 +122,7 @@ def test_attach_analysis_preserves_reanalysis_lineage() -> None:
     )
     confirmed = confirm_criteria(revised)
     bundle = analysis_bundle_for(confirmed)
+    bundle.criteria_revision_number = 99
 
     attached = attach_analysis(confirmed, bundle)
 
@@ -134,16 +135,52 @@ def test_attach_analysis_preserves_reanalysis_lineage() -> None:
     assert attached.bundle.review == attached.review
     assert attached.bundle.criteria == confirmed.criteria_revision.criteria
     assert attached.bundle.source_text == "Export filtered CSV"
+    assert attached.bundle.criteria_revision_number == 2
     assert attached.bundle.resolutions == []
     assert attached.review.final_acceptance is False
 
     bundle.review.review_id = "caller-mutation"
     bundle.criteria[0].text = "Caller mutation"
     bundle.source_text = "Caller mutation"
+    bundle.criteria_revision_number = 100
 
     assert attached.bundle.review.review_id == original_review_id
     assert attached.bundle.criteria[0].text == "Export filtered CSV"
     assert attached.bundle.source_text == "Export filtered CSV"
+    assert attached.bundle.criteria_revision_number == 2
+
+
+def test_skipped_analysis_history_records_exact_criteria_revisions() -> None:
+    revision_one = initial_state()
+    revision_two = confirm_criteria(
+        revise_criteria(
+            revision_one,
+            [Criterion(criterion_id="AC-01", text="Export CSV with headers")],
+            "Export CSV with headers",
+        )
+    )
+    revision_three = confirm_criteria(
+        revise_criteria(
+            revision_two,
+            [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+            "Export filtered CSV",
+        )
+    )
+    analyzed_revision_three = attach_analysis(
+        revision_three, analysis_bundle_for(revision_three)
+    )
+
+    revision_four = revise_criteria(
+        analyzed_revision_three,
+        [Criterion(criterion_id="AC-01", text="Export sorted filtered CSV")],
+        "Export sorted filtered CSV",
+    )
+
+    assert [
+        bundle.criteria_revision_number for bundle in revision_four.analysis_history
+    ] == [1, 3]
+    assert revision_four.criteria_revision.number == 4
+    assert revision_four.bundle is None
 
 
 def test_attach_analysis_rejects_an_existing_active_bundle() -> None:
@@ -347,6 +384,7 @@ def test_new_review_state_rejects_preloaded_final_acceptance() -> None:
 def test_new_review_state_does_not_alias_the_supplied_bundle() -> None:
     bundle = initial_state().bundle
     assert bundle is not None
+    bundle.criteria_revision_number = 99
 
     state = new_review_state(bundle)
     bundle.review.review_id = "caller-mutation"
@@ -360,6 +398,11 @@ def test_new_review_state_does_not_alias_the_supplied_bundle() -> None:
     assert state.bundle.review.review_id == "review-1"
     assert state.bundle.criteria[0].text == "Export CSV"
     assert state.bundle.source_text == "Export CSV"
+    assert state.bundle.criteria_revision_number == 1
+
+    bundle.criteria_revision_number = 99
+
+    assert state.bundle.criteria_revision_number == 1
 
 
 def test_editing_confirmed_criteria_creates_revision_and_invalidates_analysis() -> None:

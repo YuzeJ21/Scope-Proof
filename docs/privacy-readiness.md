@@ -45,7 +45,11 @@ may never use elevated credentials for fork-origin pull requests.
 ## Audit and operating rules
 
 Local `ReviewState` keeps criteria revisions and append-only resolution events;
-it is an audit trail, not a tamper-proof ledger. A private pilot must retain the
-ruleset version and source SHA, request least privilege, never upload code or
-notes to ScopeProof infrastructure, keep forks non-mutating, and test secret
-redaction, no-token persistence, deletion, and public/offline compatibility.
+new analysis history records also identify the criteria revision that produced
+each analysis. Migrated legacy history explicitly reports revision lineage as
+`unknown` when the producing revision cannot be proven; ScopeProof does not
+infer or recover that missing lineage. This is an audit trail, not a tamper-proof
+ledger. A private pilot must retain the ruleset version and source SHA, request
+least privilege, never upload code or notes to ScopeProof infrastructure, keep
+forks non-mutating, and test secret redaction, no-token persistence, deletion,
+and public/offline compatibility.
