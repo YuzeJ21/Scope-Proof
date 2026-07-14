@@ -359,6 +359,37 @@ def test_canonical_public_pr_url_enables_fetch_without_format_warning() -> None:
     assert app.button(key="fetch_pr").disabled is False
 
 
+def test_loaded_public_pr_shows_validated_source_identity_before_criteria_confirmation() -> None:
+    head_sha = "0123456789abcdef0123456789abcdef01234567"
+    snapshot = load_demo_snapshot().model_copy(
+        update={
+            "repository": "acme/widget",
+            "pr_number": 7,
+            "head_sha": head_sha,
+            "ingestion_state": IngestionState.COMPLETE,
+        }
+    )
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/widget/pull/7"
+    ).run()
+
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+
+    markdown_text = "\n".join(item.value for item in app.markdown)
+    code_text = "\n".join(item.value for item in app.code)
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "acme/widget · PR #7" in markdown_text
+    assert head_sha in code_text
+    assert "2 changed files fetched" in caption_text
+    assert "Complete ingestion" in caption_text
+    assert app.button(key="run_analysis").disabled is True
+
+
 def test_demo_loads_confirmable_criteria() -> None:
     app = load_demo(new_app())
     assert app.session_state["snapshot"] is not None

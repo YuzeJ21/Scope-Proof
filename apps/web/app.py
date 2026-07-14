@@ -181,6 +181,20 @@ def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
 
 
+def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
+    changed_file_count = len(snapshot.files)
+    changed_file_label = "file" if changed_file_count == 1 else "files"
+    with st.container(border=True):
+        st.markdown("**Loaded source**")
+        st.markdown(f"{snapshot.repository} · PR #{snapshot.pr_number}")
+        st.caption("Head SHA")
+        st.code(snapshot.head_sha, language=None)
+        st.caption(
+            f"{changed_file_count} changed {changed_file_label} fetched · "
+            f"{_status_label(snapshot.ingestion_state.value)} ingestion"
+        )
+
+
 def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -> None:
     if source is None or source.ingestion_state is not IngestionState.PARTIAL:
         return
@@ -413,6 +427,10 @@ elif source_reload_notice is not None:
         f"PR source reloaded at the same head SHA: {source_reload_notice.current_head_sha}. "
         "Reconfirm criteria and run a new review before relying on current results."
     )
+
+loaded_snapshot = st.session_state["snapshot"]
+if loaded_snapshot is not None:
+    _render_loaded_source_identity(loaded_snapshot)
 
 ingestion_limitations_source = st.session_state["snapshot"]
 if ingestion_limitations_source is None and current_review_state is not None:
