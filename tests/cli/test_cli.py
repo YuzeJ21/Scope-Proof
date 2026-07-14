@@ -355,3 +355,37 @@ def test_requirements_confirmation_command_validates_bound_record(tmp_path: Path
         ]
     ) == 0
     assert '"confirmed_by": "Demo owner"' in capsys.readouterr().out
+
+
+def test_requirements_confirmation_command_rejects_blank_confirmer(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Document the demo.\n", encoding="utf-8")
+    confirmation = tmp_path / "confirmation.json"
+    confirmation.write_text(
+        json.dumps(
+            {
+                "requirements_sha256": hashlib.sha256(requirements.read_bytes()).hexdigest(),
+                "confirmed_by": "   ",
+                "confirmed_at": "2026-07-12T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "validate-requirements-confirmation",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(confirmation),
+            ]
+        )
+
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert "confirmed_by must contain non-whitespace text" in captured.err
+    assert captured.out == ""

@@ -36,3 +36,31 @@ def test_confirmation_record_rejects_changed_requirements(tmp_path: Path) -> Non
 
     with pytest.raises(ValueError, match="does not match"):
         validate_requirements_confirmation(requirements, record)
+
+
+@pytest.mark.parametrize("confirmed_by", ["", "   ", "\t\n"])
+def test_confirmation_record_rejects_blank_confirmer(
+    tmp_path: Path, confirmed_by: str
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Document the validation demo.\n", encoding="utf-8")
+    payload = confirmation_payload(requirements.read_text())
+    payload["confirmed_by"] = confirmed_by
+    record = tmp_path / "confirmation.json"
+    record.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="confirmed_by must contain non-whitespace text"):
+        validate_requirements_confirmation(requirements, record)
+
+
+def test_confirmation_record_preserves_valid_confirmer_text(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Document the validation demo.\n", encoding="utf-8")
+    payload = confirmation_payload(requirements.read_text())
+    payload["confirmed_by"] = "  Demo owner  "
+    record = tmp_path / "confirmation.json"
+    record.write_text(json.dumps(payload), encoding="utf-8")
+
+    confirmation = validate_requirements_confirmation(requirements, record)
+
+    assert confirmation.confirmed_by == "  Demo owner  "

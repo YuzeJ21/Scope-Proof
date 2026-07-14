@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RequirementsConfirmation(BaseModel):
@@ -17,6 +17,13 @@ class RequirementsConfirmation(BaseModel):
     requirements_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     confirmed_by: str = Field(min_length=1)
     confirmed_at: datetime
+
+    @field_validator("confirmed_by", mode="before")
+    @classmethod
+    def require_non_blank_confirmer(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("confirmed_by must contain non-whitespace text")
+        return value
 
 
 def validate_requirements_confirmation(
