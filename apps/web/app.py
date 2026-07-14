@@ -245,6 +245,16 @@ def _clear_criteria_authoring_drafts(keys: tuple[str, ...]) -> None:
         st.session_state[key] = ""
 
 
+def _requirements_draft_pending() -> bool:
+    return st.session_state.get("requirements_input", "") != st.session_state.get(
+        "source_text", ""
+    )
+
+
+def _clear_requirements_draft() -> None:
+    st.session_state["requirements_input"] = st.session_state["source_text"]
+
+
 def _criterion_detail_draft_pending() -> bool:
     runtime_text_keys = (
         "runtime_artifact_reference",
@@ -354,6 +364,8 @@ criteria_authoring_reset_keys = st.session_state.pop(
 )
 if criteria_authoring_reset_keys:
     _clear_criteria_authoring_drafts(criteria_authoring_reset_keys)
+if st.session_state.pop("requirements_draft_reset_pending", False):
+    _clear_requirements_draft()
 
 st.title("ScopeProof")
 st.subheader("Prove the PR matches the product intent.")
@@ -366,10 +378,12 @@ st.caption("No paid LLM API. Deterministic rules. Human acceptance stays visible
 current_review_state: ReviewState | None = st.session_state["review_state"]
 has_pending_criteria_draft = _criteria_draft_pending(st.session_state["criteria"])
 has_pending_criteria_authoring_draft = _criteria_authoring_draft_pending()
+has_pending_requirements_draft = _requirements_draft_pending()
 has_pending_criterion_detail_draft = _criterion_detail_draft_pending()
 has_pending_review_input = (
     has_pending_criteria_draft
     or has_pending_criteria_authoring_draft
+    or has_pending_requirements_draft
     or has_pending_criterion_detail_draft
 )
 has_unsaved_review = bool(
@@ -396,6 +410,17 @@ authoring_submission_blocked = bool(
     and (
         not _review_matches_local_save(current_review_state)
         or has_pending_criteria_draft
+        or has_pending_requirements_draft
+        or has_pending_criterion_detail_draft
+    )
+    and not replace_unsaved_review_confirmed
+)
+requirements_submission_blocked = bool(
+    current_review_state is not None
+    and (
+        not _review_matches_local_save(current_review_state)
+        or has_pending_criteria_draft
+        or has_pending_criteria_authoring_draft
         or has_pending_criterion_detail_draft
     )
     and not replace_unsaved_review_confirmed
@@ -594,6 +619,20 @@ requirements_text = st.text_area(
     key="requirements_input",
     help="Use one independently judgeable behavior per line. ScopeProof will not invent criteria.",
 )
+requirements_draft_discard_notice = st.session_state.pop(
+    "requirements_draft_discard_notice", None
+)
+if requirements_draft_discard_notice is not None:
+    st.success(requirements_draft_discard_notice)
+if has_pending_requirements_draft and st.button(
+    "Discard unprepared requirements changes",
+    key="discard_requirements_draft",
+):
+    st.session_state["requirements_draft_reset_pending"] = True
+    st.session_state["requirements_draft_discard_notice"] = (
+        "Unprepared requirements changes discarded without changing the review."
+    )
+    st.rerun()
 requirements_are_prepared = (
     bool(st.session_state["criteria"])
     and st.session_state["bundle"] is None
@@ -604,7 +643,7 @@ if st.button(
     key="prepare_criteria",
     disabled=(
         not bool(requirements_text.strip())
-        or replacement_blocked
+        or requirements_submission_blocked
         or requirements_are_prepared
     ),
 ):
@@ -1307,6 +1346,11 @@ else:
             st.caption(
                 "Pending add or split criterion inputs are not saved or exported. Submit or "
                 "clear them before relying on this review ID."
+            )
+        if has_pending_requirements_draft:
+            st.caption(
+                "Pending requirements changes are not saved or exported. Prepare or discard "
+                "them before relying on this review ID."
             )
         if has_pending_criterion_detail_draft:
             st.caption(
