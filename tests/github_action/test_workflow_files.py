@@ -30,7 +30,7 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
     assert "pip install scopeproof" not in example
     assert (
         "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@"
-        "7d0cc09c942f76234657ec3fb101dae26e811d6f"
+        "a231dbb19cb373b58b9df68603f7ecd5a7924471"
     ) in example
 
 
