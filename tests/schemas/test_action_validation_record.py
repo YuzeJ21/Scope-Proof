@@ -68,3 +68,52 @@ def test_action_validation_record_requires_marker_for_the_verified_head() -> Non
 
     with pytest.raises(ValueError, match="comment marker"):
         ActionValidationRecord.model_validate(wrong_marker)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "blank_value"),
+    [
+        ("requirements_base_sha", "   "),
+        ("requirements_base_sha", "\t"),
+        ("requirements_base_sha", "\n"),
+        ("non_fork_head_sha", "   "),
+        ("non_fork_head_sha", "\t"),
+        ("rerun_head_sha", "   "),
+        ("rerun_head_sha", "\t"),
+        ("validated_by", "   "),
+        ("validated_by", "\t"),
+        ("validated_by", "\n"),
+    ],
+)
+def test_action_validation_record_rejects_blank_required_context(
+    field_name: str, blank_value: str
+) -> None:
+    payload = record_data()
+    payload[field_name] = blank_value
+    if field_name in {"non_fork_head_sha", "rerun_head_sha"}:
+        payload["non_fork_head_sha"] = blank_value
+        payload["rerun_head_sha"] = blank_value
+        payload["scopeproof_comment_marker"] = f"<!-- scopeproof:{blank_value} -->"
+
+    with pytest.raises(ValueError, match="non-whitespace"):
+        ActionValidationRecord.model_validate(payload)
+
+
+@pytest.mark.parametrize("blank_value", ["   ", "\t", "\n"])
+def test_action_validation_record_rejects_blank_limitation(blank_value: str) -> None:
+    payload = record_data() | {"limitations": ["Public demo only", blank_value]}
+
+    with pytest.raises(ValueError, match="limitation"):
+        ActionValidationRecord.model_validate(payload)
+
+
+def test_action_validation_record_preserves_valid_human_context() -> None:
+    payload = record_data() | {
+        "validated_by": "  Demo repository owner  ",
+        "limitations": ["  Public demo only  "],
+    }
+
+    record = ActionValidationRecord.model_validate(payload)
+
+    assert record.validated_by == "  Demo repository owner  "
+    assert record.limitations == ["  Public demo only  "]
