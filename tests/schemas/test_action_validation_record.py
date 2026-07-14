@@ -4,18 +4,22 @@ import pytest
 
 from scopeproof_core.schemas.models import ActionValidationRecord
 
+BASE_SHA = "1" * 40
+HEAD_SHA = "2" * 40
+OTHER_SHA = "3" * 40
+
 
 def record_data() -> dict:
     return {
         "repository": "acme/demo",
-        "requirements_base_sha": "base123",
+        "requirements_base_sha": BASE_SHA,
         "non_fork_pr_url": "https://github.com/acme/demo/pull/12",
-        "non_fork_head_sha": "head123",
+        "non_fork_head_sha": HEAD_SHA,
         "non_fork_run_url": "https://github.com/acme/demo/actions/runs/1",
         "non_fork_comment_count": 1,
-        "scopeproof_comment_marker": "<!-- scopeproof:head123 -->",
+        "scopeproof_comment_marker": f"<!-- scopeproof:{HEAD_SHA} -->",
         "rerun_url": "https://github.com/acme/demo/actions/runs/2",
-        "rerun_head_sha": "head123",
+        "rerun_head_sha": HEAD_SHA,
         "rerun_comment_count": 1,
         "fork_pr_url": "https://github.com/acme/demo/pull/13",
         "fork_run_url": "https://github.com/acme/demo/actions/runs/3",
@@ -45,7 +49,7 @@ def test_action_validation_record_allows_a_single_account_fork_exclusion() -> No
 
 
 def test_action_validation_record_rejects_rerun_that_changes_head_or_comment_count() -> None:
-    changed_head = record_data() | {"rerun_head_sha": "different"}
+    changed_head = record_data() | {"rerun_head_sha": OTHER_SHA}
     with pytest.raises(ValueError, match="same head SHA"):
         ActionValidationRecord.model_validate(changed_head)
 
@@ -64,39 +68,51 @@ def test_action_validation_record_rejects_links_from_another_repository() -> Non
 
 
 def test_action_validation_record_requires_marker_for_the_verified_head() -> None:
-    wrong_marker = record_data() | {"scopeproof_comment_marker": "<!-- scopeproof:old -->"}
+    wrong_marker = record_data() | {
+        "scopeproof_comment_marker": f"<!-- scopeproof:{OTHER_SHA} -->"
+    }
 
     with pytest.raises(ValueError, match="comment marker"):
         ActionValidationRecord.model_validate(wrong_marker)
 
 
-@pytest.mark.parametrize(
-    ("field_name", "blank_value"),
-    [
-        ("requirements_base_sha", "   "),
-        ("requirements_base_sha", "\t"),
-        ("requirements_base_sha", "\n"),
-        ("non_fork_head_sha", "   "),
-        ("non_fork_head_sha", "\t"),
-        ("rerun_head_sha", "   "),
-        ("rerun_head_sha", "\t"),
-        ("validated_by", "   "),
-        ("validated_by", "\t"),
-        ("validated_by", "\n"),
-    ],
-)
-def test_action_validation_record_rejects_blank_required_context(
-    field_name: str, blank_value: str
-) -> None:
-    payload = record_data()
-    payload[field_name] = blank_value
-    if field_name in {"non_fork_head_sha", "rerun_head_sha"}:
-        payload["non_fork_head_sha"] = blank_value
-        payload["rerun_head_sha"] = blank_value
-        payload["scopeproof_comment_marker"] = f"<!-- scopeproof:{blank_value} -->"
+@pytest.mark.parametrize("blank_value", ["   ", "\t", "\n"])
+def test_action_validation_record_rejects_blank_validated_by(blank_value: str) -> None:
+    payload = record_data() | {"validated_by": blank_value}
 
     with pytest.raises(ValueError, match="non-whitespace"):
         ActionValidationRecord.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "invalid_sha",
+    ["", "   ", "x", "not-a-sha", "g" * 40, "a" * 39, "a" * 41, "A" * 40],
+)
+@pytest.mark.parametrize(
+    "field_name",
+    ["requirements_base_sha", "non_fork_head_sha", "rerun_head_sha"],
+)
+def test_action_validation_record_rejects_invalid_commit_sha_shape(
+    field_name: str, invalid_sha: str
+) -> None:
+    payload = record_data()
+    payload[field_name] = invalid_sha
+    if field_name in {"non_fork_head_sha", "rerun_head_sha"}:
+        payload["non_fork_head_sha"] = invalid_sha
+        payload["rerun_head_sha"] = invalid_sha
+        payload["scopeproof_comment_marker"] = f"<!-- scopeproof:{invalid_sha} -->"
+
+    with pytest.raises(ValueError, match="string_pattern_mismatch"):
+        ActionValidationRecord.model_validate(payload)
+
+
+def test_action_validation_record_preserves_valid_commit_shas_exactly() -> None:
+    record = ActionValidationRecord.model_validate(record_data())
+
+    assert record.requirements_base_sha == BASE_SHA
+    assert record.non_fork_head_sha == HEAD_SHA
+    assert record.rerun_head_sha == HEAD_SHA
+    assert record.scopeproof_comment_marker == f"<!-- scopeproof:{HEAD_SHA} -->"
 
 
 @pytest.mark.parametrize("blank_value", ["   ", "\t", "\n"])
