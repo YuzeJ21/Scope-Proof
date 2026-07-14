@@ -666,9 +666,7 @@ else:
 
     st.markdown("### Manual runtime evidence")
     st.caption(
-        f"This record will be attached to {selected_id} — {selected_criterion.text}."
-    )
-    st.caption(
+        f"This record will be attached to {selected_id} — {selected_criterion.text}. "
         "Record a human-supplied observation only. ScopeProof does not run PR code "
         "or infer runtime results."
     )
@@ -686,9 +684,7 @@ else:
     st.caption(
         "E3 means manually recorded external runtime verification. "
         "E4 means explicit human acceptance. Saving this record does not resolve the "
-        "criterion or record final review acceptance."
-    )
-    st.caption(
+        "criterion or record final review acceptance. "
         "Artifact, scenario, environment, observed result, and reviewer are required. "
         "Limitations are optional."
     )
@@ -754,8 +750,8 @@ else:
         st.session_state.pop("manual_evidence_level", None)
     resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
 
-    st.markdown("### Criterion resolution")
-    st.caption(
+    st.markdown(
+        "### Criterion resolution\n\n"
         f"This decision will be recorded for {selected_id} — {selected_criterion.text}. "
         "It does not record final review acceptance."
     )

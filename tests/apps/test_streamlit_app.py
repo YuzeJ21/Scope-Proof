@@ -854,26 +854,29 @@ def test_successful_manual_verification_clears_conditional_evidence_level() -> N
 
 def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
     app = analyzed_demo(new_app())
-    markdown_text = "\n".join(markdown.value for markdown in app.markdown)
     caption_text = "\n".join(caption.value for caption in app.caption)
 
-    assert "Criterion resolution" in markdown_text
+    resolution_context = next(
+        markdown.value
+        for markdown in app.markdown
+        if markdown.value.startswith("### Criterion resolution")
+    )
     assert (
         "This decision will be recorded for AC-01 — User can export the research list as CSV. "
         "It does not record final review acceptance."
-    ) in caption_text
+    ) in resolution_context
     assert "Select a decision to see its deterministic gate impact." in caption_text
 
     app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
-    target_captions = [
-        caption.value
-        for caption in app.caption
-        if caption.value.startswith("This decision will be recorded for")
-    ]
-    assert target_captions == [
+    resolution_context = next(
+        markdown.value
+        for markdown in app.markdown
+        if markdown.value.startswith("### Criterion resolution")
+    )
+    assert (
         "This decision will be recorded for AC-03 — Failed export shows an error message. "
         "It does not record final review acceptance."
-    ]
+    ) in resolution_context
 
 
 def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> None:
@@ -987,17 +990,31 @@ def test_runtime_evidence_prerequisite_guidance_is_visible() -> None:
 
 def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> None:
     app = analyzed_demo(new_app())
-    caption_text = "\n".join(caption.value for caption in app.caption)
-
+    target_context = next(
+        caption.value
+        for caption in app.caption
+        if caption.value.startswith("This record will be attached to")
+    )
     assert (
         "This record will be attached to AC-01 — User can export the research list as CSV."
-        in caption_text
+    ) in target_context
+    assert "Record a human-supplied observation only." in target_context
+
+    level_context = next(
+        caption.value
+        for caption in app.caption
+        if caption.value.startswith("E3 means manually recorded external runtime verification")
     )
     assert (
         "E3 means manually recorded external runtime verification. "
         "E4 means explicit human acceptance. Saving this record does not resolve the criterion "
         "or record final review acceptance."
-    ) in caption_text
+    ) in level_context
+    assert (
+        "Artifact, scenario, environment, observed result, and reviewer are required."
+        in level_context
+    )
+    assert "Limitations are optional." in level_context
 
     app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
     target_captions = [
@@ -1005,9 +1022,12 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
         for caption in app.caption
         if caption.value.startswith("This record will be attached to")
     ]
-    assert target_captions == [
+    assert len(target_captions) == 1
+    assert (
         "This record will be attached to AC-03 — Failed export shows an error message."
-    ]
+        in target_captions[0]
+    )
+    assert "Record a human-supplied observation only." in target_captions[0]
 
 
 def test_manual_runtime_evidence_can_be_recorded_without_changing_static_findings() -> None:
