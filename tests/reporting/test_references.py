@@ -52,6 +52,16 @@ def test_non_link_artifact_reference_cannot_activate_formatting_or_autolinks() -
     assert "https://example.test/plain" not in fragment
 
 
+def test_non_link_artifact_reference_cannot_break_markdown_with_newlines() -> None:
+    reference = "artifact\r\n\r\n    injected code block"
+
+    fragment = render_artifact_reference_markdown(reference)
+
+    assert "\r" not in fragment
+    assert "\n" not in fragment
+    assert " ".join(fragment.replace("\\", "").split()) == "artifact injected code block"
+
+
 def test_escaped_https_markdown_preserves_label_and_navigation_semantics() -> None:
     reference = "https://example.test/path\\*name?label=&copy;"
 

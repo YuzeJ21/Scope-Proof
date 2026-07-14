@@ -33,7 +33,8 @@ def is_linkable_artifact_reference(value: str) -> bool:
 
 
 def _escape_markdown_text(value: str) -> str:
-    escaped = html.escape(value, quote=False)
+    normalized = value.replace("\r", " ").replace("\n", " ")
+    escaped = html.escape(normalized, quote=False)
     return "".join(
         f"\\{character}" if character in _MARKDOWN_PUNCTUATION else character
         for character in escaped
