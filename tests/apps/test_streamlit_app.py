@@ -371,7 +371,7 @@ def test_loaded_public_pr_shows_validated_source_identity_before_criteria_confir
     )
     app = new_app()
     app = app.text_input(key="pr_url").set_value(
-        "https://github.com/acme/widget/pull/7"
+        "https://github.com/operator/entered/pull/42"
     ).run()
 
     with patch(
@@ -384,6 +384,20 @@ def test_loaded_public_pr_shows_validated_source_identity_before_criteria_confir
     code_text = "\n".join(item.value for item in app.code)
     caption_text = "\n".join(item.value for item in app.caption)
     assert "acme/widget · PR #7" in markdown_text
+    assert head_sha in code_text
+    assert "2 changed files fetched" in caption_text
+    assert "Complete ingestion" in caption_text
+    assert app.button(key="run_analysis").disabled is True
+
+    app = app.text_area(key="requirements_input").set_value(
+        "The loaded source identity remains visible while criteria are edited."
+    ).run()
+
+    markdown_text = "\n".join(item.value for item in app.markdown)
+    code_text = "\n".join(item.value for item in app.code)
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "acme/widget · PR #7" in markdown_text
+    assert "operator/entered · PR #42" not in markdown_text
     assert head_sha in code_text
     assert "2 changed files fetched" in caption_text
     assert "Complete ingestion" in caption_text
