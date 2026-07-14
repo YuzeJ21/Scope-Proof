@@ -337,3 +337,83 @@ def test_runtime_evidence_is_append_only_and_does_not_change_gate() -> None:
     assert updated.bundle is not None
     assert updated.bundle.runtime_evidence[0].artifact_reference.endswith("/1")
     assert updated.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+
+
+def test_runtime_evidence_is_revalidated_before_append() -> None:
+    evidence = RuntimeEvidence(
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/run/1",
+        scenario="Export CSV",
+        environment="staging",
+        result="passed",
+        reviewer="QA",
+        evidence_level=EvidenceLevel.E3,
+    )
+    evidence.evidence_level = EvidenceLevel.E1
+
+    with pytest.raises(ValidationError, match="runtime evidence requires E3 or E4"):
+        append_runtime_evidence(initial_state(), evidence)
+
+
+def test_runtime_evidence_requires_an_active_analysis_bundle() -> None:
+    pending = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Updated requirements",
+    )
+    confirmed = confirm_criteria(pending)
+
+    with pytest.raises(
+        ValueError, match="Run a confirmed analysis before recording runtime evidence"
+    ):
+        append_runtime_evidence(
+            confirmed,
+            RuntimeEvidence(
+                criterion_id="AC-01",
+                artifact_reference="https://example.test/run/1",
+                scenario="Export CSV",
+                environment="staging",
+                result="passed",
+                reviewer="QA",
+                evidence_level=EvidenceLevel.E3,
+            ),
+        )
+
+
+def test_runtime_evidence_must_reference_an_active_criterion() -> None:
+    with pytest.raises(
+        ValueError, match="runtime evidence must reference a criterion in the active review"
+    ):
+        append_runtime_evidence(
+            initial_state(),
+            RuntimeEvidence(
+                criterion_id="AC-99",
+                artifact_reference="https://example.test/run/1",
+                scenario="Export CSV",
+                environment="staging",
+                result="passed",
+                reviewer="QA",
+                evidence_level=EvidenceLevel.E3,
+            ),
+        )
+
+
+def test_appended_runtime_evidence_does_not_alias_the_supplied_object() -> None:
+    evidence = RuntimeEvidence(
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/run/1",
+        scenario="Export CSV",
+        environment="staging",
+        result="passed",
+        reviewer="QA",
+        evidence_level=EvidenceLevel.E3,
+        limitations=["Browser only"],
+    )
+
+    updated = append_runtime_evidence(initial_state(), evidence)
+    evidence.result = ""
+    evidence.limitations.append("Caller mutation")
+
+    assert updated.bundle is not None
+    assert updated.bundle.runtime_evidence[0].result == "passed"
+    assert updated.bundle.runtime_evidence[0].limitations == ["Browser only"]
