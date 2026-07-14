@@ -93,6 +93,23 @@ def test_revise_criteria_preserves_valid_requirements_source() -> None:
     assert revised.criteria_revision.source_text == source_text
 
 
+def test_revise_criteria_revalidates_supplied_criteria() -> None:
+    criterion = Criterion(criterion_id="AC-01", text="Export filtered CSV")
+    criterion.text = ""
+
+    with pytest.raises(ValidationError, match="String should have at least 1 character"):
+        revise_criteria(initial_state(), [criterion], "Updated requirements")
+
+
+def test_revised_criteria_do_not_alias_supplied_objects() -> None:
+    criterion = Criterion(criterion_id="AC-01", text="Export filtered CSV")
+
+    revised = revise_criteria(initial_state(), [criterion], "Updated requirements")
+    criterion.text = "Caller mutation"
+
+    assert revised.criteria_revision.criteria[0].text == "Export filtered CSV"
+
+
 def test_confirmation_keeps_revision_and_unblocks_future_analysis() -> None:
     revised = revise_criteria(
         initial_state(), [Criterion(criterion_id="AC-01", text="Export filtered CSV")], "Updated"
