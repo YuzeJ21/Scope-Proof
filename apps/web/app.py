@@ -200,6 +200,38 @@ def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
 
 
+def _clear_criterion_detail_drafts() -> bool:
+    """Clear unsaved target-specific inputs and report whether any draft existed."""
+    runtime_text_keys = (
+        "runtime_artifact_reference",
+        "runtime_scenario",
+        "runtime_environment",
+        "runtime_result",
+        "runtime_reviewer",
+        "runtime_limitations",
+    )
+    had_pending_input = any(
+        bool(str(st.session_state.get(key, ""))) for key in runtime_text_keys
+    )
+    had_pending_input = had_pending_input or (
+        st.session_state.get("runtime_evidence_level", EvidenceLevel.E3)
+        != EvidenceLevel.E3
+    )
+    had_pending_input = had_pending_input or (
+        st.session_state.get("resolution_decision") is not None
+        or bool(str(st.session_state.get("resolution_note", "")))
+        or "manual_evidence_level" in st.session_state
+    )
+
+    for key in runtime_text_keys:
+        st.session_state[key] = ""
+    st.session_state["runtime_evidence_level"] = EvidenceLevel.E3
+    st.session_state["resolution_decision"] = None
+    st.session_state["resolution_note"] = ""
+    st.session_state.pop("manual_evidence_level", None)
+    return had_pending_input
+
+
 def _render_sidebar_step(text: str, anchor: str | None = None) -> None:
     st.markdown(f"[{text}]({anchor})" if anchor is not None else text)
 
@@ -775,6 +807,31 @@ else:
         options=[criterion.criterion_id for criterion in bundle.criteria],
         key="selected_criterion",
     )
+    assert review_state is not None
+    criterion_detail_target = (
+        review_state.review.review_id,
+        review_state.review.head_sha,
+        review_state.criteria_revision.number,
+        selected_id,
+    )
+    previous_criterion_detail_target = st.session_state.get(
+        "criterion_detail_form_target"
+    )
+    if (
+        previous_criterion_detail_target is not None
+        and previous_criterion_detail_target != criterion_detail_target
+        and _clear_criterion_detail_drafts()
+    ):
+        st.session_state["criterion_detail_form_reset_notice"] = (
+            "Unsaved runtime evidence or resolution inputs were cleared because the review "
+            f"target changed. Re-enter them for {selected_id} before saving."
+        )
+    st.session_state["criterion_detail_form_target"] = criterion_detail_target
+    criterion_detail_form_reset_notice = st.session_state.pop(
+        "criterion_detail_form_reset_notice", None
+    )
+    if criterion_detail_form_reset_notice is not None:
+        st.info(criterion_detail_form_reset_notice)
     selected_criterion = next(
         criterion for criterion in bundle.criteria if criterion.criterion_id == selected_id
     )
