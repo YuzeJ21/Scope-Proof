@@ -1055,14 +1055,22 @@ else:
         key="save_review",
         disabled=review_matches_local_save or not review_store_available,
     ):
-        review_store.save(review_state)
-        st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(
-            review_state
-        )
-        st.session_state["review_save_notice"] = (
-            f"Review saved locally. ID: {review_state.review.review_id}."
-        )
-        st.rerun()
+        try:
+            review_store.save(review_state)
+        except (OSError, ValueError):
+            st.error(
+                "The review could not be saved locally. The current review remains open "
+                "as unsaved work. Verify the local review directory and review integrity, "
+                "then try again."
+            )
+        else:
+            st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(
+                review_state
+            )
+            st.session_state["review_save_notice"] = (
+                f"Review saved locally. ID: {review_state.review.review_id}."
+            )
+            st.rerun()
     if review_save_notice is not None:
         st.success(review_save_notice)
     verdict = _status_label(bundle.gate.verdict.value)
