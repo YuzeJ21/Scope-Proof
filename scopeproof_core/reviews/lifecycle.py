@@ -25,6 +25,11 @@ class ResolutionEventStatus(StrEnum):
     PRIOR_REVISION = "prior_revision"
 
 
+def _validated_state(state: ReviewState) -> ReviewState:
+    """Revalidate mutable model input before applying a lifecycle transition."""
+    return ReviewState.model_validate(state.model_dump(mode="python"))
+
+
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
     """Initialize lifecycle state from an already validated analysis bundle."""
     revision = CriteriaRevision(
@@ -41,6 +46,7 @@ def revise_criteria(
     state: ReviewState, criteria: list[Criterion], source_text: str
 ) -> ReviewState:
     """Create an unconfirmed revision and preserve the superseded analysis."""
+    state = _validated_state(state)
     history = [*state.analysis_history]
     if state.bundle is not None:
         history.append(state.bundle)
@@ -64,6 +70,7 @@ def revise_criteria(
 
 def confirm_criteria(state: ReviewState) -> ReviewState:
     """Mark the active revision confirmed without manufacturing an analysis."""
+    state = _validated_state(state)
     if state.bundle is not None:
         raise ValueError(
             "criteria confirmation requires a pending revision without an active bundle"
@@ -152,6 +159,7 @@ def _recalculate(state: ReviewState) -> ReviewState:
 
 def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState:
     """Append an event, bind it to the active revision, and rerun the deterministic gate."""
+    state = _validated_state(state)
     bound_event = event.model_copy(
         update={"criteria_revision_number": state.criteria_revision.number}
     )
@@ -163,6 +171,7 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
 def append_runtime_evidence(state: ReviewState, evidence: RuntimeEvidence) -> ReviewState:
     """Append a manual runtime record without upgrading static findings or gate truth."""
 
+    state = _validated_state(state)
     if state.bundle is None:
         raise ValueError("Run a confirmed analysis before recording runtime evidence")
     if evidence.criterion_id not in {criterion.criterion_id for criterion in state.bundle.criteria}:

@@ -131,6 +131,49 @@ def test_confirmation_rejects_an_active_analysis_bundle() -> None:
         confirm_criteria(active_unconfirmed)
 
 
+@pytest.mark.parametrize(
+    "operation",
+    ["revise_criteria", "confirm_criteria", "append_resolution", "append_runtime_evidence"],
+)
+def test_lifecycle_operations_revalidate_active_review_identity(operation: str) -> None:
+    state = initial_state()
+    divergent = state.model_copy(
+        update={
+            "review": state.review.model_copy(update={"head_sha": "different-head"})
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="active bundle review must match lifecycle review"
+    ):
+        if operation == "revise_criteria":
+            revise_criteria(
+                divergent,
+                divergent.criteria_revision.criteria,
+                divergent.criteria_revision.source_text,
+            )
+        elif operation == "confirm_criteria":
+            confirm_criteria(divergent)
+        elif operation == "append_resolution":
+            append_resolution(
+                divergent,
+                ResolutionEvent(event_id="identity-probe", final_acceptance=False),
+            )
+        else:
+            append_runtime_evidence(
+                divergent,
+                RuntimeEvidence(
+                    criterion_id="AC-01",
+                    artifact_reference="local-identity-probe",
+                    scenario="Reject contradictory lifecycle state",
+                    environment="local",
+                    result="observed",
+                    reviewer="Codex",
+                    evidence_level=EvidenceLevel.E3,
+                ),
+            )
+
+
 def test_resolution_events_preserve_history_and_latest_decision_controls_gate() -> None:
     state = initial_state()
     state = append_resolution(
