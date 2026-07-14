@@ -53,6 +53,24 @@ def finding_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
+def review_identity_payload(model, **overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "repository": "acme/widgets",
+        "pr_number": 7,
+        "base_sha": "base123",
+        "head_sha": "head123",
+    }
+    if model is PullRequestSnapshot:
+        payload.update(
+            {
+                "title": "Example",
+                "html_url": "https://github.com/acme/widgets/pull/7",
+            }
+        )
+    payload.update(overrides)
+    return payload
+
+
 def test_evidence_rejects_line_range_without_sha() -> None:
     with pytest.raises(ValidationError):
         EvidenceItem(
@@ -183,6 +201,39 @@ def test_finding_context_allows_empty_optional_lists() -> None:
 
     assert finding.missing_evidence == []
     assert finding.contradictions == []
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+@pytest.mark.parametrize("field_name", ["base_sha", "head_sha"])
+@pytest.mark.parametrize("blank", ["   ", "\t\n"])
+def test_review_identity_rejects_whitespace_only_shas(model, field_name, blank) -> None:
+    with pytest.raises(
+        ValidationError, match="review identity must contain non-whitespace text"
+    ):
+        model.model_validate(review_identity_payload(model, **{field_name: blank}))
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+@pytest.mark.parametrize("repository", [" / ", "acme/ ", " acme/widgets", "acme/widgets/extra"])
+def test_review_identity_rejects_malformed_repositories(model, repository) -> None:
+    with pytest.raises(ValidationError):
+        model.model_validate(review_identity_payload(model, repository=repository))
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_review_identity_preserves_valid_nonblank_values(model) -> None:
+    payload = review_identity_payload(
+        model,
+        repository="YuzeJ21/Scope-Proof",
+        base_sha="  base123  ",
+        head_sha="head-demo-002",
+    )
+
+    identity = model.model_validate(payload)
+
+    assert identity.repository == "YuzeJ21/Scope-Proof"
+    assert identity.base_sha == "  base123  "
+    assert identity.head_sha == "head-demo-002"
 
 
 def test_review_requires_confirmed_criteria_before_analysis() -> None:

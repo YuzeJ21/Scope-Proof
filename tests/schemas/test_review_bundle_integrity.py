@@ -217,6 +217,24 @@ def test_review_bundle_integrity_rejects_runtime_evidence_for_unknown_criterion(
         ReviewBundle.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("repository", " / "),
+        ("base_sha", "   "),
+        ("head_sha", "\t"),
+    ],
+)
+def test_review_bundle_integrity_rejects_invalid_review_identity(
+    field_name: str, invalid_value: str
+) -> None:
+    payload = bundle_payload()
+    payload["review"][field_name] = invalid_value
+
+    with pytest.raises(ValidationError):
+        ReviewBundle.model_validate(payload)
+
+
 def test_review_bundle_integrity_rejects_duplicate_resolution_ids() -> None:
     payload = bundle_payload()
     payload["resolutions"].append(payload["resolutions"][0].copy())
