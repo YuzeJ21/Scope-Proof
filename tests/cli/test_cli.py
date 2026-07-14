@@ -9,6 +9,27 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.version import __version__
 
 
+def action_evidence_data() -> dict:
+    return {
+        "repository": "acme/demo",
+        "requirements_base_sha": "base123",
+        "non_fork_pr_url": "https://github.com/acme/demo/pull/12",
+        "non_fork_head_sha": "head123",
+        "non_fork_run_url": "https://github.com/acme/demo/actions/runs/1",
+        "non_fork_comment_count": 1,
+        "scopeproof_comment_marker": "<!-- scopeproof:head123 -->",
+        "rerun_url": "https://github.com/acme/demo/actions/runs/2",
+        "rerun_head_sha": "head123",
+        "rerun_comment_count": 1,
+        "fork_pr_url": "https://github.com/acme/demo/pull/13",
+        "fork_run_url": "https://github.com/acme/demo/actions/runs/3",
+        "fork_comment_count": 0,
+        "validated_by": "Demo owner",
+        "validated_at": "2026-07-11T00:00:00Z",
+        "limitations": ["Public demo only"],
+    }
+
+
 def test_cli_reports_shared_version_without_a_subcommand(capsys) -> None:
     with pytest.raises(SystemExit) as raised:
         main(["--version"])
@@ -246,32 +267,24 @@ def test_export_command_supports_self_contained_html(tmp_path: Path, capsys) -> 
 
 def test_action_evidence_command_validates_owner_supplied_record(tmp_path: Path, capsys) -> None:
     evidence_path = tmp_path / "action-evidence.json"
-    evidence_path.write_text(
-        json.dumps(
-            {
-                "repository": "acme/demo",
-                "requirements_base_sha": "base123",
-                "non_fork_pr_url": "https://github.com/acme/demo/pull/12",
-                "non_fork_head_sha": "head123",
-                "non_fork_run_url": "https://github.com/acme/demo/actions/runs/1",
-                "non_fork_comment_count": 1,
-                "scopeproof_comment_marker": "<!-- scopeproof:head123 -->",
-                "rerun_url": "https://github.com/acme/demo/actions/runs/2",
-                "rerun_head_sha": "head123",
-                "rerun_comment_count": 1,
-                "fork_pr_url": "https://github.com/acme/demo/pull/13",
-                "fork_run_url": "https://github.com/acme/demo/actions/runs/3",
-                "fork_comment_count": 0,
-                "validated_by": "Demo owner",
-                "validated_at": "2026-07-11T00:00:00Z",
-                "limitations": ["Public demo only"],
-            }
-        ),
-        encoding="utf-8",
-    )
+    evidence_path.write_text(json.dumps(action_evidence_data()), encoding="utf-8")
 
     assert main(["validate-action-evidence", str(evidence_path)]) == 0
     assert '"repository": "acme/demo"' in capsys.readouterr().out
+
+
+def test_action_evidence_command_rejects_blank_owner_context(tmp_path: Path, capsys) -> None:
+    evidence_path = tmp_path / "blank-action-evidence.json"
+    payload = action_evidence_data() | {"validated_by": "   "}
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        main(["validate-action-evidence", str(evidence_path)])
+
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert "non-whitespace" in captured.err
+    assert '"repository"' not in captured.out
 
 
 def test_requirements_confirmation_command_validates_bound_record(tmp_path: Path, capsys) -> None:
