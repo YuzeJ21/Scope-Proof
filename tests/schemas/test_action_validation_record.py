@@ -117,3 +117,64 @@ def test_action_validation_record_preserves_valid_human_context() -> None:
 
     assert record.validated_by == "  Demo repository owner  "
     assert record.limitations == ["  Public demo only  "]
+
+
+@pytest.mark.parametrize(
+    ("repository", "url_prefix"),
+    [
+        (" / ", "https://github.com/ / "),
+        ("ac me/de mo", "https://github.com/ac me/de mo"),
+        (" acme/demo", "https://github.com/ acme/demo"),
+        ("acme/demo\t", "https://github.com/acme/demo\t"),
+    ],
+)
+def test_action_validation_record_rejects_noncanonical_repository_identity(
+    repository: str, url_prefix: str
+) -> None:
+    payload = record_data() | {
+        "repository": repository,
+        "non_fork_pr_url": f"{url_prefix}/pull/12",
+        "non_fork_run_url": f"{url_prefix}/actions/runs/1",
+        "rerun_url": f"{url_prefix}/actions/runs/2",
+        "fork_pr_url": f"{url_prefix}/pull/13",
+        "fork_run_url": f"{url_prefix}/actions/runs/3",
+    }
+
+    with pytest.raises(ValueError, match="string_pattern_mismatch"):
+        ActionValidationRecord.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "non_fork_pr_url",
+        "non_fork_run_url",
+        "rerun_url",
+        "fork_pr_url",
+        "fork_run_url",
+    ],
+)
+def test_action_validation_record_rejects_noncanonical_github_url_field(
+    field_name: str,
+) -> None:
+    payload = record_data()
+    suffix = "/pull/12" if field_name.endswith("pr_url") else "/actions/runs/1"
+    payload[field_name] = f"https://github.com/ac me/demo{suffix}"
+
+    with pytest.raises(ValueError, match="string_pattern_mismatch"):
+        ActionValidationRecord.model_validate(payload)
+
+
+def test_action_validation_record_accepts_supported_slug_characters() -> None:
+    payload = record_data() | {
+        "repository": "acme-team/demo.repo_name",
+        "non_fork_pr_url": "https://github.com/acme-team/demo.repo_name/pull/12",
+        "non_fork_run_url": "https://github.com/acme-team/demo.repo_name/actions/runs/1",
+        "rerun_url": "https://github.com/acme-team/demo.repo_name/actions/runs/2",
+        "fork_pr_url": "https://github.com/acme-team/demo.repo_name/pull/13",
+        "fork_run_url": "https://github.com/acme-team/demo.repo_name/actions/runs/3",
+    }
+
+    record = ActionValidationRecord.model_validate(payload)
+
+    assert record.repository == "acme-team/demo.repo_name"
