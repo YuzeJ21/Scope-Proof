@@ -23,6 +23,8 @@ ACTIVE_REVIEW_OVERRIDES = [
     {"ruleset_version": "0.0.0-history"},
 ]
 
+COERCIVE_REVISION_VALUES = [True, False, "1", "01", 1.0, 2.0]
+
 
 @pytest.mark.parametrize("review_overrides", ACTIVE_REVIEW_OVERRIDES)
 def test_review_state_rejects_divergent_active_bundle_review(review_overrides) -> None:
@@ -49,6 +51,26 @@ def test_standalone_review_bundle_defaults_to_unknown_criteria_revision() -> Non
     assert bundle.criteria_revision_number == "unknown"
 
 
+def test_standalone_review_bundle_accepts_strict_positive_integer_revision() -> None:
+    payload = build_demo_review().model_dump(mode="python")
+    payload["criteria_revision_number"] = 1
+
+    bundle = ReviewBundle.model_validate(payload)
+
+    assert bundle.criteria_revision_number == 1
+
+
+@pytest.mark.parametrize("revision_number", COERCIVE_REVISION_VALUES)
+def test_review_bundle_rejects_coercive_criteria_revision_values(
+    revision_number: object,
+) -> None:
+    payload = build_demo_review().model_dump(mode="python")
+    payload["criteria_revision_number"] = revision_number
+
+    with pytest.raises(ValidationError):
+        ReviewBundle.model_validate(payload)
+
+
 @pytest.mark.parametrize("revision_number", [0, -1])
 def test_review_bundle_rejects_non_positive_known_criteria_revision(
     revision_number: int,
@@ -71,6 +93,17 @@ def test_review_state_rejects_active_bundle_revision_mismatch(
         ValidationError,
         match="active bundle revision must match the active criteria revision",
     ):
+        ReviewState.model_validate(payload)
+
+
+@pytest.mark.parametrize("bundle_revision", COERCIVE_REVISION_VALUES)
+def test_review_state_rejects_coercive_active_bundle_revision(
+    bundle_revision: object,
+) -> None:
+    payload = new_review_state(build_demo_review()).model_dump(mode="python")
+    payload["bundle"]["criteria_revision_number"] = bundle_revision
+
+    with pytest.raises(ValidationError):
         ReviewState.model_validate(payload)
 
 
@@ -225,6 +258,23 @@ def test_review_state_preserves_unknown_historical_revision() -> None:
     reopened = ReviewState.model_validate(payload)
 
     assert reopened.analysis_history[0].criteria_revision_number == "unknown"
+
+
+@pytest.mark.parametrize("historical_revision", COERCIVE_REVISION_VALUES)
+def test_review_state_rejects_coercive_historical_bundle_revision(
+    historical_revision: object,
+) -> None:
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        state.criteria_revision.source_text,
+    )
+    payload = revised.model_dump(mode="python")
+    payload["analysis_history"][0]["criteria_revision_number"] = historical_revision
+
+    with pytest.raises(ValidationError):
+        ReviewState.model_validate(payload)
 
 
 @pytest.mark.parametrize(

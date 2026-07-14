@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import uuid4
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PositiveInt,
+    StrictInt,
     computed_field,
     field_validator,
     model_validator,
@@ -542,7 +542,9 @@ class GateDecision(BaseModel):
 
 class ReviewBundle(BaseModel):
     review: Review
-    criteria_revision_number: PositiveInt | Literal["unknown"] = "unknown"
+    criteria_revision_number: Annotated[StrictInt, Field(gt=0)] | Literal[
+        "unknown"
+    ] = "unknown"
     source_text: str
     criteria: list[Criterion]
     evidence: list[EvidenceItem]
