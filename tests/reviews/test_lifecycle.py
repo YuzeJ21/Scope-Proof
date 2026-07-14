@@ -396,6 +396,27 @@ def test_resolution_event_statuses_separate_prior_revisions() -> None:
     ]
 
 
+def test_append_resolution_rejects_an_existing_event_id() -> None:
+    state = append_resolution(
+        initial_state(),
+        ResolutionEvent(
+            event_id="event-1",
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="resolution event ID must be unique"):
+        append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="event-1",
+                final_acceptance=True,
+                comment="Release approved",
+            ),
+        )
+
+
 def test_final_acceptance_event_allows_ready_after_criterion_resolution() -> None:
     state = append_resolution(
         initial_state(),

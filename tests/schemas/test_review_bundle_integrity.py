@@ -16,10 +16,16 @@ from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
     HumanResolution,
+    ResolutionEvent,
     Review,
     ReviewBundle,
     RuntimeEvidence,
 )
+
+
+def test_resolution_event_rejects_a_blank_event_id() -> None:
+    with pytest.raises(ValidationError, match="event ID must contain non-whitespace text"):
+        ResolutionEvent(event_id="   ", final_acceptance=False)
 
 
 def valid_bundle() -> ReviewBundle:

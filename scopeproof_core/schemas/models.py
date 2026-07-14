@@ -478,6 +478,13 @@ class ResolutionEvent(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     criteria_revision_number: int = Field(default=0, ge=0)
 
+    @field_validator("event_id")
+    @classmethod
+    def require_non_blank_event_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("event ID must contain non-whitespace text")
+        return value
+
     @model_validator(mode="after")
     def validate_event_kind(self) -> ResolutionEvent:
         is_criterion_event = self.criterion_id is not None and self.decision is not None
@@ -606,6 +613,17 @@ class ReviewState(BaseModel):
 
     @model_validator(mode="after")
     def validate_active_review_identity(self) -> ReviewState:
+        event_ids = [event.event_id for event in self.resolution_events]
+        if len(event_ids) != len(set(event_ids)):
+            raise ValueError("resolution event IDs must be unique")
+        if any(
+            event.criteria_revision_number < 1
+            or event.criteria_revision_number > self.criteria_revision.number
+            for event in self.resolution_events
+        ):
+            raise ValueError(
+                "resolution event revisions must reference an existing criteria revision"
+            )
         if self.bundle is not None and self.bundle.review != self.review:
             raise ValueError("active bundle review must match lifecycle review")
         if self.review.criteria_confirmed != self.criteria_revision.confirmed:
