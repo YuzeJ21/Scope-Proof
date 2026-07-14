@@ -1221,7 +1221,7 @@ with st.sidebar:
     else:
         _render_sidebar_step("Locked — Run deterministic analysis")
     if has_analysis:
-        _render_sidebar_step("Complete — Review and export available")
+        _render_sidebar_step("Available — Review evidence and export")
     else:
         _render_sidebar_step("Locked — Review and export")
     st.divider()

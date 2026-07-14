@@ -566,7 +566,8 @@ def test_sidebar_reports_analysis_and_review_availability() -> None:
 
     sidebar_text = "\n".join(markdown.value for markdown in app.sidebar.markdown)
     assert "Complete — Analysis generated" in sidebar_text
-    assert "Complete — Review and export available" in sidebar_text
+    assert "Available — Review evidence and export" in sidebar_text
+    assert "Complete — Review and export available" not in sidebar_text
 
 
 @pytest.mark.parametrize(
@@ -794,7 +795,7 @@ def test_sidebar_step_navigation_tracks_available_workflow_sections() -> None:
         "[Complete — Criteria prepared](#2-confirm-criteria)",
         "[Complete — Criteria confirmed](#2-confirm-criteria)",
         "[Complete — Analysis generated](#3-evidence-matrix)",
-        "Complete — Review and export available",
+        "Available — Review evidence and export",
     ]
 
 
