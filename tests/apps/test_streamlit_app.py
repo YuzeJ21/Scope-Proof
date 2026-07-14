@@ -129,6 +129,19 @@ def test_sidebar_reports_confirmation_and_next_action_in_same_run() -> None:
     assert "active_step" not in app.session_state.filtered_state
 
 
+def test_criteria_confirmation_shows_one_durable_success_message() -> None:
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert [item.value for item in app.success] == [
+        "Criteria confirmed by the reviewer."
+    ]
+    sidebar_text = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Complete — Criteria confirmed" in sidebar_text
+    assert "Next — Run deterministic analysis" in sidebar_text
+    assert app.button(key="run_analysis").disabled is False
+
+
 def test_sidebar_reports_analysis_and_review_availability() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
