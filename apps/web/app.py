@@ -976,20 +976,27 @@ else:
         if review_state is None:
             st.error("Run analysis before recording final acceptance.")
         else:
-            review_state = append_resolution(
-                review_state,
-                ResolutionEvent(
-                    final_acceptance=True,
-                    comment="Reviewer recorded final acceptance",
-                ),
-            )
-            st.session_state["review_state"] = review_state
-            st.session_state["bundle"] = review_state.bundle
-            bundle = review_state.bundle
-            st.session_state["final_acceptance_save_notice"] = (
-                "Final acceptance appended to the local review history."
-            )
-            st.rerun()
+            try:
+                review_state = append_resolution(
+                    review_state,
+                    ResolutionEvent(
+                        final_acceptance=True,
+                        comment="Reviewer recorded final acceptance",
+                    ),
+                )
+            except ValueError:
+                st.error(
+                    "Final acceptance could not be recorded. The review remains unchanged. "
+                    "Verify the active review state and try again."
+                )
+            else:
+                st.session_state["review_state"] = review_state
+                st.session_state["bundle"] = review_state.bundle
+                bundle = review_state.bundle
+                st.session_state["final_acceptance_save_notice"] = (
+                    "Final acceptance appended to the local review history."
+                )
+                st.rerun()
     if final_acceptance_save_notice is not None:
         st.success(final_acceptance_save_notice)
 
