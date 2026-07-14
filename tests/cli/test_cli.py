@@ -306,6 +306,63 @@ def test_export_command_supports_self_contained_html(tmp_path: Path, capsys) -> 
     assert "<!doctype html>" in capsys.readouterr().out.lower()
 
 
+def test_delete_command_removes_one_saved_local_review(tmp_path: Path, capsys) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    store_dir = tmp_path / "reviews"
+    assert main(
+        [
+            "review",
+            "--fixture",
+            "evals/fixtures/complete_implementation_pr.json",
+            "--requirements",
+            str(requirements),
+            "--storage-dir",
+            str(store_dir),
+        ]
+    ) == 0
+    review_id = json.loads(capsys.readouterr().out)["review_id"]
+
+    assert main(["delete", review_id, "--storage-dir", str(store_dir)]) == 0
+
+    assert json.loads(capsys.readouterr().out) == {
+        "deleted_review_id": review_id,
+        "storage_dir": str(store_dir),
+    }
+    assert not (store_dir / f"{review_id}.json").exists()
+
+
+@pytest.mark.parametrize("review_id", ["missing-review", "../invalid-review"])
+def test_delete_command_reports_invalid_or_missing_id_without_deleting_neighbor(
+    tmp_path: Path, capsys, review_id: str
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    store_dir = tmp_path / "reviews"
+    assert main(
+        [
+            "review",
+            "--fixture",
+            "evals/fixtures/complete_implementation_pr.json",
+            "--requirements",
+            str(requirements),
+            "--storage-dir",
+            str(store_dir),
+        ]
+    ) == 0
+    neighbor_id = json.loads(capsys.readouterr().out)["review_id"]
+
+    with pytest.raises(SystemExit) as raised:
+        main(["delete", review_id, "--storage-dir", str(store_dir)])
+
+    assert raised.value.code == 2
+    captured = capsys.readouterr()
+    assert "scopeproof: error:" in captured.err
+    assert "Traceback" not in captured.err
+    assert captured.out == ""
+    assert (store_dir / f"{neighbor_id}.json").is_file()
+
+
 def test_action_evidence_command_validates_owner_supplied_record(tmp_path: Path, capsys) -> None:
     evidence_path = tmp_path / "action-evidence.json"
     evidence_path.write_text(json.dumps(action_evidence_data()), encoding="utf-8")
