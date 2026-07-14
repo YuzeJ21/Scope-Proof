@@ -106,9 +106,9 @@ must-have False Ready cases, and HTTP health `ok`.
 - [ ] **Step 2: Perform current-browser comparison**
 
 Reload the local workbench, reach the analyzed demo without recording external
-evidence, and inspect the runtime-record presentation through controlled local fixture
-state. Save and inspect the accepted screenshot. Confirm labels and layout are visible;
-do not claim the fixture as real runtime evidence.
+evidence, and verify the unchanged prerequisite and final-acceptance boundaries. Do not
+submit invented runtime evidence solely to create a screenshot. Treat the AppTest
+render-tree assertions as the authoritative evidence for the saved-record fields.
 
 - [ ] **Step 3: Publish through the protected workflow**
 

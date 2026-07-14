@@ -97,8 +97,10 @@ fixtures solely to verify rendering behavior and make no external-validation cla
 - Preserve the existing plain-artifact rendering and runtime append-only tests.
 - Run focused and adjacent Streamlit tests, Ruff, the complete offline suite, the
   deterministic benchmark, `git diff --check`, and a loopback Streamlit health smoke.
-- Reload the current browser flow and capture the rendered runtime-record layout using
-  controlled local fixture state only; do not claim it as external evidence.
+- Reload the current browser flow and verify the unchanged prerequisite and final-
+  acceptance boundaries. Do not submit invented runtime evidence solely to create a
+  screenshot; use AppTest render-tree assertions as the authoritative saved-record
+  display evidence.
 
 ## Approval Basis
 

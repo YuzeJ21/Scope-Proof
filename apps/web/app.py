@@ -1156,10 +1156,18 @@ else:
     ]
     for item in selected_runtime:
         artifact_reference = render_artifact_reference_markdown(item.artifact_reference)
-        st.markdown(
-            f"- {artifact_reference} — {item.scenario} "
-            f"({item.environment}: {item.result}; {item.evidence_level.value})"
-        )
+        with st.container(border=True):
+            st.markdown(f"{artifact_reference} — {item.scenario}")
+            st.markdown(f"**Environment:** {item.environment}")
+            st.markdown(f"**Observed result:** {item.result}")
+            st.markdown(f"**Evidence level:** {item.evidence_level.value}")
+            st.markdown(f"**Reviewer:** {item.reviewer}")
+            st.markdown("**Limitations**")
+            if item.limitations:
+                for limitation in item.limitations:
+                    st.markdown(f"- {limitation}")
+            else:
+                st.caption("No limitations recorded.")
 
     resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
 

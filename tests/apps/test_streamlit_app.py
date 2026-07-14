@@ -2377,9 +2377,65 @@ def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
         for item in app.markdown
         if "artifact\\-42" in item.value
     ]
-    assert runtime_rows == [
-        "- artifact-42 — Fixture scenario (Fixture environment: Fixture result; E3)"
-    ]
+    assert runtime_rows == ["artifact-42 — Fixture scenario"]
+
+
+def test_runtime_record_shows_reviewer_and_limitations() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "artifact-complete-record"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value(
+        "Controlled export scenario"
+    ).run()
+    app = app.text_input(key="runtime_environment").set_value(
+        "Controlled environment"
+    ).run()
+    app = app.text_input(key="runtime_result").set_value(
+        "Controlled observed result"
+    ).run()
+    app = app.text_input(key="runtime_reviewer").set_value(
+        "Controlled reviewer"
+    ).run()
+    app = app.text_area(key="runtime_limitations").set_value(
+        "Browser-only observation\nMobile behavior not observed"
+    ).run()
+
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    rendered = [item.value.replace("\\", "") for item in app.markdown]
+    assert "artifact-complete-record — Controlled export scenario" in rendered
+    assert "**Environment:** Controlled environment" in rendered
+    assert "**Observed result:** Controlled observed result" in rendered
+    assert "**Evidence level:** E3" in rendered
+    assert "**Reviewer:** Controlled reviewer" in rendered
+    assert "**Limitations**" in rendered
+    assert "- Browser-only observation" in rendered
+    assert "- Mobile behavior not observed" in rendered
+    assert "No limitations recorded." not in [item.value for item in app.caption]
+
+
+def test_runtime_record_shows_explicit_empty_limitations_state() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "artifact-no-limitations"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value(
+        "Controlled export scenario"
+    ).run()
+    app = app.text_input(key="runtime_environment").set_value(
+        "Controlled environment"
+    ).run()
+    app = app.text_input(key="runtime_result").set_value(
+        "Controlled observed result"
+    ).run()
+    app = app.text_input(key="runtime_reviewer").set_value(
+        "Controlled reviewer"
+    ).run()
+
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    assert "No limitations recorded." in [item.value for item in app.caption]
 
 
 def test_successful_runtime_evidence_save_clears_form_and_prevents_accidental_repeat() -> None:
