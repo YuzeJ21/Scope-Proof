@@ -398,6 +398,20 @@ class Finding(BaseModel):
     contradictions: list[str] = Field(default_factory=list)
     recommended_action: str
 
+    @field_validator("reason", "recommended_action", mode="before")
+    @classmethod
+    def require_non_blank_explanation(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must contain non-whitespace text")
+        return value
+
+    @field_validator("missing_evidence", "contradictions")
+    @classmethod
+    def require_non_blank_context(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() for item in value):
+            raise ValueError("finding context must contain non-whitespace text")
+        return value
+
 
 class HumanResolution(BaseModel):
     criterion_id: str
