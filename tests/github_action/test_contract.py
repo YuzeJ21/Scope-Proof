@@ -78,3 +78,42 @@ def test_event_context_rejects_invalid_head_sha_shape(invalid_sha: str) -> None:
 
 def test_event_context_preserves_valid_head_sha_exactly() -> None:
     assert context().head_sha == HEAD_SHA
+
+
+@pytest.mark.parametrize(
+    "invalid_repository",
+    [
+        " / ",
+        "ac me/de mo",
+        " acme/demo",
+        "acme/demo\t",
+        "acme/demo/extra",
+        "acme@team/demo",
+        "acme/demo#repo",
+    ],
+)
+def test_event_context_rejects_noncanonical_repository_identity(
+    invalid_repository: str,
+) -> None:
+    with pytest.raises(ValueError, match="string_pattern_mismatch"):
+        EventContext(
+            repository=invalid_repository,
+            pr_number=42,
+            head_sha=HEAD_SHA,
+            is_fork=False,
+            requirements_confirmed=True,
+        )
+
+
+def test_event_context_preserves_supported_repository_identity_exactly() -> None:
+    repository = "acme-team/demo.repo_name-test"
+
+    event = EventContext(
+        repository=repository,
+        pr_number=42,
+        head_sha=HEAD_SHA,
+        is_fork=False,
+        requirements_confirmed=True,
+    )
+
+    assert event.repository == repository
