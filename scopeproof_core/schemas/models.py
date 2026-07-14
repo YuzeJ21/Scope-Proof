@@ -349,6 +349,13 @@ class RuntimeEvidence(BaseModel):
             raise ValueError("must contain non-whitespace text")
         return value
 
+    @field_validator("limitations")
+    @classmethod
+    def require_non_blank_limitations(cls, value: list[str]) -> list[str]:
+        if any(not limitation.strip() for limitation in value):
+            raise ValueError("limitations must contain non-whitespace text")
+        return value
+
     @model_validator(mode="after")
     def validate_manual_level(self) -> RuntimeEvidence:
         if self.evidence_level not in {EvidenceLevel.E3, EvidenceLevel.E4}:

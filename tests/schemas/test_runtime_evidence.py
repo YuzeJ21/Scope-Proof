@@ -68,3 +68,29 @@ def test_runtime_evidence_preserves_nonblank_text_exactly(field_name: str) -> No
     evidence = RuntimeEvidence(**payload)
 
     assert getattr(evidence, field_name) == "  retained evidence text  "
+
+
+def test_runtime_evidence_rejects_whitespace_only_limitation() -> None:
+    payload = runtime_evidence_payload()
+    payload["limitations"] = ["Manual observation only", " \t\n "]
+
+    with pytest.raises(ValueError, match="limitations must contain non-whitespace text"):
+        RuntimeEvidence(**payload)
+
+
+def test_runtime_evidence_preserves_nonblank_limitation_exactly() -> None:
+    payload = runtime_evidence_payload()
+    payload["limitations"] = ["  retained limitation text  "]
+
+    evidence = RuntimeEvidence(**payload)
+
+    assert evidence.limitations == ["  retained limitation text  "]
+
+
+def test_runtime_evidence_accepts_empty_limitations() -> None:
+    payload = runtime_evidence_payload()
+    payload["limitations"] = []
+
+    evidence = RuntimeEvidence(**payload)
+
+    assert evidence.limitations == []
