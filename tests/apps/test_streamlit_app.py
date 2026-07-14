@@ -941,6 +941,42 @@ def test_demo_summary_requires_explicit_resolution_decision() -> None:
     assert app.button(key="save_resolution").disabled is True
 
 
+def test_decision_reviewer_is_explicit_and_required_for_human_events() -> None:
+    app = analyzed_demo(new_app())
+
+    assert app.text_input(key="decision_reviewer").value == "Local reviewer"
+    app = app.text_input(key="decision_reviewer").set_value("   ").run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+
+    assert app.button(key="save_resolution").disabled is True
+    assert app.button(key="record_final_acceptance").disabled is True
+    assert (
+        "Decision reviewer is required for an attributable audit event."
+        in [item.value for item in app.caption]
+    )
+
+
+def test_human_events_store_the_trimmed_decision_reviewer() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="decision_reviewer").set_value(
+        "  Controlled reviewer  "
+    ).run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+    app = app.button(key="save_resolution").click().run()
+
+    first_event = app.session_state["review_state"].resolution_events[0]
+    assert first_event.reviewer == "Controlled reviewer"
+
+    app = app.button(key="record_final_acceptance").click().run()
+    final_event = app.session_state["review_state"].resolution_events[1]
+    assert final_event.final_acceptance is True
+    assert final_event.reviewer == "Controlled reviewer"
+
+
 def test_human_decision_explains_selected_gate_impact() -> None:
     app = analyzed_demo(new_app())
     caption_text = "\n".join(item.value for item in app.caption)

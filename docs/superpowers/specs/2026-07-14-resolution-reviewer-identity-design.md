@@ -23,7 +23,10 @@ This is a locally reproduced product limitation, not external validation.
 
 Add one shared text input, `Decision reviewer (required)`, immediately before
 the criterion-resolution controls. Its value is used for both a criterion
-resolution and final acceptance in the current review session.
+resolution and final acceptance in the current review session. Initialize it
+with the existing `Local reviewer` schema default so the local-first workflow
+remains compatible, while making that identity visible and editable before an
+event is recorded.
 
 Until the trimmed value is non-empty:
 
@@ -57,4 +60,3 @@ the existing non-blank default for backwards compatibility.
   green.
 - Browser verification confirms the required input and rendered reviewer while
   the deterministic gate boundary remains unchanged.
-

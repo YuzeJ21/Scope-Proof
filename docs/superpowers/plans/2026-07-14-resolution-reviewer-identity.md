@@ -38,4 +38,3 @@ append function and history renderer.
 - Commit, push, open a ready PR, wait for protected checks, merge only when
   green, verify the exact merge SHA on `main`, clean up, and resume the next
   audit loop.
-

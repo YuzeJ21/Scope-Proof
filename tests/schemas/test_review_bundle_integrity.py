@@ -28,6 +28,12 @@ def test_resolution_event_rejects_a_blank_event_id() -> None:
         ResolutionEvent(event_id="   ", final_acceptance=False)
 
 
+@pytest.mark.parametrize("reviewer", ["", "   ", "\t\n"])
+def test_resolution_event_rejects_a_blank_reviewer(reviewer: str) -> None:
+    with pytest.raises(ValidationError, match="reviewer must contain non-whitespace text"):
+        ResolutionEvent(final_acceptance=False, reviewer=reviewer)
+
+
 def valid_bundle() -> ReviewBundle:
     criterion = Criterion(criterion_id="AC-01", text="Failed export shows an error")
     evidence = EvidenceItem(

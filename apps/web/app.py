@@ -1173,6 +1173,15 @@ else:
 
     resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
 
+    decision_reviewer = st.text_input(
+        "Decision reviewer (required)",
+        value="Local reviewer",
+        key="decision_reviewer",
+    )
+    decision_reviewer_ready = bool(decision_reviewer.strip())
+    if not decision_reviewer_ready:
+        st.caption("Decision reviewer is required for an attributable audit event.")
+
     st.markdown(
         "### Criterion resolution\n\n"
         f"This decision will be recorded for {selected_id} — {selected_criterion.text}. "
@@ -1218,7 +1227,11 @@ else:
     if st.button(
         "Save resolution",
         key="save_resolution",
-        disabled=decision is None or not manual_verification_ready,
+        disabled=(
+            decision is None
+            or not manual_verification_ready
+            or not decision_reviewer_ready
+        ),
     ):
         if review_state is None:
             st.error("Run analysis before recording a human resolution.")
@@ -1230,6 +1243,7 @@ else:
                     decision=decision,
                     comment=resolution_note,
                     claimed_evidence_level=manual_level,
+                    reviewer=decision_reviewer.strip(),
                 )
                 review_state = append_resolution(review_state, event)
             except ValueError:
@@ -1263,7 +1277,7 @@ else:
     if st.button(
         "Record final acceptance",
         key="record_final_acceptance",
-        disabled=final_acceptance_recorded,
+        disabled=final_acceptance_recorded or not decision_reviewer_ready,
     ):
         if review_state is None:
             st.error("Run analysis before recording final acceptance.")
@@ -1274,6 +1288,7 @@ else:
                     ResolutionEvent(
                         final_acceptance=True,
                         comment="Reviewer recorded final acceptance",
+                        reviewer=decision_reviewer.strip(),
                     ),
                 )
             except ValueError:
