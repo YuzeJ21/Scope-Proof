@@ -8,7 +8,12 @@ import pytest
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import export_html, export_markdown
-from scopeproof_core.reviews.lifecycle import new_review_state, revise_criteria
+from scopeproof_core.reviews.lifecycle import (
+    attach_analysis,
+    confirm_criteria,
+    new_review_state,
+    revise_criteria,
+)
 from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
@@ -29,6 +34,44 @@ def review_state():
     return new_review_state(bundle)
 
 
+def attached_review_state():
+    state = new_review_state(build_demo_review())
+    updated_criteria = [
+        item.model_copy(deep=True) for item in state.criteria_revision.criteria
+    ]
+    updated_criteria[0] = updated_criteria[0].model_copy(
+        update={"text": "Updated AC-01 requirement"}
+    )
+    revised = confirm_criteria(
+        revise_criteria(
+            state,
+            updated_criteria,
+            "Updated requirements",
+        )
+    )
+    incoming = build_demo_review()
+    incoming.review = incoming.review.model_copy(
+        update={
+            "repository": revised.review.repository,
+            "pr_number": revised.review.pr_number,
+            "base_sha": revised.review.base_sha,
+            "head_sha": revised.review.head_sha,
+            "check_state": revised.review.check_state,
+            "criteria_confirmed": True,
+            "ingestion_state": revised.review.ingestion_state,
+            "ingestion_warnings": revised.review.ingestion_warnings,
+            "skipped_files": revised.review.skipped_files,
+            "tool_version": revised.review.tool_version,
+            "ruleset_version": revised.review.ruleset_version,
+        }
+    )
+    incoming.source_text = revised.criteria_revision.source_text
+    incoming.criteria = [
+        item.model_copy(deep=True) for item in revised.criteria_revision.criteria
+    ]
+    return attach_analysis(revised, incoming)
+
+
 def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
     state = review_state()
@@ -40,6 +83,32 @@ def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     assert loaded.model_dump(mode="json") == state.model_dump(mode="json")
     assert "ghp_" not in path.read_text(encoding="utf-8")
     assert "authorization" not in path.read_text(encoding="utf-8").lower()
+
+
+def test_attached_analysis_round_trip_preserves_reanalysis_lineage(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    attached = attached_review_state()
+    original = build_demo_review()
+    stable_review_id = attached.review.review_id
+
+    store.save(attached)
+    loaded = store.load(stable_review_id)
+
+    assert loaded == attached
+    assert loaded.criteria_revision.number == 2
+    assert len(loaded.analysis_history) == 1
+    assert loaded.review.review_id == stable_review_id
+    assert loaded.bundle is not None
+    assert loaded.bundle.review.review_id == stable_review_id
+    assert loaded.bundle.source_text == "Updated requirements"
+    assert loaded.bundle.criteria == loaded.criteria_revision.criteria
+    historical = loaded.analysis_history[0]
+    assert historical.source_text == original.source_text
+    assert historical.criteria == original.criteria
+    assert historical.source_text != loaded.bundle.source_text
+    assert historical.criteria != loaded.bundle.criteria
 
 
 def test_historical_review_state_loads_without_ingestion_limitation_fields(

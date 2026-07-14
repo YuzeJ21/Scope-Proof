@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 import pytest
 from pydantic import ValidationError
 
 from scopeproof_core.gates.evaluator import evaluate_gate
+from scopeproof_core.reviews import attach_analysis
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     append_resolution,
@@ -55,6 +58,229 @@ def initial_state():
         gate=evaluate_gate(review, [criterion], [finding], []),
     )
     return new_review_state(bundle)
+
+
+def analysis_bundle_for(
+    state,
+    *,
+    criteria: list[Criterion] | None = None,
+    source_text: str | None = None,
+    review: Review | None = None,
+    resolutions: list[HumanResolution] | None = None,
+) -> ReviewBundle:
+    analysis_criteria = criteria or [
+        criterion.model_copy(deep=True) for criterion in state.criteria_revision.criteria
+    ]
+    analysis_review = review or state.review.model_copy(
+        update={
+            "review_id": "generated-review",
+            "created_at": state.review.created_at + timedelta(seconds=1),
+        }
+    )
+    findings = [
+        Finding(
+            criterion_id=criterion.criterion_id,
+            status=FindingStatus.EVIDENCE_FOUND,
+            evidence_level=EvidenceLevel.E1,
+            reason="Candidate found for the edited criterion",
+            recommended_action="Review evidence",
+        )
+        for criterion in analysis_criteria
+    ]
+    analysis_resolutions = resolutions or []
+    return ReviewBundle(
+        review=analysis_review,
+        source_text=source_text or state.criteria_revision.source_text,
+        criteria=analysis_criteria,
+        evidence=[],
+        findings=findings,
+        resolutions=analysis_resolutions,
+        gate=evaluate_gate(
+            analysis_review,
+            analysis_criteria,
+            findings,
+            analysis_resolutions,
+        ),
+    )
+
+
+def test_attach_analysis_preserves_reanalysis_lineage() -> None:
+    state = append_resolution(
+        initial_state(),
+        ResolutionEvent(
+            event_id="event-1",
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Reviewed the original analysis",
+        ),
+    )
+    original_review_id = state.review.review_id
+    revised = revise_criteria(
+        state,
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_criteria(revised)
+    bundle = analysis_bundle_for(confirmed)
+
+    attached = attach_analysis(confirmed, bundle)
+
+    assert attached.review.review_id == original_review_id
+    assert attached.criteria_revision.number == 2
+    assert attached.criteria_revision == confirmed.criteria_revision
+    assert attached.analysis_history == confirmed.analysis_history
+    assert attached.resolution_events == confirmed.resolution_events
+    assert attached.bundle is not None
+    assert attached.bundle.review == attached.review
+    assert attached.bundle.criteria == confirmed.criteria_revision.criteria
+    assert attached.bundle.source_text == "Export filtered CSV"
+    assert attached.bundle.resolutions == []
+    assert attached.review.final_acceptance is False
+
+    bundle.review.review_id = "caller-mutation"
+    bundle.criteria[0].text = "Caller mutation"
+    bundle.source_text = "Caller mutation"
+
+    assert attached.bundle.review.review_id == original_review_id
+    assert attached.bundle.criteria[0].text == "Export filtered CSV"
+    assert attached.bundle.source_text == "Export filtered CSV"
+
+
+def test_attach_analysis_rejects_an_existing_active_bundle() -> None:
+    state = initial_state()
+    assert state.bundle is not None
+
+    with pytest.raises(
+        ValueError,
+        match="analysis attachment requires a pending revision without an active bundle",
+    ):
+        attach_analysis(state, state.bundle)
+
+
+def test_attach_analysis_rejects_an_unconfirmed_revision() -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+
+    with pytest.raises(
+        ValueError, match="analysis attachment requires a confirmed criteria revision"
+    ):
+        attach_analysis(revised, analysis_bundle_for(revised))
+
+
+def test_attach_analysis_rejects_mismatched_criteria() -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_criteria(revised)
+    mismatched = [Criterion(criterion_id="AC-01", text="Export JSON")]
+
+    with pytest.raises(
+        ValueError, match="attached analysis criteria must match the active revision"
+    ):
+        attach_analysis(
+            confirmed,
+            analysis_bundle_for(confirmed, criteria=mismatched),
+        )
+
+
+def test_attach_analysis_rejects_mismatched_source_text() -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_criteria(revised)
+
+    with pytest.raises(
+        ValueError, match="attached analysis source must match the active revision"
+    ):
+        attach_analysis(
+            confirmed,
+            analysis_bundle_for(confirmed, source_text="Export JSON"),
+        )
+
+
+def test_attach_analysis_rejects_mismatched_review_provenance() -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_criteria(revised)
+    mismatched_review = confirmed.review.model_copy(
+        update={"review_id": "generated-review", "head_sha": "different-head"}
+    )
+
+    with pytest.raises(
+        ValueError, match="attached analysis review must match the lifecycle review"
+    ):
+        attach_analysis(
+            confirmed,
+            analysis_bundle_for(confirmed, review=mismatched_review),
+        )
+
+
+def test_attach_analysis_rejects_preloaded_human_resolutions() -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_criteria(revised)
+    resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Preloaded decision",
+        )
+    ]
+
+    with pytest.raises(
+        ValueError, match="attached analysis must not contain human resolutions"
+    ):
+        attach_analysis(
+            confirmed,
+            analysis_bundle_for(confirmed, resolutions=resolutions),
+        )
+
+
+def test_attach_analysis_rejects_preloaded_final_acceptance() -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_criteria(revised)
+    accepted_review = confirmed.review.model_copy(
+        update={"review_id": "generated-review", "final_acceptance": True}
+    )
+
+    with pytest.raises(
+        ValueError, match="attached analysis must not contain final acceptance"
+    ):
+        attach_analysis(
+            confirmed,
+            analysis_bundle_for(confirmed, review=accepted_review),
+        )
+
+
+def test_attach_analysis_revalidates_a_mutated_bundle() -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_criteria(revised)
+    bundle = analysis_bundle_for(confirmed)
+    bundle.criteria[0].text = ""
+
+    with pytest.raises(ValidationError, match="String should have at least 1 character"):
+        attach_analysis(confirmed, bundle)
 
 
 def test_new_review_state_revalidates_the_supplied_bundle() -> None:
@@ -218,7 +444,13 @@ def test_confirmation_rejects_an_active_analysis_bundle() -> None:
 
 @pytest.mark.parametrize(
     "operation",
-    ["revise_criteria", "confirm_criteria", "append_resolution", "append_runtime_evidence"],
+    [
+        "revise_criteria",
+        "confirm_criteria",
+        "attach_analysis",
+        "append_resolution",
+        "append_runtime_evidence",
+    ],
 )
 def test_lifecycle_operations_revalidate_active_review_identity(operation: str) -> None:
     state = initial_state()
@@ -239,6 +471,9 @@ def test_lifecycle_operations_revalidate_active_review_identity(operation: str) 
             )
         elif operation == "confirm_criteria":
             confirm_criteria(divergent)
+        elif operation == "attach_analysis":
+            assert state.bundle is not None
+            attach_analysis(divergent, state.bundle)
         elif operation == "append_resolution":
             append_resolution(
                 divergent,

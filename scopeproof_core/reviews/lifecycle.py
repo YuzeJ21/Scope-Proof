@@ -98,6 +98,37 @@ def confirm_criteria(state: ReviewState) -> ReviewState:
     return state.model_copy(update={"criteria_revision": revision, "review": review})
 
 
+def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
+    """Attach validated static analysis to a confirmed pending revision."""
+    state = _validated_state(state)
+    bundle = validated_review_bundle(bundle)
+    if state.bundle is not None:
+        raise ValueError(
+            "analysis attachment requires a pending revision without an active bundle"
+        )
+    if not state.criteria_revision.confirmed:
+        raise ValueError("analysis attachment requires a confirmed criteria revision")
+    if bundle.resolutions:
+        raise ValueError("attached analysis must not contain human resolutions")
+    if bundle.review.final_acceptance:
+        raise ValueError("attached analysis must not contain final acceptance")
+    if bundle.criteria != state.criteria_revision.criteria:
+        raise ValueError("attached analysis criteria must match the active revision")
+    if bundle.source_text != state.criteria_revision.source_text:
+        raise ValueError("attached analysis source must match the active revision")
+    rebound_review = bundle.review.model_copy(
+        update={
+            "review_id": state.review.review_id,
+            "created_at": state.review.created_at,
+        }
+    )
+    if rebound_review != state.review:
+        raise ValueError("attached analysis review must match the lifecycle review")
+    active_bundle = bundle.model_copy(deep=True)
+    active_bundle.review = state.review.model_copy(deep=True)
+    return validated_review_state(state.model_copy(update={"bundle": active_bundle}))
+
+
 def resolution_event_statuses(
     events: list[ResolutionEvent], active_revision_number: int
 ) -> list[ResolutionEventStatus]:

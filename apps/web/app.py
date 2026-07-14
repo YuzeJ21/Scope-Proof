@@ -31,6 +31,7 @@ from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     append_resolution,
     append_runtime_evidence,
+    attach_analysis,
     confirm_criteria,
     new_review_state,
     resolution_event_statuses,
@@ -546,11 +547,21 @@ analysis_disabled = not (
     and st.session_state["criteria_confirmed"]
     and bool(st.session_state["criteria"])
     and not criteria_edits_pending
+    and (
+        st.session_state["review_state"] is None
+        or st.session_state["review_state"].bundle is None
+    )
 )
 if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis_disabled):
     bundle = _analyze()
-    st.session_state["bundle"] = bundle
-    st.session_state["review_state"] = new_review_state(bundle)
+    existing_state = st.session_state["review_state"]
+    state = (
+        new_review_state(bundle)
+        if existing_state is None
+        else attach_analysis(existing_state, bundle)
+    )
+    st.session_state["review_state"] = state
+    st.session_state["bundle"] = state.bundle
     st.session_state["source_reload_notice"] = None
     st.rerun()
 

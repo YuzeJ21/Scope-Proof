@@ -1,9 +1,17 @@
+import json
+
 import pytest
 
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
-from scopeproof_core.reviews.lifecycle import append_resolution, new_review_state, revise_criteria
+from scopeproof_core.reviews.lifecycle import (
+    append_resolution,
+    attach_analysis,
+    confirm_criteria,
+    new_review_state,
+    revise_criteria,
+)
 from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
@@ -25,6 +33,44 @@ def state_with_history():
     )
 
 
+def attached_review_state():
+    state = new_review_state(build_demo_review())
+    updated_criteria = [
+        item.model_copy(deep=True) for item in state.criteria_revision.criteria
+    ]
+    updated_criteria[0] = updated_criteria[0].model_copy(
+        update={"text": "Updated AC-01 requirement"}
+    )
+    revised = confirm_criteria(
+        revise_criteria(
+            state,
+            updated_criteria,
+            "Updated requirements",
+        )
+    )
+    incoming = build_demo_review()
+    incoming.review = incoming.review.model_copy(
+        update={
+            "repository": revised.review.repository,
+            "pr_number": revised.review.pr_number,
+            "base_sha": revised.review.base_sha,
+            "head_sha": revised.review.head_sha,
+            "check_state": revised.review.check_state,
+            "criteria_confirmed": True,
+            "ingestion_state": revised.review.ingestion_state,
+            "ingestion_warnings": revised.review.ingestion_warnings,
+            "skipped_files": revised.review.skipped_files,
+            "tool_version": revised.review.tool_version,
+            "ruleset_version": revised.review.ruleset_version,
+        }
+    )
+    incoming.source_text = revised.criteria_revision.source_text
+    incoming.criteria = [
+        item.model_copy(deep=True) for item in revised.criteria_revision.criteria
+    ]
+    return attach_analysis(revised, incoming)
+
+
 def test_lifecycle_markdown_exposes_revision_and_resolution_history() -> None:
     markdown = export_markdown(state_with_history())
 
@@ -42,6 +88,29 @@ def test_lifecycle_json_and_csv_preserve_review_state_without_secret() -> None:
     assert '"resolution_events"' in json_text
     assert "AC-01" in csv_text
     assert "ghp_" not in json_text
+
+
+def test_lifecycle_json_preserves_attached_reanalysis_lineage() -> None:
+    attached = attached_review_state()
+    original = build_demo_review()
+    stable_review_id = attached.review.review_id
+
+    payload = json.loads(export_json(attached))
+
+    assert payload == attached.model_dump(mode="json")
+    assert payload["criteria_revision"]["number"] == 2
+    assert len(payload["analysis_history"]) == 1
+    assert payload["review"]["review_id"] == stable_review_id
+    assert payload["bundle"]["review"]["review_id"] == stable_review_id
+    assert payload["bundle"]["source_text"] == "Updated requirements"
+    assert payload["bundle"]["criteria"] == payload["criteria_revision"]["criteria"]
+    historical = payload["analysis_history"][0]
+    assert historical["source_text"] == original.source_text
+    assert historical["criteria"] == [
+        item.model_dump(mode="json") for item in original.criteria
+    ]
+    assert historical["source_text"] != payload["bundle"]["source_text"]
+    assert historical["criteria"] != payload["bundle"]["criteria"]
 
 
 @pytest.mark.parametrize("exporter", [export_json, export_markdown])

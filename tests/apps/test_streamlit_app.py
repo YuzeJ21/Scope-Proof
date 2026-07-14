@@ -765,6 +765,58 @@ def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> No
     assert app.button(key="record_final_acceptance").disabled is False
 
 
+def test_analysis_is_disabled_with_active_bundle_and_enabled_for_pending_revision() -> None:
+    app = analyzed_demo(new_app())
+
+    assert app.button(key="run_analysis").disabled is True
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "User can export the revised research list as a downloadable CSV"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert app.session_state["review_state"].bundle is None
+    assert app.button(key="run_analysis").disabled is False
+
+
+def test_reanalysis_preserves_review_lineage_and_prior_events() -> None:
+    app = analyzed_demo(new_app())
+    original_review_id = app.session_state["review_state"].review.review_id
+    app = app.button(key="record_final_acceptance").click().run()
+    original_bundle = app.session_state["review_state"].bundle.model_copy(deep=True)
+    original_event = app.session_state["review_state"].resolution_events[0].model_copy(
+        deep=True
+    )
+    edited_criterion = "User can export the edited research list as a downloadable CSV"
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(edited_criterion).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    pending_state = app.session_state["review_state"]
+    assert pending_state.review.review_id == original_review_id
+    assert pending_state.criteria_revision.number == 2
+    assert len(pending_state.analysis_history) == 1
+    assert len(pending_state.resolution_events) == 1
+
+    app = app.button(key="run_analysis").click().run()
+    state = app.session_state["review_state"]
+
+    assert (
+        state.review.review_id,
+        state.criteria_revision.number,
+        len(state.analysis_history),
+        len(state.resolution_events),
+    ) == (original_review_id, 2, 1, 1)
+    assert state.analysis_history == [original_bundle]
+    assert state.resolution_events == [original_event]
+    assert state.resolution_events[0].criteria_revision_number == 1
+    assert state.bundle.criteria[0].text == edited_criterion
+    assert state.review.final_acceptance is False
+    assert state.bundle.review.final_acceptance is False
+    assert app.session_state["bundle"] == state.bundle
+    assert app.session_state["bundle"].review.review_id == original_review_id
+
+
 def test_criteria_can_be_added_and_removed_before_reconfirmation() -> None:
     app = load_demo(new_app())
     app = app.text_input(key="new_criterion_text").set_value("Document export format").run()
