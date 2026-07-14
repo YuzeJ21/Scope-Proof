@@ -1266,6 +1266,89 @@ def test_successful_criteria_authoring_action_clears_consumed_input(
     assert app.button(key=submit_key).disabled is True
 
 
+def test_pending_requirements_draft_is_not_claimed_saved_or_exportable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    requirements_draft = (
+        f"{app.session_state['source_text']}\nDraft requirement not yet prepared"
+    )
+
+    app = app.text_area(key="requirements_input").set_value(requirements_draft).run()
+
+    captions = "\n".join(item.value for item in app.caption)
+    sidebar = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Saved locally — current review matches the last local save." not in captions
+    assert (
+        "Pending requirements changes are not saved or exported. Prepare or discard "
+        "them before relying on this review ID."
+    ) in captions
+    assert app.button(key="save_review").disabled is True
+    assert all(button.disabled for button in app.download_button)
+    assert app.button(key="load_demo").disabled is True
+    assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
+    assert app.button(key="discard_requirements_draft").disabled is False
+    assert app.button(key="prepare_criteria").disabled is False
+    assert "Pending — Resolve inputs before export" in sidebar
+    assert app.session_state["review_state"] == review_state
+
+    app = app.text_input(key="new_criterion_text").set_value(
+        "Unrelated criterion edit"
+    ).run()
+    assert app.button(key="add_criterion_ui").disabled is True
+
+
+def test_discard_requirements_draft_restores_authoritative_saved_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    authoritative_source = app.session_state["source_text"]
+    app = app.text_area(key="requirements_input").set_value(
+        f"{authoritative_source}\nDraft requirement not yet prepared"
+    ).run()
+
+    app = app.button(key="discard_requirements_draft").click().run()
+
+    assert app.session_state["review_state"] == review_state
+    assert app.session_state["source_text"] == authoritative_source
+    assert app.text_area(key="requirements_input").value == authoritative_source
+    assert "Unprepared requirements changes discarded without changing the review." in [
+        item.value for item in app.success
+    ]
+    captions = "\n".join(item.value for item in app.caption)
+    sidebar = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Saved locally — current review matches the last local save." in captions
+    assert "Pending requirements changes are not saved or exported." not in captions
+    assert app.button(key="save_review").disabled is True
+    assert all(not button.disabled for button in app.download_button)
+    assert app.button(key="load_demo").disabled is False
+    assert "Available — Review evidence and export" in sidebar
+
+
+def test_prepare_criteria_consumes_pending_requirements_draft() -> None:
+    app, _ = saved_demo_review(new_app())
+    requirements_draft = "Export PDF\nRecord the export event"
+    app = app.text_area(key="requirements_input").set_value(requirements_draft).run()
+
+    assert app.button(key="prepare_criteria").disabled is False
+    app = app.button(key="prepare_criteria").click().run()
+
+    assert app.session_state["review_state"] is None
+    assert app.session_state["source_text"] == requirements_draft
+    assert app.text_area(key="requirements_input").value == requirements_draft
+    assert [item.text for item in app.session_state["criteria"]] == [
+        "Export PDF",
+        "Record the export event",
+    ]
+    assert not [
+        item for item in app.checkbox if item.key == "replace_unsaved_review_confirmed"
+    ]
+
+
 def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
