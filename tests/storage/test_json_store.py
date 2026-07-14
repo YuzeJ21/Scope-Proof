@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
@@ -72,6 +73,15 @@ def attached_review_state():
     return attach_analysis(revised, incoming)
 
 
+def downgrade_to_version_one(payload: dict) -> dict:
+    payload["record_version"] = 1
+    if payload["state"]["bundle"] is not None:
+        payload["state"]["bundle"].pop("criteria_revision_number")
+    for historical_bundle in payload["state"]["analysis_history"]:
+        historical_bundle.pop("criteria_revision_number")
+    return payload
+
+
 def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
     state = review_state()
@@ -109,6 +119,145 @@ def test_attached_analysis_round_trip_preserves_reanalysis_lineage(
     assert historical.criteria == original.criteria
     assert historical.source_text != loaded.bundle.source_text
     assert historical.criteria != loaded.bundle.criteria
+
+
+def test_new_save_writes_version_two_with_exact_analysis_lineage(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = attached_review_state()
+
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+
+    assert payload["record_version"] == 2
+    assert payload["state"]["bundle"]["criteria_revision_number"] == 2
+    assert [
+        bundle["criteria_revision_number"]
+        for bundle in payload["state"]["analysis_history"]
+    ] == [1]
+
+
+def test_version_one_record_migrates_active_revision_and_unknown_history(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = attached_review_state()
+    path = store.save(state)
+    payload = downgrade_to_version_one(
+        json.loads(path.read_text(encoding="utf-8"))
+    )
+    payload["state"]["analysis_history"].append(
+        json.loads(json.dumps(payload["state"]["analysis_history"][0]))
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(state.review.review_id)
+
+    assert loaded.bundle is not None
+    assert loaded.bundle.criteria_revision_number == 2
+    assert [
+        bundle.criteria_revision_number for bundle in loaded.analysis_history
+    ] == ["unknown", "unknown"]
+
+
+def test_saving_migrated_version_one_state_preserves_unknown_history(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = attached_review_state()
+    path = store.save(state)
+    payload = downgrade_to_version_one(
+        json.loads(path.read_text(encoding="utf-8"))
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = store.load(state.review.review_id)
+    migrated_path = store.save(migrated)
+    migrated_payload = json.loads(migrated_path.read_text(encoding="utf-8"))
+
+    assert migrated_payload["record_version"] == 2
+    assert migrated_payload["state"]["bundle"]["criteria_revision_number"] == 2
+    assert [
+        bundle["criteria_revision_number"]
+        for bundle in migrated_payload["state"]["analysis_history"]
+    ] == ["unknown"]
+
+
+def test_bundleless_version_one_record_preserves_unknown_history(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    pending = revise_criteria(
+        review_state(),
+        review_state().criteria_revision.criteria,
+        "Updated requirements",
+    )
+    path = store.save(pending)
+    payload = downgrade_to_version_one(
+        json.loads(path.read_text(encoding="utf-8"))
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(pending.review.review_id)
+
+    assert loaded.bundle is None
+    assert [
+        bundle.criteria_revision_number for bundle in loaded.analysis_history
+    ] == ["unknown"]
+
+
+def test_version_one_migration_does_not_mutate_parsed_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = attached_review_state()
+    path = store.save(state)
+    legacy_payload = downgrade_to_version_one(
+        json.loads(path.read_text(encoding="utf-8"))
+    )
+    original_payload = json.loads(json.dumps(legacy_payload))
+    monkeypatch.setattr(
+        "scopeproof_core.storage.json_store.json.loads",
+        lambda _: legacy_payload,
+    )
+
+    store.load(state.review.review_id)
+
+    assert legacy_payload == original_payload
+
+
+def test_malformed_version_one_nested_content_is_rejected_by_pydantic(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    payload = downgrade_to_version_one(
+        json.loads(path.read_text(encoding="utf-8"))
+    )
+    payload["state"]["bundle"] = []
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValidationError):
+        store.load("review-1")
+
+
+def test_version_one_migration_rejects_non_deterministic_gate(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    payload = downgrade_to_version_one(
+        json.loads(path.read_text(encoding="utf-8"))
+    )
+    payload["state"]["bundle"]["gate"]["verdict"] = GateVerdict.READY.value
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match="analysis bundle gate must match deterministic evaluation"
+    ):
+        store.load("review-1")
 
 
 def test_historical_review_state_loads_without_ingestion_limitation_fields(
@@ -248,6 +397,7 @@ def test_version_one_record_with_legacy_permalink_loads_and_exports_inertly(
     payload = json.loads(path.read_text(encoding="utf-8"))
     legacy_permalink = "javascript:alert(1)"
     payload["state"]["bundle"]["evidence"][0]["permalink"] = legacy_permalink
+    downgrade_to_version_one(payload)
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     loaded = store.load("review-1")

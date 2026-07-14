@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,7 +14,8 @@ from pathlib import Path
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewState
 
-RECORD_VERSION = 1
+RECORD_VERSION = 2
+_SUPPORTED_RECORD_VERSIONS = (1, RECORD_VERSION)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 
 
@@ -108,11 +110,27 @@ class JsonReviewStore:
     def load(self, review_id: str) -> ReviewState:
         """Load a known record format and validate all nested models."""
         payload = json.loads(self._existing_record_path(review_id).read_text(encoding="utf-8"))
-        if payload.get("record_version") != RECORD_VERSION:
+        record_version = payload.get("record_version")
+        if record_version not in _SUPPORTED_RECORD_VERSIONS:
             raise UnsupportedRecordVersion(
-                f"Unsupported review record version {payload.get('record_version')!r}"
+                f"Unsupported review record version {record_version!r}"
             )
-        return validated_review_state(ReviewState.model_validate(payload["state"]))
+        state_payload = deepcopy(payload["state"])
+        if record_version == 1 and isinstance(state_payload, dict):
+            active_bundle = state_payload.get("bundle")
+            criteria_revision = state_payload.get("criteria_revision")
+            if (
+                isinstance(active_bundle, dict)
+                and isinstance(criteria_revision, dict)
+                and "number" in criteria_revision
+            ):
+                active_bundle["criteria_revision_number"] = criteria_revision["number"]
+            analysis_history = state_payload.get("analysis_history")
+            if isinstance(analysis_history, list):
+                for historical_bundle in analysis_history:
+                    if isinstance(historical_bundle, dict):
+                        historical_bundle["criteria_revision_number"] = "unknown"
+        return validated_review_state(ReviewState.model_validate(state_payload))
 
     @staticmethod
     def detect_head_change(state: ReviewState, snapshot: PullRequestSnapshot) -> HeadChange:
