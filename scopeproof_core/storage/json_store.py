@@ -45,6 +45,8 @@ class JsonReviewStore:
     def _require_safe_directory(self) -> None:
         if self.directory.is_symlink():
             raise UnsafeReviewStore("review store directory must not be a symbolic link")
+        if self.directory.exists() and not self.directory.is_dir():
+            raise UnsafeReviewStore("review store path must be a directory")
 
     @staticmethod
     def _validate_review_id(review_id: str) -> str:

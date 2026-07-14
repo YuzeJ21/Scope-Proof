@@ -154,11 +154,12 @@ history rather than silently replacing earlier decisions.
 
 The workbench stores versioned JSON records under `~/.scopeproof/reviews`. The reopen panel lists
 safe local record IDs in deterministic order, while an empty store retains manual ID recovery.
-The app validates the selected record when it is opened and refuses a review directory that is
-itself a symbolic link. This app-owned local directory prevents a browser input from selecting
-arbitrary file paths. Records preserve the review SHAs, criteria revisions, evidence, findings,
-resolution history, and gate decision. They never contain the optional GitHub token. A reopened
-review reports a changed head SHA rather than silently reusing old evidence.
+The app validates the selected record when it is opened and refuses a configured review path that
+is a symbolic link or another existing non-directory. This app-owned local directory prevents a
+browser input from selecting arbitrary file paths. Records preserve the review SHAs, criteria
+revisions, evidence, findings, resolution history, and gate decision. They never contain the
+optional GitHub token. A reopened review reports a changed head SHA rather than silently reusing
+old evidence.
 
 ## Deliberately constructed demo
 
