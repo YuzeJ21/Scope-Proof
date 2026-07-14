@@ -55,6 +55,15 @@ def test_product_disclaimer_is_visible() -> None:
     assert "No paid LLM API" in visible_text
 
 
+def test_reopen_review_is_a_collapsed_secondary_path_before_start_review() -> None:
+    app = new_app()
+
+    assert [item.label for item in app.expander] == ["Reopen saved review"]
+    assert app.text_input(key="reopen_review_id").value == ""
+    assert app.button(key="reopen_review").disabled is True
+    assert "### Reopen saved review" not in [item.value for item in app.markdown]
+
+
 def test_blank_public_pr_url_remains_neutral_and_disables_fetch() -> None:
     app = new_app()
 

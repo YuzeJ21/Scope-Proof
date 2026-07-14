@@ -204,27 +204,27 @@ replacement_blocked = has_unsaved_review and not replace_unsaved_review_confirme
 
 storage_directory = default_local_review_directory()
 review_store = JsonReviewStore(Path(storage_directory))
-st.markdown("### Reopen saved review")
-reopen_id = st.text_input("Review ID", key="reopen_review_id")
-if st.button(
-    "Reopen local review",
-    key="reopen_review",
-    disabled=not reopen_id.strip() or replacement_blocked,
-):
-    try:
-        reopened_state = review_store.load(reopen_id.strip())
-    except FileNotFoundError:
-        st.error("No saved review was found for that review ID.")
-    except UnsupportedRecordVersion:
-        st.error("This saved review requires a different ScopeProof record version.")
-    except (OSError, ValueError):
-        st.error("The saved review could not be opened. Verify its ID and record integrity.")
-    else:
-        _hydrate_reopened_review(reopened_state)
-        st.session_state["review_reopen_notice"] = (
-            "Review reopened from local storage after validation."
-        )
-        st.rerun()
+with st.expander("Reopen saved review", expanded=False):
+    reopen_id = st.text_input("Review ID", key="reopen_review_id")
+    if st.button(
+        "Reopen local review",
+        key="reopen_review",
+        disabled=not reopen_id.strip() or replacement_blocked,
+    ):
+        try:
+            reopened_state = review_store.load(reopen_id.strip())
+        except FileNotFoundError:
+            st.error("No saved review was found for that review ID.")
+        except UnsupportedRecordVersion:
+            st.error("This saved review requires a different ScopeProof record version.")
+        except (OSError, ValueError):
+            st.error("The saved review could not be opened. Verify its ID and record integrity.")
+        else:
+            _hydrate_reopened_review(reopened_state)
+            st.session_state["review_reopen_notice"] = (
+                "Review reopened from local storage after validation."
+            )
+            st.rerun()
 review_reopen_notice = st.session_state.pop("review_reopen_notice", None)
 if review_reopen_notice is not None:
     st.success(review_reopen_notice)
