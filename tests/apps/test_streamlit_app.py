@@ -323,6 +323,18 @@ def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     assert str(tmp_path) not in rendered_recovery
     assert list(outside.iterdir()) == []
 
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "pending-runtime-artifact"
+    ).run()
+    pending_recovery = (
+        "Local saving is unavailable. The current review remains open as unsaved work, "
+        "and exports remain unavailable until pending criterion inputs are submitted or "
+        "cleared. Verify that the ScopeProof review directory is a regular local directory; "
+        "ScopeProof will recheck it on the next interaction."
+    )
+    assert pending_recovery in [item.value for item in app.warning]
+    assert all(button.disabled for button in app.download_button)
+
 
 def test_regular_file_review_store_has_safe_recovery_and_disables_storage_actions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -982,6 +994,92 @@ def test_current_review_id_is_copyable_and_used_in_save_confirmation(
     caption_text = "\n".join(item.value for item in app.caption)
     assert "Saved locally — current review matches the last local save." in caption_text
     assert app.button(key="save_review").disabled is True
+
+
+def test_pending_criterion_draft_is_not_claimed_saved_or_exportable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "pending-runtime-artifact"
+    ).run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+
+    captions = "\n".join(item.value for item in app.caption)
+    warnings = "\n".join(item.value for item in app.warning)
+    assert "Saved locally — current review matches the last local save." not in captions
+    assert (
+        "Pending criterion-detail inputs are not saved or exported. Submit or clear "
+        "them before relying on this review ID."
+    ) in captions
+    assert (
+        "Pending criterion inputs are not part of the review, local save, or exports. "
+        "Submit them through the matching form or clear them before continuing."
+    ) in warnings
+    assert app.button(key="save_review").disabled is True
+    assert all(button.disabled for button in app.download_button)
+    assert app.button(key="load_demo").disabled is True
+    assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
+    assert app.button(key="clear_criterion_detail_drafts").disabled is False
+    assert app.session_state["review_state"] == review_state
+
+
+def test_clear_pending_criterion_draft_restores_saved_exportable_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "pending-runtime-artifact"
+    ).run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+
+    app = app.button(key="clear_criterion_detail_drafts").click().run()
+
+    assert app.session_state["review_state"] == review_state
+    assert app.text_input(key="runtime_artifact_reference").value == ""
+    assert app.selectbox(key="resolution_decision").value is None
+    assert "Pending criterion inputs cleared without changing the review." in [
+        item.value for item in app.success
+    ]
+    captions = "\n".join(item.value for item in app.caption)
+    assert "Saved locally — current review matches the last local save." in captions
+    assert "Pending criterion-detail inputs are not saved or exported." not in captions
+    assert app.button(key="save_review").disabled is True
+    assert all(not button.disabled for button in app.download_button)
+    assert app.button(key="load_demo").disabled is False
+
+
+def test_submitted_runtime_draft_restores_authoritative_save_and_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/run/authoritative"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("passed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    assert len(app.session_state["review_state"].bundle.runtime_evidence) == 1
+    assert app.text_input(key="runtime_artifact_reference").value == ""
+    captions = "\n".join(item.value for item in app.caption)
+    assert "Pending criterion-detail inputs are not saved or exported." not in captions
+    assert "Unsaved changes — save locally before relying on this review ID." in captions
+    assert app.button(key="save_review").disabled is False
+    assert all(not button.disabled for button in app.download_button)
 
 
 @pytest.mark.parametrize(
