@@ -17,10 +17,14 @@ def is_linkable_artifact_reference(value: str) -> bool:
 
 
 def _escape_markdown_text(value: str) -> str:
-    escaped = value.replace("\\", "\\\\")
+    escaped = value.replace("&", "&amp;").replace("\\", "\\\\")
     for character in ("`", "*", "_", "[", "]", "<", ">"):
         escaped = escaped.replace(character, f"\\{character}")
     return escaped
+
+
+def _escape_markdown_destination(value: str) -> str:
+    return value.replace("\\", "%5C").replace("&", "&amp;")
 
 
 def render_artifact_reference_markdown(value: str) -> str:
@@ -28,4 +32,5 @@ def render_artifact_reference_markdown(value: str) -> str:
     label = _escape_markdown_text(value)
     if not is_linkable_artifact_reference(value):
         return label
-    return f"[{label}](<{value}>)"
+    destination = _escape_markdown_destination(value)
+    return f"[{label}](<{destination}>)"
