@@ -480,6 +480,59 @@ class ReviewBundle(BaseModel):
     resolutions: list[HumanResolution] = Field(default_factory=list)
     gate: GateDecision
 
+    @model_validator(mode="after")
+    def validate_cross_references(self) -> ReviewBundle:
+        criterion_ids = [criterion.criterion_id for criterion in self.criteria]
+        if len(criterion_ids) != len(set(criterion_ids)):
+            raise ValueError("criterion IDs must be unique")
+        known_criteria = set(criterion_ids)
+
+        evidence_ids = [item.evidence_id for item in self.evidence]
+        if len(evidence_ids) != len(set(evidence_ids)):
+            raise ValueError("evidence IDs must be unique")
+        evidence_by_id = {item.evidence_id: item for item in self.evidence}
+        if any(item.criterion_id not in known_criteria for item in self.evidence):
+            raise ValueError("evidence criterion IDs must reference known criteria")
+
+        finding_ids = [finding.criterion_id for finding in self.findings]
+        if len(finding_ids) != len(set(finding_ids)):
+            raise ValueError("finding criterion IDs must be unique")
+        if set(finding_ids) != known_criteria:
+            raise ValueError("findings must match criteria exactly")
+        for finding in self.findings:
+            if len(finding.evidence_ids) != len(set(finding.evidence_ids)):
+                raise ValueError("finding evidence references must be unique")
+            if any(evidence_id not in evidence_by_id for evidence_id in finding.evidence_ids):
+                raise ValueError("finding evidence references must resolve")
+            if any(
+                evidence_by_id[evidence_id].criterion_id != finding.criterion_id
+                for evidence_id in finding.evidence_ids
+            ):
+                raise ValueError("finding evidence must belong to the same criterion")
+
+        if any(item.criterion_id not in known_criteria for item in self.runtime_evidence):
+            raise ValueError("runtime evidence criterion IDs must reference known criteria")
+
+        resolution_ids = [resolution.criterion_id for resolution in self.resolutions]
+        if len(resolution_ids) != len(set(resolution_ids)):
+            raise ValueError("resolution criterion IDs must be unique")
+        if any(criterion_id not in known_criteria for criterion_id in resolution_ids):
+            raise ValueError("resolution criterion IDs must reference known criteria")
+
+        for field_name in (
+            "blocking_criteria",
+            "conditional_criteria",
+            "unresolved_criteria",
+            "resolved_exceptions",
+        ):
+            gate_criterion_ids = getattr(self.gate, field_name)
+            if len(gate_criterion_ids) != len(set(gate_criterion_ids)):
+                raise ValueError(f"{field_name} must contain unique criterion IDs")
+            if any(criterion_id not in known_criteria for criterion_id in gate_criterion_ids):
+                raise ValueError(f"{field_name} must reference known criteria")
+
+        return self
+
 
 class ReviewState(BaseModel):
     """Validated local lifecycle state for one review and its audit history."""
