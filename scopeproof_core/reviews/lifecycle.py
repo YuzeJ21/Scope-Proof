@@ -187,6 +187,7 @@ def append_runtime_evidence(state: ReviewState, evidence: RuntimeEvidence) -> Re
     """Append a manual runtime record without upgrading static findings or gate truth."""
 
     state = _validated_state(state)
+    evidence = RuntimeEvidence.model_validate(evidence.model_dump())
     if state.bundle is None:
         raise ValueError("Run a confirmed analysis before recording runtime evidence")
     if evidence.criterion_id not in {criterion.criterion_id for criterion in state.bundle.criteria}:
