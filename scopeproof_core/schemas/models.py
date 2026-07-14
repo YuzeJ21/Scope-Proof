@@ -474,6 +474,13 @@ class CriteriaRevision(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     confirmed_at: datetime | None = None
 
+    @field_validator("source_text")
+    @classmethod
+    def validate_source_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("requirements source must contain non-whitespace text")
+        return value
+
 
 class GateDecision(BaseModel):
     verdict: GateVerdict
@@ -493,6 +500,13 @@ class ReviewBundle(BaseModel):
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
     gate: GateDecision
+
+    @field_validator("source_text")
+    @classmethod
+    def validate_source_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("requirements source must contain non-whitespace text")
+        return value
 
     @model_validator(mode="after")
     def validate_cross_references(self) -> ReviewBundle:
