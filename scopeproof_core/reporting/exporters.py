@@ -6,6 +6,7 @@ import csv
 import html
 import io
 import json
+import string
 from collections import defaultdict
 
 from scopeproof_core.gates.guidance import gate_guidance
@@ -17,14 +18,14 @@ from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewSta
 
 ExportableReview = ReviewBundle | ReviewState
 
-_MARKDOWN_PUNCTUATION = frozenset(r"\\`*_{}[]()#!|")
+_MARKDOWN_PUNCTUATION = frozenset(set(string.punctuation) - {"&", ";"})
 _SPREADSHEET_FORMULA_PREFIXES = frozenset(("=", "+", "-", "@", "\t", "\r"))
 
 
 def _escape_markdown_text(value: str) -> str:
     """Keep untrusted text readable without activating Markdown or raw HTML."""
     normalized = value.replace("\r", " ").replace("\n", " ")
-    escaped = html.escape(normalized, quote=True)
+    escaped = html.escape(normalized, quote=False)
     return "".join(
         f"\\{character}" if character in _MARKDOWN_PUNCTUATION else character
         for character in escaped
@@ -166,9 +167,19 @@ def export_markdown(bundle: ExportableReview) -> str:
         if candidates:
             lines.extend(["", "**Candidate evidence:**"])
             for candidate in candidates:
+                candidate_label = (
+                    f"{_escape_markdown_text(candidate.file_path)}:L{candidate.line_start}"
+                )
+                if is_linkable_artifact_reference(candidate.permalink):
+                    destination = html.escape(candidate.permalink, quote=True)
+                    candidate_reference = f"[{candidate_label}](<{destination}>)"
+                else:
+                    candidate_reference = (
+                        f"{candidate_label} — permalink: "
+                        f"{_escape_markdown_text(candidate.permalink)}"
+                    )
                 lines.append(
-                    f"- [{_escape_markdown_text(candidate.file_path)}:L{candidate.line_start}]"
-                    f"(<{candidate.permalink}>) — "
+                    f"- {candidate_reference} — "
                     f"{_escape_markdown_text(candidate.relevance_reason)}"
                 )
                 lines.append(f"  - Excerpt: {_render_markdown_code(candidate.excerpt)}")
@@ -249,6 +260,15 @@ def _render_artifact_reference_html(value: str) -> str:
     if not is_linkable_artifact_reference(value):
         return label
     return f'<a href="{html.escape(value, quote=True)}">{label}</a>'
+
+
+def _render_candidate_reference_html(item: EvidenceItem) -> str:
+    label = f"{html.escape(item.file_path)}:L{item.line_start}"
+    if is_linkable_artifact_reference(item.permalink):
+        reference = f'<a href="{html.escape(item.permalink, quote=True)}">{label}</a>'
+    else:
+        reference = f"{label}<br><code>{html.escape(item.permalink)}</code>"
+    return f"{reference}<br><code>{html.escape(item.excerpt)}</code>"
 
 
 def export_csv(bundle: ExportableReview) -> str:
@@ -363,12 +383,7 @@ def export_html(value: ExportableReview) -> str:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
         evidence = "<br>".join(
-            (
-                f'<a href="{html.escape(evidence_by_id[item_id].permalink, quote=True)}">'
-                f"{html.escape(evidence_by_id[item_id].file_path)}"
-                f":L{evidence_by_id[item_id].line_start}</a>"
-                f"<br><code>{html.escape(evidence_by_id[item_id].excerpt)}</code>"
-            )
+            _render_candidate_reference_html(evidence_by_id[item_id])
             for item_id in finding.evidence_ids
         ) or "No candidate evidence"
         rows.append(

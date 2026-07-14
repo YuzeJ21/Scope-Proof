@@ -113,12 +113,13 @@ def test_exports_agree_on_review_identity_verdict_and_criteria() -> None:
         export_html(bundle),
     ]
     for output in outputs:
-        assert bundle.review.review_id in output
-        assert bundle.review.base_sha in output
-        assert created_at in output
-        assert "blocked" in output.lower()
-        assert "head123" in output
-        assert "AC-01" in output
+        semantic_output = output.replace("\\", "")
+        assert bundle.review.review_id in semantic_output
+        assert bundle.review.base_sha in semantic_output
+        assert created_at in semantic_output
+        assert "blocked" in semantic_output.lower()
+        assert "head123" in semantic_output
+        assert "AC-01" in semantic_output
 
 
 def test_exports_preserve_tool_and_ruleset_provenance() -> None:
@@ -193,6 +194,27 @@ def test_markdown_keeps_all_untrusted_review_text_inert() -> None:
     assert r"\!\[remote\]\(" in report
 
 
+def test_markdown_neutralizes_links_html_formatting_and_autolinks() -> None:
+    bundle = example_bundle()
+    bundle.source_text = (
+        "[link](https://example.invalid/link) <img src=x> **bold** _emphasis_ "
+        "`code` ~~strike~~ https://example.invalid/plain"
+    )
+
+    report = export_markdown(bundle)
+
+    for active_syntax in (
+        "[link](https://example.invalid/link)",
+        "<img src=x>",
+        "**bold**",
+        "_emphasis_",
+        "`code`",
+        "~~strike~~",
+        "https://example.invalid/plain",
+    ):
+        assert active_syntax not in report
+
+
 def test_csv_neutralizes_formula_cells_and_serializes_lists_reversibly() -> None:
     bundle = example_bundle()
     bundle.review.review_id = '=HYPERLINK("https://example.invalid","review")'
@@ -233,7 +255,7 @@ def test_exports_preserve_confirmed_requirement_source() -> None:
     html_report = export_html(bundle)
 
     assert json.loads(json_report)["source_text"] == bundle.source_text
-    assert "> Confirmed requirement source:" in markdown_report
+    assert "> Confirmed requirement source\\:" in markdown_report
     assert "> Failed export shows an error" in markdown_report
     csv_row = next(csv.DictReader(io.StringIO(csv_report)))
     assert csv_row["requirements_source_text"] == bundle.source_text
@@ -283,6 +305,20 @@ def test_runtime_http_artifact_reference_remains_clickable() -> None:
 
     assert f"[{reference}](<{reference}>)" in export_markdown(bundle)
     assert f'<a href="{reference}">{reference}</a>' in export_html(bundle)
+
+
+def test_bypassed_unsafe_candidate_permalink_is_rendered_as_inert_text() -> None:
+    bundle = example_bundle()
+    unsafe = 'javascript:alert(1)\"><img src=x>'
+    bundle.evidence[0].permalink = unsafe
+
+    markdown = export_markdown(bundle)
+    html_report = export_html(bundle)
+
+    assert f"]({unsafe})" not in markdown
+    assert "javascript\\:alert\\(1\\)" in markdown
+    assert f'href="{unsafe}"' not in html_report
+    assert "javascript:alert(1)&quot;&gt;&lt;img src=x&gt;" in html_report
 
 
 def test_runtime_artifact_reference_stays_exact_in_json_and_csv() -> None:
@@ -344,7 +380,10 @@ def test_human_readable_exports_complete_the_evidence_matrix_contract() -> None:
     html_report = export_html(bundle)
 
     assert "| Confidence | Count | Concern | Human decision |" in markdown
-    assert "| medium | 1 | Only the export path was found. | change_required |" in markdown
+    assert (
+        "| medium | 1 | Only the export path was found. | change_required |"
+        in markdown.replace("\\", "")
+    )
     assert "<th>Confidence</th><th>Count</th><th>Concern</th>" in html_report
     assert "<th>Human resolution</th>" in html_report
     assert "<td>medium</td><td>1</td>" in html_report
@@ -376,7 +415,7 @@ def test_markdown_keeps_gate_reasons_and_adds_recovery_guidance() -> None:
     assert "## Gate Reasons" in markdown
     assert "<code>blocking_criteria</code>" in markdown
     assert "## What To Do Next" in markdown
-    assert "blocking criteria: AC-01" in markdown
+    assert "blocking criteria: AC-01" in markdown.replace("\\", "")
 
 
 def test_html_keeps_gate_reasons_and_adds_escaped_recovery_guidance() -> None:

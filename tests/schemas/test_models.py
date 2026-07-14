@@ -138,6 +138,20 @@ def test_candidate_evidence_context_allows_no_limitations() -> None:
     assert item.limitations == []
 
 
+@pytest.mark.parametrize(
+    "permalink",
+    [
+        "javascript:alert(1)",
+        "relative/evidence",
+        "https://example.test/path with space",
+        "https://example.test/path<unsafe>",
+    ],
+)
+def test_candidate_evidence_rejects_unsafe_permalink(permalink: str) -> None:
+    with pytest.raises(ValidationError, match="permalink must be a safe absolute HTTP URL"):
+        EvidenceItem.model_validate(candidate_evidence_payload(permalink=permalink))
+
+
 @pytest.mark.parametrize("field", ["reason", "recommended_action"])
 @pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
 def test_finding_context_rejects_blank_required_text(field: str, blank: str) -> None:

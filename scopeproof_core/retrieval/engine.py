@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import PurePosixPath
+from urllib.parse import quote
 
 from scopeproof_core.schemas.models import (
     ChangedFile,
@@ -94,10 +95,10 @@ def _evidence_type(file: ChangedFile) -> EvidenceType:
 def _permalink(
     snapshot: PullRequestSnapshot, file_path: str, line_number: int, commit_sha: str
 ) -> str:
-    return (
-        f"https://github.com/{snapshot.repository}/blob/{commit_sha}/"
-        f"{file_path}#L{line_number}-L{line_number}"
-    )
+    repository = quote(snapshot.repository, safe="/")
+    commit = quote(commit_sha, safe="")
+    path = quote(file_path, safe="/")
+    return f"https://github.com/{repository}/blob/{commit}/{path}#L{line_number}-L{line_number}"
 
 
 def _candidate_file(retrieved: RetrievedFile) -> ChangedFile:
