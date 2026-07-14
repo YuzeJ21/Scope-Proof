@@ -109,3 +109,18 @@ def test_workflows_use_the_vetted_node24_action_revisions() -> None:
             if "upload-artifact" in reference and path.name == "ci.yml":
                 continue
             assert reference in contents, f"{path}: {reference}"
+
+
+def test_action_requires_explicit_per_pr_requirements_applicability() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+        assert "types: [opened, reopened, synchronize, labeled]" in workflow
+        assert (
+            "if: contains(github.event.pull_request.labels.*.name, 'scopeproof-review')"
+            in workflow
+        )
+        assert "paths:" not in workflow
+        assert "github.event.pull_request.user" not in workflow
