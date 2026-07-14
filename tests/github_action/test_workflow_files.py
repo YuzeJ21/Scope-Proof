@@ -124,3 +124,14 @@ def test_action_requires_explicit_per_pr_requirements_applicability() -> None:
         )
         assert "paths:" not in workflow
         assert "github.event.pull_request.user" not in workflow
+
+
+def test_action_guidance_requires_maintainer_applicability_opt_in() -> None:
+    guide = Path("docs/github-action.md").read_text(encoding="utf-8")
+    runbook = Path("docs/github-action-external-validation.md").read_text(encoding="utf-8")
+
+    for document in (guide, runbook):
+        assert "`scopeproof-review`" in document
+        assert "not reviewed, not Ready" in document
+    assert "repository maintainer" in guide
+    assert "checked-in requirements apply to this PR" in guide

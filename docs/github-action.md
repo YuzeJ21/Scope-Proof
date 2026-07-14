@@ -16,13 +16,25 @@ It is deliberately a **safe preview**, not an enforcement integration:
   Review** and cannot say Ready or publish a comment.
 - It uses the event's head-repository fork flag to create a non-mutating plan.
   Fork PRs receive no write plan.
-- For a non-fork PR with checked-in confirmed requirements, it may create or
-  update one informational comment using GitHub's short-lived `github.token`.
-  The pure planner supplies create/update/skip decisions and a head-SHA marker;
-  fork, missing-requirements, and missing-token paths make no write request.
+- For a labeled, non-fork PR with checked-in confirmed requirements, it may
+  create or update one informational comment using GitHub's short-lived
+  `github.token`. The pure planner supplies create/update/skip decisions and a
+  head-SHA marker; fork, missing-requirements, and missing-token paths make no
+  write request.
 - `SCOPEPROOF_REQUIRED_CHECK=false` is a documented non-blocking default. Do
   not make it a required check until confirmed dogfood reviews show that the
   requirements source and evidence rules fit the repository.
+
+## Per-PR requirements applicability
+
+Create the exact `scopeproof-review` repository label during setup. Opening a PR does not authorize
+ScopeProof to apply the repository's checked-in requirements. A repository maintainer must first
+confirm that the checked-in requirements apply to this PR, then apply `scopeproof-review`.
+
+The requirements-confirmation record binds the approved requirements bytes. The label separately
+confirms their applicability to the current PR. Without the label, the review job is skipped: the PR
+is not reviewed, not Ready. Keeping the label on the PR allows `synchronize` and `reopened` events to
+review later heads under the same checked-in requirements.
 
 The workflow's public-PR evidence command is informational and
 `continue-on-error`; GitHub API limits, temporary network failures, or an

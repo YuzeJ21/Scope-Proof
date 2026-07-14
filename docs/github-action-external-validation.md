@@ -23,7 +23,10 @@ that no external fork-run claim is being made.
    checks out the base SHA, never the PR head.
 4. Confirm the workflow remains informational:
    `SCOPEPROOF_REQUIRED_CHECK: false`.
-5. Do not add personal access tokens. The workflow uses GitHub's short-lived
+5. Create the exact `scopeproof-review` repository label. A repository owner
+   applies it only after confirming the checked-in requirements apply to the
+   specific PR.
+6. Do not add personal access tokens. The workflow uses GitHub's short-lived
    `github.token` only for its scoped, non-fork comment step.
 
 ## Capture record
@@ -43,19 +46,27 @@ limitations: public demo only; no customer validation claimed
 
 ## Test 1 — non-fork PR
 
-1. Open a same-repository PR that makes a small, safe text or code change.
-2. Wait for **ScopeProof evidence review** to finish.
-3. Preserve its run URL and the ScopeProof comment URL.
-4. Verify the summary and comment verdict match the CLI review result for the
+1. Open a same-repository PR that makes a small, safe text or code change, but
+   do not apply `scopeproof-review` yet.
+2. Verify the unlabeled **ScopeProof evidence review** job is skipped. Without
+   the label, the PR is not reviewed, not Ready.
+3. Have the repository owner confirm the checked-in requirements apply to this
+   PR, then apply `scopeproof-review`.
+4. Wait for **ScopeProof evidence review** to finish.
+5. Preserve its run URL and the ScopeProof comment URL. Keep the
+   `scopeproof-review` label on the PR for the same-head rerun and subsequent
+   head synchronization.
+6. Verify the summary and comment verdict match the CLI review result for the
    same PR head SHA.
-5. Verify the comment ends with `<!-- scopeproof:<head SHA> -->`.
+7. Verify the comment ends with `<!-- scopeproof:<head SHA> -->`.
 
 Expected: an informational GitHub check and one ScopeProof comment. This does
 not prove the requirement is correct, runtime behavior, or customer value.
 
 ## Test 2 — same-head rerun
 
-1. Re-run the ScopeProof job without changing the PR head SHA.
+1. With `scopeproof-review` still applied, re-run the ScopeProof job without
+   changing the PR head SHA.
 2. Preserve the rerun URL.
 3. Verify the existing ScopeProof comment is updated rather than a second
    marker-matched comment being created.
