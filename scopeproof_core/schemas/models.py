@@ -130,6 +130,25 @@ class ActionValidationRecord(BaseModel):
     validated_at: datetime
     limitations: list[str] = Field(min_length=1)
 
+    @field_validator(
+        "requirements_base_sha",
+        "non_fork_head_sha",
+        "rerun_head_sha",
+        "validated_by",
+    )
+    @classmethod
+    def require_non_blank_action_context(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must contain non-whitespace text")
+        return value
+
+    @field_validator("limitations")
+    @classmethod
+    def require_non_blank_limitations(cls, value: list[str]) -> list[str]:
+        if any(not limitation.strip() for limitation in value):
+            raise ValueError("limitations must contain non-whitespace text")
+        return value
+
     @model_validator(mode="after")
     def validate_rerun_idempotency(self) -> ActionValidationRecord:
         repository_url = f"https://github.com/{self.repository}/"
