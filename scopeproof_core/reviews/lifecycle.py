@@ -6,6 +6,10 @@ from datetime import UTC, datetime
 from enum import StrEnum
 
 from scopeproof_core.gates.evaluator import evaluate_gate
+from scopeproof_core.gates.validation import (
+    validated_review_bundle,
+    validated_review_state,
+)
 from scopeproof_core.schemas.models import (
     CriteriaRevision,
     Criterion,
@@ -27,20 +31,12 @@ class ResolutionEventStatus(StrEnum):
 
 def _validated_state(state: ReviewState) -> ReviewState:
     """Revalidate mutable model input before applying a lifecycle transition."""
-    return ReviewState.model_validate(state.model_dump(mode="python"))
+    return validated_review_state(state)
 
 
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
     """Initialize lifecycle state from a revalidated analysis bundle."""
-    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
-    expected_gate = evaluate_gate(
-        bundle.review,
-        bundle.criteria,
-        bundle.findings,
-        bundle.resolutions,
-    )
-    if bundle.gate != expected_gate:
-        raise ValueError("analysis bundle gate must match deterministic evaluation")
+    bundle = validated_review_bundle(bundle)
     active_bundle = bundle.model_copy(deep=True)
     revision = CriteriaRevision(
         number=1,

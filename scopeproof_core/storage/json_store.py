@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewState
 
 RECORD_VERSION = 1
@@ -86,7 +87,7 @@ class JsonReviewStore:
 
     def save(self, state: ReviewState) -> Path:
         """Atomically save a versioned record without accepting credential fields."""
-        validated = ReviewState.model_validate(state.model_dump(mode="python"))
+        validated = validated_review_state(state)
         self._require_safe_directory()
         self.directory.mkdir(parents=True, exist_ok=True)
         target = self._path(validated.review.review_id)
@@ -111,7 +112,7 @@ class JsonReviewStore:
             raise UnsupportedRecordVersion(
                 f"Unsupported review record version {payload.get('record_version')!r}"
             )
-        return ReviewState.model_validate(payload["state"])
+        return validated_review_state(ReviewState.model_validate(payload["state"]))
 
     @staticmethod
     def detect_head_change(state: ReviewState, snapshot: PullRequestSnapshot) -> HeadChange:

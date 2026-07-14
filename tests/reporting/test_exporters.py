@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from scopeproof_core.gates import validation as gate_validation
 from scopeproof_core.reporting.exporters import (
     export_csv,
     export_html,
@@ -450,9 +451,16 @@ def test_markdown_keeps_gate_reasons_and_adds_recovery_guidance() -> None:
     assert "blocking criteria: AC-01" in markdown.replace("\\", "")
 
 
-def test_html_keeps_gate_reasons_and_adds_escaped_recovery_guidance() -> None:
+def test_html_keeps_gate_reasons_and_adds_escaped_recovery_guidance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     bundle = example_bundle()
     bundle.gate.reason_codes.append("future_<reason>")
+    monkeypatch.setattr(
+        gate_validation,
+        "evaluate_gate",
+        lambda *_args: bundle.gate,
+    )
 
     report = export_html(bundle)
 

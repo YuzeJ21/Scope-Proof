@@ -8,7 +8,7 @@ import pytest
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.reporting.exporters import export_html, export_markdown
 from scopeproof_core.reviews.lifecycle import new_review_state
-from scopeproof_core.schemas.models import PullRequestSnapshot
+from scopeproof_core.schemas.models import GateVerdict, PullRequestSnapshot
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
     UnsafeReviewStore,
@@ -87,6 +87,33 @@ def test_save_revalidates_mismatched_active_bundle_review(tmp_path: Path) -> Non
         store.save(divergent)
 
     assert list(tmp_path.iterdir()) == []
+
+
+def test_save_rejects_a_non_deterministic_active_gate(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    assert state.bundle is not None
+    state.bundle.gate = state.bundle.gate.model_copy(update={"verdict": GateVerdict.READY})
+
+    with pytest.raises(
+        ValueError, match="analysis bundle gate must match deterministic evaluation"
+    ):
+        store.save(state)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_load_rejects_a_non_deterministic_active_gate(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"]["bundle"]["gate"]["verdict"] = GateVerdict.READY.value
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match="analysis bundle gate must match deterministic evaluation"
+    ):
+        store.load("review-1")
 
 
 def test_version_one_record_with_legacy_permalink_loads_and_exports_inertly(
