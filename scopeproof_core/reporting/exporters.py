@@ -17,11 +17,32 @@ from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewSta
 
 ExportableReview = ReviewBundle | ReviewState
 
+_MARKDOWN_PUNCTUATION = frozenset(r"\\`*_{}[]()#!|")
+_SPREADSHEET_FORMULA_PREFIXES = frozenset(("=", "+", "-", "@", "\t", "\r"))
+
+
+def _escape_markdown_text(value: str) -> str:
+    """Keep untrusted text readable without activating Markdown or raw HTML."""
+    normalized = value.replace("\r", " ").replace("\n", " ")
+    escaped = html.escape(normalized, quote=True)
+    return "".join(
+        f"\\{character}" if character in _MARKDOWN_PUNCTUATION else character
+        for character in escaped
+    )
+
 
 def _render_markdown_code(value: str) -> str:
     """Render untrusted repository text as inert HTML code within Markdown."""
     normalized = value.replace("\r", " ").replace("\n", " ")
     return f"<code>{html.escape(normalized, quote=True)}</code>"
+
+
+def _csv_text(value: str) -> str:
+    """Prevent spreadsheet software from interpreting exported text as a formula."""
+    candidate = value.lstrip(" ")
+    if candidate and candidate[0] in _SPREADSHEET_FORMULA_PREFIXES:
+        return f"'{value}"
+    return value
 
 
 def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewState | None]:
@@ -50,15 +71,15 @@ def export_markdown(bundle: ExportableReview) -> str:
         "# ScopeProof Acceptance Review",
         "",
         f"**Verdict:** {verdict}",
-        f"**Review ID:** `{bundle.review.review_id}`",
-        f"**Repository:** `{bundle.review.repository}`",
+        f"**Review ID:** {_render_markdown_code(bundle.review.review_id)}",
+        f"**Repository:** {_render_markdown_code(bundle.review.repository)}",
         f"**Pull request:** #{bundle.review.pr_number}",
-        f"**Base SHA:** `{bundle.review.base_sha}`",
-        f"**Head SHA:** `{bundle.review.head_sha}`",
-        f"**Review created:** `{review_created_at}`",
-        f"**Tool version:** `{bundle.review.tool_version}`",
-        f"**Ruleset:** `{bundle.review.ruleset_version}`",
-        f"**Ingestion state:** `{bundle.review.ingestion_state.value}`",
+        f"**Base SHA:** {_render_markdown_code(bundle.review.base_sha)}",
+        f"**Head SHA:** {_render_markdown_code(bundle.review.head_sha)}",
+        f"**Review created:** {_render_markdown_code(review_created_at)}",
+        f"**Tool version:** {_render_markdown_code(bundle.review.tool_version)}",
+        f"**Ruleset:** {_render_markdown_code(bundle.review.ruleset_version)}",
+        f"**Ingestion state:** {_render_markdown_code(bundle.review.ingestion_state.value)}",
         *([f"**Criteria revision: {state.criteria_revision.number}**"] if state else []),
         "",
         (
@@ -93,7 +114,10 @@ def export_markdown(bundle: ExportableReview) -> str:
         ),
         "## Confirmed Requirements Source",
         "",
-        *[f"> {line}" for line in (bundle.source_text.splitlines() or [""])],
+        *[
+            f"> {_escape_markdown_text(line)}"
+            for line in (bundle.source_text.splitlines() or [""])
+        ],
         "",
         "## Evidence Matrix",
         "",
@@ -107,9 +131,12 @@ def export_markdown(bundle: ExportableReview) -> str:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
         decision = resolution.decision.value if resolution else "Unresolved"
-        concern = finding.reason.replace("|", "\\|").replace("\n", " ")
+        criterion_label = _escape_markdown_text(
+            f"{criterion.criterion_id}: {criterion.text}"
+        )
+        concern = _escape_markdown_text(finding.reason)
         lines.append(
-            f"| {criterion.criterion_id}: {criterion.text} | "
+            f"| {criterion_label} | "
             f"{criterion.criterion_source.value} | {criterion.priority.value} | "
             f"{finding.status.value} | {finding.evidence_level.value} | "
             f"{finding.confidence_band.value} | {len(finding.evidence_ids)} | "
@@ -121,60 +148,87 @@ def export_markdown(bundle: ExportableReview) -> str:
         finding = finding_by_id[criterion.criterion_id]
         lines.extend(
             [
-                f"### {criterion.criterion_id} — {criterion.text}",
+                f"### {_escape_markdown_text(f'{criterion.criterion_id} — {criterion.text}')}",
                 "",
                 f"**Finding:** {finding.status.value}",
-                f"**Reason:** {finding.reason}",
+                f"**Reason:** {_escape_markdown_text(finding.reason)}",
             ]
         )
         if finding.missing_evidence:
             lines.extend(
-                ["", "**Missing evidence:**", *[f"- {item}" for item in finding.missing_evidence]]
+                [
+                    "",
+                    "**Missing evidence:**",
+                    *[f"- {_escape_markdown_text(item)}" for item in finding.missing_evidence],
+                ]
             )
         candidates = [evidence_by_id[item_id] for item_id in finding.evidence_ids]
         if candidates:
             lines.extend(["", "**Candidate evidence:**"])
             for candidate in candidates:
                 lines.append(
-                    f"- [{candidate.file_path}:L{candidate.line_start}]({candidate.permalink}) — "
-                    f"{candidate.relevance_reason}"
+                    f"- [{_escape_markdown_text(candidate.file_path)}:L{candidate.line_start}]"
+                    f"(<{candidate.permalink}>) — "
+                    f"{_escape_markdown_text(candidate.relevance_reason)}"
                 )
-                lines.append(f"  - Excerpt: `{candidate.excerpt}`")
+                lines.append(f"  - Excerpt: {_render_markdown_code(candidate.excerpt)}")
                 for limitation in candidate.limitations:
-                    lines.append(f"  - Limitation: {limitation}")
+                    lines.append(f"  - Limitation: {_escape_markdown_text(limitation)}")
         resolution = resolution_by_id.get(criterion.criterion_id)
         if resolution:
             lines.extend(
                 [
                     "",
                     f"**Human resolution:** {resolution.decision.value}",
-                    f"**Reviewer note:** {resolution.comment or 'No note provided'}",
+                    "**Reviewer note:** "
+                    f"{_escape_markdown_text(resolution.comment or 'No note provided')}",
                 ]
             )
-        lines.extend(["", f"**Recommended action:** {finding.recommended_action}", ""])
+        lines.extend(
+            [
+                "",
+                f"**Recommended action:** {_escape_markdown_text(finding.recommended_action)}",
+                "",
+            ]
+        )
 
     if bundle.runtime_evidence:
         lines.extend(["## Manual Runtime Evidence", ""])
         for item in bundle.runtime_evidence:
             lines.extend(
                 [
-                    f"- **{item.criterion_id}** — "
+                    f"- **{_escape_markdown_text(item.criterion_id)}** — "
                     f"{render_artifact_reference_markdown(item.artifact_reference)}",
-                    f"  - Scenario: {item.scenario}",
-                    f"  - Environment: {item.environment}; result: {item.result}; "
-                    f"reviewer: {item.reviewer}; level: {item.evidence_level.value}",
-                    f"  - Limitations: {', '.join(item.limitations) or 'None recorded'}",
+                    f"  - Scenario: {_escape_markdown_text(item.scenario)}",
+                    f"  - Environment: {_escape_markdown_text(item.environment)}; "
+                    f"result: {_escape_markdown_text(item.result)}; "
+                    f"reviewer: {_escape_markdown_text(item.reviewer)}; "
+                    f"level: {_escape_markdown_text(item.evidence_level.value)}",
+                    "  - Limitations: "
+                    f"{_escape_markdown_text(', '.join(item.limitations) or 'None recorded')}",
                 ]
             )
         lines.append("")
 
     if bundle.gate.reason_codes:
         lines.extend(
-            ["## Gate Reasons", "", *[f"- `{code}`" for code in bundle.gate.reason_codes], ""]
+            [
+                "## Gate Reasons",
+                "",
+                *[f"- {_render_markdown_code(code)}" for code in bundle.gate.reason_codes],
+                "",
+            ]
         )
     guidance = gate_guidance(bundle.gate)
     if guidance:
-        lines.extend(["## What To Do Next", "", *[f"- {message}" for message in guidance], ""])
+        lines.extend(
+            [
+                "## What To Do Next",
+                "",
+                *[f"- {_escape_markdown_text(message)}" for message in guidance],
+                "",
+            ]
+        )
     if state is not None:
         lines.extend(["## Resolution History", ""])
         for event in state.resolution_events:
@@ -184,13 +238,10 @@ def export_markdown(bundle: ExportableReview) -> str:
                 if event.decision
                 else str(event.final_acceptance).lower()
             )
-            lines.append(f"- {target}: {outcome} — {event.comment or 'No note provided'}")
+            history = f"{target}: {outcome} — {event.comment or 'No note provided'}"
+            lines.append(f"- {_escape_markdown_text(history)}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
-
-
-def _links(items: list[EvidenceItem]) -> str:
-    return " | ".join(item.permalink for item in items)
 
 
 def _render_artifact_reference_html(value: str) -> str:
@@ -242,7 +293,7 @@ def export_csv(bundle: ExportableReview) -> str:
         "runtime_result",
     ]
     output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
+    writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
     writer.writeheader()
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
@@ -252,38 +303,50 @@ def export_csv(bundle: ExportableReview) -> str:
         ]
         writer.writerow(
             {
-                "review_id": bundle.review.review_id,
-                "repository": bundle.review.repository,
+                "review_id": _csv_text(bundle.review.review_id),
+                "repository": _csv_text(bundle.review.repository),
                 "pr_number": bundle.review.pr_number,
-                "base_sha": bundle.review.base_sha,
-                "head_sha": bundle.review.head_sha,
+                "base_sha": _csv_text(bundle.review.base_sha),
+                "head_sha": _csv_text(bundle.review.head_sha),
                 "review_created_at": bundle.review.model_dump(mode="json")["created_at"],
-                "tool_version": bundle.review.tool_version,
-                "ruleset_version": bundle.review.ruleset_version,
+                "tool_version": _csv_text(bundle.review.tool_version),
+                "ruleset_version": _csv_text(bundle.review.ruleset_version),
                 "ingestion_state": bundle.review.ingestion_state.value,
                 "ingestion_warnings": json.dumps(
                     bundle.review.ingestion_warnings, ensure_ascii=False
                 ),
                 "skipped_files": json.dumps(bundle.review.skipped_files, ensure_ascii=False),
                 "criteria_revision": state.criteria_revision.number if state else 1,
-                "requirements_source_text": bundle.source_text,
+                "requirements_source_text": _csv_text(bundle.source_text),
                 "verdict": bundle.gate.verdict.value,
-                "criterion_id": criterion.criterion_id,
-                "criterion": criterion.text,
+                "criterion_id": _csv_text(criterion.criterion_id),
+                "criterion": _csv_text(criterion.text),
                 "criterion_source": criterion.criterion_source.value,
                 "priority": criterion.priority.value,
                 "status": finding.status.value,
                 "evidence_level": finding.evidence_level.value,
                 "confidence_band": finding.confidence_band.value,
                 "evidence_count": len(finding.evidence_ids),
-                "concern": finding.reason,
-                "evidence_links": _links(evidence_by_criterion[criterion.criterion_id]),
-                "missing_evidence": " | ".join(finding.missing_evidence),
+                "concern": _csv_text(finding.reason),
+                "evidence_links": json.dumps(
+                    [
+                        item.permalink
+                        for item in evidence_by_criterion[criterion.criterion_id]
+                    ],
+                    ensure_ascii=False,
+                ),
+                "missing_evidence": json.dumps(
+                    finding.missing_evidence, ensure_ascii=False
+                ),
                 "human_decision": resolution.decision.value if resolution else "",
-                "reviewer_comment": resolution.comment if resolution else "",
-                "recommended_action": finding.recommended_action,
-                "runtime_artifacts": " | ".join(item.artifact_reference for item in runtime_items),
-                "runtime_result": " | ".join(item.result for item in runtime_items),
+                "reviewer_comment": _csv_text(resolution.comment) if resolution else "",
+                "recommended_action": _csv_text(finding.recommended_action),
+                "runtime_artifacts": json.dumps(
+                    [item.artifact_reference for item in runtime_items], ensure_ascii=False
+                ),
+                "runtime_result": json.dumps(
+                    [item.result for item in runtime_items], ensure_ascii=False
+                ),
             }
         )
     return output.getvalue()
