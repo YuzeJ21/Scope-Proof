@@ -735,16 +735,23 @@ else:
     )
     if runtime_evidence_save_notice is not None:
         st.success(runtime_evidence_save_notice)
-    runtime_evidence_ready = all(
-        value.strip()
-        for value in (
-            runtime_artifact,
-            runtime_scenario,
-            runtime_environment,
-            runtime_result,
-            runtime_reviewer,
-        )
+    required_runtime_fields = (
+        ("Artifact or URL", runtime_artifact),
+        ("Runtime scenario", runtime_scenario),
+        ("Environment", runtime_environment),
+        ("Observed result", runtime_result),
+        ("Runtime reviewer", runtime_reviewer),
     )
+    missing_runtime_fields = [
+        label for label, value in required_runtime_fields if not value.strip()
+    ]
+    runtime_evidence_ready = not missing_runtime_fields
+    if missing_runtime_fields:
+        st.caption(
+            "Complete required fields to enable Save: "
+            + ", ".join(missing_runtime_fields)
+            + "."
+        )
     if st.button(
         "Save manual runtime evidence",
         key="save_runtime_evidence",
