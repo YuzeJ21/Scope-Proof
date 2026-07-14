@@ -65,7 +65,7 @@ Run:
 
 ```bash
 PYTHONPATH="$PWD" /Users/yjian070/Documents/New\ project\ 2/.venv/bin/python -m pytest \
-  tests/schemas/test_runtime_evidence.py -k limitations -q
+  tests/schemas/test_runtime_evidence.py -k limitation -q
 ```
 
 Expected: the whitespace-only regression fails because current Pydantic construction accepts the list; the preservation and empty-list cases pass.
