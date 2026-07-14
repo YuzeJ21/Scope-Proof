@@ -309,6 +309,19 @@ class RuntimeEvidence(BaseModel):
     evidence_level: EvidenceLevel
     limitations: list[str] = Field(default_factory=list)
 
+    @field_validator(
+        "artifact_reference",
+        "scenario",
+        "environment",
+        "result",
+        "reviewer",
+    )
+    @classmethod
+    def require_non_blank_human_context(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must contain non-whitespace text")
+        return value
+
     @model_validator(mode="after")
     def validate_manual_level(self) -> RuntimeEvidence:
         if self.evidence_level not in {EvidenceLevel.E3, EvidenceLevel.E4}:
