@@ -10,6 +10,10 @@ import string
 from collections import defaultdict
 
 from scopeproof_core.gates.guidance import gate_guidance
+from scopeproof_core.gates.validation import (
+    validated_review_bundle,
+    validated_review_state,
+)
 from scopeproof_core.reporting.references import (
     is_linkable_artifact_reference,
     render_artifact_reference_markdown,
@@ -48,8 +52,9 @@ def _csv_text(value: str) -> str:
 
 def _validated_exportable(value: ExportableReview) -> ExportableReview:
     """Revalidate mutable model input before rendering an export artifact."""
-    model = ReviewState if isinstance(value, ReviewState) else ReviewBundle
-    return model.model_validate(value.model_dump(mode="python"))
+    if isinstance(value, ReviewState):
+        return validated_review_state(value)
+    return validated_review_bundle(value)
 
 
 def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewState | None]:
