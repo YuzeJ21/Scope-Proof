@@ -298,7 +298,28 @@ def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     assert app.button(key="reopen_review").disabled is True
 
     app = analyzed_demo(app)
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    recovery = (
+        "Local saving is unavailable. The current review remains open as unsaved work, "
+        "and exports remain available. Verify that the ScopeProof review directory is a "
+        "regular local directory; ScopeProof will recheck it on the next interaction."
+    )
+
+    assert recovery in [item.value for item in app.warning]
     assert app.button(key="save_review").disabled is True
+    assert app.session_state["review_state"] == review_state
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert len(app.download_button) == 3
+    rendered_recovery = "\n".join(
+        item.value
+        for item in [
+            *app.error,
+            *app.warning,
+            *app.info,
+            *app.success,
+        ]
+    )
+    assert str(tmp_path) not in rendered_recovery
     assert list(outside.iterdir()) == []
 
 
