@@ -705,7 +705,7 @@ def test_local_save_failure_preserves_retryable_unsaved_review_without_raw_detai
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     app = analyzed_demo(new_app())
-    review_state = app.session_state["review_state"]
+    review_state = app.session_state["review_state"].model_copy(deep=True)
 
     with patch(
         "scopeproof_core.storage.json_store.JsonReviewStore.save",
@@ -721,7 +721,16 @@ def test_local_save_failure_preserves_retryable_unsaved_review_without_raw_detai
     assert recovery in [message.value for message in app.error]
     assert not app.exception
     rendered_recovery = "\n".join(
-        message.value for message in [*app.error, *app.warning]
+        message.value
+        for message in [
+            *app.error,
+            *app.warning,
+            *app.info,
+            *app.success,
+            *app.caption,
+            *app.markdown,
+            *app.code,
+        ]
     )
     assert str(save_error) not in rendered_recovery
     assert "/private/secret/path" not in rendered_recovery
