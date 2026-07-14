@@ -760,10 +760,17 @@ else:
             options=[EvidenceLevel.E2, EvidenceLevel.E3, EvidenceLevel.E4],
             key="manual_evidence_level",
         )
+    manual_verification_ready = (
+        decision is not HumanDecision.MANUALLY_VERIFIED or bool(resolution_note.strip())
+    )
+    if not manual_verification_ready:
+        st.caption(
+            "Reviewer note is required for manual verification. Describe what was verified."
+        )
     if st.button(
         "Save resolution",
         key="save_resolution",
-        disabled=decision is None,
+        disabled=decision is None or not manual_verification_ready,
     ):
         if review_state is None:
             st.error("Run analysis before recording a human resolution.")

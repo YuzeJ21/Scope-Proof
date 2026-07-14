@@ -357,6 +357,8 @@ class HumanResolution(BaseModel):
     def manual_verification_needs_level(self) -> HumanResolution:
         if self.decision is HumanDecision.MANUALLY_VERIFIED and self.claimed_evidence_level is None:
             raise ValueError("manually verified decisions require a claimed evidence level")
+        if self.decision is HumanDecision.MANUALLY_VERIFIED and not self.comment.strip():
+            raise ValueError("manually verified decisions require a reviewer note")
         return self
 
 
@@ -388,6 +390,8 @@ class ResolutionEvent(BaseModel):
             raise ValueError("claimed evidence level is reserved for manually verified decisions")
         if self.decision is HumanDecision.MANUALLY_VERIFIED and self.claimed_evidence_level is None:
             raise ValueError("manually verified events require a claimed evidence level")
+        if self.decision is HumanDecision.MANUALLY_VERIFIED and not self.comment.strip():
+            raise ValueError("manually verified decisions require a reviewer note")
         return self
 
 
