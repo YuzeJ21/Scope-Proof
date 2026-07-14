@@ -110,20 +110,30 @@ class ActionValidationRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    repository: str = Field(pattern=r"^[^/]+/[^/]+$")
+    repository: str = Field(pattern=r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$")
     requirements_base_sha: str = Field(min_length=1)
-    non_fork_pr_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/pull/\d+$")
+    non_fork_pr_url: str = Field(
+        pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/pull/\d+$"
+    )
     non_fork_head_sha: str = Field(min_length=1)
-    non_fork_run_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
+    non_fork_run_url: str = Field(
+        pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/actions/runs/\d+$"
+    )
     non_fork_comment_count: int = Field(ge=1)
     scopeproof_comment_marker: str = Field(pattern=r"^<!-- scopeproof:.+ -->$")
-    rerun_url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$")
+    rerun_url: str = Field(
+        pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/actions/runs/\d+$"
+    )
     rerun_head_sha: str = Field(min_length=1)
     rerun_comment_count: int = Field(ge=1)
     fork_status: Literal["excluded", "validated"] = "validated"
-    fork_pr_url: str | None = Field(default=None, pattern=r"^https://github\.com/[^/]+/[^/]+/pull/\d+$")
+    fork_pr_url: str | None = Field(
+        default=None,
+        pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/pull/\d+$",
+    )
     fork_run_url: str | None = Field(
-        default=None, pattern=r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+$"
+        default=None,
+        pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/actions/runs/\d+$",
     )
     fork_comment_count: int | None = Field(default=None, ge=0, le=0)
     validated_by: str = Field(min_length=1)

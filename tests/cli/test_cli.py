@@ -287,6 +287,29 @@ def test_action_evidence_command_rejects_blank_owner_context(tmp_path: Path, cap
     assert '"repository"' not in captured.out
 
 
+def test_action_evidence_command_rejects_noncanonical_repository_identity(
+    tmp_path: Path, capsys
+) -> None:
+    evidence_path = tmp_path / "invalid-repository-action-evidence.json"
+    payload = action_evidence_data() | {
+        "repository": "ac me/demo",
+        "non_fork_pr_url": "https://github.com/ac me/demo/pull/12",
+        "non_fork_run_url": "https://github.com/ac me/demo/actions/runs/1",
+        "rerun_url": "https://github.com/ac me/demo/actions/runs/2",
+        "fork_pr_url": "https://github.com/ac me/demo/pull/13",
+        "fork_run_url": "https://github.com/ac me/demo/actions/runs/3",
+    }
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        main(["validate-action-evidence", str(evidence_path)])
+
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert "string_pattern_mismatch" in captured.err
+    assert '"repository"' not in captured.out
+
+
 def test_requirements_confirmation_command_validates_bound_record(tmp_path: Path, capsys) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Document the demo.\n", encoding="utf-8")
