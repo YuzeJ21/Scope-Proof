@@ -1050,6 +1050,12 @@ else:
             st.caption("Saved locally — current review matches the last local save.")
         else:
             st.caption("Unsaved changes — save locally before relying on this review ID.")
+    if review_state is not None and not review_store_available:
+        st.warning(
+            "Local saving is unavailable. The current review remains open as unsaved work, "
+            "and exports remain available. Verify that the ScopeProof review directory is a "
+            "regular local directory; ScopeProof will recheck it on the next interaction."
+        )
     if review_state is not None and st.button(
         "Save local review",
         key="save_review",
