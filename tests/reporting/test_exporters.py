@@ -6,13 +6,14 @@ from datetime import UTC, datetime
 import pytest
 
 from scopeproof_core.gates import validation as gate_validation
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import (
     export_csv,
     export_html,
     export_json,
     export_markdown,
 )
-from scopeproof_core.reviews.lifecycle import new_review_state
+from scopeproof_core.reviews.lifecycle import append_resolution, new_review_state
 from scopeproof_core.schemas.models import (
     CheckState,
     ConfidenceBand,
@@ -27,6 +28,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    ResolutionEvent,
     Review,
     ReviewBundle,
     RuntimeEvidence,
@@ -106,12 +108,38 @@ def example_bundle() -> ReviewBundle:
     )
 
 
+def example_state():
+    bundle = example_bundle()
+    resolution = bundle.resolutions[0]
+    bundle.resolutions = []
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+    state = new_review_state(bundle)
+    return append_resolution(
+        state,
+        ResolutionEvent(
+            event_id="review-event-1",
+            criterion_id=resolution.criterion_id,
+            decision=resolution.decision,
+            comment=resolution.comment,
+            evidence_url=resolution.evidence_url,
+            claimed_evidence_level=resolution.claimed_evidence_level,
+            reviewer=resolution.reviewer,
+            timestamp=resolution.timestamp,
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     "exporter",
     [export_json, export_markdown, export_csv, export_html],
 )
 def test_exporters_revalidate_active_review_state_identity(exporter) -> None:
-    state = new_review_state(example_bundle())
+    state = example_state()
     divergent = state.model_copy(
         update={
             "review": state.review.model_copy(update={"head_sha": "different-head"})
@@ -365,7 +393,7 @@ def test_runtime_artifact_reference_stays_exact_in_json_and_csv() -> None:
 
 
 def test_markdown_groups_version_provenance_before_criteria_revision() -> None:
-    markdown = export_markdown(new_review_state(example_bundle()))
+    markdown = export_markdown(example_state())
 
     assert markdown.index("**Tool version:**") < markdown.index("**Ruleset:**")
     assert markdown.index("**Ruleset:**") < markdown.index("**Criteria revision:")

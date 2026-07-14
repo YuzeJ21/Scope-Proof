@@ -10,10 +10,10 @@ from scopeproof_core.gates.validation import (
     validated_review_bundle,
     validated_review_state,
 )
+from scopeproof_core.resolution_events import current_resolutions, final_acceptance
 from scopeproof_core.schemas.models import (
     CriteriaRevision,
     Criterion,
-    HumanResolution,
     ResolutionEvent,
     ReviewBundle,
     ReviewState,
@@ -37,6 +37,10 @@ def _validated_state(state: ReviewState) -> ReviewState:
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
     """Initialize lifecycle state from a revalidated analysis bundle."""
     bundle = validated_review_bundle(bundle)
+    if bundle.resolutions:
+        raise ValueError("initial analysis bundle must not contain human resolutions")
+    if bundle.review.final_acceptance:
+        raise ValueError("initial analysis bundle must not contain final acceptance")
     active_bundle = bundle.model_copy(deep=True)
     revision = CriteriaRevision(
         number=1,
@@ -94,32 +98,6 @@ def confirm_criteria(state: ReviewState) -> ReviewState:
     return state.model_copy(update={"criteria_revision": revision, "review": review})
 
 
-def current_resolutions(
-    events: list[ResolutionEvent], criteria_revision_number: int | None = None
-) -> list[HumanResolution]:
-    """Return the latest criterion decision in each revision, preserving event history elsewhere."""
-    if criteria_revision_number is None:
-        revision_numbers = [event.criteria_revision_number for event in events]
-        criteria_revision_number = max(revision_numbers, default=1)
-    latest: dict[str, ResolutionEvent] = {}
-    for event in events:
-        if event.criteria_revision_number != criteria_revision_number or event.criterion_id is None:
-            continue
-        latest[event.criterion_id] = event
-    return [
-        HumanResolution(
-            criterion_id=event.criterion_id,
-            decision=event.decision,
-            comment=event.comment,
-            evidence_url=event.evidence_url,
-            claimed_evidence_level=event.claimed_evidence_level,
-            reviewer=event.reviewer,
-            timestamp=event.timestamp,
-        )
-        for _, event in sorted(latest.items())
-    ]
-
-
 def resolution_event_statuses(
     events: list[ResolutionEvent], active_revision_number: int
 ) -> list[ResolutionEventStatus]:
@@ -146,21 +124,12 @@ def resolution_event_statuses(
     return statuses
 
 
-def _final_acceptance(events: list[ResolutionEvent], revision_number: int) -> bool:
-    final_events = [
-        event
-        for event in events
-        if event.criteria_revision_number == revision_number and event.criterion_id is None
-    ]
-    return final_events[-1].final_acceptance if final_events else False
-
-
 def _recalculate(state: ReviewState) -> ReviewState:
     if state.bundle is None:
         return state
     revision_number = state.criteria_revision.number
     review = state.review.model_copy(
-        update={"final_acceptance": _final_acceptance(state.resolution_events, revision_number)}
+        update={"final_acceptance": final_acceptance(state.resolution_events, revision_number)}
     )
     resolutions = current_resolutions(state.resolution_events, revision_number)
     bundle = state.bundle.model_copy(deep=True)

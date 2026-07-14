@@ -6,9 +6,15 @@ from pathlib import Path
 import pytest
 
 from scopeproof_core.demo import build_demo_review
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import export_html, export_markdown
 from scopeproof_core.reviews.lifecycle import new_review_state
-from scopeproof_core.schemas.models import GateVerdict, PullRequestSnapshot
+from scopeproof_core.schemas.models import (
+    GateVerdict,
+    HumanDecision,
+    HumanResolution,
+    PullRequestSnapshot,
+)
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
     UnsafeReviewStore,
@@ -114,6 +120,37 @@ def test_load_rejects_a_non_deterministic_active_gate(tmp_path: Path) -> None:
         ValueError, match="analysis bundle gate must match deterministic evaluation"
     ):
         store.load("review-1")
+
+
+def test_save_rejects_forged_ready_state_without_resolution_events(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    assert state.bundle is not None
+    state.review.final_acceptance = True
+    state.bundle.review.final_acceptance = True
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id=criterion.criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            comment="Forged acceptance",
+        )
+        for criterion in state.bundle.criteria
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+    assert state.bundle.gate.verdict is GateVerdict.READY
+    assert state.resolution_events == []
+
+    with pytest.raises(
+        ValueError, match="active bundle resolutions must match active resolution events"
+    ):
+        store.save(state)
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_version_one_record_with_legacy_permalink_loads_and_exports_inertly(
