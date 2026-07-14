@@ -55,9 +55,12 @@ def revise_criteria(
     history = [*state.analysis_history]
     if state.bundle is not None:
         history.append(state.bundle)
+    validated_criteria = [
+        Criterion.model_validate(criterion.model_dump(mode="python")) for criterion in criteria
+    ]
     revision = CriteriaRevision(
         number=state.criteria_revision.number + 1,
-        criteria=criteria,
+        criteria=validated_criteria,
         source_text=source_text,
     )
     review = state.review.model_copy(
