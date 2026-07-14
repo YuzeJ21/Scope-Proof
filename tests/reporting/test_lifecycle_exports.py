@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +19,7 @@ from scopeproof_core.schemas.models import (
     HumanResolution,
     ResolutionEvent,
 )
+from scopeproof_core.storage.json_store import JsonReviewStore
 
 
 def state_with_history():
@@ -48,27 +50,61 @@ def attached_review_state():
             "Updated requirements",
         )
     )
+    return attach_analysis(revised, analysis_for(revised))
+
+
+def analysis_for(state):
     incoming = build_demo_review()
     incoming.review = incoming.review.model_copy(
         update={
-            "repository": revised.review.repository,
-            "pr_number": revised.review.pr_number,
-            "base_sha": revised.review.base_sha,
-            "head_sha": revised.review.head_sha,
-            "check_state": revised.review.check_state,
+            "repository": state.review.repository,
+            "pr_number": state.review.pr_number,
+            "base_sha": state.review.base_sha,
+            "head_sha": state.review.head_sha,
+            "check_state": state.review.check_state,
             "criteria_confirmed": True,
-            "ingestion_state": revised.review.ingestion_state,
-            "ingestion_warnings": revised.review.ingestion_warnings,
-            "skipped_files": revised.review.skipped_files,
-            "tool_version": revised.review.tool_version,
-            "ruleset_version": revised.review.ruleset_version,
+            "ingestion_state": state.review.ingestion_state,
+            "ingestion_warnings": state.review.ingestion_warnings,
+            "skipped_files": state.review.skipped_files,
+            "tool_version": state.review.tool_version,
+            "ruleset_version": state.review.ruleset_version,
         }
     )
-    incoming.source_text = revised.criteria_revision.source_text
+    incoming.source_text = state.criteria_revision.source_text
     incoming.criteria = [
-        item.model_copy(deep=True) for item in revised.criteria_revision.criteria
+        item.model_copy(deep=True) for item in state.criteria_revision.criteria
     ]
-    return attach_analysis(revised, incoming)
+    return incoming
+
+
+def state_with_skipped_analysis_revision():
+    revision_one = new_review_state(build_demo_review())
+    revision_two = confirm_criteria(
+        revise_criteria(
+            revision_one,
+            revision_one.criteria_revision.criteria,
+            "Confirmed revision two without analysis",
+        )
+    )
+    revision_three = confirm_criteria(
+        revise_criteria(
+            revision_two,
+            revision_two.criteria_revision.criteria,
+            "Confirmed revision three",
+        )
+    )
+    analyzed_revision_three = attach_analysis(
+        revision_three,
+        analysis_for(revision_three),
+    )
+    revision_four = confirm_criteria(
+        revise_criteria(
+            analyzed_revision_three,
+            analyzed_revision_three.criteria_revision.criteria,
+            "Confirmed revision four",
+        )
+    )
+    return attach_analysis(revision_four, analysis_for(revision_four))
 
 
 def test_lifecycle_markdown_exposes_revision_and_resolution_history() -> None:
@@ -111,6 +147,41 @@ def test_lifecycle_json_preserves_attached_reanalysis_lineage() -> None:
     ]
     assert historical["source_text"] != payload["bundle"]["source_text"]
     assert historical["criteria"] != payload["bundle"]["criteria"]
+
+
+def test_lifecycle_json_exposes_active_and_skipped_known_revision_lineage() -> None:
+    state = state_with_skipped_analysis_revision()
+
+    payload = json.loads(export_json(state))
+
+    assert payload == state.model_dump(mode="json")
+    assert payload["bundle"]["criteria_revision_number"] == 4
+    assert [
+        bundle["criteria_revision_number"] for bundle in payload["analysis_history"]
+    ] == [1, 3]
+
+
+def test_lifecycle_json_preserves_migrated_unknown_revision_lineage(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = attached_review_state()
+    path = store.save(state)
+    legacy_record = json.loads(path.read_text(encoding="utf-8"))
+    legacy_record["record_version"] = 1
+    legacy_record["state"]["bundle"].pop("criteria_revision_number")
+    for historical_bundle in legacy_record["state"]["analysis_history"]:
+        historical_bundle.pop("criteria_revision_number")
+    path.write_text(json.dumps(legacy_record), encoding="utf-8")
+
+    migrated = store.load(state.review.review_id)
+    payload = json.loads(export_json(migrated))
+
+    assert payload == migrated.model_dump(mode="json")
+    assert payload["bundle"]["criteria_revision_number"] == 2
+    assert [
+        bundle["criteria_revision_number"] for bundle in payload["analysis_history"]
+    ] == ["unknown"]
 
 
 @pytest.mark.parametrize("exporter", [export_json, export_markdown])
