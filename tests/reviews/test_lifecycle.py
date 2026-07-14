@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     append_resolution,
@@ -66,6 +69,28 @@ def test_editing_confirmed_criteria_creates_revision_and_invalidates_analysis() 
     assert revised.review.criteria_confirmed is False
     assert revised.bundle is None
     assert len(revised.analysis_history) == 1
+
+
+@pytest.mark.parametrize("source_text", ["", "   ", "\t", "\n\r"])
+def test_revise_criteria_rejects_blank_requirements_source(source_text: str) -> None:
+    state = initial_state()
+
+    with pytest.raises(
+        ValidationError, match="requirements source must contain non-whitespace text"
+    ):
+        revise_criteria(state, state.criteria_revision.criteria, source_text)
+
+
+def test_revise_criteria_preserves_valid_requirements_source() -> None:
+    source_text = "  Export filtered CSV\n"
+
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        source_text,
+    )
+
+    assert revised.criteria_revision.source_text == source_text
 
 
 def test_confirmation_keeps_revision_and_unblocks_future_analysis() -> None:

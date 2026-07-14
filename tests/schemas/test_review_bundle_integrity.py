@@ -102,6 +102,25 @@ def test_review_bundle_integrity_allows_valid_json_round_trip() -> None:
     assert ReviewBundle.model_validate_json(bundle.model_dump_json()) == bundle
 
 
+@pytest.mark.parametrize("source_text", ["", "   ", "\t", "\n\r"])
+def test_review_bundle_rejects_blank_requirements_source(source_text: str) -> None:
+    payload = bundle_payload()
+    payload["source_text"] = source_text
+
+    with pytest.raises(
+        ValidationError, match="requirements source must contain non-whitespace text"
+    ):
+        ReviewBundle.model_validate(payload)
+
+
+def test_review_bundle_preserves_valid_requirements_source() -> None:
+    source_text = "  Failed export shows an error\n"
+    payload = bundle_payload()
+    payload["source_text"] = source_text
+
+    assert ReviewBundle.model_validate(payload).source_text == source_text
+
+
 def test_review_bundle_integrity_rejects_duplicate_criterion_ids() -> None:
     payload = bundle_payload()
     payload["criteria"].append(payload["criteria"][0].copy())
