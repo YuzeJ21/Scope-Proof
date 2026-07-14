@@ -9,12 +9,17 @@ from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import (
+    RULESET_VERSION,
     EvidenceLevel,
     GateVerdict,
     HumanDecision,
     IngestionState,
     Priority,
     ResolutionEvent,
+)
+from scopeproof_core.storage.json_store import (
+    JsonReviewStore,
+    default_local_review_directory,
 )
 
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
@@ -812,6 +817,37 @@ def test_sidebar_step_navigation_tracks_available_workflow_sections() -> None:
         "[Complete — Analysis generated](#3-evidence-matrix)",
         "Available — Review evidence and export",
     ]
+
+
+def test_sidebar_uses_active_review_ruleset_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    current_caption = (
+        f"Ruleset {RULESET_VERSION} · local-first · public repositories only"
+    )
+    assert current_caption in [item.value for item in new_app().sidebar.caption]
+
+    saved, review_id = saved_demo_review(new_app())
+    current_state = saved.session_state["review_state"]
+    historical_review = current_state.review.model_copy(
+        update={"ruleset_version": "0.9.0"}
+    )
+    historical_bundle = current_state.bundle.model_copy(
+        update={"review": historical_review}
+    )
+    historical_state = current_state.model_copy(
+        update={"review": historical_review, "bundle": historical_bundle}
+    )
+    JsonReviewStore(default_local_review_directory()).save(historical_state)
+
+    reopened = select_saved_review(new_app(), review_id)
+    reopened = reopened.button(key="reopen_review").click().run()
+
+    assert (
+        "Ruleset 0.9.0 · local-first · public repositories only"
+        in [item.value for item in reopened.sidebar.caption]
+    )
 
 
 @pytest.mark.parametrize("text", ["", "   ", "\t\n"])

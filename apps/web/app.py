@@ -40,6 +40,7 @@ from scopeproof_core.reviews.lifecycle import (
     revise_criteria,
 )
 from scopeproof_core.schemas.models import (
+    RULESET_VERSION,
     Criterion,
     EvidenceLevel,
     HumanDecision,
@@ -1488,6 +1489,9 @@ criteria_are_confirmed = (
     st.session_state["criteria_confirmed"] and not criteria_edits_pending
 )
 has_analysis = bundle is not None
+sidebar_ruleset_version = (
+    bundle.review.ruleset_version if bundle is not None else RULESET_VERSION
+)
 
 with st.sidebar:
     st.header("Review status")
@@ -1526,4 +1530,6 @@ with st.sidebar:
     else:
         _render_sidebar_step("Locked — Review and export")
     st.divider()
-    st.caption("Ruleset 1.0.0 · local-first · public repositories only")
+    st.caption(
+        f"Ruleset {sidebar_ruleset_version} · local-first · public repositories only"
+    )
