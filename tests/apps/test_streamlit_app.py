@@ -815,6 +815,22 @@ def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: st
     ]
 
 
+def test_confirmed_criteria_disable_repeat_confirmation_until_an_edit() -> None:
+    app = analyzed_demo(new_app())
+    state_before = app.session_state["review_state"].model_copy(deep=True)
+
+    assert app.button(key="confirm_criteria").disabled is True
+    assert state_before.criteria_revision.number == 1
+    assert state_before.bundle is not None
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Changed visible criterion"
+    ).run()
+
+    assert app.button(key="confirm_criteria").disabled is False
+    assert app.session_state["review_state"] == state_before
+
+
 def test_pending_criterion_text_edit_requires_reconfirmation_before_analysis() -> None:
     app = analyzed_demo(new_app())
     confirmed_text = app.session_state["criteria"][0].text
