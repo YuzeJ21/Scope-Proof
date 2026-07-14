@@ -25,6 +25,7 @@ from scopeproof_core.github.client import (
     parse_pr_url,
 )
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
+from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
@@ -739,8 +740,9 @@ else:
         item for item in bundle.runtime_evidence if item.criterion_id == selected_id
     ]
     for item in selected_runtime:
+        artifact_reference = render_artifact_reference_markdown(item.artifact_reference)
         st.markdown(
-            f"- [{item.artifact_reference}]({item.artifact_reference}) — {item.scenario} "
+            f"- {artifact_reference} — {item.scenario} "
             f"({item.environment}: {item.result}; {item.evidence_level.value})"
         )
 
