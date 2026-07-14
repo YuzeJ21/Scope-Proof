@@ -1146,7 +1146,11 @@ def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
     app = app.text_input(key="runtime_reviewer").set_value("Fixture reviewer").run()
     app = app.button(key="save_runtime_evidence").click().run()
 
-    runtime_rows = [item.value for item in app.markdown if "artifact-42" in item.value]
+    runtime_rows = [
+        item.value.replace("\\", "")
+        for item in app.markdown
+        if "artifact\\-42" in item.value
+    ]
     assert runtime_rows == [
         "- artifact-42 — Fixture scenario (Fixture environment: Fixture result; E3)"
     ]

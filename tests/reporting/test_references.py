@@ -15,6 +15,10 @@ from scopeproof_core.reporting.references import (
         ("HTTPS://example.test/run/42", True),
         ("http:///run/42", False),
         ("https://", False),
+        ("https://@", False),
+        ("https://.", False),
+        ("https://example.test:invalid/run", False),
+        ("https://example.test/run\x00", False),
         ("https://example.test/run 42", False),
         ("https://example.test/run\t42", False),
         ("https://example.test/<run>", False),
@@ -36,7 +40,16 @@ def test_inert_markdown_label_renders_as_the_exact_supplied_text() -> None:
 
     fragment = render_artifact_reference_markdown(reference)
 
-    assert fragment == r"artifact-&amp;copy;\_\[run\]\*\`result\`\\path"
+    assert fragment == r"artifact\-&amp;copy;\_\[run\]\*\`result\`\\path"
+
+
+def test_non_link_artifact_reference_cannot_activate_formatting_or_autolinks() -> None:
+    reference = "~~strike~~ https://example.test/plain with space"
+
+    fragment = render_artifact_reference_markdown(reference)
+
+    assert "~~strike~~" not in fragment
+    assert "https://example.test/plain" not in fragment
 
 
 def test_escaped_https_markdown_preserves_label_and_navigation_semantics() -> None:
@@ -45,6 +58,6 @@ def test_escaped_https_markdown_preserves_label_and_navigation_semantics() -> No
     fragment = render_artifact_reference_markdown(reference)
 
     assert fragment == (
-        r"[https://example.test/path\\\*name?label=&amp;copy;]"
+        r"[https\:\/\/example\.test\/path\\\*name\?label\=&amp;copy;]"
         r"(<https://example.test/path%5C*name?label=&amp;copy;>)"
     )

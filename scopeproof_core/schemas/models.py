@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
@@ -348,19 +347,6 @@ class EvidenceItem(BaseModel):
     def require_non_blank_candidate_context(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
             raise ValueError("must contain non-whitespace text")
-        return value
-
-    @field_validator("permalink")
-    @classmethod
-    def require_safe_absolute_http_permalink(cls, value: str) -> str:
-        if any(character.isspace() for character in value) or "<" in value or ">" in value:
-            raise ValueError("permalink must be a safe absolute HTTP URL")
-        try:
-            parsed = urlsplit(value)
-        except ValueError as exc:
-            raise ValueError("permalink must be a safe absolute HTTP URL") from exc
-        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("permalink must be a safe absolute HTTP URL")
         return value
 
     @field_validator("limitations")

@@ -138,18 +138,12 @@ def test_candidate_evidence_context_allows_no_limitations() -> None:
     assert item.limitations == []
 
 
-@pytest.mark.parametrize(
-    "permalink",
-    [
-        "javascript:alert(1)",
-        "relative/evidence",
-        "https://example.test/path with space",
-        "https://example.test/path<unsafe>",
-    ],
-)
-def test_candidate_evidence_rejects_unsafe_permalink(permalink: str) -> None:
-    with pytest.raises(ValidationError, match="permalink must be a safe absolute HTTP URL"):
-        EvidenceItem.model_validate(candidate_evidence_payload(permalink=permalink))
+def test_candidate_evidence_preserves_legacy_non_http_permalink_for_inert_recovery() -> None:
+    permalink = "relative/legacy-evidence"
+
+    item = EvidenceItem.model_validate(candidate_evidence_payload(permalink=permalink))
+
+    assert item.permalink == permalink
 
 
 @pytest.mark.parametrize("field", ["reason", "recommended_action"])
