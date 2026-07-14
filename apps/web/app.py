@@ -456,6 +456,7 @@ st.header("2 · Confirm Criteria")
 criteria: list[Criterion] = st.session_state["criteria"]
 edited_criteria = criteria
 criteria_edits_pending = False
+analysis_continuation_placeholder = None
 if not criteria:
     st.info("Load the demo or prepare at least one criterion to continue.")
 else:
@@ -465,6 +466,7 @@ else:
         "E3 = manually recorded runtime verification. Static PR analysis can produce "
         "only E1 or E2."
     )
+    analysis_continuation_placeholder = st.empty()
     new_criterion_text = st.text_input("Add criterion", key="new_criterion_text")
     if st.button(
         "Add criterion",
@@ -601,6 +603,11 @@ analysis_disabled = not (
         or st.session_state["review_state"].bundle is None
     )
 )
+if not analysis_disabled and analysis_continuation_placeholder is not None:
+    analysis_continuation_placeholder.markdown(
+        "[Continue to run deterministic analysis](#run-deterministic-analysis)"
+    )
+st.markdown("### Run deterministic analysis")
 if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis_disabled):
     bundle = _analyze()
     existing_state = st.session_state["review_state"]
