@@ -432,7 +432,10 @@ with fetch_column:
             )
             st.rerun()
         except GitHubIngestionError as error:
-            st.error(str(error))
+            st.error(
+                f"{error} No review data was changed. Verify that the PR is public and "
+                "try again. Use the optional token only if GitHub reports a rate limit."
+            )
 
 source_load_notice = st.session_state.pop("source_load_notice", None)
 if source_load_notice is not None:
