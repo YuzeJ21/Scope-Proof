@@ -76,6 +76,8 @@ def _build_bundle(
         check_state=snapshot.check_state,
         criteria_confirmed=True,
         ingestion_state=snapshot.ingestion_state,
+        ingestion_warnings=snapshot.warnings,
+        skipped_files=snapshot.skipped_files,
     )
     evidence = retrieve_evidence(snapshot, criteria)
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
@@ -107,6 +109,9 @@ def _review(args: argparse.Namespace) -> int:
         "record": str(path),
         "verdict": bundle.gate.verdict.value,
         "head_sha": bundle.review.head_sha,
+        "ingestion_state": bundle.review.ingestion_state.value,
+        "ingestion_warnings": bundle.review.ingestion_warnings,
+        "skipped_files": bundle.review.skipped_files,
     }
     if report_target is not None:
         report_path, renderer = report_target

@@ -18,6 +18,18 @@ from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewSta
 ExportableReview = ReviewBundle | ReviewState
 
 
+def _escape_markdown_list_text(value: str) -> str:
+    """Keep untrusted repository text inert inside a Markdown list item."""
+    return (
+        value.replace("\\", "\\\\")
+        .replace("<", "\\<")
+        .replace(">", "\\>")
+        .replace("|", "\\|")
+        .replace("\r", " ")
+        .replace("\n", " ")
+    )
+
+
 def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewState | None]:
     if isinstance(value, ReviewState):
         if value.bundle is None:
@@ -52,6 +64,7 @@ def export_markdown(bundle: ExportableReview) -> str:
         f"**Review created:** `{review_created_at}`",
         f"**Tool version:** `{bundle.review.tool_version}`",
         f"**Ruleset:** `{bundle.review.ruleset_version}`",
+        f"**Ingestion state:** `{bundle.review.ingestion_state.value}`",
         *([f"**Criteria revision: {state.criteria_revision.number}**"] if state else []),
         "",
         (
@@ -59,6 +72,31 @@ def export_markdown(bundle: ExportableReview) -> str:
             "It does not replace QA or prove correctness."
         ),
         "",
+        *(
+            [
+                "## Ingestion Limitations",
+                "",
+                *[
+                    f"- {_escape_markdown_list_text(warning)}"
+                    for warning in bundle.review.ingestion_warnings
+                ],
+                *(
+                    [
+                        "",
+                        "**Skipped changed files (not inspected):**",
+                        *[
+                            f"- {_escape_markdown_list_text(path)}"
+                            for path in bundle.review.skipped_files
+                        ],
+                    ]
+                    if bundle.review.skipped_files
+                    else []
+                ),
+                "",
+            ]
+            if bundle.review.ingestion_warnings or bundle.review.skipped_files
+            else []
+        ),
         "## Confirmed Requirements Source",
         "",
         *[f"> {line}" for line in (bundle.source_text.splitlines() or [""])],
@@ -186,6 +224,9 @@ def export_csv(bundle: ExportableReview) -> str:
         "review_created_at",
         "tool_version",
         "ruleset_version",
+        "ingestion_state",
+        "ingestion_warnings",
+        "skipped_files",
         "criteria_revision",
         "requirements_source_text",
         "verdict",
@@ -225,6 +266,9 @@ def export_csv(bundle: ExportableReview) -> str:
                 "review_created_at": bundle.review.model_dump(mode="json")["created_at"],
                 "tool_version": bundle.review.tool_version,
                 "ruleset_version": bundle.review.ruleset_version,
+                "ingestion_state": bundle.review.ingestion_state.value,
+                "ingestion_warnings": " | ".join(bundle.review.ingestion_warnings),
+                "skipped_files": " | ".join(bundle.review.skipped_files),
                 "criteria_revision": state.criteria_revision.number if state else 1,
                 "requirements_source_text": bundle.source_text,
                 "verdict": bundle.gate.verdict.value,
@@ -307,9 +351,26 @@ def export_html(value: ExportableReview) -> str:
             f"Review created <code>{html.escape(review_created_at)}</code> · "
             f"Tool <code>{html.escape(bundle.review.tool_version)}</code> · "
             f"Ruleset <code>{html.escape(bundle.review.ruleset_version)}</code> · "
+            f"Ingestion <code>{html.escape(bundle.review.ingestion_state.value)}</code> · "
             f"Criteria revision {revision}</p>",
             "<p class=\"note\">ScopeProof surfaces auditable candidate evidence. "
             "It does not replace QA or prove correctness.</p>",
+            *(
+                [
+                    "<h2>Ingestion Limitations</h2><ul>",
+                    *[
+                        f"<li>{html.escape(warning)}</li>"
+                        for warning in bundle.review.ingestion_warnings
+                    ],
+                    *[
+                        f"<li>Skipped changed file: <code>{html.escape(path)}</code></li>"
+                        for path in bundle.review.skipped_files
+                    ],
+                    "</ul>",
+                ]
+                if bundle.review.ingestion_warnings or bundle.review.skipped_files
+                else []
+            ),
             "<h2>Confirmed Requirements Source</h2>",
             f"<pre>{html.escape(bundle.source_text)}</pre>",
             "<table><thead><tr><th>ID</th><th>Criterion</th><th>Source</th><th>Priority</th>"

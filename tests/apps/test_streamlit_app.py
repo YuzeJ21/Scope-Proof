@@ -5,7 +5,13 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.demo import load_demo_snapshot
-from scopeproof_core.schemas.models import EvidenceLevel, GateVerdict, HumanDecision, Priority
+from scopeproof_core.schemas.models import (
+    EvidenceLevel,
+    GateVerdict,
+    HumanDecision,
+    IngestionState,
+    Priority,
+)
 
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
 
@@ -57,6 +63,62 @@ def test_product_disclaimer_is_visible() -> None:
     )
     assert "does not replace QA" in visible_text
     assert "No paid LLM API" in visible_text
+
+
+def test_partial_public_pr_fetch_shows_bounded_analysis_and_skipped_paths() -> None:
+    snapshot = load_demo_snapshot().model_copy(
+        update={
+            "ingestion_state": IngestionState.PARTIAL,
+            "warnings": ["File limit reached; skipped 2 changed files."],
+            "skipped_files": ["src/one.py", "src/two.py"],
+        }
+    )
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/repo/pull/7"
+    ).run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+
+    warning_text = "\n".join(item.value for item in app.warning)
+    assert "Partial PR ingestion" in warning_text
+    assert "gate cannot be Ready" in warning_text
+    assert "File limit reached; skipped 2 changed files." in warning_text
+    assert [item.label for item in app.expander if "Skipped changed files" in item.label] == [
+        "Skipped changed files (2)"
+    ]
+    assert "src/one.py" in "\n".join(item.value for item in app.code)
+
+
+def test_reopened_partial_review_keeps_ingestion_recovery_details(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    snapshot = load_demo_snapshot().model_copy(
+        update={
+            "ingestion_state": IngestionState.PARTIAL,
+            "warnings": ["File limit reached; skipped 1 changed files."],
+            "skipped_files": ["src/reopen-skipped.py"],
+        }
+    )
+    app = new_app()
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=snapshot):
+        app = app.button(key="load_demo").click().run()
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    review_id = app.session_state["review_state"].review.review_id
+    app = app.button(key="save_review").click().run()
+
+    fresh = select_saved_review(new_app(), review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+
+    warning_text = "\n".join(item.value for item in fresh.warning)
+    assert "Partial PR ingestion" in warning_text
+    assert "File limit reached; skipped 1 changed files." in warning_text
+    assert "src/reopen-skipped.py" in "\n".join(item.value for item in fresh.code)
 
 
 def test_reopen_review_is_a_collapsed_secondary_path_before_start_review(

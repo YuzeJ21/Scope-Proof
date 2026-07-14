@@ -202,6 +202,33 @@ def test_confirmed_complete_review_can_analyze() -> None:
     assert review.can_analyze is True
 
 
+def test_review_preserves_ingestion_limitations_with_backward_compatible_defaults() -> None:
+    review = Review(
+        repository="acme/repo",
+        pr_number=7,
+        base_sha="base",
+        head_sha="head",
+        ingestion_state=IngestionState.PARTIAL,
+        ingestion_warnings=["File limit reached; skipped 2 changed files."],
+        skipped_files=["src/one.py", "src/two.py"],
+    )
+
+    reopened = Review.model_validate_json(review.model_dump_json())
+    historical = Review.model_validate(
+        {
+            "repository": "acme/repo",
+            "pr_number": 7,
+            "base_sha": "base",
+            "head_sha": "head",
+        }
+    )
+
+    assert reopened.ingestion_warnings == ["File limit reached; skipped 2 changed files."]
+    assert reopened.skipped_files == ["src/one.py", "src/two.py"]
+    assert historical.ingestion_warnings == []
+    assert historical.skipped_files == []
+
+
 def test_new_review_records_current_package_version() -> None:
     review = Review(
         repository="acme/repo",

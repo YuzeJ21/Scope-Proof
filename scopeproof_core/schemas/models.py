@@ -284,6 +284,8 @@ class Review(BaseModel):
     check_state: CheckState = CheckState.UNAVAILABLE
     criteria_confirmed: bool = False
     ingestion_state: IngestionState = IngestionState.COMPLETE
+    ingestion_warnings: list[str] = Field(default_factory=list)
+    skipped_files: list[str] = Field(default_factory=list)
     final_acceptance: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tool_version: str = Field(default_factory=lambda: __version__)

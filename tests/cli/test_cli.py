@@ -76,6 +76,45 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     assert state.bundle.review.tool_version == __version__
 
 
+def test_partial_fixture_review_reports_and_persists_ingestion_limitations(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    fixture_payload = json.loads(
+        Path("evals/fixtures/complete_implementation_pr.json").read_text(encoding="utf-8")
+    )
+    fixture_payload.update(
+        {
+            "ingestion_state": "partial",
+            "warnings": ["File limit reached; skipped 1 changed files."],
+            "skipped_files": ["src/skipped.py"],
+        }
+    )
+    fixture = tmp_path / "partial.json"
+    fixture.write_text(json.dumps(fixture_payload), encoding="utf-8")
+
+    assert main(
+        [
+            "review",
+            "--fixture",
+            str(fixture),
+            "--requirements",
+            str(requirements),
+            "--storage-dir",
+            str(tmp_path / "reviews"),
+        ]
+    ) == 0
+
+    metadata = json.loads(capsys.readouterr().out)
+    state = JsonReviewStore(tmp_path / "reviews").load(metadata["review_id"])
+    assert metadata["ingestion_state"] == "partial"
+    assert metadata["ingestion_warnings"] == fixture_payload["warnings"]
+    assert metadata["skipped_files"] == fixture_payload["skipped_files"]
+    assert state.review.ingestion_warnings == fixture_payload["warnings"]
+    assert state.review.skipped_files == fixture_payload["skipped_files"]
+
+
 def test_review_can_write_markdown_report_in_one_command(tmp_path: Path, capsys) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Export CSV\n", encoding="utf-8")

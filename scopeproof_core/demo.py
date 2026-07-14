@@ -41,6 +41,8 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
         check_state=snapshot.check_state,
         criteria_confirmed=labels.get("criteria_confirmed", True),
         ingestion_state=snapshot.ingestion_state,
+        ingestion_warnings=snapshot.warnings,
+        skipped_files=snapshot.skipped_files,
         final_acceptance=labels.get("final_acceptance", False),
     )
     evidence = retrieve_evidence(snapshot, criteria)
