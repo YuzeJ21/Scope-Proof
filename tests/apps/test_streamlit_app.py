@@ -5,6 +5,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.demo import load_demo_snapshot
+from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.schemas.models import (
     EvidenceLevel,
     GateVerdict,
@@ -377,6 +378,31 @@ def test_canonical_public_pr_url_enables_fetch_without_format_warning() -> None:
 
     warning_text = "\n".join(item.value for item in app.warning)
     assert "Enter a public GitHub pull request URL" not in warning_text
+    assert app.button(key="fetch_pr").disabled is False
+
+
+def test_public_pr_fetch_failure_preserves_inputs_and_shows_retry_guidance() -> None:
+    requirement = "The export error state remains visible and retryable."
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/widget/pull/42"
+    ).run()
+    app = app.text_area(key="requirements_input").set_value(requirement).run()
+    app = app.button(key="prepare_criteria").click().run()
+
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        side_effect=GitHubNetworkError("Could not reach GitHub."),
+    ):
+        app = app.button(key="fetch_pr").click().run()
+
+    rendered_errors = "\n".join(item.value for item in app.error)
+    assert "Could not reach GitHub." in rendered_errors
+    assert "No review data was changed." in rendered_errors
+    assert "Verify that the PR is public and try again." in rendered_errors
+    assert app.text_input(key="pr_url").value == "https://github.com/acme/widget/pull/42"
+    assert app.text_area(key="requirements_input").value == requirement
+    assert [criterion.text for criterion in app.session_state["criteria"]] == [requirement]
     assert app.button(key="fetch_pr").disabled is False
 
 
