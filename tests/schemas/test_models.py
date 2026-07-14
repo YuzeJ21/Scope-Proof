@@ -9,6 +9,8 @@ from scopeproof_core.schemas.models import (
     EvidenceItem,
     EvidenceLevel,
     EvidenceType,
+    Finding,
+    FindingStatus,
     IngestionState,
     Priority,
     PullRequestSnapshot,
@@ -33,6 +35,19 @@ def candidate_evidence_payload(**overrides: object) -> dict[str, object]:
         "relevance_reason": "Matched export_csv",
         "relevance_score": 0.9,
         "limitations": ["Candidate evidence does not prove runtime behavior"],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def finding_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "criterion_id": "AC-01",
+        "status": FindingStatus.MISSING,
+        "reason": "No candidate evidence was found.",
+        "missing_evidence": ["Required evidence level E1"],
+        "contradictions": [],
+        "recommended_action": "Add or identify candidate evidence.",
     }
     payload.update(overrides)
     return payload
@@ -121,6 +136,45 @@ def test_candidate_evidence_context_allows_no_limitations() -> None:
     item = EvidenceItem.model_validate(candidate_evidence_payload(limitations=[]))
 
     assert item.limitations == []
+
+
+@pytest.mark.parametrize("field", ["reason", "recommended_action"])
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_finding_context_rejects_blank_required_text(field: str, blank: str) -> None:
+    with pytest.raises(ValidationError, match="must contain non-whitespace text"):
+        Finding.model_validate(finding_payload(**{field: blank}))
+
+
+@pytest.mark.parametrize("field", ["missing_evidence", "contradictions"])
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_finding_context_rejects_blank_list_member(field: str, blank: str) -> None:
+    with pytest.raises(
+        ValidationError, match="finding context must contain non-whitespace text"
+    ):
+        Finding.model_validate(finding_payload(**{field: [blank]}))
+
+
+def test_finding_context_preserves_valid_text_exactly() -> None:
+    finding = Finding.model_validate(
+        finding_payload(
+            reason="  No candidate evidence was found.  ",
+            recommended_action="  Add candidate evidence.  ",
+            missing_evidence=["  Required evidence level E1  "],
+            contradictions=["  Conflicting implementation  "],
+        )
+    )
+
+    assert finding.reason == "  No candidate evidence was found.  "
+    assert finding.recommended_action == "  Add candidate evidence.  "
+    assert finding.missing_evidence == ["  Required evidence level E1  "]
+    assert finding.contradictions == ["  Conflicting implementation  "]
+
+
+def test_finding_context_allows_empty_optional_lists() -> None:
+    finding = Finding.model_validate(finding_payload(missing_evidence=[], contradictions=[]))
+
+    assert finding.missing_evidence == []
+    assert finding.contradictions == []
 
 
 def test_review_requires_confirmed_criteria_before_analysis() -> None:
