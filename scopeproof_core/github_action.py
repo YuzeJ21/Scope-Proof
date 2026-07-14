@@ -29,7 +29,7 @@ class EventContext(BaseModel):
 
     repository: str = Field(pattern=r"^[^/]+/[^/]+$")
     pr_number: int = Field(gt=0)
-    head_sha: str = Field(min_length=1)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     is_fork: bool
     requirements_confirmed: bool
 
