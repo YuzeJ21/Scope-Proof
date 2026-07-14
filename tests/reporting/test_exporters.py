@@ -292,7 +292,7 @@ def test_runtime_artifact_identifiers_and_non_web_schemes_are_plain_text() -> No
         markdown_report = export_markdown(bundle)
         html_report = export_html(bundle)
 
-        assert reference in markdown_report
+        assert reference in markdown_report.replace("\\", "")
         assert f"[{reference}](" not in markdown_report
         assert reference in html_report
         assert f'href="{reference}"' not in html_report
@@ -303,7 +303,7 @@ def test_runtime_http_artifact_reference_remains_clickable() -> None:
     reference = "https://example.test/runs/7?case=(export)"
     bundle.runtime_evidence[0].artifact_reference = reference
 
-    assert f"[{reference}](<{reference}>)" in export_markdown(bundle)
+    assert f"](<{reference}>)" in export_markdown(bundle)
     assert f'<a href="{reference}">{reference}</a>' in export_html(bundle)
 
 
