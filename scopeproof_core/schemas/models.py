@@ -494,6 +494,13 @@ class ResolutionEvent(BaseModel):
             raise ValueError("event ID must contain non-whitespace text")
         return value
 
+    @field_validator("reviewer")
+    @classmethod
+    def require_non_blank_reviewer(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reviewer must contain non-whitespace text")
+        return value
+
     @model_validator(mode="after")
     def validate_event_kind(self) -> ResolutionEvent:
         is_criterion_event = self.criterion_id is not None and self.decision is not None
