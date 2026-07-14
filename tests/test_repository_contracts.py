@@ -124,7 +124,7 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert '__version__ = "0.1.20"' in version_source
+    assert '__version__ = "0.1.21.dev0"' in version_source
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
