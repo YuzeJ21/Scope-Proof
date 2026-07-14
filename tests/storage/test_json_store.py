@@ -72,6 +72,23 @@ def test_load_rejects_mismatched_active_bundle_review(tmp_path: Path) -> None:
         store.load("review-1")
 
 
+def test_save_revalidates_mismatched_active_bundle_review(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    divergent = state.model_copy(
+        update={
+            "review": state.review.model_copy(update={"head_sha": "different-head"})
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="active bundle review must match lifecycle review"
+    ):
+        store.save(divergent)
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_version_one_record_with_legacy_permalink_loads_and_exports_inertly(
     tmp_path: Path,
 ) -> None:

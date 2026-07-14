@@ -64,6 +64,10 @@ def revise_criteria(
 
 def confirm_criteria(state: ReviewState) -> ReviewState:
     """Mark the active revision confirmed without manufacturing an analysis."""
+    if state.bundle is not None:
+        raise ValueError(
+            "criteria confirmation requires a pending revision without an active bundle"
+        )
     now = datetime.now(UTC)
     revision = state.criteria_revision.model_copy(update={"confirmed": True, "confirmed_at": now})
     review = state.review.model_copy(update={"criteria_confirmed": True, "final_acceptance": False})

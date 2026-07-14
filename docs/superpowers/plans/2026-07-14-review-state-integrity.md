@@ -4,7 +4,7 @@
 
 **Goal:** Prevent one validated `ReviewState` from carrying contradictory active lifecycle and bundle review provenance.
 
-**Architecture:** Add one Pydantic after-validator to `ReviewState`. When an active bundle exists, its complete nested `Review` must equal the top-level lifecycle `Review`; bundle-less pending-revision states and historical analysis bundles retain their existing semantics. Storage, exporters, lifecycle operations, and UI remain consumers of the validated state.
+**Architecture:** Add one Pydantic after-validator to `ReviewState`. When an active bundle exists, its complete nested `Review` must equal the top-level lifecycle `Review`; bundle-less pending-revision states and historical analysis bundles retain their existing semantics. Revalidate mutable model instances at the persistence boundary, and allow criteria confirmation only for a bundle-less pending revision.
 
 **Tech Stack:** Python 3.12, Pydantic v2, pytest, Ruff, existing lifecycle and local JSON store.
 
@@ -184,7 +184,42 @@ Run:
 
 Expected: all tests pass, including valid save/reopen and historical bundle behavior.
 
-### Task 4: Verify, package, and commit
+### Task 4: Close operation-boundary validation bypasses
+
+**Files:**
+- Modify: `scopeproof_core/storage/json_store.py`
+- Modify: `scopeproof_core/reviews/lifecycle.py`
+- Modify: `tests/storage/test_json_store.py`
+- Modify: `tests/reviews/test_lifecycle.py`
+
+**Interfaces:**
+- Consumes: potentially validator-bypassed `ReviewState` instances passed to save or confirmation.
+- Produces: validated persistence input and a bundle-less confirmation precondition.
+
+- [ ] **Step 1: Add operation-boundary RED tests**
+
+Prove `JsonReviewStore.save(...)` currently accepts a contradictory `model_copy(...)` and writes a
+file. Prove `confirm_criteria(...)` currently changes only the lifecycle review when an unconfirmed
+active bundle exists. Preserve the valid bundle-less confirmation and round-trip case.
+
+- [ ] **Step 2: Revalidate before persistence**
+
+Reconstruct `ReviewState` from `state.model_dump(mode="python")` at the start of `save(...)`. Use the
+validated instance for the filename and serialized state. Validation must happen before directory
+creation or any record write.
+
+- [ ] **Step 3: Require a pending revision for confirmation**
+
+Reject `confirm_criteria(...)` when `state.bundle` is present with a stable error explaining that
+confirmation requires a pending revision without an active bundle. The existing
+`revise_criteria(...)` path remains the valid transition.
+
+- [ ] **Step 4: Run focused storage and lifecycle tests**
+
+Run the new regressions plus the complete storage and lifecycle suites. Expected: both bypasses are
+rejected, no invalid record is created, and bundle-less confirmation round-trips.
+
+### Task 5: Verify, package, and commit
 
 **Files:**
 - Verify all changed files.
@@ -224,11 +259,15 @@ Run:
 ```bash
 git diff --check
 git add scopeproof_core/schemas/models.py \
+  scopeproof_core/storage/json_store.py \
+  scopeproof_core/reviews/lifecycle.py \
   tests/schemas/test_review_state_integrity.py \
   tests/storage/test_json_store.py \
+  tests/reviews/test_lifecycle.py \
   docs/superpowers/specs/2026-07-14-review-state-integrity-design.md \
   docs/superpowers/plans/2026-07-14-review-state-integrity.md
 git commit -m "fix: validate active review state identity"
 ```
 
-Expected: one intentional commit containing only the bounded schema guard, regressions, and its design records.
+Expected: intentional commits containing only the bounded schema and operation guards, regressions,
+and their design records.

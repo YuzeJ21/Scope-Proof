@@ -102,6 +102,33 @@ def test_confirmation_keeps_revision_and_unblocks_future_analysis() -> None:
 
     assert confirmed.criteria_revision.number == 2
     assert confirmed.review.criteria_confirmed is True
+    assert confirmed.bundle is None
+    assert confirmed.criteria_revision.confirmed is True
+    assert confirmed.criteria_revision.confirmed_at is not None
+
+    reopened = type(confirmed).model_validate(confirmed.model_dump(mode="python"))
+
+    assert reopened == confirmed
+
+
+def test_confirmation_rejects_an_active_analysis_bundle() -> None:
+    state = initial_state()
+    review = state.review.model_copy(update={"criteria_confirmed": False})
+    bundle = state.bundle.model_copy(deep=True)
+    bundle.review = review
+    active_unconfirmed = type(state).model_validate(
+        {
+            **state.model_dump(mode="python"),
+            "review": review,
+            "bundle": bundle,
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="criteria confirmation requires a pending revision without an active bundle",
+    ):
+        confirm_criteria(active_unconfirmed)
 
 
 def test_resolution_events_preserve_history_and_latest_decision_controls_gate() -> None:

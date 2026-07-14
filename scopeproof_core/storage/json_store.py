@@ -86,13 +86,14 @@ class JsonReviewStore:
 
     def save(self, state: ReviewState) -> Path:
         """Atomically save a versioned record without accepting credential fields."""
+        validated = ReviewState.model_validate(state.model_dump(mode="python"))
         self._require_safe_directory()
         self.directory.mkdir(parents=True, exist_ok=True)
-        target = self._path(state.review.review_id)
+        target = self._path(validated.review.review_id)
         payload = {
             "record_version": RECORD_VERSION,
             "saved_at": datetime.now(UTC).isoformat(),
-            "state": state.model_dump(mode="json"),
+            "state": validated.model_dump(mode="json"),
         }
         serialized = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
         with tempfile.NamedTemporaryFile(

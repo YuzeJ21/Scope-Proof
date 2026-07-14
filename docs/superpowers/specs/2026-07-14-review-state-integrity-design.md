@@ -59,9 +59,18 @@ Add one `model_validator(mode="after")` to `ReviewState` in
    must match the lifecycle review.
 3. Otherwise return the state unchanged.
 
-`new_review_state`, `_recalculate`, `append_resolution`, and `append_runtime_evidence` already keep
-the two objects aligned. `revise_criteria` intentionally removes the active bundle before changing
-the lifecycle review. No service or adapter change is required.
+`new_review_state`, `_recalculate`, `append_resolution`, and `append_runtime_evidence` keep normal
+lifecycle outputs aligned. `revise_criteria` intentionally removes the active bundle before
+changing the lifecycle review.
+
+Pydantic's `model_copy(...)` and assignment do not rerun validators. Two operation boundaries must
+therefore defend against already-constructed mutable model instances:
+
+1. `JsonReviewStore.save(...)` reconstructs and validates `ReviewState` from its Python dump before
+   creating a directory, deriving a filename, or serializing a record.
+2. `confirm_criteria(...)` requires the pending-revision state produced by `revise_criteria`, where
+   `bundle` is `None`. Confirmation cannot mutate only the lifecycle review while an analyzed bundle
+   remains active.
 
 ## Error and Compatibility Behavior
 
@@ -71,6 +80,8 @@ the lifecycle review. No service or adapter change is required.
 - Bundle-less pending-revision states remain valid.
 - Historical analysis bundles may retain older review facts.
 - The validator rejects contradictory input; it does not infer, normalize, or overwrite identity.
+- Save rejects contradictory in-memory model copies before any filesystem object is created.
+- Criteria confirmation rejects an active analysis bundle; callers revise criteria first.
 - No raw Pydantic output is added to the Streamlit UI; its existing load error boundary remains the
   user-facing recovery path.
 
@@ -83,6 +94,10 @@ Add focused tests proving:
 - a bundle-less revised or confirmed state remains valid;
 - `JsonReviewStore.load(...)` rejects a saved record whose top-level and bundle review identities
   differ;
+- `JsonReviewStore.save(...)` revalidates and rejects a contradictory `model_copy(...)` without
+  creating a record;
+- criteria confirmation accepts and round-trips a bundle-less pending revision but rejects an
+  active analysis bundle;
 - valid lifecycle resolution, runtime-evidence, save/reopen, and export paths remain green.
 
 Verification includes focused schema, lifecycle, storage, and reporting tests, Ruff, the complete
@@ -93,8 +108,8 @@ controlled object integrity, not external runtime evidence, adoption, or final a
 ## Out of Scope
 
 - Requiring historical `analysis_history` reviews to equal the active review.
-- Changing review fields, record versions, storage filenames, lifecycle services, exporters, UI
-  copy, evidence, findings, resolutions, runtime evidence, final acceptance, or gates.
+- Changing review fields, record versions, storage filenames, exporters, UI copy, evidence,
+  findings, resolutions, runtime evidence, final acceptance, or gates.
 - Auto-repairing contradictory saved records or adding migrations without real affected records.
 - Paid APIs, LLMs, billing, organizations, accounts, private repositories, forks, untrusted PR-code
   execution, synthetic validation, comments, or a release.
