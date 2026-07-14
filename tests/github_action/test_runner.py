@@ -141,3 +141,24 @@ def test_build_event_plan_rejects_invalid_head_sha_before_planning(tmp_path: Pat
 
     with pytest.raises(ValueError, match="string_pattern_mismatch"):
         build_event_plan(event_path, requirements_confirmed=True, content="Report")
+
+
+def test_build_event_plan_rejects_noncanonical_repository_before_planning(
+    tmp_path: Path,
+) -> None:
+    event_path = tmp_path / "invalid-repository-event.json"
+    event_path.write_text(
+        json.dumps(
+            {
+                "repository": {"full_name": "ac me/de mo"},
+                "pull_request": {
+                    "number": 42,
+                    "head": {"sha": HEAD_SHA, "repo": {"fork": False}},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="string_pattern_mismatch"):
+        build_event_plan(event_path, requirements_confirmed=True, content="Report")

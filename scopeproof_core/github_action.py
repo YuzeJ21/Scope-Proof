@@ -27,7 +27,7 @@ class EventContext(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    repository: str = Field(pattern=r"^[^/]+/[^/]+$")
+    repository: str = Field(pattern=r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$")
     pr_number: int = Field(gt=0)
     head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     is_fork: bool
