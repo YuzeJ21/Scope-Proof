@@ -1006,6 +1006,47 @@ def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -
     ]
 
 
+def test_final_acceptance_failure_preserves_retryable_state_without_raw_details() -> None:
+    app = analyzed_demo(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    raw_error = "invalid final event at /private/secret/final.json"
+
+    with patch(
+        "scopeproof_core.reviews.lifecycle.append_resolution",
+        side_effect=ValueError(raw_error),
+    ):
+        app = app.button(key="record_final_acceptance").click().run()
+
+    recovery = (
+        "Final acceptance could not be recorded. The review remains unchanged. Verify the "
+        "active review state and try again."
+    )
+    assert recovery in [item.value for item in app.error]
+    assert not app.exception
+    rendered = "\n".join(
+        item.value
+        for item in [
+            *app.error,
+            *app.warning,
+            *app.info,
+            *app.success,
+            *app.caption,
+            *app.markdown,
+            *app.code,
+        ]
+    )
+    assert raw_error not in rendered
+    assert "/private/secret/final.json" not in rendered
+    assert app.session_state["review_state"] == review_state
+    assert app.session_state["bundle"] == review_state.bundle
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["review_state"].resolution_events == []
+    assert app.button(key="record_final_acceptance").disabled is False
+    assert "Final acceptance appended" not in "\n".join(
+        item.value for item in app.success
+    )
+
+
 def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> None:
     app = analyzed_demo(new_app())
     app = app.button(key="record_final_acceptance").click().run()
