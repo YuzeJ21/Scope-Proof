@@ -105,6 +105,35 @@ def test_demo_loads_confirmable_criteria() -> None:
     assert app.button(key="confirm_criteria").disabled is False
 
 
+def test_demo_marks_requirements_prepared_and_exposes_confirmation_link() -> None:
+    app = load_demo(new_app())
+
+    assert app.button(key="prepare_criteria").disabled is True
+    assert "Criteria prepared. Review the set before explicitly confirming it." in [
+        item.value for item in app.success
+    ]
+    assert "[Continue to 2 · Confirm Criteria](#2-confirm-criteria)" in [
+        item.value for item in app.markdown
+    ]
+    assert app.session_state["criteria_confirmed"] is False
+    assert app.button(key="run_analysis").disabled is True
+
+
+def test_editing_prepared_requirements_reenables_preparation() -> None:
+    app = load_demo(new_app())
+    app = app.text_area(key="requirements_input").set_value(
+        "Users can export the currently filtered list as CSV."
+    ).run()
+
+    assert app.button(key="prepare_criteria").disabled is False
+    assert "Criteria prepared. Review the set before explicitly confirming it." not in [
+        item.value for item in app.success
+    ]
+    assert "[Continue to 2 · Confirm Criteria](#2-confirm-criteria)" not in [
+        item.value for item in app.markdown
+    ]
+
+
 def test_criteria_confirmation_explains_required_evidence_levels() -> None:
     app = load_demo(new_app())
     caption_text = "\n".join(item.value for item in app.caption)

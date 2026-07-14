@@ -313,14 +313,27 @@ requirements_text = st.text_area(
     key="requirements_input",
     help="Use one independently judgeable behavior per line. ScopeProof will not invent criteria.",
 )
+requirements_are_prepared = (
+    bool(st.session_state["criteria"])
+    and st.session_state["bundle"] is None
+    and requirements_text == st.session_state["source_text"]
+)
 if st.button(
     "Prepare criteria",
     key="prepare_criteria",
-    disabled=not bool(requirements_text.strip()) or replacement_blocked,
+    disabled=(
+        not bool(requirements_text.strip())
+        or replacement_blocked
+        or requirements_are_prepared
+    ),
 ):
     st.session_state["source_text"] = requirements_text
     _prepare_from_text(requirements_text)
     st.rerun()
+
+if requirements_are_prepared and not st.session_state["criteria_confirmed"]:
+    st.success("Criteria prepared. Review the set before explicitly confirming it.")
+    st.markdown("[Continue to 2 · Confirm Criteria](#2-confirm-criteria)")
 
 st.caption(
     f"Local review storage: `{storage_directory}`. Records stay under your user-owned "
@@ -447,6 +460,7 @@ else:
         st.session_state["criteria_confirmed"] = True
         st.session_state["bundle"] = None if state is None else state.bundle
         criteria_edits_pending = False
+        st.rerun()
 
 if criteria_edits_pending:
     st.warning(
