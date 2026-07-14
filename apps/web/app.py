@@ -290,7 +290,7 @@ with st.expander("Reopen saved review", expanded=False):
                 "Review reopened from local storage after validation."
             )
             st.rerun()
-    if reopen_id and review_store_available:
+    if saved_review_ids and reopen_id and review_store_available:
         delete_confirmed = st.checkbox(
             "Permanently delete the selected local review",
             key="delete_saved_review_confirmed",

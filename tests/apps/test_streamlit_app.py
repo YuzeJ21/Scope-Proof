@@ -194,6 +194,22 @@ def test_delete_saved_review_requires_selection_and_confirmation_and_deletes_onl
     assert app.session_state["delete_saved_review_confirmed"] is False
 
 
+def test_delete_saved_review_controls_stay_hidden_for_manually_typed_missing_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = new_app()
+
+    app = app.text_input(key="reopen_review_id").set_value("missing-review").run()
+
+    assert not [
+        item
+        for item in app.checkbox
+        if item.key == "delete_saved_review_confirmed"
+    ]
+    assert not [item for item in app.button if item.key == "delete_saved_review"]
+
+
 def test_delete_saved_open_review_preserves_exact_state_as_unsaved_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
