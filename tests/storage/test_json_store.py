@@ -34,6 +34,26 @@ def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     assert "authorization" not in path.read_text(encoding="utf-8").lower()
 
 
+def test_list_review_ids_returns_empty_when_store_does_not_exist(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path / "reviews")
+
+    assert store.list_review_ids() == []
+
+
+def test_list_review_ids_is_sorted_bounded_and_does_not_parse_records(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    (tmp_path / "z-review.json").write_text("not parsed during discovery", encoding="utf-8")
+    (tmp_path / "a-review.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "bad id.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "ignored.txt").write_text("{}", encoding="utf-8")
+    (tmp_path / "directory.json").mkdir()
+    (tmp_path / "linked-review.json").symlink_to(tmp_path / "a-review.json")
+
+    assert store.list_review_ids() == ["a-review", "z-review"]
+
+
 def test_head_change_is_reported_without_mutating_old_evidence(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
     state = review_state()
