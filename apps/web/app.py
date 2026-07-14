@@ -1156,12 +1156,14 @@ else:
     ]
     for item in selected_runtime:
         artifact_reference = render_artifact_reference_markdown(item.artifact_reference)
+        recorded_at = item.model_dump(mode="json")["timestamp"]
         with st.container(border=True):
             st.markdown(f"{artifact_reference} — {item.scenario}")
             st.markdown(f"**Environment:** {item.environment}")
             st.markdown(f"**Observed result:** {item.result}")
             st.markdown(f"**Evidence level:** {item.evidence_level.value}")
             st.markdown(f"**Reviewer:** {item.reviewer}")
+            st.markdown(f"**Recorded at (UTC):** {recorded_at}")
             st.markdown("**Limitations**")
             if item.limitations:
                 for limitation in item.limitations:

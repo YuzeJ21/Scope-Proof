@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -2413,6 +2414,38 @@ def test_runtime_record_shows_reviewer_and_limitations() -> None:
     assert "- Browser-only observation" in rendered
     assert "- Mobile behavior not observed" in rendered
     assert "No limitations recorded." not in [item.value for item in app.caption]
+
+
+def test_runtime_record_shows_persisted_utc_timestamp() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "artifact-timestamped"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value(
+        "Controlled timestamp scenario"
+    ).run()
+    app = app.text_input(key="runtime_environment").set_value(
+        "Controlled environment"
+    ).run()
+    app = app.text_input(key="runtime_result").set_value(
+        "Controlled observed result"
+    ).run()
+    app = app.text_input(key="runtime_reviewer").set_value(
+        "Controlled reviewer"
+    ).run()
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    review_state.bundle.runtime_evidence[0].timestamp = datetime(
+        2026, 7, 14, 12, 10, tzinfo=UTC
+    )
+    app.session_state["review_state"] = review_state
+    app.session_state["bundle"] = review_state.bundle
+    app = app.run()
+
+    assert "**Recorded at (UTC):** 2026-07-14T12:10:00Z" in [
+        item.value for item in app.markdown
+    ]
 
 
 def test_runtime_record_shows_explicit_empty_limitations_state() -> None:
