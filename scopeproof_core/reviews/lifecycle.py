@@ -143,6 +143,8 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
     """Append an event, bind it to the active revision, and rerun the deterministic gate."""
     state = _validated_state(state)
     event = ResolutionEvent.model_validate(event.model_dump())
+    if any(existing.event_id == event.event_id for existing in state.resolution_events):
+        raise ValueError("resolution event ID must be unique")
     if state.bundle is None:
         raise ValueError("Run a confirmed analysis before recording a resolution")
     if event.criterion_id is not None and event.criterion_id not in {
