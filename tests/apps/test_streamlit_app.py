@@ -691,6 +691,52 @@ def test_current_review_id_is_copyable_and_used_in_save_confirmation(
     assert app.button(key="save_review").disabled is True
 
 
+@pytest.mark.parametrize(
+    "save_error",
+    [
+        OSError("disk full at /private/secret/path"),
+        ValueError("invalid record at /private/secret/path"),
+    ],
+)
+def test_local_save_failure_preserves_retryable_unsaved_review_without_raw_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    save_error: OSError | ValueError,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_demo(new_app())
+    review_state = app.session_state["review_state"]
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.save",
+        side_effect=save_error,
+    ):
+        app = app.button(key="save_review").click().run()
+
+    recovery = (
+        "The review could not be saved locally. The current review remains open as "
+        "unsaved work. Verify the local review directory and review integrity, then try "
+        "again."
+    )
+    assert recovery in [message.value for message in app.error]
+    assert not app.exception
+    rendered_recovery = "\n".join(
+        message.value for message in [*app.error, *app.warning]
+    )
+    assert str(save_error) not in rendered_recovery
+    assert "/private/secret/path" not in rendered_recovery
+    assert app.session_state["review_state"] == review_state
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.button(key="save_review").disabled is False
+    assert (
+        "Unsaved changes — save locally before relying on this review ID."
+        in [message.value for message in app.caption]
+    )
+    assert "Review saved locally" not in "\n".join(
+        message.value for message in app.success
+    )
+
+
 def test_post_save_resolution_marks_review_unsaved_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
