@@ -46,7 +46,14 @@ def _csv_text(value: str) -> str:
     return value
 
 
+def _validated_exportable(value: ExportableReview) -> ExportableReview:
+    """Revalidate mutable model input before rendering an export artifact."""
+    model = ReviewState if isinstance(value, ReviewState) else ReviewBundle
+    return model.model_validate(value.model_dump(mode="python"))
+
+
 def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewState | None]:
+    value = _validated_exportable(value)
     if isinstance(value, ReviewState):
         if value.bundle is None:
             raise ValueError("A confirmed analysis is required before exporting a review state")
@@ -56,7 +63,7 @@ def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewStat
 
 def export_json(bundle: ExportableReview) -> str:
     """Return canonical, diff-friendly JSON without adapter state or credentials."""
-    payload = bundle.model_dump(mode="json")
+    payload = _validated_exportable(bundle).model_dump(mode="json")
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 

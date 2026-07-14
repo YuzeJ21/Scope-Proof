@@ -3,6 +3,8 @@ import io
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from scopeproof_core.reporting.exporters import (
     export_csv,
     export_html,
@@ -101,6 +103,36 @@ def example_bundle() -> ReviewBundle:
         resolutions=[resolution],
         gate=gate,
     )
+
+
+@pytest.mark.parametrize(
+    "exporter",
+    [export_json, export_markdown, export_csv, export_html],
+)
+def test_exporters_revalidate_active_review_state_identity(exporter) -> None:
+    state = new_review_state(example_bundle())
+    divergent = state.model_copy(
+        update={
+            "review": state.review.model_copy(update={"head_sha": "different-head"})
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="active bundle review must match lifecycle review"
+    ):
+        exporter(divergent)
+
+
+@pytest.mark.parametrize(
+    "exporter",
+    [export_json, export_markdown, export_csv, export_html],
+)
+def test_exporters_revalidate_direct_review_bundle(exporter) -> None:
+    bundle = example_bundle()
+    bundle.review = bundle.review.model_copy(update={"base_sha": " "})
+
+    with pytest.raises(ValueError, match="review identity must contain non-whitespace text"):
+        exporter(bundle)
 
 
 def test_exports_agree_on_review_identity_verdict_and_criteria() -> None:
