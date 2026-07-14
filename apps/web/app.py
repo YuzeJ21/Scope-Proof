@@ -1332,6 +1332,13 @@ else:
                     f"- {status} — {target}: {outcome} — "
                     f"{event.comment or 'No note provided'}"
                 )
+                recorded_at = event.model_dump(mode="json")["timestamp"]
+                metadata = f"Reviewer: {event.reviewer} · Recorded at (UTC): {recorded_at}"
+                if event.claimed_evidence_level is not None:
+                    metadata += (
+                        f" · Claimed evidence level: {event.claimed_evidence_level.value}"
+                    )
+                st.caption(metadata)
         else:
             st.caption("No human decisions have been recorded yet.")
 

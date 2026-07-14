@@ -7,12 +7,14 @@ from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.github.client import GitHubNetworkError
+from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import (
     EvidenceLevel,
     GateVerdict,
     HumanDecision,
     IngestionState,
     Priority,
+    ResolutionEvent,
 )
 
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
@@ -2086,6 +2088,59 @@ def test_resolution_history_distinguishes_current_and_superseded_decisions() -> 
         "Current events are the latest recorded inputs for the active revision. Superseded and "
         "prior-revision events remain audit history and do not independently control the gate."
     ) in caption_text
+
+
+def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None:
+    app = analyzed_demo(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    review_state = append_resolution(
+        review_state,
+        ResolutionEvent(
+            event_id="manual-audit-event",
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Controlled verification note",
+            reviewer="Controlled reviewer",
+            claimed_evidence_level=EvidenceLevel.E3,
+            timestamp=datetime(2026, 7, 14, 19, 45, tzinfo=UTC),
+            criteria_revision_number=1,
+        ),
+    )
+    app.session_state["review_state"] = review_state
+    app.session_state["bundle"] = review_state.bundle
+    app = app.run()
+
+    assert (
+        "Reviewer: Controlled reviewer · Recorded at (UTC): 2026-07-14T19:45:00Z · "
+        "Claimed evidence level: E3"
+    ) in [item.value for item in app.caption]
+
+
+def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> None:
+    app = analyzed_demo(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    review_state = append_resolution(
+        review_state,
+        ResolutionEvent(
+            event_id="accepted-audit-event",
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Controlled acceptance note",
+            reviewer="Controlled reviewer",
+            timestamp=datetime(2026, 7, 14, 19, 50, tzinfo=UTC),
+            criteria_revision_number=1,
+        ),
+    )
+    app.session_state["review_state"] = review_state
+    app.session_state["bundle"] = review_state.bundle
+    app = app.run()
+
+    captions = [item.value for item in app.caption]
+    assert (
+        "Reviewer: Controlled reviewer · Recorded at (UTC): 2026-07-14T19:50:00Z"
+        in captions
+    )
+    assert not any("Claimed evidence level" in item for item in captions)
 
 
 def test_runtime_evidence_guidance_lists_only_missing_required_fields() -> None:
