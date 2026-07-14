@@ -31,13 +31,14 @@
 
 - [ ] **Step 1: Write failing AppTests**
 
-Add `datetime`, `UTC`, and `ResolutionEvent` imports if not already present. Construct fixed validated events through the current analyzed demo state:
+Add `datetime`, `UTC`, `append_resolution`, and `ResolutionEvent` imports if not already present. Construct fixed validated events through the current analyzed demo state and lifecycle operation so the active bundle stays consistent:
 
 ```python
 def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None:
     app = analyzed_demo(new_app())
     review_state = app.session_state["review_state"].model_copy(deep=True)
-    review_state.resolution_events = [
+    review_state = append_resolution(
+        review_state,
         ResolutionEvent(
             event_id="manual-audit-event",
             criterion_id="AC-01",
@@ -47,8 +48,8 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
             claimed_evidence_level=EvidenceLevel.E3,
             timestamp=datetime(2026, 7, 14, 19, 45, tzinfo=UTC),
             criteria_revision_number=1,
-        )
-    ]
+        ),
+    )
     app.session_state["review_state"] = review_state
     app.session_state["bundle"] = review_state.bundle
     app = app.run()
@@ -62,7 +63,8 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
 def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> None:
     app = analyzed_demo(new_app())
     review_state = app.session_state["review_state"].model_copy(deep=True)
-    review_state.resolution_events = [
+    review_state = append_resolution(
+        review_state,
         ResolutionEvent(
             event_id="accepted-audit-event",
             criterion_id="AC-01",
@@ -71,8 +73,8 @@ def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> Non
             reviewer="Controlled reviewer",
             timestamp=datetime(2026, 7, 14, 19, 50, tzinfo=UTC),
             criteria_revision_number=1,
-        )
-    ]
+        ),
+    )
     app.session_state["review_state"] = review_state
     app.session_state["bundle"] = review_state.bundle
     app = app.run()
