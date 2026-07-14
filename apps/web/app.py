@@ -943,21 +943,28 @@ else:
             st.error("Run analysis before recording a human resolution.")
         else:
             assert decision is not None
-            event = ResolutionEvent(
-                criterion_id=selected_id,
-                decision=decision,
-                comment=resolution_note,
-                claimed_evidence_level=manual_level,
-            )
-            review_state = append_resolution(review_state, event)
-            st.session_state["review_state"] = review_state
-            st.session_state["bundle"] = review_state.bundle
-            bundle = review_state.bundle
-            st.session_state["resolution_form_reset_pending"] = True
-            st.session_state["resolution_save_notice"] = (
-                "Human resolution appended to the local review history."
-            )
-            st.rerun()
+            try:
+                event = ResolutionEvent(
+                    criterion_id=selected_id,
+                    decision=decision,
+                    comment=resolution_note,
+                    claimed_evidence_level=manual_level,
+                )
+                review_state = append_resolution(review_state, event)
+            except ValueError:
+                st.error(
+                    "Criterion resolution could not be recorded. The review remains unchanged. "
+                    "Verify the active review state and try again."
+                )
+            else:
+                st.session_state["review_state"] = review_state
+                st.session_state["bundle"] = review_state.bundle
+                bundle = review_state.bundle
+                st.session_state["resolution_form_reset_pending"] = True
+                st.session_state["resolution_save_notice"] = (
+                    "Human resolution appended to the local review history."
+                )
+                st.rerun()
 
     final_acceptance_save_notice = st.session_state.pop(
         "final_acceptance_save_notice", None
