@@ -1154,6 +1154,118 @@ def test_discard_unconfirmed_criteria_edits_restores_saved_exportable_state(
     assert "Available — Review evidence and export" in sidebar
 
 
+@pytest.mark.parametrize(
+    ("input_kind", "input_key", "input_value", "submit_key"),
+    [
+        (
+            "text_input",
+            "new_criterion_text",
+            "Draft a new export behavior",
+            "add_criterion_ui",
+        ),
+        (
+            "text_area",
+            "split_criterion_text",
+            "Export CSV\nRecord analytics",
+            "split_criterion_ui",
+        ),
+    ],
+)
+def test_pending_criteria_authoring_draft_is_not_claimed_saved_or_exportable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    input_kind: str,
+    input_key: str,
+    input_value: str,
+    submit_key: str,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+
+    widget = getattr(app, input_kind)(key=input_key)
+    app = widget.set_value(input_value).run()
+
+    captions = "\n".join(item.value for item in app.caption)
+    sidebar = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Saved locally — current review matches the last local save." not in captions
+    assert (
+        "Pending add or split criterion inputs are not saved or exported. Submit or "
+        "clear them before relying on this review ID."
+    ) in captions
+    assert app.button(key="save_review").disabled is True
+    assert all(button.disabled for button in app.download_button)
+    assert app.button(key="load_demo").disabled is True
+    assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
+    assert app.button(key="clear_criteria_authoring_drafts").disabled is False
+    assert app.button(key=submit_key).disabled is False
+    assert "Pending — Resolve inputs before export" in sidebar
+    assert app.session_state["review_state"] == review_state
+
+
+def test_clear_criteria_authoring_drafts_restores_saved_exportable_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app = app.text_input(key="new_criterion_text").set_value(
+        "Draft a new export behavior"
+    ).run()
+    app = app.text_area(key="split_criterion_text").set_value(
+        "Export CSV\nRecord analytics"
+    ).run()
+
+    app = app.button(key="clear_criteria_authoring_drafts").click().run()
+
+    assert app.session_state["review_state"] == review_state
+    assert app.text_input(key="new_criterion_text").value == ""
+    assert app.text_area(key="split_criterion_text").value == ""
+    assert "Unsubmitted add and split inputs cleared without changing the review." in [
+        item.value for item in app.success
+    ]
+    captions = "\n".join(item.value for item in app.caption)
+    sidebar = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Saved locally — current review matches the last local save." in captions
+    assert "Pending add or split criterion inputs are not saved or exported." not in captions
+    assert app.button(key="save_review").disabled is True
+    assert all(not button.disabled for button in app.download_button)
+    assert app.button(key="load_demo").disabled is False
+    assert "Available — Review evidence and export" in sidebar
+
+
+@pytest.mark.parametrize(
+    ("input_kind", "input_key", "input_value", "submit_key"),
+    [
+        (
+            "text_input",
+            "new_criterion_text",
+            "Document export format",
+            "add_criterion_ui",
+        ),
+        (
+            "text_area",
+            "split_criterion_text",
+            "Export CSV\nRecord analytics",
+            "split_criterion_ui",
+        ),
+    ],
+)
+def test_successful_criteria_authoring_action_clears_consumed_input(
+    input_kind: str,
+    input_key: str,
+    input_value: str,
+    submit_key: str,
+) -> None:
+    app = load_demo(new_app())
+    app = getattr(app, input_kind)(key=input_key).set_value(input_value).run()
+
+    app = app.button(key=submit_key).click().run()
+
+    assert getattr(app, input_kind)(key=input_key).value == ""
+    assert app.button(key=submit_key).disabled is True
+
+
 def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

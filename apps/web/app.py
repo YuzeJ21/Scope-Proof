@@ -100,7 +100,10 @@ def _reset_analysis() -> None:
 
 
 def _apply_criteria_update(
-    operation: Callable[[], list[Criterion]], success_message: str
+    operation: Callable[[], list[Criterion]],
+    success_message: str,
+    *,
+    consumed_input_keys: tuple[str, ...] = (),
 ) -> None:
     try:
         updated_criteria = operation()
@@ -111,6 +114,8 @@ def _apply_criteria_update(
         )
     else:
         st.session_state["criteria"] = updated_criteria
+        if consumed_input_keys:
+            st.session_state["criteria_authoring_reset_keys"] = consumed_input_keys
         _reset_analysis()
         st.success(success_message)
         st.rerun()
@@ -228,6 +233,18 @@ def _clear_criteria_draft(criteria: list[Criterion]) -> None:
         )
 
 
+def _criteria_authoring_draft_pending() -> bool:
+    return any(
+        bool(str(st.session_state.get(key, "")).strip())
+        for key in ("new_criterion_text", "split_criterion_text")
+    )
+
+
+def _clear_criteria_authoring_drafts(keys: tuple[str, ...]) -> None:
+    for key in keys:
+        st.session_state[key] = ""
+
+
 def _criterion_detail_draft_pending() -> bool:
     runtime_text_keys = (
         "runtime_artifact_reference",
@@ -332,6 +349,11 @@ if st.session_state.pop("resolution_form_reset_pending", False):
     _clear_resolution_draft()
 if st.session_state.pop("criteria_draft_reset_pending", False):
     _clear_criteria_draft(st.session_state["criteria"])
+criteria_authoring_reset_keys = st.session_state.pop(
+    "criteria_authoring_reset_keys", ()
+)
+if criteria_authoring_reset_keys:
+    _clear_criteria_authoring_drafts(criteria_authoring_reset_keys)
 
 st.title("ScopeProof")
 st.subheader("Prove the PR matches the product intent.")
@@ -343,9 +365,12 @@ st.caption("No paid LLM API. Deterministic rules. Human acceptance stays visible
 
 current_review_state: ReviewState | None = st.session_state["review_state"]
 has_pending_criteria_draft = _criteria_draft_pending(st.session_state["criteria"])
+has_pending_criteria_authoring_draft = _criteria_authoring_draft_pending()
 has_pending_criterion_detail_draft = _criterion_detail_draft_pending()
 has_pending_review_input = (
-    has_pending_criteria_draft or has_pending_criterion_detail_draft
+    has_pending_criteria_draft
+    or has_pending_criteria_authoring_draft
+    or has_pending_criterion_detail_draft
 )
 has_unsaved_review = bool(
     current_review_state is not None
@@ -366,6 +391,15 @@ else:
     st.session_state["replace_unsaved_review_confirmed"] = False
     replace_unsaved_review_confirmed = False
 replacement_blocked = has_unsaved_review and not replace_unsaved_review_confirmed
+authoring_submission_blocked = bool(
+    current_review_state is not None
+    and (
+        not _review_matches_local_save(current_review_state)
+        or has_pending_criteria_draft
+        or has_pending_criterion_detail_draft
+    )
+    and not replace_unsaved_review_confirmed
+)
 
 storage_directory = default_local_review_directory()
 review_store = JsonReviewStore(Path(storage_directory))
@@ -606,11 +640,12 @@ else:
     if st.button(
         "Add criterion",
         key="add_criterion_ui",
-        disabled=not new_criterion_text.strip() or replacement_blocked,
+        disabled=not new_criterion_text.strip() or authoring_submission_blocked,
     ):
         _apply_criteria_update(
             partial(add_criterion, criteria, new_criterion_text),
             "Criterion added. Confirm the updated set before analysis.",
+            consumed_input_keys=("new_criterion_text",),
         )
     split_target = st.selectbox(
         "Split criterion",
@@ -626,14 +661,32 @@ else:
         key="split_criterion_ui",
         disabled=(
             len([line for line in split_text.splitlines() if line.strip()]) < 2
-            or replacement_blocked
+            or authoring_submission_blocked
         ),
     ):
         split_texts = [line.strip() for line in split_text.splitlines() if line.strip()]
         _apply_criteria_update(
             partial(split_criterion, criteria, split_target, split_texts),
             "Criterion split. Confirm the updated set before analysis.",
+            consumed_input_keys=("split_criterion_text",),
         )
+    criteria_authoring_clear_notice = st.session_state.pop(
+        "criteria_authoring_clear_notice", None
+    )
+    if criteria_authoring_clear_notice is not None:
+        st.success(criteria_authoring_clear_notice)
+    if has_pending_criteria_authoring_draft and st.button(
+        "Clear unsubmitted add and split inputs",
+        key="clear_criteria_authoring_drafts",
+    ):
+        st.session_state["criteria_authoring_reset_keys"] = (
+            "new_criterion_text",
+            "split_criterion_text",
+        )
+        st.session_state["criteria_authoring_clear_notice"] = (
+            "Unsubmitted add and split inputs cleared without changing the review."
+        )
+        st.rerun()
     edited_criteria: list[Criterion] = []
     blank_criterion_ids: list[str] = []
     for position, criterion in enumerate(criteria):
@@ -1249,6 +1302,11 @@ else:
             st.caption(
                 "Pending criteria edits are not saved or exported. Confirm or discard them "
                 "before relying on this review ID."
+            )
+        if has_pending_criteria_authoring_draft:
+            st.caption(
+                "Pending add or split criterion inputs are not saved or exported. Submit or "
+                "clear them before relying on this review ID."
             )
         if has_pending_criterion_detail_draft:
             st.caption(
