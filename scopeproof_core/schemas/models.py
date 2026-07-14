@@ -111,11 +111,11 @@ class ActionValidationRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     repository: str = Field(pattern=r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$")
-    requirements_base_sha: str = Field(min_length=1)
+    requirements_base_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     non_fork_pr_url: str = Field(
         pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/pull/\d+$"
     )
-    non_fork_head_sha: str = Field(min_length=1)
+    non_fork_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     non_fork_run_url: str = Field(
         pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/actions/runs/\d+$"
     )
@@ -124,7 +124,7 @@ class ActionValidationRecord(BaseModel):
     rerun_url: str = Field(
         pattern=r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/actions/runs/\d+$"
     )
-    rerun_head_sha: str = Field(min_length=1)
+    rerun_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     rerun_comment_count: int = Field(ge=1)
     fork_status: Literal["excluded", "validated"] = "validated"
     fork_pr_url: str | None = Field(
@@ -140,12 +140,7 @@ class ActionValidationRecord(BaseModel):
     validated_at: datetime
     limitations: list[str] = Field(min_length=1)
 
-    @field_validator(
-        "requirements_base_sha",
-        "non_fork_head_sha",
-        "rerun_head_sha",
-        "validated_by",
-    )
+    @field_validator("validated_by")
     @classmethod
     def require_non_blank_action_context(cls, value: str) -> str:
         if not value.strip():
