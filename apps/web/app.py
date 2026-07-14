@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 
@@ -95,6 +97,23 @@ def _reset_analysis() -> None:
     st.session_state["saved_review_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
+
+
+def _apply_criteria_update(
+    operation: Callable[[], list[Criterion]], success_message: str
+) -> None:
+    try:
+        updated_criteria = operation()
+    except ValueError:
+        st.error(
+            "Criteria could not be updated. The current review remains unchanged. "
+            "Verify the edit and try again."
+        )
+    else:
+        st.session_state["criteria"] = updated_criteria
+        _reset_analysis()
+        st.success(success_message)
+        st.rerun()
 
 
 def _review_state_fingerprint(state: ReviewState) -> str:
@@ -495,10 +514,10 @@ else:
         key="add_criterion_ui",
         disabled=not new_criterion_text.strip() or replacement_blocked,
     ):
-        st.session_state["criteria"] = add_criterion(criteria, new_criterion_text)
-        _reset_analysis()
-        st.success("Criterion added. Confirm the updated set before analysis.")
-        st.rerun()
+        _apply_criteria_update(
+            partial(add_criterion, criteria, new_criterion_text),
+            "Criterion added. Confirm the updated set before analysis.",
+        )
     split_target = st.selectbox(
         "Split criterion",
         options=[item.criterion_id for item in criteria],
@@ -517,10 +536,10 @@ else:
         ),
     ):
         split_texts = [line.strip() for line in split_text.splitlines() if line.strip()]
-        st.session_state["criteria"] = split_criterion(criteria, split_target, split_texts)
-        _reset_analysis()
-        st.success("Criterion split. Confirm the updated set before analysis.")
-        st.rerun()
+        _apply_criteria_update(
+            partial(split_criterion, criteria, split_target, split_texts),
+            "Criterion split. Confirm the updated set before analysis.",
+        )
     edited_criteria: list[Criterion] = []
     blank_criterion_ids: list[str] = []
     for position, criterion in enumerate(criteria):
@@ -554,10 +573,10 @@ else:
                 key=f"remove_{criterion.criterion_id}",
                 disabled=replacement_blocked,
             ):
-                st.session_state["criteria"] = remove_criterion(criteria, criterion.criterion_id)
-                _reset_analysis()
-                st.success("Criterion removed. Confirm the updated set before analysis.")
-                st.rerun()
+                _apply_criteria_update(
+                    partial(remove_criterion, criteria, criterion.criterion_id),
+                    "Criterion removed. Confirm the updated set before analysis.",
+                )
             if position > 0 and st.button(
                 f"Move {criterion.criterion_id} up",
                 key=f"move_up_{criterion.criterion_id}",
@@ -565,10 +584,10 @@ else:
             ):
                 order = [item.criterion_id for item in criteria]
                 order[position - 1], order[position] = order[position], order[position - 1]
-                st.session_state["criteria"] = reorder_criteria(criteria, order)
-                _reset_analysis()
-                st.success("Criterion order changed. Confirm the updated set before analysis.")
-                st.rerun()
+                _apply_criteria_update(
+                    partial(reorder_criteria, criteria, order),
+                    "Criterion order changed. Confirm the updated set before analysis.",
+                )
         if not edited_text.strip():
             blank_criterion_ids.append(criterion.criterion_id)
             edited_criteria.append(criterion)
