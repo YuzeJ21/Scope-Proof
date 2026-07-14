@@ -160,7 +160,22 @@ def test_demo_summary_explains_non_prescriptive_next_actions() -> None:
     assert "What to do next" in visible_text
     assert "unresolved criteria: AC-01" in visible_text
     assert "ScopeProof does not decide them" in visible_text
-    assert "blocking_criteria" in visible_text
+    assert "Gate reasons: Blocking Criteria" in visible_text
+
+
+def test_demo_summary_humanizes_gate_reasons_without_mutating_codes() -> None:
+    app = analyzed_demo(new_app())
+    markdown_text = "\n".join(item.value for item in app.markdown)
+
+    assert (
+        "Gate reasons: Blocking Criteria · Conditional Criteria · Unresolved Criteria"
+    ) in markdown_text
+    assert "blocking_criteria, conditional_criteria, unresolved_criteria" not in markdown_text
+    assert app.session_state["bundle"].gate.reason_codes == [
+        "blocking_criteria",
+        "conditional_criteria",
+        "unresolved_criteria",
+    ]
 
 
 def test_demo_summary_requires_explicit_resolution_decision() -> None:

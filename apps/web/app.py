@@ -864,7 +864,8 @@ else:
     verdict = _status_label(bundle.gate.verdict.value)
     st.markdown(f"## Verdict: **{verdict}**")
     if bundle.gate.reason_codes:
-        st.write("Gate reasons: " + ", ".join(bundle.gate.reason_codes))
+        labels = [_status_label(code) for code in bundle.gate.reason_codes]
+        st.write("Gate reasons: " + " · ".join(labels))
     guidance = gate_guidance(bundle.gate)
     if guidance:
         st.markdown("### What to do next")
