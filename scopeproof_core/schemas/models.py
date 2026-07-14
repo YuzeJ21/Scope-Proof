@@ -4,10 +4,19 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from itertools import pairwise
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveInt,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from scopeproof_core.version import __version__
 
@@ -533,6 +542,7 @@ class GateDecision(BaseModel):
 
 class ReviewBundle(BaseModel):
     review: Review
+    criteria_revision_number: PositiveInt | Literal["unknown"] = "unknown"
     source_text: str
     criteria: list[Criterion]
     evidence: list[EvidenceItem]
@@ -626,6 +636,13 @@ class ReviewState(BaseModel):
             )
         if self.bundle is not None and self.bundle.review != self.review:
             raise ValueError("active bundle review must match lifecycle review")
+        if self.bundle is not None and (
+            self.bundle.criteria_revision_number == "unknown"
+            or self.bundle.criteria_revision_number != self.criteria_revision.number
+        ):
+            raise ValueError(
+                "active bundle revision must match the active criteria revision"
+            )
         if self.review.criteria_confirmed != self.criteria_revision.confirmed:
             raise ValueError("criteria confirmation must match the active revision")
         if self.bundle is not None and not self.criteria_revision.confirmed:
@@ -645,6 +662,7 @@ class ReviewState(BaseModel):
             self.review.repository,
             self.review.pr_number,
         )
+        known_historical_revisions: list[int] = []
         for historical_bundle in self.analysis_history:
             historical_lineage = (
                 historical_bundle.review.review_id,
@@ -655,4 +673,22 @@ class ReviewState(BaseModel):
                 raise ValueError(
                     "historical bundle review lineage must match lifecycle review"
                 )
+            if historical_bundle.criteria_revision_number != "unknown":
+                known_historical_revisions.append(
+                    historical_bundle.criteria_revision_number
+                )
+        if any(
+            revision_number >= self.criteria_revision.number
+            for revision_number in known_historical_revisions
+        ):
+            raise ValueError(
+                "historical bundle revisions must be lower than the active revision"
+            )
+        if any(
+            earlier >= later
+            for earlier, later in pairwise(known_historical_revisions)
+        ):
+            raise ValueError(
+                "known historical bundle revisions must be unique and strictly increasing"
+            )
         return self

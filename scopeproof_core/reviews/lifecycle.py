@@ -41,7 +41,9 @@ def new_review_state(bundle: ReviewBundle) -> ReviewState:
         raise ValueError("initial analysis bundle must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("initial analysis bundle must not contain final acceptance")
-    active_bundle = bundle.model_copy(deep=True)
+    active_bundle = bundle.model_copy(
+        update={"criteria_revision_number": 1}, deep=True
+    )
     revision = CriteriaRevision(
         number=1,
         criteria=[criterion.model_copy(deep=True) for criterion in bundle.criteria],
@@ -124,7 +126,12 @@ def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
     )
     if rebound_review != state.review:
         raise ValueError("attached analysis review must match the lifecycle review")
-    active_bundle = bundle.model_copy(deep=True)
+    active_bundle = bundle.model_copy(
+        update={
+            "criteria_revision_number": state.criteria_revision.number,
+        },
+        deep=True,
+    )
     active_bundle.review = state.review.model_copy(deep=True)
     return validated_review_state(state.model_copy(update={"bundle": active_bundle}))
 

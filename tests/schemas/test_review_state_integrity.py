@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.reviews.lifecycle import new_review_state, revise_criteria
-from scopeproof_core.schemas.models import ReviewState
+from scopeproof_core.schemas.models import ReviewBundle, ReviewState
 
 ACTIVE_REVIEW_OVERRIDES = [
     {"review_id": "different-review"},
@@ -41,6 +41,37 @@ def test_review_state_accepts_matching_active_bundle_review() -> None:
     reopened = ReviewState.model_validate_json(state.model_dump_json())
 
     assert reopened == state
+
+
+def test_standalone_review_bundle_defaults_to_unknown_criteria_revision() -> None:
+    bundle = build_demo_review()
+
+    assert bundle.criteria_revision_number == "unknown"
+
+
+@pytest.mark.parametrize("revision_number", [0, -1])
+def test_review_bundle_rejects_non_positive_known_criteria_revision(
+    revision_number: int,
+) -> None:
+    payload = build_demo_review().model_dump(mode="python")
+    payload["criteria_revision_number"] = revision_number
+
+    with pytest.raises(ValidationError):
+        ReviewBundle.model_validate(payload)
+
+
+@pytest.mark.parametrize("bundle_revision", [2, "unknown"])
+def test_review_state_rejects_active_bundle_revision_mismatch(
+    bundle_revision: int | str,
+) -> None:
+    payload = new_review_state(build_demo_review()).model_dump(mode="python")
+    payload["bundle"]["criteria_revision_number"] = bundle_revision
+
+    with pytest.raises(
+        ValidationError,
+        match="active bundle revision must match the active criteria revision",
+    ):
+        ReviewState.model_validate(payload)
 
 
 def test_review_state_rejects_active_bundle_with_unconfirmed_revision() -> None:
@@ -133,6 +164,67 @@ def test_review_state_accepts_bundleless_pending_revision() -> None:
 
     assert reopened.bundle is None
     assert reopened.analysis_history == [state.bundle]
+
+
+@pytest.mark.parametrize("historical_revision", [2, 3])
+def test_review_state_rejects_known_historical_revision_at_or_above_active_revision(
+    historical_revision: int,
+) -> None:
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        state.criteria_revision.source_text,
+    )
+    payload = revised.model_dump(mode="python")
+    payload["analysis_history"][0]["criteria_revision_number"] = historical_revision
+
+    with pytest.raises(
+        ValidationError,
+        match="historical bundle revisions must be lower than the active revision",
+    ):
+        ReviewState.model_validate(payload)
+
+
+@pytest.mark.parametrize("known_revisions", [[1, 1], [2, 1]])
+def test_review_state_rejects_duplicate_or_decreasing_known_history(
+    known_revisions: list[int],
+) -> None:
+    state = new_review_state(build_demo_review())
+    revision_two = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        state.criteria_revision.source_text,
+    )
+    payload = revision_two.model_dump(mode="python")
+    historical = payload["analysis_history"][0]
+    payload["criteria_revision"]["number"] = 3
+    payload["analysis_history"] = [historical.copy(), historical.copy()]
+    for bundle, revision_number in zip(
+        payload["analysis_history"], known_revisions, strict=True
+    ):
+        bundle["criteria_revision_number"] = revision_number
+
+    with pytest.raises(
+        ValidationError,
+        match="known historical bundle revisions must be unique and strictly increasing",
+    ):
+        ReviewState.model_validate(payload)
+
+
+def test_review_state_preserves_unknown_historical_revision() -> None:
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        state.criteria_revision.source_text,
+    )
+    payload = revised.model_dump(mode="python")
+    payload["analysis_history"][0]["criteria_revision_number"] = "unknown"
+
+    reopened = ReviewState.model_validate(payload)
+
+    assert reopened.analysis_history[0].criteria_revision_number == "unknown"
 
 
 @pytest.mark.parametrize(
