@@ -124,3 +124,15 @@ def test_criterion_defaults_to_must_have_e1() -> None:
     criterion = Criterion(criterion_id="AC-01", text="Export CSV")
     assert criterion.priority is Priority.MUST_HAVE
     assert criterion.required_evidence_level is EvidenceLevel.E1
+
+
+@pytest.mark.parametrize("text", ["", "   ", "\t\n"])
+def test_criterion_rejects_blank_normalized_text(text: str) -> None:
+    with pytest.raises(ValidationError):
+        Criterion(criterion_id="AC-01", text=text)
+
+
+def test_criterion_normalizes_nonblank_text_before_validation() -> None:
+    criterion = Criterion(criterion_id="AC-01", text="  Export CSV  ")
+
+    assert criterion.text == "Export CSV"

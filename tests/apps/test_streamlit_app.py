@@ -190,6 +190,22 @@ def test_sidebar_reports_analysis_and_review_availability() -> None:
     assert "Complete — Review and export available" in sidebar_text
 
 
+@pytest.mark.parametrize("text", ["", "   ", "\t\n"])
+def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: str) -> None:
+    app = analyzed_demo(new_app())
+    confirmed_text = app.session_state["criteria"][0].text
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(text).run()
+
+    assert not app.exception
+    assert app.session_state["criteria"][0].text == confirmed_text
+    assert app.button(key="confirm_criteria").disabled is True
+    assert app.button(key="run_analysis").disabled is True
+    assert "AC-01: Criterion text cannot be blank." in [
+        item.value for item in app.warning
+    ]
+
+
 def test_pending_criterion_text_edit_requires_reconfirmation_before_analysis() -> None:
     app = analyzed_demo(new_app())
     confirmed_text = app.session_state["criteria"][0].text
