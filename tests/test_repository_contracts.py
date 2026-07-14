@@ -155,6 +155,15 @@ def test_readme_documents_actual_stage_2a_durability_behavior() -> None:
     assert "unchanged candidate" in readme
 
 
+def test_readme_documents_single_record_local_review_deletion() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "scopeproof delete REVIEW_ID" in readme
+    assert "Permanently delete the selected local review" in readme
+    assert "Exported reports remain user-owned and are not removed" in readme
+    assert "not secure erasure" in readme
+
+
 def test_security_policy_uses_github_private_vulnerability_reporting() -> None:
     policy = Path("SECURITY.md").read_text(encoding="utf-8")
 
