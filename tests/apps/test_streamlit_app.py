@@ -442,6 +442,31 @@ def test_criteria_confirmation_shows_one_durable_success_message() -> None:
     assert app.button(key="run_analysis").disabled is False
 
 
+def test_analysis_continuation_link_tracks_confirmed_transition() -> None:
+    continuation_link = (
+        "[Continue to run deterministic analysis](#run-deterministic-analysis)"
+    )
+    app = load_demo(new_app())
+
+    assert continuation_link not in [item.value for item in app.markdown]
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert continuation_link in [item.value for item in app.markdown]
+    assert "### Run deterministic analysis" in [item.value for item in app.markdown]
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Changed visible criterion"
+    ).run()
+
+    assert continuation_link not in [item.value for item in app.markdown]
+
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    assert continuation_link not in [item.value for item in app.markdown]
+
+
 def test_sidebar_reports_analysis_and_review_availability() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
