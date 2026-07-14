@@ -166,6 +166,14 @@ revisions, evidence, findings, resolution history, and gate decision. They never
 optional GitHub token. A reopened review reports a changed head SHA rather than silently reusing
 old evidence.
 
+To delete one saved review in the workbench, select its listed ID, then check
+`Permanently delete the selected local review`. From the CLI, run
+`scopeproof delete REVIEW_ID`; add `--storage-dir PATH` only for a review saved
+outside the default CLI directory. Deletion removes only that app-owned JSON
+record. Exported reports remain user-owned and are not removed, and deletion is
+not secure erasure of storage media or backups. An open deleted review remains
+available as unsaved session work until it is replaced or the session ends.
+
 ## Deliberately constructed demo
 
 The bundled CSV export case is a deliberately constructed demo, not a real incident. Its PR-shaped fixture implements CSV export, one active filter, and a happy-path test. It intentionally omits another filter, the error state, and the `research_exported` event.
