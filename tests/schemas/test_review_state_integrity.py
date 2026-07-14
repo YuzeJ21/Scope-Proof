@@ -133,3 +133,46 @@ def test_review_state_accepts_bundleless_pending_revision() -> None:
 
     assert reopened.bundle is None
     assert reopened.analysis_history == [state.bundle]
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("review_id", "foreign-review"),
+        ("repository", "other/repository"),
+        ("pr_number", 999),
+    ],
+)
+def test_review_state_rejects_foreign_historical_lineage(
+    field_name: str, value: object
+) -> None:
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        "Updated requirements",
+    )
+    payload = revised.model_dump(mode="python")
+    payload["analysis_history"][0]["review"][field_name] = value
+
+    with pytest.raises(
+        ValidationError,
+        match="historical bundle review lineage must match lifecycle review",
+    ):
+        ReviewState.model_validate(payload)
+
+
+def test_review_state_allows_historical_commit_provenance() -> None:
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        "Updated requirements",
+    )
+    payload = revised.model_dump(mode="python")
+    payload["analysis_history"][0]["review"]["base_sha"] = "historical-base"
+    payload["analysis_history"][0]["review"]["head_sha"] = "historical-head"
+
+    reopened = ReviewState.model_validate(payload)
+
+    assert reopened.analysis_history[0].review.head_sha == "historical-head"
