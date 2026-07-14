@@ -194,6 +194,27 @@ def test_delete_saved_review_requires_selection_and_confirmation_and_deletes_onl
     assert app.session_state["delete_saved_review_confirmed"] is False
 
 
+def test_delete_selected_saved_review_preserves_other_open_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, first_review_id = saved_demo_review(new_app())
+    _, second_review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), first_review_id)
+    app = app.button(key="reopen_review").click().run()
+    open_state = app.session_state["review_state"]
+    saved_fingerprint = app.session_state["saved_review_fingerprint"]
+
+    app = select_saved_review(app, second_review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    app = app.button(key="delete_saved_review").click().run()
+
+    assert app.session_state["review_state"] == open_state
+    assert app.session_state["saved_review_fingerprint"] == saved_fingerprint
+    assert app.selectbox(key="saved_reopen_review_id").options == [first_review_id]
+    assert second_review_id not in app.selectbox(key="saved_reopen_review_id").options
+
+
 def test_delete_saved_review_controls_stay_hidden_for_manually_typed_missing_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

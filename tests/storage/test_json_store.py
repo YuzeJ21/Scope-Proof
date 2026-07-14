@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+import scopeproof_core.storage.json_store as json_store_module
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import export_html, export_markdown
@@ -454,6 +456,55 @@ def test_delete_removes_a_corrupt_regular_record_without_parsing_it(
     JsonReviewStore(tmp_path).delete("corrupt")
 
     assert not corrupt_record.exists()
+
+
+def test_delete_pins_store_directory_when_root_is_replaced_at_unlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_root = tmp_path / "reviews"
+    store = JsonReviewStore(store_root)
+    target = store.save(review_state("review-1"))
+    neighbor = store.save(review_state("review-2"))
+    neighbor_contents = neighbor.read_bytes()
+    opened_store_root = tmp_path / "opened-reviews"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_target = outside / target.name
+    outside_target.write_text("keep external", encoding="utf-8")
+    real_unlink = os.unlink
+    root_replaced = False
+
+    def replace_root_then_unlink(path, *args, **kwargs):
+        nonlocal root_replaced
+        if not root_replaced:
+            store_root.rename(opened_store_root)
+            store_root.symlink_to(outside, target_is_directory=True)
+            root_replaced = True
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", replace_root_then_unlink)
+
+    store.delete("review-1")
+
+    assert root_replaced is True
+    assert outside_target.read_text(encoding="utf-8") == "keep external"
+    assert not (opened_store_root / target.name).exists()
+    assert (opened_store_root / neighbor.name).read_bytes() == neighbor_contents
+
+
+def test_delete_fails_closed_when_safe_directory_descriptor_operations_are_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    target = store.save(review_state("review-1"))
+    monkeypatch.setattr(
+        json_store_module, "_SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED", False
+    )
+
+    with pytest.raises(OSError, match="safe local review deletion is unsupported"):
+        store.delete("review-1")
+
+    assert target.exists()
 
 
 @pytest.mark.parametrize("review_id", ["../review-1", "review-1.json", "/tmp/review-1"])

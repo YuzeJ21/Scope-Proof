@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 from copy import deepcopy
 from dataclasses import dataclass
@@ -17,6 +18,13 @@ from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewState
 RECORD_VERSION = 2
 _SUPPORTED_RECORD_VERSIONS = (1, RECORD_VERSION)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+_SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED = (
+    hasattr(os, "O_DIRECTORY")
+    and hasattr(os, "O_NOFOLLOW")
+    and os.stat in os.supports_dir_fd
+    and os.stat in os.supports_follow_symlinks
+    and os.unlink in os.supports_dir_fd
+)
 
 
 def default_local_review_directory() -> Path:
@@ -89,7 +97,34 @@ class JsonReviewStore:
 
     def delete(self, review_id: str) -> None:
         """Delete one exact safe local record without parsing its contents."""
-        self._existing_record_path(review_id).unlink()
+        validated_id = self._validate_review_id(review_id)
+        self._require_safe_directory()
+        if not _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED:
+            raise OSError("safe local review deletion is unsupported on this platform")
+        try:
+            directory_fd = os.open(
+                self.directory,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+            )
+        except FileNotFoundError:
+            raise FileNotFoundError(validated_id) from None
+        except NotADirectoryError:
+            raise UnsafeReviewStore("review store path must be a directory") from None
+        try:
+            record_name = f"{validated_id}.json"
+            try:
+                record_status = os.stat(
+                    record_name,
+                    dir_fd=directory_fd,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                raise FileNotFoundError(validated_id) from None
+            if not stat.S_ISREG(record_status.st_mode):
+                raise FileNotFoundError(validated_id)
+            os.unlink(record_name, dir_fd=directory_fd)
+        finally:
+            os.close(directory_fd)
 
     def save(self, state: ReviewState) -> Path:
         """Atomically save a versioned record without accepting credential fields."""
