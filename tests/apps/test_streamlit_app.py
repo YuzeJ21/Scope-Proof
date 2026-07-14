@@ -328,9 +328,9 @@ def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     ).run()
     pending_recovery = (
         "Local saving is unavailable. The current review remains open as unsaved work, "
-        "and exports remain unavailable until pending criterion inputs are submitted or "
-        "cleared. Verify that the ScopeProof review directory is a regular local directory; "
-        "ScopeProof will recheck it on the next interaction."
+        "and exports remain unavailable until pending review inputs are confirmed, "
+        "submitted, discarded, or cleared. Verify that the ScopeProof review directory "
+        "is a regular local directory; ScopeProof will recheck it on the next interaction."
     )
     assert pending_recovery in [item.value for item in app.warning]
     assert all(button.disabled for button in app.download_button)
@@ -1080,6 +1080,103 @@ def test_submitted_runtime_draft_restores_authoritative_save_and_export(
     assert "Unsaved changes — save locally before relying on this review ID." in captions
     assert app.button(key="save_review").disabled is False
     assert all(not button.disabled for button in app.download_button)
+
+
+def test_pending_criteria_edit_is_not_claimed_saved_or_exportable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Pending revised export requirement"
+    ).run()
+    app = app.selectbox(key="criterion_priority_AC-01").set_value(
+        Priority.SHOULD_HAVE
+    ).run()
+    app = app.selectbox(key="criterion_level_AC-01").set_value(
+        EvidenceLevel.E3
+    ).run()
+
+    captions = "\n".join(item.value for item in app.caption)
+    sidebar = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Saved locally — current review matches the last local save." not in captions
+    assert (
+        "Pending criteria edits are not saved or exported. Confirm or discard them "
+        "before relying on this review ID."
+    ) in captions
+    assert app.button(key="save_review").disabled is True
+    assert all(button.disabled for button in app.download_button)
+    assert app.button(key="load_demo").disabled is True
+    assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
+    assert app.button(key="discard_criteria_draft").disabled is False
+    assert "Pending — Resolve inputs before export" in sidebar
+    assert app.session_state["review_state"] == review_state
+
+
+def test_discard_unconfirmed_criteria_edits_restores_saved_exportable_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    criterion = app.session_state["criteria"][0]
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Pending revised export requirement"
+    ).run()
+    app = app.selectbox(key="criterion_priority_AC-01").set_value(
+        Priority.SHOULD_HAVE
+    ).run()
+    app = app.selectbox(key="criterion_level_AC-01").set_value(
+        EvidenceLevel.E3
+    ).run()
+
+    app = app.button(key="discard_criteria_draft").click().run()
+
+    assert app.session_state["review_state"] == review_state
+    assert app.text_input(key="criterion_text_AC-01").value == criterion.text
+    assert app.selectbox(key="criterion_priority_AC-01").value is criterion.priority
+    assert (
+        app.selectbox(key="criterion_level_AC-01").value
+        is criterion.required_evidence_level
+    )
+    assert "Unconfirmed criteria edits discarded without changing the review." in [
+        item.value for item in app.success
+    ]
+    captions = "\n".join(item.value for item in app.caption)
+    sidebar = "\n".join(item.value for item in app.sidebar.markdown)
+    assert "Saved locally — current review matches the last local save." in captions
+    assert "Pending criteria edits are not saved or exported." not in captions
+    assert app.button(key="save_review").disabled is True
+    assert all(not button.disabled for button in app.download_button)
+    assert app.button(key="load_demo").disabled is False
+    assert "Available — Review evidence and export" in sidebar
+
+
+def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, _ = saved_demo_review(new_app())
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Confirmed revised export requirement"
+    ).run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    review_state = app.session_state["review_state"]
+    assert review_state.criteria_revision.number == 2
+    assert review_state.criteria_revision.criteria[0].text == (
+        "Confirmed revised export requirement"
+    )
+    assert review_state.bundle is None
+    assert app.session_state["criteria_confirmed"] is True
+    assert app.button(key="confirm_criteria").disabled is True
+    assert app.button(key="run_analysis").disabled is False
+    assert "Criteria edits are pending confirmation." not in "\n".join(
+        item.value for item in app.warning
+    )
 
 
 @pytest.mark.parametrize(

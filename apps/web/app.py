@@ -200,6 +200,34 @@ def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
 
 
+def _criteria_draft_pending(criteria: list[Criterion]) -> bool:
+    return any(
+        not str(
+            st.session_state.get(f"criterion_text_{item.criterion_id}", item.text)
+        ).strip()
+        or st.session_state.get(f"criterion_text_{item.criterion_id}", item.text)
+        != item.text
+        or st.session_state.get(
+            f"criterion_priority_{item.criterion_id}", item.priority
+        )
+        != item.priority
+        or st.session_state.get(
+            f"criterion_level_{item.criterion_id}", item.required_evidence_level
+        )
+        != item.required_evidence_level
+        for item in criteria
+    )
+
+
+def _clear_criteria_draft(criteria: list[Criterion]) -> None:
+    for item in criteria:
+        st.session_state[f"criterion_text_{item.criterion_id}"] = item.text
+        st.session_state[f"criterion_priority_{item.criterion_id}"] = item.priority
+        st.session_state[f"criterion_level_{item.criterion_id}"] = (
+            item.required_evidence_level
+        )
+
+
 def _criterion_detail_draft_pending() -> bool:
     runtime_text_keys = (
         "runtime_artifact_reference",
@@ -302,6 +330,8 @@ if st.session_state.pop("runtime_evidence_form_reset_pending", False):
     _clear_runtime_evidence_draft()
 if st.session_state.pop("resolution_form_reset_pending", False):
     _clear_resolution_draft()
+if st.session_state.pop("criteria_draft_reset_pending", False):
+    _clear_criteria_draft(st.session_state["criteria"])
 
 st.title("ScopeProof")
 st.subheader("Prove the PR matches the product intent.")
@@ -312,12 +342,16 @@ st.markdown(
 st.caption("No paid LLM API. Deterministic rules. Human acceptance stays visible.")
 
 current_review_state: ReviewState | None = st.session_state["review_state"]
+has_pending_criteria_draft = _criteria_draft_pending(st.session_state["criteria"])
 has_pending_criterion_detail_draft = _criterion_detail_draft_pending()
+has_pending_review_input = (
+    has_pending_criteria_draft or has_pending_criterion_detail_draft
+)
 has_unsaved_review = bool(
     current_review_state is not None
     and (
         not _review_matches_local_save(current_review_state)
-        or has_pending_criterion_detail_draft
+        or has_pending_review_input
     )
 )
 if has_unsaved_review:
@@ -667,7 +701,21 @@ else:
     warnings = validate_criteria(edited_criteria)
     for warning in warnings:
         st.warning(f"{warning.criterion_id}: {warning.message}")
-    criteria_edits_pending = bool(blank_criterion_ids) or edited_criteria != criteria
+    criteria_edits_pending = _criteria_draft_pending(criteria)
+    criteria_draft_discard_notice = st.session_state.pop(
+        "criteria_draft_discard_notice", None
+    )
+    if criteria_draft_discard_notice is not None:
+        st.success(criteria_draft_discard_notice)
+    if criteria_edits_pending and st.button(
+        "Discard unconfirmed criteria edits",
+        key="discard_criteria_draft",
+    ):
+        st.session_state["criteria_draft_reset_pending"] = True
+        st.session_state["criteria_draft_discard_notice"] = (
+            "Unconfirmed criteria edits discarded without changing the review."
+        )
+        st.rerun()
     if st.button(
         "Confirm criteria",
         key="confirm_criteria",
@@ -1190,27 +1238,32 @@ else:
     review_matches_local_save = bool(
         review_state is not None
         and _review_matches_local_save(review_state)
-        and not has_pending_criterion_detail_draft
+        and not has_pending_review_input
     )
     if review_state is not None:
         st.caption(
             "Current review ID — save this review before using the ID in a future session."
         )
         st.code(review_state.review.review_id, language=None)
+        if has_pending_criteria_draft:
+            st.caption(
+                "Pending criteria edits are not saved or exported. Confirm or discard them "
+                "before relying on this review ID."
+            )
         if has_pending_criterion_detail_draft:
             st.caption(
                 "Pending criterion-detail inputs are not saved or exported. Submit or clear "
                 "them before relying on this review ID."
             )
-        elif review_matches_local_save:
+        if review_matches_local_save:
             st.caption("Saved locally — current review matches the last local save.")
-        else:
+        elif not has_pending_review_input:
             st.caption("Unsaved changes — save locally before relying on this review ID.")
     if review_state is not None and not review_store_available:
         export_availability = (
-            "exports remain unavailable until pending criterion inputs are submitted or "
-            "cleared."
-            if has_pending_criterion_detail_draft
+            "exports remain unavailable until pending review inputs are confirmed, "
+            "submitted, discarded, or cleared."
+            if has_pending_review_input
             else "exports remain available."
         )
         st.warning(
@@ -1223,7 +1276,7 @@ else:
         key="save_review",
         disabled=(
             review_matches_local_save
-            or has_pending_criterion_detail_draft
+            or has_pending_review_input
             or not review_store_available
         ),
     ):
@@ -1270,7 +1323,7 @@ else:
             markdown_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.md",
             mime="text/markdown",
-            disabled=has_pending_criterion_detail_draft,
+            disabled=has_pending_review_input,
         )
     with json_column:
         st.download_button(
@@ -1278,7 +1331,7 @@ else:
             json_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.json",
             mime="application/json",
-            disabled=has_pending_criterion_detail_draft,
+            disabled=has_pending_review_input,
         )
     with csv_column:
         st.download_button(
@@ -1286,7 +1339,7 @@ else:
             csv_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.csv",
             mime="text/csv",
-            disabled=has_pending_criterion_detail_draft,
+            disabled=has_pending_review_input,
         )
 
 st.divider()
@@ -1332,7 +1385,9 @@ with st.sidebar:
         )
     else:
         _render_sidebar_step("Locked — Run deterministic analysis")
-    if has_analysis:
+    if has_analysis and has_pending_review_input:
+        _render_sidebar_step("Pending — Resolve inputs before export")
+    elif has_analysis:
         _render_sidebar_step("Available — Review evidence and export")
     else:
         _render_sidebar_step("Locked — Review and export")
