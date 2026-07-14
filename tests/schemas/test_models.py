@@ -17,6 +17,27 @@ from scopeproof_core.schemas.models import (
 from scopeproof_core.version import __version__
 
 
+def candidate_evidence_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "evidence_id": "EV-1",
+        "criterion_id": "AC-01",
+        "evidence_type": EvidenceType.IMPLEMENTATION,
+        "evidence_level": EvidenceLevel.E1,
+        "file_path": "src/export.py",
+        "line_start": 2,
+        "line_end": 4,
+        "commit_sha": "head123",
+        "permalink": "https://github.com/acme/repo/blob/head123/src/export.py#L2-L4",
+        "excerpt": "def export_csv():",
+        "matching_rule": "identifier",
+        "relevance_reason": "Matched export_csv",
+        "relevance_score": 0.9,
+        "limitations": ["Candidate evidence does not prove runtime behavior"],
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_evidence_rejects_line_range_without_sha() -> None:
     with pytest.raises(ValidationError):
         EvidenceItem(
@@ -53,6 +74,53 @@ def test_evidence_rejects_reversed_line_range() -> None:
             relevance_reason="Matched export_csv",
             relevance_score=0.9,
         )
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "evidence_id",
+        "criterion_id",
+        "file_path",
+        "commit_sha",
+        "permalink",
+        "excerpt",
+        "matching_rule",
+        "relevance_reason",
+    ],
+)
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_candidate_evidence_context_rejects_blank_required_text(
+    field: str, blank: str
+) -> None:
+    with pytest.raises(ValidationError, match="must contain non-whitespace text"):
+        EvidenceItem.model_validate(candidate_evidence_payload(**{field: blank}))
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_candidate_evidence_context_rejects_blank_limitation(blank: str) -> None:
+    with pytest.raises(ValidationError, match="limitations must contain non-whitespace text"):
+        EvidenceItem.model_validate(candidate_evidence_payload(limitations=[blank]))
+
+
+def test_candidate_evidence_context_preserves_valid_text_exactly() -> None:
+    item = EvidenceItem.model_validate(
+        candidate_evidence_payload(
+            excerpt="  def export_csv():  ",
+            relevance_reason="  Matched export_csv  ",
+            limitations=["  Requires reviewer confirmation  "],
+        )
+    )
+
+    assert item.excerpt == "  def export_csv():  "
+    assert item.relevance_reason == "  Matched export_csv  "
+    assert item.limitations == ["  Requires reviewer confirmation  "]
+
+
+def test_candidate_evidence_context_allows_no_limitations() -> None:
+    item = EvidenceItem.model_validate(candidate_evidence_payload(limitations=[]))
+
+    assert item.limitations == []
 
 
 def test_review_requires_confirmed_criteria_before_analysis() -> None:

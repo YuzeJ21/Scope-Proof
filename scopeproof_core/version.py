@@ -1,3 +1,3 @@
 """Single checked-in source for ScopeProof package and review provenance."""
 
-__version__ = "0.1.17"
+__version__ = "0.1.18.dev0"
