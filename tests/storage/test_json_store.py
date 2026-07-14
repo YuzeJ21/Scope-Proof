@@ -90,6 +90,32 @@ def test_save_rejects_a_symlinked_store_root(tmp_path: Path) -> None:
     assert list(outside.iterdir()) == []
 
 
+def test_list_review_ids_rejects_a_regular_file_store_root(tmp_path: Path) -> None:
+    store_root = tmp_path / "reviews"
+    store_root.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(UnsafeReviewStore, match="review store path must be a directory"):
+        JsonReviewStore(store_root).list_review_ids()
+
+
+def test_load_rejects_a_regular_file_store_root(tmp_path: Path) -> None:
+    store_root = tmp_path / "reviews"
+    store_root.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(UnsafeReviewStore, match="review store path must be a directory"):
+        JsonReviewStore(store_root).load("review-1")
+
+
+def test_save_rejects_a_regular_file_store_root(tmp_path: Path) -> None:
+    store_root = tmp_path / "reviews"
+    store_root.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(UnsafeReviewStore, match="review store path must be a directory"):
+        JsonReviewStore(store_root).save(review_state())
+
+    assert store_root.read_text(encoding="utf-8") == "not a directory"
+
+
 def test_head_change_is_reported_without_mutating_old_evidence(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
     state = review_state()

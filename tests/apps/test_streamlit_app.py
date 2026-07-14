@@ -122,6 +122,30 @@ def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     assert list(outside.iterdir()) == []
 
 
+def test_regular_file_review_store_has_safe_recovery_and_disables_storage_actions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    store_parent = tmp_path / ".scopeproof"
+    store_parent.mkdir()
+    store_root = store_parent / "reviews"
+    store_root.write_text("not a directory", encoding="utf-8")
+
+    app = new_app()
+
+    assert [item.value for item in app.error] == [
+        "Local review storage is unavailable. Verify that the ScopeProof review directory "
+        "is a regular local directory."
+    ]
+    assert not [item for item in app.text_input if item.key == "reopen_review_id"]
+    assert not [item for item in app.selectbox if item.key == "saved_reopen_review_id"]
+    assert app.button(key="reopen_review").disabled is True
+
+    app = analyzed_demo(app)
+    assert app.button(key="save_review").disabled is True
+    assert store_root.read_text(encoding="utf-8") == "not a directory"
+
+
 def test_blank_public_pr_url_remains_neutral_and_disables_fetch() -> None:
     app = new_app()
 
