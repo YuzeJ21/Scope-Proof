@@ -547,6 +547,10 @@ analysis_disabled = not (
     and st.session_state["criteria_confirmed"]
     and bool(st.session_state["criteria"])
     and not criteria_edits_pending
+    and (
+        st.session_state["review_state"] is None
+        or st.session_state["review_state"].bundle is None
+    )
 )
 if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis_disabled):
     bundle = _analyze()

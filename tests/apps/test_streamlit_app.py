@@ -765,10 +765,28 @@ def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> No
     assert app.button(key="record_final_acceptance").disabled is False
 
 
+def test_analysis_is_disabled_with_active_bundle_and_enabled_for_pending_revision() -> None:
+    app = analyzed_demo(new_app())
+
+    assert app.button(key="run_analysis").disabled is True
+
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "User can export the revised research list as a downloadable CSV"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert app.session_state["review_state"].bundle is None
+    assert app.button(key="run_analysis").disabled is False
+
+
 def test_reanalysis_preserves_review_lineage_and_prior_events() -> None:
     app = analyzed_demo(new_app())
     original_review_id = app.session_state["review_state"].review.review_id
     app = app.button(key="record_final_acceptance").click().run()
+    original_bundle = app.session_state["review_state"].bundle.model_copy(deep=True)
+    original_event = app.session_state["review_state"].resolution_events[0].model_copy(
+        deep=True
+    )
     edited_criterion = "User can export the edited research list as a downloadable CSV"
 
     app = app.text_input(key="criterion_text_AC-01").set_value(edited_criterion).run()
@@ -789,6 +807,9 @@ def test_reanalysis_preserves_review_lineage_and_prior_events() -> None:
         len(state.analysis_history),
         len(state.resolution_events),
     ) == (original_review_id, 2, 1, 1)
+    assert state.analysis_history == [original_bundle]
+    assert state.resolution_events == [original_event]
+    assert state.resolution_events[0].criteria_revision_number == 1
     assert state.bundle.criteria[0].text == edited_criterion
     assert state.review.final_acceptance is False
     assert state.bundle.review.final_acceptance is False
