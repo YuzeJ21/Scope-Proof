@@ -26,7 +26,12 @@ that no external fork-run claim is being made.
 5. Create the exact `scopeproof-review` repository label. A repository owner
    applies it only after confirming the checked-in requirements apply to the
    specific PR.
-6. Do not add personal access tokens. The workflow uses GitHub's short-lived
+6. If the checked-in confirmed requirements bytes change, maintainers must
+   remove `scopeproof-review`, review the new confirmed text for applicability
+   to the PR, and reapply the label before another ScopeProof review. This is an
+   operator requirement; the workflow checks current state but does not enforce
+   or reconstruct label history.
+7. Do not add personal access tokens. The workflow uses GitHub's short-lived
    `github.token` only for its scoped, non-fork comment step.
 
 ## Capture record

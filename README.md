@@ -276,10 +276,12 @@ constructed-demo and technical-smoke boundaries explicit.
 The checked-in [GitHub Actions guide](docs/github-action.md) explains the local
 starter workflow. It is non-blocking by default, needs an explicit checked-in
 requirements file plus a hash-bound confirmation, runs the trusted base-branch
-workflow through `pull_request_target`, and permits a scoped, idempotent
-informational comment only for non-fork PRs with confirmed requirements. It
-never checks out or executes pull-request head code. Its publication policy is
-fixture-tested locally.
+workflow through `pull_request_target`, and reviews only PRs carrying the exact
+maintainer-controlled `scopeproof-review` label. An unlabeled PR is not
+reviewed, not Ready. For a labeled non-fork PR with confirmed requirements, the
+workflow permits a scoped, idempotent informational comment. It never checks
+out or executes pull-request head code. Its publication policy is fixture-tested
+locally.
 
 Use the [external validation runbook](docs/github-action-external-validation.md)
 only in an authorized public demo repository. It records exact non-fork and

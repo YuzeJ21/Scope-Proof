@@ -36,6 +36,11 @@ confirms their applicability to the current PR. Without the label, the review jo
 is not reviewed, not Ready. Keeping the label on the PR allows `synchronize` and `reopened` events to
 review later heads under the same checked-in requirements.
 
+If the checked-in confirmed requirements bytes change, maintainers must remove
+`scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label
+before another ScopeProof review. This is an operator requirement: the workflow checks the current
+label and confirmation record, but does not enforce or reconstruct label history.
+
 The workflow's public-PR evidence command is informational and
 `continue-on-error`; GitHub API limits, temporary network failures, or an
 incomplete diff must remain visible for human review, not become a false pass.
