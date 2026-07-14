@@ -109,3 +109,52 @@ def test_workflows_use_the_vetted_node24_action_revisions() -> None:
             if "upload-artifact" in reference and path.name == "ci.yml":
                 continue
             assert reference in contents, f"{path}: {reference}"
+
+
+def test_action_requires_explicit_per_pr_requirements_applicability() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+        assert "types: [opened, reopened, synchronize, labeled]" in workflow
+        assert re.search(
+            r"(?m)^jobs:\n"
+            r"  review:\n"
+            r"    if: contains\(github\.event\.pull_request\.labels\.\*\.name, "
+            r"'scopeproof-review'\)$",
+            workflow,
+        )
+        assert "paths:" not in workflow
+        assert "github.event.pull_request.user" not in workflow
+
+
+def test_action_guidance_requires_maintainer_applicability_opt_in() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    guide = Path("docs/github-action.md").read_text(encoding="utf-8")
+    runbook = Path("docs/github-action-external-validation.md").read_text(encoding="utf-8")
+
+    safe_preview = readme.split("## GitHub Actions safe preview", maxsplit=1)[1].split(
+        "## Confirmed-action validation revision", maxsplit=1
+    )[0]
+    normalized_safe_preview = " ".join(safe_preview.split())
+    assert "maintainer-controlled `scopeproof-review` label" in normalized_safe_preview
+    assert "not reviewed, not Ready" in normalized_safe_preview
+
+    for document in (guide, runbook):
+        assert "`scopeproof-review`" in document
+        assert "not reviewed, not Ready" in document
+    assert "repository maintainer" in guide
+    assert "checked-in requirements apply to this PR" in guide
+
+
+def test_action_guidance_requires_fresh_applicability_review_after_byte_changes() -> None:
+    for path in (
+        Path("docs/github-action.md"),
+        Path("docs/github-action-external-validation.md"),
+    ):
+        document = " ".join(path.read_text(encoding="utf-8").split())
+        assert "requirements bytes change" in document
+        assert "remove `scopeproof-review`" in document
+        assert "review the new confirmed text for applicability" in document
+        assert "reapply the label" in document
