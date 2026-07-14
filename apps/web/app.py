@@ -518,9 +518,6 @@ else:
                 "Priority": _status_label(criterion.priority.value),
                 "Status": _status_label(finding.status.value),
                 "Evidence": finding.evidence_level.value,
-                "Confidence": finding.confidence_band.value.title(),
-                "Count": len(finding.evidence_ids),
-                "Concern": finding.reason,
                 "Human resolution": (
                     _status_label(resolution_by_id[criterion.criterion_id].decision.value)
                     if criterion.criterion_id in resolution_by_id
@@ -534,9 +531,6 @@ else:
         "Priority",
         "Status",
         "Evidence",
-        "Confidence",
-        "Count",
-        "Concern",
         "Human resolution",
     ]
     table_lines = [
@@ -552,8 +546,6 @@ else:
     st.markdown("\n".join(table_lines))
     if not matrix:
         st.info("No criteria match the current filters.")
-    for row in matrix:
-        st.markdown(f"**{row['Criterion']} — {row['Status']}** · {row['Requirement']}")
 
     st.header("4 · Criterion Detail")
     selected_id = st.selectbox(
@@ -565,8 +557,20 @@ else:
         criterion for criterion in bundle.criteria if criterion.criterion_id == selected_id
     )
     selected_finding = finding_by_id[selected_id]
+    selected_resolution = (
+        _status_label(resolution_by_id[selected_id].decision.value)
+        if selected_id in resolution_by_id
+        else "Unresolved"
+    )
     st.markdown(f"### {selected_id} · {selected_criterion.text}")
     st.markdown(f"**Provisional status:** {_status_label(selected_finding.status.value)}")
+    st.markdown(
+        f"**Required evidence:** {selected_criterion.required_evidence_level.value} · "
+        f"**Observed evidence:** {selected_finding.evidence_level.value} · "
+        f"**Confidence:** {selected_finding.confidence_band.value.title()} · "
+        f"**Candidates:** {len(selected_finding.evidence_ids)} · "
+        f"**Human resolution:** {selected_resolution}"
+    )
     st.write(selected_finding.reason)
     if selected_finding.missing_evidence:
         st.markdown("**Missing evidence**")

@@ -568,15 +568,35 @@ def test_evidence_matrix_renders_as_one_markdown_table() -> None:
         markdown.value
         for markdown in app.markdown
         if markdown.value.startswith(
-            "| Criterion | Requirement | Priority | Status | Evidence | Confidence | Count |"
+            "| Criterion | Requirement | Priority | Status | Evidence | Human resolution |"
         )
     ]
     assert len(table_blocks) == 1
-    assert "|---|---|---|---|---|---|---|---|---|" in table_blocks[0]
+    assert "|---|---|---|---|---|---|" in table_blocks[0]
     assert "| AC-01 | User can export the research list as CSV |" in table_blocks[0]
-    assert "| High | 4 | Strong candidate evidence was found;" in table_blocks[0]
+    assert "| Must Have | Evidence Found | E2 | Unresolved |" in table_blocks[0]
     assert "| Unresolved |" in table_blocks[0]
     assert "| AC-04 | Successful export records research_exported |" in table_blocks[0]
+    assert "Confidence" not in table_blocks[0]
+    assert "Count" not in table_blocks[0]
+    assert "Concern" not in table_blocks[0]
+
+
+def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summary() -> None:
+    app = analyzed_demo(new_app())
+    markdown_text = [item.value for item in app.markdown]
+    visible_markdown = "\n".join(markdown_text)
+
+    assert (
+        "**Required evidence:** E1 · **Observed evidence:** E2 · "
+        "**Confidence:** High · **Candidates:** 4 · **Human resolution:** Unresolved"
+    ) in markdown_text
+    assert "Strong candidate evidence was found; a reviewer must still judge sufficiency." in (
+        item.value for item in app.markdown
+    )
+    assert "**AC-01 — Evidence Found** · User can export the research list as CSV" not in (
+        visible_markdown
+    )
 
 
 def test_evidence_matrix_shows_current_human_resolution() -> None:
