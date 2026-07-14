@@ -3,7 +3,7 @@ import pytest
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
-from scopeproof_core.reviews.lifecycle import append_resolution, new_review_state
+from scopeproof_core.reviews.lifecycle import append_resolution, new_review_state, revise_criteria
 from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
@@ -95,3 +95,19 @@ def test_lifecycle_exports_reject_forged_ready_without_resolution_events(exporte
         ValueError, match="active bundle resolutions must match active resolution events"
     ):
         exporter(state)
+
+
+def test_lifecycle_json_rejects_foreign_historical_review_lineage() -> None:
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        "Updated requirements",
+    )
+    revised.analysis_history[0].review.review_id = "foreign-review"
+
+    with pytest.raises(
+        ValueError,
+        match="historical bundle review lineage must match lifecycle review",
+    ):
+        export_json(revised)

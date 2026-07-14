@@ -622,4 +622,19 @@ class ReviewState(BaseModel):
             and self.bundle.source_text != self.criteria_revision.source_text
         ):
             raise ValueError("active bundle source must match the active revision")
+        active_lineage = (
+            self.review.review_id,
+            self.review.repository,
+            self.review.pr_number,
+        )
+        for historical_bundle in self.analysis_history:
+            historical_lineage = (
+                historical_bundle.review.review_id,
+                historical_bundle.review.repository,
+                historical_bundle.review.pr_number,
+            )
+            if historical_lineage != active_lineage:
+                raise ValueError(
+                    "historical bundle review lineage must match lifecycle review"
+                )
         return self
