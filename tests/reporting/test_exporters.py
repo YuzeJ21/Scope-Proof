@@ -166,6 +166,44 @@ def test_repeated_exports_preserve_deterministic_review_identity() -> None:
         assert exporter(bundle) == exporter(bundle)
 
 
+def test_runtime_artifact_identifiers_and_non_web_schemes_are_plain_text() -> None:
+    for reference in (
+        "artifact-42",
+        "relative/run-42",
+        "file:///tmp/run-42",
+        "javascript:alert(1)",
+    ):
+        bundle = example_bundle()
+        bundle.runtime_evidence[0].artifact_reference = reference
+
+        markdown_report = export_markdown(bundle)
+        html_report = export_html(bundle)
+
+        assert reference in markdown_report
+        assert f"[{reference}](" not in markdown_report
+        assert reference in html_report
+        assert f'href="{reference}"' not in html_report
+
+
+def test_runtime_http_artifact_reference_remains_clickable() -> None:
+    bundle = example_bundle()
+    reference = "https://example.test/runs/7?case=(export)"
+    bundle.runtime_evidence[0].artifact_reference = reference
+
+    assert f"[{reference}](<{reference}>)" in export_markdown(bundle)
+    assert f'<a href="{reference}">{reference}</a>' in export_html(bundle)
+
+
+def test_runtime_artifact_reference_stays_exact_in_json_and_csv() -> None:
+    bundle = example_bundle()
+    reference = "artifact-42"
+    bundle.runtime_evidence[0].artifact_reference = reference
+
+    assert json.loads(export_json(bundle))["runtime_evidence"][0]["artifact_reference"] == reference
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    assert csv_row["runtime_artifacts"] == reference
+
+
 def test_markdown_groups_version_provenance_before_criteria_revision() -> None:
     markdown = export_markdown(new_review_state(example_bundle()))
 
