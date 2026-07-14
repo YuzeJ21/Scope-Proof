@@ -1439,6 +1439,66 @@ def test_runtime_evidence_prerequisite_guidance_is_visible() -> None:
     assert "Limitations are optional" in caption_text
 
 
+def test_runtime_evidence_validation_failure_is_safe_and_retryable() -> None:
+    app = analyzed_demo(new_app())
+    values = {
+        "runtime_artifact_reference": "artifact-controlled",
+        "runtime_scenario": "Controlled scenario",
+        "runtime_environment": "controlled environment",
+        "runtime_result": "controlled result",
+        "runtime_reviewer": "controlled reviewer",
+    }
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        values["runtime_artifact_reference"]
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value(
+        values["runtime_scenario"]
+    ).run()
+    for key in ("runtime_environment", "runtime_result", "runtime_reviewer"):
+        app = app.text_input(key=key).set_value(values[key]).run()
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    raw_error = "2 validation errors at /private/secret/runtime.json"
+
+    with patch(
+        "scopeproof_core.reviews.lifecycle.append_runtime_evidence",
+        side_effect=ValueError(raw_error),
+    ):
+        app = app.button(key="save_runtime_evidence").click().run()
+
+    recovery = (
+        "Runtime evidence could not be saved. Check every required field and select E3 or E4."
+    )
+    assert recovery in [item.value for item in app.error]
+    assert not app.exception
+    rendered = "\n".join(
+        item.value
+        for item in [
+            *app.error,
+            *app.warning,
+            *app.info,
+            *app.success,
+            *app.caption,
+            *app.markdown,
+            *app.code,
+        ]
+    )
+    assert raw_error not in rendered
+    assert "/private/secret/runtime.json" not in rendered
+    assert app.session_state["review_state"] == review_state
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["review_state"].bundle.runtime_evidence == []
+    assert app.text_input(key="runtime_artifact_reference").value == values[
+        "runtime_artifact_reference"
+    ]
+    assert app.text_area(key="runtime_scenario").value == values["runtime_scenario"]
+    for key in ("runtime_environment", "runtime_result", "runtime_reviewer"):
+        assert app.text_input(key=key).value == values[key]
+    assert app.button(key="save_runtime_evidence").disabled is False
+    assert "Manual runtime evidence appended" not in "\n".join(
+        item.value for item in app.success
+    )
+
+
 def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> None:
     app = analyzed_demo(new_app())
     target_context = next(
