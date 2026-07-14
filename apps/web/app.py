@@ -443,7 +443,6 @@ else:
         st.session_state["criteria"] = edited_criteria
         st.session_state["criteria_confirmed"] = True
         st.session_state["bundle"] = None if state is None else state.bundle
-        st.success("Criteria confirmed. Analysis can now begin.")
 
 if st.session_state["criteria_confirmed"]:
     st.success("Criteria confirmed by the reviewer.")
