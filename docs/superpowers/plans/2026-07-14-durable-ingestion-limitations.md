@@ -35,4 +35,3 @@ Preserve and expose bounded GitHub-ingestion details from fetch through UI, stor
 5. Perform an independent diff review and fix all material findings.
 6. Commit, push, open a ready PR, wait for every required check, merge with head matching, and verify exact merge-SHA CI.
 7. Fast-forward local main and remove the owned worktree/branch.
-

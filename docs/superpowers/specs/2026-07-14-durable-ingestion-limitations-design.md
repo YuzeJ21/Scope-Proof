@@ -41,4 +41,3 @@ Adapter warnings follow as plain text. When paths exist, a collapsed `Skipped ch
 - Export contract tests, including hostile HTML and Markdown path characters.
 - Streamlit tests for live partial source and reopened partial review.
 - Full unit suite, lint, benchmark, and a current-vs-fixed browser run against a real public PR with more than 100 changed files.
-
