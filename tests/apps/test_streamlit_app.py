@@ -1030,6 +1030,58 @@ def test_resolution_history_distinguishes_current_and_superseded_decisions() -> 
     ) in caption_text
 
 
+def test_runtime_evidence_guidance_lists_only_missing_required_fields() -> None:
+    app = analyzed_demo(new_app())
+
+    guidance = [
+        caption.value
+        for caption in app.caption
+        if caption.value.startswith("Complete required fields to enable Save:")
+    ]
+    assert guidance == [
+        "Complete required fields to enable Save: Artifact or URL, Runtime scenario, "
+        "Environment, Observed result, Runtime reviewer."
+    ]
+    assert app.button(key="save_runtime_evidence").disabled is True
+
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/run/1"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+
+    guidance = [
+        caption.value
+        for caption in app.caption
+        if caption.value.startswith("Complete required fields to enable Save:")
+    ]
+    assert guidance == [
+        "Complete required fields to enable Save: Observed result, Runtime reviewer."
+    ]
+    assert app.button(key="save_runtime_evidence").disabled is True
+
+
+def test_runtime_evidence_guidance_disappears_when_save_is_ready() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value("   ").run()
+    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("passed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+
+    guidance = "\n".join(caption.value for caption in app.caption)
+    assert "Complete required fields to enable Save: Artifact or URL." in guidance
+    assert app.button(key="save_runtime_evidence").disabled is True
+
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/run/1"
+    ).run()
+
+    guidance = "\n".join(caption.value for caption in app.caption)
+    assert "Complete required fields to enable Save:" not in guidance
+    assert app.button(key="save_runtime_evidence").disabled is False
+
+
 def test_runtime_evidence_save_requires_all_required_fields() -> None:
     app = analyzed_demo(new_app())
     assert app.button(key="save_runtime_evidence").disabled is True
