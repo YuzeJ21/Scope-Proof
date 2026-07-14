@@ -22,10 +22,28 @@ from scopeproof_core.version import __version__
 
 RULESET_VERSION = "1.0.0"
 GITHUB_REPOSITORY_PATTERN = r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$"
+LocalReviewId = Annotated[
+    str,
+    Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"),
+]
 
 
 class StringEnum(StrEnum):
     """A JSON-friendly enum with readable values."""
+
+
+class SavedReviewListing(BaseModel):
+    """Validated local identifiers returned by CLI review discovery."""
+
+    review_ids: list[LocalReviewId]
+    storage_dir: str
+
+    @field_validator("review_ids")
+    @classmethod
+    def validate_sorted_unique_ids(cls, value: list[str]) -> list[str]:
+        if value != sorted(set(value)):
+            raise ValueError("saved review IDs must be sorted and unique")
+        return value
 
 
 class Priority(StringEnum):

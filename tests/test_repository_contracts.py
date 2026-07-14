@@ -164,6 +164,14 @@ def test_readme_documents_single_record_local_review_deletion() -> None:
     assert "not secure erasure" in readme
 
 
+def test_readme_documents_local_saved_review_discovery() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "scopeproof list" in readme
+    assert "local review IDs" in readme
+    assert "does not parse review contents" in readme
+
+
 def test_security_policy_uses_github_private_vulnerability_reporting() -> None:
     policy = Path("SECURITY.md").read_text(encoding="utf-8")
 

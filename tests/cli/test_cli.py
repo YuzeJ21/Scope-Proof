@@ -306,6 +306,54 @@ def test_export_command_supports_self_contained_html(tmp_path: Path, capsys) -> 
     assert "<!doctype html>" in capsys.readouterr().out.lower()
 
 
+def test_list_command_reports_empty_absent_local_store(tmp_path: Path, capsys) -> None:
+    store_dir = tmp_path / "reviews"
+
+    assert main(["list", "--storage-dir", str(store_dir)]) == 0
+
+    assert json.loads(capsys.readouterr().out) == {
+        "review_ids": [],
+        "storage_dir": str(store_dir),
+    }
+    assert not store_dir.exists()
+
+
+def test_list_command_returns_sorted_safe_ids_without_parsing_records(
+    tmp_path: Path, capsys
+) -> None:
+    store_dir = tmp_path / "reviews"
+    store_dir.mkdir()
+    (store_dir / "z-review.json").write_text("not json", encoding="utf-8")
+    (store_dir / "a-review.json").write_text("also not json", encoding="utf-8")
+    (store_dir / "ignored.txt").write_text("not a record", encoding="utf-8")
+
+    assert main(["list", "--storage-dir", str(store_dir)]) == 0
+
+    assert json.loads(capsys.readouterr().out) == {
+        "review_ids": ["a-review", "z-review"],
+        "storage_dir": str(store_dir),
+    }
+
+
+def test_list_command_fails_closed_for_unsafe_store_root(
+    tmp_path: Path, capsys
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    store_dir = tmp_path / "reviews"
+    store_dir.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(SystemExit) as raised:
+        main(["list", "--storage-dir", str(store_dir)])
+
+    assert raised.value.code == 2
+    captured = capsys.readouterr()
+    assert "scopeproof: error:" in captured.err
+    assert "symbolic link" in captured.err
+    assert "Traceback" not in captured.err
+    assert captured.out == ""
+
+
 def test_delete_command_removes_one_saved_local_review(tmp_path: Path, capsys) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Export CSV\n", encoding="utf-8")

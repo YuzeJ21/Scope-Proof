@@ -15,6 +15,7 @@ from scopeproof_core.schemas.models import (
     Priority,
     PullRequestSnapshot,
     Review,
+    SavedReviewListing,
 )
 from scopeproof_core.version import __version__
 
@@ -69,6 +70,17 @@ def review_identity_payload(model, **overrides: object) -> dict[str, object]:
         )
     payload.update(overrides)
     return payload
+
+
+@pytest.mark.parametrize(
+    "review_ids",
+    [["z-review", "a-review"], ["duplicate", "duplicate"], ["../unsafe"]],
+)
+def test_saved_review_listing_rejects_unsorted_duplicate_or_unsafe_ids(
+    review_ids: list[str],
+) -> None:
+    with pytest.raises(ValidationError):
+        SavedReviewListing(review_ids=review_ids, storage_dir=".scopeproof/reviews")
 
 
 def test_evidence_rejects_line_range_without_sha() -> None:
