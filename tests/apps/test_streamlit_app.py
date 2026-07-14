@@ -648,6 +648,50 @@ def test_criteria_confirmation_failure_preserves_pending_edit_without_raw_detail
     assert app.button(key="run_analysis").disabled is True
 
 
+def test_sidebar_step_navigation_links_next_action_and_keeps_locked_steps_plain() -> None:
+    app = new_app()
+
+    assert [item.value for item in app.sidebar.markdown] == [
+        "[Next — Load a public PR or demo](#1-start-review)",
+        "Locked — Prepare at least one criterion",
+        "Locked — Confirm criteria",
+        "Locked — Run deterministic analysis",
+        "Locked — Review and export",
+    ]
+
+
+def test_sidebar_step_navigation_tracks_available_workflow_sections() -> None:
+    app = load_demo(new_app())
+
+    assert [item.value for item in app.sidebar.markdown] == [
+        "[Complete — Source loaded](#1-start-review)",
+        "[Complete — Criteria prepared](#2-confirm-criteria)",
+        "[Next — Confirm criteria](#2-confirm-criteria)",
+        "Locked — Run deterministic analysis",
+        "Locked — Review and export",
+    ]
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert [item.value for item in app.sidebar.markdown] == [
+        "[Complete — Source loaded](#1-start-review)",
+        "[Complete — Criteria prepared](#2-confirm-criteria)",
+        "[Complete — Criteria confirmed](#2-confirm-criteria)",
+        "[Next — Run deterministic analysis](#run-deterministic-analysis)",
+        "Locked — Review and export",
+    ]
+
+    app = app.button(key="run_analysis").click().run()
+
+    assert [item.value for item in app.sidebar.markdown] == [
+        "[Complete — Source loaded](#1-start-review)",
+        "[Complete — Criteria prepared](#2-confirm-criteria)",
+        "[Complete — Criteria confirmed](#2-confirm-criteria)",
+        "[Complete — Analysis generated](#3-evidence-matrix)",
+        "Complete — Review and export available",
+    ]
+
+
 @pytest.mark.parametrize("text", ["", "   ", "\t\n"])
 def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: str) -> None:
     app = analyzed_demo(new_app())
