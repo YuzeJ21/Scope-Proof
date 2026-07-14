@@ -76,6 +76,9 @@ _STATE_DEFAULTS = {
     "replace_unsaved_review_confirmed": False,
     "replace_unsaved_review_reset_pending": False,
     "review_reopen_notice": None,
+    "delete_saved_review_confirmed": False,
+    "delete_saved_review_reset_pending": False,
+    "saved_review_delete_notice": None,
     "source_load_notice": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
@@ -205,6 +208,10 @@ def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -
 if st.session_state["replace_unsaved_review_reset_pending"]:
     st.session_state["replace_unsaved_review_confirmed"] = False
     st.session_state["replace_unsaved_review_reset_pending"] = False
+if st.session_state["delete_saved_review_reset_pending"]:
+    st.session_state["delete_saved_review_reset_pending"] = False
+    st.session_state["saved_reopen_review_id"] = None
+    st.session_state["delete_saved_review_confirmed"] = False
 
 st.title("ScopeProof")
 st.subheader("Prove the PR matches the product intent.")
@@ -283,6 +290,48 @@ with st.expander("Reopen saved review", expanded=False):
                 "Review reopened from local storage after validation."
             )
             st.rerun()
+    if reopen_id and review_store_available:
+        delete_confirmed = st.checkbox(
+            "Permanently delete the selected local review",
+            key="delete_saved_review_confirmed",
+        )
+        if st.button(
+            "Delete saved review",
+            key="delete_saved_review",
+            disabled=not delete_confirmed,
+        ):
+            try:
+                review_store.delete(reopen_id)
+            except FileNotFoundError:
+                st.session_state["saved_review_delete_notice"] = (
+                    "The selected saved review was already removed. Refresh the saved "
+                    "review list."
+                )
+            except (OSError, ValueError):
+                st.session_state["saved_review_delete_notice"] = (
+                    "The saved review could not be deleted. Verify the local review "
+                    "directory and try again."
+                )
+            else:
+                current = st.session_state["review_state"]
+                if current is not None and current.review.review_id == reopen_id:
+                    st.session_state["saved_review_fingerprint"] = None
+                    st.session_state["saved_review_delete_notice"] = (
+                        "Saved review deleted. The open review remains available as "
+                        "unsaved work."
+                    )
+                else:
+                    st.session_state["saved_review_delete_notice"] = (
+                        "Saved review deleted."
+                    )
+            st.session_state["delete_saved_review_reset_pending"] = True
+            st.rerun()
+saved_review_delete_notice = st.session_state.pop("saved_review_delete_notice", None)
+if saved_review_delete_notice is not None:
+    if saved_review_delete_notice.startswith("Saved review deleted."):
+        st.success(saved_review_delete_notice)
+    else:
+        st.warning(saved_review_delete_notice)
 review_reopen_notice = st.session_state.pop("review_reopen_notice", None)
 if review_reopen_notice is not None:
     st.success(review_reopen_notice)
