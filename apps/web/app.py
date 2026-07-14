@@ -205,11 +205,27 @@ replacement_blocked = has_unsaved_review and not replace_unsaved_review_confirme
 storage_directory = default_local_review_directory()
 review_store = JsonReviewStore(Path(storage_directory))
 with st.expander("Reopen saved review", expanded=False):
-    reopen_id = st.text_input("Review ID", key="reopen_review_id")
+    saved_review_ids = review_store.list_review_ids()
+    if saved_review_ids:
+        reopen_id = st.selectbox(
+            "Saved review ID",
+            options=saved_review_ids,
+            index=None,
+            placeholder="Select a saved review",
+            key="saved_reopen_review_id",
+        )
+        record_label = "review" if len(saved_review_ids) == 1 else "reviews"
+        st.caption(
+            f"{len(saved_review_ids)} saved local {record_label} found. "
+            "The selected record is validated when opened."
+        )
+    else:
+        reopen_id = st.text_input("Review ID", key="reopen_review_id")
+        st.caption("No saved local reviews found.")
     if st.button(
         "Reopen local review",
         key="reopen_review",
-        disabled=not reopen_id.strip() or replacement_blocked,
+        disabled=not reopen_id or replacement_blocked,
     ):
         try:
             reopened_state = review_store.load(reopen_id.strip())

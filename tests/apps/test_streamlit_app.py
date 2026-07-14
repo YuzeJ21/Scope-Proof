@@ -31,6 +31,10 @@ def saved_demo_review(app: AppTest) -> tuple[AppTest, str]:
     return app, review_id
 
 
+def select_saved_review(app: AppTest, review_id: str) -> AppTest:
+    return app.selectbox(key="saved_reopen_review_id").set_value(review_id).run()
+
+
 def evidence_matrix_table(app: AppTest) -> str:
     return next(
         markdown.value
@@ -55,13 +59,42 @@ def test_product_disclaimer_is_visible() -> None:
     assert "No paid LLM API" in visible_text
 
 
-def test_reopen_review_is_a_collapsed_secondary_path_before_start_review() -> None:
+def test_reopen_review_is_a_collapsed_secondary_path_before_start_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
     app = new_app()
 
     assert [item.label for item in app.expander] == ["Reopen saved review"]
     assert app.text_input(key="reopen_review_id").value == ""
     assert app.button(key="reopen_review").disabled is True
+    assert "No saved local reviews found." in [item.value for item in app.caption]
     assert "### Reopen saved review" not in [item.value for item in app.markdown]
+
+
+def test_saved_review_is_discoverable_and_selectable_in_a_fresh_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    saved_state = saved.session_state["review_state"]
+
+    fresh = new_app()
+    saved_ids = fresh.selectbox(key="saved_reopen_review_id")
+    assert saved_ids.options == [review_id]
+    assert saved_ids.value is None
+    assert fresh.button(key="reopen_review").disabled is True
+    caption_text = "\n".join(item.value for item in fresh.caption)
+    assert "1 saved local review found" in caption_text
+    assert "validated when opened" in caption_text
+
+    fresh = saved_ids.set_value(review_id).run()
+    fresh = fresh.button(key="reopen_review").click().run()
+
+    assert fresh.session_state["review_state"] == saved_state
+    assert "Review reopened from local storage" in "\n".join(
+        message.value for message in fresh.success
+    )
 
 
 def test_blank_public_pr_url_remains_neutral_and_disables_fetch() -> None:
@@ -330,7 +363,7 @@ def test_demo_can_save_and_reopen_durable_review_state() -> None:
 
     app = app.button(key="save_review").click().run()
     assert "Review saved locally" in "\n".join(message.value for message in app.success)
-    app = app.text_input(key="reopen_review_id").set_value(review_id).run()
+    app = select_saved_review(app, review_id)
     app = app.button(key="reopen_review").click().run()
 
     assert app.session_state["review_state"].review.review_id == review_id
@@ -376,9 +409,13 @@ def test_post_save_resolution_marks_review_unsaved_again(
     assert app.button(key="save_review").disabled is False
 
 
-def test_unsaved_review_requires_explicit_approval_before_replacement() -> None:
+def test_unsaved_review_requires_explicit_approval_before_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, saved_review_id = saved_demo_review(new_app())
     app = analyzed_demo(new_app())
-    app = app.text_input(key="reopen_review_id").set_value("another-review").run()
+    app = select_saved_review(app, saved_review_id)
     app = app.text_input(key="pr_url").set_value(
         "https://github.com/acme/example/pull/7"
     ).run()
@@ -439,8 +476,8 @@ def test_saved_review_can_be_reopened_from_a_fresh_session(
     saved_state = saved.session_state["review_state"]
 
     fresh = new_app()
-    assert fresh.text_input(key="reopen_review_id").value == ""
-    fresh = fresh.text_input(key="reopen_review_id").set_value(review_id).run()
+    assert fresh.selectbox(key="saved_reopen_review_id").value is None
+    fresh = select_saved_review(fresh, review_id)
     fresh = fresh.button(key="reopen_review").click().run()
 
     reopened = fresh.session_state["review_state"]
@@ -470,7 +507,7 @@ def test_reopening_clears_an_unrelated_loaded_snapshot(
 
     app = load_demo(new_app())
     assert app.session_state["snapshot"] is not None
-    app = app.text_input(key="reopen_review_id").set_value(review_id).run()
+    app = select_saved_review(app, review_id)
     app = app.button(key="reopen_review").click().run()
 
     assert app.session_state["snapshot"] is None
@@ -489,7 +526,7 @@ def test_reopened_review_reports_changed_head_before_invalidating_analysis(
     changed_snapshot = load_demo_snapshot().model_copy(update={"head_sha": changed_head})
 
     fresh = new_app()
-    fresh = fresh.text_input(key="reopen_review_id").set_value(review_id).run()
+    fresh = select_saved_review(fresh, review_id)
     fresh = fresh.button(key="reopen_review").click().run()
     with patch("scopeproof_core.demo.load_demo_snapshot", return_value=changed_snapshot):
         fresh = fresh.button(key="load_demo").click().run()
@@ -512,7 +549,7 @@ def test_reopened_review_reports_same_head_before_reanalysis(
     saved_head = saved.session_state["review_state"].review.head_sha
 
     fresh = new_app()
-    fresh = fresh.text_input(key="reopen_review_id").set_value(review_id).run()
+    fresh = select_saved_review(fresh, review_id)
     fresh = fresh.button(key="reopen_review").click().run()
     fresh = fresh.button(key="load_demo").click().run()
 
@@ -531,7 +568,7 @@ def test_reopened_review_does_not_compare_a_different_pull_request(
     unrelated_snapshot = load_demo_snapshot().model_copy(update={"pr_number": 999})
 
     fresh = new_app()
-    fresh = fresh.text_input(key="reopen_review_id").set_value(review_id).run()
+    fresh = select_saved_review(fresh, review_id)
     fresh = fresh.button(key="reopen_review").click().run()
     with patch("scopeproof_core.demo.load_demo_snapshot", return_value=unrelated_snapshot):
         fresh = fresh.button(key="load_demo").click().run()

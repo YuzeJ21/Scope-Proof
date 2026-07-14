@@ -60,6 +60,18 @@ class JsonReviewStore:
                 return candidate
         raise FileNotFoundError(validated_id)
 
+    def list_review_ids(self) -> list[str]:
+        """Return deterministic candidate record IDs without parsing record contents."""
+        if not self.directory.is_dir():
+            return []
+        return sorted(
+            candidate.stem
+            for candidate in self.directory.glob("*.json")
+            if not candidate.is_symlink()
+            and candidate.is_file()
+            and _REVIEW_ID.fullmatch(candidate.stem)
+        )
+
     def save(self, state: ReviewState) -> Path:
         """Atomically save a versioned record without accepting credential fields."""
         self.directory.mkdir(parents=True, exist_ok=True)
