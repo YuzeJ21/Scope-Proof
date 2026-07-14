@@ -59,6 +59,36 @@ def test_historical_review_state_loads_without_ingestion_limitation_fields(
     assert loaded.bundle.review.skipped_files == []
 
 
+def test_load_rejects_mismatched_active_bundle_review(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"]["review"]["head_sha"] = "different-head"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match="active bundle review must match lifecycle review"
+    ):
+        store.load("review-1")
+
+
+def test_save_revalidates_mismatched_active_bundle_review(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    divergent = state.model_copy(
+        update={
+            "review": state.review.model_copy(update={"head_sha": "different-head"})
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="active bundle review must match lifecycle review"
+    ):
+        store.save(divergent)
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_version_one_record_with_legacy_permalink_loads_and_exports_inertly(
     tmp_path: Path,
 ) -> None:

@@ -603,3 +603,9 @@ class ReviewState(BaseModel):
     bundle: ReviewBundle | None = None
     analysis_history: list[ReviewBundle] = Field(default_factory=list)
     resolution_events: list[ResolutionEvent] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_active_review_identity(self) -> ReviewState:
+        if self.bundle is not None and self.bundle.review != self.review:
+            raise ValueError("active bundle review must match lifecycle review")
+        return self
