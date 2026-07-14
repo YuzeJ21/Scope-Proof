@@ -125,6 +125,19 @@ def test_partial_ingestion_forces_needs_review() -> None:
     assert "partial_ingestion" in decision.reason_codes
 
 
+def test_limitation_provenance_defensively_prevents_ready() -> None:
+    review, criterion, finding = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    contradictory = review.model_copy(update={"skipped_files": ["src/skipped.py"]})
+    resolution = HumanResolution(criterion_id="AC-01", decision=HumanDecision.ACCEPTED)
+
+    decision = evaluate_gate(contradictory, [criterion], [finding], [resolution])
+
+    assert decision.verdict is GateVerdict.NEEDS_REVIEW
+    assert "ingestion_limitations_present" in decision.reason_codes
+
+
 def test_change_required_blocks_even_when_finding_has_evidence() -> None:
     review, criterion, finding = gate_case(
         True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND

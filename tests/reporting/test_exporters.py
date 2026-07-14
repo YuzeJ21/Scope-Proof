@@ -23,6 +23,7 @@ from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
     HumanResolution,
+    IngestionState,
     Review,
     ReviewBundle,
     RuntimeEvidence,
@@ -131,6 +132,39 @@ def test_exports_preserve_tool_and_ruleset_provenance() -> None:
     ):
         assert bundle.review.tool_version in output
         assert bundle.review.ruleset_version in output
+
+
+def test_exports_preserve_ingestion_limitations_and_escape_html() -> None:
+    bundle = example_bundle()
+    bundle.review.ingestion_state = IngestionState.PARTIAL
+    bundle.review.ingestion_warnings = [
+        "![remote image](https://example.invalid/pixel.png)",
+        "=HYPERLINK(\"https://example.invalid\",\"warning\")",
+    ]
+    bundle.review.skipped_files = [
+        "src/one.py",
+        "src/<unsafe>|two.py",
+        "=HYPERLINK(\"https://example.invalid\",\"path\")",
+        "src/literal | delimiter.py",
+    ]
+
+    json_report = export_json(bundle)
+    markdown_report = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert json.loads(json_report)["review"]["skipped_files"] == bundle.review.skipped_files
+    assert "## Ingestion Limitations" in markdown_report
+    assert "- ![remote image]" not in markdown_report
+    assert "- <code>![remote image]" in markdown_report
+    assert "src/&lt;unsafe&gt;|two.py" in markdown_report
+    assert csv_row["ingestion_state"] == "partial"
+    assert json.loads(csv_row["ingestion_warnings"]) == bundle.review.ingestion_warnings
+    assert json.loads(csv_row["skipped_files"]) == bundle.review.skipped_files
+    assert not csv_row["ingestion_warnings"].startswith(("=", "+", "-", "@"))
+    assert not csv_row["skipped_files"].startswith(("=", "+", "-", "@"))
+    assert "src/&lt;unsafe&gt;|two.py" in html_report
+    assert "src/<unsafe>" not in html_report
 
 
 def test_exports_preserve_confirmed_requirement_source() -> None:

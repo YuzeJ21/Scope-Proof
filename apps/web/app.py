@@ -40,6 +40,7 @@ from scopeproof_core.schemas.models import (
     Criterion,
     EvidenceLevel,
     HumanDecision,
+    IngestionState,
     Priority,
     PullRequestSnapshot,
     ResolutionEvent,
@@ -154,6 +155,8 @@ def _analyze() -> ReviewBundle:
         check_state=snapshot.check_state,
         criteria_confirmed=st.session_state["criteria_confirmed"],
         ingestion_state=snapshot.ingestion_state,
+        ingestion_warnings=snapshot.warnings,
+        skipped_files=snapshot.skipped_files,
     )
     evidence = retrieve_evidence(snapshot, criteria)
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
@@ -172,6 +175,30 @@ def _analyze() -> ReviewBundle:
 
 def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
+
+
+def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -> None:
+    if source is None or source.ingestion_state is not IngestionState.PARTIAL:
+        return
+    ingestion_warnings = (
+        source.warnings
+        if isinstance(source, PullRequestSnapshot)
+        else source.ingestion_warnings
+    )
+    st.warning(
+        "Partial PR ingestion: ScopeProof did not inspect every changed file. Results remain "
+        "bounded to the files retrieved, and the gate cannot be Ready. Narrow or split the PR, "
+        "then reload it for a complete review."
+    )
+    if ingestion_warnings:
+        st.caption("Ingestion details reported by the repository adapter:")
+        for warning in ingestion_warnings:
+            st.code(warning, language=None)
+    if source.skipped_files:
+        with st.expander(f"Skipped changed files ({len(source.skipped_files)})"):
+            st.caption("These paths were not inspected and are not evidence for any criterion.")
+            for path in source.skipped_files:
+                st.code(path, language=None)
 
 
 if st.session_state["replace_unsaved_review_reset_pending"]:
@@ -336,6 +363,11 @@ elif source_reload_notice is not None:
         f"PR source reloaded at the same head SHA: {source_reload_notice.current_head_sha}. "
         "Reconfirm criteria and run a new review before relying on current results."
     )
+
+ingestion_limitations_source = st.session_state["snapshot"]
+if ingestion_limitations_source is None and current_review_state is not None:
+    ingestion_limitations_source = current_review_state.review
+_render_ingestion_limitations(ingestion_limitations_source)
 
 requirements_text = st.text_area(
     "Product requirements or acceptance criteria",

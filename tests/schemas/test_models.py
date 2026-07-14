@@ -202,6 +202,62 @@ def test_confirmed_complete_review_can_analyze() -> None:
     assert review.can_analyze is True
 
 
+def test_review_preserves_ingestion_limitations_with_backward_compatible_defaults() -> None:
+    review = Review(
+        repository="acme/repo",
+        pr_number=7,
+        base_sha="base",
+        head_sha="head",
+        ingestion_state=IngestionState.PARTIAL,
+        ingestion_warnings=["File limit reached; skipped 2 changed files."],
+        skipped_files=["src/one.py", "src/two.py"],
+    )
+
+    reopened = Review.model_validate_json(review.model_dump_json())
+    historical = Review.model_validate(
+        {
+            "repository": "acme/repo",
+            "pr_number": 7,
+            "base_sha": "base",
+            "head_sha": "head",
+        }
+    )
+
+    assert reopened.ingestion_warnings == ["File limit reached; skipped 2 changed files."]
+    assert reopened.skipped_files == ["src/one.py", "src/two.py"]
+    assert historical.ingestion_warnings == []
+    assert historical.skipped_files == []
+
+
+@pytest.mark.parametrize(
+    ("model", "extra"),
+    [
+        (Review, {"ingestion_warnings": ["unexpected limitation"]}),
+        (Review, {"skipped_files": ["src/skipped.py"]}),
+        (PullRequestSnapshot, {"warnings": ["unexpected limitation"]}),
+        (PullRequestSnapshot, {"skipped_files": ["src/skipped.py"]}),
+    ],
+)
+def test_complete_ingestion_rejects_limitation_provenance(model, extra) -> None:
+    base = {
+        "repository": "acme/widgets",
+        "pr_number": 7,
+        "base_sha": "base123",
+        "head_sha": "head123",
+        "ingestion_state": IngestionState.COMPLETE,
+    }
+    if model is PullRequestSnapshot:
+        base.update(
+            {
+                "title": "Example",
+                "html_url": "https://github.com/acme/widgets/pull/7",
+            }
+        )
+
+    with pytest.raises(ValueError, match="complete ingestion cannot include limitations"):
+        model.model_validate({**base, **extra})
+
+
 def test_new_review_records_current_package_version() -> None:
     review = Review(
         repository="acme/repo",
