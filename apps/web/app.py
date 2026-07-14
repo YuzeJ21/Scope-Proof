@@ -614,7 +614,8 @@ else:
     if st.button(
         "Confirm criteria",
         key="confirm_criteria",
-        disabled=bool(blank_criterion_ids),
+        disabled=bool(blank_criterion_ids)
+        or (st.session_state["criteria_confirmed"] and not criteria_edits_pending),
     ):
         state: ReviewState | None = st.session_state["review_state"]
         try:
