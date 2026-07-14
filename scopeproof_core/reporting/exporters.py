@@ -9,6 +9,10 @@ import json
 from collections import defaultdict
 
 from scopeproof_core.gates.guidance import gate_guidance
+from scopeproof_core.reporting.references import (
+    is_linkable_artifact_reference,
+    render_artifact_reference_markdown,
+)
 from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewState
 
 ExportableReview = ReviewBundle | ReviewState
@@ -123,7 +127,7 @@ def export_markdown(bundle: ExportableReview) -> str:
             lines.extend(
                 [
                     f"- **{item.criterion_id}** — "
-                    f"[{item.artifact_reference}]({item.artifact_reference})",
+                    f"{render_artifact_reference_markdown(item.artifact_reference)}",
                     f"  - Scenario: {item.scenario}",
                     f"  - Environment: {item.environment}; result: {item.result}; "
                     f"reviewer: {item.reviewer}; level: {item.evidence_level.value}",
@@ -155,6 +159,13 @@ def export_markdown(bundle: ExportableReview) -> str:
 
 def _links(items: list[EvidenceItem]) -> str:
     return " | ".join(item.permalink for item in items)
+
+
+def _render_artifact_reference_html(value: str) -> str:
+    label = html.escape(value)
+    if not is_linkable_artifact_reference(value):
+        return label
+    return f'<a href="{html.escape(value, quote=True)}">{label}</a>'
 
 
 def export_csv(bundle: ExportableReview) -> str:
@@ -333,8 +344,7 @@ def export_html(value: ExportableReview) -> str:
                     *[
                         "<li>"
                         f"{html.escape(item.criterion_id)}: "
-                        f"<a href=\"{html.escape(item.artifact_reference, quote=True)}\">"
-                        f"{html.escape(item.artifact_reference)}</a> — "
+                        f"{_render_artifact_reference_html(item.artifact_reference)} — "
                         f"{html.escape(item.scenario)}; {html.escape(item.environment)}; "
                         f"{html.escape(item.result)}; {html.escape(item.reviewer)}; "
                         f"{html.escape(item.evidence_level.value)}</li>"
