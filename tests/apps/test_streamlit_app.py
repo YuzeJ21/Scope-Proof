@@ -1735,6 +1735,7 @@ def test_runtime_evidence_guidance_disappears_when_save_is_ready() -> None:
     app = app.text_input(key="runtime_environment").set_value("staging").run()
     app = app.text_input(key="runtime_result").set_value("passed").run()
     app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+    app = app.text_area(key="runtime_limitations").set_value("Browser only").run()
 
     guidance = "\n".join(caption.value for caption in app.caption)
     assert "Complete required fields to enable Save: Artifact or URL." in guidance
@@ -1897,6 +1898,62 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
         in target_captions[0]
     )
     assert "Record a human-supplied observation only." in target_captions[0]
+
+
+def test_criterion_change_clears_pending_target_specific_drafts() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "artifact-for-ac-01"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value(
+        "AC-01 export scenario"
+    ).run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("passed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+    app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.MANUALLY_VERIFIED
+    ).run()
+    app = app.text_area(key="resolution_note").set_value(
+        "Verified AC-01 in staging."
+    ).run()
+    app = app.selectbox(key="manual_evidence_level").set_value(EvidenceLevel.E4).run()
+
+    assert app.button(key="save_runtime_evidence").disabled is False
+    assert app.button(key="save_resolution").disabled is False
+
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+
+    assert app.text_input(key="runtime_artifact_reference").value == ""
+    assert app.text_area(key="runtime_scenario").value == ""
+    assert app.text_input(key="runtime_environment").value == ""
+    assert app.text_input(key="runtime_result").value == ""
+    assert app.text_input(key="runtime_reviewer").value == ""
+    assert app.text_area(key="runtime_limitations").value == ""
+    assert app.selectbox(key="runtime_evidence_level").value is EvidenceLevel.E3
+    assert app.button(key="save_runtime_evidence").disabled is True
+    assert app.selectbox(key="resolution_decision").value is None
+    assert app.text_area(key="resolution_note").value == ""
+    assert "manual_evidence_level" not in app.session_state.filtered_state
+    assert app.button(key="save_resolution").disabled is True
+    assert app.session_state["review_state"].bundle.runtime_evidence == []
+    assert app.session_state["review_state"].resolution_events == []
+    assert (
+        "Unsaved runtime evidence or resolution inputs were cleared because the review "
+        "target changed. Re-enter them for AC-03 before saving."
+    ) in [item.value for item in app.info]
+
+
+def test_clean_criterion_change_does_not_claim_a_draft_was_cleared() -> None:
+    app = analyzed_demo(new_app())
+
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+
+    assert (
+        "Unsaved runtime evidence or resolution inputs were cleared because the review "
+        "target changed."
+    ) not in "\n".join(item.value for item in app.info)
 
 
 def test_manual_runtime_evidence_can_be_recorded_without_changing_static_findings() -> None:
