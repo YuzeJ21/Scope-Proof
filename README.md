@@ -105,15 +105,20 @@ scopeproof review --pr https://github.com/OWNER/REPOSITORY/pull/123 \
   --report scopeproof-review.md
 ```
 
+The optional report path may end in `.md`, `.json`, `.csv`, or `.html`. ScopeProof validates the
+selected export and refuses to overwrite an existing file.
+
 The command prints JSON containing the local `review_id`, record path, head SHA, and provisional
-gate verdict, plus the requested report path. ScopeProof refuses to overwrite an existing report.
-Use the review identifier later to repeat the export or choose another format:
+gate verdict, plus the requested report path. Use the review identifier later to repeat the export
+or choose another format:
 
 ```bash
 scopeproof export REVIEW_ID \
   --storage-dir .scopeproof/reviews \
   --format markdown
 ```
+
+Available repeat-export formats are `json`, `markdown`, `csv`, and `html`.
 
 CSV exports neutralize leading spreadsheet-formula characters in scalar text cells. Fields that
 can contain multiple values (`ingestion_warnings`, `skipped_files`, `evidence_links`,
@@ -242,7 +247,7 @@ Provisional findings + human resolution
       ↓
 Deterministic gate
       ↓
-Markdown / JSON / CSV
+Markdown / JSON / CSV / HTML
 ```
 
 `scopeproof_core` contains Pydantic contracts, ingestion, retrieval, verification, gates, reporting, fixtures, and evaluation. It has no Streamlit dependency. `apps/web/app.py` is a thin local interface over those core services.
@@ -263,7 +268,7 @@ scopeproof_core/criteria/ Manual criterion preparation
 scopeproof_core/retrieval/Deterministic evidence candidates
 scopeproof_core/verification/Provisional findings
 scopeproof_core/gates/    Release truth table
-scopeproof_core/reporting/Markdown, JSON, and CSV exports
+scopeproof_core/reporting/Markdown, JSON, CSV, and HTML exports
 scopeproof_core/evals/    Regression runner
 evals/                    Controlled fixtures and labels
 tests/                    Unit, regression, AppTest, and live smoke tests
