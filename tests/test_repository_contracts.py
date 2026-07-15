@@ -217,3 +217,29 @@ def test_public_docs_do_not_require_or_offer_external_fork_validation() -> None:
     assert "same-head rerun, and fork evidence" not in combined
     assert "external fork validation is optional" not in combined
     assert "fork testing is permanently excluded" in combined
+
+
+def test_ci_validates_declared_minimum_python() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    compatibility = workflow.split("  compatibility-python-311:", maxsplit=1)[1].split(
+        "\n  verify:", maxsplit=1
+    )[0]
+    verify = workflow.split("\n  verify:", maxsplit=1)[1]
+
+    assert 'python-version: "3.11"' in compatibility
+    assert "python -m pytest -q" in compatibility
+    assert "python -m scopeproof_core.evals.runner" in compatibility
+    assert "python -m pip wheel . --no-deps" in compatibility
+    assert "scopeproof --version" in compatibility
+    assert "scopeproof-web --version" in compatibility
+    assert "needs: compatibility-python-311" in verify
+
+
+def test_readme_documents_all_export_formats() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "`.md`, `.json`, `.csv`, or `.html`" in readme
+    assert "`json`, `markdown`, `csv`, and `html`" in readme
+    assert "Markdown / JSON / CSV / HTML" in readme
+    assert "Markdown, JSON, CSV, and HTML exports" in readme
