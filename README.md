@@ -109,8 +109,8 @@ The optional report path may end in `.md`, `.json`, `.csv`, or `.html`. ScopePro
 selected export and refuses to overwrite an existing file.
 
 The command prints JSON containing the local `review_id`, record path, head SHA, and provisional
-gate verdict, plus the requested report path. ScopeProof refuses to overwrite an existing report.
-Use the review identifier later to repeat the export or choose another format:
+gate verdict, plus the requested report path. Use the review identifier later to repeat the export
+or choose another format:
 
 ```bash
 scopeproof export REVIEW_ID \
