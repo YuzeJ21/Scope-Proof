@@ -1,0 +1,73 @@
+name: Public-alpha review feedback
+description: Share a voluntary outcome from reviewing a genuine public pull request.
+title: "[Public alpha]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Submit only voluntary, sanitized feedback for a public repository. A deliberately
+        constructed demo is product-flow evidence, not a real first-use outcome.
+  - type: input
+    id: public_pr
+    attributes:
+      label: Public pull request
+      description: Link the genuine public PR reviewed with ScopeProof.
+      placeholder: https://github.com/OWNER/REPOSITORY/pull/123
+    validations:
+      required: true
+  - type: textarea
+    id: requirements_source
+    attributes:
+      label: Confirmed requirements source
+      description: Explain who supplied and confirmed the normalized criteria.
+      placeholder: The repository source owner confirmed these criteria before analysis...
+    validations:
+      required: true
+  - type: checkboxes
+    id: source_owner
+    attributes:
+      label: Source ownership
+      options:
+        - label: The acceptance criteria were source-owner-confirmed before ScopeProof analysis.
+          required: true
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Review outcome
+      options:
+        - Found a useful previously unknown gap
+        - Clarified a known gap
+        - Produced only already-known information
+        - Could not complete because of product friction
+    validations:
+      required: true
+  - type: textarea
+    id: useful
+    attributes:
+      label: What was useful?
+      description: Cite the criterion, evidence link, missing-evidence statement, or workflow step.
+    validations:
+      required: true
+  - type: textarea
+    id: friction
+    attributes:
+      label: What created friction?
+      description: Describe the stage, expected next action, and actual experience.
+    validations:
+      required: false
+  - type: textarea
+    id: limitations
+    attributes:
+      label: Limitations and human decision
+      description: Record what ScopeProof could not verify and the reviewer's final decision.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: This is genuine public-PR use, not a constructed demo or invented validation.
+          required: true
+        - label: I removed credentials, private data, and confidential source material.
+          required: true

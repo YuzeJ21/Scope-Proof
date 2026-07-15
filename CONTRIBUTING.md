@@ -4,6 +4,9 @@ ScopeProof is a local-first public alpha for reviewing public GitHub pull
 requests against user-confirmed requirements. Contributions should preserve its
 deterministic, informational, and non-blocking boundaries.
 
+Review the [public roadmap](ROADMAP.md) before proposing broader scope. The
+[changelog](CHANGELOG.md) links active development to authoritative published releases.
+
 ## Before opening a pull request
 
 1. Keep the change focused and explain the user-confirmed requirement or bug it

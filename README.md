@@ -288,6 +288,11 @@ read-only private-repository boundary. It does not claim private support exists.
 
 This is a public-repository MVP for validating the requirement-to-evidence workflow. The next product decision should be based on repeat use with real pull requests and confirmed gaps found before merge—not the number of files scanned or comments generated.
 
+The [public roadmap](ROADMAP.md) defines the evidence-gated path from engineering-complete public
+alpha to limited beta. The [changelog](CHANGELOG.md) summarizes the active development line and
+links to authoritative published release notes. Neither document substitutes for genuine public-PR
+use or human acceptance.
+
 For safe public-alpha operations, see the [public PR dogfood protocol](docs/dogfood/public-pr-protocol.md) and the [60-second demo script](docs/launch/demo-script.md). The protocol distinguishes deliberately constructed demos, technical smokes, and confirmed dogfood reviews so launch material does not overclaim validation.
 
 The [launch evidence matrix](docs/launch/evidence-matrix.md) and
