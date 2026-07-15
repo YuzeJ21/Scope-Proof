@@ -4,8 +4,8 @@ This file highlights user-visible changes from the active development line. Auth
 artifacts, and checksums for published versions remain on the
 [GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases).
 
-It intentionally does not reconstruct historical releases from memory. Consult each signed Git
-tag and its linked release entry for the exact published source and assets.
+It intentionally does not reconstruct historical releases from memory. Consult each Git tag and
+its linked release entry for the exact published source and assets.
 
 ## Unreleased
 

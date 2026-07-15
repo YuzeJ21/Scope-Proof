@@ -17,4 +17,3 @@ choice, synthetic validation, or invented evidence.
 5. Link the governance surfaces from README and CONTRIBUTING.
 6. Run focused tests, Ruff, the full test suite, the deterministic benchmark, and `git diff --check`.
 7. Publish one protected-main pull request and merge only after required checks pass.
-

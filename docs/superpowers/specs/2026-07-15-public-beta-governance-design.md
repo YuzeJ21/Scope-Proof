@@ -49,4 +49,3 @@ account notification settings remain outside ScopeProof and are not changed by t
 Repository contract tests require the four artifacts, their key safety language, and the README /
 contribution links. The normal Ruff, full pytest suite, deterministic benchmark, and diff checks
 remain the acceptance gates.
-
