@@ -288,3 +288,18 @@ def test_public_docs_link_governance_surfaces() -> None:
     assert "[changelog](CHANGELOG.md)" in readme
     assert "[public roadmap](ROADMAP.md)" in contributing
     assert "[changelog](CHANGELOG.md)" in contributing
+
+
+def test_readme_shows_disclosed_constructed_demo_visual() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    image_path = Path("docs/assets/scopeproof-constructed-demo-evidence-matrix.jpg")
+
+    assert image_path.is_file()
+    assert image_path.read_bytes().startswith(b"\xff\xd8\xff")
+    assert image_path.stat().st_size > 50_000
+    assert (
+        "![ScopeProof deliberately constructed demo evidence matrix]"
+        "(docs/assets/scopeproof-constructed-demo-evidence-matrix.jpg)"
+    ) in readme
+    assert "Controlled demo screenshot—not a customer case" in readme
+    assert "not runtime verification or proof of correctness" in readme

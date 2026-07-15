@@ -6,6 +6,12 @@ ScopeProof reviews a public GitHub pull request against user-confirmed product r
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
+![ScopeProof deliberately constructed demo evidence matrix](docs/assets/scopeproof-constructed-demo-evidence-matrix.jpg)
+
+*Controlled demo screenshot—not a customer case. It shows deterministic candidate evidence and
+missing-evidence states; it is not runtime verification or proof of correctness. See the
+[deliberately constructed demo](#deliberately-constructed-demo) for the expected findings.*
+
 ## Why this exists
 
 AI coding agents can produce pull requests quickly, but a green CI check does not establish that every ticket promise was implemented. Product reviewers still need to answer questions such as:
