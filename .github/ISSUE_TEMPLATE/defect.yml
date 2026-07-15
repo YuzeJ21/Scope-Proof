@@ -1,0 +1,59 @@
+name: Reproducible defect
+description: Report deterministic ScopeProof behavior that differs from the documented contract.
+title: "[Defect]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include tokens, private repository data, customer information, or secrets.
+        Use GitHub's private vulnerability reporting for security concerns.
+  - type: input
+    id: version
+    attributes:
+      label: ScopeProof version or commit
+      description: Paste the output of `scopeproof --version` or an immutable commit SHA.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: List the smallest safe sequence that reproduces the behavior.
+      placeholder: |
+        1. Start with ...
+        2. Confirm ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected documented behavior
+      description: Link the documentation, criterion, or contract that defines the expectation.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include sanitized output and exact error text where useful.
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence_level
+    attributes:
+      label: Evidence type
+      options:
+        - Local deterministic reproduction
+        - Automated regression failure
+        - External runtime observation
+        - Documentation inconsistency
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed credentials, private data, and confidential source material.
+          required: true
