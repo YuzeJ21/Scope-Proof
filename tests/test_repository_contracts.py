@@ -243,3 +243,48 @@ def test_readme_documents_all_export_formats() -> None:
     assert "`json`, `markdown`, `csv`, and `html`" in readme
     assert "Markdown / JSON / CSV / HTML" in readme
     assert "Markdown, JSON, CSV, and HTML exports" in readme
+
+
+def test_roadmap_uses_evidence_gated_beta_stages() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+
+    assert "engineering-complete public alpha" in roadmap
+    assert "source-owner-confirmed criteria" in roadmap
+    assert "genuine public pull request" in roadmap
+    assert "Software license decision" in roadmap
+    assert "Do not create synthetic validation" in roadmap
+    assert "No recurring monitor" in roadmap
+
+
+def test_changelog_points_to_authoritative_release_history() -> None:
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "## Unreleased" in changelog
+    assert "github.com/YuzeJ21/Scope-Proof/releases" in changelog
+    assert "does not reconstruct" in changelog
+
+
+def test_public_contribution_templates_preserve_evidence_boundaries() -> None:
+    defect = Path(".github/ISSUE_TEMPLATE/defect.yml").read_text(encoding="utf-8")
+    feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    pull_request = Path(".github/pull_request_template.md").read_text(encoding="utf-8")
+
+    assert "Do not include tokens" in defect
+    assert "Reproduction" in defect
+    assert "source-owner-confirmed" in feedback
+    assert "constructed demo" in feedback
+    assert "User-confirmed requirement" in pull_request
+    assert "Static evidence is not runtime verification" in pull_request
+    assert "Remaining limitations" in pull_request
+
+
+def test_public_docs_link_governance_surfaces() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    contributing = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert "[public roadmap](ROADMAP.md)" in readme
+    assert "[changelog](CHANGELOG.md)" in readme
+    assert "[public roadmap](ROADMAP.md)" in contributing
+    assert "[changelog](CHANGELOG.md)" in contributing
