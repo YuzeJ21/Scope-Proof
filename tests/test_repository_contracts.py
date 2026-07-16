@@ -48,6 +48,22 @@ def test_public_docs_state_evaluation_only_use_policy() -> None:
     assert not Path("LICENSE").exists()
 
 
+def test_wheel_packages_use_policy_without_license_metadata() -> None:
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    project = config["project"]
+    wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
+
+    assert project["urls"]["Use Policy"] == (
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md"
+    )
+    assert wheel["force-include"]["USE_POLICY.md"] == "scopeproof_core/USE_POLICY.md"
+    assert "license" not in project
+    assert "license-files" not in project
+    assert not any(
+        classifier.startswith("License ::") for classifier in project.get("classifiers", [])
+    )
+
+
 def test_python_312_ci_enforces_local_coverage_floor() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     dev_dependencies = config["project"]["optional-dependencies"]["dev"]
