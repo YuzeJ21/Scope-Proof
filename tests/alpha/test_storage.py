@@ -14,6 +14,8 @@ def alpha_case():
         public_pr_url="https://github.com/acme/repo/pull/7",
         requirements_source_url="https://github.com/acme/repo/issues/6",
         participant_role=ParticipantRole.ENGINEERING,
+        source_owner_confirmed=True,
+        no_confidential_information=True,
         confirmed_criteria=["Export CSV"],
     )
 
