@@ -548,10 +548,13 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert "Likes, views, stars, impressions, and downloads are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
     assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.22" in html
-    assert "../docs/alpha/participant-quickstart.md" in html
+    assert (
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
+        in html
+    )
     assert "https://www.linkedin.com/" in html
     assert "DM" in html
-    assert "../USE_POLICY.md" in html
+    assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md" in html
     assert parser.forms == 0
     assert parser.remote_scripts == []
     assert "analytics" not in html.lower()
