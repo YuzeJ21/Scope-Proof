@@ -428,3 +428,38 @@ def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
     with Image.open(image_path) as image:
         assert image.format == "PNG"
         assert image.size == (1200, 1200)
+
+
+def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(
+        encoding="utf-8"
+    )
+    qualification = Path("docs/alpha/public-pr-qualification-checklist.md").read_text(
+        encoding="utf-8"
+    )
+    criteria = Path(
+        "docs/alpha/acceptance-criteria-confirmation-template.md"
+    ).read_text(encoding="utf-8")
+    outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+    protocol = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
+
+    assert all(f"Minute {minute}" in quickstart for minute in range(1, 11))
+    assert "scopeproof alpha init" in quickstart
+    assert "scopeproof alpha outcome" in quickstart
+    assert "source owner" in qualification.lower()
+    assert "No confidential information" in qualification
+    assert "one criterion per line" in criteria.lower()
+    assert "found_useful_gap" in outcome
+    assert "showed_only_known_information" in outcome
+    assert "created_friction" in outcome
+    assert "report consent" in outcome.lower()
+    assert "quotation consent" in outcome.lower()
+    prohibited = ("participant name", "email address", "linkedin profile", "dm transcript")
+    combined = "\n".join((quickstart, qualification, criteria, outcome)).lower()
+    assert all(term not in combined for term in prohibited)
+    assert (
+        "[public-alpha participant quickstart](docs/alpha/participant-quickstart.md)"
+        in readme
+    )
+    assert "docs/alpha/participant-quickstart.md" in protocol
