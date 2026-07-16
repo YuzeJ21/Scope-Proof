@@ -24,6 +24,8 @@ Exit conditions:
 - [x] **Software license decision:** the repository owner chose an evaluation-only use policy and
   explicitly records that no open-source license is granted.
 
+Activation readiness is now available through the [ten-minute participant quickstart](docs/alpha/participant-quickstart.md), public-PR qualification checklist, explicit source-owner confirmation in the workbench and CLI, and consent-gated local alpha-case records. These tools make the two remaining gates auditable; they do not satisfy either gate without a genuine participant and outcome.
+
 ## Stage 2 — Limited beta
 
 Entry requires every open Stage 1 condition. Limited beta means repeated, supervised use on public
