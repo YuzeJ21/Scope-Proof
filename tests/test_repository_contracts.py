@@ -26,6 +26,7 @@ class _PublicSiteParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.forms = 0
+        self.links: list[str] = []
         self.remote_scripts: list[str] = []
         self.video_tracks: list[dict[str, str | None]] = []
 
@@ -33,6 +34,8 @@ class _PublicSiteParser(HTMLParser):
         values = dict(attrs)
         if tag == "form":
             self.forms += 1
+        if tag == "a" and values.get("href"):
+            self.links.append(str(values["href"]))
         if tag == "script" and str(values.get("src", "")).startswith(("http://", "https://")):
             self.remote_scripts.append(str(values["src"]))
         if tag == "track":
@@ -559,7 +562,7 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
         in html
     )
-    assert "https://www.linkedin.com/" in html
+    assert "https://www.linkedin.com/" in parser.links
     assert "DM" in html
     assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md" in html
     assert parser.forms == 0
