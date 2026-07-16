@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import main
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.version import __version__
@@ -533,3 +534,168 @@ def test_requirements_confirmation_command_rejects_blank_confirmer(
     captured = capsys.readouterr()
     assert "confirmed_by must contain non-whitespace text" in captured.err
     assert captured.out == ""
+
+
+def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str]:
+    requirements = tmp_path / "alpha-requirements.txt"
+    requirements.write_text("Export CSV\nShow an error state\n", encoding="utf-8")
+    store = tmp_path / "alpha-cases"
+    assert main(
+        [
+            "alpha",
+            "init",
+            "--pr",
+            "https://github.com/acme/repo/pull/7",
+            "--requirements-source",
+            "https://github.com/acme/repo/issues/6",
+            "--participant-role",
+            "qa",
+            "--requirements",
+            str(requirements),
+            "--confirmed-no-confidential-information",
+            "--storage-dir",
+            str(store),
+        ]
+    ) == 0
+    case_id = json.loads(capsys.readouterr().out)["case_id"]
+    return store, case_id
+
+
+def test_alpha_init_creates_validated_local_record(tmp_path: Path, capsys) -> None:
+    store_dir, case_id = _initialize_alpha_case(tmp_path, capsys)
+
+    record = JsonAlphaCaseStore(store_dir).load(case_id)
+
+    assert record.confirmed_criteria == ["Export CSV", "Show an error state"]
+    assert record.source_owner_confirmed is True
+    assert record.no_confidential_information is True
+
+
+def test_alpha_init_requires_confidentiality_confirmation(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "alpha",
+                "init",
+                "--pr",
+                "https://github.com/acme/repo/pull/7",
+                "--requirements-source",
+                "https://github.com/acme/repo/issues/6",
+                "--participant-role",
+                "qa",
+                "--requirements",
+                str(requirements),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "--confirmed-no-confidential-information" in capsys.readouterr().err
+
+
+def test_alpha_outcome_and_consent_gated_public_summary(
+    tmp_path: Path, capsys
+) -> None:
+    store_dir, case_id = _initialize_alpha_case(tmp_path, capsys)
+    notes = tmp_path / "outcome.txt"
+    notes.write_text("The report showed only information already known.\n", encoding="utf-8")
+
+    assert main(
+        [
+            "alpha",
+            "outcome",
+            case_id,
+            "--review-id",
+            "review-7",
+            "--head-sha",
+            "a" * 40,
+            "--result",
+            "showed_only_known_information",
+            "--notes-file",
+            str(notes),
+            "--report-consent",
+            "--storage-dir",
+            str(store_dir),
+        ]
+    ) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["outcome"] == "showed_only_known_information"
+
+    assert main(
+        [
+            "alpha",
+            "show",
+            case_id,
+            "--public-summary",
+            "--storage-dir",
+            str(store_dir),
+        ]
+    ) == 0
+    public = json.loads(capsys.readouterr().out)
+    assert "outcome_notes" not in public
+    assert "publication_consent" not in public
+
+
+def test_alpha_public_summary_refuses_without_report_consent(
+    tmp_path: Path, capsys
+) -> None:
+    store_dir, case_id = _initialize_alpha_case(tmp_path, capsys)
+    assert main(
+        [
+            "alpha",
+            "outcome",
+            case_id,
+            "--review-id",
+            "review-7",
+            "--head-sha",
+            "a" * 40,
+            "--result",
+            "found_useful_gap",
+            "--storage-dir",
+            str(store_dir),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "alpha",
+                "show",
+                case_id,
+                "--public-summary",
+                "--storage-dir",
+                str(store_dir),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "report publication consent" in capsys.readouterr().err
+
+
+def test_alpha_friction_requires_stage(tmp_path: Path, capsys) -> None:
+    store_dir, case_id = _initialize_alpha_case(tmp_path, capsys)
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "alpha",
+                "outcome",
+                case_id,
+                "--review-id",
+                "review-7",
+                "--head-sha",
+                "a" * 40,
+                "--result",
+                "created_friction",
+                "--storage-dir",
+                str(store_dir),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "friction stage" in capsys.readouterr().err
