@@ -578,3 +578,29 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         assert poster.size == (1280, 720)
     with Image.open(alpha_visual_path) as alpha_visual:
         assert alpha_visual.size == (1200, 1200)
+
+
+def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> None:
+    workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
+
+    assert "  push:\n    branches: [main]\n  workflow_dispatch:" in workflow
+    assert "pull_request_target" not in workflow
+    assert "schedule:" not in workflow
+    assert "contents: read" in workflow
+    assert "pages: write" in workflow
+    assert "id-token: write" in workflow
+    assert "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0" in workflow
+    assert "actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0" in workflow
+    assert (
+        "actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0"
+        in workflow
+    )
+    assert "actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0" in workflow
+    assert "path: site" in workflow
+    assert "github-pages" in workflow
+    assert "cancel-in-progress: true" in workflow
+    for line in workflow.splitlines():
+        if "uses:" in line:
+            reference = line.split("@", maxsplit=1)[1].split()[0]
+            assert len(reference) == 40
+            assert all(character in "0123456789abcdef" for character in reference)
