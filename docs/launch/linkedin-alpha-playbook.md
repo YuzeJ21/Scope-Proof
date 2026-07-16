@@ -32,6 +32,15 @@ characters. Recheck LinkedIn's current help pages before publishing if the platf
 > evidence, and missing evidence. The headline says that green CI is not the same as complete
 > product intent. The image is labeled as a deliberately constructed demo.
 
+## Asset provenance
+
+| Final asset | Export | Provenance |
+| --- | --- | --- |
+| `docs/assets/scopeproof-linkedin-alpha.png` | PNG, 1200x1200 | An abstract, text-free matrix background was created with built-in ImageGen. All visible copy, status labels, disclosure text, dimensions, and layout were applied deterministically and then inspected at original resolution. |
+
+The matrix is an abstract visual motif, not a captured participant case or an exact application
+screenshot. The asset contains no customer data, testimonial, product metric, or validation result.
+
 ## First-response DM
 
 Send this only after a person contacts the owner:
