@@ -2,6 +2,7 @@ import tomllib
 from html.parser import HTMLParser
 from pathlib import Path
 from struct import unpack
+from urllib.parse import urlsplit
 
 from PIL import Image
 
@@ -562,7 +563,14 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
         in html
     )
-    assert "https://www.linkedin.com/" in parser.links
+    linkedin_links = [
+        urlsplit(link)
+        for link in parser.links
+        if urlsplit(link).hostname == "www.linkedin.com"
+    ]
+    assert len(linkedin_links) == 1
+    assert linkedin_links[0].scheme == "https"
+    assert linkedin_links[0].path == "/"
     assert "DM" in html
     assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md" in html
     assert parser.forms == 0
