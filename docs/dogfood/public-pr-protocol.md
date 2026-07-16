@@ -14,6 +14,8 @@ Use this protocol to collect reproducible product evidence from public pull requ
 
 ## Confirmed dogfood requirements
 
+Start with the participant-facing ten-minute guide at `docs/alpha/participant-quickstart.md` and complete its public PR qualification checklist. The structured `scopeproof alpha` commands are the preferred local record for new cases; the directory format below remains available for existing manual records.
+
 Before running a confirmed dogfood review, create a local directory containing:
 
 ```text

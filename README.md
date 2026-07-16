@@ -139,6 +139,8 @@ executes its code, or converts static candidates into runtime verification.
 
 ## Contributor setup
 
+For a fully pinned setup, use the [reproducible development environment](docs/development-environment.md). The standard editable setup remains available below.
+
 Read the [evaluation-only use policy](USE_POLICY.md) before cloning or proposing a contribution.
 Public visibility does not grant permission beyond evaluation and review.
 
@@ -304,7 +306,7 @@ alpha to limited beta. The [changelog](CHANGELOG.md) summarizes the active devel
 links to authoritative published release notes. Neither document substitutes for genuine public-PR
 use or human acceptance.
 
-For safe public-alpha operations, see the [public PR dogfood protocol](docs/dogfood/public-pr-protocol.md) and the [60-second demo script](docs/launch/demo-script.md). The protocol distinguishes deliberately constructed demos, technical smokes, and confirmed dogfood reviews so launch material does not overclaim validation.
+For safe public-alpha operations, start with the [public-alpha participant quickstart](docs/alpha/participant-quickstart.md), then use the [public PR dogfood protocol](docs/dogfood/public-pr-protocol.md) and the [60-second demo script](docs/launch/demo-script.md). The protocol distinguishes deliberately constructed demos, technical smokes, and confirmed dogfood reviews so launch material does not overclaim validation.
 
 The [launch evidence matrix](docs/launch/evidence-matrix.md) and
 [review-before-posting LinkedIn draft](docs/launch/linkedin-draft.md) keep the

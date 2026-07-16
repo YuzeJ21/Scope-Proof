@@ -376,6 +376,56 @@ def test_blank_public_pr_url_remains_neutral_and_disables_fetch() -> None:
     assert app.button(key="fetch_pr").disabled is True
 
 
+def test_first_use_flow_labels_five_stages_and_defaults_to_technical_smoke() -> None:
+    app = new_app()
+
+    visible = "\n".join(
+        item.value for item in [*app.markdown, *app.caption, *app.info]
+    )
+    assert "PR → Criteria → Evidence → Decisions → Outcome" in visible
+    assert app.radio(key="review_path").value == "Technical smoke only"
+    assert "not user validation" in visible
+
+
+def test_confirmed_alpha_fetch_requires_validated_public_safe_preflight() -> None:
+    app = new_app()
+    app = app.radio(key="review_path").set_value("Confirmed public-alpha review").run()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/widget/pull/42"
+    ).run()
+
+    assert app.button(key="fetch_pr").disabled is True
+
+    app = app.text_input(key="requirements_source_url").set_value(
+        "https://github.com/acme/widget/issues/41"
+    ).run()
+    app = app.checkbox(key="source_owner_confirmed").check().run()
+    app = app.checkbox(key="no_confidential_information").check().run()
+
+    assert app.selectbox(key="participant_role").value == "product_manager"
+    assert app.button(key="fetch_pr").disabled is False
+
+
+def test_criteria_and_outcome_surfaces_preserve_human_confirmation_boundary() -> None:
+    app = analyzed_demo(new_app())
+    visible = "\n".join(
+        item.value
+        for item in [*app.markdown, *app.caption, *app.info, *app.code]
+    )
+
+    assert "source owner" in visible.lower()
+    assert "found_useful_gap" in visible
+    assert "showed_only_known_information" in visible
+    assert "created_friction" in visible
+    selected = app.selectbox(key="selected_criterion").value
+    expected_action = next(
+        finding.recommended_action
+        for finding in app.session_state["bundle"].findings
+        if finding.criterion_id == selected
+    )
+    assert expected_action in [item.value for item in app.code]
+
+
 def test_malformed_public_pr_url_shows_format_guidance_and_disables_fetch() -> None:
     app = new_app()
     app = app.text_input(key="pr_url").set_value(

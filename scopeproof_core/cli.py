@@ -6,6 +6,13 @@ import argparse
 import json
 from pathlib import Path
 
+from scopeproof_core.alpha.models import AlphaFrictionStage, AlphaOutcome, ParticipantRole
+from scopeproof_core.alpha.service import (
+    initialize_alpha_case,
+    public_alpha_summary,
+    record_alpha_outcome,
+)
+from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
 from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.evals.metrics import EvidenceQualityMetrics
@@ -170,6 +177,57 @@ def _validate_requirements_confirmation(args: argparse.Namespace) -> int:
     return 0
 
 
+def _alpha_init(args: argparse.Namespace) -> int:
+    """Create a local, validated record for one genuine public-alpha case."""
+    requirements_path = Path(args.requirements)
+    criteria = _criteria_from_file(requirements_path)
+    record = initialize_alpha_case(
+        public_pr_url=args.pr,
+        requirements_source_url=args.requirements_source,
+        participant_role=ParticipantRole(args.participant_role),
+        source_owner_confirmed=args.source_owner_confirmed,
+        no_confidential_information=args.confirmed_no_confidential_information,
+        confirmed_criteria=[criterion.text for criterion in criteria],
+    )
+    path = JsonAlphaCaseStore(Path(args.storage_dir)).save(record)
+    payload = record.model_dump(mode="json")
+    payload["record"] = str(path)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def _alpha_outcome(args: argparse.Namespace) -> int:
+    """Complete one local alpha case with a bounded, validated outcome."""
+    store = JsonAlphaCaseStore(Path(args.storage_dir))
+    record = store.load(args.case_id)
+    notes = None
+    if args.notes_file:
+        notes = Path(args.notes_file).read_text(encoding="utf-8")
+    updated = record_alpha_outcome(
+        record,
+        review_id=args.review_id,
+        reviewed_head_sha=args.head_sha,
+        outcome=AlphaOutcome(args.result),
+        friction_stage=(
+            AlphaFrictionStage(args.friction_stage) if args.friction_stage else None
+        ),
+        outcome_notes=notes,
+        report_consent=args.report_consent,
+        quote_consent=args.quote_consent,
+    )
+    store.update(updated)
+    print(updated.model_dump_json(indent=2))
+    return 0
+
+
+def _alpha_show(args: argparse.Namespace) -> int:
+    """Show a full local case or its reduced consent-gated public summary."""
+    record = JsonAlphaCaseStore(Path(args.storage_dir)).load(args.case_id)
+    output = public_alpha_summary(record) if args.public_summary else record
+    print(json.dumps(output.model_dump(mode="json"), indent=2, sort_keys=True))
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scopeproof", description=__doc__)
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -214,6 +272,65 @@ def _parser() -> argparse.ArgumentParser:
     requirements_confirmation.add_argument("--requirements", required=True)
     requirements_confirmation.add_argument("--confirmation", required=True)
     requirements_confirmation.set_defaults(handler=_validate_requirements_confirmation)
+    alpha = commands.add_parser(
+        "alpha", help="Capture truthful local evidence from genuine public-alpha use"
+    )
+    alpha_commands = alpha.add_subparsers(dest="alpha_command", required=True)
+    alpha_init = alpha_commands.add_parser(
+        "init", help="Initialize a source-owner-confirmed public-alpha case"
+    )
+    alpha_init.add_argument("--pr", required=True, help="Public GitHub pull request URL")
+    alpha_init.add_argument(
+        "--requirements-source",
+        required=True,
+        help="Public HTTPS URL containing the owner-confirmed requirements",
+    )
+    alpha_init.add_argument(
+        "--participant-role",
+        required=True,
+        choices=[role.value for role in ParticipantRole],
+    )
+    alpha_init.add_argument(
+        "--requirements", required=True, help="One confirmed criterion per line"
+    )
+    alpha_init.add_argument(
+        "--source-owner-confirmed",
+        action="store_true",
+        required=True,
+        help="Confirm authority to approve the linked requirements",
+    )
+    alpha_init.add_argument(
+        "--confirmed-no-confidential-information",
+        action="store_true",
+        required=True,
+        help="Confirm the case contains no private or confidential information",
+    )
+    alpha_init.add_argument("--storage-dir", default=".scopeproof/alpha-cases")
+    alpha_init.set_defaults(handler=_alpha_init)
+    alpha_outcome = alpha_commands.add_parser(
+        "outcome", help="Record one bounded alpha outcome"
+    )
+    alpha_outcome.add_argument("case_id")
+    alpha_outcome.add_argument("--review-id", required=True)
+    alpha_outcome.add_argument("--head-sha", required=True)
+    alpha_outcome.add_argument(
+        "--result", required=True, choices=[outcome.value for outcome in AlphaOutcome]
+    )
+    alpha_outcome.add_argument("--notes-file")
+    alpha_outcome.add_argument(
+        "--friction-stage", choices=[stage.value for stage in AlphaFrictionStage]
+    )
+    alpha_outcome.add_argument("--report-consent", action="store_true")
+    alpha_outcome.add_argument("--quote-consent", action="store_true")
+    alpha_outcome.add_argument("--storage-dir", default=".scopeproof/alpha-cases")
+    alpha_outcome.set_defaults(handler=_alpha_outcome)
+    alpha_show = alpha_commands.add_parser(
+        "show", help="Show a local alpha record or consent-gated public summary"
+    )
+    alpha_show.add_argument("case_id")
+    alpha_show.add_argument("--public-summary", action="store_true")
+    alpha_show.add_argument("--storage-dir", default=".scopeproof/alpha-cases")
+    alpha_show.set_defaults(handler=_alpha_show)
     return parser
 
 

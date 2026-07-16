@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ScopeProof maps source-owner-confirmed acceptance criteria to auditable evidence in public GitHub pull requests.">
+    <title>ScopeProof — Does this PR prove the requirement?</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="ScopeProof home">
+        <span class="brand-mark" aria-hidden="true">SP</span>
+        <span>ScopeProof</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#workflow">Workflow</a>
+        <a href="#demo">Demo</a>
+        <a href="#alpha">Public alpha</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">Local-first · deterministic · public PRs only</p>
+          <h1 id="hero-title">Does this PR prove the requirement?</h1>
+          <p class="lede">ScopeProof maps source-owner-confirmed acceptance criteria to inspectable implementation and test candidates, then shows the evidence gaps a human still needs to resolve.</p>
+          <div class="actions">
+            <a class="button button-primary" href="https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.22">Try release v0.1.22</a>
+            <a class="button button-secondary" href="https://github.com/YuzeJ21/Scope-Proof">View the repository</a>
+          </div>
+          <p class="boundary">Evidence assistant, not a correctness oracle. ScopeProof does not execute pull-request code, replace QA, or turn static evidence into runtime verification.</p>
+        </div>
+        <div class="hero-visual">
+          <img src="assets/scopeproof-linkedin-alpha.png" width="1200" height="1200" alt="ScopeProof product overview showing criteria, evidence, and human review boundaries">
+        </div>
+      </section>
+
+      <section id="workflow" class="section" aria-labelledby="workflow-title">
+        <p class="eyebrow">A bounded review</p>
+        <h2 id="workflow-title">PR → Criteria → Evidence → Decisions → Outcome</h2>
+        <div class="workflow-grid">
+          <article><span>01</span><h3>PR</h3><p>Load a public GitHub pull request without executing its code.</p></article>
+          <article><span>02</span><h3>Criteria</h3><p>The source owner confirms one atomic requirement per line before analysis.</p></article>
+          <article><span>03</span><h3>Evidence</h3><p>Deterministic rules cite immutable candidates or state what evidence is missing.</p></article>
+          <article><span>04</span><h3>Decisions</h3><p>A human accepts, rejects, verifies, or records an exception with a reason.</p></article>
+          <article><span>05</span><h3>Outcome</h3><p>Record one honest result without turning a trial into a market claim.</p></article>
+        </div>
+      </section>
+
+      <section id="demo" class="section demo-section" aria-labelledby="demo-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">60-second product walkthrough</p>
+            <h2 id="demo-title">See the evidence boundary in action</h2>
+          </div>
+          <a href="demo-transcript.html">Read the full demo transcript</a>
+        </div>
+        <p class="disclosure">This is a deliberately constructed demo case. ScopeProof uses deterministic evidence rules and human review; it does not guarantee correctness or replace QA.</p>
+        <video controls preload="metadata" poster="assets/scopeproof-demo-poster.jpg" aria-label="ScopeProof deliberately constructed 60-second demo">
+          <source src="assets/scopeproof-captioned-demo.mp4" type="video/mp4">
+          <track kind="captions" src="assets/scopeproof-captioned-demo.vtt" srclang="en" label="English" default>
+          Your browser does not support HTML video. <a href="demo-transcript.html">Read the transcript</a>.
+        </video>
+      </section>
+
+      <section id="alpha" class="section alpha-section" aria-labelledby="alpha-title">
+        <div>
+          <p class="eyebrow">Help test the product question</p>
+          <h2 id="alpha-title">Bring one genuine public PR</h2>
+          <p>ScopeProof needs product managers, QA practitioners, and engineers who own or are directly authorized to confirm public acceptance criteria. A ten-minute trial can end honestly in one of three ways: it found a useful gap, showed only known information, or created friction.</p>
+          <p class="metric-boundary">Likes, views, stars, impressions, and downloads are not product validation.</p>
+        </div>
+        <div class="alpha-actions">
+          <a class="button button-primary" href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md">Open the ten-minute quickstart</a>
+          <a class="button button-secondary" href="https://www.linkedin.com/">Open LinkedIn to DM</a>
+          <p>Use LinkedIn DM only after confirming the PR and requirement source are genuinely public. Do not send private code, credentials, customer data, or confidential information.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>ScopeProof · evaluation and review only</p>
+      <div>
+        <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md">Use policy</a>
+        <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/SECURITY.md">Security</a>
+        <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/ROADMAP.md">Roadmap</a>
+      </div>
+    </footer>
+  </body>
+</html>

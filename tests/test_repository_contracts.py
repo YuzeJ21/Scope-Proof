@@ -1,7 +1,46 @@
 import tomllib
+from html.parser import HTMLParser
 from pathlib import Path
+from struct import unpack
+from urllib.parse import urlsplit
 
 from PIL import Image
+
+
+def _mp4_duration_seconds(path: Path) -> float:
+    data = path.read_bytes()
+    marker = data.find(b"mvhd")
+    assert marker >= 0, "MP4 must contain an mvhd movie header"
+    version = data[marker + 4]
+    if version == 0:
+        timescale = unpack(">I", data[marker + 16 : marker + 20])[0]
+        duration = unpack(">I", data[marker + 20 : marker + 24])[0]
+    elif version == 1:
+        timescale = unpack(">I", data[marker + 24 : marker + 28])[0]
+        duration = unpack(">Q", data[marker + 28 : marker + 36])[0]
+    else:
+        raise AssertionError(f"unsupported mvhd version: {version}")
+    return duration / timescale
+
+
+class _PublicSiteParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.forms = 0
+        self.links: list[str] = []
+        self.remote_scripts: list[str] = []
+        self.video_tracks: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if tag == "form":
+            self.forms += 1
+        if tag == "a" and values.get("href"):
+            self.links.append(str(values["href"]))
+        if tag == "script" and str(values.get("src", "")).startswith(("http://", "https://")):
+            self.remote_scripts.append(str(values["src"]))
+        if tag == "track":
+            self.video_tracks.append(values)
 
 
 def test_readme_states_product_limits() -> None:
@@ -116,6 +155,34 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "ruff check" in workflow
     assert "pytest" in workflow
     assert "scopeproof_core.evals.runner" in workflow
+
+
+def test_locked_development_environment_is_documented_and_verified() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    guide = Path("docs/development-environment.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+    lock = Path("uv.lock").read_text(encoding="utf-8")
+
+    assert Path(".python-version").read_text(encoding="utf-8").strip() == "3.12"
+    assert 'name = "scopeproof"' in lock
+    assert 'name = "streamlit"' in lock
+    assert "uv sync --extra dev --locked" in guide
+    assert "uv run pytest" in guide
+    assert "uv run scopeproof benchmark" in guide
+    assert "Streamlit 1.59.2" in guide
+    assert "Streamlit 1.57.0" in guide
+    assert "testing-interface regression" in guide
+    assert "locked-environment:" in workflow
+    assert "astral-sh/setup-uv@" not in workflow
+    assert "python -m pip install uv==0.11.29" in workflow
+    assert "python -m uv sync --extra dev --locked" in workflow
+    assert (
+        "python -m uv run python -m pytest -q tests/test_repository_contracts.py"
+        in workflow
+    )
+    assert "python -m uv run scopeproof benchmark" in workflow
+    assert "needs: [compatibility-python-311, locked-environment]" in workflow
+    assert "[reproducible development environment](docs/development-environment.md)" in readme
 
 
 def test_ci_avoids_duplicate_feature_branch_runs() -> None:
@@ -314,7 +381,7 @@ def test_ci_validates_declared_minimum_python() -> None:
     assert "python -m pip wheel . --no-deps" in compatibility
     assert "scopeproof --version" in compatibility
     assert "scopeproof-web --version" in compatibility
-    assert "needs: compatibility-python-311" in verify
+    assert "needs: [compatibility-python-311, locked-environment]" in verify
 
 
 def test_readme_documents_all_export_formats() -> None:
@@ -428,3 +495,130 @@ def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
     with Image.open(image_path) as image:
         assert image.format == "PNG"
         assert image.size == (1200, 1200)
+
+
+def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(
+        encoding="utf-8"
+    )
+    qualification = Path("docs/alpha/public-pr-qualification-checklist.md").read_text(
+        encoding="utf-8"
+    )
+    criteria = Path(
+        "docs/alpha/acceptance-criteria-confirmation-template.md"
+    ).read_text(encoding="utf-8")
+    outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+    protocol = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
+
+    assert all(f"Minute {minute}" in quickstart for minute in range(1, 11))
+    assert "scopeproof alpha init" in quickstart
+    assert "scopeproof alpha outcome" in quickstart
+    assert "source owner" in qualification.lower()
+    assert "No confidential information" in qualification
+    assert "one criterion per line" in criteria.lower()
+    assert "found_useful_gap" in outcome
+    assert "showed_only_known_information" in outcome
+    assert "created_friction" in outcome
+    assert "report consent" in outcome.lower()
+    assert "quotation consent" in outcome.lower()
+    prohibited = ("participant name", "email address", "linkedin profile", "dm transcript")
+    combined = "\n".join((quickstart, qualification, criteria, outcome)).lower()
+    assert all(term not in combined for term in prohibited)
+    assert (
+        "[public-alpha participant quickstart](docs/alpha/participant-quickstart.md)"
+        in readme
+    )
+    assert "docs/alpha/participant-quickstart.md" in protocol
+
+
+def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() -> None:
+    index_path = Path("site/index.html")
+    styles_path = Path("site/styles.css")
+    transcript_path = Path("site/demo-transcript.html")
+    video_path = Path("site/assets/scopeproof-captioned-demo.mp4")
+    captions_path = Path("site/assets/scopeproof-captioned-demo.vtt")
+    poster_path = Path("site/assets/scopeproof-demo-poster.jpg")
+    alpha_visual_path = Path("site/assets/scopeproof-linkedin-alpha.png")
+    disclosure = (
+        "This is a deliberately constructed demo case. ScopeProof uses deterministic "
+        "evidence rules and human review; it does not guarantee correctness or replace QA."
+    )
+
+    html = index_path.read_text(encoding="utf-8")
+    css = styles_path.read_text(encoding="utf-8")
+    transcript = transcript_path.read_text(encoding="utf-8")
+    captions = captions_path.read_text(encoding="utf-8")
+    parser = _PublicSiteParser()
+    parser.feed(html)
+
+    assert html.count("<h1") == 1
+    assert disclosure in html
+    assert disclosure in transcript
+    assert "PR → Criteria → Evidence → Decisions → Outcome" in html
+    assert "Likes, views, stars, impressions, and downloads are not product validation." in html
+    assert "https://github.com/YuzeJ21/Scope-Proof" in html
+    assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.22" in html
+    assert (
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
+        in html
+    )
+    linkedin_links = [
+        urlsplit(link)
+        for link in parser.links
+        if urlsplit(link).hostname == "www.linkedin.com"
+    ]
+    assert len(linkedin_links) == 1
+    assert linkedin_links[0].scheme == "https"
+    assert linkedin_links[0].path == "/"
+    assert "DM" in html
+    assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md" in html
+    assert parser.forms == 0
+    assert parser.remote_scripts == []
+    assert "analytics" not in html.lower()
+    assert "@media (prefers-reduced-motion: reduce)" in css
+    assert ":focus-visible" in css
+    assert parser.video_tracks == [
+        {
+            "kind": "captions",
+            "src": "assets/scopeproof-captioned-demo.vtt",
+            "srclang": "en",
+            "label": "English",
+            "default": None,
+        }
+    ]
+    assert captions.startswith("WEBVTT\n")
+    assert disclosure in captions
+    assert video_path.read_bytes()[4:8] == b"ftyp"
+    assert 59.9 <= _mp4_duration_seconds(video_path) <= 60.1
+    assert video_path.stat().st_size > 100_000
+    with Image.open(poster_path) as poster:
+        assert poster.size == (1280, 720)
+    with Image.open(alpha_visual_path) as alpha_visual:
+        assert alpha_visual.size == (1200, 1200)
+
+
+def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> None:
+    workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
+
+    assert "  push:\n    branches: [main]\n  workflow_dispatch:" in workflow
+    assert "pull_request_target" not in workflow
+    assert "schedule:" not in workflow
+    assert "contents: read" in workflow
+    assert "pages: write" in workflow
+    assert "id-token: write" in workflow
+    assert "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0" in workflow
+    assert "actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0" in workflow
+    assert (
+        "actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0"
+        in workflow
+    )
+    assert "actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0" in workflow
+    assert "path: site" in workflow
+    assert "github-pages" in workflow
+    assert "cancel-in-progress: true" in workflow
+    for line in workflow.splitlines():
+        if "uses:" in line:
+            reference = line.split("@", maxsplit=1)[1].split()[0]
+            assert len(reference) == 40
+            assert all(character in "0123456789abcdef" for character in reference)
