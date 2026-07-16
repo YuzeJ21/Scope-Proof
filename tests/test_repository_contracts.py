@@ -1,7 +1,42 @@
 import tomllib
+from html.parser import HTMLParser
 from pathlib import Path
+from struct import unpack
 
 from PIL import Image
+
+
+def _mp4_duration_seconds(path: Path) -> float:
+    data = path.read_bytes()
+    marker = data.find(b"mvhd")
+    assert marker >= 0, "MP4 must contain an mvhd movie header"
+    version = data[marker + 4]
+    if version == 0:
+        timescale = unpack(">I", data[marker + 16 : marker + 20])[0]
+        duration = unpack(">I", data[marker + 20 : marker + 24])[0]
+    elif version == 1:
+        timescale = unpack(">I", data[marker + 24 : marker + 28])[0]
+        duration = unpack(">Q", data[marker + 28 : marker + 36])[0]
+    else:
+        raise AssertionError(f"unsupported mvhd version: {version}")
+    return duration / timescale
+
+
+class _PublicSiteParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.forms = 0
+        self.remote_scripts: list[str] = []
+        self.video_tracks: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if tag == "form":
+            self.forms += 1
+        if tag == "script" and str(values.get("src", "")).startswith(("http://", "https://")):
+            self.remote_scripts.append(str(values["src"]))
+        if tag == "track":
+            self.video_tracks.append(values)
 
 
 def test_readme_states_product_limits() -> None:
@@ -484,3 +519,59 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
         in readme
     )
     assert "docs/alpha/participant-quickstart.md" in protocol
+
+
+def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() -> None:
+    index_path = Path("site/index.html")
+    styles_path = Path("site/styles.css")
+    transcript_path = Path("site/demo-transcript.html")
+    video_path = Path("site/assets/scopeproof-captioned-demo.mp4")
+    captions_path = Path("site/assets/scopeproof-captioned-demo.vtt")
+    poster_path = Path("site/assets/scopeproof-demo-poster.jpg")
+    alpha_visual_path = Path("site/assets/scopeproof-linkedin-alpha.png")
+    disclosure = (
+        "This is a deliberately constructed demo case. ScopeProof uses deterministic "
+        "evidence rules and human review; it does not guarantee correctness or replace QA."
+    )
+
+    html = index_path.read_text(encoding="utf-8")
+    css = styles_path.read_text(encoding="utf-8")
+    transcript = transcript_path.read_text(encoding="utf-8")
+    captions = captions_path.read_text(encoding="utf-8")
+    parser = _PublicSiteParser()
+    parser.feed(html)
+
+    assert html.count("<h1") == 1
+    assert disclosure in html
+    assert disclosure in transcript
+    assert "PR → Criteria → Evidence → Decisions → Outcome" in html
+    assert "Likes, views, stars, impressions, and downloads are not product validation." in html
+    assert "https://github.com/YuzeJ21/Scope-Proof" in html
+    assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.22" in html
+    assert "../docs/alpha/participant-quickstart.md" in html
+    assert "https://www.linkedin.com/" in html
+    assert "DM" in html
+    assert "../USE_POLICY.md" in html
+    assert parser.forms == 0
+    assert parser.remote_scripts == []
+    assert "analytics" not in html.lower()
+    assert "@media (prefers-reduced-motion: reduce)" in css
+    assert ":focus-visible" in css
+    assert parser.video_tracks == [
+        {
+            "kind": "captions",
+            "src": "assets/scopeproof-captioned-demo.vtt",
+            "srclang": "en",
+            "label": "English",
+            "default": None,
+        }
+    ]
+    assert captions.startswith("WEBVTT\n")
+    assert disclosure in captions
+    assert video_path.read_bytes()[4:8] == b"ftyp"
+    assert 59.9 <= _mp4_duration_seconds(video_path) <= 60.1
+    assert video_path.stat().st_size > 100_000
+    with Image.open(poster_path) as poster:
+        assert poster.size == (1280, 720)
+    with Image.open(alpha_visual_path) as alpha_visual:
+        assert alpha_visual.size == (1200, 1200)
