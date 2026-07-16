@@ -165,6 +165,9 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "uv sync --extra dev --locked" in guide
     assert "uv run pytest" in guide
     assert "uv run scopeproof benchmark" in guide
+    assert "Streamlit 1.59.2" in guide
+    assert "Streamlit 1.57.0" in guide
+    assert "testing-interface regression" in guide
     assert "locked-environment:" in workflow
     assert "astral-sh/setup-uv@" in workflow
     assert "uv sync --extra dev --locked" in workflow
