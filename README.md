@@ -26,6 +26,8 @@ ScopeProof turns that review into a requirement-to-evidence matrix. It shows why
 
 ## MVP boundaries
 
+- The repository is published under an [evaluation-only use policy](USE_POLICY.md) and does not
+  grant an open-source license.
 - No paid LLM API and no model-generated verdicts.
 - Supports public repositories only.
 - Anonymous GitHub access works without a token.
@@ -136,6 +138,9 @@ free rate limit, but it is not required or persisted. The CLI never comments on 
 executes its code, or converts static candidates into runtime verification.
 
 ## Contributor setup
+
+Read the [evaluation-only use policy](USE_POLICY.md) before cloning or proposing a contribution.
+Public visibility does not grant permission beyond evaluation and review.
 
 Clone the repository to run the Streamlit workbench or contribute changes:
 

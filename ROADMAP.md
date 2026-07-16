@@ -21,8 +21,8 @@ Exit conditions:
 - [ ] At least one genuine public pull request is reviewed against source-owner-confirmed criteria.
 - [ ] The source owner records whether the report found a useful pre-merge gap, produced only known
   information, or created friction.
-- [ ] **Software license decision:** the repository owner explicitly chooses a license or explicitly
-  records that no license is granted. ScopeProof does not infer this decision.
+- [x] **Software license decision:** the repository owner chose an evaluation-only use policy and
+  explicitly records that no open-source license is granted.
 
 ## Stage 2 — Limited beta
 
@@ -52,7 +52,7 @@ the owner makes a separate explicit product decision.
 - No recurring monitor should poll for evidence when nothing new exists. Record the exact waiting
   condition once, then continue with another independent, evidence-backed maintenance slice.
 - Do not execute pull-request code or promote static candidates to test or runtime verification.
-- Do not choose a software license on the owner's behalf.
+- Do not broaden or replace the recorded evaluation-only use policy without a new owner decision.
 - Do not refactor large modules solely to create activity; use a demonstrated defect or repeated
   maintenance cost to define the slice.
 
@@ -60,7 +60,6 @@ the owner makes a separate explicit product decision.
 
 1. A source owner must confirm the normalized acceptance criteria for a genuine public PR.
 2. A human reviewer must record the outcome after reviewing ScopeProof's report.
-3. The repository owner must make the software license decision.
 
 Until those events occur, engineering work can improve verified compatibility, documentation,
 onboarding, and defects found through real product use, but it cannot truthfully close the beta

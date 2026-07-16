@@ -26,6 +26,63 @@ def test_project_has_no_paid_llm_runtime_dependency() -> None:
     assert "anthropic" not in dependencies
 
 
+def test_public_docs_state_evaluation_only_use_policy() -> None:
+    policy = Path("USE_POLICY.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+    contributing = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+
+    assert "intentionally published without an open-source license" in policy
+    assert "evaluation and review only" in policy
+    assert "No additional permission is granted" in policy
+    assert "GitHub Terms of Service" in policy
+    assert "applicable law" in policy
+    assert "warranty" in policy.lower()
+    assert "correctness claim" in policy
+    assert "service commitment" in policy
+    assert "support obligation" in policy
+    assert "repository owner" in policy
+    assert "[evaluation-only use policy](USE_POLICY.md)" in readme
+    assert "[evaluation-only use policy](USE_POLICY.md)" in contributing
+    assert "- [x] **Software license decision:**" in roadmap
+    assert not Path("LICENSE").exists()
+
+
+def test_python_312_ci_enforces_local_coverage_floor() -> None:
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    dev_dependencies = config["project"]["optional-dependencies"]["dev"]
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    gitignore = Path(".gitignore").read_text(encoding="utf-8")
+    compatibility = workflow.split("  compatibility-python-311:", maxsplit=1)[1].split(
+        "\n  verify:", maxsplit=1
+    )[0]
+    verify = workflow.split("\n  verify:", maxsplit=1)[1]
+
+    assert "pytest-cov>=6,<7" in dev_dependencies
+    assert "python -m pytest -q" in compatibility
+    assert "--cov" not in compatibility
+    assert "--cov=scopeproof_core" in verify
+    assert "--cov=apps" in verify
+    assert "--cov-report=term-missing:skip-covered" in verify
+    assert "--cov-fail-under=95" in verify
+    assert "codecov" not in workflow.lower()
+    assert "coverage.xml" not in workflow
+    assert ".coverage" in gitignore.splitlines()
+    assert ".coverage.*" in gitignore.splitlines()
+
+
+def test_internal_engineering_archive_has_provenance_index() -> None:
+    archive = Path("docs/superpowers/README.md").read_text(encoding="utf-8")
+    contributing = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert "historical engineering records" in archive
+    assert "not current product status" in archive
+    assert "not runtime evidence" in archive
+    assert "not adoption evidence" in archive
+    assert "not a sequential user manual" in archive
+    assert "[engineering archive index](docs/superpowers/README.md)" in contributing
+
+
 def test_wheel_includes_bundled_benchmark_data() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]

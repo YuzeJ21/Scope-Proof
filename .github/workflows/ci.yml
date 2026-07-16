@@ -50,7 +50,13 @@ jobs:
       - name: Lint
         run: python -m ruff check .
       - name: Test
-        run: python -m pytest -q
+        run: >-
+          python -m pytest
+          --cov=scopeproof_core
+          --cov=apps
+          --cov-report=term-missing:skip-covered
+          --cov-fail-under=95
+          -q
       - name: Deterministic benchmark
         run: python -m scopeproof_core.evals.runner
       - name: Installed wheel smoke
