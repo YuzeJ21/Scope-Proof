@@ -1,0 +1,16 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:05.000
+This is a deliberately constructed demo case. ScopeProof uses deterministic evidence rules and human review; it does not guarantee correctness or replace QA.
+
+00:00:05.000 --> 00:00:15.000
+The source owner confirms normalized acceptance criteria before analysis. ScopeProof does not invent product intent.
+
+00:00:15.000 --> 00:00:35.000
+Deterministic rules cite implementation and test candidates—or state exactly what evidence is missing.
+
+00:00:35.000 --> 00:00:50.000
+A human decides what the evidence means. Static candidates are never presented as runtime verification.
+
+00:00:50.000 --> 00:01:00.000
+Record one honest outcome. ScopeProof supports the review; it does not guarantee correctness or replace QA.

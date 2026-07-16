@@ -1,0 +1,20 @@
+{
+  "asset": "scopeproof-captioned-demo.mp4",
+  "audio": false,
+  "dimensions": [
+    1280,
+    720
+  ],
+  "disclosure": "Deliberately constructed demo \u2014 deterministic evidence rules and human review. ScopeProof does not guarantee correctness or replace QA.",
+  "duration_seconds": 60,
+  "frames_per_second": 2,
+  "generator": "scripts/build_public_demo.py",
+  "source_frames": [
+    "generated title and disclosure",
+    "demo-criteria.png",
+    "demo-evidence.png",
+    "demo-missing.png",
+    "demo-summary.png"
+  ],
+  "source_type": "deliberately_constructed_demo"
+}
