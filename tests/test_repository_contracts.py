@@ -118,6 +118,27 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "scopeproof_core.evals.runner" in workflow
 
 
+def test_locked_development_environment_is_documented_and_verified() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    guide = Path("docs/development-environment.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+    lock = Path("uv.lock").read_text(encoding="utf-8")
+
+    assert Path(".python-version").read_text(encoding="utf-8").strip() == "3.12"
+    assert 'name = "scopeproof"' in lock
+    assert 'name = "streamlit"' in lock
+    assert "uv sync --extra dev --locked" in guide
+    assert "uv run pytest" in guide
+    assert "uv run scopeproof benchmark" in guide
+    assert "locked-environment:" in workflow
+    assert "astral-sh/setup-uv@" in workflow
+    assert "uv sync --extra dev --locked" in workflow
+    assert "uv run python -m pytest -q tests/test_repository_contracts.py" in workflow
+    assert "uv run scopeproof benchmark" in workflow
+    assert "needs: [compatibility-python-311, locked-environment]" in workflow
+    assert "[reproducible development environment](docs/development-environment.md)" in readme
+
+
 def test_ci_avoids_duplicate_feature_branch_runs() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 
@@ -314,7 +335,7 @@ def test_ci_validates_declared_minimum_python() -> None:
     assert "python -m pip wheel . --no-deps" in compatibility
     assert "scopeproof --version" in compatibility
     assert "scopeproof-web --version" in compatibility
-    assert "needs: compatibility-python-311" in verify
+    assert "needs: [compatibility-python-311, locked-environment]" in verify
 
 
 def test_readme_documents_all_export_formats() -> None:

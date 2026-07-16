@@ -139,6 +139,8 @@ executes its code, or converts static candidates into runtime verification.
 
 ## Contributor setup
 
+For a fully pinned setup, use the [reproducible development environment](docs/development-environment.md). The standard editable setup remains available below.
+
 Read the [evaluation-only use policy](USE_POLICY.md) before cloning or proposing a contribution.
 Public visibility does not grant permission beyond evaluation and review.
 
