@@ -15,6 +15,8 @@ its linked release entry for the exact published source and assets.
   benchmark, and installed-wheel command checks.
 - Public roadmap, structured contribution forms, and a pull-request evidence checklist.
 - A repository use policy that records evaluation-only access without an open-source license.
+- Future wheels built from protected source carry the evaluation-only use policy and expose its
+  canonical project URL without declaring an open-source license.
 
 ### Documentation
 
