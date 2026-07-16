@@ -39,6 +39,25 @@ class AlphaFrictionStage(StrEnum):
     INTEGRATION = "integration"
 
 
+class AlphaQualification(BaseModel):
+    """Session-safe preflight contract for a genuine public-alpha review."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    public_pr_url: str = Field(pattern=PUBLIC_PR_PATTERN)
+    requirements_source_url: HttpUrl
+    participant_role: ParticipantRole
+    source_owner_confirmed: Literal[True]
+    no_confidential_information: Literal[True]
+
+    @field_validator("requirements_source_url")
+    @classmethod
+    def require_https_source(cls, value: HttpUrl) -> HttpUrl:
+        if value.scheme != "https":
+            raise ValueError("requirements source must use HTTPS")
+        return value
+
+
 class AlphaPublicationConsent(BaseModel):
     """Separate permission boundaries for reports and quotations."""
 

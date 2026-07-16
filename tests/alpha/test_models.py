@@ -8,6 +8,7 @@ from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
     AlphaPublicationConsent,
+    AlphaQualification,
     ParticipantRole,
 )
 
@@ -21,6 +22,44 @@ def valid_record_data() -> dict[str, object]:
         "no_confidential_information": True,
         "confirmed_criteria": ["Export CSV", "Show an error state"],
     }
+
+
+def test_alpha_qualification_accepts_only_confirmed_public_safe_inputs() -> None:
+    qualification = AlphaQualification(
+        public_pr_url="https://github.com/acme/repo/pull/7",
+        requirements_source_url="https://github.com/acme/repo/issues/6",
+        participant_role=ParticipantRole.PRODUCT_MANAGER,
+        source_owner_confirmed=True,
+        no_confidential_information=True,
+    )
+
+    assert qualification.source_owner_confirmed is True
+    assert qualification.no_confidential_information is True
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("public_pr_url", "https://github.com/acme/repo/issues/7"),
+        ("requirements_source_url", "http://example.com/requirements"),
+        ("source_owner_confirmed", False),
+        ("no_confidential_information", False),
+    ],
+)
+def test_alpha_qualification_rejects_unqualified_inputs(
+    field: str, value: object
+) -> None:
+    data: dict[str, object] = {
+        "public_pr_url": "https://github.com/acme/repo/pull/7",
+        "requirements_source_url": "https://github.com/acme/repo/issues/6",
+        "participant_role": ParticipantRole.QA,
+        "source_owner_confirmed": True,
+        "no_confidential_information": True,
+    }
+    data[field] = value
+
+    with pytest.raises(ValidationError):
+        AlphaQualification(**data)
 
 
 def test_alpha_record_has_privacy_safe_defaults() -> None:

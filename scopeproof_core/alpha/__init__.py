@@ -6,6 +6,7 @@ from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
     AlphaPublicationConsent,
+    AlphaQualification,
     ParticipantRole,
 )
 from scopeproof_core.alpha.service import (
@@ -21,6 +22,7 @@ __all__ = [
     "AlphaFrictionStage",
     "AlphaOutcome",
     "AlphaPublicationConsent",
+    "AlphaQualification",
     "JsonAlphaCaseStore",
     "ParticipantRole",
     "default_alpha_case_directory",
