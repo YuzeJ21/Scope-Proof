@@ -486,6 +486,33 @@ def test_linkedin_alpha_launch_package_is_current_and_truthful() -> None:
         assert required_field in playbook
 
 
+def test_concierge_dm_first_outreach_is_manual_bounded_and_truthful() -> None:
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required_text in (
+        "## DM-first outreach",
+        "### Warm-contact message",
+        "### Cold-contact message",
+        "### One optional follow-up",
+        "no sooner than seven days",
+        "Do not send another message",
+        "sent manually",
+        "Do not automate",
+        "Do not send private code",
+        "genuine public PR",
+        "own or are authorized to confirm",
+        "No paid LLM API",
+    ):
+        assert required_text in playbook
+
+    assert "I noticed your public work on [verified public project or PR]" in playbook
+    assert "I know your team needs" not in playbook
+    assert "ScopeProof customers" not in playbook
+    assert "validated accuracy" not in playbook
+
+
 def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
     image_path = Path("docs/assets/scopeproof-linkedin-alpha.png")
 
