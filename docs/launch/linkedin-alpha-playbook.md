@@ -5,6 +5,10 @@ publishes the post and sends every LinkedIn message manually. Do not automate ou
 profiles, create synthetic participants, or report an outcome that a real participant did not
 provide.
 
+The owner runs an accepted case through the single
+[concierge host checklist](../alpha/concierge-host-checklist.md), which links to the authoritative
+qualification, confirmation, review, and outcome instructions.
+
 ## Publish the image-led post
 
 1. Open a new LinkedIn post and choose visibility **Anyone**.

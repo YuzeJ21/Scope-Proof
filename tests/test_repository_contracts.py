@@ -513,6 +513,48 @@ def test_concierge_dm_first_outreach_is_manual_bounded_and_truthful() -> None:
     assert "validated accuracy" not in playbook
 
 
+def test_concierge_host_checklist_indexes_real_alpha_without_contact_data() -> None:
+    checklist_path = Path("docs/alpha/concierge-host-checklist.md")
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
+        encoding="utf-8"
+    )
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+
+    assert checklist_path.is_file()
+    checklist = checklist_path.read_text(encoding="utf-8")
+    for required_link in (
+        "../../README.md#quickstart",
+        "public-pr-qualification-checklist.md",
+        "acceptance-criteria-confirmation-template.md",
+        "participant-quickstart.md",
+        "../dogfood/public-pr-protocol.md",
+        "outcome-form.md",
+    ):
+        assert required_link in checklist
+
+    for status in (
+        "not_started",
+        "qualified",
+        "criteria_confirmed",
+        "review_completed",
+        "outcome_received",
+        "declined",
+        "withdrawn",
+    ):
+        assert f"`{status}`" in checklist
+
+    prohibited_fields = (
+        "participant name",
+        "email address",
+        "linkedin profile",
+        "dm transcript",
+        "contact list",
+    )
+    assert all(field not in checklist.lower() for field in prohibited_fields)
+    assert "../alpha/concierge-host-checklist.md" in playbook
+    assert "docs/alpha/concierge-host-checklist.md" in roadmap
+
+
 def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
     image_path = Path("docs/assets/scopeproof-linkedin-alpha.png")
 
