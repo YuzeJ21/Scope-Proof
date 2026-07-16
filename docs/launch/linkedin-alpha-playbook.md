@@ -11,7 +11,7 @@ provide.
 2. Upload `docs/assets/scopeproof-linkedin-alpha.png` as the post image.
 3. Add the alt text below to the image.
 4. Paste only the body under `Copy-ready post` from `linkedin-draft.md`.
-5. Confirm that the repository URL, `v0.1.22` release URL, DM call to action, and required demo
+5. Confirm that the repository URL, `v0.1.23` release URL, DM call to action, and required demo
    disclosure are present. Because the image is the post media, keep the two URLs in the text and
    do not rely on a link-preview card.
 6. Complete the pre-publication checklist below, then publish manually.
@@ -122,7 +122,7 @@ Use `demo-script.md` only after the image post is live and the owner wants a fol
 - [ ] The image is `scopeproof-linkedin-alpha.png`, is legible, and includes the constructed-demo
       boundary.
 - [ ] The post body is no more than 3,000 characters.
-- [ ] The repository and `v0.1.22` release links resolve publicly.
+- [ ] The repository and `v0.1.23` release links resolve publicly.
 - [ ] The exact required demo disclosure is present.
 - [ ] The CTA says `DM me`; no automated outreach or email is enabled.
 - [ ] No customer name, private source, secret, usage metric, testimonial, or unconfirmed result is

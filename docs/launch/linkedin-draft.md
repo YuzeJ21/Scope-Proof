@@ -16,7 +16,7 @@ I am looking for product managers, QA practitioners, and engineers who own or ca
 
 Repository: https://github.com/YuzeJ21/Scope-Proof
 
-Current release: https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.22
+Current release: https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.23
 
 This is a deliberately constructed demo case. ScopeProof uses deterministic evidence rules and human review; it does not guarantee correctness or replace QA.
 
