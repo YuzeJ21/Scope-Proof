@@ -9,6 +9,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from scopeproof_core.alpha.models import AlphaQualification, ParticipantRole
 from scopeproof_core.criteria.service import (
     add_criterion,
     parse_criteria,
@@ -525,6 +526,18 @@ if review_reopen_notice is not None:
     st.success(review_reopen_notice)
 
 st.header("1 · Start Review")
+st.markdown("**Qualify → Confirm → Analyze → Decide → Outcome**")
+st.caption(
+    "Five bounded stages keep source ownership, human confirmation, evidence analysis, "
+    "decisions, and outcomes separate."
+)
+review_path = st.radio(
+    "Review path",
+    options=["Confirmed public-alpha review", "Technical smoke only"],
+    index=1,
+    key="review_path",
+    help="A technical smoke checks the workflow but is not user validation.",
+)
 pr_url = st.text_input(
     "Public GitHub pull request URL",
     placeholder="https://github.com/owner/repository/pull/123",
@@ -541,6 +554,54 @@ if pr_url.strip():
         )
     else:
         pr_url_is_valid = True
+alpha_qualification_ready = True
+if review_path == "Confirmed public-alpha review":
+    st.caption(
+        "Qualification is session-only. Confirm a genuine public case before fetching; "
+        "ScopeProof does not store these preflight fields here."
+    )
+    requirements_source_url = st.text_input(
+        "Public requirements source URL",
+        placeholder="https://github.com/owner/repository/issues/123",
+        key="requirements_source_url",
+    )
+    participant_role = st.selectbox(
+        "Participant role",
+        options=[role.value for role in ParticipantRole],
+        key="participant_role",
+    )
+    source_owner_confirmed = st.checkbox(
+        "I am the source owner or directly authorized to confirm these requirements",
+        key="source_owner_confirmed",
+    )
+    no_confidential_information = st.checkbox(
+        "This review contains no confidential information, secrets, or private links",
+        key="no_confidential_information",
+    )
+    alpha_qualification_ready = False
+    if (
+        pr_url_is_valid
+        and requirements_source_url.strip()
+        and source_owner_confirmed
+        and no_confidential_information
+    ):
+        try:
+            AlphaQualification(
+                public_pr_url=pr_url,
+                requirements_source_url=requirements_source_url,
+                participant_role=ParticipantRole(participant_role),
+                source_owner_confirmed=True,
+                no_confidential_information=True,
+            )
+        except ValueError:
+            st.warning("Use a public HTTPS requirements source and a canonical public PR URL.")
+        else:
+            alpha_qualification_ready = True
+else:
+    st.info(
+        "Technical smoke only — this can check ingestion and reporting, but it is not "
+        "user validation and must not be described as a confirmed alpha outcome."
+    )
 github_token = st.text_input(
     "Optional GitHub token",
     type="password",
@@ -570,7 +631,11 @@ with fetch_column:
     if st.button(
         "Fetch public PR",
         key="fetch_pr",
-        disabled=not pr_url_is_valid or replacement_blocked,
+        disabled=(
+            not pr_url_is_valid
+            or not alpha_qualification_ready
+            or replacement_blocked
+        ),
         use_container_width=True,
     ):
         try:
@@ -670,6 +735,8 @@ if not criteria:
     st.info("Load the demo or prepare at least one criterion to continue.")
 else:
     st.caption(
+        "The source owner must review and explicitly confirm the normalized criteria "
+        "before analysis. "
         "Evidence levels set the minimum proof needed for each criterion: "
         "E1 = implementation or contract candidate; E2 = test candidate; "
         "E3 = manually recorded runtime verification. Static PR analysis can produce "
@@ -1044,6 +1111,7 @@ else:
             st.markdown(f"- {missing}")
     st.markdown("**Recommended next action**")
     st.info(selected_finding.recommended_action)
+    st.code(selected_finding.recommended_action, language=None)
     st.markdown("### Candidate evidence")
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
     if not selected_finding.evidence_ids:
@@ -1359,6 +1427,25 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
+    st.markdown("### Record the alpha outcome")
+    st.caption(
+        "After the participant reviews the evidence and decisions, record exactly one "
+        "truthful outcome. This does not prove correctness, market demand, or repeat use."
+    )
+    st.markdown(
+        "- `found_useful_gap` — surfaced a useful requirement-evidence gap\n"
+        "- `showed_only_known_information` — added no useful new information\n"
+        "- `created_friction` — created material friction; record the stage"
+    )
+    st.code(
+        "scopeproof alpha outcome CASE_ID --review-id REVIEW_ID --head-sha HEAD_SHA "
+        "--result found_useful_gap",
+        language=None,
+    )
+    st.caption(
+        "See docs/alpha/outcome-form.md. Report and quotation permissions are separate "
+        "and off by default."
+    )
     review_save_notice = st.session_state.pop("review_save_notice", None)
     review_matches_local_save = bool(
         review_state is not None
