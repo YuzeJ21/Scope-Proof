@@ -1,29 +1,29 @@
-# LinkedIn Draft — Review Before Posting
+# LinkedIn Post — ScopeProof Public Alpha
 
-## Draft
+## Copy-ready post
 
-I built ScopeProof, a local-first tool for a narrow question before merge:
+Green CI is useful. It is not the same as complete product intent.
 
-**Does this PR have auditable implementation and test evidence for the
-user-confirmed acceptance criteria?**
+I built ScopeProof to answer one narrow pre-merge question:
 
-It does not use a paid LLM API. A reviewer confirms atomic criteria, ScopeProof
-maps deterministic candidate evidence to immutable GitHub commit links, and it
-keeps missing or partial evidence visible instead of turning it into a confident
-pass. Reviewers can record decisions, exceptions, and manually supplied runtime
-observations separately from static code evidence.
+**Does this PR have auditable implementation and test evidence for the acceptance criteria a reviewer confirmed?**
 
-The current demo is deliberately constructed. It shows a PR-shaped CSV-export
-case where a happy path exists but other promised behavior is absent. That is a
-workflow demonstration—not a customer case study, not a claim of runtime
-correctness, and not a replacement for QA or engineering review.
+ScopeProof is a local-first, deterministic evidence assistant. It does not use a paid LLM API. A reviewer first confirms normalized, atomic acceptance criteria. ScopeProof then maps candidate implementation and test evidence to each criterion, links findings to an immutable GitHub commit, and keeps partial or missing evidence visible.
 
-I am looking for feedback from product, QA, and engineering teams on whether
-the requirement-to-evidence workflow is useful before merge.
+Static implementation evidence is not runtime verification. Reviewers record runtime observations, decisions, and exceptions separately. ScopeProof does not execute untrusted repository code and does not replace QA or engineering review.
 
-## Required disclosure
+I am looking for product managers, QA practitioners, and engineers who own or can confirm the requirements for a genuine public pull request. If you are willing to try one supervised public-alpha review, DM me with the public PR URL and your relationship to its acceptance criteria. Please do not send private source, credentials, customer information, or confidential requirements.
 
-Add the [demo disclosure](demo-script.md#required-disclosure) verbatim to any
-post containing the constructed demo. Do not publish until a reviewer checks
-that no customer name, private source, usage metric, or unconfirmed finding was
-added.
+Repository: https://github.com/YuzeJ21/Scope-Proof
+
+Current release: https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.22
+
+This is a deliberately constructed demo case. ScopeProof uses deterministic evidence rules and human review; it does not guarantee correctness or replace QA.
+
+#ProductManagement #QualityAssurance #SoftwareEngineering #DeveloperTools
+
+## Publication boundary
+
+Post only after completing `linkedin-alpha-playbook.md`. Public repository visibility does not
+grant an open-source license; ScopeProof remains available for evaluation and review under its
+[use policy](../../USE_POLICY.md).
