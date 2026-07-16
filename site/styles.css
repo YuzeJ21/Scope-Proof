@@ -75,6 +75,7 @@ footer div { display: flex; flex-wrap: wrap; gap: 1.5rem; }
   .hero, .alpha-section { grid-template-columns: 1fr; }
   .hero { padding-top: 4rem; }
   .hero-visual { max-width: 38rem; }
+  .hero-visual::before { inset: 6% 0 -6% 6%; }
   .workflow-grid { grid-template-columns: repeat(2, 1fr); }
 }
 

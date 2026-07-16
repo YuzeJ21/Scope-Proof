@@ -382,7 +382,7 @@ def test_first_use_flow_labels_five_stages_and_defaults_to_technical_smoke() -> 
     visible = "\n".join(
         item.value for item in [*app.markdown, *app.caption, *app.info]
     )
-    assert "Qualify → Confirm → Analyze → Decide → Outcome" in visible
+    assert "PR → Criteria → Evidence → Decisions → Outcome" in visible
     assert app.radio(key="review_path").value == "Technical smoke only"
     assert "not user validation" in visible
 

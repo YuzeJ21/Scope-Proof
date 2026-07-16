@@ -526,7 +526,7 @@ if review_reopen_notice is not None:
     st.success(review_reopen_notice)
 
 st.header("1 · Start Review")
-st.markdown("**Qualify → Confirm → Analyze → Decide → Outcome**")
+st.markdown("**PR → Criteria → Evidence → Decisions → Outcome**")
 st.caption(
     "Five bounded stages keep source ownership, human confirmation, evidence analysis, "
     "decisions, and outcomes separate."
