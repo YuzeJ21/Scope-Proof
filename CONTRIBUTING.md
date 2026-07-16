@@ -6,6 +6,10 @@ deterministic, informational, and non-blocking boundaries.
 
 Review the [public roadmap](ROADMAP.md) before proposing broader scope. The
 [changelog](CHANGELOG.md) links active development to authoritative published releases.
+Read the [evaluation-only use policy](USE_POLICY.md) before using or contributing to the
+repository; public visibility does not grant an open-source license. Historical design and
+implementation records are explained in the
+[engineering archive index](docs/superpowers/README.md).
 
 ## Before opening a pull request
 

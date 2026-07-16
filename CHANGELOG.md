@@ -14,11 +14,16 @@ its linked release entry for the exact published source and assets.
 - CI evidence for the declared Python 3.11 minimum, including the full test suite, deterministic
   benchmark, and installed-wheel command checks.
 - Public roadmap, structured contribution forms, and a pull-request evidence checklist.
+- A repository use policy that records evaluation-only access without an open-source license.
 
 ### Documentation
 
 - The complete Markdown, JSON, CSV, and HTML export inventory.
 - Explicit evidence-gated public-alpha, limited-beta, and beta-expansion boundaries.
+- Provenance guidance separating historical engineering records from current product, runtime,
+  and adoption evidence.
+- A Python 3.12 CI coverage floor for the core engine and application layer, with no external
+  coverage upload.
 
 ## Published releases
 

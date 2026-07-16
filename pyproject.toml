@@ -21,6 +21,7 @@ scopeproof-web = "apps.web.launcher:main"
 [project.optional-dependencies]
 dev = [
   "pytest>=9.0.3,<10",
+  "pytest-cov>=6,<7",
   "ruff>=0.5,<1",
 ]
 

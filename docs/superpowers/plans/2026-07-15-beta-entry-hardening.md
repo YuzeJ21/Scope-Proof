@@ -86,10 +86,11 @@
 - [ ] Run `./.venv/bin/python -m ruff check .`.
 - [ ] Run `./.venv/bin/python -m pytest -q`.
 - [ ] Run the Python 3.12 coverage command and confirm the floor.
-- [ ] Run `./.venv/bin/python benchmarks/run_benchmark.py --check`.
+- [ ] Run `./.venv/bin/python -m scopeproof_core.evals.runner`.
 - [ ] Run `./.venv/bin/python -m pip check`.
 - [ ] Build the wheel and install it into a temporary clean virtual environment.
-- [ ] Smoke-test `scopeproof --version`, `scopeproof-action --version`, and the Streamlit health endpoint without retaining generated artifacts.
+- [ ] Smoke-test `scopeproof --version`, `scopeproof-web --version`, the GitHub Action runner tests,
+  and the Streamlit health endpoint without retaining generated artifacts.
 - [ ] Parse the modified workflow as YAML.
 - [ ] Run `git diff --check`, inspect the complete diff, and confirm no unrelated files, secrets, paid-service dependencies, scheduled workflows, or evidence overclaims were introduced.
 
