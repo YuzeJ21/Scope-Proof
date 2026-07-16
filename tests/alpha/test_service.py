@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
@@ -15,6 +18,8 @@ def initialized_case():
         public_pr_url="https://github.com/acme/repo/pull/7",
         requirements_source_url="https://github.com/acme/repo/issues/6",
         participant_role=ParticipantRole.QA,
+        source_owner_confirmed=True,
+        no_confidential_information=True,
         confirmed_criteria=["Export CSV"],
     )
 
@@ -26,6 +31,24 @@ def test_initialize_alpha_case_is_qualified_and_unpublished() -> None:
     assert record.no_confidential_information is True
     assert record.publication_consent.report is False
     assert record.publication_consent.quote is False
+
+
+@pytest.mark.parametrize(
+    ("source_owner_confirmed", "no_confidential_information"),
+    [(False, True), (True, False)],
+)
+def test_initialize_alpha_case_requires_explicit_safe_confirmations(
+    source_owner_confirmed: bool, no_confidential_information: bool
+) -> None:
+    with pytest.raises(ValidationError):
+        initialize_alpha_case(
+            public_pr_url="https://github.com/acme/repo/pull/7",
+            requirements_source_url="https://github.com/acme/repo/issues/6",
+            participant_role=ParticipantRole.QA,
+            source_owner_confirmed=source_owner_confirmed,
+            no_confidential_information=no_confidential_information,
+            confirmed_criteria=["Export CSV"],
+        )
 
 
 def test_record_alpha_outcome_returns_completed_validated_copy() -> None:
@@ -83,4 +106,3 @@ def test_public_summary_omits_local_notes_and_consent_fields() -> None:
     assert payload["outcome"] == "showed_only_known_information"
     assert "outcome_notes" not in payload
     assert "publication_consent" not in payload
-

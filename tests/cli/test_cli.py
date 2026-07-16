@@ -552,6 +552,7 @@ def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str]:
             "qa",
             "--requirements",
             str(requirements),
+            "--source-owner-confirmed",
             "--confirmed-no-confidential-information",
             "--storage-dir",
             str(store),
@@ -590,11 +591,37 @@ def test_alpha_init_requires_confidentiality_confirmation(
                 "qa",
                 "--requirements",
                 str(requirements),
+                "--source-owner-confirmed",
             ]
         )
 
     assert error.value.code == 2
     assert "--confirmed-no-confidential-information" in capsys.readouterr().err
+
+
+def test_alpha_init_requires_source_owner_confirmation(tmp_path: Path, capsys) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "alpha",
+                "init",
+                "--pr",
+                "https://github.com/acme/repo/pull/7",
+                "--requirements-source",
+                "https://github.com/acme/repo/issues/6",
+                "--participant-role",
+                "qa",
+                "--requirements",
+                str(requirements),
+                "--confirmed-no-confidential-information",
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "--source-owner-confirmed" in capsys.readouterr().err
 
 
 def test_alpha_outcome_and_consent_gated_public_summary(

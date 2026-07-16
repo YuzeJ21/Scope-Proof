@@ -19,6 +19,8 @@ def initialize_alpha_case(
     public_pr_url: str,
     requirements_source_url: str,
     participant_role: ParticipantRole,
+    source_owner_confirmed: bool,
+    no_confidential_information: bool,
     confirmed_criteria: list[str],
 ) -> AlphaCaseRecord:
     """Create a qualified local case without claiming an outcome."""
@@ -26,8 +28,8 @@ def initialize_alpha_case(
         public_pr_url=public_pr_url,
         requirements_source_url=requirements_source_url,
         participant_role=participant_role,
-        source_owner_confirmed=True,
-        no_confidential_information=True,
+        source_owner_confirmed=source_owner_confirmed,
+        no_confidential_information=no_confidential_information,
         confirmed_criteria=confirmed_criteria,
     )
 

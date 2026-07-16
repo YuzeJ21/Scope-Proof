@@ -12,7 +12,7 @@ Use public sources only. Do not paste tokens, private repository content, custom
 4. **Minute 4 — initialize local evidence.** Run:
 
    ```bash
-   scopeproof alpha init --pr PR_URL --requirements-source REQUIREMENTS_URL --participant-role qa --requirements requirements.txt --confirmed-no-confidential-information
+   scopeproof alpha init --pr PR_URL --requirements-source REQUIREMENTS_URL --participant-role qa --requirements requirements.txt --source-owner-confirmed --confirmed-no-confidential-information
    ```
 
 5. **Minute 5 — run the review.** Run `scopeproof review --pr PR_URL --requirements requirements.txt --report scopeproof-review.md` and retain its printed review ID and reviewed head SHA.

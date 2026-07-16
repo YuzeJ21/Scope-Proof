@@ -185,6 +185,8 @@ def _alpha_init(args: argparse.Namespace) -> int:
         public_pr_url=args.pr,
         requirements_source_url=args.requirements_source,
         participant_role=ParticipantRole(args.participant_role),
+        source_owner_confirmed=args.source_owner_confirmed,
+        no_confidential_information=args.confirmed_no_confidential_information,
         confirmed_criteria=[criterion.text for criterion in criteria],
     )
     path = JsonAlphaCaseStore(Path(args.storage_dir)).save(record)
@@ -290,6 +292,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     alpha_init.add_argument(
         "--requirements", required=True, help="One confirmed criterion per line"
+    )
+    alpha_init.add_argument(
+        "--source-owner-confirmed",
+        action="store_true",
+        required=True,
+        help="Confirm authority to approve the linked requirements",
     )
     alpha_init.add_argument(
         "--confirmed-no-confidential-information",
