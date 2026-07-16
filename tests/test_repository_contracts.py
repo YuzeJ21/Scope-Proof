@@ -1,6 +1,8 @@
 import tomllib
 from pathlib import Path
 
+from PIL import Image
+
 
 def test_readme_states_product_limits() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
@@ -382,3 +384,47 @@ def test_readme_shows_disclosed_constructed_demo_visual() -> None:
     ) in readme
     assert "Controlled demo screenshot—not a customer case" in readme
     assert "not runtime verification or proof of correctness" in readme
+
+
+def test_linkedin_alpha_launch_package_is_current_and_truthful() -> None:
+    draft = Path("docs/launch/linkedin-draft.md").read_text(encoding="utf-8")
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
+        encoding="utf-8"
+    )
+    disclosure = (
+        "This is a deliberately constructed demo case. ScopeProof uses deterministic "
+        "evidence rules and human review; it does not guarantee correctness or replace QA."
+    )
+
+    for required_text in (
+        "https://github.com/YuzeJ21/Scope-Proof",
+        "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.22",
+        disclosure,
+        "DM me",
+        "genuine public pull request",
+        "product managers",
+        "QA",
+        "engineers",
+    ):
+        assert required_text in draft
+
+    for required_field in (
+        "Public PR URL",
+        "Source-owner confirmation",
+        "Public criteria",
+        "No confidential information",
+        "Technical smoke only",
+        "Decline",
+    ):
+        assert required_field in playbook
+
+
+def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
+    image_path = Path("docs/assets/scopeproof-linkedin-alpha.png")
+
+    assert image_path.is_file()
+    assert image_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert image_path.stat().st_size > 40_000
+    with Image.open(image_path) as image:
+        assert image.format == "PNG"
+        assert image.size == (1200, 1200)
