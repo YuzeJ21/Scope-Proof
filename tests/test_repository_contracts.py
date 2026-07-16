@@ -116,6 +116,12 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "scopeproof_core.evals.runner" in workflow
 
 
+def test_ci_avoids_duplicate_feature_branch_runs() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "on:\n  push:\n    branches: [main]\n  pull_request:\n" in workflow
+
+
 def test_ci_builds_and_executes_installed_wheel() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 
