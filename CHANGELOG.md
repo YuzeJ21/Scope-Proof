@@ -9,6 +9,12 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+### Fixed
+
+- The public-alpha participant path now points to v0.1.23, the first release wheel that includes
+  the documented `scopeproof alpha` case initialization, outcome, and consent-gated summary
+  commands.
+
 ### Added
 
 - CI evidence for the declared Python 3.11 minimum, including the full test suite, deterministic
