@@ -486,6 +486,78 @@ def test_linkedin_alpha_launch_package_is_current_and_truthful() -> None:
         assert required_field in playbook
 
 
+def test_concierge_dm_first_outreach_is_manual_bounded_and_truthful() -> None:
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required_text in (
+        "## DM-first outreach",
+        "### Warm-contact message",
+        "### Cold-contact message",
+        "### One optional follow-up",
+        "no sooner than seven days",
+        "Do not send another message",
+        "sent manually",
+        "Do not automate",
+        "Do not send private code",
+        "genuine public PR",
+        "own or are authorized to confirm",
+        "No paid LLM API",
+    ):
+        assert required_text in playbook
+
+    assert "I noticed your public work on [verified public project or PR]" in playbook
+    assert "I know your team needs" not in playbook
+    assert "ScopeProof customers" not in playbook
+    assert "validated accuracy" not in playbook
+
+
+def test_concierge_host_checklist_indexes_real_alpha_without_contact_data() -> None:
+    checklist_path = Path("docs/alpha/concierge-host-checklist.md")
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
+        encoding="utf-8"
+    )
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+
+    assert checklist_path.is_file()
+    checklist = checklist_path.read_text(encoding="utf-8")
+    for required_link in (
+        "../../README.md#quickstart",
+        "public-pr-qualification-checklist.md",
+        "acceptance-criteria-confirmation-template.md",
+        "participant-quickstart.md",
+        "../dogfood/public-pr-protocol.md",
+        "outcome-form.md",
+    ):
+        assert required_link in checklist
+
+    for status in (
+        "not_started",
+        "qualified",
+        "criteria_confirmed",
+        "review_completed",
+        "outcome_received",
+        "declined",
+        "withdrawn",
+    ):
+        assert f"`{status}`" in checklist
+
+    prohibited_fields = (
+        "participant name",
+        "email address",
+        "linkedin profile",
+        "dm transcript",
+        "contact list",
+    )
+    assert all(field not in checklist.lower() for field in prohibited_fields)
+    assert "../alpha/concierge-host-checklist.md" in playbook
+    assert (
+        "[concierge host checklist](docs/alpha/concierge-host-checklist.md)"
+        in roadmap
+    )
+
+
 def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
     image_path = Path("docs/assets/scopeproof-linkedin-alpha.png")
 
@@ -563,14 +635,15 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
         in html
     )
-    linkedin_links = [
-        urlsplit(link)
-        for link in parser.links
-        if urlsplit(link).hostname == "www.linkedin.com"
-    ]
-    assert len(linkedin_links) == 1
-    assert linkedin_links[0].scheme == "https"
-    assert linkedin_links[0].path == "/"
+    qualification_url = (
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/"
+        "docs/alpha/public-pr-qualification-checklist.md"
+    )
+    assert qualification_url in parser.links
+    assert "Check whether your PR qualifies" in html
+    assert not any(
+        urlsplit(link).hostname == "www.linkedin.com" for link in parser.links
+    )
     assert "DM" in html
     assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md" in html
     assert parser.forms == 0

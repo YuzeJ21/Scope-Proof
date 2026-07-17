@@ -5,6 +5,10 @@ publishes the post and sends every LinkedIn message manually. Do not automate ou
 profiles, create synthetic participants, or report an outcome that a real participant did not
 provide.
 
+The owner runs an accepted case through the single
+[concierge host checklist](../alpha/concierge-host-checklist.md), which links to the authoritative
+qualification, confirmation, review, and outcome instructions.
+
 ## Publish the image-led post
 
 1. Open a new LinkedIn post and choose visibility **Anyone**.
@@ -40,6 +44,49 @@ characters. Recheck LinkedIn's current help pages before publishing if the platf
 
 The matrix is an abstract visual motif, not a captured participant case or an exact application
 screenshot. The asset contains no customer data, testimonial, product metric, or validation result.
+
+## DM-first outreach
+
+Use this sequence for five to ten carefully selected product managers, QA practitioners, or
+engineers whose relevant role or public work the owner has verified. Every message is personalized,
+reviewed, and sent manually. Do not automate messages, scrape profiles, harvest contacts, invent
+familiarity, or commit contact details or transcripts to the repository.
+
+Before sending, verify the person's current role or relevant public work from information they made
+public. Reference only a fact you inspected. Do not imply knowledge of private work, team needs, or
+acceptance criteria. Do not send private code, credentials, customer information, or confidential
+requirements in either direction.
+
+### Warm-contact message
+
+> Hi [first name] — I built ScopeProof, a local-first evidence assistant for one narrow question:
+> does a public PR contain auditable implementation and test evidence for acceptance criteria its
+> source owner confirmed? I am looking for one supervised public-alpha case. Do you currently have
+> a genuine public PR whose requirements you own or are authorized to confirm? No paid LLM API is
+> involved. Please do not send private code, credentials, customer information, or confidential
+> requirements. If the answer is no, there is nothing else you need to do.
+
+### Cold-contact message
+
+> Hi [first name] — I noticed your public work on [verified public project or PR], so I am asking a
+> narrow question rather than assuming anything about your private work. I built ScopeProof, a
+> local-first evidence assistant that maps source-owner-confirmed acceptance criteria to auditable
+> implementation and test candidates in a genuine public PR. Do you have a public PR whose criteria
+> you own or are authorized to confirm and would you consider one supervised ten-minute alpha
+> review? No paid LLM API is involved. Please do not send private code, credentials, customer
+> information, or confidential requirements. A no or no response ends the request.
+
+### One optional follow-up
+
+Send this manually no sooner than seven days after the first message and only when the recipient has
+not replied:
+
+> One brief follow-up on ScopeProof's supervised public-PR alpha. If you do not have a qualifying
+> public PR or are not interested, no reply is needed and I will not follow up again. Please do not
+> send private or confidential material.
+
+Do not send another message after this follow-up, after any decline, or after a request to stop.
+Interest, replies, and message counts are not product validation.
 
 ## First-response DM
 
