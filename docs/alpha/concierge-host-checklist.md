@@ -23,10 +23,14 @@ If repeated maintenance goals end at `waiting_for_external_participant_evidence`
 [participant evidence unblocker](participant-evidence-unblocker.md) instead of starting another
 overnight monitor.
 
+Submit a public alpha case through the inbound-only issue form:
+https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
+
 ## Host sequence
 
 - [ ] Install and verify the current release using the [README quickstart](../../README.md#quickstart).
-- [ ] Select and manually send one approved message from the [LinkedIn alpha playbook](../launch/linkedin-alpha-playbook.md#dm-first-outreach).
+- [ ] Wait for an inbound public-alpha case submission. Do not manually contact participants or
+      store outreach records in the repository.
 - [ ] Apply every [public-PR qualification check](public-pr-qualification-checklist.md).
 - [ ] Normalize criteria with the [acceptance-criteria confirmation template](acceptance-criteria-confirmation-template.md), then return them to the source owner for confirmation before analysis.
 - [ ] Follow the [ten-minute participant quickstart](participant-quickstart.md), including `scopeproof alpha init` before the review.

@@ -636,6 +636,49 @@ def test_participant_evidence_unblocker_prevents_empty_monitoring_loops() -> Non
         assert forbidden in unblocker
 
 
+def test_inbound_alpha_case_submission_path_is_public_safe_and_owner_passive() -> None:
+    template_path = Path(".github/ISSUE_TEMPLATE/public-alpha-case.yml")
+    template = template_path.read_text(encoding="utf-8")
+    site = Path("site/index.html").read_text(encoding="utf-8")
+    unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(
+        encoding="utf-8"
+    )
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(
+        encoding="utf-8"
+    )
+
+    issue_url = (
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new"
+        "?template=public-alpha-case.yml"
+    )
+    assert "name: Public-alpha case submission" in template
+    assert "title: \"[Alpha case]: \"" in template
+    assert "public_pr_url" in template
+    assert "public_requirements_url" in template
+    assert "criteria_authority" in template
+    assert "confidentiality_confirmation" in template
+    assert "participant_role" in template
+    assert "source-owner-confirmed acceptance criteria" in template
+    assert "not a constructed demo, synthetic validation, or invented evidence" in template
+    for forbidden in (
+        "tokens",
+        "credentials",
+        "private code",
+        "customer data",
+        "confidential requirements",
+    ):
+        assert forbidden in template
+
+    assert issue_url in site
+    assert "Submit a public alpha case" in site
+    assert "Use LinkedIn DM only" not in site
+    assert "inbound-only" in unblocker
+    assert issue_url in unblocker
+    assert "Do not manually contact participants" in unblocker
+    assert "Submit a public alpha case" in checklist
+    assert issue_url in checklist
+
+
 def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() -> None:
     index_path = Path("site/index.html")
     styles_path = Path("site/styles.css")
