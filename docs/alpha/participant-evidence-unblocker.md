@@ -11,13 +11,16 @@ clean maintenance audit with no participant input is useful once; repeating it o
 move the product closer to validation.
 
 Do not start another overnight monitor for this gate after one clean audit. Start the first genuine
-alpha case only after the owner has the required public inputs below.
+alpha case only after a candidate submits the required public inputs through the inbound-only public
+alpha issue form:
+
+https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 
 ## Owner action
 
-Manually contact five carefully selected product managers, QA practitioners, or engineers using the
-approved LinkedIn alpha playbook. Do not automate messages, scrape profiles, send email, create a
-contact list in the repository, or follow up more than once after seven days.
+Do not manually contact participants. Do not send DMs, scrape profiles, send email, create a contact
+list in the repository, or follow up. Keep the owner path passive: publish or share the public site
+if desired, then wait for inbound public issue submissions.
 
 The next Codex run needs all four inputs:
 
@@ -64,4 +67,7 @@ If any supplied input is not public, not explicit, or not enough to prove source
 ## What Codex should do if restarted too early
 
 Run one clean health audit if needed, report the exact missing input, and hand back this document.
-Do not create another long-running monitor when the only missing item is a real participant.
+Do not create another long-running monitor when the only missing item is a real participant. Point
+to the inbound-only public alpha issue form instead:
+
+https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml

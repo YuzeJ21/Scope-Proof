@@ -1,0 +1,74 @@
+name: Public-alpha case submission
+description: Submit a genuine public PR candidate for a supervised ScopeProof alpha review.
+title: "[Alpha case]: "
+labels: ["external-validation", "dogfood"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Submit only public information. ScopeProof accepts public pull requests with
+        source-owner-confirmed acceptance criteria. Do not include tokens, credentials,
+        private code, customer data, private links, confidential requirements, or secrets.
+
+        A submission is a candidate for review, not validation by itself. A case counts only
+        after the documented ScopeProof review and participant outcome are completed.
+  - type: input
+    id: public_pr_url
+    attributes:
+      label: Public PR URL
+      description: Link the public GitHub pull request you want reviewed.
+      placeholder: https://github.com/OWNER/REPOSITORY/pull/123
+    validations:
+      required: true
+  - type: input
+    id: public_requirements_url
+    attributes:
+      label: Public HTTPS requirements source
+      description: Link the public issue, ticket, PRD, or acceptance-criteria source.
+      placeholder: https://github.com/OWNER/REPOSITORY/issues/456
+    validations:
+      required: true
+  - type: textarea
+    id: criteria_authority
+    attributes:
+      label: Criteria authority
+      description: Explain how you own or are authorized to confirm the acceptance criteria.
+      placeholder: I am the source owner for these requirements, or I am directly authorized by the source owner to confirm them.
+    validations:
+      required: true
+  - type: dropdown
+    id: participant_role
+    attributes:
+      label: Participant role
+      description: Choose the role closest to your relationship with the public PR.
+      options:
+        - Product manager
+        - QA practitioner
+        - Engineer
+        - Maintainer
+        - Other source-owner-authorized reviewer
+    validations:
+      required: true
+  - type: textarea
+    id: review_question
+    attributes:
+      label: Review question
+      description: State the narrow requirement-to-evidence question you want ScopeProof to review.
+      placeholder: Does this PR provide implementation and test evidence for the public acceptance criteria?
+    validations:
+      required: true
+  - type: checkboxes
+    id: confidentiality_confirmation
+    attributes:
+      label: Public-information and validation boundary
+      options:
+        - label: The PR URL and requirements source are public and reachable without private-repository access.
+          required: true
+        - label: I own or am authorized to confirm the source-owner-confirmed acceptance criteria before analysis.
+          required: true
+        - label: I did not include tokens, credentials, private code, customer data, private links, confidential requirements, or secrets.
+          required: true
+        - label: This is not a constructed demo, synthetic validation, or invented evidence.
+          required: true
+        - label: I understand this submission is not validation until the documented review and participant outcome are completed.
+          required: true
