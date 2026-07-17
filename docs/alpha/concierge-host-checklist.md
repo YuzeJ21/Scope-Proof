@@ -19,6 +19,10 @@ only. Never retain credentials, private source, customer data, or confidential r
 Do not fill this repository file with a person or case. Persist only a qualified case through the
 existing Pydantic-validated `scopeproof alpha` commands after the required confirmations.
 
+If repeated maintenance goals end at `waiting_for_external_participant_evidence`, use the
+[participant evidence unblocker](participant-evidence-unblocker.md) instead of starting another
+overnight monitor.
+
 ## Host sequence
 
 - [ ] Install and verify the current release using the [README quickstart](../../README.md#quickstart).

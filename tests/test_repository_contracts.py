@@ -604,6 +604,38 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     assert "docs/alpha/participant-quickstart.md" in protocol
 
 
+def test_participant_evidence_unblocker_prevents_empty_monitoring_loops() -> None:
+    unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(
+        encoding="utf-8"
+    )
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "[participant evidence unblocker](participant-evidence-unblocker.md)" in checklist
+    assert "waiting_for_external_participant_evidence" in unblocker
+    assert "public PR URL" in unblocker
+    assert "public HTTPS requirements source" in unblocker
+    assert "explicit authority to confirm criteria" in unblocker
+    assert (
+        "explicit confirmation that no private or confidential information is included"
+        in unblocker
+    )
+    assert "Do not start another overnight monitor" in unblocker
+    assert "/goal Run ScopeProof's first genuine public-alpha case" in unblocker
+    for forbidden in (
+        "paid OpenAI/LLM API",
+        "billing",
+        "automated outreach",
+        "scraping",
+        "synthetic validation",
+        "invented evidence",
+        "fork testing",
+        "GitHub issue comment",
+    ):
+        assert forbidden in unblocker
+
+
 def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() -> None:
     index_path = Path("site/index.html")
     styles_path = Path("site/styles.css")
