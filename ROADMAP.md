@@ -26,7 +26,8 @@ Exit conditions:
 
 Activation readiness is now available through the [ten-minute participant quickstart](docs/alpha/participant-quickstart.md), public-PR qualification checklist, explicit source-owner confirmation in the workbench and CLI, and consent-gated local alpha-case records. These tools make the two remaining gates auditable; they do not satisfy either gate without a genuine participant and outcome.
 
-The repository owner uses `docs/alpha/concierge-host-checklist.md` as the operational index for a
+The repository owner uses the
+[concierge host checklist](docs/alpha/concierge-host-checklist.md) as the operational index for a
 manually recruited supervised trial; the checklist does not itself satisfy either external gate.
 
 ## Stage 2 — Limited beta

@@ -552,7 +552,10 @@ def test_concierge_host_checklist_indexes_real_alpha_without_contact_data() -> N
     )
     assert all(field not in checklist.lower() for field in prohibited_fields)
     assert "../alpha/concierge-host-checklist.md" in playbook
-    assert "docs/alpha/concierge-host-checklist.md" in roadmap
+    assert (
+        "[concierge host checklist](docs/alpha/concierge-host-checklist.md)"
+        in roadmap
+    )
 
 
 def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
