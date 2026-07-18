@@ -134,12 +134,9 @@ def test_action_guidance_requires_maintainer_applicability_opt_in() -> None:
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
     runbook = Path("docs/github-action-external-validation.md").read_text(encoding="utf-8")
 
-    safe_preview = readme.split("## GitHub Actions safe preview", maxsplit=1)[1].split(
-        "## Confirmed-action validation revision", maxsplit=1
-    )[0]
-    normalized_safe_preview = " ".join(safe_preview.split())
-    assert "maintainer-controlled `scopeproof-review` label" in normalized_safe_preview
-    assert "not reviewed, not Ready" in normalized_safe_preview
+    assert "## GitHub Action advanced preview" in readme
+    assert "[GitHub Actions\nguide](docs/github-action.md)" in readme
+    assert "not part of first use" in readme
 
     for document in (guide, runbook):
         assert "`scopeproof-review`" in document
