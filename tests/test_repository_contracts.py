@@ -292,9 +292,10 @@ def test_readme_documents_optional_release_checksum_verification() -> None:
     wheel_name = "scopeproof-0.2.1-py3-none-any.whl"
 
     assert f"releases/download/v0.2.1/{wheel_name}" in readme
-    assert f"releases/download/v0.2.1/{wheel_name}.sha256" in readme
-    assert f"shasum -a 256 -c {wheel_name}.sha256" in readme
-    assert f"sha256sum -c {wheel_name}.sha256" in readme
+    assert "releases/download/v0.2.1/SHA256SUMS.txt" in readme
+    assert f'grep " {wheel_name}$" SHA256SUMS.txt | shasum -a 256 -c -' in readme
+    assert f'grep " {wheel_name}$" SHA256SUMS.txt | sha256sum -c -' in readme
+    assert f"{wheel_name}.sha256" not in readme
     assert f"python -m pip install ./{wheel_name}" in readme
     assert "does not provide code-signing or product-correctness assurance" in readme
 

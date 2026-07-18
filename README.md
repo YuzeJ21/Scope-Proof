@@ -88,17 +88,18 @@ To verify the release bytes before installation, download the wheel and its chec
 
 ```bash
 curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/scopeproof-0.2.1-py3-none-any.whl
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/scopeproof-0.2.1-py3-none-any.whl.sha256
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/SHA256SUMS.txt
 ```
 
-Use the command for your platform, then install the verified local file:
+Select the wheel entry from the published manifest, use the command for your platform, then install
+the verified local file:
 
 ```bash
 # macOS
-shasum -a 256 -c scopeproof-0.2.1-py3-none-any.whl.sha256
+grep " scopeproof-0.2.1-py3-none-any.whl$" SHA256SUMS.txt | shasum -a 256 -c -
 
 # Linux
-sha256sum -c scopeproof-0.2.1-py3-none-any.whl.sha256
+grep " scopeproof-0.2.1-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
 
 python -m pip install ./scopeproof-0.2.1-py3-none-any.whl
 ```
