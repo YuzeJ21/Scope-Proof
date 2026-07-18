@@ -46,6 +46,22 @@ def test_comparison_benchmark_requires_manifest(tmp_path: Path) -> None:
         run_comparison_benchmark(tmp_path)
 
 
+def test_comparison_benchmark_reports_missing_declared_input(tmp_path: Path) -> None:
+    source = Path(__file__).resolve().parents[2] / "evals" / "comparisons"
+    target = tmp_path / "comparisons"
+    shutil.copytree(source, target)
+    manifest_path = target / "rereview_evidence_integrity.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["cases"][0]["current_fixture"] = "missing_pr.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"Comparison benchmark input is missing: missing_pr\.json",
+    ):
+        run_comparison_benchmark(target)
+
+
 def test_comparison_benchmark_reports_bounded_count_mismatch(tmp_path: Path) -> None:
     source = Path(__file__).resolve().parents[2] / "evals" / "comparisons"
     target = tmp_path / "comparisons"
