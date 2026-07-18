@@ -768,6 +768,42 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         assert alpha_visual.size == (1200, 1200)
 
 
+def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
+    guide_path = Path("docs/commercialization/design-partner-sprint.md")
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+
+    assert guide_path.is_file()
+    guide = guide_path.read_text(encoding="utf-8")
+    for required in (
+        "30-day Design Partner Sprint",
+        "free",
+        "USD 99 per team per month",
+        "USD 999 per team per year",
+        "research hypotheses only",
+        "not a purchase agreement",
+        "after a genuine participant completes a review",
+        "waiting_for_external_participant_evidence",
+        "Local Pro",
+    ):
+        assert required in guide
+    for non_evidence in (
+        "stars",
+        "views",
+        "downloads",
+        "issue submissions",
+        "constructed demos",
+        "synthetic cases",
+        "owner-authored examples",
+    ):
+        assert non_evidence in guide
+
+    assert "## Stage 2 — Commercial discovery" in roadmap
+    assert "two independent completed participants" in roadmap
+    assert "voluntarily agree to discuss the team-price hypothesis" in roadmap
+    assert "Local Pro remains deferred" in roadmap
+    assert "not revenue, orders, customers, paid demand, or willingness to pay" in roadmap
+
+
 def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> None:
     workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
 
