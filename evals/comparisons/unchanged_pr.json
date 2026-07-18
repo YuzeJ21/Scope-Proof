@@ -1,0 +1,24 @@
+{
+  "repository": "scopeproof/constructed-rereview-benchmark",
+  "pr_number": 202,
+  "title": "Constructed unchanged re-review snapshot",
+  "description": "Deliberately constructed engineering evidence; not participant or market validation.",
+  "html_url": "https://github.com/scopeproof/constructed-rereview-benchmark/pull/202",
+  "base_sha": "constructed-base-unchanged-001",
+  "head_sha": "constructed-head-unchanged-001",
+  "check_state": "passing",
+  "fetched_at": "2026-07-18T02:00:00Z",
+  "files": [
+    {
+      "path": "src/unchanged.py",
+      "status": "modified",
+      "lines": [
+        {
+          "change_type": "added",
+          "line_number": 10,
+          "content": "unchangedproof"
+        }
+      ]
+    }
+  ]
+}

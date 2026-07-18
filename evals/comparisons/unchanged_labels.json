@@ -1,0 +1,14 @@
+{
+  "source_text": "Deliberately constructed unchanged requirements for engineering research only.",
+  "criteria_confirmed": true,
+  "criteria": [
+    {
+      "criterion_id": "AC-01",
+      "text": "unchangedproof",
+      "priority": "must_have",
+      "required_evidence_level": "E1"
+    }
+  ],
+  "resolutions": [],
+  "final_acceptance": false
+}
