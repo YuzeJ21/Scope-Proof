@@ -14,13 +14,13 @@ From the repository root, use one temporary directory for this run. The checked 
 the four atomic criteria paired with the deliberately constructed CSV-export fixture.
 
 ```bash
-run_dir="$(mktemp -d /tmp/scopeproof-owner-rehearsal.XXXXXX)"
+run_dir="$(uv run python -c 'import os, tempfile; print(os.path.realpath(tempfile.mkdtemp(prefix="scopeproof-owner-rehearsal.")))')"
 
 uv run scopeproof owner-rehearsal init \
   --pr https://github.com/scopeproof/demo-stock-research/pull/17 \
   --requirements-source https://github.com/scopeproof/demo-stock-research/issues/17 \
   --criteria-authority "I am the owner of this deliberately constructed rehearsal and authorize these criteria." \
-  --requirements evals/rehearsals/owner_rehearsal_requirements.txt \
+  --requirements evals/rehearsals/owner_rehearsal_criteria.txt \
   --source-owner-confirmed \
   --confirmed-no-confidential-information \
   --storage-dir "$run_dir/alpha-rehearsals"
@@ -41,7 +41,7 @@ ineligibility fields; it does not convert the record into an alpha case or outco
 
 ```bash
 uv run scopeproof review --fixture evals/fixtures/csv_export_pr.json \
-  --requirements evals/rehearsals/owner_rehearsal_requirements.txt \
+  --requirements evals/rehearsals/owner_rehearsal_criteria.txt \
   --storage-dir "$run_dir/reviews" \
   --report "$run_dir/review.json"
 ```

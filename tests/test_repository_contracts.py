@@ -198,7 +198,8 @@ def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> No
 
 
 def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None:
-    requirements = Path("evals/rehearsals/owner_rehearsal_requirements.txt").read_text(
+    rehearsal_dir = Path("evals/rehearsals")
+    requirements = (rehearsal_dir / "owner_rehearsal_criteria.txt").read_text(
         encoding="utf-8"
     )
     guide = Path("docs/alpha/owner-rehearsal.md").read_text(encoding="utf-8")
@@ -206,6 +207,8 @@ def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None
         encoding="utf-8"
     )
     development_copy = development_guide.replace("\n", " ")
+
+    assert not list(rehearsal_dir.glob("*requirements*.txt"))
 
     assert requirements.splitlines() == [
         "User can export the research list as CSV",
@@ -221,7 +224,9 @@ def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None
         "uv run scopeproof comparison-benchmark",
     ):
         assert command in guide
-    assert "/tmp/" in guide
+    assert "mktemp -d /tmp/" not in guide
+    assert "uv run python -c" in guide
+    assert "os.path.realpath(tempfile.mkdtemp" in guide
     assert "engineering evidence only" in guide
     assert "does not advance Stage 1" in guide
     assert "public issue" in guide.lower()
