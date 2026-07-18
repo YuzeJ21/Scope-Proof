@@ -93,6 +93,23 @@ def test_primary_workbench_uses_acceptance_coverage_language() -> None:
     assert "Prove the PR matches the product intent" not in visible_text
 
 
+def test_loaded_source_labels_check_aggregation_as_observed_ci_state() -> None:
+    app = load_demo(new_app())
+
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "Observed CI state: Passing" in caption_text
+
+
+def test_criterion_detail_shows_bounded_candidate_context() -> None:
+    app = analyzed_demo(new_app())
+
+    assert "**Bounded context:**" in [item.value for item in app.markdown]
+    assert any(
+        "export_research_list_csv" in item.value and "filtered_rows" in item.value
+        for item in app.code
+    )
+
+
 def test_partial_public_pr_fetch_shows_bounded_analysis_and_skipped_paths() -> None:
     snapshot = load_demo_snapshot().model_copy(
         update={

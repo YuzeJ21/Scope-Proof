@@ -120,6 +120,18 @@ def test_check_runs_and_commit_status_aggregate_to_passing() -> None:
     assert snapshot.check_state is CheckState.PASSING
 
 
+@pytest.mark.parametrize("conclusion", ["neutral", "skipped"])
+def test_neutral_or_skipped_checks_do_not_prove_observed_ci_passing(
+    conclusion: str,
+) -> None:
+    state = GitHubClient._check_state(
+        {"check_runs": [{"status": "completed", "conclusion": conclusion}]},
+        {"state": None},
+    )
+
+    assert state is CheckState.UNAVAILABLE
+
+
 @pytest.mark.parametrize(
     ("status", "headers", "expected"),
     [

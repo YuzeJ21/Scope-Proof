@@ -204,6 +204,10 @@ def export_markdown(bundle: ExportableReview) -> str:
                     f"{_escape_markdown_text(candidate.relevance_reason)}"
                 )
                 lines.append(f"  - Excerpt: {_render_markdown_code(candidate.excerpt)}")
+                if candidate.context_excerpt:
+                    lines.append(
+                        f"  - Context: {_render_markdown_code(candidate.context_excerpt)}"
+                    )
                 for limitation in candidate.limitations:
                     lines.append(f"  - Limitation: {_escape_markdown_text(limitation)}")
         resolution = resolution_by_id.get(criterion.criterion_id)
@@ -289,7 +293,12 @@ def _render_candidate_reference_html(item: EvidenceItem) -> str:
         reference = f'<a href="{html.escape(item.permalink, quote=True)}">{label}</a>'
     else:
         reference = f"{label}<br><code>{html.escape(item.permalink)}</code>"
-    return f"{reference}<br><code>{html.escape(item.excerpt)}</code>"
+    context = (
+        f"<br><pre>{html.escape(item.context_excerpt)}</pre>"
+        if item.context_excerpt
+        else ""
+    )
+    return f"{reference}<br><code>{html.escape(item.excerpt)}</code>{context}"
 
 
 def export_csv(bundle: ExportableReview) -> str:

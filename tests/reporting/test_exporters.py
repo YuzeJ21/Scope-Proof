@@ -203,6 +203,23 @@ def test_human_readable_exports_use_reviewer_owned_coverage_language() -> None:
     assert "<td>Weak candidate</td><td>Implementation</td>" in html_report
 
 
+def test_human_readable_exports_show_bounded_context_without_changing_line_link() -> None:
+    bundle = example_bundle()
+    bundle.evidence[0].context_excerpt = (
+        "def prepare_rows():\n"
+        "def export_csv(rows):\n"
+        "    return filtered_rows"
+    )
+
+    markdown = export_markdown(bundle)
+    html_report = export_html(bundle)
+
+    assert "Context: <code>def prepare_rows(): def export_csv(rows):" in markdown
+    assert "<pre>def prepare_rows():\ndef export_csv(rows):" in html_report
+    assert "src/export.py#L42-L42" in markdown
+    assert "src/export.py#L42-L42" in html_report
+
+
 def test_exports_preserve_tool_and_ruleset_provenance() -> None:
     bundle = example_bundle()
 

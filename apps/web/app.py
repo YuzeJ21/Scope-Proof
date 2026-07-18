@@ -328,6 +328,7 @@ def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
             f"{changed_file_count} changed {changed_file_label} fetched · "
             f"{_status_label(snapshot.ingestion_state.value)} ingestion"
         )
+        st.caption(f"Observed CI state: {_status_label(snapshot.check_state.value)}")
 
 
 def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -> None:
@@ -1127,6 +1128,9 @@ else:
         item = evidence_by_id[evidence_id]
         with st.expander(f"{item.file_path}:L{item.line_start} · {item.evidence_type.value}"):
             st.code(item.excerpt)
+            if item.context_excerpt:
+                st.markdown("**Bounded context:**")
+                st.code(item.context_excerpt)
             st.markdown(f"[Open immutable GitHub evidence]({item.permalink})")
             st.markdown(f"**Matching rationale:** {item.relevance_reason}")
             st.caption(f"Matching rule: {item.matching_rule}")

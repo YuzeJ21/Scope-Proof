@@ -168,6 +168,18 @@ def test_candidate_evidence_context_allows_no_limitations() -> None:
     assert item.limitations == []
 
 
+def test_candidate_evidence_allows_missing_context_for_legacy_records() -> None:
+    item = EvidenceItem.model_validate(candidate_evidence_payload())
+
+    assert item.context_excerpt is None
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_candidate_evidence_rejects_blank_optional_context(blank: str) -> None:
+    with pytest.raises(ValidationError, match="context excerpt must contain non-whitespace text"):
+        EvidenceItem.model_validate(candidate_evidence_payload(context_excerpt=blank))
+
+
 def test_candidate_evidence_preserves_legacy_non_http_permalink_for_inert_recovery() -> None:
     permalink = "relative/legacy-evidence"
 

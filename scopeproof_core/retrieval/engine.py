@@ -112,6 +112,24 @@ def _candidate_file(retrieved: RetrievedFile) -> ChangedFile:
     )
 
 
+def _context_excerpt(changed_file: ChangedFile, line_number: int) -> str:
+    """Return the matched line with at most one inspectable neighbor on each side."""
+
+    inspectable = [
+        line
+        for line in changed_file.lines
+        if line.change_type is not LineChangeType.REMOVED and line.line_number is not None
+    ]
+    match_index = next(
+        index
+        for index, line in enumerate(inspectable)
+        if line.line_number == line_number
+    )
+    start = max(0, match_index - 1)
+    end = min(len(inspectable), match_index + 2)
+    return "\n".join(line.content for line in inspectable[start:end])
+
+
 def retrieve_evidence(
     snapshot: PullRequestSnapshot,
     criteria: list[Criterion],
@@ -198,6 +216,7 @@ def retrieve_evidence(
                     commit_sha=commit_sha,
                     permalink=_permalink(snapshot, changed_file.path, line_number, commit_sha),
                     excerpt=content.strip(),
+                    context_excerpt=_context_excerpt(changed_file, line_number),
                     matching_rule="exact_identifier" if exact else "keyword_overlap",
                     relevance_reason=f"Matched terms: {', '.join(sorted(matched))}",
                     relevance_score=round(score, 3),
