@@ -27,6 +27,12 @@ from scopeproof_core.github.client import (
     InvalidPullRequestUrl,
     parse_pr_url,
 )
+from scopeproof_core.presentation import (
+    EvidenceStatus,
+    criterion_coverage_rows,
+    evidence_status_text,
+    review_status_label,
+)
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
@@ -370,7 +376,7 @@ if st.session_state.pop("requirements_draft_reset_pending", False):
     _clear_requirements_draft()
 
 st.title("ScopeProof")
-st.subheader("Prove the PR matches the product intent.")
+st.subheader("See which acceptance criteria have credible PR evidence—and which still need review.")
 st.markdown(
     "> ScopeProof surfaces auditable candidate evidence. "
     "It does not replace QA or prove correctness."
@@ -955,19 +961,20 @@ if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
 else:
     st.caption(
-        "Evidence levels: E0 = no candidate found; "
-        "E1 = implementation or contract candidate; E2 = test candidate; "
-        "E3 = manually recorded runtime verification; E4 = explicit human acceptance. "
-        "Levels describe evidence type, not correctness."
+        "Evidence status describes deterministic candidates, not correctness. Evidence types "
+        "keep implementation, test, and externally recorded runtime observations separate."
     )
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {
         resolution.criterion_id: resolution for resolution in bundle.resolutions
     }
+    coverage_by_id = {
+        row.criterion_id: row for row in criterion_coverage_rows(bundle)
+    }
     status_filter = st.multiselect(
-        "Filter status",
-        options=["evidence_found", "partial", "missing", "needs_review"],
-        format_func=_status_label,
+        "Filter evidence status",
+        options=list(EvidenceStatus),
+        format_func=evidence_status_text,
         key="status_filter",
     )
     priority_filter = st.multiselect(
@@ -990,7 +997,8 @@ else:
     matrix = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
-        if status_filter and finding.status.value not in status_filter:
+        coverage = coverage_by_id[criterion.criterion_id]
+        if status_filter and coverage.evidence_status not in status_filter:
             continue
         if priority_filter and criterion.priority not in priority_filter:
             continue
@@ -1002,23 +1010,19 @@ else:
             {
                 "Criterion": criterion.criterion_id,
                 "Requirement": criterion.text,
-                "Priority": _status_label(criterion.priority.value),
-                "Status": _status_label(finding.status.value),
-                "Evidence": finding.evidence_level.value,
-                "Human resolution": (
-                    _status_label(resolution_by_id[criterion.criterion_id].decision.value)
-                    if criterion.criterion_id in resolution_by_id
-                    else "Unresolved"
-                ),
+                "Priority": coverage.priority,
+                "Evidence status": evidence_status_text(coverage.evidence_status),
+                "Evidence types": ", ".join(coverage.evidence_types) or "None",
+                "Reviewer decision": coverage.reviewer_decision,
             }
         )
     table_headers = [
         "Criterion",
         "Requirement",
         "Priority",
-        "Status",
-        "Evidence",
-        "Human resolution",
+        "Evidence status",
+        "Evidence types",
+        "Reviewer decision",
     ]
     table_lines = [
         "| " + " | ".join(table_headers) + " |",
@@ -1096,7 +1100,10 @@ else:
         else "Unresolved"
     )
     st.markdown(f"### {selected_id} · {selected_criterion.text}")
-    st.markdown(f"**Provisional status:** {_status_label(selected_finding.status.value)}")
+    selected_coverage = coverage_by_id[selected_id]
+    st.markdown(
+        f"**Evidence status:** {evidence_status_text(selected_coverage.evidence_status)}"
+    )
     st.markdown(
         f"**Required evidence:** {selected_criterion.required_evidence_level.value} · "
         f"**Observed evidence:** {selected_finding.evidence_level.value} · "
@@ -1520,8 +1527,8 @@ else:
             st.rerun()
     if review_save_notice is not None:
         st.success(review_save_notice)
-    verdict = _status_label(bundle.gate.verdict.value)
-    st.markdown(f"## Verdict: **{verdict}**")
+    review_status = review_status_label(bundle.gate.verdict)
+    st.markdown(f"## Review status: **{review_status}**")
     if bundle.gate.reason_codes:
         labels = [_status_label(code) for code in bundle.gate.reason_codes]
         st.write("Gate reasons: " + " · ".join(labels))

@@ -54,7 +54,9 @@ def evidence_matrix_table(app: AppTest) -> str:
     return next(
         markdown.value
         for markdown in app.markdown
-        if markdown.value.startswith("| Criterion | Requirement | Priority |")
+        if markdown.value.startswith(
+            "| Criterion | Requirement | Priority | Evidence status |"
+        )
     )
 
 
@@ -72,6 +74,23 @@ def test_product_disclaimer_is_visible() -> None:
     )
     assert "does not replace QA" in visible_text
     assert "No paid LLM API" in visible_text
+
+
+def test_primary_workbench_uses_acceptance_coverage_language() -> None:
+    app = analyzed_demo(new_app())
+    visible_text = "\n".join(
+        [
+            *(item.value for item in app.markdown),
+            *(item.value for item in app.subheader),
+            *(item.value for item in app.caption),
+        ]
+    )
+
+    assert "See which acceptance criteria have credible PR evidence" in visible_text
+    assert "Evidence status" in evidence_matrix_table(app)
+    assert "Evidence types" in evidence_matrix_table(app)
+    assert "Reviewer decision" in evidence_matrix_table(app)
+    assert "Prove the PR matches the product intent" not in visible_text
 
 
 def test_partial_public_pr_fetch_shows_bounded_analysis_and_skipped_paths() -> None:
@@ -575,9 +594,8 @@ def test_evidence_matrix_explains_observed_evidence_levels() -> None:
     caption_text = "\n".join(item.value for item in app.caption)
 
     assert (
-        "Evidence levels: E0 = no candidate found; E1 = implementation or contract candidate; "
-        "E2 = test candidate; E3 = manually recorded runtime verification; "
-        "E4 = explicit human acceptance. Levels describe evidence type, not correctness."
+        "Evidence status describes deterministic candidates, not correctness. Evidence types "
+        "keep implementation, test, and externally recorded runtime observations separate."
     ) in caption_text
 
 
@@ -985,9 +1003,9 @@ def test_demo_flow_reaches_blocked_summary() -> None:
     assert app.session_state["criteria_confirmed"] is True
     app = app.button(key="run_analysis").click().run()
     visible_text = "\n".join(markdown.value for markdown in app.markdown)
-    assert "Blocked" in visible_text
-    assert "Partial" in visible_text
-    assert "Missing" in visible_text
+    assert "Action required" in visible_text
+    assert "Weak candidate" in visible_text
+    assert "No candidate" in visible_text
     assert app.session_state["bundle"] is not None
 
 
@@ -1961,13 +1979,17 @@ def test_evidence_matrix_renders_as_one_markdown_table() -> None:
         markdown.value
         for markdown in app.markdown
         if markdown.value.startswith(
-            "| Criterion | Requirement | Priority | Status | Evidence | Human resolution |"
+            "| Criterion | Requirement | Priority | Evidence status | Evidence types | "
+            "Reviewer decision |"
         )
     ]
     assert len(table_blocks) == 1
     assert "|---|---|---|---|---|---|" in table_blocks[0]
     assert "| AC-01 | User can export the research list as CSV |" in table_blocks[0]
-    assert "| Must Have | Evidence Found | E2 | Unresolved |" in table_blocks[0]
+    assert (
+        "| Must have | Strong candidate | Implementation, Test | Unresolved |"
+        in table_blocks[0]
+    )
     assert "| Unresolved |" in table_blocks[0]
     assert "| AC-04 | Successful export records research_exported |" in table_blocks[0]
     assert "Confidence" not in table_blocks[0]
