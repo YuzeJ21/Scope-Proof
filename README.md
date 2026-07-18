@@ -336,8 +336,13 @@ alpha to limited beta. The [changelog](CHANGELOG.md) summarizes the active devel
 links to authoritative published release notes. Neither document substitutes for genuine public-PR
 use or human acceptance.
 
-Standard reviews create no research record. To volunteer genuine feedback, explicitly enable the
-**Alpha feedback session** and follow the [public-alpha participant quickstart](docs/alpha/participant-quickstart.md).
+Standard reviews create no research record. To volunteer genuine feedback, submit the inbound
+public-alpha case form before starting locally:
+
+https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
+
+Then explicitly enable the **Alpha feedback session** and follow the
+[public-alpha participant quickstart](docs/alpha/participant-quickstart.md).
 Qualification and consent stay local and off by
 default; the constructed demo never counts as participant validation.
 

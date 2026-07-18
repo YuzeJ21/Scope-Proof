@@ -197,6 +197,34 @@ def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> No
     assert all(count > 0 for count in aggregate_counts.values())
 
 
+def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None:
+    requirements = Path("evals/rehearsals/owner_rehearsal_requirements.txt").read_text(
+        encoding="utf-8"
+    )
+    guide = Path("docs/alpha/owner-rehearsal.md").read_text(encoding="utf-8")
+
+    assert requirements.splitlines() == [
+        "User can export the research list as CSV",
+        "Export respects all active filters",
+        "Failed export shows an error message",
+        "Successful export records research_exported",
+    ]
+    for command in (
+        "uv run scopeproof owner-rehearsal init",
+        "uv run scopeproof owner-rehearsal show",
+        "uv run scopeproof review --fixture evals/fixtures/csv_export_pr.json",
+        "uv run scopeproof export",
+        "uv run scopeproof comparison-benchmark",
+    ):
+        assert command in guide
+    assert "/tmp/" in guide
+    assert "engineering evidence only" in guide
+    assert "does not advance Stage 1" in guide
+    assert "public issue" in guide.lower()
+    assert "notification" in guide.lower()
+    assert "across two paired previous/current cases" in guide
+
+
 def test_ci_runs_lint_tests_and_benchmark() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "python -m pip install --upgrade pip" in workflow
@@ -461,7 +489,7 @@ def test_roadmap_uses_evidence_gated_beta_stages() -> None:
     assert "Five completed reviews" in roadmap
     assert "three independent practitioners" in roadmap
     assert "three public repositories" in roadmap
-    assert "waiting_for_external_participant_evidence" in roadmap
+    assert "waiting_for_inbound_public_alpha_submission" in roadmap
     assert "source-owner-confirmed criteria" in roadmap
     assert "genuine public pull request" in roadmap
     assert "Software license decision" in roadmap
@@ -697,7 +725,7 @@ def test_participant_evidence_unblocker_prevents_empty_monitoring_loops() -> Non
     )
 
     assert "[participant evidence unblocker](participant-evidence-unblocker.md)" in checklist
-    assert "waiting_for_external_participant_evidence" in unblocker
+    assert "waiting_for_inbound_public_alpha_submission" in unblocker
     assert "public PR URL" in unblocker
     assert "public HTTPS requirements source" in unblocker
     assert "explicit authority to confirm criteria" in unblocker
@@ -850,7 +878,7 @@ def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
         "research hypotheses only",
         "not a purchase agreement",
         "after a genuine participant completes a review",
-        "waiting_for_external_participant_evidence",
+        "waiting_for_inbound_public_alpha_submission",
         "Local Pro",
     ):
         assert required in guide
@@ -918,6 +946,62 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
     assert all(f"id: {field_id}" not in template for field_id in forbidden_ids)
 
 
+def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -> None:
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(
+        encoding="utf-8"
+    )
+    readme = Path("README.md").read_text(encoding="utf-8")
+    site = Path("site/index.html").read_text(encoding="utf-8")
+    feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    case_url = (
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?"
+        "template=public-alpha-case.yml"
+    )
+
+    assert quickstart.index(case_url) < quickstart.index("## Ten-minute path")
+    assert "Submit the inbound public-alpha case form before starting locally" in quickstart
+    assert "submit the inbound\npublic-alpha case form before starting locally" in readme
+    assert "incomplete review" not in site
+
+    outcome_block = feedback.split("id: outcome", maxsplit=1)[1].split(
+        "validations:", maxsplit=1
+    )[0]
+    assert [
+        line.strip()[2:]
+        for line in outcome_block.splitlines()
+        if line.strip().startswith("- ")
+    ] == [
+        "Found a useful previously unknown gap",
+        "Produced only already-known information",
+        "Created material product friction",
+    ]
+    assert "Completed reviews only" in feedback
+    assert "required dropdown" in feedback
+    assert "Prefer not to answer" in feedback
+
+
+def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() -> None:
+    site = Path("site/index.html").read_text(encoding="utf-8")
+    css = Path("site/styles.css").read_text(encoding="utf-8")
+    active_docs = (
+        Path("ROADMAP.md"),
+        Path("CHANGELOG.md"),
+        Path("docs/alpha/participant-evidence-unblocker.md"),
+        Path("docs/alpha/concierge-host-checklist.md"),
+        Path("docs/commercialization/design-partner-sprint.md"),
+    )
+
+    mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
+    assert '<a href="#alpha">Public alpha</a>' in site
+    assert "nav { display: flex;" in mobile_css
+    for path in active_docs:
+        content = path.read_text(encoding="utf-8")
+        assert "waiting_for_inbound_public_alpha_submission" in content
+        assert "waiting_for_external_participant_evidence" not in content
+
+
 def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     site = Path("site/index.html").read_text(encoding="utf-8")
@@ -960,7 +1044,7 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     ):
         assert unsupported_claim not in public_surfaces
 
-    assert "incomplete review" in site
+    assert "Incomplete reviews do not become completed feedback outcomes" in site
     assert "participant-selected outcome" in quickstart
     assert "not commercial validation" in outcome
 

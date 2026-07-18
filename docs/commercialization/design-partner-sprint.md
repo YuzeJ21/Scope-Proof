@@ -5,7 +5,7 @@ acceptance coverage to use it again and voluntarily discuss a possible team prod
 design-partner review is free, public-repository-only research. No paid product or billing is
 active.
 
-The current external state is `waiting_for_external_participant_evidence`. This guide makes the
+The current external state is `waiting_for_inbound_public_alpha_submission`. This guide makes the
 next genuine case actionable; it does not create participant evidence by itself.
 
 ## Current state
@@ -142,6 +142,6 @@ Until the evidence gate passes and the owner makes a separate decision, do not b
 
 ## Current waiting condition
 
-Remain at `waiting_for_external_participant_evidence` until a non-owner participant supplies all
+Remain at `waiting_for_inbound_public_alpha_submission` until a non-owner participant supplies all
 qualifying public inputs, completes the review at an exact head SHA, and selects the honest
 outcome. Do not poll, send outreach, or create a synthetic substitute while waiting.

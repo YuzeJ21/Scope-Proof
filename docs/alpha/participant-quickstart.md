@@ -5,6 +5,13 @@ is directly authorized to confirm requirements for a genuine public GitHub pull 
 ScopeProof is an evidence assistant, not a correctness oracle. Use public sources only; never enter
 tokens, private code, customer data, secrets, or confidential material.
 
+Submit the inbound public-alpha case form before starting locally:
+
+https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
+
+The form is the only public-alpha intake. If it is not appropriate to submit a genuine public case,
+use Standard review instead; do not treat a technical smoke or constructed example as alpha use.
+
 ## Ten-minute path
 
 1. **Minute 1 — qualify the case.** Confirm the PR and requirements source are public, you have
@@ -38,8 +45,10 @@ After saving the review and recording the participant-selected outcome, read the
 participant may voluntarily submit the bounded
 [public feedback form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml).
 
-The feedback form records an honest useful gap, already-known information, incomplete review, or
-product friction plus timing, decision impact, and reuse intent. Its pricing question is optional
-research after product use. No paid product or billing is active, a response is not a purchase
-agreement, and declining the question does not affect the review. A form submission without a
-completed genuine review does not count as product or commercial validation.
+The feedback form records one completed-review outcome: a useful previously unknown gap,
+already-known information, or material product friction, plus timing, decision impact, and reuse
+intent. If the review is incomplete, do not use the completed-feedback form; stop or continue the
+local Standard review without claiming an alpha outcome. Its pricing question is optional research
+after product use. No paid product or billing is active, a response is not a purchase agreement,
+and declining the question does not affect the review. A form submission without a completed
+genuine review does not count as product or commercial validation.

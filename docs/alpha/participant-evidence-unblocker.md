@@ -1,7 +1,7 @@
 # Participant evidence unblocker
 
 Use this when a ScopeProof maintenance goal keeps ending at
-`waiting_for_external_participant_evidence`.
+`waiting_for_inbound_public_alpha_submission`.
 
 ## Why the monitor stopped
 
