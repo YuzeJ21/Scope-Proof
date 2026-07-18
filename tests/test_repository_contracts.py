@@ -202,6 +202,10 @@ def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None
         encoding="utf-8"
     )
     guide = Path("docs/alpha/owner-rehearsal.md").read_text(encoding="utf-8")
+    development_guide = Path("docs/development-environment.md").read_text(
+        encoding="utf-8"
+    )
+    development_copy = development_guide.replace("\n", " ")
 
     assert requirements.splitlines() == [
         "User can export the research list as CSV",
@@ -223,6 +227,10 @@ def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None
     assert "public issue" in guide.lower()
     assert "notification" in guide.lower()
     assert "across two paired previous/current cases" in guide
+    assert "[owner-rehearsal runbook](alpha/owner-rehearsal.md)" in development_guide
+    assert "scopeproof owner-rehearsal init" in development_guide
+    assert "owner/Codex rehearsal is engineering evidence only" in development_copy
+    assert "does not advance Stage 1" in development_copy
 
 
 def test_ci_runs_lint_tests_and_benchmark() -> None:
