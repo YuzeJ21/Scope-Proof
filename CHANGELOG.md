@@ -9,6 +9,30 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+## 0.2.1 — Re-review evidence integrity
+
+### Added
+
+- Deterministic re-review evidence classification for Unchanged, Relocated, Modified, Added, and
+  Removed candidates, with conservative ambiguity fallback.
+- Two-sided JSON, Markdown, and Streamlit comparison output anchored to previous and current
+  immutable evidence references.
+- A checked-in comparison benchmark and `scopeproof comparison-benchmark` command.
+- Evidence-gated commercial-discovery and inbound design-partner documentation.
+
+### Changed
+
+- Public-alpha intake is inbound-only through the public GitHub issue form; stale direct-message
+  and follow-up instructions were removed.
+
+### Boundaries
+
+- The comparison corpus is deliberately constructed engineering evidence. It does not advance Stage 1,
+  prove correctness, establish external use, or constitute customer or market validation.
+- No paid API, LLM, billing, private repository, account, fork test, email, direct message,
+  automated outreach, scraping, synthetic validation, generic review, security scanner, or
+  automatic fix capability was added.
+
 ## 0.2.0 — Reviewer-first product reset
 
 ### Changed

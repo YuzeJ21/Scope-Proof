@@ -12,11 +12,13 @@ ScopeProof is a local-first, deterministic evidence assistant. It does not use a
 
 Static implementation evidence is not runtime verification. Reviewers record runtime observations, decisions, and exceptions separately. ScopeProof does not execute untrusted repository code and does not replace QA or engineering review.
 
-I am looking for product managers, QA practitioners, and engineers who own or can confirm the requirements for a genuine public pull request. If you are willing to try one supervised public-alpha review, DM me with the public PR URL and your relationship to its acceptance criteria. Please do not send private source, credentials, customer information, or confidential requirements.
+I am looking for product managers, QA practitioners, and engineers who own or can confirm the requirements for a genuine public pull request. If you are willing to try one supervised public-alpha review, submit the public PR and requirements through the inbound case form. A submission is only an intake candidate; it is not product validation until a genuine review and participant-selected outcome are complete. Please do not submit private source, credentials, customer information, or confidential requirements.
+
+Public-alpha case form: https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 
 Repository: https://github.com/YuzeJ21/Scope-Proof
 
-Current release: https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.0
+Current release: https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.1
 
 This is a deliberately constructed demo case. ScopeProof uses deterministic evidence rules and human review; it does not guarantee correctness or replace QA.
 
