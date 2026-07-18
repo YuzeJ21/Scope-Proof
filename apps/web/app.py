@@ -46,7 +46,7 @@ from scopeproof_core.presentation import (
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
-from scopeproof_core.reviews.comparison import compare_reviews
+from scopeproof_core.reviews.comparison import EvidenceReference, compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     append_external_verification,
@@ -235,6 +235,25 @@ def _analyze() -> ReviewBundle:
 
 def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
+
+
+def _render_comparison_reference(
+    label: str, reference: EvidenceReference | None
+) -> None:
+    """Render one validated comparison reference without trusting its text as Markdown."""
+
+    if reference is None:
+        return
+    st.markdown(f"**{label}**")
+    st.caption("Immutable location")
+    st.code(
+        f"{reference.file_path}:L{reference.line_start}-L{reference.line_end}"
+        f" @ {reference.commit_sha}",
+        language=None,
+    )
+    st.caption("Candidate excerpt")
+    st.code(reference.excerpt, language=None)
+    st.markdown(render_artifact_reference_markdown(reference.permalink))
 
 
 def _criteria_draft_pending(criteria: list[Criterion]) -> bool:
@@ -1060,9 +1079,30 @@ else:
             f"{_status_label(comparison.current_gate.value)}"
         )
         st.markdown(
-            f"**Candidate evidence:** {len(comparison.added_evidence_ids)} added · "
-            f"{len(comparison.removed_evidence_ids)} removed"
+            "**Candidate changes:** "
+            f"Modified: {comparison.evidence_change_counts.modified} · "
+            f"Relocated: {comparison.evidence_change_counts.relocated} · "
+            f"Added: {comparison.evidence_change_counts.added} · "
+            f"Removed: {comparison.evidence_change_counts.removed} · "
+            f"Unchanged: {comparison.evidence_change_counts.unchanged}"
         )
+        st.caption(
+            "Candidate comparison does not prove criterion satisfaction. Review the current "
+            "evidence before recording a new decision."
+        )
+        for evidence_change in comparison.evidence_changes:
+            if evidence_change.kind.value == "unchanged":
+                continue
+            with st.container(border=True):
+                st.markdown(
+                    f"**{evidence_change.criterion_id} · "
+                    f"{_status_label(evidence_change.kind.value)}**"
+                )
+                st.caption(evidence_change.reason)
+                _render_comparison_reference(
+                    "Previous candidate", evidence_change.previous
+                )
+                _render_comparison_reference("Current candidate", evidence_change.current)
         if comparison.changed_finding_statuses:
             st.markdown("**Changed criterion findings**")
             for change in comparison.changed_finding_statuses:
