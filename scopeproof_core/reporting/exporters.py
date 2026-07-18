@@ -23,6 +23,10 @@ from scopeproof_core.reporting.references import (
     is_linkable_artifact_reference,
     render_artifact_reference_markdown,
 )
+from scopeproof_core.reviews.comparison import (
+    EvidenceReference,
+    ReviewComparison,
+)
 from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewState
 
 ExportableReview = ReviewBundle | ReviewState
@@ -75,6 +79,122 @@ def export_json(bundle: ExportableReview) -> str:
     """Return canonical, diff-friendly JSON without adapter state or credentials."""
     payload = _validated_exportable(bundle).model_dump(mode="json")
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def _validated_comparison(comparison: ReviewComparison) -> ReviewComparison:
+    """Revalidate mutable comparison input before rendering an export artifact."""
+
+    return ReviewComparison.model_validate(
+        comparison.model_dump(mode="python", exclude={"evidence_change_counts"})
+    )
+
+
+def export_comparison_json(comparison: ReviewComparison) -> str:
+    """Return canonical JSON for a validated re-review comparison."""
+
+    payload = _validated_comparison(comparison).model_dump(mode="json")
+    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def _comparison_reference_markdown(
+    label: str, reference: EvidenceReference
+) -> list[str]:
+    location = f"{_escape_markdown_text(reference.file_path)}:L{reference.line_start}"
+    if is_linkable_artifact_reference(reference.permalink):
+        destination = html.escape(reference.permalink, quote=True)
+        rendered_location = f"[{location}](<{destination}>)"
+    else:
+        rendered_location = (
+            f"{location} — permalink: {_escape_markdown_text(reference.permalink)}"
+        )
+    return [
+        f"- **{label}:** {rendered_location}",
+        f"  - Evidence ID: {_render_markdown_code(reference.evidence_id)}",
+        f"  - Commit: {_render_markdown_code(reference.commit_sha)}",
+        f"  - Excerpt: {_render_markdown_code(reference.excerpt)}",
+    ]
+
+
+def export_comparison_markdown(comparison: ReviewComparison) -> str:
+    """Render an inspectable, evidence-bound re-review comparison."""
+
+    comparison = _validated_comparison(comparison)
+    counts = comparison.evidence_change_counts
+    lines = [
+        "# ScopeProof Re-review Comparison",
+        "",
+        f"**Previous head:** {_render_markdown_code(comparison.previous_head_sha)}",
+        f"**Current head:** {_render_markdown_code(comparison.current_head_sha)}",
+        f"**Previous review status:** {_render_markdown_code(comparison.previous_gate.value)}",
+        f"**Current review status:** {_render_markdown_code(comparison.current_gate.value)}",
+        "",
+        (
+            "> ScopeProof compares auditable candidate references. Candidate comparison does not "
+            "prove criterion satisfaction."
+        ),
+        "",
+        "## Evidence Change Counts",
+        "",
+        f"- Modified: {counts.modified}",
+        f"- Relocated: {counts.relocated}",
+        f"- Added: {counts.added}",
+        f"- Removed: {counts.removed}",
+        f"- Unchanged: {counts.unchanged}",
+        "",
+        "## Evidence Changes",
+        "",
+    ]
+    for change in comparison.evidence_changes:
+        kind = change.kind.value.replace("_", " ").title()
+        lines.extend(
+            [
+                f"### {_escape_markdown_text(change.criterion_id)} — {kind}",
+                "",
+                f"**Reason:** {_escape_markdown_text(change.reason)}",
+            ]
+        )
+        if change.previous is not None:
+            lines.extend(_comparison_reference_markdown("Previous candidate", change.previous))
+        if change.current is not None:
+            lines.extend(_comparison_reference_markdown("Current candidate", change.current))
+        if change.kind.value != "unchanged":
+            lines.append(
+                "- Review the current evidence before recording a new decision."
+            )
+        lines.append("")
+
+    if comparison.changed_finding_statuses:
+        lines.extend(["## Changed Criterion Findings", ""])
+        for change in comparison.changed_finding_statuses:
+            previous = change.previous_status.value if change.previous_status else "none"
+            current = change.current_status.value if change.current_status else "none"
+            lines.append(
+                f"- {_escape_markdown_text(change.criterion_id)}: "
+                f"{_render_markdown_code(previous)} → {_render_markdown_code(current)}"
+            )
+        lines.append("")
+    if comparison.changed_human_resolutions:
+        lines.extend(["## Changed Reviewer Decisions", ""])
+        for change in comparison.changed_human_resolutions:
+            previous = change.previous_decision.value if change.previous_decision else "none"
+            current = change.current_decision.value if change.current_decision else "none"
+            lines.append(
+                f"- {_escape_markdown_text(change.criterion_id)}: "
+                f"{_render_markdown_code(previous)} → {_render_markdown_code(current)}"
+            )
+        lines.append("")
+    lines.extend(
+        [
+            "## Comparison Boundary",
+            "",
+            (
+                "This report describes deterministic candidate-reference changes only. It does "
+                "not carry forward a prior human decision or replace review of the current head."
+            ),
+            "",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def export_markdown(bundle: ExportableReview) -> str:
