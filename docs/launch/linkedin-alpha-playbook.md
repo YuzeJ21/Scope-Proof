@@ -1,9 +1,9 @@
 # ScopeProof LinkedIn Public-Alpha Playbook
 
-This playbook turns the copy-ready post into a truthful, privacy-safe recruitment path. The owner
-publishes the post and sends every LinkedIn message manually. Do not automate outreach, scrape
-profiles, create synthetic participants, or report an outcome that a real participant did not
-provide.
+This playbook turns the copy-ready post into a truthful, privacy-safe inbound path. The owner may
+publish the post but does not contact potential participants. Do not send email or direct messages,
+automate outreach, scrape profiles, create synthetic participants, or report an outcome that a real
+participant did not provide.
 
 The owner runs an accepted case through the single
 [concierge host checklist](../alpha/concierge-host-checklist.md), which links to the authoritative
@@ -15,9 +15,9 @@ qualification, confirmation, review, and outcome instructions.
 2. Upload `docs/assets/scopeproof-linkedin-alpha.png` as the post image.
 3. Add the alt text below to the image.
 4. Paste only the body under `Copy-ready post` from `linkedin-draft.md`.
-5. Confirm that the repository URL, `v0.1.23` release URL, DM call to action, and required demo
-   disclosure are present. Because the image is the post media, keep the two URLs in the text and
-   do not rely on a link-preview card.
+5. Confirm that the repository URL, `v0.2.1` release URL, inbound case-form URL, and required demo
+   disclosure are present. Because the image is the post media, keep the URLs in the text and do
+   not rely on a link-preview card.
 6. Complete the pre-publication checklist below, then publish manually.
 7. If the post is visible publicly, add it to the LinkedIn profile's Featured section when that
    feature is available on the owner's profile.
@@ -45,58 +45,18 @@ characters. Recheck LinkedIn's current help pages before publishing if the platf
 The matrix is an abstract visual motif, not a captured participant case or an exact application
 screenshot. The asset contains no customer data, testimonial, product metric, or validation result.
 
-## DM-first outreach
+## Inbound-only intake
 
-Use this sequence for five to ten carefully selected product managers, QA practitioners, or
-engineers whose relevant role or public work the owner has verified. Every message is personalized,
-reviewed, and sent manually. Do not automate messages, scrape profiles, harvest contacts, invent
-familiarity, or commit contact details or transcripts to the repository.
+The owner path stays passive. Do not send email or direct messages, build a contact list, scrape
+profiles, automate outreach, or add notification-only GitHub comments. A participant independently
+submits one genuine public PR through the canonical public form:
 
-Before sending, verify the person's current role or relevant public work from information they made
-public. Reference only a fact you inspected. Do not imply knowledge of private work, team needs, or
-acceptance criteria. Do not send private code, credentials, customer information, or confidential
-requirements in either direction.
+https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 
-### Warm-contact message
-
-> Hi [first name] — I built ScopeProof, a local-first evidence assistant for one narrow question:
-> does a public PR contain auditable implementation and test evidence for acceptance criteria its
-> source owner confirmed? I am looking for one supervised public-alpha case. Do you currently have
-> a genuine public PR whose requirements you own or are authorized to confirm? No paid LLM API is
-> involved. Please do not send private code, credentials, customer information, or confidential
-> requirements. If the answer is no, there is nothing else you need to do.
-
-### Cold-contact message
-
-> Hi [first name] — I noticed your public work on [verified public project or PR], so I am asking a
-> narrow question rather than assuming anything about your private work. I built ScopeProof, a
-> local-first evidence assistant that maps source-owner-confirmed acceptance criteria to auditable
-> implementation and test candidates in a genuine public PR. Do you have a public PR whose criteria
-> you own or are authorized to confirm and would you consider one supervised ten-minute alpha
-> review? No paid LLM API is involved. Please do not send private code, credentials, customer
-> information, or confidential requirements. A no or no response ends the request.
-
-### One optional follow-up
-
-Send this manually no sooner than seven days after the first message and only when the recipient has
-not replied:
-
-> One brief follow-up on ScopeProof's supervised public-PR alpha. If you do not have a qualifying
-> public PR or are not interested, no reply is needed and I will not follow up again. Please do not
-> send private or confidential material.
-
-Do not send another message after this follow-up, after any decline, or after a request to stop.
-Interest, replies, and message counts are not product validation.
-
-## First-response DM
-
-Send this only after a person contacts the owner:
-
-> Thanks for offering to try ScopeProof. Before we continue, please share only public information:
-> the public PR URL, how you are connected to its requirements, and where the acceptance criteria
-> are publicly documented. Please do not send private code, credentials, customer information, or
-> confidential requirements. I will confirm the case is in scope before asking you to do anything
-> else.
+The form requests a public PR URL, a public requirements URL, source-owner-confirmed criteria
+authority, and confirmation that no confidential information is included. No paid LLM API is
+involved. A submission is only an intake candidate; it is not product validation until a genuine
+review and participant-selected outcome are complete.
 
 ## Qualification record
 
@@ -169,9 +129,11 @@ Use `demo-script.md` only after the image post is live and the owner wants a fol
 - [ ] The image is `scopeproof-linkedin-alpha.png`, is legible, and includes the constructed-demo
       boundary.
 - [ ] The post body is no more than 3,000 characters.
-- [ ] The repository and `v0.1.23` release links resolve publicly.
+- [ ] The repository and `v0.2.1` release links resolve publicly.
+- [ ] The canonical inbound public-alpha case-form link resolves publicly.
 - [ ] The exact required demo disclosure is present.
-- [ ] The CTA says `DM me`; no automated outreach or email is enabled.
+- [ ] The CTA uses only the inbound case form; no email, direct-message, or automated outreach is
+      enabled.
 - [ ] No customer name, private source, secret, usage metric, testimonial, or unconfirmed result is
       present.
 - [ ] No adoption, production accuracy, runtime correctness, or market-validation claim is made.
@@ -181,8 +143,8 @@ Use `demo-script.md` only after the image post is live and the owner wants a fol
 ## Results-log boundary
 
 The public post itself is not validation. A like, impression, profile view, repository star, or
-unqualified DM is not product evidence. Record a result only after a real participant completes
-the documented protocol, and distinguish these outcomes:
+unqualified submission is not product evidence. Record a result only after a real participant
+completes the documented protocol, and distinguish these outcomes:
 
 - qualified interest;
 - criteria confirmed;

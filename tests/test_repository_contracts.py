@@ -276,8 +276,8 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert (
-        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.0/"
-        "scopeproof-0.2.0-py3-none-any.whl"
+        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/"
+        "scopeproof-0.2.1-py3-none-any.whl"
     ) in readme
     assert "scopeproof benchmark" in readme
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in readme
@@ -289,10 +289,10 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
 
 def test_readme_documents_optional_release_checksum_verification() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    wheel_name = "scopeproof-0.2.0-py3-none-any.whl"
+    wheel_name = "scopeproof-0.2.1-py3-none-any.whl"
 
-    assert f"releases/download/v0.2.0/{wheel_name}" in readme
-    assert f"releases/download/v0.2.0/{wheel_name}.sha256" in readme
+    assert f"releases/download/v0.2.1/{wheel_name}" in readme
+    assert f"releases/download/v0.2.1/{wheel_name}.sha256" in readme
     assert f"shasum -a 256 -c {wheel_name}.sha256" in readme
     assert f"sha256sum -c {wheel_name}.sha256" in readme
     assert f"python -m pip install ./{wheel_name}" in readme
@@ -315,7 +315,7 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert '__version__ = "0.2.0"' in version_source
+    assert '__version__ = "0.2.1"' in version_source
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
@@ -458,6 +458,14 @@ def test_changelog_points_to_authoritative_release_history() -> None:
     assert "does not reconstruct" in changelog
 
 
+def test_changelog_discloses_v021_rereview_evidence_boundaries() -> None:
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "## 0.2.1 — Re-review evidence integrity" in changelog
+    assert "deliberately constructed engineering evidence" in changelog
+    assert "does not advance Stage 1" in changelog
+
+
 def test_public_contribution_templates_preserve_evidence_boundaries() -> None:
     defect = Path(".github/ISSUE_TEMPLATE/defect.yml").read_text(encoding="utf-8")
     feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
@@ -508,12 +516,16 @@ def test_linkedin_alpha_launch_package_is_current_and_truthful() -> None:
         "This is a deliberately constructed demo case. ScopeProof uses deterministic "
         "evidence rules and human review; it does not guarantee correctness or replace QA."
     )
+    issue_url = (
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new"
+        "?template=public-alpha-case.yml"
+    )
 
     for required_text in (
         "https://github.com/YuzeJ21/Scope-Proof",
-        "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.0",
+        "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.1",
+        issue_url,
         disclosure,
-        "DM me",
         "genuine public pull request",
         "product managers",
         "QA",
@@ -532,31 +544,38 @@ def test_linkedin_alpha_launch_package_is_current_and_truthful() -> None:
         assert required_field in playbook
 
 
-def test_concierge_dm_first_outreach_is_manual_bounded_and_truthful() -> None:
+def test_linkedin_alpha_intake_is_inbound_only_and_owner_passive() -> None:
+    draft = Path("docs/launch/linkedin-draft.md").read_text(encoding="utf-8")
     playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
         encoding="utf-8"
     )
+    issue_url = (
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new"
+        "?template=public-alpha-case.yml"
+    )
 
     for required_text in (
-        "## DM-first outreach",
-        "### Warm-contact message",
-        "### Cold-contact message",
-        "### One optional follow-up",
-        "no sooner than seven days",
-        "Do not send another message",
-        "sent manually",
-        "Do not automate",
-        "Do not send private code",
+        "## Inbound-only intake",
+        "The owner path stays passive",
+        "A submission is only an intake candidate",
+        issue_url,
         "genuine public PR",
-        "own or are authorized to confirm",
+        "source-owner-confirmed",
         "No paid LLM API",
     ):
         assert required_text in playbook
 
-    assert "I noticed your public work on [verified public project or PR]" in playbook
-    assert "I know your team needs" not in playbook
-    assert "ScopeProof customers" not in playbook
-    assert "validated accuracy" not in playbook
+    assert issue_url in draft
+    for forbidden_text in (
+        "DM me",
+        "DM-first outreach",
+        "Warm-contact message",
+        "Cold-contact message",
+        "One optional follow-up",
+        "First-response DM",
+    ):
+        assert forbidden_text not in draft
+        assert forbidden_text not in playbook
 
 
 def test_concierge_host_checklist_indexes_real_alpha_without_contact_data() -> None:
@@ -754,7 +773,7 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     )
     assert "Likes, views, stars, impressions, and downloads are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
-    assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.0" in html
+    assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.1" in html
     assert (
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
         in html
@@ -768,7 +787,7 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert not any(
         urlsplit(link).hostname == "www.linkedin.com" for link in parser.links
     )
-    assert "DM" in html
+    assert "DM me" not in html
     assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md" in html
     assert parser.forms == 0
     assert parser.remote_scripts == []

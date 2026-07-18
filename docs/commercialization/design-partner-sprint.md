@@ -10,7 +10,7 @@ next genuine case actionable; it does not create participant evidence by itself.
 
 ## Current state
 
-ScopeProof v0.2.0 can turn source-owner-confirmed acceptance criteria and one genuine public
+ScopeProof v0.2.1 can turn source-owner-confirmed acceptance criteria and one genuine public
 GitHub pull request into an inspectable requirement-to-evidence review. It does not execute the
 pull request, invent requirements, replace QA, or prove correctness.
 
