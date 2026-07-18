@@ -54,7 +54,9 @@ def test_comparison_benchmark_command_reports_constructed_boundary(capsys) -> No
     assert main(["comparison-benchmark"]) == 0
     payload = json.loads(capsys.readouterr().out)
 
-    assert payload["executed_case_count"] == 1
+    assert payload["executed_case_count"] == 2
+    assert payload["actual_counts"]["unchanged"] == 1
+    assert payload["actual_counts"] == payload["expected_counts"]
     assert payload["mismatches"] == []
     assert payload["evidence_boundary"] == "deliberately constructed engineering evidence"
     assert payload["does_not_advance_stage_1"] is True
