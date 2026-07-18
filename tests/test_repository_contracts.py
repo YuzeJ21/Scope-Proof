@@ -1,3 +1,4 @@
+import json
 import tomllib
 from html.parser import HTMLParser
 from pathlib import Path
@@ -5,6 +6,8 @@ from struct import unpack
 from urllib.parse import urlsplit
 
 from PIL import Image
+
+from scopeproof_core.reviews.comparison import EvidenceChangeKind
 
 
 def _mp4_duration_seconds(path: Path) -> float:
@@ -161,6 +164,8 @@ def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> No
         "current_pr.json",
         "current_labels.json",
         "rereview_evidence_integrity.json",
+        "unchanged_pr.json",
+        "unchanged_labels.json",
     }
     readme = Path("README.md").read_text(encoding="utf-8")
     guide = Path("docs/development-environment.md").read_text(encoding="utf-8")
@@ -177,6 +182,18 @@ def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> No
         assert "does not prove correctness" in document
         assert "does not constitute customer validation" in document
         assert "does not show external use" in document
+
+    manifest = json.loads(
+        Path("evals/comparisons/rereview_evidence_integrity.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    aggregate_counts = {kind.value: 0 for kind in EvidenceChangeKind}
+    for case in manifest["cases"]:
+        for kind, count in case["expected_counts"].items():
+            aggregate_counts[kind] += count
+    assert set(aggregate_counts) == {kind.value for kind in EvidenceChangeKind}
+    assert all(count > 0 for count in aggregate_counts.values())
 
 
 def test_ci_runs_lint_tests_and_benchmark() -> None:

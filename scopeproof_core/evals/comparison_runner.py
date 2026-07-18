@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from scopeproof_core.demo import build_review_from_paths
 from scopeproof_core.reviews.comparison import (
@@ -19,15 +19,26 @@ _MANIFEST_NAME = "rereview_evidence_integrity.json"
 _EVIDENCE_BOUNDARY = "deliberately constructed engineering evidence"
 
 
-class _ComparisonBenchmarkManifest(BaseModel):
+class _ComparisonBenchmarkCaseManifest(BaseModel):
     case_id: str = Field(min_length=1)
     previous_fixture: str = Field(min_length=1)
     previous_labels: str = Field(min_length=1)
     current_fixture: str = Field(min_length=1)
     current_labels: str = Field(min_length=1)
     expected_counts: EvidenceChangeCounts
+
+
+class _ComparisonBenchmarkManifest(BaseModel):
+    cases: list[_ComparisonBenchmarkCaseManifest] = Field(min_length=1)
     evidence_boundary: Literal["deliberately constructed engineering evidence"]
     does_not_advance_stage_1: Literal[True]
+
+    @model_validator(mode="after")
+    def _case_ids_are_unique(self) -> _ComparisonBenchmarkManifest:
+        case_ids = [case.case_id for case in self.cases]
+        if len(case_ids) != len(set(case_ids)):
+            raise ValueError("comparison benchmark case IDs must be unique")
+        return self
 
 
 class ComparisonBenchmarkCaseResult(BaseModel):
@@ -66,39 +77,60 @@ def _required_file(root: Path, name: str) -> Path:
     return path
 
 
+def _sum_counts(counts: list[EvidenceChangeCounts]) -> EvidenceChangeCounts:
+    return EvidenceChangeCounts(
+        **{
+            kind.value: sum(getattr(item, kind.value) for item in counts)
+            for kind in EvidenceChangeKind
+        }
+    )
+
+
 def run_comparison_benchmark(root: Path) -> ComparisonBenchmarkResult:
-    """Execute one local paired review without running any fixture repository code."""
+    """Execute local paired reviews without running any fixture repository code."""
 
     manifest = _load_manifest(root / _MANIFEST_NAME)
-    previous = build_review_from_paths(
-        _required_file(root, manifest.previous_fixture),
-        _required_file(root, manifest.previous_labels),
-    )
-    current = build_review_from_paths(
-        _required_file(root, manifest.current_fixture),
-        _required_file(root, manifest.current_labels),
-    )
-    actual = compare_reviews(previous, current).evidence_change_counts
-    mismatches = [
-        f"{kind.value}: expected {getattr(manifest.expected_counts, kind.value)}, "
-        f"got {getattr(actual, kind.value)}"
-        for kind in EvidenceChangeKind
-        if getattr(manifest.expected_counts, kind.value) != getattr(actual, kind.value)
-    ]
-    case = ComparisonBenchmarkCaseResult(
-        case_id=manifest.case_id,
-        expected_counts=manifest.expected_counts,
-        actual_counts=actual,
-        mismatches=mismatches,
-    )
+    case_results: list[ComparisonBenchmarkCaseResult] = []
+    aggregate_mismatches: list[str] = []
+    for case_manifest in manifest.cases:
+        previous = build_review_from_paths(
+            _required_file(root, case_manifest.previous_fixture),
+            _required_file(root, case_manifest.previous_labels),
+        )
+        current = build_review_from_paths(
+            _required_file(root, case_manifest.current_fixture),
+            _required_file(root, case_manifest.current_labels),
+        )
+        actual = compare_reviews(previous, current).evidence_change_counts
+        mismatches = [
+            f"{kind.value}: expected "
+            f"{getattr(case_manifest.expected_counts, kind.value)}, "
+            f"got {getattr(actual, kind.value)}"
+            for kind in EvidenceChangeKind
+            if getattr(case_manifest.expected_counts, kind.value)
+            != getattr(actual, kind.value)
+        ]
+        case_results.append(
+            ComparisonBenchmarkCaseResult(
+                case_id=case_manifest.case_id,
+                expected_counts=case_manifest.expected_counts,
+                actual_counts=actual,
+                mismatches=mismatches,
+            )
+        )
+        aggregate_mismatches.extend(
+            f"{case_manifest.case_id}: {message}" for message in mismatches
+        )
     return ComparisonBenchmarkResult(
-        executed_case_count=1,
-        expected_counts=manifest.expected_counts,
-        actual_counts=actual,
-        mismatches=[f"{case.case_id}: {message}" for message in mismatches],
+        executed_case_count=len(case_results),
+        expected_counts=_sum_counts(
+            [case.expected_counts for case in case_results]
+        ),
+        actual_counts=_sum_counts([case.actual_counts for case in case_results]),
+        mismatches=aggregate_mismatches,
         evidence_boundary=_EVIDENCE_BOUNDARY,
         does_not_advance_stage_1=True,
-        case_results=[case],
+        case_results=case_results,
     )
 
 
