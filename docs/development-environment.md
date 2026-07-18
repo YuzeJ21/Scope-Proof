@@ -18,7 +18,18 @@ uv sync --extra dev --locked
 uv run ruff check .
 uv run pytest
 uv run scopeproof benchmark
+uv run scopeproof comparison-benchmark
 ```
+
+`scopeproof benchmark` checks deterministic acceptance-coverage behavior across the labeled local
+corpus. `scopeproof comparison-benchmark` checks deterministic re-review evidence classification
+across one paired previous/current case, including fail-closed ambiguous matching. Both are
+deliberately constructed engineering evidence. They do not prove correctness, do not constitute
+customer validation, do not show external use, and do not advance Stage 1. Neither command executes
+fixture repository code or uses a paid API.
+
+This engineering evidence does not prove correctness, does not constitute customer validation,
+and does not show external use.
 
 Run the local workbench with:
 

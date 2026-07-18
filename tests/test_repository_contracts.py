@@ -149,6 +149,36 @@ def test_wheel_includes_bundled_benchmark_data() -> None:
     assert list(Path("evals/labels").glob("*.json"))
 
 
+def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> None:
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
+    comparison_files = {
+        path.name for path in Path("evals/comparisons").glob("*.json")
+    }
+    expected_files = {
+        "previous_pr.json",
+        "previous_labels.json",
+        "current_pr.json",
+        "current_labels.json",
+        "rereview_evidence_integrity.json",
+    }
+    readme = Path("README.md").read_text(encoding="utf-8")
+    guide = Path("docs/development-environment.md").read_text(encoding="utf-8")
+
+    assert Path("evals/comparisons").is_dir()
+    assert comparison_files == expected_files
+    assert wheel["force-include"]["evals"] == "evals"
+    assert "scopeproof comparison-benchmark" in readme
+    assert "deliberately constructed engineering evidence" in readme
+    assert "does not advance Stage 1" in readme
+    assert "uv run scopeproof benchmark" in guide
+    assert "uv run scopeproof comparison-benchmark" in guide
+    for document in (readme, guide):
+        assert "does not prove correctness" in document
+        assert "does not constitute customer validation" in document
+        assert "does not show external use" in document
+
+
 def test_ci_runs_lint_tests_and_benchmark() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "python -m pip install --upgrade pip" in workflow

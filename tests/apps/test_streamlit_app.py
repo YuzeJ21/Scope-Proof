@@ -1876,9 +1876,57 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     fresh = fresh.button(key="confirm_criteria").click().run()
     fresh = fresh.button(key="run_analysis").click().run()
 
-    rendered = "\n".join(item.value for item in [*fresh.markdown, *fresh.caption])
+    rendered = "\n".join(
+        item.value for item in [*fresh.markdown, *fresh.caption, *fresh.code]
+    )
     assert f"Previous head: {previous_head}" in rendered
     assert f"Current head: {changed_snapshot.head_sha}" in rendered
+    assert "Relocated: 9" in rendered
+    assert "Previous candidate" in rendered
+    assert "Current candidate" in rendered
+    assert "review the current evidence" in rendered.lower()
+    assert "does not prove criterion satisfaction" in rendered.lower()
+
+
+def test_rereview_comparison_shows_modified_candidate_excerpt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    original = load_demo_snapshot()
+    files = [item.model_copy(deep=True) for item in original.files]
+    lines = [item.model_copy(deep=True) for item in files[0].lines]
+    lines[0] = lines[0].model_copy(
+        update={
+            "content": "def export_research_list_csv_safe(rows, active_sector=None):"
+        }
+    )
+    files[0] = files[0].model_copy(update={"lines": lines})
+    changed_snapshot = original.model_copy(
+        update={"head_sha": "c" * 40, "files": files}
+    )
+
+    fresh = new_app()
+    fresh = select_saved_review(fresh, review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+    fresh = fresh.text_input(key="pr_url").set_value(
+        "https://github.com/scopeproof/demo-stock-research/pull/7"
+    ).run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=changed_snapshot,
+    ):
+        fresh = fresh.button(key="fetch_pr").click().run()
+    fresh = fresh.button(key="confirm_criteria").click().run()
+    fresh = fresh.button(key="run_analysis").click().run()
+
+    rendered = "\n".join(
+        item.value for item in [*fresh.markdown, *fresh.caption, *fresh.code]
+    )
+    assert "Modified" in rendered
+    assert "def export_research_list_csv(rows, active_sector=None):" in rendered
+    assert "def export_research_list_csv_safe(rows, active_sector=None):" in rendered
+    assert "review the current evidence" in rendered.lower()
 
 
 def test_reopened_review_reports_same_head_before_reanalysis(
