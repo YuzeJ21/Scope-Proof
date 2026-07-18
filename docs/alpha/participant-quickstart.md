@@ -30,3 +30,16 @@ tokens, private code, customer data, secrets, or confidential material.
 
 If the PR, criteria authority, public source, or confidentiality boundary cannot be confirmed, stop
 the alpha session. A constructed demo or technical smoke is not participant validation.
+
+## Optional post-review commercial research
+
+After saving the review and recording the participant-selected outcome, read the
+[30-day Design Partner Sprint](../commercialization/design-partner-sprint.md). A completed
+participant may voluntarily submit the bounded
+[public feedback form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml).
+
+The feedback form records an honest useful gap, already-known information, incomplete review, or
+product friction plus timing, decision impact, and reuse intent. Its pricing question is optional
+research after product use. No paid product or billing is active, a response is not a purchase
+agreement, and declining the question does not affect the review. A form submission without a
+completed genuine review does not count as product or commercial validation.

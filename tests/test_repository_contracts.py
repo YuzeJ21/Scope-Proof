@@ -850,6 +850,53 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
     assert all(f"id: {field_id}" not in template for field_id in forbidden_ids)
 
 
+def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    site = Path("site/index.html").read_text(encoding="utf-8")
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(
+        encoding="utf-8"
+    )
+    outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(
+        encoding="utf-8"
+    )
+    public_surfaces = "\n".join((readme, site))
+
+    guide = "docs/commercialization/design-partner-sprint.md"
+    feedback_url = (
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?"
+        "template=public-alpha-feedback.yml"
+    )
+    assert guide in readme
+    assert "../commercialization/design-partner-sprint.md" in quickstart
+    assert guide in site
+    assert feedback_url in site
+    assert feedback_url in quickstart
+    assert "../commercialization/design-partner-sprint.md" in outcome
+    assert "../commercialization/design-partner-sprint.md" in checklist
+
+    for required in (
+        "free design-partner review",
+        "No paid product or billing is active",
+        "pricing question is optional research after product use",
+        "public-repository-only",
+        "acceptance-coverage assistant",
+        "not an AI code reviewer",
+    ):
+        assert required in public_surfaces
+    for unsupported_claim in (
+        "ScopeProof customers",
+        "validated pricing",
+        "paid plan is available",
+        "proven commercial demand",
+    ):
+        assert unsupported_claim not in public_surfaces
+
+    assert "incomplete review" in site
+    assert "participant-selected outcome" in quickstart
+    assert "not commercial validation" in outcome
+
+
 def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> None:
     workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
 

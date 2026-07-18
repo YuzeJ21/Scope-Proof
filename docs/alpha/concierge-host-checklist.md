@@ -26,6 +26,9 @@ overnight monitor.
 Submit a public alpha case through the inbound-only issue form:
 https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 
+The [30-day Design Partner Sprint](../commercialization/design-partner-sprint.md) defines the
+commercial-research evidence and stop gates. It does not authorize outreach or create evidence.
+
 ## Host sequence
 
 - [ ] Install and verify the current release using the [README quickstart](../../README.md#quickstart).
@@ -37,6 +40,10 @@ https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 - [ ] Conduct the review under the [confirmed dogfood protocol](../dogfood/public-pr-protocol.md). Do not execute the PR or convert static evidence into runtime verification.
 - [ ] Let the participant accept, reject, or mark findings ambiguous; do not choose for them.
 - [ ] Ask the participant to select exactly one value from the [public-alpha outcome form](outcome-form.md).
+- [ ] Only after the local outcome is complete, offer the voluntary public feedback form:
+      https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml
+      Do not select timing, decision impact, reuse intent, or design-partner interest for the
+      participant.
 - [ ] Record report and quotation consent independently. Both remain off unless explicitly granted.
 - [ ] Use a public summary only when the validated case has report consent. Never publish local notes or infer quotation consent.
 

@@ -6,7 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Submit only voluntary, sanitized feedback after a genuine public-PR review. A deliberately
+        Submit only voluntary, sanitized feedback after a genuine public-PR review with
+        source-owner-confirmed criteria. A deliberately
         constructed demo, owner-authored example, or submission without a completed participant
         outcome is not validation. Keep the full local review private and include no tokens,
         credentials, private code, customer data, private links, or confidential requirements.
