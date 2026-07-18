@@ -9,6 +9,16 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+### Changed
+
+- Expanded the deliberately constructed comparison benchmark from one changed-head case to two
+  paired cases, adding exact Unchanged coverage while preserving all core classification rules.
+
+### Boundaries
+
+- The added case and its runtime result remain engineering evidence only. They do not advance
+  Stage 1 or constitute correctness, customer, market, participant, or external-use evidence.
+
 ## 0.2.1 — Re-review evidence integrity
 
 ### Added

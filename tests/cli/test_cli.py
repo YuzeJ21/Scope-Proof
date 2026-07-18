@@ -6,6 +6,7 @@ import pytest
 
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import main
+from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.version import __version__
 
@@ -60,6 +61,23 @@ def test_comparison_benchmark_command_reports_constructed_boundary(capsys) -> No
     assert payload["mismatches"] == []
     assert payload["evidence_boundary"] == "deliberately constructed engineering evidence"
     assert payload["does_not_advance_stage_1"] is True
+
+
+def test_comparison_benchmark_command_returns_nonzero_for_mismatch(
+    monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    result = run_bundled_comparison_benchmark().model_copy(
+        update={"mismatches": ["unchanged-reference: unchanged: expected 1, got 0"]}
+    )
+    monkeypatch.setattr(
+        "scopeproof_core.cli.run_bundled_comparison_benchmark", lambda: result
+    )
+
+    assert main(["comparison-benchmark"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["mismatches"] == [
+        "unchanged-reference: unchanged: expected 1, got 0"
+    ]
 
 
 def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> None:

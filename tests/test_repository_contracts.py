@@ -178,6 +178,7 @@ def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> No
     assert "does not advance Stage 1" in readme
     assert "uv run scopeproof benchmark" in guide
     assert "uv run scopeproof comparison-benchmark" in guide
+    assert "across two paired previous/current cases" in guide
     for document in (readme, guide):
         assert "does not prove correctness" in document
         assert "does not constitute customer validation" in document
