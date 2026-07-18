@@ -110,6 +110,8 @@ def test_rehearsal_rejects_empty_or_duplicate_criteria(
         "https://user:password@example.com/requirements",
         "https://localhost/requirements",
         "https://localhost./requirements",
+        "https://foo.localhost/requirements",
+        "https://foo.localhost./requirements",
         "https://requirements.local/criteria",
         "https://127.0.0.1/requirements",
         "https://10.0.0.1/requirements",

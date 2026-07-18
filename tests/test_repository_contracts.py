@@ -987,6 +987,9 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
     feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
         encoding="utf-8"
     )
+    sprint = Path("docs/commercialization/design-partner-sprint.md").read_text(
+        encoding="utf-8"
+    )
     case_url = (
         "https://github.com/YuzeJ21/Scope-Proof/issues/new?"
         "template=public-alpha-case.yml"
@@ -1012,6 +1015,12 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
     assert "Completed reviews only" in feedback
     assert "required dropdown" in feedback
     assert "Prefer not to answer" in feedback
+
+    completed_signals = sprint.split(
+        "## Signals recorded only after a completed review", maxsplit=1
+    )[1].split("## Research-only price hypotheses", maxsplit=1)[0]
+    assert "inspectable report" not in completed_signals
+    assert "incomplete review" not in completed_signals
 
 
 def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() -> None:

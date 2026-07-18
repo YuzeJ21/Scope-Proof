@@ -56,9 +56,8 @@ contact list, automate outreach, or add notification-only GitHub comments.
 
 Record the participant's explicit selection for:
 
-- completion time: under five minutes, five to ten minutes, more than ten minutes, or no
-  inspectable report;
-- outcome: useful gap, already-known information, incomplete review, or product friction;
+- completion time: under five minutes, five to ten minutes, or more than ten minutes;
+- outcome: useful gap, already-known information, or product friction;
 - useful-gap category: missing implementation, weak or misleading evidence, missing test
   evidence, stale evidence after a new commit, unclear criteria, another attributable public
   finding, or no new useful gap;

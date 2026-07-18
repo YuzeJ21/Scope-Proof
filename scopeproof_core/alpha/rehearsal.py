@@ -48,6 +48,7 @@ class AlphaRehearsalInput(BaseModel):
             parsed.password is not None
             or normalized_hostname is None
             or normalized_hostname == "localhost"
+            or normalized_hostname.endswith(".localhost")
             or normalized_hostname.endswith(".local")
         ):
             unsafe = True
