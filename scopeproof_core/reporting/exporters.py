@@ -14,6 +14,11 @@ from scopeproof_core.gates.validation import (
     validated_review_bundle,
     validated_review_state,
 )
+from scopeproof_core.presentation import (
+    criterion_coverage_rows,
+    evidence_status_text,
+    review_status_label,
+)
 from scopeproof_core.reporting.references import (
     is_linkable_artifact_reference,
     render_artifact_reference_markdown,
@@ -78,12 +83,15 @@ def export_markdown(bundle: ExportableReview) -> str:
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
-    verdict = bundle.gate.verdict.value.replace("_", " ").title()
+    review_status = review_status_label(bundle.gate.verdict)
+    coverage_by_id = {
+        row.criterion_id: row for row in criterion_coverage_rows(bundle)
+    }
     review_created_at = bundle.review.model_dump(mode="json")["created_at"]
     lines = [
         "# ScopeProof Acceptance Review",
         "",
-        f"**Verdict:** {verdict}",
+        f"**Review status:** {review_status}",
         f"**Review ID:** {_render_markdown_code(bundle.review.review_id)}",
         f"**Repository:** {_render_markdown_code(bundle.review.repository)}",
         f"**Pull request:** #{bundle.review.pr_number}",
@@ -135,35 +143,36 @@ def export_markdown(bundle: ExportableReview) -> str:
         "## Evidence Matrix",
         "",
         (
-            "| Criterion | Source | Priority | Status | Level | Confidence | Count | "
-            "Concern | Human decision |"
+            "| Criterion | Source | Priority | Evidence status | Evidence types | "
+            "Reviewer decision | Confidence | Count | Concern |"
         ),
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
-        resolution = resolution_by_id.get(criterion.criterion_id)
-        decision = resolution.decision.value if resolution else "Unresolved"
+        row = coverage_by_id[criterion.criterion_id]
         criterion_label = _escape_markdown_text(
             f"{criterion.criterion_id}: {criterion.text}"
         )
         concern = _escape_markdown_text(finding.reason)
         lines.append(
             f"| {criterion_label} | "
-            f"{criterion.criterion_source.value} | {criterion.priority.value} | "
-            f"{finding.status.value} | {finding.evidence_level.value} | "
-            f"{finding.confidence_band.value} | {len(finding.evidence_ids)} | "
-            f"{concern} | {decision} |"
+            f"{row.source} | {row.priority} | "
+            f"{evidence_status_text(row.evidence_status)} | "
+            f"{', '.join(row.evidence_types) or 'None'} | {row.reviewer_decision} | "
+            f"{finding.confidence_band.value} | {row.candidate_count} | {concern} |"
         )
 
     lines.extend(["", "## Criterion Details", ""])
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
+        coverage = coverage_by_id[criterion.criterion_id]
         lines.extend(
             [
                 f"### {_escape_markdown_text(f'{criterion.criterion_id} — {criterion.text}')}",
                 "",
-                f"**Finding:** {finding.status.value}",
+                "**Evidence status:** "
+                f"{evidence_status_text(coverage.evidence_status)}",
                 f"**Reason:** {_escape_markdown_text(finding.reason)}",
             ]
         )
@@ -195,6 +204,10 @@ def export_markdown(bundle: ExportableReview) -> str:
                     f"{_escape_markdown_text(candidate.relevance_reason)}"
                 )
                 lines.append(f"  - Excerpt: {_render_markdown_code(candidate.excerpt)}")
+                if candidate.context_excerpt:
+                    lines.append(
+                        f"  - Context: {_render_markdown_code(candidate.context_excerpt)}"
+                    )
                 for limitation in candidate.limitations:
                     lines.append(f"  - Limitation: {_escape_markdown_text(limitation)}")
         resolution = resolution_by_id.get(criterion.criterion_id)
@@ -202,7 +215,7 @@ def export_markdown(bundle: ExportableReview) -> str:
             lines.extend(
                 [
                     "",
-                    f"**Human resolution:** {resolution.decision.value}",
+                    f"**Reviewer decision:** {coverage.reviewer_decision}",
                     "**Reviewer note:** "
                     f"{_escape_markdown_text(resolution.comment or 'No note provided')}",
                 ]
@@ -236,7 +249,7 @@ def export_markdown(bundle: ExportableReview) -> str:
     if bundle.gate.reason_codes:
         lines.extend(
             [
-                "## Gate Reasons",
+                "## Review Status Reasons",
                 "",
                 *[f"- {_render_markdown_code(code)}" for code in bundle.gate.reason_codes],
                 "",
@@ -280,7 +293,12 @@ def _render_candidate_reference_html(item: EvidenceItem) -> str:
         reference = f'<a href="{html.escape(item.permalink, quote=True)}">{label}</a>'
     else:
         reference = f"{label}<br><code>{html.escape(item.permalink)}</code>"
-    return f"{reference}<br><code>{html.escape(item.excerpt)}</code>"
+    context = (
+        f"<br><pre>{html.escape(item.context_excerpt)}</pre>"
+        if item.context_excerpt
+        else ""
+    )
+    return f"{reference}<br><code>{html.escape(item.excerpt)}</code>{context}"
 
 
 def export_csv(bundle: ExportableReview) -> str:
@@ -307,18 +325,22 @@ def export_csv(bundle: ExportableReview) -> str:
         "criteria_revision",
         "requirements_source_text",
         "verdict",
+        "review_status",
         "criterion_id",
         "criterion",
         "criterion_source",
         "priority",
         "status",
+        "evidence_status",
         "evidence_level",
+        "evidence_types",
         "confidence_band",
         "evidence_count",
         "concern",
         "evidence_links",
         "missing_evidence",
         "human_decision",
+        "reviewer_decision",
         "reviewer_comment",
         "recommended_action",
         "runtime_artifacts",
@@ -327,9 +349,13 @@ def export_csv(bundle: ExportableReview) -> str:
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
     writer.writeheader()
+    coverage_by_id = {
+        row.criterion_id: row for row in criterion_coverage_rows(bundle)
+    }
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
+        coverage = coverage_by_id[criterion.criterion_id]
         runtime_items = [
             item for item in bundle.runtime_evidence if item.criterion_id == criterion.criterion_id
         ]
@@ -351,12 +377,15 @@ def export_csv(bundle: ExportableReview) -> str:
                 "criteria_revision": state.criteria_revision.number if state else 1,
                 "requirements_source_text": _csv_text(bundle.source_text),
                 "verdict": bundle.gate.verdict.value,
+                "review_status": review_status_label(bundle.gate.verdict),
                 "criterion_id": _csv_text(criterion.criterion_id),
                 "criterion": _csv_text(criterion.text),
                 "criterion_source": criterion.criterion_source.value,
                 "priority": criterion.priority.value,
                 "status": finding.status.value,
+                "evidence_status": evidence_status_text(coverage.evidence_status),
                 "evidence_level": finding.evidence_level.value,
+                "evidence_types": json.dumps(coverage.evidence_types, ensure_ascii=False),
                 "confidence_band": finding.confidence_band.value,
                 "evidence_count": len(finding.evidence_ids),
                 "concern": _csv_text(finding.reason),
@@ -371,6 +400,7 @@ def export_csv(bundle: ExportableReview) -> str:
                     finding.missing_evidence, ensure_ascii=False
                 ),
                 "human_decision": resolution.decision.value if resolution else "",
+                "reviewer_decision": coverage.reviewer_decision,
                 "reviewer_comment": _csv_text(resolution.comment) if resolution else "",
                 "recommended_action": _csv_text(finding.recommended_action),
                 "runtime_artifacts": json.dumps(
@@ -389,11 +419,13 @@ def export_html(value: ExportableReview) -> str:
     bundle, state = _bundle_and_state(value)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
-    resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
+    coverage_by_id = {
+        row.criterion_id: row for row in criterion_coverage_rows(bundle)
+    }
     rows = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
-        resolution = resolution_by_id.get(criterion.criterion_id)
+        coverage = coverage_by_id[criterion.criterion_id]
         evidence = "<br>".join(
             _render_candidate_reference_html(evidence_by_id[item_id])
             for item_id in finding.evidence_ids
@@ -402,19 +434,19 @@ def export_html(value: ExportableReview) -> str:
             "<tr>"
             f"<td>{html.escape(criterion.criterion_id)}</td>"
             f"<td>{html.escape(criterion.text)}</td>"
-            f"<td>{html.escape(criterion.criterion_source.value)}</td>"
-            f"<td>{html.escape(criterion.priority.value)}</td>"
-            f"<td>{html.escape(finding.status.value)}</td>"
-            f"<td>{html.escape(finding.evidence_level.value)}</td>"
+            f"<td>{html.escape(coverage.source)}</td>"
+            f"<td>{html.escape(coverage.priority)}</td>"
+            f"<td>{html.escape(evidence_status_text(coverage.evidence_status))}</td>"
+            f"<td>{html.escape(', '.join(coverage.evidence_types) or 'None')}</td>"
+            f"<td>{html.escape(coverage.reviewer_decision)}</td>"
             f"<td>{html.escape(finding.confidence_band.value)}</td>"
             f"<td>{len(finding.evidence_ids)}</td>"
             f"<td>{html.escape(finding.reason)}</td>"
-            f"<td>{html.escape(resolution.decision.value) if resolution else 'Unresolved'}</td>"
             f"<td>{evidence}</td>"
             "</tr>"
         )
     revision = state.criteria_revision.number if state else 1
-    verdict = html.escape(bundle.gate.verdict.value.replace("_", " ").title())
+    review_status = html.escape(review_status_label(bundle.gate.verdict))
     review_created_at = bundle.review.model_dump(mode="json")["created_at"]
     guidance = gate_guidance(bundle.gate)
     return "\n".join(
@@ -428,7 +460,7 @@ def export_html(value: ExportableReview) -> str:
             "pre{white-space:pre-wrap}</style>",
             "</head><body>",
             "<h1>ScopeProof Acceptance Review</h1>",
-            f"<p><strong>Verdict:</strong> {verdict}</p>",
+            f"<p><strong>Review status:</strong> {review_status}</p>",
             f"<p>Review ID: <code>{html.escape(bundle.review.review_id)}</code> · "
             f"Repository: <code>{html.escape(bundle.review.repository)}</code> · "
             f"PR #{bundle.review.pr_number} · Base SHA "
@@ -460,13 +492,14 @@ def export_html(value: ExportableReview) -> str:
             "<h2>Confirmed Requirements Source</h2>",
             f"<pre>{html.escape(bundle.source_text)}</pre>",
             "<table><thead><tr><th>ID</th><th>Criterion</th><th>Source</th><th>Priority</th>"
-            "<th>Status</th><th>Level</th><th>Confidence</th><th>Count</th><th>Concern</th>"
-            "<th>Human resolution</th><th>Evidence</th></tr></thead><tbody>",
+            "<th>Evidence status</th><th>Evidence types</th><th>Reviewer decision</th>"
+            "<th>Confidence</th><th>Count</th><th>Concern</th>"
+            "<th>Evidence</th></tr></thead><tbody>",
             *rows,
             "</tbody></table>",
             *(
                 [
-                    "<h2>Gate Reasons</h2><ul>",
+                    "<h2>Review Status Reasons</h2><ul>",
                     *[
                         f"<li><code>{html.escape(code)}</code></li>"
                         for code in bundle.gate.reason_codes

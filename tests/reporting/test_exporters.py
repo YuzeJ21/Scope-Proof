@@ -167,20 +167,57 @@ def test_exporters_revalidate_direct_review_bundle(exporter) -> None:
 def test_exports_agree_on_review_identity_verdict_and_criteria() -> None:
     bundle = example_bundle()
     created_at = bundle.review.model_dump(mode="json")["created_at"]
-    outputs = [
-        export_json(bundle),
-        export_markdown(bundle),
-        export_csv(bundle),
-        export_html(bundle),
-    ]
+    json_report = export_json(bundle)
+    markdown_report = export_markdown(bundle)
+    csv_report = export_csv(bundle)
+    html_report = export_html(bundle)
+    outputs = [json_report, markdown_report, csv_report, html_report]
     for output in outputs:
         semantic_output = output.replace("\\", "")
         assert bundle.review.review_id in semantic_output
         assert bundle.review.base_sha in semantic_output
         assert created_at in semantic_output
-        assert "blocked" in semantic_output.lower()
         assert "head123" in semantic_output
         assert "AC-01" in semantic_output
+    assert "blocked" in json_report.lower()
+    assert "blocked" in csv_report.lower()
+    assert "Action required" in markdown_report
+    assert "Action required" in html_report
+
+
+def test_human_readable_exports_use_reviewer_owned_coverage_language() -> None:
+    bundle = example_bundle()
+
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert "**Review status:** Action required" in markdown
+    assert "| Evidence status | Evidence types | Reviewer decision |" in markdown
+    assert "Weak candidate" in markdown
+    assert csv_row["review_status"] == "Action required"
+    assert csv_row["evidence_status"] == "Weak candidate"
+    assert json.loads(csv_row["evidence_types"]) == ["Implementation"]
+    assert "<strong>Review status:</strong> Action required" in html_report
+    assert "<th>Evidence status</th><th>Evidence types</th>" in html_report
+    assert "<td>Weak candidate</td><td>Implementation</td>" in html_report
+
+
+def test_human_readable_exports_show_bounded_context_without_changing_line_link() -> None:
+    bundle = example_bundle()
+    bundle.evidence[0].context_excerpt = (
+        "def prepare_rows():\n"
+        "def export_csv(rows):\n"
+        "    return filtered_rows"
+    )
+
+    markdown = export_markdown(bundle)
+    html_report = export_html(bundle)
+
+    assert "Context: <code>def prepare_rows(): def export_csv(rows):" in markdown
+    assert "<pre>def prepare_rows():\ndef export_csv(rows):" in html_report
+    assert "src/export.py#L42-L42" in markdown
+    assert "src/export.py#L42-L42" in html_report
 
 
 def test_exports_preserve_tool_and_ruleset_provenance() -> None:
@@ -321,8 +358,10 @@ def test_exports_preserve_confirmed_requirement_source() -> None:
     csv_row = next(csv.DictReader(io.StringIO(csv_report)))
     assert csv_row["requirements_source_text"] == bundle.source_text
     assert bundle.source_text in html_report
-    for output in (json_report, markdown_report, csv_report, html_report):
-        assert bundle.criteria[0].criterion_source.value in output
+    assert bundle.criteria[0].criterion_source.value in json_report
+    assert bundle.criteria[0].criterion_source.value in csv_report
+    assert "User confirmed" in markdown_report
+    assert "User confirmed" in html_report
 
 
 def test_human_readable_exports_keep_historical_tool_version() -> None:
@@ -440,16 +479,16 @@ def test_human_readable_exports_complete_the_evidence_matrix_contract() -> None:
     markdown = export_markdown(bundle)
     html_report = export_html(bundle)
 
-    assert "| Confidence | Count | Concern | Human decision |" in markdown
+    assert "| Reviewer decision | Confidence | Count | Concern |" in markdown
     assert (
-        "| medium | 1 | Only the export path was found. | change_required |"
+        "| Change required | medium | 1 | Only the export path was found. |"
         in markdown.replace("\\", "")
     )
-    assert "<th>Confidence</th><th>Count</th><th>Concern</th>" in html_report
-    assert "<th>Human resolution</th>" in html_report
+    assert "<th>Reviewer decision</th><th>Confidence</th><th>Count</th>" in html_report
+    assert "<th>Concern</th>" in html_report
     assert "<td>medium</td><td>1</td>" in html_report
     assert "<td>Only the export path was found.</td>" in html_report
-    assert "<td>change_required</td>" in html_report
+    assert "<td>Change required</td>" in html_report
 
 
 def test_candidate_evidence_count_excludes_manual_runtime_evidence() -> None:
@@ -473,7 +512,7 @@ def test_human_readable_exports_label_unresolved_human_decision() -> None:
 def test_markdown_keeps_gate_reasons_and_adds_recovery_guidance() -> None:
     markdown = export_markdown(example_bundle())
 
-    assert "## Gate Reasons" in markdown
+    assert "## Review Status Reasons" in markdown
     assert "<code>blocking_criteria</code>" in markdown
     assert "## What To Do Next" in markdown
     assert "blocking criteria: AC-01" in markdown.replace("\\", "")
@@ -492,7 +531,7 @@ def test_html_keeps_gate_reasons_and_adds_escaped_recovery_guidance(
 
     report = export_html(bundle)
 
-    assert "Gate Reasons" in report
+    assert "Review Status Reasons" in report
     assert "blocking_criteria" in report
     assert "future_&lt;reason&gt;" in report
     assert "What To Do Next" in report

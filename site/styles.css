@@ -82,14 +82,17 @@ footer div { display: flex; flex-wrap: wrap; gap: 1.5rem; }
 @media (max-width: 600px) {
   .site-header { align-items: flex-start; padding: 1rem 0; }
   nav { display: none; }
-  h1 { font-size: clamp(3rem, 17vw, 4.8rem); }
+  h1 { font-size: clamp(2.35rem, 12vw, 3.5rem); overflow-wrap: anywhere; }
+  h2, h3, p, a { overflow-wrap: anywhere; }
+  img, video { max-width: 100%; }
   .hero { min-height: auto; padding: 3.5rem 0; }
   .section { padding: 4rem 0; }
   .workflow-grid { grid-template-columns: 1fr; }
   .workflow-grid article { min-height: auto; }
   .workflow-grid article span { margin-bottom: 1.5rem; }
   .section-heading, footer { align-items: flex-start; flex-direction: column; }
-  .button { width: 100%; }
+  .actions, .alpha-actions { min-width: 0; }
+  .button { width: 100%; max-width: 100%; white-space: normal; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -7,8 +7,10 @@ from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews import attach_analysis
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
+    append_external_verification,
     append_resolution,
     append_runtime_evidence,
+    can_record_final_acceptance,
     confirm_criteria,
     current_resolutions,
     new_review_state,
@@ -733,6 +735,109 @@ def test_runtime_evidence_is_append_only_and_does_not_change_gate() -> None:
     assert updated.bundle is not None
     assert updated.bundle.runtime_evidence[0].artifact_reference.endswith("/1")
     assert updated.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+
+
+def test_external_verification_atomically_appends_evidence_and_resolution() -> None:
+    state = initial_state()
+    evidence = RuntimeEvidence(
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/run/1",
+        scenario="Export CSV",
+        environment="staging",
+        result="passed",
+        reviewer="QA",
+        evidence_level=EvidenceLevel.E3,
+    )
+    event = ResolutionEvent(
+        event_id="external-1",
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        comment="QA observed the export in staging.",
+        reviewer="QA",
+        claimed_evidence_level=EvidenceLevel.E3,
+    )
+
+    updated = append_external_verification(state, evidence, event)
+
+    assert state.bundle is not None and state.bundle.runtime_evidence == []
+    assert state.resolution_events == []
+    assert updated.bundle is not None
+    assert updated.bundle.runtime_evidence == [evidence]
+    assert updated.resolution_events[-1].event_id == "external-1"
+    assert updated.bundle.resolutions[0].decision is HumanDecision.MANUALLY_VERIFIED
+
+
+@pytest.mark.parametrize(
+    ("evidence_update", "event_update", "message"),
+    [
+        ({"criterion_id": "AC-99"}, {}, "same active criterion"),
+        ({}, {"criterion_id": "AC-99"}, "same active criterion"),
+        ({"reviewer": "QA one"}, {"reviewer": "QA two"}, "same reviewer"),
+        (
+            {"evidence_level": EvidenceLevel.E3},
+            {"claimed_evidence_level": EvidenceLevel.E4},
+            "same evidence level",
+        ),
+    ],
+)
+def test_external_verification_rejects_mismatched_atomic_inputs(
+    evidence_update, event_update, message
+) -> None:
+    evidence = RuntimeEvidence(
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/run/1",
+        scenario="Export CSV",
+        environment="staging",
+        result="passed",
+        reviewer="QA",
+        evidence_level=EvidenceLevel.E3,
+    ).model_copy(update=evidence_update)
+    event = ResolutionEvent(
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        comment="QA observed the export in staging.",
+        reviewer="QA",
+        claimed_evidence_level=EvidenceLevel.E3,
+    ).model_copy(update=event_update)
+
+    with pytest.raises(ValueError, match=message):
+        append_external_verification(initial_state(), evidence, event)
+
+
+def test_final_acceptance_requires_complete_passing_resolved_review() -> None:
+    state = initial_state()
+    assert can_record_final_acceptance(state) is False
+
+    resolved = append_resolution(
+        state,
+        ResolutionEvent(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Reviewed candidate evidence",
+        ),
+    )
+
+    assert can_record_final_acceptance(resolved) is True
+
+
+def test_final_acceptance_ignores_superseded_and_prior_revision_decisions() -> None:
+    state = append_resolution(
+        initial_state(),
+        ResolutionEvent(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Original revision accepted",
+        ),
+    )
+    pending = revise_criteria(
+        state,
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_criteria(pending)
+    reanalyzed = attach_analysis(confirmed, analysis_bundle_for(confirmed))
+
+    assert can_record_final_acceptance(reanalyzed) is False
 
 
 def test_runtime_evidence_is_revalidated_before_append() -> None:

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="ScopeProof maps source-owner-confirmed acceptance criteria to auditable evidence in public GitHub pull requests.">
-    <title>ScopeProof — Does this PR prove the requirement?</title>
+    <title>ScopeProof — Acceptance coverage for public PRs</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -25,10 +25,10 @@
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow">Local-first · deterministic · public PRs only</p>
-          <h1 id="hero-title">Does this PR prove the requirement?</h1>
-          <p class="lede">ScopeProof maps source-owner-confirmed acceptance criteria to inspectable implementation and test candidates, then shows the evidence gaps a human still needs to resolve.</p>
+          <h1 id="hero-title">Review acceptance coverage before merge</h1>
+          <p class="lede">ScopeProof shows which confirmed acceptance criteria have credible implementation or test candidates—and which still need human review.</p>
           <div class="actions">
-            <a class="button button-primary" href="https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.23">Try release v0.1.23</a>
+            <a class="button button-primary" href="https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.0">Try release v0.2.0</a>
             <a class="button button-secondary" href="https://github.com/YuzeJ21/Scope-Proof">View the repository</a>
           </div>
           <p class="boundary">Evidence assistant, not a correctness oracle. ScopeProof does not execute pull-request code, replace QA, or turn static evidence into runtime verification.</p>
@@ -40,13 +40,13 @@
 
       <section id="workflow" class="section" aria-labelledby="workflow-title">
         <p class="eyebrow">A bounded review</p>
-        <h2 id="workflow-title">PR → Criteria → Evidence → Decisions → Outcome</h2>
+        <h2 id="workflow-title">Public PR → Confirm criteria → Review coverage → Record decisions → Export</h2>
         <div class="workflow-grid">
           <article><span>01</span><h3>PR</h3><p>Load a public GitHub pull request without executing its code.</p></article>
           <article><span>02</span><h3>Criteria</h3><p>The source owner confirms one atomic requirement per line before analysis.</p></article>
-          <article><span>03</span><h3>Evidence</h3><p>Deterministic rules cite immutable candidates or state what evidence is missing.</p></article>
+          <article><span>03</span><h3>Coverage</h3><p>Deterministic rules cite immutable candidates or state what evidence is missing.</p></article>
           <article><span>04</span><h3>Decisions</h3><p>A human accepts, rejects, verifies, or records an exception with a reason.</p></article>
-          <article><span>05</span><h3>Outcome</h3><p>Record one honest result without turning a trial into a market claim.</p></article>
+          <article><span>05</span><h3>Export</h3><p>Save or export a reproducible review without turning candidates into correctness claims.</p></article>
         </div>
       </section>
 
@@ -68,7 +68,7 @@
 
       <section id="alpha" class="section alpha-section" aria-labelledby="alpha-title">
         <div>
-          <p class="eyebrow">Help test the product question</p>
+          <p class="eyebrow">Optional alpha feedback session</p>
           <h2 id="alpha-title">Bring one genuine public PR</h2>
           <p>ScopeProof needs product managers, QA practitioners, and engineers who own or are directly authorized to confirm public acceptance criteria. A ten-minute trial can end honestly in one of three ways: it found a useful gap, showed only known information, or created friction.</p>
           <p class="metric-boundary">Likes, views, stars, impressions, and downloads are not product validation.</p>

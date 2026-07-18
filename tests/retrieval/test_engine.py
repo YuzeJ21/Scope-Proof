@@ -107,6 +107,35 @@ def test_evidence_permalink_is_anchored_to_head_sha_and_lines() -> None:
     )
 
 
+def test_retrieval_adds_one_inspectable_neighbor_on_each_side() -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                "src/export.py",
+                [
+                    (LineChangeType.CONTEXT, 40, "def prepare_rows():"),
+                    (LineChangeType.ADDED, 41, "    filtered_rows = active_rows()"),
+                    (LineChangeType.ADDED, 42, "    return export_csv(filtered_rows)"),
+                    (LineChangeType.CONTEXT, 43, "def unrelated_footer():"),
+                ],
+            )
+        ]
+    )
+
+    evidence = retrieve_evidence(
+        snapshot, [Criterion(criterion_id="AC-01", text="Export CSV filtered rows")]
+    )
+
+    matched = next(item for item in evidence if item.line_start == 42)
+    assert matched.excerpt == "return export_csv(filtered_rows)"
+    assert matched.context_excerpt == (
+        "    filtered_rows = active_rows()\n"
+        "    return export_csv(filtered_rows)\n"
+        "def unrelated_footer():"
+    )
+    assert matched.line_start == matched.line_end == 42
+
+
 def test_evidence_permalink_encodes_repository_controlled_path_characters() -> None:
     snapshot = snapshot_with_files(
         [

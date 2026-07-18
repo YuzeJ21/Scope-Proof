@@ -12,6 +12,7 @@ from scopeproof_core.alpha.models import (
     AlphaPublicationConsent,
     ParticipantRole,
 )
+from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 
 
 def initialize_alpha_case(
@@ -32,6 +33,48 @@ def initialize_alpha_case(
         no_confidential_information=no_confidential_information,
         confirmed_criteria=confirmed_criteria,
     )
+
+
+def ensure_alpha_case(
+    *,
+    store: JsonAlphaCaseStore,
+    public_pr_url: str,
+    requirements_source_url: str,
+    participant_role: ParticipantRole,
+    source_owner_confirmed: bool,
+    no_confidential_information: bool,
+    confirmed_criteria: list[str],
+    case_id: str | None = None,
+) -> AlphaCaseRecord:
+    """Create one validated case or return the matching case already named by the caller."""
+
+    candidate = initialize_alpha_case(
+        public_pr_url=public_pr_url,
+        requirements_source_url=requirements_source_url,
+        participant_role=participant_role,
+        source_owner_confirmed=source_owner_confirmed,
+        no_confidential_information=no_confidential_information,
+        confirmed_criteria=confirmed_criteria,
+    )
+    if case_id is None:
+        store.save(candidate)
+        return candidate
+
+    existing = store.load(case_id)
+    comparable_fields = (
+        "public_pr_url",
+        "requirements_source_url",
+        "participant_role",
+        "source_owner_confirmed",
+        "no_confidential_information",
+        "confirmed_criteria",
+    )
+    if any(
+        getattr(existing, field) != getattr(candidate, field)
+        for field in comparable_fields
+    ):
+        raise ValueError("existing alpha case does not match the supplied qualification")
+    return existing
 
 
 def record_alpha_outcome(

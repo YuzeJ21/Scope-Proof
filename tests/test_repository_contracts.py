@@ -229,12 +229,25 @@ def test_readme_documents_operating_commands() -> None:
     assert "scopeproof_core.evals.runner" in readme
 
 
+def test_public_product_surfaces_use_reviewer_first_vocabulary() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    site = Path("site/index.html").read_text(encoding="utf-8")
+    demo = Path("docs/launch/demo-script.md").read_text(encoding="utf-8")
+    public_surfaces = "\n".join((readme, site, demo))
+
+    assert "See which acceptance criteria have credible PR evidence" in readme
+    assert "Prove the PR matches the product intent" not in public_surfaces
+    assert "Alpha feedback session" in readme
+    assert "GitHub Action advanced preview" in readme
+    assert "Observed CI state" in readme
+
+
 def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert (
-        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.1.23/"
-        "scopeproof-0.1.23-py3-none-any.whl"
+        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.0/"
+        "scopeproof-0.2.0-py3-none-any.whl"
     ) in readme
     assert "scopeproof benchmark" in readme
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in readme
@@ -246,10 +259,10 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
 
 def test_readme_documents_optional_release_checksum_verification() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    wheel_name = "scopeproof-0.1.23-py3-none-any.whl"
+    wheel_name = "scopeproof-0.2.0-py3-none-any.whl"
 
-    assert f"releases/download/v0.1.23/{wheel_name}" in readme
-    assert f"releases/download/v0.1.23/{wheel_name}.sha256" in readme
+    assert f"releases/download/v0.2.0/{wheel_name}" in readme
+    assert f"releases/download/v0.2.0/{wheel_name}.sha256" in readme
     assert f"shasum -a 256 -c {wheel_name}.sha256" in readme
     assert f"sha256sum -c {wheel_name}.sha256" in readme
     assert f"python -m pip install ./{wheel_name}" in readme
@@ -272,7 +285,7 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert '__version__ = "0.1.23"' in version_source
+    assert '__version__ = "0.2.0"' in version_source
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
@@ -343,13 +356,13 @@ def test_external_validation_runbook_permanently_excludes_fork_testing() -> None
     assert "optional test 3" not in runbook.lower()
 
 
-def test_launch_matrix_distinguishes_local_action_fixtures_from_recorded_run() -> None:
+def test_launch_matrix_keeps_action_as_an_advanced_preview() -> None:
     matrix = Path("docs/launch/evidence-matrix.md").read_text(encoding="utf-8")
 
-    assert "Local GitHub Action fixtures" in matrix
-    assert "same-repository run and same-head rerun" in matrix
-    assert "docs/launch/non-fork-action-validation.md" in matrix
-    assert "source-owner-confirmed acceptance criteria" in matrix.lower()
+    assert "GitHub Action advanced preview" in matrix
+    assert "Trusted-base planning" in matrix
+    assert "default first-use path" in matrix
+    assert "successful hosted Action run" not in matrix
 
 
 def test_public_docs_do_not_require_or_offer_external_fork_validation() -> None:
@@ -396,7 +409,10 @@ def test_readme_documents_all_export_formats() -> None:
 def test_roadmap_uses_evidence_gated_beta_stages() -> None:
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
 
-    assert "engineering-complete public alpha" in roadmap
+    assert "Five completed reviews" in roadmap
+    assert "three independent practitioners" in roadmap
+    assert "three public repositories" in roadmap
+    assert "waiting_for_external_participant_evidence" in roadmap
     assert "source-owner-confirmed criteria" in roadmap
     assert "genuine public pull request" in roadmap
     assert "Software license decision" in roadmap
@@ -465,7 +481,7 @@ def test_linkedin_alpha_launch_package_is_current_and_truthful() -> None:
 
     for required_text in (
         "https://github.com/YuzeJ21/Scope-Proof",
-        "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.23",
+        "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.0",
         disclosure,
         "DM me",
         "genuine public pull request",
@@ -584,8 +600,8 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     protocol = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
 
     assert all(f"Minute {minute}" in quickstart for minute in range(1, 11))
-    assert "scopeproof alpha init" in quickstart
-    assert "scopeproof alpha outcome" in quickstart
+    assert "Alpha feedback session" in quickstart
+    assert "Standard review mode creates no participant record" in quickstart
     assert "source owner" in qualification.lower()
     assert "No confidential information" in qualification
     assert "one criterion per line" in criteria.lower()
@@ -702,10 +718,13 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert html.count("<h1") == 1
     assert disclosure in html
     assert disclosure in transcript
-    assert "PR → Criteria → Evidence → Decisions → Outcome" in html
+    assert (
+        "Public PR → Confirm criteria → Review coverage → Record decisions → Export"
+        in html
+    )
     assert "Likes, views, stars, impressions, and downloads are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
-    assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.1.23" in html
+    assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.0" in html
     assert (
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
         in html
@@ -725,6 +744,9 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert parser.remote_scripts == []
     assert "analytics" not in html.lower()
     assert "@media (prefers-reduced-motion: reduce)" in css
+    assert "clamp(2.35rem, 12vw, 3.5rem)" in css
+    assert "overflow-wrap: anywhere" in css
+    assert "max-width: 100%" in css
     assert ":focus-visible" in css
     assert parser.video_tracks == [
         {

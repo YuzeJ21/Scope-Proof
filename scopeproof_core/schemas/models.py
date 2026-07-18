@@ -369,6 +369,7 @@ class EvidenceItem(BaseModel):
     commit_sha: str = Field(min_length=1)
     permalink: str
     excerpt: str = Field(min_length=1)
+    context_excerpt: str | None = None
     matching_rule: str = Field(min_length=1)
     relevance_reason: str = Field(min_length=1)
     relevance_score: float = Field(ge=0, le=1)
@@ -389,6 +390,13 @@ class EvidenceItem(BaseModel):
     def require_non_blank_candidate_context(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
             raise ValueError("must contain non-whitespace text")
+        return value
+
+    @field_validator("context_excerpt")
+    @classmethod
+    def require_non_blank_optional_context(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("context excerpt must contain non-whitespace text")
         return value
 
     @field_validator("limitations")

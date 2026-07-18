@@ -24,7 +24,7 @@ from scopeproof_core.schemas.models import (
 _PR_PATH = re.compile(r"^/([^/]+)/([^/]+)/pull/(\d+)/?$")
 _HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 _FAILING_CONCLUSIONS = {"failure", "timed_out", "cancelled", "action_required", "startup_failure"}
-_PASSING_CONCLUSIONS = {"success", "neutral", "skipped"}
+_PASSING_CONCLUSIONS = {"success"}
 
 
 class GitHubIngestionError(RuntimeError):

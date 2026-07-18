@@ -9,7 +9,17 @@ from pathlib import Path
 
 import streamlit as st
 
-from scopeproof_core.alpha.models import AlphaQualification, ParticipantRole
+from scopeproof_core.alpha.models import (
+    AlphaFrictionStage,
+    AlphaOutcome,
+    AlphaQualification,
+    ParticipantRole,
+)
+from scopeproof_core.alpha.service import ensure_alpha_case, record_alpha_outcome
+from scopeproof_core.alpha.storage import (
+    JsonAlphaCaseStore,
+    default_alpha_case_directory,
+)
 from scopeproof_core.criteria.service import (
     add_criterion,
     parse_criteria,
@@ -27,14 +37,22 @@ from scopeproof_core.github.client import (
     InvalidPullRequestUrl,
     parse_pr_url,
 )
+from scopeproof_core.presentation import (
+    EvidenceStatus,
+    criterion_coverage_rows,
+    evidence_status_text,
+    review_status_label,
+)
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
+from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
+    append_external_verification,
     append_resolution,
-    append_runtime_evidence,
     attach_analysis,
+    can_record_final_acceptance,
     confirm_criteria,
     new_review_state,
     resolution_event_statuses,
@@ -84,6 +102,11 @@ _STATE_DEFAULTS = {
     "delete_saved_review_reset_pending": False,
     "saved_review_delete_notice": None,
     "source_load_notice": None,
+    "alpha_case_id": None,
+    "alpha_case_notice": None,
+    "alpha_outcome_notice": None,
+    "candidate_files": [],
+    "comparison_base_bundle": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -138,15 +161,17 @@ def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
     state: ReviewState | None = st.session_state["review_state"]
     reopened_id: str | None = st.session_state["reopened_review_id"]
     st.session_state["source_reload_notice"] = None
+    st.session_state["comparison_base_bundle"] = None
     if (
         state is not None
         and reopened_id == state.review.review_id
         and state.review.repository == snapshot.repository
         and state.review.pr_number == snapshot.pr_number
     ):
-        st.session_state["source_reload_notice"] = JsonReviewStore.detect_head_change(
-            state, snapshot
-        )
+        notice = JsonReviewStore.detect_head_change(state, snapshot)
+        st.session_state["source_reload_notice"] = notice
+        if notice.changed and state.bundle is not None:
+            st.session_state["comparison_base_bundle"] = state.bundle.model_copy(deep=True)
 
 
 def _prepare_from_text(text: str) -> None:
@@ -171,6 +196,9 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["source_reload_notice"] = None
     st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(state)
     st.session_state["review_save_notice"] = None
+    st.session_state["candidate_files"] = []
+    st.session_state["comparison_base_bundle"] = None
+    st.session_state["alpha_case_id"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
@@ -188,7 +216,9 @@ def _analyze() -> ReviewBundle:
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
     )
-    evidence = retrieve_evidence(snapshot, criteria)
+    evidence = retrieve_evidence(
+        snapshot, criteria, unchanged_files=st.session_state["candidate_files"]
+    )
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
     resolutions = st.session_state["resolutions"]
     gate = evaluate_gate(review, criteria, findings, resolutions)
@@ -322,6 +352,7 @@ def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
             f"{changed_file_count} changed {changed_file_label} fetched · "
             f"{_status_label(snapshot.ingestion_state.value)} ingestion"
         )
+        st.caption(f"Observed CI state: {_status_label(snapshot.check_state.value)}")
 
 
 def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -> None:
@@ -370,7 +401,7 @@ if st.session_state.pop("requirements_draft_reset_pending", False):
     _clear_requirements_draft()
 
 st.title("ScopeProof")
-st.subheader("Prove the PR matches the product intent.")
+st.subheader("See which acceptance criteria have credible PR evidence—and which still need review.")
 st.markdown(
     "> ScopeProof surfaces auditable candidate evidence. "
     "It does not replace QA or prove correctness."
@@ -526,17 +557,18 @@ if review_reopen_notice is not None:
     st.success(review_reopen_notice)
 
 st.header("1 · Start Review")
-st.markdown("**PR → Criteria → Evidence → Decisions → Outcome**")
-st.caption(
-    "Five bounded stages keep source ownership, human confirmation, evidence analysis, "
-    "decisions, and outcomes separate."
+st.markdown(
+    "**Public PR → Confirm criteria → Review coverage → Record decisions → Export**"
 )
-review_path = st.radio(
-    "Review path",
-    options=["Confirmed public-alpha review", "Technical smoke only"],
-    index=1,
-    key="review_path",
-    help="A technical smoke checks the workflow but is not user validation.",
+st.caption(
+    "Five bounded stages keep source loading, human confirmation, candidate analysis, "
+    "reviewer decisions, and exports separate."
+)
+alpha_feedback_mode = st.checkbox(
+    "Alpha feedback session (optional)",
+    value=False,
+    key="alpha_feedback_mode",
+    help="Collect local, consent-controlled feedback from a genuine public-PR participant.",
 )
 pr_url = st.text_input(
     "Public GitHub pull request URL",
@@ -555,7 +587,8 @@ if pr_url.strip():
     else:
         pr_url_is_valid = True
 alpha_qualification_ready = True
-if review_path == "Confirmed public-alpha review":
+alpha_qualification: AlphaQualification | None = None
+if alpha_feedback_mode:
     st.caption(
         "Qualification is session-only. Confirm a genuine public case before fetching; "
         "ScopeProof does not store these preflight fields here."
@@ -586,7 +619,7 @@ if review_path == "Confirmed public-alpha review":
         and no_confidential_information
     ):
         try:
-            AlphaQualification(
+            alpha_qualification = AlphaQualification(
                 public_pr_url=pr_url,
                 requirements_source_url=requirements_source_url,
                 participant_role=ParticipantRole(participant_role),
@@ -598,22 +631,39 @@ if review_path == "Confirmed public-alpha review":
         else:
             alpha_qualification_ready = True
 else:
-    st.info(
-        "Technical smoke only — this can check ingestion and reporting, but it is not "
-        "user validation and must not be described as a confirmed alpha outcome."
+    st.caption(
+        "Standard review mode does not create participant research records."
     )
-github_token = st.text_input(
-    "Optional GitHub token",
-    type="password",
-    help="Used only in this session to increase free GitHub rate limits. Never exported or saved.",
-    key="github_token",
-)
+with st.expander("Advanced source options"):
+    github_token = st.text_input(
+        "Optional GitHub token",
+        type="password",
+        help=(
+            "Used only in this session to increase free GitHub rate limits. "
+            "Never exported or saved."
+        ),
+        key="github_token",
+    )
+    candidate_paths_text = st.text_area(
+        "Bounded unchanged candidate paths (optional)",
+        key="candidate_paths",
+        help=(
+            "One explicit repository-relative file path per line. ScopeProof does not "
+            "infer paths or scan the repository."
+        ),
+    )
+    candidate_paths = list(
+        dict.fromkeys(
+            line.strip() for line in candidate_paths_text.splitlines() if line.strip()
+        )
+    )
+    st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
 load_column, fetch_column = st.columns(2)
 with load_column:
     if st.button(
         "Load deliberately constructed demo",
         key="load_demo",
-        disabled=replacement_blocked,
+        disabled=replacement_blocked or alpha_feedback_mode,
         use_container_width=True,
     ):
         labels = load_demo_labels()
@@ -625,6 +675,8 @@ with load_column:
         st.session_state["criteria"] = [
             Criterion.model_validate(item) for item in labels["criteria"]
         ]
+        st.session_state["candidate_files"] = []
+        st.session_state["comparison_base_bundle"] = None
         _reset_analysis()
         st.rerun()
 with fetch_column:
@@ -639,15 +691,21 @@ with fetch_column:
         use_container_width=True,
     ):
         try:
-            snapshot = GitHubClient(token=github_token or None).fetch_pull_request(pr_url)
+            client = GitHubClient(token=github_token or None)
+            snapshot = client.fetch_pull_request(pr_url)
+            candidate_files = client.fetch_candidate_files(
+                snapshot.repository, snapshot.head_sha, candidate_paths
+            )
             _record_reopened_source_reload(snapshot)
             st.session_state["snapshot"] = snapshot
+            st.session_state["candidate_files"] = candidate_files
+            st.session_state["alpha_case_id"] = None
             _reset_analysis()
             st.session_state["source_load_notice"] = (
                 "Public PR loaded. Add and confirm criteria before analysis."
             )
             st.rerun()
-        except GitHubIngestionError as error:
+        except (GitHubIngestionError, ValueError) as error:
             st.error(
                 f"{error} No review data was changed. Verify that the PR is public and "
                 "try again. Use the optional token only if GitHub reports a rate limit."
@@ -883,18 +941,51 @@ else:
         or (st.session_state["criteria_confirmed"] and not criteria_edits_pending),
     ):
         state: ReviewState | None = st.session_state["review_state"]
+        alpha_case = None
         try:
             if state is not None:
                 state = revise_criteria(
                     state, edited_criteria, st.session_state["source_text"]
                 )
                 state = confirm_criteria(state)
+            if alpha_feedback_mode:
+                if alpha_qualification is None:
+                    raise ValueError("alpha qualification is incomplete")
+                loaded_for_alpha = st.session_state["snapshot"]
+                if loaded_for_alpha is None:
+                    raise ValueError("alpha qualification requires a loaded public PR")
+                alpha_owner, alpha_repository, alpha_pr_number = parse_pr_url(
+                    alpha_qualification.public_pr_url
+                )
+                if (
+                    f"{alpha_owner}/{alpha_repository}" != loaded_for_alpha.repository
+                    or alpha_pr_number != loaded_for_alpha.pr_number
+                ):
+                    raise ValueError("alpha qualification must match the loaded public PR")
+                alpha_store = JsonAlphaCaseStore(default_alpha_case_directory())
+                alpha_case = ensure_alpha_case(
+                    store=alpha_store,
+                    case_id=st.session_state["alpha_case_id"],
+                    public_pr_url=alpha_qualification.public_pr_url,
+                    requirements_source_url=str(
+                        alpha_qualification.requirements_source_url
+                    ),
+                    participant_role=alpha_qualification.participant_role,
+                    source_owner_confirmed=True,
+                    no_confidential_information=True,
+                    confirmed_criteria=[item.text for item in edited_criteria],
+                )
         except ValueError:
             st.error(
                 "Criteria could not be confirmed. The current review remains unchanged. "
                 "Verify the edited criteria and try again."
             )
         else:
+            if alpha_case is not None:
+                st.session_state["alpha_case_id"] = alpha_case.case_id
+                st.session_state["alpha_case_notice"] = (
+                    f"Alpha case created locally: {alpha_case.case_id}."
+                )
             if state is not None:
                 st.session_state["review_state"] = state
             st.session_state["criteria"] = edited_criteria
@@ -902,6 +993,10 @@ else:
             st.session_state["bundle"] = None if state is None else state.bundle
             criteria_edits_pending = False
             st.rerun()
+
+alpha_case_notice = st.session_state.pop("alpha_case_notice", None)
+if alpha_case_notice is not None:
+    st.success(alpha_case_notice)
 
 if criteria_edits_pending:
     st.warning(
@@ -954,20 +1049,68 @@ st.header("3 · Evidence Matrix")
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
 else:
+    comparison_base: ReviewBundle | None = st.session_state["comparison_base_bundle"]
+    if comparison_base is not None:
+        comparison = compare_reviews(comparison_base, bundle)
+        st.markdown("### Re-review comparison")
+        st.caption(f"Previous head: {comparison.previous_head_sha}")
+        st.caption(f"Current head: {comparison.current_head_sha}")
+        st.markdown(
+            f"**Review status:** {_status_label(comparison.previous_gate.value)} → "
+            f"{_status_label(comparison.current_gate.value)}"
+        )
+        st.markdown(
+            f"**Candidate evidence:** {len(comparison.added_evidence_ids)} added · "
+            f"{len(comparison.removed_evidence_ids)} removed"
+        )
+        if comparison.changed_finding_statuses:
+            st.markdown("**Changed criterion findings**")
+            for change in comparison.changed_finding_statuses:
+                previous = (
+                    _status_label(change.previous_status.value)
+                    if change.previous_status is not None
+                    else "None"
+                )
+                current = (
+                    _status_label(change.current_status.value)
+                    if change.current_status is not None
+                    else "None"
+                )
+                st.markdown(f"- {change.criterion_id}: {previous} → {current}")
+        if comparison.changed_human_resolutions:
+            st.markdown("**Changed reviewer decisions**")
+            for change in comparison.changed_human_resolutions:
+                previous = (
+                    _status_label(change.previous_decision.value)
+                    if change.previous_decision is not None
+                    else "None"
+                )
+                current = (
+                    _status_label(change.current_decision.value)
+                    if change.current_decision is not None
+                    else "None"
+                )
+                st.markdown(f"- {change.criterion_id}: {previous} → {current}")
+        st.caption(
+            "Ruleset changed between reviews."
+            if comparison.ruleset_version_changed
+            else "Ruleset unchanged between reviews."
+        )
     st.caption(
-        "Evidence levels: E0 = no candidate found; "
-        "E1 = implementation or contract candidate; E2 = test candidate; "
-        "E3 = manually recorded runtime verification; E4 = explicit human acceptance. "
-        "Levels describe evidence type, not correctness."
+        "Evidence status describes deterministic candidates, not correctness. Evidence types "
+        "keep implementation, test, and externally recorded runtime observations separate."
     )
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {
         resolution.criterion_id: resolution for resolution in bundle.resolutions
     }
+    coverage_by_id = {
+        row.criterion_id: row for row in criterion_coverage_rows(bundle)
+    }
     status_filter = st.multiselect(
-        "Filter status",
-        options=["evidence_found", "partial", "missing", "needs_review"],
-        format_func=_status_label,
+        "Filter evidence status",
+        options=list(EvidenceStatus),
+        format_func=evidence_status_text,
         key="status_filter",
     )
     priority_filter = st.multiselect(
@@ -990,7 +1133,8 @@ else:
     matrix = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
-        if status_filter and finding.status.value not in status_filter:
+        coverage = coverage_by_id[criterion.criterion_id]
+        if status_filter and coverage.evidence_status not in status_filter:
             continue
         if priority_filter and criterion.priority not in priority_filter:
             continue
@@ -1002,23 +1146,19 @@ else:
             {
                 "Criterion": criterion.criterion_id,
                 "Requirement": criterion.text,
-                "Priority": _status_label(criterion.priority.value),
-                "Status": _status_label(finding.status.value),
-                "Evidence": finding.evidence_level.value,
-                "Human resolution": (
-                    _status_label(resolution_by_id[criterion.criterion_id].decision.value)
-                    if criterion.criterion_id in resolution_by_id
-                    else "Unresolved"
-                ),
+                "Priority": coverage.priority,
+                "Evidence status": evidence_status_text(coverage.evidence_status),
+                "Evidence types": ", ".join(coverage.evidence_types) or "None",
+                "Reviewer decision": coverage.reviewer_decision,
             }
         )
     table_headers = [
         "Criterion",
         "Requirement",
         "Priority",
-        "Status",
-        "Evidence",
-        "Human resolution",
+        "Evidence status",
+        "Evidence types",
+        "Reviewer decision",
     ]
     table_lines = [
         "| " + " | ".join(table_headers) + " |",
@@ -1096,7 +1236,10 @@ else:
         else "Unresolved"
     )
     st.markdown(f"### {selected_id} · {selected_criterion.text}")
-    st.markdown(f"**Provisional status:** {_status_label(selected_finding.status.value)}")
+    selected_coverage = coverage_by_id[selected_id]
+    st.markdown(
+        f"**Evidence status:** {evidence_status_text(selected_coverage.evidence_status)}"
+    )
     st.markdown(
         f"**Required evidence:** {selected_criterion.required_evidence_level.value} · "
         f"**Observed evidence:** {selected_finding.evidence_level.value} · "
@@ -1120,6 +1263,9 @@ else:
         item = evidence_by_id[evidence_id]
         with st.expander(f"{item.file_path}:L{item.line_start} · {item.evidence_type.value}"):
             st.code(item.excerpt)
+            if item.context_excerpt:
+                st.markdown("**Bounded context:**")
+                st.code(item.context_excerpt)
             st.markdown(f"[Open immutable GitHub evidence]({item.permalink})")
             st.markdown(f"**Matching rationale:** {item.relevance_reason}")
             st.caption(f"Matching rule: {item.matching_rule}")
@@ -1130,11 +1276,12 @@ else:
         "runtime_evidence_save_notice", None
     )
 
-    st.markdown("### Manual runtime evidence")
+    st.markdown("### Record external verification")
     st.caption(
         f"This record will be attached to {selected_id} — {selected_criterion.text}. "
         "Record a human-supplied observation only. ScopeProof does not run PR code "
-        "or infer runtime results."
+        "or infer runtime results. Saving records the evidence and the criterion's "
+        "manual-verification decision together."
     )
     runtime_artifact = st.text_input(
         "Artifact or URL (required)", key="runtime_artifact_reference"
@@ -1161,8 +1308,8 @@ else:
     )
     st.caption(
         "E3 means manually recorded external runtime verification. "
-        "E4 means explicit human acceptance. Saving this record does not resolve the "
-        "criterion or record final review acceptance. "
+        "E4 means explicit human acceptance. Saving resolves this criterion as manually "
+        "verified but does not record final review acceptance. "
         "Artifact, scenario, environment, observed result, and reviewer are required. "
         "Limitations are optional."
     )
@@ -1186,12 +1333,12 @@ else:
             + "."
         )
     if st.button(
-        "Save manual runtime evidence",
+        "Save external verification",
         key="save_runtime_evidence",
         disabled=not runtime_evidence_ready,
     ):
         if review_state is None:
-            st.error("Run analysis before recording manual runtime evidence.")
+            st.error("Run analysis before recording external verification.")
         else:
             try:
                 runtime_evidence = RuntimeEvidence(
@@ -1206,18 +1353,27 @@ else:
                         line.strip() for line in runtime_limitations.splitlines() if line.strip()
                     ],
                 )
-                review_state = append_runtime_evidence(review_state, runtime_evidence)
+                verification_event = ResolutionEvent(
+                    criterion_id=selected_id,
+                    decision=HumanDecision.MANUALLY_VERIFIED,
+                    comment=f"Externally observed result: {runtime_result.strip()}",
+                    claimed_evidence_level=runtime_level,
+                    reviewer=runtime_reviewer.strip(),
+                )
+                review_state = append_external_verification(
+                    review_state, runtime_evidence, verification_event
+                )
                 st.session_state["review_state"] = review_state
                 st.session_state["bundle"] = review_state.bundle
                 bundle = review_state.bundle
                 st.session_state["runtime_evidence_form_reset_pending"] = True
                 st.session_state["runtime_evidence_save_notice"] = (
-                    "Manual runtime evidence appended without changing static findings."
+                    "External verification and reviewer decision recorded together."
                 )
                 st.rerun()
             except ValueError:
                 st.error(
-                    "Runtime evidence could not be saved. Check every required field and "
+                    "External verification could not be saved. Check every required field and "
                     "select E3 or E4."
                 )
     selected_runtime = [
@@ -1260,7 +1416,6 @@ else:
         HumanDecision.ACCEPTED,
         HumanDecision.CHANGE_REQUIRED,
         HumanDecision.REJECTED_FINDING,
-        HumanDecision.MANUALLY_VERIFIED,
         HumanDecision.ACCEPTED_EXCEPTION,
         HumanDecision.NOT_IN_SCOPE,
     ]
@@ -1279,26 +1434,11 @@ else:
     resolution_note = st.text_area("Reviewer note", key="resolution_note")
     if resolution_save_notice is not None:
         st.success(resolution_save_notice)
-    manual_level = None
-    if decision is HumanDecision.MANUALLY_VERIFIED:
-        manual_level = st.selectbox(
-            "Externally verified evidence level",
-            options=[EvidenceLevel.E2, EvidenceLevel.E3, EvidenceLevel.E4],
-            key="manual_evidence_level",
-        )
-    manual_verification_ready = (
-        decision is not HumanDecision.MANUALLY_VERIFIED or bool(resolution_note.strip())
-    )
-    if not manual_verification_ready:
-        st.caption(
-            "Reviewer note is required for manual verification. Describe what was verified."
-        )
     if st.button(
         "Save resolution",
         key="save_resolution",
         disabled=(
             decision is None
-            or not manual_verification_ready
             or not decision_reviewer_ready
         ),
     ):
@@ -1311,7 +1451,6 @@ else:
                     criterion_id=selected_id,
                     decision=decision,
                     comment=resolution_note,
-                    claimed_evidence_level=manual_level,
                     reviewer=decision_reviewer.strip(),
                 )
                 review_state = append_resolution(review_state, event)
@@ -1336,6 +1475,9 @@ else:
     final_acceptance_recorded = bool(
         review_state is not None and review_state.review.final_acceptance
     )
+    final_acceptance_eligible = bool(
+        review_state is not None and can_record_final_acceptance(review_state)
+    )
 
     st.markdown("### Final review acceptance")
     st.caption(
@@ -1343,10 +1485,16 @@ else:
         "or override the deterministic gate. Review every criterion and its evidence before "
         "recording final acceptance."
     )
+    if not final_acceptance_recorded and not final_acceptance_eligible:
+        st.caption("Resolve every active criterion before recording final acceptance.")
     if st.button(
         "Record final acceptance",
         key="record_final_acceptance",
-        disabled=final_acceptance_recorded or not decision_reviewer_ready,
+        disabled=(
+            final_acceptance_recorded
+            or not final_acceptance_eligible
+            or not decision_reviewer_ready
+        ),
     ):
         if review_state is None:
             st.error("Run analysis before recording final acceptance.")
@@ -1427,25 +1575,6 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
-    st.markdown("### Record the alpha outcome")
-    st.caption(
-        "After the participant reviews the evidence and decisions, record exactly one "
-        "truthful outcome. This does not prove correctness, market demand, or repeat use."
-    )
-    st.markdown(
-        "- `found_useful_gap` — surfaced a useful requirement-evidence gap\n"
-        "- `showed_only_known_information` — added no useful new information\n"
-        "- `created_friction` — created material friction; record the stage"
-    )
-    st.code(
-        "scopeproof alpha outcome CASE_ID --review-id REVIEW_ID --head-sha HEAD_SHA "
-        "--result found_useful_gap",
-        language=None,
-    )
-    st.caption(
-        "See docs/alpha/outcome-form.md. Report and quotation permissions are separate "
-        "and off by default."
-    )
     review_save_notice = st.session_state.pop("review_save_notice", None)
     review_matches_local_save = bool(
         review_state is not None
@@ -1520,8 +1649,99 @@ else:
             st.rerun()
     if review_save_notice is not None:
         st.success(review_save_notice)
-    verdict = _status_label(bundle.gate.verdict.value)
-    st.markdown(f"## Verdict: **{verdict}**")
+    if alpha_feedback_mode and st.session_state["alpha_case_id"] is not None:
+        st.markdown("### Alpha feedback outcome")
+        st.caption(
+            "Record one voluntary outcome for this local case. This is participant feedback, "
+            "not proof of correctness, market demand, or repeat use."
+        )
+        st.code(st.session_state["alpha_case_id"], language=None)
+        alpha_store = JsonAlphaCaseStore(default_alpha_case_directory())
+        try:
+            alpha_record = alpha_store.load(st.session_state["alpha_case_id"])
+        except (OSError, ValueError):
+            st.warning(
+                "The local alpha case is unavailable. The review and exports remain unchanged."
+            )
+        else:
+            if alpha_record.outcome is not None:
+                st.success(
+                    "Alpha feedback completed locally: "
+                    f"{_status_label(alpha_record.outcome.value)}."
+                )
+            else:
+                alpha_outcome = st.selectbox(
+                    "Participant outcome",
+                    options=list(AlphaOutcome),
+                    index=None,
+                    placeholder="Select one outcome",
+                    format_func=lambda item: _status_label(item.value),
+                    key="alpha_outcome",
+                )
+                friction_stage = None
+                if alpha_outcome is AlphaOutcome.CREATED_FRICTION:
+                    friction_stage = st.selectbox(
+                        "Friction stage",
+                        options=list(AlphaFrictionStage),
+                        format_func=lambda item: _status_label(item.value),
+                        key="alpha_friction_stage",
+                    )
+                outcome_notes = st.text_area(
+                    "Outcome notes (optional)", key="alpha_outcome_notes"
+                )
+                report_consent = st.checkbox(
+                    "Allow this case in an anonymized aggregate report",
+                    value=False,
+                    key="alpha_report_consent",
+                )
+                quote_consent = st.checkbox(
+                    "Allow a direct quotation from the optional notes",
+                    value=False,
+                    key="alpha_quote_consent",
+                )
+                alpha_outcome_ready = bool(
+                    alpha_outcome is not None
+                    and review_state is not None
+                    and review_matches_local_save
+                )
+                if not review_matches_local_save:
+                    st.caption(
+                        "Save the current review locally before recording participant feedback."
+                    )
+                if st.button(
+                    "Record alpha outcome",
+                    key="record_alpha_outcome",
+                    disabled=not alpha_outcome_ready,
+                ):
+                    assert review_state is not None
+                    assert alpha_outcome is not None
+                    try:
+                        completed_alpha_record = record_alpha_outcome(
+                            alpha_record,
+                            review_id=review_state.review.review_id,
+                            reviewed_head_sha=review_state.review.head_sha,
+                            outcome=alpha_outcome,
+                            friction_stage=friction_stage,
+                            outcome_notes=outcome_notes.strip() or None,
+                            report_consent=report_consent,
+                            quote_consent=quote_consent,
+                        )
+                        alpha_store.update(completed_alpha_record)
+                    except (OSError, ValueError):
+                        st.error(
+                            "Alpha feedback could not be recorded. The review and existing "
+                            "alpha case remain unchanged."
+                        )
+                    else:
+                        st.session_state["alpha_outcome_notice"] = (
+                            "Alpha feedback outcome recorded locally."
+                        )
+                        st.rerun()
+        alpha_outcome_notice = st.session_state.pop("alpha_outcome_notice", None)
+        if alpha_outcome_notice is not None:
+            st.success(alpha_outcome_notice)
+    review_status = review_status_label(bundle.gate.verdict)
+    st.markdown(f"## Review status: **{review_status}**")
     if bundle.gate.reason_codes:
         labels = [_status_label(code) for code in bundle.gate.reason_codes]
         st.write("Gate reasons: " + " · ".join(labels))

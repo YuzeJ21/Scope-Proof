@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 
 import httpx
+import pytest
 
 from scopeproof_core.github.client import GitHubClient
 
@@ -82,3 +83,11 @@ def test_candidate_file_is_bounded_and_anchored_to_head_sha() -> None:
     assert candidates[0].commit_sha == "head"
     assert candidates[0].source_scope == "unchanged_candidate"
     assert candidates[0].content.startswith("def export_csv")
+
+
+@pytest.mark.parametrize("path", ["/etc/passwd", "../secret.txt", "src/../secret.txt"])
+def test_candidate_file_rejects_paths_outside_repository(path: str) -> None:
+    client = GitHubClient(transport=paged_transport())
+
+    with pytest.raises(ValueError, match="repository-relative"):
+        client.fetch_candidate_files("acme/widget", "head", [path])

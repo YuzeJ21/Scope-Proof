@@ -12,8 +12,12 @@ from scopeproof_core.gates.validation import (
 )
 from scopeproof_core.resolution_events import current_resolutions, final_acceptance
 from scopeproof_core.schemas.models import (
+    CheckState,
     CriteriaRevision,
     Criterion,
+    EvidenceLevel,
+    HumanDecision,
+    IngestionState,
     ResolutionEvent,
     ReviewBundle,
     ReviewState,
@@ -212,3 +216,83 @@ def append_runtime_evidence(state: ReviewState, evidence: RuntimeEvidence) -> Re
     bundle = state.bundle.model_copy(deep=True)
     bundle.runtime_evidence.append(evidence)
     return state.model_copy(update={"bundle": bundle})
+
+
+def append_external_verification(
+    state: ReviewState,
+    evidence: RuntimeEvidence,
+    event: ResolutionEvent,
+) -> ReviewState:
+    """Atomically record external runtime evidence and its manual verification decision."""
+
+    state = _validated_state(state)
+    evidence = RuntimeEvidence.model_validate(evidence.model_dump())
+    event = ResolutionEvent.model_validate(event.model_dump())
+    if state.bundle is None:
+        raise ValueError("Run a confirmed analysis before recording external verification")
+    if event.decision is not HumanDecision.MANUALLY_VERIFIED:
+        raise ValueError("external verification requires a manually verified decision")
+    if evidence.criterion_id != event.criterion_id:
+        raise ValueError("external verification inputs must reference the same active criterion")
+    if evidence.criterion_id not in {
+        criterion.criterion_id for criterion in state.bundle.criteria
+    }:
+        raise ValueError("external verification inputs must reference the same active criterion")
+    if evidence.reviewer != event.reviewer:
+        raise ValueError("external verification inputs must use the same reviewer")
+    if evidence.evidence_level != event.claimed_evidence_level:
+        raise ValueError("external verification inputs must use the same evidence level")
+    if evidence.evidence_level not in {EvidenceLevel.E3, EvidenceLevel.E4}:
+        raise ValueError("external verification requires E3 or E4 evidence")
+    if any(existing.event_id == event.event_id for existing in state.resolution_events):
+        raise ValueError("resolution event ID must be unique")
+
+    bound_event = ResolutionEvent.model_validate(
+        {
+            **event.model_dump(),
+            "criteria_revision_number": state.criteria_revision.number,
+        }
+    )
+    bundle = state.bundle.model_copy(deep=True)
+    bundle.runtime_evidence.append(evidence.model_copy(deep=True))
+    updated = state.model_copy(
+        update={
+            "bundle": bundle,
+            "resolution_events": [*state.resolution_events, bound_event],
+        }
+    )
+    return validated_review_state(_recalculate(updated))
+
+
+def can_record_final_acceptance(state: ReviewState) -> bool:
+    """Return whether the active revision has every deterministic prerequisite."""
+
+    state = _validated_state(state)
+    if state.bundle is None or state.review.final_acceptance:
+        return False
+    if not state.review.criteria_confirmed:
+        return False
+    if state.review.ingestion_state is not IngestionState.COMPLETE:
+        return False
+    if state.review.ingestion_warnings or state.review.skipped_files:
+        return False
+    if state.review.check_state is not CheckState.PASSING:
+        return False
+
+    accepted_decisions = {
+        HumanDecision.ACCEPTED,
+        HumanDecision.ACCEPTED_EXCEPTION,
+        HumanDecision.MANUALLY_VERIFIED,
+        HumanDecision.NOT_IN_SCOPE,
+    }
+    active_resolutions = {
+        resolution.criterion_id: resolution
+        for resolution in current_resolutions(
+            state.resolution_events, state.criteria_revision.number
+        )
+    }
+    return all(
+        criterion.criterion_id in active_resolutions
+        and active_resolutions[criterion.criterion_id].decision in accepted_decisions
+        for criterion in state.bundle.criteria
+    )

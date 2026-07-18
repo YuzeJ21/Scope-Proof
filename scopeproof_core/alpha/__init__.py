@@ -10,6 +10,7 @@ from scopeproof_core.alpha.models import (
     ParticipantRole,
 )
 from scopeproof_core.alpha.service import (
+    ensure_alpha_case,
     initialize_alpha_case,
     public_alpha_summary,
     record_alpha_outcome,
@@ -26,6 +27,7 @@ __all__ = [
     "JsonAlphaCaseStore",
     "ParticipantRole",
     "default_alpha_case_directory",
+    "ensure_alpha_case",
     "initialize_alpha_case",
     "public_alpha_summary",
     "record_alpha_outcome",

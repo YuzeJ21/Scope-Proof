@@ -5,6 +5,11 @@ from unittest.mock import patch
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from scopeproof_core.alpha.models import AlphaOutcome
+from scopeproof_core.alpha.storage import (
+    JsonAlphaCaseStore,
+    default_alpha_case_directory,
+)
 from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.reviews.lifecycle import append_resolution
@@ -39,6 +44,22 @@ def analyzed_demo(app: AppTest) -> AppTest:
     return app.button(key="run_analysis").click().run()
 
 
+def resolve_all_criteria(app: AppTest) -> AppTest:
+    state = app.session_state["review_state"]
+    for criterion in state.criteria_revision.criteria:
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment="Reviewed candidate evidence",
+            ),
+        )
+    app.session_state["review_state"] = state
+    app.session_state["bundle"] = state.bundle
+    return app.run()
+
+
 def saved_demo_review(app: AppTest) -> tuple[AppTest, str]:
     app = analyzed_demo(app)
     review_id = app.session_state["review_state"].review.review_id
@@ -54,7 +75,9 @@ def evidence_matrix_table(app: AppTest) -> str:
     return next(
         markdown.value
         for markdown in app.markdown
-        if markdown.value.startswith("| Criterion | Requirement | Priority |")
+        if markdown.value.startswith(
+            "| Criterion | Requirement | Priority | Evidence status |"
+        )
     )
 
 
@@ -72,6 +95,94 @@ def test_product_disclaimer_is_visible() -> None:
     )
     assert "does not replace QA" in visible_text
     assert "No paid LLM API" in visible_text
+
+
+def test_standard_review_hides_alpha_research_fields() -> None:
+    app = new_app()
+
+    assert app.checkbox(key="alpha_feedback_mode").value is False
+    assert not [item for item in app.text_input if item.key == "requirements_source_url"]
+
+
+def test_alpha_mode_creates_case_after_confirming_criteria(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = new_app()
+    app = app.checkbox(key="alpha_feedback_mode").check().run()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/repo/pull/7"
+    ).run()
+    app = app.text_input(key="requirements_source_url").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.checkbox(key="source_owner_confirmed").check().run()
+    app = app.checkbox(key="no_confidential_information").check().run()
+    snapshot = load_demo_snapshot().model_copy(
+        update={"repository": "acme/repo", "pr_number": 7, "head_sha": "a" * 40}
+    )
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+    app = app.text_area(key="requirements_input").set_value("Export CSV").run()
+    app = app.button(key="prepare_criteria").click().run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert app.session_state["alpha_case_id"].startswith("alpha-")
+
+    app = app.button(key="run_analysis").click().run()
+    assert app.button(key="record_alpha_outcome").disabled is True
+    app = app.button(key="save_review").click().run()
+    app = app.selectbox(key="alpha_outcome").set_value(
+        AlphaOutcome.FOUND_USEFUL_GAP
+    ).run()
+    assert app.button(key="record_alpha_outcome").disabled is False
+    app = app.button(key="record_alpha_outcome").click().run()
+    assert not app.error, [item.value for item in app.error]
+
+    record = JsonAlphaCaseStore(default_alpha_case_directory()).load(
+        app.session_state["alpha_case_id"]
+    )
+    assert record.outcome is AlphaOutcome.FOUND_USEFUL_GAP
+    assert record.publication_consent.report is False
+    assert record.publication_consent.quote is False
+
+
+def test_primary_workbench_uses_acceptance_coverage_language() -> None:
+    app = analyzed_demo(new_app())
+    visible_text = "\n".join(
+        [
+            *(item.value for item in app.markdown),
+            *(item.value for item in app.subheader),
+            *(item.value for item in app.caption),
+        ]
+    )
+
+    assert "See which acceptance criteria have credible PR evidence" in visible_text
+    assert "Evidence status" in evidence_matrix_table(app)
+    assert "Evidence types" in evidence_matrix_table(app)
+    assert "Reviewer decision" in evidence_matrix_table(app)
+    assert "Prove the PR matches the product intent" not in visible_text
+
+
+def test_loaded_source_labels_check_aggregation_as_observed_ci_state() -> None:
+    app = load_demo(new_app())
+
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert "Observed CI state: Passing" in caption_text
+
+
+def test_criterion_detail_shows_bounded_candidate_context() -> None:
+    app = analyzed_demo(new_app())
+
+    assert "**Bounded context:**" in [item.value for item in app.markdown]
+    assert any(
+        "export_research_list_csv" in item.value and "filtered_rows" in item.value
+        for item in app.code
+    )
 
 
 def test_partial_public_pr_fetch_shows_bounded_analysis_and_skipped_paths() -> None:
@@ -143,7 +254,10 @@ def test_reopen_review_is_a_collapsed_secondary_path_before_start_review(
     monkeypatch.setenv("HOME", str(tmp_path))
     app = new_app()
 
-    assert [item.label for item in app.expander] == ["Reopen saved review"]
+    assert [item.label for item in app.expander] == [
+        "Reopen saved review",
+        "Advanced source options",
+    ]
     assert app.text_input(key="reopen_review_id").value == ""
     assert app.button(key="reopen_review").disabled is True
     assert "No saved local reviews found." in [item.value for item in app.caption]
@@ -376,20 +490,55 @@ def test_blank_public_pr_url_remains_neutral_and_disables_fetch() -> None:
     assert app.button(key="fetch_pr").disabled is True
 
 
-def test_first_use_flow_labels_five_stages_and_defaults_to_technical_smoke() -> None:
+def test_explicit_candidate_paths_are_normalized_and_fetched() -> None:
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/widget/pull/42"
+    ).run()
+    app = app.text_area(key="candidate_paths").set_value(
+        " src/context.py\n\ndocs/requirements.md\nsrc/context.py "
+    ).run()
+    snapshot = load_demo_snapshot().model_copy(
+        update={"repository": "acme/widget", "pr_number": 42}
+    )
+
+    with (
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+            return_value=snapshot,
+        ),
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_candidate_files",
+            return_value=[],
+        ) as fetch_candidates,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+
+    fetch_candidates.assert_called_once_with(
+        "acme/widget",
+        snapshot.head_sha,
+        ["src/context.py", "docs/requirements.md"],
+    )
+    assert app.session_state["candidate_files"] == []
+
+
+def test_first_use_flow_labels_five_stages_and_defaults_to_standard_review() -> None:
     app = new_app()
 
     visible = "\n".join(
         item.value for item in [*app.markdown, *app.caption, *app.info]
     )
-    assert "PR → Criteria → Evidence → Decisions → Outcome" in visible
-    assert app.radio(key="review_path").value == "Technical smoke only"
-    assert "not user validation" in visible
+    assert (
+        "Public PR → Confirm criteria → Review coverage → Record decisions → Export"
+        in visible
+    )
+    assert app.checkbox(key="alpha_feedback_mode").value is False
+    assert "does not create participant research records" in visible
 
 
 def test_confirmed_alpha_fetch_requires_validated_public_safe_preflight() -> None:
     app = new_app()
-    app = app.radio(key="review_path").set_value("Confirmed public-alpha review").run()
+    app = app.checkbox(key="alpha_feedback_mode").check().run()
     app = app.text_input(key="pr_url").set_value(
         "https://github.com/acme/widget/pull/42"
     ).run()
@@ -414,9 +563,8 @@ def test_criteria_and_outcome_surfaces_preserve_human_confirmation_boundary() ->
     )
 
     assert "source owner" in visible.lower()
-    assert "found_useful_gap" in visible
-    assert "showed_only_known_information" in visible
-    assert "created_friction" in visible
+    assert "Participant outcome" not in visible
+    assert not [item for item in app.selectbox if item.key == "alpha_outcome"]
     selected = app.selectbox(key="selected_criterion").value
     expected_action = next(
         finding.recommended_action
@@ -575,9 +723,8 @@ def test_evidence_matrix_explains_observed_evidence_levels() -> None:
     caption_text = "\n".join(item.value for item in app.caption)
 
     assert (
-        "Evidence levels: E0 = no candidate found; E1 = implementation or contract candidate; "
-        "E2 = test candidate; E3 = manually recorded runtime verification; "
-        "E4 = explicit human acceptance. Levels describe evidence type, not correctness."
+        "Evidence status describes deterministic candidates, not correctness. Evidence types "
+        "keep implementation, test, and externally recorded runtime observations separate."
     ) in caption_text
 
 
@@ -985,9 +1132,9 @@ def test_demo_flow_reaches_blocked_summary() -> None:
     assert app.session_state["criteria_confirmed"] is True
     app = app.button(key="run_analysis").click().run()
     visible_text = "\n".join(markdown.value for markdown in app.markdown)
-    assert "Blocked" in visible_text
-    assert "Partial" in visible_text
-    assert "Missing" in visible_text
+    assert "Action required" in visible_text
+    assert "Weak candidate" in visible_text
+    assert "No candidate" in visible_text
     assert app.session_state["bundle"] is not None
 
 
@@ -1199,6 +1346,10 @@ def test_submitted_runtime_draft_restores_authoritative_save_and_export(
     app = app.button(key="save_runtime_evidence").click().run()
 
     assert len(app.session_state["review_state"].bundle.runtime_evidence) == 1
+    assert (
+        app.session_state["review_state"].resolution_events[-1].decision
+        is HumanDecision.MANUALLY_VERIFIED
+    )
     assert app.text_input(key="runtime_artifact_reference").value == ""
     captions = "\n".join(item.value for item in app.caption)
     assert "Pending criterion-detail inputs are not saved or exported." not in captions
@@ -1703,6 +1854,33 @@ def test_reopened_review_reports_changed_head_before_invalidating_analysis(
     assert fresh.button(key="run_analysis").disabled is True
 
 
+def test_reanalysis_shows_previous_and_current_head_sha(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    previous_head = saved.session_state["review_state"].review.head_sha
+    changed_snapshot = load_demo_snapshot().model_copy(update={"head_sha": "b" * 40})
+
+    fresh = new_app()
+    fresh = select_saved_review(fresh, review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+    fresh = fresh.text_input(key="pr_url").set_value(
+        "https://github.com/scopeproof/demo-stock-research/pull/7"
+    ).run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=changed_snapshot,
+    ):
+        fresh = fresh.button(key="fetch_pr").click().run()
+    fresh = fresh.button(key="confirm_criteria").click().run()
+    fresh = fresh.button(key="run_analysis").click().run()
+
+    rendered = "\n".join(item.value for item in [*fresh.markdown, *fresh.caption])
+    assert f"Previous head: {previous_head}" in rendered
+    assert f"Current head: {changed_snapshot.head_sha}" in rendered
+
+
 def test_reopened_review_reports_same_head_before_reanalysis(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1759,11 +1937,15 @@ def test_final_acceptance_control_is_visible_only_after_analysis() -> None:
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
 
-    assert app.button(key="record_final_acceptance").disabled is False
+    assert app.button(key="record_final_acceptance").disabled is True
+    assert (
+        "Resolve every active criterion before recording final acceptance."
+        in [item.value for item in app.caption]
+    )
 
 
-def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -> None:
-    app = analyzed_demo(new_app())
+def test_final_acceptance_requires_resolutions_and_then_completes_gate() -> None:
+    app = resolve_all_criteria(analyzed_demo(new_app()))
     state_before = app.session_state["review_state"]
     gate_before = state_before.bundle.gate
 
@@ -1778,10 +1960,10 @@ def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -
     state_after = app.session_state["review_state"]
 
     assert state_after.review.final_acceptance is True
-    assert state_after.bundle.gate.verdict is GateVerdict.BLOCKED
+    assert state_after.bundle.gate.verdict is GateVerdict.READY
     assert state_after.bundle.gate.blocking_criteria == gate_before.blocking_criteria
     assert state_after.bundle.gate.unresolved_criteria == gate_before.unresolved_criteria
-    assert len(state_after.resolution_events) == 1
+    assert len(state_after.resolution_events) == len(state_after.bundle.criteria) + 1
     assert app.button(key="record_final_acceptance").disabled is True
     assert "Final acceptance appended to the local review history." in [
         item.value for item in app.success
@@ -1794,7 +1976,7 @@ def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -
 
 
 def test_final_acceptance_failure_preserves_retryable_state_without_raw_details() -> None:
-    app = analyzed_demo(new_app())
+    app = resolve_all_criteria(analyzed_demo(new_app()))
     review_state = app.session_state["review_state"].model_copy(deep=True)
     raw_error = "invalid final event at /private/secret/final.json"
 
@@ -1827,7 +2009,9 @@ def test_final_acceptance_failure_preserves_retryable_state_without_raw_details(
     assert app.session_state["review_state"] == review_state
     assert app.session_state["bundle"] == review_state.bundle
     assert app.session_state["saved_review_fingerprint"] is None
-    assert app.session_state["review_state"].resolution_events == []
+    assert len(app.session_state["review_state"].resolution_events) == len(
+        review_state.bundle.criteria
+    )
     assert app.button(key="record_final_acceptance").disabled is False
     assert "Final acceptance appended" not in "\n".join(
         item.value for item in app.success
@@ -1835,7 +2019,7 @@ def test_final_acceptance_failure_preserves_retryable_state_without_raw_details(
 
 
 def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> None:
-    app = analyzed_demo(new_app())
+    app = resolve_all_criteria(analyzed_demo(new_app()))
     app = app.button(key="record_final_acceptance").click().run()
     assert app.button(key="record_final_acceptance").disabled is True
 
@@ -1847,7 +2031,7 @@ def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> No
     assert app.session_state["review_state"].review.final_acceptance is False
     assert app.session_state["review_state"].bundle is None
     app = app.button(key="run_analysis").click().run()
-    assert app.button(key="record_final_acceptance").disabled is False
+    assert app.button(key="record_final_acceptance").disabled is True
 
 
 def test_analysis_is_disabled_with_active_bundle_and_enabled_for_pending_revision() -> None:
@@ -1961,13 +2145,17 @@ def test_evidence_matrix_renders_as_one_markdown_table() -> None:
         markdown.value
         for markdown in app.markdown
         if markdown.value.startswith(
-            "| Criterion | Requirement | Priority | Status | Evidence | Human resolution |"
+            "| Criterion | Requirement | Priority | Evidence status | Evidence types | "
+            "Reviewer decision |"
         )
     ]
     assert len(table_blocks) == 1
     assert "|---|---|---|---|---|---|" in table_blocks[0]
     assert "| AC-01 | User can export the research list as CSV |" in table_blocks[0]
-    assert "| Must Have | Evidence Found | E2 | Unresolved |" in table_blocks[0]
+    assert (
+        "| Must have | Strong candidate | Implementation, Test | Unresolved |"
+        in table_blocks[0]
+    )
     assert "| Unresolved |" in table_blocks[0]
     assert "| AC-04 | Successful export records research_exported |" in table_blocks[0]
     assert "Confidence" not in table_blocks[0]
@@ -2068,39 +2256,10 @@ def test_criterion_resolution_failure_preserves_retryable_state_without_raw_deta
     )
 
 
-@pytest.mark.parametrize("note", ["", "   ", "\t\n"])
-def test_manual_verification_requires_nonblank_reviewer_note(note: str) -> None:
+def test_manual_verification_is_only_available_through_external_verification() -> None:
     app = analyzed_demo(new_app())
-    app = app.selectbox(key="resolution_decision").set_value(
-        HumanDecision.MANUALLY_VERIFIED
-    ).run()
-    app = app.text_area(key="resolution_note").set_value(note).run()
-
-    assert app.button(key="save_resolution").disabled is True
-    assert len(app.session_state["review_state"].resolution_events) == 0
-    assert (
-        "Reviewer note is required for manual verification. Describe what was verified."
-    ) in [item.value for item in app.caption]
-
-
-def test_successful_manual_verification_clears_conditional_evidence_level() -> None:
-    app = analyzed_demo(new_app())
-    app = app.selectbox(key="resolution_decision").set_value(
-        HumanDecision.MANUALLY_VERIFIED
-    ).run()
-    app = app.selectbox(key="manual_evidence_level").set_value(EvidenceLevel.E4).run()
-    app = app.text_area(key="resolution_note").set_value(
-        "Verified the export in staging."
-    ).run()
-    assert app.button(key="save_resolution").disabled is False
-    app = app.button(key="save_resolution").click().run()
-
-    assert len(app.session_state["review_state"].resolution_events) == 1
-    assert app.session_state["review_state"].resolution_events[0].comment == (
-        "Verified the export in staging."
-    )
-    assert app.selectbox(key="resolution_decision").value is None
-    assert "manual_evidence_level" not in app.session_state.filtered_state
+    assert "Manually Verified" not in app.selectbox(key="resolution_decision").options
+    assert app.button(key="save_runtime_evidence").label == "Save external verification"
 
 
 def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
@@ -2387,13 +2546,13 @@ def test_runtime_evidence_validation_failure_is_safe_and_retryable() -> None:
     raw_error = "2 validation errors at /private/secret/runtime.json"
 
     with patch(
-        "scopeproof_core.reviews.lifecycle.append_runtime_evidence",
+        "scopeproof_core.reviews.lifecycle.append_external_verification",
         side_effect=ValueError(raw_error),
     ):
         app = app.button(key="save_runtime_evidence").click().run()
 
     recovery = (
-        "Runtime evidence could not be saved. Check every required field and select E3 or E4."
+        "External verification could not be saved. Check every required field and select E3 or E4."
     )
     assert recovery in [item.value for item in app.error]
     assert not app.exception
@@ -2445,8 +2604,8 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
     )
     assert (
         "E3 means manually recorded external runtime verification. "
-        "E4 means explicit human acceptance. Saving this record does not resolve the criterion "
-        "or record final review acceptance."
+        "E4 means explicit human acceptance. Saving resolves this criterion as manually "
+        "verified but does not record final review acceptance."
     ) in level_context
     assert (
         "Artifact, scenario, environment, observed result, and reviewer are required."
@@ -2481,12 +2640,11 @@ def test_criterion_change_clears_pending_target_specific_drafts() -> None:
     app = app.text_input(key="runtime_reviewer").set_value("QA").run()
     app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()
     app = app.selectbox(key="resolution_decision").set_value(
-        HumanDecision.MANUALLY_VERIFIED
+        HumanDecision.ACCEPTED
     ).run()
     app = app.text_area(key="resolution_note").set_value(
         "Verified AC-01 in staging."
     ).run()
-    app = app.selectbox(key="manual_evidence_level").set_value(EvidenceLevel.E4).run()
 
     assert app.button(key="save_runtime_evidence").disabled is False
     assert app.button(key="save_resolution").disabled is False
@@ -2671,6 +2829,6 @@ def test_successful_runtime_evidence_save_clears_form_and_prevents_accidental_re
     assert app.text_area(key="runtime_limitations").value == ""
     assert app.selectbox(key="runtime_evidence_level").value is EvidenceLevel.E3
     assert app.button(key="save_runtime_evidence").disabled is True
-    assert "Manual runtime evidence appended without changing static findings." in [
+    assert "External verification and reviewer decision recorded together." in [
         item.value for item in app.success
     ]

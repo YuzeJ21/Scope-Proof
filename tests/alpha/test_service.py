@@ -7,10 +7,12 @@ from scopeproof_core.alpha.models import (
     ParticipantRole,
 )
 from scopeproof_core.alpha.service import (
+    ensure_alpha_case,
     initialize_alpha_case,
     public_alpha_summary,
     record_alpha_outcome,
 )
+from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 
 
 def initialized_case():
@@ -31,6 +33,49 @@ def test_initialize_alpha_case_is_qualified_and_unpublished() -> None:
     assert record.no_confidential_information is True
     assert record.publication_consent.report is False
     assert record.publication_consent.quote is False
+
+
+def test_ensure_alpha_case_creates_once_and_returns_matching_existing(tmp_path) -> None:
+    store = JsonAlphaCaseStore(tmp_path)
+    inputs = {
+        "public_pr_url": "https://github.com/acme/repo/pull/7",
+        "requirements_source_url": "https://github.com/acme/repo/issues/6",
+        "participant_role": ParticipantRole.QA,
+        "source_owner_confirmed": True,
+        "no_confidential_information": True,
+        "confirmed_criteria": ["Export CSV"],
+    }
+
+    created = ensure_alpha_case(store=store, **inputs)
+    reused = ensure_alpha_case(store=store, case_id=created.case_id, **inputs)
+
+    assert reused == created
+    assert store.list_case_ids() == [created.case_id]
+
+
+def test_ensure_alpha_case_rejects_reusing_id_for_different_case(tmp_path) -> None:
+    store = JsonAlphaCaseStore(tmp_path)
+    created = ensure_alpha_case(
+        store=store,
+        public_pr_url="https://github.com/acme/repo/pull/7",
+        requirements_source_url="https://github.com/acme/repo/issues/6",
+        participant_role=ParticipantRole.QA,
+        source_owner_confirmed=True,
+        no_confidential_information=True,
+        confirmed_criteria=["Export CSV"],
+    )
+
+    with pytest.raises(ValueError, match="does not match"):
+        ensure_alpha_case(
+            store=store,
+            case_id=created.case_id,
+            public_pr_url="https://github.com/acme/repo/pull/8",
+            requirements_source_url="https://github.com/acme/repo/issues/6",
+            participant_role=ParticipantRole.QA,
+            source_owner_confirmed=True,
+            no_confidential_information=True,
+            confirmed_criteria=["Export CSV"],
+        )
 
 
 @pytest.mark.parametrize(
