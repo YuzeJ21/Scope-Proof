@@ -1,5 +1,13 @@
+import pytest
+from pydantic import ValidationError
+
 from scopeproof_core.gates.evaluator import evaluate_gate
-from scopeproof_core.reviews.comparison import EvidenceChangeKind, compare_reviews
+from scopeproof_core.reviews.comparison import (
+    EvidenceChange,
+    EvidenceChangeKind,
+    EvidenceReference,
+    compare_reviews,
+)
 from scopeproof_core.schemas.models import (
     CheckState,
     Criterion,
@@ -243,3 +251,102 @@ def test_unmatched_candidates_are_added_and_removed_with_compatibility_ids() -> 
     assert comparison.removed_evidence_ids == ["EV-removed"]
     assert comparison.evidence_change_counts.added == 1
     assert comparison.evidence_change_counts.removed == 1
+
+
+def test_ambiguous_relocation_falls_back_to_removed_and_added() -> None:
+    previous = bundle_with(
+        evidence("EV-old-1", sha="old", path="src/a.py"),
+        evidence("EV-old-2", sha="old", path="src/b.py"),
+        head_sha="old",
+    )
+    current = bundle_with(
+        evidence("EV-new-1", sha="new", path="src/c.py", line=4),
+        evidence("EV-new-2", sha="new", path="src/d.py", line=4),
+        head_sha="new",
+    )
+
+    kinds = [change.kind for change in compare_reviews(previous, current).evidence_changes]
+
+    assert kinds.count(EvidenceChangeKind.REMOVED) == 2
+    assert kinds.count(EvidenceChangeKind.ADDED) == 2
+    assert EvidenceChangeKind.RELOCATED not in kinds
+
+
+def test_ambiguous_modification_falls_back_to_removed_and_added() -> None:
+    previous = bundle_with(
+        evidence("EV-old-1", sha="old", excerpt="first old"),
+        evidence("EV-old-2", sha="old", excerpt="second old"),
+        head_sha="old",
+    )
+    current = bundle_with(
+        evidence("EV-new-1", sha="new", excerpt="first new"),
+        evidence("EV-new-2", sha="new", excerpt="second new"),
+        head_sha="new",
+    )
+
+    kinds = [change.kind for change in compare_reviews(previous, current).evidence_changes]
+
+    assert kinds.count(EvidenceChangeKind.REMOVED) == 2
+    assert kinds.count(EvidenceChangeKind.ADDED) == 2
+    assert EvidenceChangeKind.MODIFIED not in kinds
+
+
+def test_comparison_output_is_stable_when_evidence_input_order_changes() -> None:
+    old_items = [
+        evidence("EV-old-1", sha="old", path="src/a.py"),
+        evidence("EV-old-2", sha="old", path="src/b.py", excerpt="removed()"),
+    ]
+    new_items = [
+        evidence("EV-new-1", sha="new", path="src/a.py", excerpt="changed()"),
+        evidence("EV-new-2", sha="new", path="src/c.py", excerpt="added()"),
+    ]
+
+    ordered = compare_reviews(
+        bundle_with(*old_items, head_sha="old"),
+        bundle_with(*new_items, head_sha="new"),
+    )
+    reversed_input = compare_reviews(
+        bundle_with(*reversed(old_items), head_sha="old"),
+        bundle_with(*reversed(new_items), head_sha="new"),
+    )
+
+    assert ordered.model_dump(mode="json") == reversed_input.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(
+    ("kind", "previous_present", "current_present"),
+    [
+        (EvidenceChangeKind.UNCHANGED, False, True),
+        (EvidenceChangeKind.RELOCATED, True, False),
+        (EvidenceChangeKind.MODIFIED, False, False),
+        (EvidenceChangeKind.ADDED, True, True),
+        (EvidenceChangeKind.REMOVED, True, True),
+    ],
+)
+def test_change_model_rejects_references_that_do_not_match_kind(
+    kind: EvidenceChangeKind, previous_present: bool, current_present: bool
+) -> None:
+    reference = EvidenceReference.from_item(evidence("EV-1", sha="head"))
+
+    with pytest.raises(ValidationError):
+        EvidenceChange(
+            criterion_id="AC-01",
+            kind=kind,
+            previous=reference if previous_present else None,
+            current=reference if current_present else None,
+            reason="Observable change",
+        )
+
+
+def test_change_model_rejects_blank_criterion_identity() -> None:
+    reference = EvidenceReference.from_item(
+        evidence("EV-1", sha="head")
+    ).model_copy(update={"criterion_id": " "})
+
+    with pytest.raises(ValidationError, match="criterion ID"):
+        EvidenceChange(
+            criterion_id=" ",
+            kind=EvidenceChangeKind.ADDED,
+            current=reference,
+            reason="Candidate appears only in the current review.",
+        )

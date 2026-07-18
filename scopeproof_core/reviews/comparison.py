@@ -82,6 +82,13 @@ class EvidenceChange(BaseModel):
     current: EvidenceReference | None = None
     reason: str = Field(min_length=1)
 
+    @field_validator("criterion_id")
+    @classmethod
+    def _criterion_id_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("evidence change criterion ID must contain non-whitespace text")
+        return value
+
     @field_validator("reason")
     @classmethod
     def _reason_is_not_blank(cls, value: str) -> str:
@@ -266,7 +273,7 @@ def _change(
     )
 
 
-def _pair_first(
+def _pair_unique(
     previous: list[EvidenceReference],
     current: list[EvidenceReference],
     consumed_previous: set[int],
@@ -275,24 +282,27 @@ def _pair_first(
     kind: EvidenceChangeKind,
 ) -> list[EvidenceChange]:
     changes: list[EvidenceChange] = []
-    for previous_index, previous_reference in enumerate(previous):
-        if previous_index in consumed_previous:
+    previous_by_signature: dict[tuple, list[int]] = {}
+    current_by_signature: dict[tuple, list[int]] = {}
+    for index, reference in enumerate(previous):
+        if index not in consumed_previous:
+            previous_by_signature.setdefault(signature(reference), []).append(index)
+    for index, reference in enumerate(current):
+        if index not in consumed_current:
+            current_by_signature.setdefault(signature(reference), []).append(index)
+    for candidate_signature in sorted(
+        set(previous_by_signature) & set(current_by_signature), key=repr
+    ):
+        previous_indexes = previous_by_signature[candidate_signature]
+        current_indexes = current_by_signature[candidate_signature]
+        if len(previous_indexes) != 1 or len(current_indexes) != 1:
             continue
-        previous_signature = signature(previous_reference)
-        current_index = next(
-            (
-                index
-                for index, reference in enumerate(current)
-                if index not in consumed_current and signature(reference) == previous_signature
-            ),
-            None,
-        )
-        if current_index is None:
-            continue
+        previous_index = previous_indexes[0]
+        current_index = current_indexes[0]
         consumed_previous.add(previous_index)
         consumed_current.add(current_index)
         changes.append(
-            _change(kind, previous=previous_reference, current=current[current_index])
+            _change(kind, previous=previous[previous_index], current=current[current_index])
         )
     return changes
 
@@ -348,7 +358,7 @@ def _compare_evidence(
         consumed_previous: set[int] = set()
         consumed_current: set[int] = set()
         changes.extend(
-            _pair_first(
+            _pair_unique(
                 previous,
                 current,
                 consumed_previous,
@@ -358,7 +368,7 @@ def _compare_evidence(
             )
         )
         changes.extend(
-            _pair_first(
+            _pair_unique(
                 previous,
                 current,
                 consumed_previous,
@@ -368,7 +378,7 @@ def _compare_evidence(
             )
         )
         changes.extend(
-            _pair_first(
+            _pair_unique(
                 previous,
                 current,
                 consumed_previous,
