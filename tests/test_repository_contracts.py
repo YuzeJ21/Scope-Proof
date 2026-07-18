@@ -289,6 +289,30 @@ def test_ci_builds_and_executes_installed_wheel() -> None:
     assert "scopeproof benchmark" in workflow
 
 
+def test_ci_executes_comparison_benchmark_in_locked_and_installed_environments() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    locked = workflow.split("  locked-environment:", maxsplit=1)[1].split(
+        "\n  verify:", maxsplit=1
+    )[0]
+    installed_wheel = workflow.split("      - name: Installed wheel smoke", maxsplit=1)[
+        1
+    ]
+
+    required_commands = {
+        "locked environment": "python -m uv run scopeproof comparison-benchmark",
+        "installed wheel smoke": (
+            '(cd "$RUNNER_TEMP" && scopeproof comparison-benchmark)'
+        ),
+    }
+    missing = {
+        environment: command
+        for environment, command in required_commands.items()
+        if command not in (locked if environment == "locked environment" else installed_wheel)
+    }
+
+    assert not missing, f"CI comparison benchmark coverage is incomplete: {missing}"
+
+
 def test_ci_starts_and_cleans_up_installed_web_workbench() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 
