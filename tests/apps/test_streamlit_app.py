@@ -39,6 +39,22 @@ def analyzed_demo(app: AppTest) -> AppTest:
     return app.button(key="run_analysis").click().run()
 
 
+def resolve_all_criteria(app: AppTest) -> AppTest:
+    state = app.session_state["review_state"]
+    for criterion in state.criteria_revision.criteria:
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment="Reviewed candidate evidence",
+            ),
+        )
+    app.session_state["review_state"] = state
+    app.session_state["bundle"] = state.bundle
+    return app.run()
+
+
 def saved_demo_review(app: AppTest) -> tuple[AppTest, str]:
     app = analyzed_demo(app)
     review_id = app.session_state["review_state"].review.review_id
@@ -1234,6 +1250,10 @@ def test_submitted_runtime_draft_restores_authoritative_save_and_export(
     app = app.button(key="save_runtime_evidence").click().run()
 
     assert len(app.session_state["review_state"].bundle.runtime_evidence) == 1
+    assert (
+        app.session_state["review_state"].resolution_events[-1].decision
+        is HumanDecision.MANUALLY_VERIFIED
+    )
     assert app.text_input(key="runtime_artifact_reference").value == ""
     captions = "\n".join(item.value for item in app.caption)
     assert "Pending criterion-detail inputs are not saved or exported." not in captions
@@ -1794,11 +1814,15 @@ def test_final_acceptance_control_is_visible_only_after_analysis() -> None:
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
 
-    assert app.button(key="record_final_acceptance").disabled is False
+    assert app.button(key="record_final_acceptance").disabled is True
+    assert (
+        "Resolve every active criterion before recording final acceptance."
+        in [item.value for item in app.caption]
+    )
 
 
-def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -> None:
-    app = analyzed_demo(new_app())
+def test_final_acceptance_requires_resolutions_and_then_completes_gate() -> None:
+    app = resolve_all_criteria(analyzed_demo(new_app()))
     state_before = app.session_state["review_state"]
     gate_before = state_before.bundle.gate
 
@@ -1813,10 +1837,10 @@ def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -
     state_after = app.session_state["review_state"]
 
     assert state_after.review.final_acceptance is True
-    assert state_after.bundle.gate.verdict is GateVerdict.BLOCKED
+    assert state_after.bundle.gate.verdict is GateVerdict.READY
     assert state_after.bundle.gate.blocking_criteria == gate_before.blocking_criteria
     assert state_after.bundle.gate.unresolved_criteria == gate_before.unresolved_criteria
-    assert len(state_after.resolution_events) == 1
+    assert len(state_after.resolution_events) == len(state_after.bundle.criteria) + 1
     assert app.button(key="record_final_acceptance").disabled is True
     assert "Final acceptance appended to the local review history." in [
         item.value for item in app.success
@@ -1829,7 +1853,7 @@ def test_final_acceptance_is_labeled_as_review_level_without_overriding_gate() -
 
 
 def test_final_acceptance_failure_preserves_retryable_state_without_raw_details() -> None:
-    app = analyzed_demo(new_app())
+    app = resolve_all_criteria(analyzed_demo(new_app()))
     review_state = app.session_state["review_state"].model_copy(deep=True)
     raw_error = "invalid final event at /private/secret/final.json"
 
@@ -1862,7 +1886,9 @@ def test_final_acceptance_failure_preserves_retryable_state_without_raw_details(
     assert app.session_state["review_state"] == review_state
     assert app.session_state["bundle"] == review_state.bundle
     assert app.session_state["saved_review_fingerprint"] is None
-    assert app.session_state["review_state"].resolution_events == []
+    assert len(app.session_state["review_state"].resolution_events) == len(
+        review_state.bundle.criteria
+    )
     assert app.button(key="record_final_acceptance").disabled is False
     assert "Final acceptance appended" not in "\n".join(
         item.value for item in app.success
@@ -1870,7 +1896,7 @@ def test_final_acceptance_failure_preserves_retryable_state_without_raw_details(
 
 
 def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> None:
-    app = analyzed_demo(new_app())
+    app = resolve_all_criteria(analyzed_demo(new_app()))
     app = app.button(key="record_final_acceptance").click().run()
     assert app.button(key="record_final_acceptance").disabled is True
 
@@ -1882,7 +1908,7 @@ def test_criteria_revision_reenables_final_acceptance_after_invalidation() -> No
     assert app.session_state["review_state"].review.final_acceptance is False
     assert app.session_state["review_state"].bundle is None
     app = app.button(key="run_analysis").click().run()
-    assert app.button(key="record_final_acceptance").disabled is False
+    assert app.button(key="record_final_acceptance").disabled is True
 
 
 def test_analysis_is_disabled_with_active_bundle_and_enabled_for_pending_revision() -> None:
@@ -2107,39 +2133,10 @@ def test_criterion_resolution_failure_preserves_retryable_state_without_raw_deta
     )
 
 
-@pytest.mark.parametrize("note", ["", "   ", "\t\n"])
-def test_manual_verification_requires_nonblank_reviewer_note(note: str) -> None:
+def test_manual_verification_is_only_available_through_external_verification() -> None:
     app = analyzed_demo(new_app())
-    app = app.selectbox(key="resolution_decision").set_value(
-        HumanDecision.MANUALLY_VERIFIED
-    ).run()
-    app = app.text_area(key="resolution_note").set_value(note).run()
-
-    assert app.button(key="save_resolution").disabled is True
-    assert len(app.session_state["review_state"].resolution_events) == 0
-    assert (
-        "Reviewer note is required for manual verification. Describe what was verified."
-    ) in [item.value for item in app.caption]
-
-
-def test_successful_manual_verification_clears_conditional_evidence_level() -> None:
-    app = analyzed_demo(new_app())
-    app = app.selectbox(key="resolution_decision").set_value(
-        HumanDecision.MANUALLY_VERIFIED
-    ).run()
-    app = app.selectbox(key="manual_evidence_level").set_value(EvidenceLevel.E4).run()
-    app = app.text_area(key="resolution_note").set_value(
-        "Verified the export in staging."
-    ).run()
-    assert app.button(key="save_resolution").disabled is False
-    app = app.button(key="save_resolution").click().run()
-
-    assert len(app.session_state["review_state"].resolution_events) == 1
-    assert app.session_state["review_state"].resolution_events[0].comment == (
-        "Verified the export in staging."
-    )
-    assert app.selectbox(key="resolution_decision").value is None
-    assert "manual_evidence_level" not in app.session_state.filtered_state
+    assert "Manually Verified" not in app.selectbox(key="resolution_decision").options
+    assert app.button(key="save_runtime_evidence").label == "Save external verification"
 
 
 def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
@@ -2426,13 +2423,13 @@ def test_runtime_evidence_validation_failure_is_safe_and_retryable() -> None:
     raw_error = "2 validation errors at /private/secret/runtime.json"
 
     with patch(
-        "scopeproof_core.reviews.lifecycle.append_runtime_evidence",
+        "scopeproof_core.reviews.lifecycle.append_external_verification",
         side_effect=ValueError(raw_error),
     ):
         app = app.button(key="save_runtime_evidence").click().run()
 
     recovery = (
-        "Runtime evidence could not be saved. Check every required field and select E3 or E4."
+        "External verification could not be saved. Check every required field and select E3 or E4."
     )
     assert recovery in [item.value for item in app.error]
     assert not app.exception
@@ -2484,8 +2481,8 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
     )
     assert (
         "E3 means manually recorded external runtime verification. "
-        "E4 means explicit human acceptance. Saving this record does not resolve the criterion "
-        "or record final review acceptance."
+        "E4 means explicit human acceptance. Saving resolves this criterion as manually "
+        "verified but does not record final review acceptance."
     ) in level_context
     assert (
         "Artifact, scenario, environment, observed result, and reviewer are required."
@@ -2520,12 +2517,11 @@ def test_criterion_change_clears_pending_target_specific_drafts() -> None:
     app = app.text_input(key="runtime_reviewer").set_value("QA").run()
     app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()
     app = app.selectbox(key="resolution_decision").set_value(
-        HumanDecision.MANUALLY_VERIFIED
+        HumanDecision.ACCEPTED
     ).run()
     app = app.text_area(key="resolution_note").set_value(
         "Verified AC-01 in staging."
     ).run()
-    app = app.selectbox(key="manual_evidence_level").set_value(EvidenceLevel.E4).run()
 
     assert app.button(key="save_runtime_evidence").disabled is False
     assert app.button(key="save_resolution").disabled is False
@@ -2710,6 +2706,6 @@ def test_successful_runtime_evidence_save_clears_form_and_prevents_accidental_re
     assert app.text_area(key="runtime_limitations").value == ""
     assert app.selectbox(key="runtime_evidence_level").value is EvidenceLevel.E3
     assert app.button(key="save_runtime_evidence").disabled is True
-    assert "Manual runtime evidence appended without changing static findings." in [
+    assert "External verification and reviewer decision recorded together." in [
         item.value for item in app.success
     ]

@@ -38,9 +38,10 @@ from scopeproof_core.reporting.references import render_artifact_reference_markd
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
+    append_external_verification,
     append_resolution,
-    append_runtime_evidence,
     attach_analysis,
+    can_record_final_acceptance,
     confirm_criteria,
     new_review_state,
     resolution_event_statuses,
@@ -1141,11 +1142,12 @@ else:
         "runtime_evidence_save_notice", None
     )
 
-    st.markdown("### Manual runtime evidence")
+    st.markdown("### Record external verification")
     st.caption(
         f"This record will be attached to {selected_id} — {selected_criterion.text}. "
         "Record a human-supplied observation only. ScopeProof does not run PR code "
-        "or infer runtime results."
+        "or infer runtime results. Saving records the evidence and the criterion's "
+        "manual-verification decision together."
     )
     runtime_artifact = st.text_input(
         "Artifact or URL (required)", key="runtime_artifact_reference"
@@ -1172,8 +1174,8 @@ else:
     )
     st.caption(
         "E3 means manually recorded external runtime verification. "
-        "E4 means explicit human acceptance. Saving this record does not resolve the "
-        "criterion or record final review acceptance. "
+        "E4 means explicit human acceptance. Saving resolves this criterion as manually "
+        "verified but does not record final review acceptance. "
         "Artifact, scenario, environment, observed result, and reviewer are required. "
         "Limitations are optional."
     )
@@ -1197,12 +1199,12 @@ else:
             + "."
         )
     if st.button(
-        "Save manual runtime evidence",
+        "Save external verification",
         key="save_runtime_evidence",
         disabled=not runtime_evidence_ready,
     ):
         if review_state is None:
-            st.error("Run analysis before recording manual runtime evidence.")
+            st.error("Run analysis before recording external verification.")
         else:
             try:
                 runtime_evidence = RuntimeEvidence(
@@ -1217,18 +1219,27 @@ else:
                         line.strip() for line in runtime_limitations.splitlines() if line.strip()
                     ],
                 )
-                review_state = append_runtime_evidence(review_state, runtime_evidence)
+                verification_event = ResolutionEvent(
+                    criterion_id=selected_id,
+                    decision=HumanDecision.MANUALLY_VERIFIED,
+                    comment=f"Externally observed result: {runtime_result.strip()}",
+                    claimed_evidence_level=runtime_level,
+                    reviewer=runtime_reviewer.strip(),
+                )
+                review_state = append_external_verification(
+                    review_state, runtime_evidence, verification_event
+                )
                 st.session_state["review_state"] = review_state
                 st.session_state["bundle"] = review_state.bundle
                 bundle = review_state.bundle
                 st.session_state["runtime_evidence_form_reset_pending"] = True
                 st.session_state["runtime_evidence_save_notice"] = (
-                    "Manual runtime evidence appended without changing static findings."
+                    "External verification and reviewer decision recorded together."
                 )
                 st.rerun()
             except ValueError:
                 st.error(
-                    "Runtime evidence could not be saved. Check every required field and "
+                    "External verification could not be saved. Check every required field and "
                     "select E3 or E4."
                 )
     selected_runtime = [
@@ -1271,7 +1282,6 @@ else:
         HumanDecision.ACCEPTED,
         HumanDecision.CHANGE_REQUIRED,
         HumanDecision.REJECTED_FINDING,
-        HumanDecision.MANUALLY_VERIFIED,
         HumanDecision.ACCEPTED_EXCEPTION,
         HumanDecision.NOT_IN_SCOPE,
     ]
@@ -1290,26 +1300,11 @@ else:
     resolution_note = st.text_area("Reviewer note", key="resolution_note")
     if resolution_save_notice is not None:
         st.success(resolution_save_notice)
-    manual_level = None
-    if decision is HumanDecision.MANUALLY_VERIFIED:
-        manual_level = st.selectbox(
-            "Externally verified evidence level",
-            options=[EvidenceLevel.E2, EvidenceLevel.E3, EvidenceLevel.E4],
-            key="manual_evidence_level",
-        )
-    manual_verification_ready = (
-        decision is not HumanDecision.MANUALLY_VERIFIED or bool(resolution_note.strip())
-    )
-    if not manual_verification_ready:
-        st.caption(
-            "Reviewer note is required for manual verification. Describe what was verified."
-        )
     if st.button(
         "Save resolution",
         key="save_resolution",
         disabled=(
             decision is None
-            or not manual_verification_ready
             or not decision_reviewer_ready
         ),
     ):
@@ -1322,7 +1317,6 @@ else:
                     criterion_id=selected_id,
                     decision=decision,
                     comment=resolution_note,
-                    claimed_evidence_level=manual_level,
                     reviewer=decision_reviewer.strip(),
                 )
                 review_state = append_resolution(review_state, event)
@@ -1347,6 +1341,9 @@ else:
     final_acceptance_recorded = bool(
         review_state is not None and review_state.review.final_acceptance
     )
+    final_acceptance_eligible = bool(
+        review_state is not None and can_record_final_acceptance(review_state)
+    )
 
     st.markdown("### Final review acceptance")
     st.caption(
@@ -1354,10 +1351,16 @@ else:
         "or override the deterministic gate. Review every criterion and its evidence before "
         "recording final acceptance."
     )
+    if not final_acceptance_recorded and not final_acceptance_eligible:
+        st.caption("Resolve every active criterion before recording final acceptance.")
     if st.button(
         "Record final acceptance",
         key="record_final_acceptance",
-        disabled=final_acceptance_recorded or not decision_reviewer_ready,
+        disabled=(
+            final_acceptance_recorded
+            or not final_acceptance_eligible
+            or not decision_reviewer_ready
+        ),
     ):
         if review_state is None:
             st.error("Run analysis before recording final acceptance.")
