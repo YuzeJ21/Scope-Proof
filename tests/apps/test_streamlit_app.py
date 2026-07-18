@@ -528,7 +528,10 @@ def test_first_use_flow_labels_five_stages_and_defaults_to_standard_review() -> 
     visible = "\n".join(
         item.value for item in [*app.markdown, *app.caption, *app.info]
     )
-    assert "PR → Criteria → Evidence → Decisions → Outcome" in visible
+    assert (
+        "Public PR → Confirm criteria → Review coverage → Record decisions → Export"
+        in visible
+    )
     assert app.checkbox(key="alpha_feedback_mode").value is False
     assert "does not create participant research records" in visible
 

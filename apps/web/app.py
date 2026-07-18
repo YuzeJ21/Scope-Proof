@@ -557,10 +557,12 @@ if review_reopen_notice is not None:
     st.success(review_reopen_notice)
 
 st.header("1 · Start Review")
-st.markdown("**PR → Criteria → Evidence → Decisions → Outcome**")
+st.markdown(
+    "**Public PR → Confirm criteria → Review coverage → Record decisions → Export**"
+)
 st.caption(
-    "Five bounded stages keep source ownership, human confirmation, evidence analysis, "
-    "decisions, and outcomes separate."
+    "Five bounded stages keep source loading, human confirmation, candidate analysis, "
+    "reviewer decisions, and exports separate."
 )
 alpha_feedback_mode = st.checkbox(
     "Alpha feedback session (optional)",
