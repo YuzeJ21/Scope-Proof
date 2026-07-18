@@ -113,4 +113,3 @@ No public rehearsal issue, comment, release note, or notification-only event is 
 ships through one protected pull request because it changes a public CLI surface and onboarding
 contracts. A new release is not required unless the repository's release policy separately demands
 one after the merged change; release activity is never manufactured as validation.
-

@@ -285,4 +285,3 @@ as blocking completed engineering work.
 Report final protected-main SHA, PR, merge and release decisions, changed behavior, exact test and
 check results, rehearsal proof and non-proof, remaining gaps, preserved unrelated files/worktrees,
 and the next highest-value evidence-bound stage.
-
