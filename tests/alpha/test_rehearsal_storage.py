@@ -138,9 +138,9 @@ def test_concurrent_rehearsal_saves_create_exactly_once(tmp_path: Path) -> None:
     write_barrier = Barrier(2)
 
     class SynchronizedStore(JsonAlphaRehearsalStore):
-        def _write(self, target, record):
+        def _write(self, directory_fd, target_name, record):
             write_barrier.wait()
-            return super()._write(target, record)
+            return super()._write(directory_fd, target_name, record)
 
     record = alpha_rehearsal()
     store = SynchronizedStore(tmp_path)
@@ -158,6 +158,62 @@ def test_concurrent_rehearsal_saves_create_exactly_once(tmp_path: Path) -> None:
 
     assert sorted(results) == ["already_exists", "created"]
     assert store.load(record.rehearsal_id) == record
+
+
+def test_rehearsal_save_stays_anchored_when_ancestor_is_swapped(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "save-root"
+    directory = root / "rehearsals"
+    directory.mkdir(parents=True)
+    moved_root = tmp_path / "save-root-original"
+    outside = tmp_path / "save-outside"
+    outside.mkdir()
+
+    class SwappingWriteStore(JsonAlphaRehearsalStore):
+        def _write(self, directory_fd, target_name, record):
+            root.rename(moved_root)
+            root.symlink_to(outside, target_is_directory=True)
+            return super()._write(directory_fd, target_name, record)
+
+    record = alpha_rehearsal()
+    store = SwappingWriteStore(directory)
+
+    returned_path = store.save(record)
+
+    anchored_directory = moved_root / "rehearsals"
+    assert returned_path == directory / f"{record.rehearsal_id}.json"
+    assert JsonAlphaRehearsalStore(anchored_directory).load(record.rehearsal_id) == record
+    assert list(outside.rglob("*.json")) == []
+
+
+def test_rehearsal_load_stays_anchored_when_ancestor_is_swapped(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "load-root"
+    directory = root / "rehearsals"
+    directory.mkdir(parents=True)
+    moved_root = tmp_path / "load-root-original"
+    outside = tmp_path / "load-outside"
+    outside_directory = outside / "rehearsals"
+    outside_directory.mkdir(parents=True)
+    record = alpha_rehearsal()
+    JsonAlphaRehearsalStore(directory).save(record)
+    outside_path = outside_directory / f"{record.rehearsal_id}.json"
+    outside_path.write_text("outside target must not be read", encoding="utf-8")
+
+    class SwappingReadStore(JsonAlphaRehearsalStore):
+        def _read(self, directory_fd, target_name):
+            root.rename(moved_root)
+            root.symlink_to(outside, target_is_directory=True)
+            return super()._read(directory_fd, target_name)
+
+    loaded = SwappingReadStore(directory).load(record.rehearsal_id)
+
+    assert loaded == record
+    assert root.is_symlink()
+    assert (moved_root / "rehearsals").is_dir()
+    assert outside_path.read_text(encoding="utf-8") == "outside target must not be read"
 
 
 def test_rehearsal_store_rejects_valid_record_under_different_id(
