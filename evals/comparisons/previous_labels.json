@@ -1,0 +1,13 @@
+{
+  "source_text": "Deliberately constructed previous requirements for engineering research only.",
+  "criteria_confirmed": true,
+  "criteria": [
+    {"criterion_id": "AC-01", "text": "relocateproof", "priority": "must_have", "required_evidence_level": "E1"},
+    {"criterion_id": "AC-02", "text": "modifyproof", "priority": "must_have", "required_evidence_level": "E1"},
+    {"criterion_id": "AC-03", "text": "removeproof", "priority": "should_have", "required_evidence_level": "E1"},
+    {"criterion_id": "AC-04", "text": "addproof", "priority": "should_have", "required_evidence_level": "E1"},
+    {"criterion_id": "AC-05", "text": "duplicateproof", "priority": "should_have", "required_evidence_level": "E1"}
+  ],
+  "resolutions": [],
+  "final_acceptance": false
+}

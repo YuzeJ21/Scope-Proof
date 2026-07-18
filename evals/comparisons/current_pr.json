@@ -1,0 +1,18 @@
+{
+  "repository": "scopeproof/constructed-rereview-benchmark",
+  "pr_number": 201,
+  "title": "Constructed current re-review snapshot",
+  "description": "Deliberately constructed engineering evidence; not participant or market validation.",
+  "html_url": "https://github.com/scopeproof/constructed-rereview-benchmark/pull/201",
+  "base_sha": "constructed-base-001",
+  "head_sha": "constructed-current-001",
+  "check_state": "passing",
+  "fetched_at": "2026-07-18T01:00:00Z",
+  "files": [
+    {"path": "src/moved.py", "status": "modified", "lines": [{"change_type": "added", "line_number": 11, "content": "relocateproof"}]},
+    {"path": "src/modify.py", "status": "modified", "lines": [{"change_type": "added", "line_number": 20, "content": "modifyproof current"}]},
+    {"path": "src/add.py", "status": "modified", "lines": [{"change_type": "added", "line_number": 31, "content": "addproof"}]},
+    {"path": "src/duplicate_c.py", "status": "modified", "lines": [{"change_type": "added", "line_number": 41, "content": "duplicateproof"}]},
+    {"path": "src/duplicate_d.py", "status": "modified", "lines": [{"change_type": "added", "line_number": 51, "content": "duplicateproof"}]}
+  ]
+}

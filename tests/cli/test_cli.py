@@ -50,6 +50,16 @@ def test_benchmark_command_prints_execution_derived_metrics(capsys) -> None:
     assert '"criterion_agreement_rate": 1.0' in output
 
 
+def test_comparison_benchmark_command_reports_constructed_boundary(capsys) -> None:
+    assert main(["comparison-benchmark"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["executed_case_count"] == 1
+    assert payload["mismatches"] == []
+    assert payload["evidence_boundary"] == "deliberately constructed engineering evidence"
+    assert payload["does_not_advance_stage_1"] is True
+
+
 def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Export CSV\n", encoding="utf-8")

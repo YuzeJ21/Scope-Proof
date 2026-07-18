@@ -15,6 +15,7 @@ from scopeproof_core.alpha.service import (
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
 from scopeproof_core.criteria.service import parse_criteria
+from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
 from scopeproof_core.evals.metrics import EvidenceQualityMetrics
 from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
@@ -259,6 +260,11 @@ def _parser() -> argparse.ArgumentParser:
     delete.set_defaults(handler=_delete)
     benchmark = commands.add_parser("benchmark", help="Run every labelled local benchmark case")
     benchmark.set_defaults(handler=lambda _: _benchmark())
+    comparison_benchmark = commands.add_parser(
+        "comparison-benchmark",
+        help="Run the constructed re-review evidence-integrity benchmark",
+    )
+    comparison_benchmark.set_defaults(handler=lambda _: _comparison_benchmark())
     action_evidence = commands.add_parser(
         "validate-action-evidence",
         help="Validate an owner-supplied external Action evidence record without networking",
@@ -349,6 +355,12 @@ def _benchmark() -> int:
             or result.unexecuted_declared_categories
         )
     )
+
+
+def _comparison_benchmark() -> int:
+    result = run_bundled_comparison_benchmark()
+    print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+    return int(bool(result.mismatches or result.executed_case_count == 0))
 
 
 def main(argv: list[str] | None = None) -> int:

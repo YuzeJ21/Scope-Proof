@@ -1,0 +1,16 @@
+{
+  "case_id": "rereview-evidence-integrity",
+  "previous_fixture": "previous_pr.json",
+  "previous_labels": "previous_labels.json",
+  "current_fixture": "current_pr.json",
+  "current_labels": "current_labels.json",
+  "expected_counts": {
+    "unchanged": 0,
+    "relocated": 1,
+    "modified": 1,
+    "added": 3,
+    "removed": 3
+  },
+  "evidence_boundary": "deliberately constructed engineering evidence",
+  "does_not_advance_stage_1": true
+}
