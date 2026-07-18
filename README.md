@@ -196,7 +196,11 @@ browser input from selecting arbitrary file paths. Records preserve the review S
 revisions, evidence, findings, resolution history, and gate decision. They never contain the
 optional GitHub token. A reopened review reports a changed head SHA rather than silently reusing
 old evidence. After a new analysis, the workbench compares previous and current heads, candidates,
-finding states, reviewer decisions, and review status without mutating either bundle.
+finding states, reviewer decisions, and review status without mutating either bundle. Candidate
+evidence is classified as **Unchanged**, **Relocated**, **Modified**, **Added**, or **Removed**.
+Changed candidates show both the previous and current immutable location and excerpt so the
+reviewer can inspect what moved or changed before recording a new decision. This comparison does
+not prove criterion satisfaction.
 
 From the CLI, run `scopeproof list` to return the safe local review IDs in the default
 `.scopeproof/reviews` directory; add `--storage-dir PATH` only when earlier CLI commands used that
@@ -238,14 +242,23 @@ python -m pytest -q
 Run the labeled regression benchmark:
 
 ```bash
-python -m scopeproof_core.evals.runner
+uv run scopeproof benchmark
+uv run scopeproof comparison-benchmark
 ```
 
-The benchmark executes 12 executable benchmark cases, rather than treating a static category list
-as coverage. It reports executed case and criterion counts, False Ready, False Blocker,
+The first command executes 12 executable benchmark cases for acceptance coverage, rather than
+treating a static category list as coverage. The equivalent module entry point is
+`python -m scopeproof_core.evals.runner`. It reports executed case and criterion counts, False Ready, False Blocker,
 case-level mismatches, immutable evidence-link errors, and unexecuted required categories. It exits
 nonzero when a known must-have False Ready, label mismatch, evidence-link error, or unexecuted
 category is present.
+
+The second command executes a paired previous/current review case and checks deterministic
+re-review classification, including conservative handling of ambiguous duplicate candidates. The
+paired case is deliberately constructed engineering evidence. It does not advance Stage 1. This
+engineering evidence does not prove correctness, does not constitute customer validation, and
+does not show external use.
+Both benchmark commands execute local JSON inputs only; they do not run fixture repository code.
 
 Run the opt-in live public GitHub smoke test:
 
