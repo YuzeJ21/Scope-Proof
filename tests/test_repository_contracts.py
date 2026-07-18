@@ -804,6 +804,52 @@ def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
     assert "not revenue, orders, customers, paid demand, or willingness to pay" in roadmap
 
 
+def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    for field_id in (
+        "public_pr",
+        "alpha_case_issue",
+        "reviewed_head_sha",
+        "public_requirements_url",
+        "source_owner",
+        "outcome",
+        "completion_time",
+        "useful_gap_category",
+        "decision_impact",
+        "reuse_intent",
+        "design_partner_interest",
+        "friction",
+        "limitations",
+        "safety",
+    ):
+        assert f"id: {field_id}" in template
+
+    for required_text in (
+        "USD 99 per team per month",
+        "USD 999 per team per year",
+        "research hypotheses only",
+        "not a purchase agreement",
+        "only after completing a genuine review",
+        "Prefer not to answer",
+        "submission alone is not validation",
+    ):
+        assert required_text in template
+
+    forbidden_ids = (
+        "name",
+        "email",
+        "linkedin_profile",
+        "employer",
+        "private_repository",
+        "payment",
+        "purchase_commitment",
+        "sales_contact",
+    )
+    assert all(f"id: {field_id}" not in template for field_id in forbidden_ids)
+
+
 def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> None:
     workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
 
