@@ -9,7 +9,17 @@ from pathlib import Path
 
 import streamlit as st
 
-from scopeproof_core.alpha.models import AlphaQualification, ParticipantRole
+from scopeproof_core.alpha.models import (
+    AlphaFrictionStage,
+    AlphaOutcome,
+    AlphaQualification,
+    ParticipantRole,
+)
+from scopeproof_core.alpha.service import ensure_alpha_case, record_alpha_outcome
+from scopeproof_core.alpha.storage import (
+    JsonAlphaCaseStore,
+    default_alpha_case_directory,
+)
 from scopeproof_core.criteria.service import (
     add_criterion,
     parse_criteria,
@@ -91,6 +101,9 @@ _STATE_DEFAULTS = {
     "delete_saved_review_reset_pending": False,
     "saved_review_delete_notice": None,
     "source_load_notice": None,
+    "alpha_case_id": None,
+    "alpha_case_notice": None,
+    "alpha_outcome_notice": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -539,12 +552,11 @@ st.caption(
     "Five bounded stages keep source ownership, human confirmation, evidence analysis, "
     "decisions, and outcomes separate."
 )
-review_path = st.radio(
-    "Review path",
-    options=["Confirmed public-alpha review", "Technical smoke only"],
-    index=1,
-    key="review_path",
-    help="A technical smoke checks the workflow but is not user validation.",
+alpha_feedback_mode = st.checkbox(
+    "Alpha feedback session (optional)",
+    value=False,
+    key="alpha_feedback_mode",
+    help="Collect local, consent-controlled feedback from a genuine public-PR participant.",
 )
 pr_url = st.text_input(
     "Public GitHub pull request URL",
@@ -563,7 +575,8 @@ if pr_url.strip():
     else:
         pr_url_is_valid = True
 alpha_qualification_ready = True
-if review_path == "Confirmed public-alpha review":
+alpha_qualification: AlphaQualification | None = None
+if alpha_feedback_mode:
     st.caption(
         "Qualification is session-only. Confirm a genuine public case before fetching; "
         "ScopeProof does not store these preflight fields here."
@@ -594,7 +607,7 @@ if review_path == "Confirmed public-alpha review":
         and no_confidential_information
     ):
         try:
-            AlphaQualification(
+            alpha_qualification = AlphaQualification(
                 public_pr_url=pr_url,
                 requirements_source_url=requirements_source_url,
                 participant_role=ParticipantRole(participant_role),
@@ -606,9 +619,8 @@ if review_path == "Confirmed public-alpha review":
         else:
             alpha_qualification_ready = True
 else:
-    st.info(
-        "Technical smoke only — this can check ingestion and reporting, but it is not "
-        "user validation and must not be described as a confirmed alpha outcome."
+    st.caption(
+        "Standard review mode does not create participant research records."
     )
 github_token = st.text_input(
     "Optional GitHub token",
@@ -621,7 +633,7 @@ with load_column:
     if st.button(
         "Load deliberately constructed demo",
         key="load_demo",
-        disabled=replacement_blocked,
+        disabled=replacement_blocked or alpha_feedback_mode,
         use_container_width=True,
     ):
         labels = load_demo_labels()
@@ -650,6 +662,7 @@ with fetch_column:
             snapshot = GitHubClient(token=github_token or None).fetch_pull_request(pr_url)
             _record_reopened_source_reload(snapshot)
             st.session_state["snapshot"] = snapshot
+            st.session_state["alpha_case_id"] = None
             _reset_analysis()
             st.session_state["source_load_notice"] = (
                 "Public PR loaded. Add and confirm criteria before analysis."
@@ -891,18 +904,51 @@ else:
         or (st.session_state["criteria_confirmed"] and not criteria_edits_pending),
     ):
         state: ReviewState | None = st.session_state["review_state"]
+        alpha_case = None
         try:
             if state is not None:
                 state = revise_criteria(
                     state, edited_criteria, st.session_state["source_text"]
                 )
                 state = confirm_criteria(state)
+            if alpha_feedback_mode:
+                if alpha_qualification is None:
+                    raise ValueError("alpha qualification is incomplete")
+                loaded_for_alpha = st.session_state["snapshot"]
+                if loaded_for_alpha is None:
+                    raise ValueError("alpha qualification requires a loaded public PR")
+                alpha_owner, alpha_repository, alpha_pr_number = parse_pr_url(
+                    alpha_qualification.public_pr_url
+                )
+                if (
+                    f"{alpha_owner}/{alpha_repository}" != loaded_for_alpha.repository
+                    or alpha_pr_number != loaded_for_alpha.pr_number
+                ):
+                    raise ValueError("alpha qualification must match the loaded public PR")
+                alpha_store = JsonAlphaCaseStore(default_alpha_case_directory())
+                alpha_case = ensure_alpha_case(
+                    store=alpha_store,
+                    case_id=st.session_state["alpha_case_id"],
+                    public_pr_url=alpha_qualification.public_pr_url,
+                    requirements_source_url=str(
+                        alpha_qualification.requirements_source_url
+                    ),
+                    participant_role=alpha_qualification.participant_role,
+                    source_owner_confirmed=True,
+                    no_confidential_information=True,
+                    confirmed_criteria=[item.text for item in edited_criteria],
+                )
         except ValueError:
             st.error(
                 "Criteria could not be confirmed. The current review remains unchanged. "
                 "Verify the edited criteria and try again."
             )
         else:
+            if alpha_case is not None:
+                st.session_state["alpha_case_id"] = alpha_case.case_id
+                st.session_state["alpha_case_notice"] = (
+                    f"Alpha case created locally: {alpha_case.case_id}."
+                )
             if state is not None:
                 st.session_state["review_state"] = state
             st.session_state["criteria"] = edited_criteria
@@ -910,6 +956,10 @@ else:
             st.session_state["bundle"] = None if state is None else state.bundle
             criteria_edits_pending = False
             st.rerun()
+
+alpha_case_notice = st.session_state.pop("alpha_case_notice", None)
+if alpha_case_notice is not None:
+    st.success(alpha_case_notice)
 
 if criteria_edits_pending:
     st.warning(
@@ -1441,25 +1491,6 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
-    st.markdown("### Record the alpha outcome")
-    st.caption(
-        "After the participant reviews the evidence and decisions, record exactly one "
-        "truthful outcome. This does not prove correctness, market demand, or repeat use."
-    )
-    st.markdown(
-        "- `found_useful_gap` — surfaced a useful requirement-evidence gap\n"
-        "- `showed_only_known_information` — added no useful new information\n"
-        "- `created_friction` — created material friction; record the stage"
-    )
-    st.code(
-        "scopeproof alpha outcome CASE_ID --review-id REVIEW_ID --head-sha HEAD_SHA "
-        "--result found_useful_gap",
-        language=None,
-    )
-    st.caption(
-        "See docs/alpha/outcome-form.md. Report and quotation permissions are separate "
-        "and off by default."
-    )
     review_save_notice = st.session_state.pop("review_save_notice", None)
     review_matches_local_save = bool(
         review_state is not None
@@ -1534,6 +1565,97 @@ else:
             st.rerun()
     if review_save_notice is not None:
         st.success(review_save_notice)
+    if alpha_feedback_mode and st.session_state["alpha_case_id"] is not None:
+        st.markdown("### Alpha feedback outcome")
+        st.caption(
+            "Record one voluntary outcome for this local case. This is participant feedback, "
+            "not proof of correctness, market demand, or repeat use."
+        )
+        st.code(st.session_state["alpha_case_id"], language=None)
+        alpha_store = JsonAlphaCaseStore(default_alpha_case_directory())
+        try:
+            alpha_record = alpha_store.load(st.session_state["alpha_case_id"])
+        except (OSError, ValueError):
+            st.warning(
+                "The local alpha case is unavailable. The review and exports remain unchanged."
+            )
+        else:
+            if alpha_record.outcome is not None:
+                st.success(
+                    "Alpha feedback completed locally: "
+                    f"{_status_label(alpha_record.outcome.value)}."
+                )
+            else:
+                alpha_outcome = st.selectbox(
+                    "Participant outcome",
+                    options=list(AlphaOutcome),
+                    index=None,
+                    placeholder="Select one outcome",
+                    format_func=lambda item: _status_label(item.value),
+                    key="alpha_outcome",
+                )
+                friction_stage = None
+                if alpha_outcome is AlphaOutcome.CREATED_FRICTION:
+                    friction_stage = st.selectbox(
+                        "Friction stage",
+                        options=list(AlphaFrictionStage),
+                        format_func=lambda item: _status_label(item.value),
+                        key="alpha_friction_stage",
+                    )
+                outcome_notes = st.text_area(
+                    "Outcome notes (optional)", key="alpha_outcome_notes"
+                )
+                report_consent = st.checkbox(
+                    "Allow this case in an anonymized aggregate report",
+                    value=False,
+                    key="alpha_report_consent",
+                )
+                quote_consent = st.checkbox(
+                    "Allow a direct quotation from the optional notes",
+                    value=False,
+                    key="alpha_quote_consent",
+                )
+                alpha_outcome_ready = bool(
+                    alpha_outcome is not None
+                    and review_state is not None
+                    and review_matches_local_save
+                )
+                if not review_matches_local_save:
+                    st.caption(
+                        "Save the current review locally before recording participant feedback."
+                    )
+                if st.button(
+                    "Record alpha outcome",
+                    key="record_alpha_outcome",
+                    disabled=not alpha_outcome_ready,
+                ):
+                    assert review_state is not None
+                    assert alpha_outcome is not None
+                    try:
+                        completed_alpha_record = record_alpha_outcome(
+                            alpha_record,
+                            review_id=review_state.review.review_id,
+                            reviewed_head_sha=review_state.review.head_sha,
+                            outcome=alpha_outcome,
+                            friction_stage=friction_stage,
+                            outcome_notes=outcome_notes.strip() or None,
+                            report_consent=report_consent,
+                            quote_consent=quote_consent,
+                        )
+                        alpha_store.update(completed_alpha_record)
+                    except (OSError, ValueError):
+                        st.error(
+                            "Alpha feedback could not be recorded. The review and existing "
+                            "alpha case remain unchanged."
+                        )
+                    else:
+                        st.session_state["alpha_outcome_notice"] = (
+                            "Alpha feedback outcome recorded locally."
+                        )
+                        st.rerun()
+        alpha_outcome_notice = st.session_state.pop("alpha_outcome_notice", None)
+        if alpha_outcome_notice is not None:
+            st.success(alpha_outcome_notice)
     review_status = review_status_label(bundle.gate.verdict)
     st.markdown(f"## Review status: **{review_status}**")
     if bundle.gate.reason_codes:

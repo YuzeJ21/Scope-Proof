@@ -5,6 +5,11 @@ from unittest.mock import patch
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from scopeproof_core.alpha.models import AlphaOutcome
+from scopeproof_core.alpha.storage import (
+    JsonAlphaCaseStore,
+    default_alpha_case_directory,
+)
 from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.reviews.lifecycle import append_resolution
@@ -90,6 +95,60 @@ def test_product_disclaimer_is_visible() -> None:
     )
     assert "does not replace QA" in visible_text
     assert "No paid LLM API" in visible_text
+
+
+def test_standard_review_hides_alpha_research_fields() -> None:
+    app = new_app()
+
+    assert app.checkbox(key="alpha_feedback_mode").value is False
+    assert not [item for item in app.text_input if item.key == "requirements_source_url"]
+
+
+def test_alpha_mode_creates_case_after_confirming_criteria(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = new_app()
+    app = app.checkbox(key="alpha_feedback_mode").check().run()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/repo/pull/7"
+    ).run()
+    app = app.text_input(key="requirements_source_url").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.checkbox(key="source_owner_confirmed").check().run()
+    app = app.checkbox(key="no_confidential_information").check().run()
+    snapshot = load_demo_snapshot().model_copy(
+        update={"repository": "acme/repo", "pr_number": 7, "head_sha": "a" * 40}
+    )
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+    app = app.text_area(key="requirements_input").set_value("Export CSV").run()
+    app = app.button(key="prepare_criteria").click().run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert app.session_state["alpha_case_id"].startswith("alpha-")
+
+    app = app.button(key="run_analysis").click().run()
+    assert app.button(key="record_alpha_outcome").disabled is True
+    app = app.button(key="save_review").click().run()
+    app = app.selectbox(key="alpha_outcome").set_value(
+        AlphaOutcome.FOUND_USEFUL_GAP
+    ).run()
+    assert app.button(key="record_alpha_outcome").disabled is False
+    app = app.button(key="record_alpha_outcome").click().run()
+    assert not app.error, [item.value for item in app.error]
+
+    record = JsonAlphaCaseStore(default_alpha_case_directory()).load(
+        app.session_state["alpha_case_id"]
+    )
+    assert record.outcome is AlphaOutcome.FOUND_USEFUL_GAP
+    assert record.publication_consent.report is False
+    assert record.publication_consent.quote is False
 
 
 def test_primary_workbench_uses_acceptance_coverage_language() -> None:
@@ -428,20 +487,20 @@ def test_blank_public_pr_url_remains_neutral_and_disables_fetch() -> None:
     assert app.button(key="fetch_pr").disabled is True
 
 
-def test_first_use_flow_labels_five_stages_and_defaults_to_technical_smoke() -> None:
+def test_first_use_flow_labels_five_stages_and_defaults_to_standard_review() -> None:
     app = new_app()
 
     visible = "\n".join(
         item.value for item in [*app.markdown, *app.caption, *app.info]
     )
     assert "PR → Criteria → Evidence → Decisions → Outcome" in visible
-    assert app.radio(key="review_path").value == "Technical smoke only"
-    assert "not user validation" in visible
+    assert app.checkbox(key="alpha_feedback_mode").value is False
+    assert "does not create participant research records" in visible
 
 
 def test_confirmed_alpha_fetch_requires_validated_public_safe_preflight() -> None:
     app = new_app()
-    app = app.radio(key="review_path").set_value("Confirmed public-alpha review").run()
+    app = app.checkbox(key="alpha_feedback_mode").check().run()
     app = app.text_input(key="pr_url").set_value(
         "https://github.com/acme/widget/pull/42"
     ).run()
@@ -466,9 +525,8 @@ def test_criteria_and_outcome_surfaces_preserve_human_confirmation_boundary() ->
     )
 
     assert "source owner" in visible.lower()
-    assert "found_useful_gap" in visible
-    assert "showed_only_known_information" in visible
-    assert "created_friction" in visible
+    assert "Participant outcome" not in visible
+    assert not [item for item in app.selectbox if item.key == "alpha_outcome"]
     selected = app.selectbox(key="selected_criterion").value
     expected_action = next(
         finding.recommended_action
