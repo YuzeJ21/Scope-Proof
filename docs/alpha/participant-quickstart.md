@@ -1,30 +1,32 @@
 # Public-alpha participant quickstart
 
-This ten-minute path is for a product manager, QA practitioner, or engineer who owns the requirements for a genuine public GitHub pull request. ScopeProof is an evidence assistant, not a correctness oracle. It does not replace QA, run repository code, or prove that a change is correct.
-
-Use public sources only. Do not paste tokens, private repository content, customer data, secrets, or confidential material.
+This optional ten-minute path is for a product manager, QA practitioner, or engineer who owns or
+is directly authorized to confirm requirements for a genuine public GitHub pull request.
+ScopeProof is an evidence assistant, not a correctness oracle. Use public sources only; never enter
+tokens, private code, customer data, secrets, or confidential material.
 
 ## Ten-minute path
 
-1. **Minute 1 — qualify the case.** Confirm the pull request is public, you are the source owner for its requirements, and the case contains no confidential material. Use the [qualification checklist](public-pr-qualification-checklist.md).
-2. **Minute 2 — open the requirement source.** Keep the public HTTPS ticket, issue, PRD, or acceptance-criteria URL beside the pull request.
-3. **Minute 3 — normalize the criteria.** Copy only the requirements you confirm into `requirements.txt`, one criterion per line, using the [confirmation template](acceptance-criteria-confirmation-template.md).
-4. **Minute 4 — initialize local evidence.** Run:
+1. **Minute 1 — qualify the case.** Confirm the PR and requirements source are public, you have
+   authority to confirm the criteria, and no confidential information is involved.
+2. **Minute 2 — start locally.** Run `scopeproof-web --host 127.0.0.1 --port 8501`, then enable
+   **Alpha feedback session**. Standard review mode creates no participant record.
+3. **Minute 3 — enter public sources.** Paste the canonical public PR URL and public HTTPS
+   requirements source. Select only your role; ScopeProof does not collect names or contact data.
+4. **Minute 4 — load the PR.** Confirm source authority and no confidential information, then fetch
+   the PR. A session-only token is optional under Advanced source options.
+5. **Minute 5 — confirm criteria.** Prepare one independently judgeable behavior per line, review
+   the normalized set, and explicitly confirm it. This creates one validated local alpha case.
+6. **Minute 6 — review coverage.** Run analysis and inspect every Strong candidate, Weak candidate,
+   No candidate, or Analysis incomplete result and its immutable source line.
+7. **Minute 7 — record decisions.** Accept, request change, reject a finding, accept an exception,
+   mark out of scope, or record external verification. ScopeProof never executes PR code.
+8. **Minute 8 — save the review.** Save the validated review locally so the outcome is bound to its
+   exact review ID and head SHA.
+9. **Minute 9 — record one outcome.** Choose found useful gap, showed only known information, or
+   created friction. Add optional notes and a friction stage when relevant.
+10. **Minute 10 — choose consent.** Aggregate-report and direct-quotation consent are separate and
+    off by default. Submit once; keep the full local record private.
 
-   ```bash
-   scopeproof alpha init --pr PR_URL --requirements-source REQUIREMENTS_URL --participant-role qa --requirements requirements.txt --source-owner-confirmed --confirmed-no-confidential-information
-   ```
-
-5. **Minute 5 — run the review.** Run `scopeproof review --pr PR_URL --requirements requirements.txt --report scopeproof-review.md` and retain its printed review ID and reviewed head SHA.
-6. **Minute 6 — inspect evidence.** Check every criterion verdict and its cited file or explicit missing-evidence statement. Implementation evidence is not test or runtime verification.
-7. **Minute 7 — make decisions.** Accept, reject, or mark findings ambiguous. ScopeProof supports the decision; you own it.
-8. **Minute 8 — record the outcome.** Select exactly one value in the [outcome form](outcome-form.md), then run:
-
-   ```bash
-   scopeproof alpha outcome CASE_ID --review-id REVIEW_ID --head-sha HEAD_SHA --result found_useful_gap
-   ```
-
-9. **Minute 9 — choose publication permissions.** Report and quotation permissions are separate and off by default. Add `--report-consent` or `--quote-consent` only when you explicitly agree.
-10. **Minute 10 — verify the record.** Run `scopeproof alpha show CASE_ID`. Use `--public-summary` only after report consent. Keep the full local record private.
-
-If the PR, criteria, or ownership cannot be confirmed, stop the alpha case. You may still run a clearly labeled technical smoke, but it is not user validation.
+If the PR, criteria authority, public source, or confidentiality boundary cannot be confirmed, stop
+the alpha session. A constructed demo or technical smoke is not participant validation.

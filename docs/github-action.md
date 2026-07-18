@@ -1,4 +1,8 @@
-# GitHub Actions starter (safe preview)
+# GitHub Action advanced preview
+
+The local reviewer workbench is ScopeProof's default product. This guide is an advanced,
+non-blocking integration preview for repository maintainers who make a separate adoption decision;
+it is not part of first use or evidence of product validation.
 
 ScopeProof includes a repository-local workflow starter at
 `.github/workflows/scopeproof.yml` and a copyable example at

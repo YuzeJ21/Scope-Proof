@@ -14,15 +14,15 @@ Use the bundled deliberately constructed CSV export demo. Do not describe it as 
 
 > ScopeProof keeps the requirements user-confirmed, then reviews one criterion at a time.
 
-15–35 seconds: show the evidence matrix.
+15–35 seconds: show the acceptance-coverage matrix.
 
-> The export implementation and a happy-path test are candidates. But the active-filter behavior is partial, and the error and analytics requirements have no candidate evidence.
+> The export implementation and a happy-path test are Strong candidates. The active-filter behavior is a Weak candidate, while the error and analytics requirements have No candidate.
 
-35–50 seconds: expand a Missing detail.
+35–50 seconds: expand a No candidate detail.
 
 > Each finding links to an immutable head SHA, explains why it matched, and says what evidence is still missing.
 
-50–60 seconds: show the Blocked verdict and HTML report.
+50–60 seconds: show Action required and the HTML report.
 
 > ScopeProof does not replace QA or claim correctness. It makes the gap between product intent and implementation evidence auditable before merge.
 

@@ -9,31 +9,35 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-### Fixed
+## 0.2.0 — Reviewer-first product reset
 
-- The public-alpha participant path now points to v0.1.23, the first release wheel that includes
-  the documented `scopeproof alpha` case initialization, outcome, and consent-gated summary
-  commands.
+### Changed
+
+- Reframed the primary product as acceptance coverage for PR reviewers, using Strong candidate,
+  Weak candidate, No candidate, Analysis incomplete, Reviewer verified, and Rejected language.
+- Human-readable review status is now Action required, Review incomplete, Accepted with
+  exceptions, or Review complete; persisted enums remain backward compatible.
+- Standard review is the default. Participant qualification and outcomes appear only in an
+  optional Alpha feedback session.
+- Visible GitHub checks are labelled Observed CI state; neutral and skipped checks no longer count
+  as passing.
 
 ### Added
 
-- CI evidence for the declared Python 3.11 minimum, including the full test suite, deterministic
-  benchmark, and installed-wheel command checks.
-- Public roadmap, structured contribution forms, and a pull-request evidence checklist.
-- A repository use policy that records evaluation-only access without an open-source license.
-- Future wheels built from protected source carry the evaluation-only use policy and expose its
-  canonical project URL without declaring an open-source license.
-- CI runs feature pull-request SHAs once while retaining an independent full run after merge to
-  main.
+- Bounded neighboring context for evidence candidates without changing immutable matched lines.
+- Atomic external verification that records runtime evidence and its attributable decision
+  together.
+- Deterministic final-acceptance prerequisites for complete ingestion, passing observed CI, and
+  current accepted decisions across all criteria.
+- Explicit bounded unchanged-file candidate paths and immutable re-review comparison.
+- Inline local alpha-case creation, one-outcome collection, and separate report and quote consent.
 
-### Documentation
+### Boundaries
 
-- The complete Markdown, JSON, CSV, and HTML export inventory.
-- Explicit evidence-gated public-alpha, limited-beta, and beta-expansion boundaries.
-- Provenance guidance separating historical engineering records from current product, runtime,
-  and adoption evidence.
-- A Python 3.12 CI coverage floor for the core engine and application layer, with no external
-  coverage upload.
+- This release does not claim genuine participant validation or beta readiness. The truthful state
+  remains `waiting_for_external_participant_evidence` until the roadmap's external gates are met.
+- No paid LLM API, private repository, billing, account, fork testing, untrusted-code execution,
+  generic review, security scan, or automatic fix capability was added.
 
 ## Published releases
 
