@@ -356,10 +356,11 @@ git commit -m "docs: publish design partner validation path"
 Run:
 
 ```bash
+uv sync --frozen --extra dev
 ruby -e 'require "yaml"; Dir[".github/ISSUE_TEMPLATE/*.yml"].each { |path| YAML.safe_load(File.read(path), aliases: true) }; puts "valid"'
 uv run ruff check .
 uv run pytest -q tests/test_repository_contracts.py
-uv run pytest -q tests/alpha tests/test_cli.py
+uv run pytest -q tests/alpha tests/cli/test_cli.py
 uv run scopeproof benchmark
 ```
 
