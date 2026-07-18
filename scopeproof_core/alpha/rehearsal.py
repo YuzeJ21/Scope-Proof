@@ -57,15 +57,7 @@ class AlphaRehearsalInput(BaseModel):
             except ValueError:
                 pass
             else:
-                unsafe = unsafe or any(
-                    (
-                        address.is_private,
-                        address.is_loopback,
-                        address.is_link_local,
-                        address.is_reserved,
-                        address.is_unspecified,
-                    )
-                )
+                unsafe = unsafe or not address.is_global or address.is_multicast
         if unsafe:
             raise ValueError(
                 "requirements source must be a public-shaped HTTPS URL without "

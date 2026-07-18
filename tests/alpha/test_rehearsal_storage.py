@@ -1,5 +1,7 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 from pydantic import ValidationError
@@ -89,6 +91,21 @@ def test_rehearsal_store_rejects_symlink_root(tmp_path: Path) -> None:
         JsonAlphaRehearsalStore(link).list_rehearsal_ids()
 
 
+def test_rehearsal_store_rejects_symlinked_existing_ancestor(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    link = tmp_path / "linked-parent"
+    link.symlink_to(target, target_is_directory=True)
+    store = JsonAlphaRehearsalStore(link / "nested" / "rehearsals")
+
+    with pytest.raises(UnsafeAlphaRehearsalStore, match="ancestor"):
+        store.list_rehearsal_ids()
+    with pytest.raises(UnsafeAlphaRehearsalStore, match="ancestor"):
+        store.save(alpha_rehearsal())
+
+
 def test_rehearsal_store_rejects_symlink_file(tmp_path: Path) -> None:
     record = alpha_rehearsal()
     target = tmp_path / "outside.json"
@@ -114,6 +131,33 @@ def test_rehearsal_store_revalidates_loaded_payload(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError):
         store.load(record.rehearsal_id)
+
+
+def test_concurrent_rehearsal_saves_create_exactly_once(tmp_path: Path) -> None:
+    start_barrier = Barrier(2)
+    write_barrier = Barrier(2)
+
+    class SynchronizedStore(JsonAlphaRehearsalStore):
+        def _write(self, target, record):
+            write_barrier.wait()
+            return super()._write(target, record)
+
+    record = alpha_rehearsal()
+    store = SynchronizedStore(tmp_path)
+
+    def save_once() -> str:
+        start_barrier.wait()
+        try:
+            store.save(record)
+        except FileExistsError:
+            return "already_exists"
+        return "created"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: save_once(), range(2)))
+
+    assert sorted(results) == ["already_exists", "created"]
+    assert store.load(record.rehearsal_id) == record
 
 
 def test_rehearsal_store_rejects_valid_record_under_different_id(

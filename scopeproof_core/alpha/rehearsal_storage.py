@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 from pathlib import Path
@@ -28,9 +29,14 @@ class JsonAlphaRehearsalStore:
         self.directory = directory
 
     def _require_safe_directory(self) -> None:
-        if self.directory.is_symlink():
+        absolute_directory = Path(os.path.abspath(self.directory))
+        if any(
+            component.is_symlink()
+            for component in (absolute_directory, *absolute_directory.parents)
+        ):
             raise UnsafeAlphaRehearsalStore(
-                "alpha-rehearsal directory must not be a symbolic link"
+                "alpha-rehearsal directory and existing ancestors must not be "
+                "symbolic links"
             )
         if self.directory.exists() and not self.directory.is_dir():
             raise UnsafeAlphaRehearsalStore(
@@ -89,14 +95,22 @@ class JsonAlphaRehearsalStore:
 
     def _write(self, target: Path, record: AlphaRehearsalRecord) -> Path:
         serialized = record.model_dump_json(indent=2) + "\n"
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=self.directory,
-            prefix=f".{target.stem}-",
-            delete=False,
-        ) as handle:
-            temporary = Path(handle.name)
-            handle.write(serialized)
-        temporary.replace(target)
-        return target
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=self.directory,
+                prefix=f".{target.stem}-",
+                delete=False,
+            ) as handle:
+                temporary = Path(handle.name)
+                handle.write(serialized)
+            try:
+                os.link(temporary, target)
+            except FileExistsError:
+                raise FileExistsError(record.rehearsal_id) from None
+            return target
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)

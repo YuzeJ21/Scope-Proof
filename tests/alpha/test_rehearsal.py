@@ -114,10 +114,13 @@ def test_rehearsal_rejects_empty_or_duplicate_criteria(
         "https://127.0.0.1/requirements",
         "https://10.0.0.1/requirements",
         "https://169.254.1.1/requirements",
+        "https://100.64.0.1/requirements",
         "https://192.0.2.1/requirements",
+        "https://224.0.0.1/requirements",
         "https://0.0.0.0/requirements",
         "https://[::1]/requirements",
         "https://[fe80::1]/requirements",
+        "https://[ff00::1]/requirements",
     ],
 )
 def test_rehearsal_rejects_non_public_shaped_requirements_urls(
@@ -128,6 +131,24 @@ def test_rehearsal_rejects_non_public_shaped_requirements_urls(
 
     with pytest.raises(ValidationError, match="public-shaped HTTPS"):
         AlphaRehearsalInput(**data)
+
+
+@pytest.mark.parametrize(
+    "requirements_source_url",
+    [
+        "https://8.8.8.8/requirements",
+        "https://[2606:4700:4700::1111]/requirements",
+    ],
+)
+def test_rehearsal_accepts_globally_routable_unicast_ip_literals(
+    requirements_source_url: str,
+) -> None:
+    data = valid_rehearsal_data()
+    data["requirements_source_url"] = requirements_source_url
+
+    rehearsal_input = AlphaRehearsalInput(**data)
+
+    assert str(rehearsal_input.requirements_source_url) == requirements_source_url
 
 
 @pytest.mark.parametrize(
