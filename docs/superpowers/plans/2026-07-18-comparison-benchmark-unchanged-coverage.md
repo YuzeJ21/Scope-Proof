@@ -25,6 +25,7 @@
 ## File map
 
 - `tests/evals/test_comparison_runner.py`: corpus aggregation, per-case results, mismatch attribution, empty-corpus, and duplicate-ID behavior.
+- `tests/cli/test_cli.py`: installed-facing command count and Unchanged coverage contract.
 - `tests/test_repository_contracts.py`: exact packaged comparison files and positive expected coverage for every `EvidenceChangeKind`.
 - `scopeproof_core/evals/comparison_runner.py`: case-list manifest validation, ordered execution, and deterministic count aggregation.
 - `evals/comparisons/rereview_evidence_integrity.json`: two-case manifest and exact per-case expectations.
@@ -35,13 +36,14 @@
 
 **Files:**
 - Modify: `tests/evals/test_comparison_runner.py`
+- Modify: `tests/cli/test_cli.py`
 - Modify: `tests/test_repository_contracts.py`
 
 **Interfaces:**
 - Consumes: `run_bundled_comparison_benchmark()` and `run_comparison_benchmark(root: Path)`.
 - Produces: executable expectations for two cases, aggregate counts, and invalid manifest rejection.
 
-- [ ] **Step 1: Update the bundled benchmark expectation**
+- [x] **Step 1: Update the bundled benchmark expectation**
 
 Replace the one-case assertion with:
 
@@ -71,7 +73,10 @@ assert result.case_results[1].actual_counts.model_dump() == {
 
 Keep the existing exact evidence-boundary and `does_not_advance_stage_1` assertions.
 
-- [ ] **Step 2: Update mismatch attribution and add manifest-integrity tests**
+Update the CLI integration contract to require two executed cases, `actual_counts.unchanged == 1`,
+and exact equality between actual and expected aggregate counts.
+
+- [x] **Step 2: Update mismatch attribution and add manifest-integrity tests**
 
 Mutate the first case by ID rather than the old top-level count:
 
@@ -91,7 +96,7 @@ Add two tests that copy the corpus, set `cases` to `[]` or duplicate the first c
 Pydantic `ValidationError` messages contain `at least 1 item` and `case IDs must be unique`,
 respectively.
 
-- [ ] **Step 3: Strengthen the packaged-corpus contract**
+- [x] **Step 3: Strengthen the packaged-corpus contract**
 
 Update `expected_files` to add `unchanged_pr.json` and `unchanged_labels.json`. Parse the manifest
 and sum each case's `expected_counts`; require the aggregate key set to equal:
@@ -103,7 +108,7 @@ and sum each case's `expected_counts`; require the aggregate key set to equal:
 and require every aggregate value to be greater than zero. Import `json` and
 `EvidenceChangeKind` explicitly.
 
-- [ ] **Step 4: Run tests and verify RED**
+- [x] **Step 4: Run tests and verify RED**
 
 Run:
 
@@ -128,7 +133,7 @@ missing multi-case behavior rather than test syntax or imports.
 - Produces: `_ComparisonBenchmarkCaseManifest` and a `_ComparisonBenchmarkManifest.cases` list.
 - Preserves: `run_comparison_benchmark(root: Path) -> ComparisonBenchmarkResult` and the public result models.
 
-- [ ] **Step 1: Define the validated case-list manifest**
+- [x] **Step 1: Define the validated case-list manifest**
 
 Move case fields into:
 
@@ -146,7 +151,7 @@ Define the top-level model with `cases: list[_ComparisonBenchmarkCaseManifest] =
 and retain both literal evidence-boundary fields. Add an `after` model validator that raises
 `ValueError("comparison benchmark case IDs must be unique")` when IDs repeat.
 
-- [ ] **Step 2: Add deterministic count aggregation**
+- [x] **Step 2: Add deterministic count aggregation**
 
 Add:
 
@@ -164,7 +169,7 @@ Iterate `manifest.cases` in order. For each case, build previous/current reviews
 create `ComparisonBenchmarkCaseResult`, and append case-prefixed mismatch messages. Return aggregate
 expected and actual counts, `len(case_results)`, and the unchanged boundary literals.
 
-- [ ] **Step 3: Add the immutable constructed case**
+- [x] **Step 3: Add the immutable constructed case**
 
 Create `unchanged_pr.json` with repository
 `scopeproof/constructed-rereview-benchmark`, a positive PR number, matching base/head identity fields,
@@ -178,12 +183,12 @@ evidence level is `E1`.
 Reference the same two new files as both the previous and current inputs of case
 `unchanged-reference`. Migrate the original case without changing its file paths or expected counts.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run the Task 1 command. Expected: all focused tests pass, including empty-corpus and duplicate-ID
 validation.
 
-- [ ] **Step 5: Run the installed-facing benchmark command**
+- [x] **Step 5: Run the installed-facing benchmark command**
 
 Run:
 
@@ -195,7 +200,7 @@ Expected: exit zero, `executed_case_count: 2`, no mismatches, exact aggregate co
 1 relocated, 1 modified, 3 added, and 3 removed, plus the engineering boundary and
 `does_not_advance_stage_1: true`.
 
-- [ ] **Step 6: Commit the behavior slice**
+- [x] **Step 6: Commit the behavior slice**
 
 ```bash
 git add scopeproof_core/evals/comparison_runner.py \
@@ -216,7 +221,7 @@ git commit -m "test: cover Unchanged comparison benchmark"
 - Consumes: the two-case constructed benchmark.
 - Produces: current verification evidence and a clean focused commit.
 
-- [ ] **Step 1: Run formatting and lint checks**
+- [x] **Step 1: Run formatting and lint checks**
 
 ```bash
 uv run ruff check scopeproof_core/evals/comparison_runner.py \
@@ -226,7 +231,7 @@ git diff --check main...HEAD
 
 Expected: both commands exit zero with no findings.
 
-- [ ] **Step 2: Run repository contracts**
+- [x] **Step 2: Run repository contracts**
 
 ```bash
 uv run pytest -q tests/test_repository_contracts.py
@@ -234,7 +239,7 @@ uv run pytest -q tests/test_repository_contracts.py
 
 Expected: all repository contracts pass.
 
-- [ ] **Step 3: Run the complete test suite**
+- [x] **Step 3: Run the complete test suite**
 
 ```bash
 uv run pytest -q
@@ -242,14 +247,14 @@ uv run pytest -q
 
 Expected: at least the baseline 834 tests pass, with only the pre-existing skip, plus the new tests.
 
-- [ ] **Step 4: Audit scope and protected files**
+- [x] **Step 4: Audit scope and protected files**
 
 Confirm `git diff --name-only main...HEAD` contains only the design, plan, runner, comparison corpus,
 and the two intended test files. Confirm the SHA-256 of `.coverage 2` remains
 `b392e4579f77b2dfd1ca904f1569e01dc887f79af9573e66534c85d7cb0e97fb`. Confirm the unrelated re-review
 worktree still reports only its pre-existing untracked `scopeproof_core/reviews/comparison 2.py`.
 
-- [ ] **Step 5: Record plan completion**
+- [x] **Step 5: Record plan completion**
 
 Mark every checkbox complete after its command succeeds. Commit the completed plan together with
 any verification-only checkbox updates:
