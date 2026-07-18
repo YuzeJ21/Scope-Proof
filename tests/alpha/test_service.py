@@ -6,6 +6,7 @@ from scopeproof_core.alpha.models import (
     AlphaOutcome,
     ParticipantRole,
 )
+from scopeproof_core.alpha.rehearsal import initialize_alpha_rehearsal
 from scopeproof_core.alpha.service import (
     ensure_alpha_case,
     initialize_alpha_case,
@@ -151,3 +152,33 @@ def test_public_summary_omits_local_notes_and_consent_fields() -> None:
     assert payload["outcome"] == "showed_only_known_information"
     assert "outcome_notes" not in payload
     assert "publication_consent" not in payload
+
+
+def initialized_rehearsal():
+    return initialize_alpha_rehearsal(
+        public_pr_url="https://github.com/acme/repo/pull/7",
+        requirements_source_url="https://example.com/requirements.txt",
+        criteria_authority="Repository owner approval",
+        source_owner_confirmed=True,
+        no_confidential_information=True,
+        confirmed_criteria=["Export CSV"],
+    )
+
+
+def test_record_alpha_outcome_rejects_owner_rehearsal_record() -> None:
+    rehearsal = initialized_rehearsal()
+
+    with pytest.raises(ValueError, match="genuine alpha-case record is required"):
+        record_alpha_outcome(  # type: ignore[arg-type]
+            rehearsal,
+            review_id="review-7",
+            reviewed_head_sha="a" * 40,
+            outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+        )
+
+
+def test_public_alpha_summary_rejects_owner_rehearsal_record() -> None:
+    rehearsal = initialized_rehearsal()
+
+    with pytest.raises(ValueError, match="genuine alpha-case record is required"):
+        public_alpha_summary(rehearsal)  # type: ignore[arg-type]

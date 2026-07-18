@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import main
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
@@ -600,6 +601,140 @@ def test_alpha_init_creates_validated_local_record(tmp_path: Path, capsys) -> No
     assert record.confirmed_criteria == ["Export CSV", "Show an error state"]
     assert record.source_owner_confirmed is True
     assert record.no_confidential_information is True
+
+
+def _initialize_owner_rehearsal(tmp_path: Path, capsys) -> tuple[Path, str, dict]:
+    requirements = tmp_path / "rehearsal-requirements.txt"
+    requirements.write_text("Export CSV\nShow an error state\n", encoding="utf-8")
+    store = tmp_path / "alpha-rehearsals"
+    assert main(
+        [
+            "owner-rehearsal",
+            "init",
+            "--pr",
+            "https://github.com/acme/repo/pull/7",
+            "--requirements-source",
+            "https://example.com/requirements.txt",
+            "--criteria-authority",
+            "Repository owner approval",
+            "--requirements",
+            str(requirements),
+            "--source-owner-confirmed",
+            "--confirmed-no-confidential-information",
+            "--storage-dir",
+            str(store),
+        ]
+    ) == 0
+    created = json.loads(capsys.readouterr().out)
+    return store, created["rehearsal_id"], created
+
+
+def test_owner_rehearsal_init_persists_fixed_exclusion_and_show_reloads_record(
+    tmp_path: Path, capsys
+) -> None:
+    store_dir, rehearsal_id, created = _initialize_owner_rehearsal(tmp_path, capsys)
+
+    record = JsonAlphaRehearsalStore(store_dir).load(rehearsal_id)
+
+    assert record.confirmed_criteria == ["Export CSV", "Show an error state"]
+    assert created["submission_mode"] == "owner_rehearsal"
+    assert created["eligible_for_stage_1"] is False
+    assert created["external_participant"] is False
+    assert created["external_validation"] is False
+    assert "engineering evidence only" in created["exclusion_reason"]
+
+    assert main(
+        [
+            "owner-rehearsal",
+            "show",
+            rehearsal_id,
+            "--storage-dir",
+            str(store_dir),
+        ]
+    ) == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown == record.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(
+    "omitted_flag",
+    [
+        "--criteria-authority",
+        "--source-owner-confirmed",
+        "--confirmed-no-confidential-information",
+    ],
+)
+def test_owner_rehearsal_init_requires_authority_and_confirmations(
+    tmp_path: Path, capsys, omitted_flag: str
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    arguments = [
+        "owner-rehearsal",
+        "init",
+        "--pr",
+        "https://github.com/acme/repo/pull/7",
+        "--requirements-source",
+        "https://example.com/requirements.txt",
+        "--criteria-authority",
+        "Repository owner approval",
+        "--requirements",
+        str(requirements),
+        "--source-owner-confirmed",
+        "--confirmed-no-confidential-information",
+    ]
+    if omitted_flag == "--criteria-authority":
+        index = arguments.index(omitted_flag)
+        del arguments[index : index + 2]
+    else:
+        arguments.remove(omitted_flag)
+
+    with pytest.raises(SystemExit) as error:
+        main(arguments)
+
+    assert error.value.code == 2
+    assert omitted_flag in capsys.readouterr().err
+
+
+def test_owner_rehearsal_init_rejects_duplicate_and_genuine_only_flags(
+    tmp_path: Path, capsys
+) -> None:
+    store_dir, rehearsal_id, _ = _initialize_owner_rehearsal(tmp_path, capsys)
+    persisted_before = JsonAlphaRehearsalStore(store_dir).load(rehearsal_id)
+    requirements = tmp_path / "rehearsal-requirements.txt"
+    common_arguments = [
+        "owner-rehearsal",
+        "init",
+        "--pr",
+        "https://github.com/acme/repo/pull/7",
+        "--requirements-source",
+        "https://example.com/requirements.txt",
+        "--criteria-authority",
+        "Repository owner approval",
+        "--requirements",
+        str(requirements),
+        "--source-owner-confirmed",
+        "--confirmed-no-confidential-information",
+        "--storage-dir",
+        str(store_dir),
+    ]
+
+    with pytest.raises(SystemExit) as duplicate:
+        main(common_arguments)
+    assert duplicate.value.code == 2
+    capsys.readouterr()
+    assert JsonAlphaRehearsalStore(store_dir).load(rehearsal_id) == persisted_before
+
+    for flag in ("--result", "--head-sha", "--participant-role", "--report-consent"):
+        with pytest.raises(SystemExit) as rejected:
+            arguments = (
+                [*common_arguments, flag, "value"]
+                if flag != "--report-consent"
+                else [*common_arguments, flag]
+            )
+            main(arguments)
+        assert rejected.value.code == 2
+        assert "unrecognized arguments" in capsys.readouterr().err
 
 
 def test_alpha_init_requires_confidentiality_confirmation(

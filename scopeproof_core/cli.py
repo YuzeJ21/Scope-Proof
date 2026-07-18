@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 
 from scopeproof_core.alpha.models import AlphaFrictionStage, AlphaOutcome, ParticipantRole
+from scopeproof_core.alpha.rehearsal import initialize_alpha_rehearsal
+from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.service import (
     initialize_alpha_case,
     public_alpha_summary,
@@ -229,6 +231,32 @@ def _alpha_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def _owner_rehearsal_init(args: argparse.Namespace) -> int:
+    """Create a deterministic local owner rehearsal excluded from genuine alpha."""
+    requirements_path = Path(args.requirements)
+    criteria = _criteria_from_file(requirements_path)
+    record = initialize_alpha_rehearsal(
+        public_pr_url=args.pr,
+        requirements_source_url=args.requirements_source,
+        criteria_authority=args.criteria_authority,
+        source_owner_confirmed=args.source_owner_confirmed,
+        no_confidential_information=args.confirmed_no_confidential_information,
+        confirmed_criteria=[criterion.text for criterion in criteria],
+    )
+    path = JsonAlphaRehearsalStore(Path(args.storage_dir)).save(record)
+    payload = record.model_dump(mode="json")
+    payload["record"] = str(path)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def _owner_rehearsal_show(args: argparse.Namespace) -> int:
+    """Show one local owner rehearsal and its fixed exclusion boundary."""
+    record = JsonAlphaRehearsalStore(Path(args.storage_dir)).load(args.rehearsal_id)
+    print(json.dumps(record.model_dump(mode="json"), indent=2, sort_keys=True))
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scopeproof", description=__doc__)
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -337,6 +365,56 @@ def _parser() -> argparse.ArgumentParser:
     alpha_show.add_argument("--public-summary", action="store_true")
     alpha_show.add_argument("--storage-dir", default=".scopeproof/alpha-cases")
     alpha_show.set_defaults(handler=_alpha_show)
+    owner_rehearsal = commands.add_parser(
+        "owner-rehearsal",
+        help="Exercise local owner intake without creating a genuine alpha case",
+    )
+    owner_rehearsal_commands = owner_rehearsal.add_subparsers(
+        dest="owner_rehearsal_command", required=True
+    )
+    owner_rehearsal_init = owner_rehearsal_commands.add_parser(
+        "init", help="Create a local owner rehearsal permanently excluded from Stage 1"
+    )
+    owner_rehearsal_init.add_argument(
+        "--pr", required=True, help="Public GitHub pull request URL"
+    )
+    owner_rehearsal_init.add_argument(
+        "--requirements-source",
+        required=True,
+        help="Public-shaped HTTPS URL containing the owner-approved requirements",
+    )
+    owner_rehearsal_init.add_argument(
+        "--criteria-authority",
+        required=True,
+        help="Statement identifying authority for the confirmed criteria",
+    )
+    owner_rehearsal_init.add_argument(
+        "--requirements", required=True, help="One confirmed criterion per line"
+    )
+    owner_rehearsal_init.add_argument(
+        "--source-owner-confirmed",
+        action="store_true",
+        required=True,
+        help="Confirm authority to approve the linked requirements",
+    )
+    owner_rehearsal_init.add_argument(
+        "--confirmed-no-confidential-information",
+        action="store_true",
+        required=True,
+        help="Confirm the rehearsal contains no private or confidential information",
+    )
+    owner_rehearsal_init.add_argument(
+        "--storage-dir", default=".scopeproof/alpha-rehearsals"
+    )
+    owner_rehearsal_init.set_defaults(handler=_owner_rehearsal_init)
+    owner_rehearsal_show = owner_rehearsal_commands.add_parser(
+        "show", help="Show one local owner rehearsal"
+    )
+    owner_rehearsal_show.add_argument("rehearsal_id")
+    owner_rehearsal_show.add_argument(
+        "--storage-dir", default=".scopeproof/alpha-rehearsals"
+    )
+    owner_rehearsal_show.set_defaults(handler=_owner_rehearsal_show)
     return parser
 
 
