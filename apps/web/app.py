@@ -46,6 +46,7 @@ from scopeproof_core.presentation import (
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence
+from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     append_external_verification,
@@ -104,6 +105,8 @@ _STATE_DEFAULTS = {
     "alpha_case_id": None,
     "alpha_case_notice": None,
     "alpha_outcome_notice": None,
+    "candidate_files": [],
+    "comparison_base_bundle": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -158,15 +161,17 @@ def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
     state: ReviewState | None = st.session_state["review_state"]
     reopened_id: str | None = st.session_state["reopened_review_id"]
     st.session_state["source_reload_notice"] = None
+    st.session_state["comparison_base_bundle"] = None
     if (
         state is not None
         and reopened_id == state.review.review_id
         and state.review.repository == snapshot.repository
         and state.review.pr_number == snapshot.pr_number
     ):
-        st.session_state["source_reload_notice"] = JsonReviewStore.detect_head_change(
-            state, snapshot
-        )
+        notice = JsonReviewStore.detect_head_change(state, snapshot)
+        st.session_state["source_reload_notice"] = notice
+        if notice.changed and state.bundle is not None:
+            st.session_state["comparison_base_bundle"] = state.bundle.model_copy(deep=True)
 
 
 def _prepare_from_text(text: str) -> None:
@@ -191,6 +196,9 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["source_reload_notice"] = None
     st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(state)
     st.session_state["review_save_notice"] = None
+    st.session_state["candidate_files"] = []
+    st.session_state["comparison_base_bundle"] = None
+    st.session_state["alpha_case_id"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
@@ -208,7 +216,9 @@ def _analyze() -> ReviewBundle:
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
     )
-    evidence = retrieve_evidence(snapshot, criteria)
+    evidence = retrieve_evidence(
+        snapshot, criteria, unchanged_files=st.session_state["candidate_files"]
+    )
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
     resolutions = st.session_state["resolutions"]
     gate = evaluate_gate(review, criteria, findings, resolutions)
@@ -622,12 +632,30 @@ else:
     st.caption(
         "Standard review mode does not create participant research records."
     )
-github_token = st.text_input(
-    "Optional GitHub token",
-    type="password",
-    help="Used only in this session to increase free GitHub rate limits. Never exported or saved.",
-    key="github_token",
-)
+with st.expander("Advanced source options"):
+    github_token = st.text_input(
+        "Optional GitHub token",
+        type="password",
+        help=(
+            "Used only in this session to increase free GitHub rate limits. "
+            "Never exported or saved."
+        ),
+        key="github_token",
+    )
+    candidate_paths_text = st.text_area(
+        "Bounded unchanged candidate paths (optional)",
+        key="candidate_paths",
+        help=(
+            "One explicit repository-relative file path per line. ScopeProof does not "
+            "infer paths or scan the repository."
+        ),
+    )
+    candidate_paths = list(
+        dict.fromkeys(
+            line.strip() for line in candidate_paths_text.splitlines() if line.strip()
+        )
+    )
+    st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
 load_column, fetch_column = st.columns(2)
 with load_column:
     if st.button(
@@ -645,6 +673,8 @@ with load_column:
         st.session_state["criteria"] = [
             Criterion.model_validate(item) for item in labels["criteria"]
         ]
+        st.session_state["candidate_files"] = []
+        st.session_state["comparison_base_bundle"] = None
         _reset_analysis()
         st.rerun()
 with fetch_column:
@@ -659,16 +689,21 @@ with fetch_column:
         use_container_width=True,
     ):
         try:
-            snapshot = GitHubClient(token=github_token or None).fetch_pull_request(pr_url)
+            client = GitHubClient(token=github_token or None)
+            snapshot = client.fetch_pull_request(pr_url)
+            candidate_files = client.fetch_candidate_files(
+                snapshot.repository, snapshot.head_sha, candidate_paths
+            )
             _record_reopened_source_reload(snapshot)
             st.session_state["snapshot"] = snapshot
+            st.session_state["candidate_files"] = candidate_files
             st.session_state["alpha_case_id"] = None
             _reset_analysis()
             st.session_state["source_load_notice"] = (
                 "Public PR loaded. Add and confirm criteria before analysis."
             )
             st.rerun()
-        except GitHubIngestionError as error:
+        except (GitHubIngestionError, ValueError) as error:
             st.error(
                 f"{error} No review data was changed. Verify that the PR is public and "
                 "try again. Use the optional token only if GitHub reports a rate limit."
@@ -1012,6 +1047,53 @@ st.header("3 · Evidence Matrix")
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
 else:
+    comparison_base: ReviewBundle | None = st.session_state["comparison_base_bundle"]
+    if comparison_base is not None:
+        comparison = compare_reviews(comparison_base, bundle)
+        st.markdown("### Re-review comparison")
+        st.caption(f"Previous head: {comparison.previous_head_sha}")
+        st.caption(f"Current head: {comparison.current_head_sha}")
+        st.markdown(
+            f"**Review status:** {_status_label(comparison.previous_gate.value)} → "
+            f"{_status_label(comparison.current_gate.value)}"
+        )
+        st.markdown(
+            f"**Candidate evidence:** {len(comparison.added_evidence_ids)} added · "
+            f"{len(comparison.removed_evidence_ids)} removed"
+        )
+        if comparison.changed_finding_statuses:
+            st.markdown("**Changed criterion findings**")
+            for change in comparison.changed_finding_statuses:
+                previous = (
+                    _status_label(change.previous_status.value)
+                    if change.previous_status is not None
+                    else "None"
+                )
+                current = (
+                    _status_label(change.current_status.value)
+                    if change.current_status is not None
+                    else "None"
+                )
+                st.markdown(f"- {change.criterion_id}: {previous} → {current}")
+        if comparison.changed_human_resolutions:
+            st.markdown("**Changed reviewer decisions**")
+            for change in comparison.changed_human_resolutions:
+                previous = (
+                    _status_label(change.previous_decision.value)
+                    if change.previous_decision is not None
+                    else "None"
+                )
+                current = (
+                    _status_label(change.current_decision.value)
+                    if change.current_decision is not None
+                    else "None"
+                )
+                st.markdown(f"- {change.criterion_id}: {previous} → {current}")
+        st.caption(
+            "Ruleset changed between reviews."
+            if comparison.ruleset_version_changed
+            else "Ruleset unchanged between reviews."
+        )
     st.caption(
         "Evidence status describes deterministic candidates, not correctness. Evidence types "
         "keep implementation, test, and externally recorded runtime observations separate."

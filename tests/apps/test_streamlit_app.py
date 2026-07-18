@@ -254,7 +254,10 @@ def test_reopen_review_is_a_collapsed_secondary_path_before_start_review(
     monkeypatch.setenv("HOME", str(tmp_path))
     app = new_app()
 
-    assert [item.label for item in app.expander] == ["Reopen saved review"]
+    assert [item.label for item in app.expander] == [
+        "Reopen saved review",
+        "Advanced source options",
+    ]
     assert app.text_input(key="reopen_review_id").value == ""
     assert app.button(key="reopen_review").disabled is True
     assert "No saved local reviews found." in [item.value for item in app.caption]
@@ -485,6 +488,38 @@ def test_blank_public_pr_url_remains_neutral_and_disables_fetch() -> None:
     warning_text = "\n".join(item.value for item in app.warning)
     assert "Enter a public GitHub pull request URL" not in warning_text
     assert app.button(key="fetch_pr").disabled is True
+
+
+def test_explicit_candidate_paths_are_normalized_and_fetched() -> None:
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/widget/pull/42"
+    ).run()
+    app = app.text_area(key="candidate_paths").set_value(
+        " src/context.py\n\ndocs/requirements.md\nsrc/context.py "
+    ).run()
+    snapshot = load_demo_snapshot().model_copy(
+        update={"repository": "acme/widget", "pr_number": 42}
+    )
+
+    with (
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+            return_value=snapshot,
+        ),
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_candidate_files",
+            return_value=[],
+        ) as fetch_candidates,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+
+    fetch_candidates.assert_called_once_with(
+        "acme/widget",
+        snapshot.head_sha,
+        ["src/context.py", "docs/requirements.md"],
+    )
+    assert app.session_state["candidate_files"] == []
 
 
 def test_first_use_flow_labels_five_stages_and_defaults_to_standard_review() -> None:
@@ -1814,6 +1849,33 @@ def test_reopened_review_reports_changed_head_before_invalidating_analysis(
     assert fresh.session_state["bundle"] is None
     assert fresh.session_state["criteria_confirmed"] is False
     assert fresh.button(key="run_analysis").disabled is True
+
+
+def test_reanalysis_shows_previous_and_current_head_sha(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    previous_head = saved.session_state["review_state"].review.head_sha
+    changed_snapshot = load_demo_snapshot().model_copy(update={"head_sha": "b" * 40})
+
+    fresh = new_app()
+    fresh = select_saved_review(fresh, review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+    fresh = fresh.text_input(key="pr_url").set_value(
+        "https://github.com/scopeproof/demo-stock-research/pull/7"
+    ).run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=changed_snapshot,
+    ):
+        fresh = fresh.button(key="fetch_pr").click().run()
+    fresh = fresh.button(key="confirm_criteria").click().run()
+    fresh = fresh.button(key="run_analysis").click().run()
+
+    rendered = "\n".join(item.value for item in [*fresh.markdown, *fresh.caption])
+    assert f"Previous head: {previous_head}" in rendered
+    assert f"Current head: {changed_snapshot.head_sha}" in rendered
 
 
 def test_reopened_review_reports_same_head_before_reanalysis(
