@@ -69,7 +69,7 @@ its linked release entry for the exact published source and assets.
 ### Boundaries
 
 - This release does not claim genuine participant validation or beta readiness. The truthful state
-  remains `waiting_for_external_participant_evidence` until the roadmap's external gates are met.
+  remains `waiting_for_inbound_public_alpha_submission` until the roadmap's external gates are met.
 - No paid LLM API, private repository, billing, account, fork testing, untrusted-code execution,
   generic review, security scan, or automatic fix capability was added.
 

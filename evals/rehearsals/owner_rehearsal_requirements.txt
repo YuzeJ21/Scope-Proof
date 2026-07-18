@@ -1,0 +1,4 @@
+User can export the research list as CSV
+Export respects all active filters
+Failed export shows an error message
+Successful export records research_exported

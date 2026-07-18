@@ -21,6 +21,13 @@ uv run scopeproof benchmark
 uv run scopeproof comparison-benchmark
 ```
 
+## Owner rehearsal
+
+For a local owner/Codex rehearsal, follow the checked
+[owner-rehearsal runbook](alpha/owner-rehearsal.md), beginning with
+`scopeproof owner-rehearsal init`. An owner/Codex rehearsal is engineering evidence only and does
+not advance Stage 1.
+
 `scopeproof benchmark` checks deterministic acceptance-coverage behavior across the labeled local
 corpus. `scopeproof comparison-benchmark` checks deterministic re-review evidence classification
 across two paired previous/current cases: changed-head evidence integrity and an exact unchanged

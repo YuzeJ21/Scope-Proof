@@ -15,6 +15,13 @@ from scopeproof_core.alpha.models import (
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 
 
+def _require_genuine_alpha_case_record(record: object) -> AlphaCaseRecord:
+    """Reject rehearsal or other unqualified records before genuine transitions."""
+    if not isinstance(record, AlphaCaseRecord):
+        raise ValueError("a genuine alpha-case record is required")
+    return record
+
+
 def initialize_alpha_case(
     *,
     public_pr_url: str,
@@ -89,6 +96,7 @@ def record_alpha_outcome(
     quote_consent: bool = False,
 ) -> AlphaCaseRecord:
     """Return a validated completed copy while preserving qualification inputs."""
+    record = _require_genuine_alpha_case_record(record)
     payload = record.model_dump(mode="python")
     payload.update(
         {
@@ -109,6 +117,7 @@ def record_alpha_outcome(
 
 def public_alpha_summary(record: AlphaCaseRecord) -> AlphaCasePublicSummary:
     """Create the reduced report surface only after explicit report consent."""
+    record = _require_genuine_alpha_case_record(record)
     if not record.publication_consent.report:
         raise ValueError("public summary requires report publication consent")
     if record.outcome is None or record.reviewed_head_sha is None or record.completed_at is None:

@@ -12,6 +12,9 @@ body:
         outcome is not validation. Keep the full local review private and include no tokens,
         credentials, private code, customer data, private links, or confidential requirements.
 
+        Completed reviews only: if the review is incomplete, do not submit this feedback form.
+        Stop or continue in Standard review without recording a completed alpha outcome.
+
         The optional price question appears only after completing a genuine review.
         USD 99 per team per month and USD 999 per team per year are research hypotheses only. A response is
         voluntary, is not a purchase agreement, and does not grant permission for sales contact.
@@ -64,9 +67,7 @@ body:
       description: Select the result you observed without improving or generalizing it.
       options:
         - Found a useful previously unknown gap
-        - Clarified a known gap
         - Produced only already-known information
-        - Could not complete the review
         - Created material product friction
     validations:
       required: true
@@ -79,7 +80,6 @@ body:
         - Under 5 minutes
         - 5 to 10 minutes
         - More than 10 minutes
-        - Did not reach an inspectable report
     validations:
       required: true
   - type: dropdown
@@ -95,7 +95,6 @@ body:
         - Unclear acceptance criteria
         - Another attributable public finding
         - No new useful gap
-        - Review was not completed
     validations:
       required: true
   - type: dropdown
@@ -127,7 +126,7 @@ body:
     id: design_partner_interest
     attributes:
       label: Optional design-partner price discussion
-      description: Respond only after product use; this is research, not a purchase or contact request.
+      description: This required dropdown asks for an optional research response after product use; select Prefer not to answer to decline. It is not a purchase or contact request.
       options:
         - I would voluntarily discuss the team-price hypotheses
         - Not now

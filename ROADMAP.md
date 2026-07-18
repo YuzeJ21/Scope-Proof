@@ -6,7 +6,7 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap advances on genuine use evidence, not elapsed time, releases, stars, downloads, or
 automated activity. The current external state is
-`waiting_for_external_participant_evidence`.
+`waiting_for_inbound_public_alpha_submission`.
 
 ## Stage 0 — Reviewer-first product reset
 
@@ -26,7 +26,7 @@ Status: complete when v0.2.0 release verification passes.
 
 ## Stage 1 — Genuine public alpha
 
-Status: waiting for external participant evidence.
+Status: `waiting_for_inbound_public_alpha_submission`.
 
 All exit conditions are required:
 
