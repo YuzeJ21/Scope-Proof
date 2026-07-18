@@ -20,3 +20,15 @@ scopeproof alpha outcome CASE_ID \
 Report consent and quotation consent are independent. Both default to no. Add `--report-consent` only to allow the reduced public summary; add `--quote-consent` only to permit a quotation. The public summary excludes local notes and permission fields.
 
 Do not claim repeat usage, customer value, market demand, or correctness from one outcome.
+
+## Optional public commercial-research handoff
+
+The validated local outcome remains the authoritative participant-selected result. After it is
+recorded, a participant may read the
+[30-day Design Partner Sprint](../commercialization/design-partner-sprint.md) and voluntarily use
+the [public feedback form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml)
+to report timing, decision impact, reuse intent, and an optional price-discussion response.
+
+That issue is not commercial validation by itself. No paid product or billing is active, and the
+research-only price question is not a purchase agreement or permission for sales contact. Never
+copy local notes, private information, or consent fields into the public issue.

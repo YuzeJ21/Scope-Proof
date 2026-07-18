@@ -768,6 +768,135 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         assert alpha_visual.size == (1200, 1200)
 
 
+def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
+    guide_path = Path("docs/commercialization/design-partner-sprint.md")
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+
+    assert guide_path.is_file()
+    guide = guide_path.read_text(encoding="utf-8")
+    for required in (
+        "30-day Design Partner Sprint",
+        "free",
+        "USD 99 per team per month",
+        "USD 999 per team per year",
+        "research hypotheses only",
+        "not a purchase agreement",
+        "after a genuine participant completes a review",
+        "waiting_for_external_participant_evidence",
+        "Local Pro",
+    ):
+        assert required in guide
+    for non_evidence in (
+        "stars",
+        "views",
+        "downloads",
+        "issue submissions",
+        "constructed demos",
+        "synthetic cases",
+        "owner-authored examples",
+    ):
+        assert non_evidence in guide
+
+    assert "## Stage 2 — Commercial discovery" in roadmap
+    assert "two independent completed participants" in roadmap
+    assert "voluntarily agree to discuss the team-price hypothesis" in roadmap
+    assert "Local Pro remains deferred" in roadmap
+    assert "not revenue, orders, customers, paid demand, or willingness to pay" in roadmap
+
+
+def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    for field_id in (
+        "public_pr",
+        "alpha_case_issue",
+        "reviewed_head_sha",
+        "public_requirements_url",
+        "source_owner",
+        "outcome",
+        "completion_time",
+        "useful_gap_category",
+        "decision_impact",
+        "reuse_intent",
+        "design_partner_interest",
+        "friction",
+        "limitations",
+        "safety",
+    ):
+        assert f"id: {field_id}" in template
+
+    for required_text in (
+        "USD 99 per team per month",
+        "USD 999 per team per year",
+        "research hypotheses only",
+        "not a purchase agreement",
+        "only after completing a genuine review",
+        "Prefer not to answer",
+        "submission alone is not validation",
+    ):
+        assert required_text in template
+
+    forbidden_ids = (
+        "name",
+        "email",
+        "linkedin_profile",
+        "employer",
+        "private_repository",
+        "payment",
+        "purchase_commitment",
+        "sales_contact",
+    )
+    assert all(f"id: {field_id}" not in template for field_id in forbidden_ids)
+
+
+def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    site = Path("site/index.html").read_text(encoding="utf-8")
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(
+        encoding="utf-8"
+    )
+    outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(
+        encoding="utf-8"
+    )
+    public_surfaces = "\n".join((readme, site))
+
+    guide = "docs/commercialization/design-partner-sprint.md"
+    feedback_url = (
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?"
+        "template=public-alpha-feedback.yml"
+    )
+    assert guide in readme
+    assert "../commercialization/design-partner-sprint.md" in quickstart
+    assert guide in site
+    assert feedback_url in site
+    assert feedback_url in quickstart
+    assert "../commercialization/design-partner-sprint.md" in outcome
+    assert "../commercialization/design-partner-sprint.md" in checklist
+
+    for required in (
+        "free design-partner review",
+        "No paid product or billing is active",
+        "pricing question is optional research after product use",
+        "public-repository-only",
+        "acceptance-coverage assistant",
+        "not an AI code reviewer",
+    ):
+        assert required in public_surfaces
+    for unsupported_claim in (
+        "ScopeProof customers",
+        "validated pricing",
+        "paid plan is available",
+        "proven commercial demand",
+    ):
+        assert unsupported_claim not in public_surfaces
+
+    assert "incomplete review" in site
+    assert "participant-selected outcome" in quickstart
+    assert "not commercial validation" in outcome
+
+
 def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> None:
     workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
 

@@ -1,73 +1,164 @@
 name: Public-alpha review feedback
-description: Share a voluntary outcome from reviewing a genuine public pull request.
+description: Share a bounded voluntary outcome after reviewing a genuine public pull request.
 title: "[Public alpha]: "
+labels: ["external-validation", "dogfood"]
 body:
   - type: markdown
     attributes:
       value: |
-        Submit only voluntary, sanitized feedback for a public repository. A deliberately
-        constructed demo is product-flow evidence, not a real first-use outcome.
+        Submit only voluntary, sanitized feedback after a genuine public-PR review with
+        source-owner-confirmed criteria. A deliberately
+        constructed demo, owner-authored example, or submission without a completed participant
+        outcome is not validation. Keep the full local review private and include no tokens,
+        credentials, private code, customer data, private links, or confidential requirements.
+
+        The optional price question appears only after completing a genuine review.
+        USD 99 per team per month and USD 999 per team per year are research hypotheses only. A response is
+        voluntary, is not a purchase agreement, and does not grant permission for sales contact.
+        This submission alone is not validation.
   - type: input
     id: public_pr
     attributes:
-      label: Public pull request
-      description: Link the genuine public PR reviewed with ScopeProof.
+      label: Genuine public pull request
+      description: Link the public PR reviewed with ScopeProof.
       placeholder: https://github.com/OWNER/REPOSITORY/pull/123
     validations:
       required: true
-  - type: textarea
-    id: requirements_source
+  - type: input
+    id: alpha_case_issue
     attributes:
-      label: Confirmed requirements source
-      description: Explain who supplied and confirmed the normalized criteria.
-      placeholder: The repository source owner confirmed these criteria before analysis...
+      label: Related public-alpha case issue
+      description: Link the inbound case issue that qualified this review.
+      placeholder: https://github.com/YuzeJ21/Scope-Proof/issues/123
+    validations:
+      required: true
+  - type: input
+    id: reviewed_head_sha
+    attributes:
+      label: Reviewed head SHA
+      description: Enter the exact 40-character commit SHA bound to the saved review.
+      placeholder: 0123456789abcdef0123456789abcdef01234567
+    validations:
+      required: true
+  - type: input
+    id: public_requirements_url
+    attributes:
+      label: Public HTTPS requirements source
+      description: Link the public requirements used to confirm the normalized criteria.
+      placeholder: https://github.com/OWNER/REPOSITORY/issues/456
     validations:
       required: true
   - type: checkboxes
     id: source_owner
     attributes:
-      label: Source ownership
+      label: Criteria authority confirmation
       options:
-        - label: The acceptance criteria were source-owner-confirmed before ScopeProof analysis.
+        - label: I own or am directly authorized to confirm these acceptance criteria.
+          required: true
+        - label: I confirmed the normalized criteria before ScopeProof analysis.
           required: true
   - type: dropdown
     id: outcome
     attributes:
-      label: Review outcome
+      label: Participant-selected review outcome
+      description: Select the result you observed without improving or generalizing it.
       options:
         - Found a useful previously unknown gap
         - Clarified a known gap
         - Produced only already-known information
-        - Could not complete because of product friction
+        - Could not complete the review
+        - Created material product friction
     validations:
       required: true
-  - type: textarea
-    id: useful
+  - type: dropdown
+    id: completion_time
     attributes:
-      label: What was useful?
-      description: Cite the criterion, evidence link, missing-evidence statement, or workflow step.
+      label: Time to inspectable coverage report
+      description: Measure from entering the public PR to reaching an inspectable report.
+      options:
+        - Under 5 minutes
+        - 5 to 10 minutes
+        - More than 10 minutes
+        - Did not reach an inspectable report
+    validations:
+      required: true
+  - type: dropdown
+    id: useful_gap_category
+    attributes:
+      label: Useful-gap category
+      description: Select the closest attributable result, including no new useful gap.
+      options:
+        - Missing implementation evidence
+        - Weak or misleading candidate evidence
+        - Missing test evidence
+        - Stale evidence after a new commit
+        - Unclear acceptance criteria
+        - Another attributable public finding
+        - No new useful gap
+        - Review was not completed
+    validations:
+      required: true
+  - type: dropdown
+    id: decision_impact
+    attributes:
+      label: Review decision impact
+      description: State what happened to your own decision after inspecting the result.
+      options:
+        - Changed my review decision
+        - Clarified my review decision
+        - Confirmed an existing review decision
+        - Had no effect on my review decision
+        - Could not determine a decision
+    validations:
+      required: true
+  - type: dropdown
+    id: reuse_intent
+    attributes:
+      label: Intent to use ScopeProof again
+      description: This is a voluntary research response, not a commitment.
+      options:
+        - "Yes, I intend to use ScopeProof on another PR"
+        - "No"
+        - Unsure
+        - Prefer not to answer
+    validations:
+      required: true
+  - type: dropdown
+    id: design_partner_interest
+    attributes:
+      label: Optional design-partner price discussion
+      description: Respond only after product use; this is research, not a purchase or contact request.
+      options:
+        - I would voluntarily discuss the team-price hypotheses
+        - Not now
+        - Unsure
+        - Prefer not to answer
     validations:
       required: true
   - type: textarea
     id: friction
     attributes:
-      label: What created friction?
-      description: Describe the stage, expected next action, and actual experience.
+      label: Material workflow friction
+      description: If applicable, describe the stage, expected next action, and actual experience.
     validations:
       required: false
   - type: textarea
     id: limitations
     attributes:
       label: Limitations and human decision
-      description: Record what ScopeProof could not verify and the reviewer's final decision.
+      description: Record what ScopeProof could not verify and the decision you made.
     validations:
       required: true
   - type: checkboxes
     id: safety
     attributes:
-      label: Safety confirmation
+      label: Public-information and evidence boundary
       options:
         - label: This is genuine public-PR use, not a constructed demo or invented validation.
           required: true
-        - label: I removed credentials, private data, and confidential source material.
+        - label: The public PR, requirements source, and case issue are reachable without private access.
+          required: true
+        - label: I included no credentials, private data, customer information, or confidential material.
+          required: true
+        - label: I understand this issue counts only with a completed genuine review and participant-selected outcome.
           required: true

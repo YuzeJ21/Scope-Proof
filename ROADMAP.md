@@ -45,9 +45,32 @@ cases, technical smokes, release downloads, and GitHub activity do not count.
 The [concierge host checklist](docs/alpha/concierge-host-checklist.md) indexes the optional manual
 research path. It helps collect evidence but does not satisfy any gate by itself.
 
-## Stage 2 — Limited beta
+## Stage 2 — Commercial discovery
 
-Entry requires every Stage 1 condition. The beta remains supervised and public-repository-only.
+Entry requires every Stage 1 condition. The current free, public-repository-only design-partner
+review remains research; no paid product or billing is active.
+
+All exit conditions are required before considering a separate Local Pro product decision:
+
+- At least two independent completed participants explicitly intend to use ScopeProof on another
+  PR.
+- At least two independent completed participants voluntarily agree to discuss the team-price hypothesis
+  after genuine product use.
+- A useful result occurs before approval, after a new commit, or during an acceptance or release
+  decision.
+- Zero confirmed False Ready outcomes remain.
+- All misleading candidates and material friction remain recorded.
+
+These signals are not revenue, orders, customers, paid demand, or willingness to pay.
+Local Pro remains deferred, including private-repository ingestion, commercial licensing, billing, hosted source
+processing, accounts, integrations, and enterprise capabilities. See the
+[30-day Design Partner Sprint](docs/commercialization/design-partner-sprint.md) for the canonical
+research workflow and stop gates.
+
+## Stage 3 — Limited beta
+
+Entry requires every Stage 1 and Stage 2 condition plus a separate owner decision. The beta
+remains supervised and public-repository-only unless that decision explicitly changes the scope.
 
 Exit conditions:
 
@@ -59,7 +82,7 @@ Exit conditions:
 - Product changes are traceable to genuine observations and have regression coverage.
 - Confirmed False Ready remains zero.
 
-## Stage 3 — Evidence-guided expansion decision
+## Stage 4 — Evidence-guided expansion decision
 
 Only recurring behavior can justify broader scope. Candidate directions include clearer
 requirements intake, better evidence explanations, and narrower collaboration handoffs. Private

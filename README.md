@@ -327,6 +327,12 @@ Standard reviews create no research record. To volunteer genuine feedback, expli
 Qualification and consent stay local and off by
 default; the constructed demo never counts as participant validation.
 
+ScopeProof is an acceptance-coverage assistant, not an AI code reviewer. The optional
+**free design-partner review** is public-repository-only. No paid product or billing is active, and
+a pricing question is optional research after product use—not a purchase requirement. The
+[30-day commercial-validation guide](docs/commercialization/design-partner-sprint.md) defines the
+inbound workflow, evidence gates, stop rules, and capabilities that remain deferred.
+
 The [launch evidence matrix](docs/launch/evidence-matrix.md) and
 [review-before-posting LinkedIn draft](docs/launch/linkedin-draft.md) keep the
 constructed-demo and technical-smoke boundaries explicit.
