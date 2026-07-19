@@ -51,7 +51,7 @@ st.caption(
     "All six evidence columns remain available. On smaller screens, scroll the table "
     "horizontally to inspect Evidence types and Reviewer decision."
 )
-st.dataframe(matrix, hide_index=True, use_container_width=True)
+st.dataframe(matrix, hide_index=True, width="stretch")
 ```
 
 Do not change filter behavior or the existing empty-result message. When filters return no rows,

@@ -71,14 +71,8 @@ def select_saved_review(app: AppTest, review_id: str) -> AppTest:
     return app.selectbox(key="saved_reopen_review_id").set_value(review_id).run()
 
 
-def evidence_matrix_table(app: AppTest) -> str:
-    return next(
-        markdown.value
-        for markdown in app.markdown
-        if markdown.value.startswith(
-            "| Criterion | Requirement | Priority | Evidence status |"
-        )
-    )
+def evidence_matrix_rows(app: AppTest) -> list[dict[str, object]]:
+    return app.dataframe[0].value.to_dict(orient="records")
 
 
 def _main_widget_keys(app: AppTest) -> list[str]:
@@ -177,9 +171,14 @@ def test_primary_workbench_uses_acceptance_coverage_language() -> None:
     )
 
     assert "See which acceptance criteria have credible PR evidence" in visible_text
-    assert "Evidence status" in evidence_matrix_table(app)
-    assert "Evidence types" in evidence_matrix_table(app)
-    assert "Reviewer decision" in evidence_matrix_table(app)
+    assert list(app.dataframe[0].value.columns) == [
+        "Criterion",
+        "Requirement",
+        "Priority",
+        "Evidence status",
+        "Evidence types",
+        "Reviewer decision",
+    ]
     assert "Prove the PR matches the product intent" not in visible_text
 
 
@@ -1158,9 +1157,12 @@ def test_demo_flow_reaches_blocked_summary() -> None:
     assert app.session_state["criteria_confirmed"] is True
     app = app.button(key="run_analysis").click().run()
     visible_text = "\n".join(markdown.value for markdown in app.markdown)
+    evidence_statuses = {
+        row["Evidence status"] for row in evidence_matrix_rows(app)
+    }
     assert "Action required" in visible_text
-    assert "Weak candidate" in visible_text
-    assert "No candidate" in visible_text
+    assert "Weak candidate" in evidence_statuses
+    assert "No candidate" in evidence_statuses
     assert app.session_state["bundle"] is not None
 
 
@@ -2194,11 +2196,8 @@ def test_evidence_matrix_combines_blocker_and_evidence_level_filters() -> None:
     app = app.checkbox(key="blocking_only").check().run()
     app = app.multiselect(key="evidence_level_filter").select(EvidenceLevel.E2).run()
 
-    table = evidence_matrix_table(app)
-    assert "| AC-02 |" in table
-    assert "| AC-01 |" not in table
-    assert "| AC-03 |" not in table
-    assert "| AC-04 |" not in table
+    criterion_ids = [row["Criterion"] for row in evidence_matrix_rows(app)]
+    assert criterion_ids == ["AC-02"]
 
 
 def test_evidence_matrix_reports_empty_filter_results() -> None:
@@ -2206,16 +2205,41 @@ def test_evidence_matrix_reports_empty_filter_results() -> None:
     app = app.checkbox(key="blocking_only").check().run()
     app = app.multiselect(key="evidence_level_filter").select(EvidenceLevel.E4).run()
 
-    assert "| AC-" not in evidence_matrix_table(app)
+    assert evidence_matrix_rows(app) == []
     assert "No criteria match the current filters." in [item.value for item in app.info]
 
 
-def test_evidence_matrix_renders_as_one_markdown_table() -> None:
+def test_evidence_matrix_renders_as_one_reachable_data_grid() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
 
-    table_blocks = [
+    assert len(app.dataframe) == 1
+    frame = app.dataframe[0].value
+    assert list(frame.columns) == [
+        "Criterion",
+        "Requirement",
+        "Priority",
+        "Evidence status",
+        "Evidence types",
+        "Reviewer decision",
+    ]
+    assert frame["Criterion"].tolist() == ["AC-01", "AC-02", "AC-03", "AC-04"]
+    assert frame.loc[0, "Requirement"] == "User can export the research list as CSV"
+    assert frame.loc[0, "Priority"] == "Must have"
+    assert frame.loc[0, "Evidence status"] == "Strong candidate"
+    assert frame.loc[0, "Evidence types"] == "Implementation, Test"
+    assert frame.loc[0, "Reviewer decision"] == "Unresolved"
+    assert frame.loc[3, "Requirement"] == "Successful export records research_exported"
+    assert "Confidence" not in frame.columns
+    assert "Count" not in frame.columns
+    assert "Concern" not in frame.columns
+    assert (
+        "All six evidence columns remain available. On smaller screens, scroll the table "
+        "horizontally to inspect Evidence types and Reviewer decision."
+        in [caption.value for caption in app.caption]
+    )
+    legacy_table_blocks = [
         markdown.value
         for markdown in app.markdown
         if markdown.value.startswith(
@@ -2223,18 +2247,7 @@ def test_evidence_matrix_renders_as_one_markdown_table() -> None:
             "Reviewer decision |"
         )
     ]
-    assert len(table_blocks) == 1
-    assert "|---|---|---|---|---|---|" in table_blocks[0]
-    assert "| AC-01 | User can export the research list as CSV |" in table_blocks[0]
-    assert (
-        "| Must have | Strong candidate | Implementation, Test | Unresolved |"
-        in table_blocks[0]
-    )
-    assert "| Unresolved |" in table_blocks[0]
-    assert "| AC-04 | Successful export records research_exported |" in table_blocks[0]
-    assert "Confidence" not in table_blocks[0]
-    assert "Count" not in table_blocks[0]
-    assert "Concern" not in table_blocks[0]
+    assert legacy_table_blocks == []
 
 
 def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summary() -> None:
@@ -2260,13 +2273,10 @@ def test_evidence_matrix_shows_current_human_resolution() -> None:
     app = app.button(key="save_resolution").click().run()
     app = app.run()
 
-    table = next(
-        markdown.value
-        for markdown in app.markdown
-        if markdown.value.startswith("| Criterion | Requirement | Priority |")
+    ac_01_row = next(
+        row for row in evidence_matrix_rows(app) if row["Criterion"] == "AC-01"
     )
-    ac_01_row = next(line for line in table.splitlines() if line.startswith("| AC-01 |"))
-    assert ac_01_row.endswith("| Accepted |")
+    assert ac_01_row["Reviewer decision"] == "Accepted"
 
 
 def test_successful_resolution_save_clears_form_and_prevents_accidental_repeat() -> None:

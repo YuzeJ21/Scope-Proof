@@ -1196,17 +1196,14 @@ else:
         "Evidence types",
         "Reviewer decision",
     ]
-    table_lines = [
-        "| " + " | ".join(table_headers) + " |",
-        "|" + "|".join("---" for _ in table_headers) + "|",
-    ]
-    for row in matrix:
-        cells = [
-            str(row[header]).replace("|", "\\|").replace("\n", " ")
-            for header in table_headers
-        ]
-        table_lines.append("| " + " | ".join(cells) + " |")
-    st.markdown("\n".join(table_lines))
+    matrix_data = {
+        header: [row[header] for row in matrix] for header in table_headers
+    }
+    st.caption(
+        "All six evidence columns remain available. On smaller screens, scroll the table "
+        "horizontally to inspect Evidence types and Reviewer decision."
+    )
+    st.dataframe(matrix_data, hide_index=True, width="stretch")
     if not matrix:
         st.info("No criteria match the current filters.")
 

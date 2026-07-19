@@ -37,7 +37,7 @@ uv run pytest -q tests/apps/test_streamlit_app.py -k 'evidence_matrix or primary
 
 1. Retain `table_headers` and `matrix` construction exactly.
 2. Add the visible caption explaining that all six columns remain available and narrow screens may scroll horizontally.
-3. Render a single non-editable `st.dataframe` with hidden index and container width.
+3. Render a single non-editable `st.dataframe` with hidden index and `width="stretch"`.
 4. For empty filters, pass a dict keyed by all six headers so the column contract remains deterministic, then retain the current no-results information message.
 5. Run the focused tests and confirm GREEN.
 
