@@ -350,7 +350,10 @@ ScopeProof is an acceptance-coverage assistant, not an AI code reviewer. The opt
 **free design-partner review** is public-repository-only. No paid product or billing is active, and
 a pricing question is optional research after product use—not a purchase requirement. The
 [30-day commercial-validation guide](docs/commercialization/design-partner-sprint.md) defines the
-inbound workflow, evidence gates, stop rules, and capabilities that remain deferred.
+inbound workflow, evidence gates, stop rules, and capabilities that remain deferred. The
+[market-positioning research](docs/commercialization/market-positioning-hypotheses.md) compares
+adjacent traceability, test-management, and code-review workflows and records only hypotheses that
+still require genuine participant evidence.
 
 The [launch evidence matrix](docs/launch/evidence-matrix.md) and
 [review-before-posting LinkedIn draft](docs/launch/linkedin-draft.md) keep the

@@ -65,7 +65,10 @@ These signals are not revenue, orders, customers, paid demand, or willingness to
 Local Pro remains deferred, including private-repository ingestion, commercial licensing, billing, hosted source
 processing, accounts, integrations, and enterprise capabilities. See the
 [30-day Design Partner Sprint](docs/commercialization/design-partner-sprint.md) for the canonical
-research workflow and stop gates.
+research workflow and stop gates. The
+[market-positioning hypotheses](docs/commercialization/market-positioning-hypotheses.md) record the
+current adjacent alternatives, likely-user and likely-buyer hypotheses, adoption risks, and trust
+requirements. Genuine completed reviews are required to validate or reject them.
 
 ## Stage 3 — Limited beta
 
