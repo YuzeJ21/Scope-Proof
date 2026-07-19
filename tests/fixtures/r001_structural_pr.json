@@ -1,0 +1,48 @@
+{
+  "repository": "scopeproof/research",
+  "pr_number": 1,
+  "title": "Structural evidence fixture",
+  "html_url": "https://github.com/scopeproof/research/pull/1",
+  "base_sha": "base-r001-structural",
+  "head_sha": "head-r001-structural-001",
+  "check_state": "passing",
+  "fetched_at": "2026-07-19T12:00:00Z",
+  "files": [
+    {
+      "path": "docs/INSTRUCTIONS.md",
+      "status": "modified",
+      "lines": [
+        {"change_type": "added", "line_number": 1, "content": "Export evidence result guidance one."},
+        {"change_type": "added", "line_number": 2, "content": "Export evidence result guidance two."},
+        {"change_type": "added", "line_number": 3, "content": "Export evidence result guidance three."},
+        {"change_type": "added", "line_number": 4, "content": "Export evidence result guidance four."},
+        {"change_type": "added", "line_number": 5, "content": "Export evidence result guidance five."},
+        {"change_type": "added", "line_number": 6, "content": "Export evidence result guidance six."},
+        {"change_type": "added", "line_number": 7, "content": "Export evidence result guidance seven."},
+        {"change_type": "added", "line_number": 8, "content": "Export evidence result guidance eight."},
+        {"change_type": "added", "line_number": 9, "content": "Export evidence result guidance nine."}
+      ]
+    },
+    {
+      "path": "evals/export_result.yaml",
+      "status": "modified",
+      "lines": [
+        {"change_type": "added", "line_number": 4, "content": "scenario: export evidence result"}
+      ]
+    },
+    {
+      "path": "src/export.py",
+      "status": "modified",
+      "lines": [
+        {"change_type": "added", "line_number": 42, "content": "def export_evidence_result(rows):"}
+      ]
+    },
+    {
+      "path": "notes/unrelated.txt",
+      "status": "modified",
+      "lines": [
+        {"change_type": "added", "line_number": 1, "content": "unrelated status notes"}
+      ]
+    }
+  ]
+}

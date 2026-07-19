@@ -1,4 +1,6 @@
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.schemas.models import (
@@ -10,6 +12,15 @@ from scopeproof_core.schemas.models import (
     LineChangeType,
     PullRequestSnapshot,
 )
+
+
+def r001_structural_snapshot() -> PullRequestSnapshot:
+    payload = json.loads(
+        (Path(__file__).parents[1] / "fixtures" / "r001_structural_pr.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    return PullRequestSnapshot.model_validate(payload)
 
 
 def snapshot_with_files(files: list[ChangedFile]) -> PullRequestSnapshot:
@@ -88,6 +99,74 @@ def test_matching_test_line_is_e2_candidate_evidence() -> None:
     assert evidence[0].evidence_type is EvidenceType.TEST
     assert evidence[0].evidence_level.value == "E2"
     assert "Candidate test evidence requires reviewer confirmation" in evidence[0].limitations
+
+
+def test_path_segment_classification_is_casefolded_but_not_substring_matched() -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                "EVALS/export_result.yaml",
+                [(LineChangeType.ADDED, 3, "scenario: export evidence result")],
+            ),
+            changed_file(
+                "DOCS/export_result.txt",
+                [(LineChangeType.ADDED, 4, "Export evidence result guidance")],
+            ),
+            changed_file(
+                "evaluations/export_result.yaml",
+                [(LineChangeType.ADDED, 5, "scenario: export evidence result")],
+            ),
+        ]
+    )
+    criterion = Criterion(criterion_id="AC-99", text="Export evidence result")
+
+    evidence = retrieve_evidence(snapshot, [criterion])
+
+    by_path = {item.file_path: item for item in evidence}
+    assert by_path["EVALS/export_result.yaml"].evidence_type is EvidenceType.TEST
+    assert by_path["EVALS/export_result.yaml"].evidence_level.value == "E2"
+    assert (
+        "Candidate test/eval definition shows test intent, not execution"
+        in by_path["EVALS/export_result.yaml"].limitations
+    )
+    assert by_path["DOCS/export_result.txt"].evidence_type is EvidenceType.DOCUMENTATION
+    assert by_path["evaluations/export_result.yaml"].evidence_type is EvidenceType.IMPLEMENTATION
+
+
+def test_r001_structural_matches_diversify_relevant_static_evidence() -> None:
+    snapshot = r001_structural_snapshot()
+    criterion = Criterion(criterion_id="AC-99", text="Export evidence result")
+
+    evidence = retrieve_evidence(snapshot, [criterion])
+
+    assert len(evidence) == 8
+    assert [(item.evidence_type, item.file_path, item.line_start) for item in evidence[:3]] == [
+        (EvidenceType.DOCUMENTATION, "docs/INSTRUCTIONS.md", 1),
+        (EvidenceType.TEST, "evals/export_result.yaml", 4),
+        (EvidenceType.IMPLEMENTATION, "src/export.py", 42),
+    ]
+    assert evidence[1].evidence_level.value == "E2"
+    assert (
+        "Candidate test/eval definition shows test intent, not execution"
+        in evidence[1].limitations
+    )
+    assert all(
+        item.evidence_type not in {EvidenceType.CI, EvidenceType.RUNTIME} for item in evidence
+    )
+    assert all(item.commit_sha == snapshot.head_sha for item in evidence)
+    assert all(f"/blob/{snapshot.head_sha}/" in item.permalink for item in evidence)
+
+
+def test_r001_structural_diversity_order_is_stable_and_does_not_force_noise() -> None:
+    snapshot = r001_structural_snapshot()
+    criterion = Criterion(criterion_id="AC-99", text="Export evidence result")
+
+    first = retrieve_evidence(snapshot, [criterion])
+    second = retrieve_evidence(snapshot, [criterion])
+
+    assert [item.evidence_id for item in first] == [item.evidence_id for item in second]
+    assert [item.permalink for item in first] == [item.permalink for item in second]
+    assert all(item.file_path != "notes/unrelated.txt" for item in first)
 
 
 def test_evidence_permalink_is_anchored_to_head_sha_and_lines() -> None:

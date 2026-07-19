@@ -79,11 +79,18 @@ def _line_terms(content: str) -> set[str]:
 
 def _evidence_type(file: ChangedFile) -> EvidenceType:
     path = PurePosixPath(file.path)
+    normalized_parts = tuple(part.casefold() for part in path.parts)
     lower_path = file.path.casefold()
     name = path.name.casefold()
-    if "test" in path.parts or name.startswith("test_") or ".test." in name or ".spec." in name:
+    if (
+        "test" in normalized_parts
+        or any(part in {"eval", "evals"} for part in normalized_parts)
+        or name.startswith("test_")
+        or ".test." in name
+        or ".spec." in name
+    ):
         return EvidenceType.TEST
-    if path.suffix.casefold() in {".md", ".rst"} or "docs" in path.parts:
+    if path.suffix.casefold() in {".md", ".rst"} or "docs" in normalized_parts:
         return EvidenceType.DOCUMENTATION
     if "migration" in lower_path or "alembic" in lower_path:
         return EvidenceType.CONTRACT
@@ -184,6 +191,19 @@ def retrieve_evidence(
                     )
                 )
         matches.sort(key=lambda item: (-item[0], item[1].path, item[2]))
+        selected_matches = []
+        selected_types: set[EvidenceType] = set()
+        for match in matches:
+            kind = _evidence_type(match[1])
+            if kind not in selected_types:
+                selected_matches.append(match)
+                selected_types.add(kind)
+        for match in matches:
+            if match not in selected_matches:
+                selected_matches.append(match)
+            if len(selected_matches) == 8:
+                break
+
         for index, (
             score,
             changed_file,
@@ -194,7 +214,7 @@ def retrieve_evidence(
             source_scope,
             commit_sha,
         ) in enumerate(
-            matches[:8], start=1
+            selected_matches[:8], start=1
         ):
             kind = _evidence_type(changed_file)
             level = EvidenceLevel.E2 if kind is EvidenceType.TEST else EvidenceLevel.E1
@@ -203,6 +223,9 @@ def retrieve_evidence(
                 limitations.insert(0, "Evidence comes from a bounded unchanged candidate file")
             if kind is EvidenceType.TEST:
                 limitations.append("Candidate test evidence requires reviewer confirmation")
+                limitations.append(
+                    "Candidate test/eval definition shows test intent, not execution"
+                )
             evidence.append(
                 EvidenceItem(
                     evidence_id=f"EV-{criterion.criterion_id}-{index:02d}",
