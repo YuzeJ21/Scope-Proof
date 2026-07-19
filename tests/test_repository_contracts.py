@@ -152,6 +152,14 @@ def test_wheel_includes_bundled_benchmark_data() -> None:
     assert list(Path("evals/labels").glob("*.json"))
 
 
+def test_sdist_excludes_local_scopeproof_state() -> None:
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert config["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"] == [
+        "/.scopeproof"
+    ]
+
+
 def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
