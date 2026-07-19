@@ -1,0 +1,6 @@
+Each explicit acceptance criterion is extracted as a separate AC item with a stable ID, such as AC-01 or AC-02.
+The implementation plan includes an Acceptance Criteria Coverage section mapping every AC to plan steps, details references, validation tasks, and status.
+Implementation details include step-level acceptance criteria references so implementors can see what each step satisfies.
+Plan Validator flags missing or partial acceptance-criteria coverage as a blocking planning defect.
+Missing or partial coverage is High by default and Critical when it blocks stated ticket completion.
+Planning completion is blocked unless every AC is Covered or explicitly marked out of scope with rationale.

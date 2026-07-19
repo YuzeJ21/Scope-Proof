@@ -23,6 +23,9 @@ Status: complete when v0.2.0 release verification passes.
 - [x] The GitHub Action remains an advanced, non-default preview.
 - [x] **Software license decision:** the evaluation-only use policy remains unchanged and no
   open-source license is granted.
+- [x] R-001 public engineering research now records hash-bound before/after evidence quality:
+  corrected observed-CI aggregation and explicit E2 eval-definition intent without claiming test
+  execution, runtime verification, acceptance, or Stage 1 credit.
 
 ## Stage 1 — Genuine public alpha
 

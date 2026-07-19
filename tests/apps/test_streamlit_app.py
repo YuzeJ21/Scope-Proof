@@ -15,12 +15,16 @@ from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import (
     RULESET_VERSION,
+    CheckState,
+    CIObservation,
     EvidenceLevel,
     GateVerdict,
     HumanDecision,
     IngestionState,
     Priority,
+    ResearchContext,
     ResolutionEvent,
+    RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
@@ -190,6 +194,144 @@ def test_loaded_source_labels_check_aggregation_as_observed_ci_state() -> None:
 
     caption_text = "\n".join(item.value for item in app.caption)
     assert "Observed CI state: Passing" in caption_text
+
+
+def test_loaded_source_explains_ci_observation_and_skipped_checks() -> None:
+    snapshot = load_demo_snapshot().model_copy(
+        update={
+            "ci_observation": CIObservation(
+                state="unavailable",
+                reason="Observed 1 skipped check run; it does not prove passing.",
+                total_check_runs=1,
+                skipped_check_runs=1,
+                skipped_check_names=["integration"],
+            ),
+            "check_state": CheckState.UNAVAILABLE,
+        }
+    )
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/repo/pull/7"
+    ).run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert (
+        "Observed CI reason: Observed 1 skipped check run; it does not prove passing."
+        in caption_text
+    )
+    assert "Skipped CI checks (unexecuted):" in caption_text
+    assert "integration" in [item.value for item in app.text]
+
+
+def test_active_and_reopened_research_review_show_evidence_boundaries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_demo(new_app())
+    state = app.session_state["review_state"]
+    assert state.bundle is not None
+    unsafe_skipped_check = "![skipped](https://example.invalid/skipped.png)"
+    unsafe_boundary_note = "![boundary](https://example.invalid/boundary.png)"
+    unsafe_collection_note = "![diagnostic](https://example.invalid/diagnostic.png)"
+    review = state.review.model_copy(
+        update={
+            "check_state": CheckState.UNAVAILABLE,
+            "ci_observation": CIObservation(
+                reason="Only skipped CI was observed.",
+                total_check_runs=1,
+                skipped_check_runs=1,
+                skipped_check_names=[unsafe_skipped_check],
+                collection_complete=False,
+                collection_notes=[unsafe_collection_note],
+            ),
+        }
+    )
+    research_bundle = state.bundle.model_copy(
+        update={
+            "review": review,
+            "research_context": ResearchContext(
+                case_id="R-001",
+                boundary_note=unsafe_boundary_note,
+            )
+        }
+    )
+    research_state = state.model_copy(update={"review": review, "bundle": research_bundle})
+    JsonReviewStore(default_local_review_directory()).save(research_state)
+    app.session_state["review_state"] = research_state
+    app.session_state["bundle"] = research_bundle
+    app = app.run()
+
+    active_text = "\n".join(
+        [*(item.value for item in app.markdown), *(item.value for item in app.caption)]
+    )
+    assert "Public engineering research" in active_text
+    assert "Stage 1 credit: 0" in active_text
+    assert "Observed CI reason:" in active_text
+    assert "Static candidates and observed CI do not establish runtime verification." in active_text
+    assert "Runtime verification: Not recorded" in active_text
+    assert unsafe_skipped_check not in active_text
+    assert unsafe_boundary_note not in active_text
+    assert unsafe_collection_note not in active_text
+    assert unsafe_skipped_check in [item.value for item in app.text]
+    assert unsafe_boundary_note in [item.value for item in app.text]
+    assert unsafe_collection_note in [item.value for item in app.text]
+
+    reopened = new_app()
+    reopened = select_saved_review(reopened, research_state.review.review_id)
+    reopened = reopened.button(key="reopen_review").click().run()
+    reopened_text = "\n".join(
+        [*(item.value for item in reopened.markdown), *(item.value for item in reopened.caption)]
+    )
+    assert "Public engineering research" in reopened_text
+    assert "Stage 1 credit: 0" in reopened_text
+    assert "Observed CI reason:" in reopened_text
+    assert "Runtime verification: Not recorded" in reopened_text
+    assert unsafe_skipped_check not in reopened_text
+    assert unsafe_boundary_note not in reopened_text
+    assert unsafe_collection_note not in reopened_text
+    assert unsafe_skipped_check in [item.value for item in reopened.text]
+    assert unsafe_boundary_note in [item.value for item in reopened.text]
+    assert unsafe_collection_note in [item.value for item in reopened.text]
+
+
+def test_active_and_reopened_review_show_recorded_runtime_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_demo(new_app())
+    state = app.session_state["review_state"]
+    assert state.bundle is not None
+    recorded_bundle = state.bundle.model_copy(
+        update={
+            "runtime_evidence": [
+                RuntimeEvidence(
+                    criterion_id="AC-01",
+                    artifact_reference="https://example.test/runs/1",
+                    scenario="Controlled runtime scenario",
+                    environment="test",
+                    result="passed",
+                    reviewer="QA",
+                    evidence_level=EvidenceLevel.E3,
+                )
+            ]
+        }
+    )
+    recorded_state = state.model_copy(update={"bundle": recorded_bundle})
+    JsonReviewStore(default_local_review_directory()).save(recorded_state)
+    app.session_state["review_state"] = recorded_state
+    app.session_state["bundle"] = recorded_bundle
+    app = app.run()
+    assert "Runtime verification: Recorded" in [item.value for item in app.caption]
+
+    reopened = new_app()
+    reopened = select_saved_review(reopened, recorded_state.review.review_id)
+    reopened = reopened.button(key="reopen_review").click().run()
+    assert "Runtime verification: Recorded" in [item.value for item in reopened.caption]
 
 
 def test_criterion_detail_shows_bounded_candidate_context() -> None:

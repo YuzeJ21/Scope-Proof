@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from scopeproof_core.schemas.models import (
     CheckState,
+    CIObservation,
     Criterion,
     EvidenceItem,
     EvidenceLevel,
@@ -283,6 +284,225 @@ def test_confirmed_complete_review_can_analyze() -> None:
         ingestion_state=IngestionState.COMPLETE,
     )
     assert review.can_analyze is True
+
+
+def test_ci_observation_requires_consistent_counts_and_bounded_skipped_names() -> None:
+    with pytest.raises(ValidationError):
+        CIObservation(
+            state=CheckState.UNAVAILABLE,
+            reason=" ",
+        )
+    with pytest.raises(ValidationError):
+        CIObservation(
+            state=CheckState.PASSING,
+            reason="Observed CI.",
+            total_check_runs=1,
+            successful_check_runs=2,
+        )
+    with pytest.raises(ValidationError):
+        CIObservation(
+            state=CheckState.UNAVAILABLE,
+            reason="Skipped checks were observed.",
+            total_check_runs=9,
+            skipped_check_runs=9,
+            skipped_check_names=[f"check-{index}" for index in range(9)],
+        )
+
+
+@pytest.mark.parametrize(
+    ("payload", "match"),
+    [
+        (
+            {
+                "state": CheckState.PASSING,
+                "reason": "Observed successful completed check runs.",
+                "collection_complete": True,
+            },
+            "cannot be passing without a successful observation",
+        ),
+        (
+            {
+                "state": CheckState.PASSING,
+                "reason": "Observed successful completed check runs.",
+                "total_check_runs": 1,
+                "successful_check_runs": 1,
+                "concrete_legacy_status_count": 1,
+                "successful_legacy_statuses": 0,
+                "pending_legacy_statuses": 0,
+                "failing_legacy_statuses": 0,
+                "neutral_legacy_statuses": 0,
+            },
+            "concrete_legacy_status_count must equal",
+        ),
+        (
+            {
+                "state": CheckState.PASSING,
+                "reason": "Observed successful completed check runs.",
+                "total_check_runs": 1,
+                "successful_check_runs": 1,
+                "collection_complete": False,
+            },
+            "must be unavailable when collection is incomplete",
+        ),
+    ],
+)
+def test_ci_observation_rejects_contradictory_aggregate_state_or_reason(
+    payload: dict[str, object], match: str
+) -> None:
+    with pytest.raises(ValidationError, match=match):
+        CIObservation(**payload)
+
+
+def test_ci_observation_accepts_complete_categorized_legacy_status_counts() -> None:
+    observation = CIObservation(
+        state=CheckState.PENDING,
+        reason="Observed 1 concrete pending legacy status.",
+        concrete_legacy_status_count=3,
+        successful_legacy_statuses=1,
+        pending_legacy_statuses=1,
+        failing_legacy_statuses=0,
+        neutral_legacy_statuses=1,
+    )
+
+    assert observation.pending_legacy_statuses == 1
+
+
+@pytest.mark.parametrize(
+    "input_reason",
+    [
+        "Passing despite an untrusted external claim.",
+        "Passing checks completed successfully.",
+    ],
+)
+def test_ci_observation_overwrites_input_reason_with_deterministic_facts(
+    input_reason: str,
+) -> None:
+    observation = CIObservation(
+        state=CheckState.PASSING,
+        reason=input_reason,
+        total_check_runs=1,
+        successful_check_runs=1,
+    )
+
+    assert observation.reason_code.value == "successful_check_runs"
+    assert observation.reason == (
+        "Observed 1 successful completed check run; no concrete legacy statuses."
+    )
+
+
+def test_ci_observation_reason_does_not_interpolate_collection_notes() -> None:
+    first = CIObservation(
+        state=CheckState.UNAVAILABLE,
+        reason="Caller-provided explanation.",
+        total_check_runs=1,
+        successful_check_runs=1,
+        collection_complete=False,
+        collection_notes=["hostile note: <script>not trusted</script>"],
+    )
+    second = CIObservation(
+        state=CheckState.UNAVAILABLE,
+        reason="Another caller-provided explanation.",
+        total_check_runs=1,
+        successful_check_runs=1,
+        collection_complete=False,
+        collection_notes=["different diagnostic detail"],
+    )
+
+    assert first.reason == second.reason
+    assert "hostile" not in first.reason
+    assert "different diagnostic" not in second.reason
+    assert first.collection_notes != second.collection_notes
+
+
+def test_ci_observation_requires_notes_only_for_incomplete_bounded_collection() -> None:
+    with pytest.raises(
+        ValidationError, match="complete CI collection cannot contain collection notes"
+    ):
+        CIObservation(
+            state=CheckState.UNAVAILABLE,
+            reason="No observations.",
+            collection_complete=True,
+            collection_notes=["Unexpected diagnostic"],
+        )
+
+    with pytest.raises(ValidationError):
+        CIObservation(
+            state=CheckState.UNAVAILABLE,
+            reason="Incomplete collection.",
+            collection_complete=False,
+            collection_notes=[f"Diagnostic {index}" for index in range(9)],
+        )
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_historical_passing_ci_state_migrates_to_incomplete_unavailable(model) -> None:
+    record = model.model_validate(
+        review_identity_payload(model, check_state=CheckState.PASSING)
+    )
+
+    assert record.check_state is CheckState.UNAVAILABLE
+    assert record.ci_observation.state is CheckState.UNAVAILABLE
+    assert record.ci_observation.collection_complete is False
+    assert "incomplete" in record.ci_observation.reason.lower()
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_uncategorized_historical_legacy_statuses_migrate_to_incomplete_unavailable(model) -> None:
+    record = model.model_validate(
+        review_identity_payload(
+            model,
+            check_state=CheckState.PASSING,
+            ci_observation={
+                "state": CheckState.PASSING,
+                "reason": "Observed 1 successful completed check run.",
+                "total_check_runs": 1,
+                "successful_check_runs": 1,
+                "concrete_legacy_status_count": 1,
+            },
+        )
+    )
+
+    assert record.check_state is CheckState.UNAVAILABLE
+    assert record.ci_observation.state is CheckState.UNAVAILABLE
+    assert record.ci_observation.collection_complete is False
+    assert record.ci_observation.neutral_legacy_statuses == 1
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_ci_observation_must_agree_with_top_level_check_state(model) -> None:
+    payload = review_identity_payload(
+        model,
+        check_state=CheckState.PASSING,
+        ci_observation=CIObservation(
+            state=CheckState.PENDING,
+            reason="Observed 1 pending check run.",
+            total_check_runs=1,
+            pending_check_runs=1,
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="check_state must agree"):
+        model.model_validate(payload)
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_new_records_default_to_an_unavailable_ci_observation(model) -> None:
+    record = model.model_validate(review_identity_payload(model))
+
+    assert record.ci_observation.state is CheckState.UNAVAILABLE
+    assert (
+        record.ci_observation.reason
+        == "No check runs or concrete legacy statuses were observed."
+    )
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_historical_ci_observation_is_incomplete(model) -> None:
+    record = model.model_validate(
+        review_identity_payload(model, check_state=CheckState.PASSING)
+    )
+
+    assert record.ci_observation.collection_complete is False
 
 
 def test_review_preserves_ingestion_limitations_with_backward_compatible_defaults() -> None:

@@ -211,6 +211,7 @@ def _analyze() -> ReviewBundle:
         base_sha=snapshot.base_sha,
         head_sha=snapshot.head_sha,
         check_state=snapshot.check_state,
+        ci_observation=snapshot.ci_observation,
         criteria_confirmed=st.session_state["criteria_confirmed"],
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
@@ -372,6 +373,13 @@ def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
             f"{_status_label(snapshot.ingestion_state.value)} ingestion"
         )
         st.caption(f"Observed CI state: {_status_label(snapshot.check_state.value)}")
+        st.caption(f"Observed CI reason: {snapshot.ci_observation.reason}")
+        if snapshot.ci_observation.skipped_check_names:
+            st.caption("Skipped CI checks (unexecuted):")
+            st.text("\n".join(snapshot.ci_observation.skipped_check_names))
+        if snapshot.ci_observation.collection_notes:
+            st.caption("CI collection diagnostics:")
+            st.text("\n".join(snapshot.ci_observation.collection_notes))
 
 
 def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -> None:
@@ -1136,6 +1144,45 @@ else:
         "Evidence status describes deterministic candidates, not correctness. Evidence types "
         "keep implementation, test, and externally recorded runtime observations separate."
     )
+    with st.container(border=True):
+        st.markdown("**Observed CI and verification boundary**")
+        st.caption(
+            f"Observed CI state: {_status_label(bundle.review.ci_observation.state.value)}"
+        )
+        st.caption(f"Observed CI reason: {bundle.review.ci_observation.reason}")
+        ci_observation = bundle.review.ci_observation
+        st.caption(
+            "Observed CI check runs: "
+            f"{ci_observation.total_check_runs} total · "
+            f"{ci_observation.successful_check_runs} successful · "
+            f"{ci_observation.pending_check_runs} pending · "
+            f"{ci_observation.failing_check_runs} failing · "
+            f"{ci_observation.neutral_check_runs} neutral · "
+            f"{ci_observation.skipped_check_runs} skipped · "
+            f"{ci_observation.concrete_legacy_status_count} concrete legacy statuses · "
+            f"{'complete' if ci_observation.collection_complete else 'incomplete'} collection"
+        )
+        if ci_observation.skipped_check_names:
+            st.caption("Skipped CI checks (unexecuted):")
+            st.text("\n".join(ci_observation.skipped_check_names))
+        if ci_observation.collection_notes:
+            st.caption("CI collection diagnostics:")
+            st.text("\n".join(ci_observation.collection_notes))
+        st.caption(
+            "Static candidates and observed CI do not establish runtime verification. "
+            "Runtime evidence and reviewer decisions remain separate."
+        )
+        st.caption(
+            "Runtime verification: "
+            f"{bundle.runtime_verification_state.value.replace('_', ' ').capitalize()}"
+        )
+        if bundle.research_context is not None:
+            st.markdown("**Public engineering research**")
+            st.caption(
+                f"Case ID: {bundle.research_context.case_id} · Stage 1 credit: 0 "
+                "(permanently excluded)"
+            )
+            st.text(bundle.research_context.boundary_note)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {
         resolution.criterion_id: resolution for resolution in bundle.resolutions
@@ -1292,7 +1339,12 @@ else:
         st.caption("No candidate evidence is linked to this provisional finding.")
     for evidence_id in selected_finding.evidence_ids:
         item = evidence_by_id[evidence_id]
-        with st.expander(f"{item.file_path}:L{item.line_start} · {item.evidence_type.value}"):
+        with st.expander(
+            f"{item.file_path}:L{item.line_start} · {item.evidence_type.value} · "
+            f"{item.evidence_level.value}"
+        ):
+            if item.evidence_type.value == "test":
+                st.caption("Test/eval definition shows intent, not executed verification.")
             st.code(item.excerpt)
             if item.context_excerpt:
                 st.markdown("**Bounded context:**")

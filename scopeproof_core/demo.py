@@ -39,6 +39,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
         base_sha=snapshot.base_sha,
         head_sha=snapshot.head_sha,
         check_state=snapshot.check_state,
+        ci_observation=snapshot.ci_observation,
         criteria_confirmed=labels.get("criteria_confirmed", True),
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,

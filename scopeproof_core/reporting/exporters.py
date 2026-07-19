@@ -221,6 +221,41 @@ def export_markdown(bundle: ExportableReview) -> str:
         f"**Tool version:** {_render_markdown_code(bundle.review.tool_version)}",
         f"**Ruleset:** {_render_markdown_code(bundle.review.ruleset_version)}",
         f"**Ingestion state:** {_render_markdown_code(bundle.review.ingestion_state.value)}",
+        f"**Observed CI:** {bundle.review.ci_observation.state.value}",
+        "**Observed CI reason:** "
+        f"{_escape_markdown_text(bundle.review.ci_observation.reason)}",
+        "**Observed CI check runs:** "
+        f"{bundle.review.ci_observation.total_check_runs} total; "
+        f"{bundle.review.ci_observation.successful_check_runs} successful; "
+        f"{bundle.review.ci_observation.pending_check_runs} pending; "
+        f"{bundle.review.ci_observation.failing_check_runs} failing; "
+        f"{bundle.review.ci_observation.neutral_check_runs} neutral; "
+        f"{bundle.review.ci_observation.skipped_check_runs} skipped; "
+        f"{bundle.review.ci_observation.concrete_legacy_status_count} concrete legacy statuses.",
+        "**CI collection completeness:** "
+        f"{'complete' if bundle.review.ci_observation.collection_complete else 'incomplete'}",
+        *(
+            [
+                "**CI collection diagnostics:**",
+                *[
+                    f"  - {_escape_markdown_text(note)}"
+                    for note in bundle.review.ci_observation.collection_notes
+                ],
+            ]
+            if bundle.review.ci_observation.collection_notes
+            else []
+        ),
+        *(
+            [
+                "**Skipped CI checks:** "
+                + ", ".join(
+                    _escape_markdown_text(name)
+                    for name in bundle.review.ci_observation.skipped_check_names
+                )
+            ]
+            if bundle.review.ci_observation.skipped_check_names
+            else []
+        ),
         *([f"**Criteria revision: {state.criteria_revision.number}**"] if state else []),
         "",
         (
@@ -228,6 +263,19 @@ def export_markdown(bundle: ExportableReview) -> str:
             "It does not replace QA or prove correctness."
         ),
         "",
+        *(
+            [
+                "## Research Boundary",
+                "",
+                f"**Case ID:** {_render_markdown_code(bundle.research_context.case_id)}",
+                "**Classification:** public engineering research",
+                "**Stage 1 credit:** 0 (permanently excluded)",
+                _escape_markdown_text(bundle.research_context.boundary_note),
+                "",
+            ]
+            if bundle.research_context is not None
+            else []
+        ),
         *(
             [
                 "## Ingestion Limitations",
@@ -323,6 +371,7 @@ def export_markdown(bundle: ExportableReview) -> str:
                     f"- {candidate_reference} — "
                     f"{_escape_markdown_text(candidate.relevance_reason)}"
                 )
+                lines.append(f"  - Type and level: {_candidate_evidence_label(candidate)}")
                 lines.append(f"  - Excerpt: {_render_markdown_code(candidate.excerpt)}")
                 if candidate.context_excerpt:
                     lines.append(
@@ -348,6 +397,20 @@ def export_markdown(bundle: ExportableReview) -> str:
             ]
         )
 
+    lines.extend(
+        [
+            "## Runtime Verification Boundary",
+            "",
+            (
+                "Manual runtime evidence is recorded separately below. Observed CI and static "
+                "candidates do not establish runtime verification."
+                if bundle.runtime_evidence
+                else "No manual runtime verification was recorded. Observed CI and static "
+                "candidates do not establish runtime verification."
+            ),
+            "",
+        ]
+    )
     if bundle.runtime_evidence:
         lines.extend(["## Manual Runtime Evidence", ""])
         for item in bundle.runtime_evidence:
@@ -418,7 +481,18 @@ def _render_candidate_reference_html(item: EvidenceItem) -> str:
         if item.context_excerpt
         else ""
     )
-    return f"{reference}<br><code>{html.escape(item.excerpt)}</code>{context}"
+    return (
+        f"{reference}<br>{html.escape(_candidate_evidence_label(item))}"
+        f"<br><code>{html.escape(item.excerpt)}</code>{context}"
+    )
+
+
+def _candidate_evidence_label(item: EvidenceItem) -> str:
+    """Name static candidate evidence without claiming it was executed."""
+    label = f"{item.evidence_type.value.title()} ({item.evidence_level.value}"
+    if item.evidence_type.value == "test":
+        label += "; test/eval definition shows intent, not execution"
+    return label + ")"
 
 
 def export_csv(bundle: ExportableReview) -> str:
@@ -442,6 +516,25 @@ def export_csv(bundle: ExportableReview) -> str:
         "ingestion_state",
         "ingestion_warnings",
         "skipped_files",
+        "ci_state",
+        "ci_reason",
+        "ci_total_check_runs",
+        "ci_successful_check_runs",
+        "ci_pending_check_runs",
+        "ci_failing_check_runs",
+        "ci_neutral_check_runs",
+        "ci_skipped_check_runs",
+        "ci_concrete_legacy_status_count",
+        "ci_skipped_check_names",
+        "ci_collection_complete",
+        "ci_collection_notes",
+        "research_case_id",
+        "research_classification",
+        "stage1_credit",
+        "research_boundary_note",
+        "candidate_evidence_proves_correctness",
+        "runtime_verification_state",
+        "reviewer_decision_state",
         "criteria_revision",
         "requirements_source_text",
         "verdict",
@@ -454,6 +547,7 @@ def export_csv(bundle: ExportableReview) -> str:
         "evidence_status",
         "evidence_level",
         "evidence_types",
+        "candidate_evidence",
         "confidence_band",
         "evidence_count",
         "concern",
@@ -494,6 +588,44 @@ def export_csv(bundle: ExportableReview) -> str:
                     bundle.review.ingestion_warnings, ensure_ascii=False
                 ),
                 "skipped_files": json.dumps(bundle.review.skipped_files, ensure_ascii=False),
+                "ci_state": bundle.review.ci_observation.state.value,
+                "ci_reason": _csv_text(bundle.review.ci_observation.reason),
+                "ci_total_check_runs": bundle.review.ci_observation.total_check_runs,
+                "ci_successful_check_runs": bundle.review.ci_observation.successful_check_runs,
+                "ci_pending_check_runs": bundle.review.ci_observation.pending_check_runs,
+                "ci_failing_check_runs": bundle.review.ci_observation.failing_check_runs,
+                "ci_neutral_check_runs": bundle.review.ci_observation.neutral_check_runs,
+                "ci_skipped_check_runs": bundle.review.ci_observation.skipped_check_runs,
+                "ci_concrete_legacy_status_count": (
+                    bundle.review.ci_observation.concrete_legacy_status_count
+                ),
+                "ci_skipped_check_names": json.dumps(
+                    bundle.review.ci_observation.skipped_check_names, ensure_ascii=False
+                ),
+                "ci_collection_complete": bundle.review.ci_observation.collection_complete,
+                "ci_collection_notes": _csv_text(
+                    json.dumps(
+                        bundle.review.ci_observation.collection_notes,
+                        ensure_ascii=False,
+                    )
+                ),
+                "research_case_id": _csv_text(bundle.research_context.case_id)
+                if bundle.research_context
+                else "",
+                "research_classification": bundle.research_context.classification
+                if bundle.research_context
+                else "",
+                "stage1_credit": bundle.research_context.stage1_credit
+                if bundle.research_context
+                else "",
+                "research_boundary_note": _csv_text(bundle.research_context.boundary_note)
+                if bundle.research_context
+                else "",
+                "candidate_evidence_proves_correctness": (
+                    bundle.candidate_evidence_proves_correctness
+                ),
+                "runtime_verification_state": bundle.runtime_verification_state.value,
+                "reviewer_decision_state": bundle.reviewer_decision_state.value,
                 "criteria_revision": state.criteria_revision.number if state else 1,
                 "requirements_source_text": _csv_text(bundle.source_text),
                 "verdict": bundle.gate.verdict.value,
@@ -506,6 +638,18 @@ def export_csv(bundle: ExportableReview) -> str:
                 "evidence_status": evidence_status_text(coverage.evidence_status),
                 "evidence_level": finding.evidence_level.value,
                 "evidence_types": json.dumps(coverage.evidence_types, ensure_ascii=False),
+                "candidate_evidence": json.dumps(
+                    [
+                        {
+                            "evidence_id": item.evidence_id,
+                            "type": item.evidence_type.value,
+                            "level": item.evidence_level.value,
+                            "boundary": _candidate_evidence_label(item),
+                        }
+                        for item in evidence_by_criterion[criterion.criterion_id]
+                    ],
+                    ensure_ascii=False,
+                ),
                 "confidence_band": finding.confidence_band.value,
                 "evidence_count": len(finding.evidence_ids),
                 "concern": _csv_text(finding.reason),
@@ -593,6 +737,51 @@ def export_html(value: ExportableReview) -> str:
             f"Criteria revision {revision}</p>",
             "<p class=\"note\">ScopeProof surfaces auditable candidate evidence. "
             "It does not replace QA or prove correctness.</p>",
+            "<h2>Observed CI</h2>",
+            "<p>Observed CI: <code>"
+            f"{html.escape(bundle.review.ci_observation.state.value)}</code><br>"
+            f"Reason: {html.escape(bundle.review.ci_observation.reason)}<br>"
+            "Check runs: "
+            f"{bundle.review.ci_observation.total_check_runs} total; "
+            f"{bundle.review.ci_observation.successful_check_runs} successful; "
+            f"{bundle.review.ci_observation.pending_check_runs} pending; "
+            f"{bundle.review.ci_observation.failing_check_runs} failing; "
+            f"{bundle.review.ci_observation.neutral_check_runs} neutral; "
+            f"{bundle.review.ci_observation.skipped_check_runs} skipped; "
+            f"{bundle.review.ci_observation.concrete_legacy_status_count} "
+            "concrete legacy statuses.<br>"
+            "Collection: "
+            f"{'complete' if bundle.review.ci_observation.collection_complete else 'incomplete'}"
+            + (
+                "<br>Skipped CI checks: "
+                + html.escape(", ".join(bundle.review.ci_observation.skipped_check_names))
+                if bundle.review.ci_observation.skipped_check_names
+                else ""
+            )
+            + "</p>",
+            *(
+                [
+                    '<ul aria-label="CI collection diagnostics">',
+                    *[
+                        f"<li>{html.escape(note)}</li>"
+                        for note in bundle.review.ci_observation.collection_notes
+                    ],
+                    "</ul>",
+                ]
+                if bundle.review.ci_observation.collection_notes
+                else []
+            ),
+            *(
+                [
+                    "<h2>Research Boundary</h2>",
+                    "<p>Public engineering research<br>"
+                    f"Case ID: <code>{html.escape(bundle.research_context.case_id)}</code><br>"
+                    "Stage 1 credit: 0 (permanently excluded)<br>"
+                    f"{html.escape(bundle.research_context.boundary_note)}</p>",
+                ]
+                if bundle.research_context is not None
+                else []
+            ),
             *(
                 [
                     "<h2>Ingestion Limitations</h2><ul>",
@@ -655,6 +844,16 @@ def export_html(value: ExportableReview) -> str:
                 if bundle.runtime_evidence
                 else []
             ),
+            "<h2>Runtime Verification Boundary</h2>",
+            "<p>"
+            + (
+                "Manual runtime evidence is recorded separately. Observed CI and static "
+                "candidates do not establish runtime verification."
+                if bundle.runtime_evidence
+                else "No manual runtime verification was recorded. Observed CI and static "
+                "candidates do not establish runtime verification."
+            )
+            + "</p>",
             "</body></html>",
         ]
     )

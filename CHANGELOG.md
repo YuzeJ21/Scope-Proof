@@ -17,11 +17,16 @@ Candidate version: 0.2.2 (not published).
   public-PR-only inputs and remains visible in the initial desktop viewport.
 - Expanded the deliberately constructed comparison benchmark from one changed-head case to two
   paired cases, adding exact Unchanged coverage while preserving all core classification rules.
+- Corrected observed-CI aggregation for empty legacy status aggregates, surfaced relevant static
+  eval definitions as E2 test intent, and recorded the hash-bound R-001 Microsoft public-PR
+  engineering comparison.
 
 ### Boundaries
 
 - The added case and its runtime result remain engineering evidence only. They do not advance
   Stage 1 or constitute correctness, customer, market, participant, or external-use evidence.
+- R-001 records public engineering research only: no Microsoft code was executed, skipped eval
+  checks are not runtime proof, and its `blocked` result carries zero Stage 1 credit.
 
 ## 0.2.1 — Re-review evidence integrity
 

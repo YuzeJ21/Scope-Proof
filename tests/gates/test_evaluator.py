@@ -3,6 +3,7 @@ import pytest
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.schemas.models import (
     CheckState,
+    CIObservation,
     Criterion,
     Finding,
     FindingStatus,
@@ -13,6 +14,24 @@ from scopeproof_core.schemas.models import (
     Priority,
     Review,
 )
+
+
+def ci_observation_for(check_state: CheckState) -> CIObservation:
+    if check_state is CheckState.PASSING:
+        return CIObservation(
+            state=CheckState.PASSING,
+            reason="Fixture",
+            total_check_runs=1,
+            successful_check_runs=1,
+        )
+    if check_state is CheckState.FAILING:
+        return CIObservation(
+            state=CheckState.FAILING,
+            reason="Fixture",
+            total_check_runs=1,
+            failing_check_runs=1,
+        )
+    return CIObservation(reason="Fixture")
 
 
 def gate_case(
@@ -27,6 +46,7 @@ def gate_case(
         base_sha="base",
         head_sha="head",
         check_state=check_state,
+        ci_observation=ci_observation_for(check_state),
         criteria_confirmed=confirmed,
         final_acceptance=True,
     )

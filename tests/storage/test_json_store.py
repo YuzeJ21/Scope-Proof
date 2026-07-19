@@ -287,6 +287,59 @@ def test_historical_review_state_loads_without_ingestion_limitation_fields(
     assert loaded.bundle.review.skipped_files == []
 
 
+def test_version_two_missing_ci_observation_recomputes_stale_ready_gate_fail_closed(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"]["review"].pop("ci_observation")
+    payload["state"]["bundle"]["review"].pop("ci_observation")
+    payload["state"]["bundle"]["gate"]["verdict"] = GateVerdict.READY.value
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load("review-1")
+
+    assert loaded.review.check_state.value == "unavailable"
+    assert loaded.bundle is not None
+    assert loaded.bundle.review.check_state.value == "unavailable"
+    assert loaded.bundle.gate == evaluate_gate(
+        loaded.bundle.review,
+        loaded.bundle.criteria,
+        loaded.bundle.findings,
+        loaded.bundle.resolutions,
+    )
+    assert loaded.bundle.gate.verdict is GateVerdict.BLOCKED
+    assert loaded.resolution_events == []
+    assert loaded.review.final_acceptance is False
+
+
+def test_version_two_missing_history_ci_observation_recomputes_stale_conditional_gate(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = attached_review_state()
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    historical = payload["state"]["analysis_history"][0]
+    historical["review"].pop("ci_observation")
+    historical["gate"]["verdict"] = GateVerdict.CONDITIONAL.value
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(state.review.review_id)
+
+    assert loaded.analysis_history[0].review.check_state.value == "unavailable"
+    assert loaded.analysis_history[0].gate == evaluate_gate(
+        loaded.analysis_history[0].review,
+        loaded.analysis_history[0].criteria,
+        loaded.analysis_history[0].findings,
+        loaded.analysis_history[0].resolutions,
+    )
+    assert loaded.analysis_history[0].gate.verdict is GateVerdict.BLOCKED
+    assert loaded.resolution_events == state.resolution_events
+    assert loaded.review.final_acceptance is state.review.final_acceptance
+
+
 def test_load_rejects_mismatched_active_bundle_review(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
     path = store.save(review_state())
