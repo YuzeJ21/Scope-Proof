@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.reviews.lifecycle import new_review_state, revise_criteria
-from scopeproof_core.schemas.models import ReviewBundle, ReviewState
+from scopeproof_core.schemas.models import CheckState, CIObservation, ReviewBundle, ReviewState
 
 ACTIVE_REVIEW_OVERRIDES = [
     {"review_id": "different-review"},
@@ -34,6 +34,12 @@ def test_review_state_rejects_divergent_active_bundle_review(review_overrides) -
         # Keep the deliberately divergent lifecycle review schema-valid so this
         # test reaches the ReviewState integrity boundary.
         payload["review"]["ci_observation"]["state"] = review_overrides["check_state"]
+        payload["review"]["ci_observation"] = CIObservation(
+            state=CheckState.FAILING,
+            reason="Fixture",
+            total_check_runs=1,
+            failing_check_runs=1,
+        ).model_dump(mode="python")
 
     with pytest.raises(
         ValidationError, match="active bundle review must match lifecycle review"

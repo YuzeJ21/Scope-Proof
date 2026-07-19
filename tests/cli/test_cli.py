@@ -126,14 +126,53 @@ def test_fixture_review_metadata_reports_validated_ci_observation(tmp_path: Path
 
     metadata = json.loads(capsys.readouterr().out)
     assert metadata["ci_state"] == "passing"
-    assert metadata["ci_reason"] == "CI observation was not captured in this historical record."
+    assert metadata["ci_reason"] == (
+        "Observed 1 successful completed check run; no concrete legacy statuses."
+    )
     assert metadata["skipped_check_names"] == []
-    assert metadata["ci_collection_complete"] is False
-    assert metadata["ci_total_check_runs"] == 0
+    assert metadata["ci_collection_complete"] is True
+    assert metadata["ci_total_check_runs"] == 1
+    assert metadata["ci_successful_check_runs"] == 1
     assert metadata["ci_skipped_check_runs"] == 0
     assert "research_case_id" not in metadata
     assert "research_classification" not in metadata
     assert "stage1_credit" not in metadata
+
+
+def test_fixture_review_metadata_reports_ci_collection_notes(tmp_path: Path, capsys) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    fixture_payload = json.loads(
+        Path("evals/fixtures/complete_implementation_pr.json").read_text(encoding="utf-8")
+    )
+    fixture_payload["check_state"] = "unavailable"
+    fixture_payload["ci_observation"] = {
+        "state": "unavailable",
+        "reason": "Untrusted caller text.",
+        "total_check_runs": 1,
+        "successful_check_runs": 1,
+        "collection_complete": False,
+        "collection_notes": ["GitHub check-runs response contained malformed entries"],
+    }
+    fixture = tmp_path / "incomplete-ci.json"
+    fixture.write_text(json.dumps(fixture_payload), encoding="utf-8")
+
+    assert main(
+        [
+            "review",
+            "--fixture",
+            str(fixture),
+            "--requirements",
+            str(requirements),
+            "--storage-dir",
+            str(tmp_path / "reviews"),
+        ]
+    ) == 0
+
+    metadata = json.loads(capsys.readouterr().out)
+    assert metadata["ci_collection_notes"] == [
+        "GitHub check-runs response contained malformed entries"
+    ]
 
 
 def test_fixture_review_persists_fixed_public_engineering_research_context(

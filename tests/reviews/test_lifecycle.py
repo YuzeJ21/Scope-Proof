@@ -19,6 +19,7 @@ from scopeproof_core.reviews.lifecycle import (
 )
 from scopeproof_core.schemas.models import (
     CheckState,
+    CIObservation,
     Criterion,
     EvidenceLevel,
     Finding,
@@ -41,6 +42,12 @@ def initial_state():
         base_sha="base",
         head_sha="head",
         check_state=CheckState.PASSING,
+        ci_observation=CIObservation(
+            state=CheckState.PASSING,
+            reason="Fixture",
+            total_check_runs=1,
+            successful_check_runs=1,
+        ),
         criteria_confirmed=True,
     )
     criterion = Criterion(criterion_id="AC-01", text="Export CSV")

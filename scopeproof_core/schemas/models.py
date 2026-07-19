@@ -127,6 +127,21 @@ class CheckState(StringEnum):
     UNAVAILABLE = "unavailable"
 
 
+class CIReasonCode(StringEnum):
+    """Deterministic category for a persisted CI observation explanation."""
+
+    FAILING_CHECK_RUNS = "failing_check_runs"
+    FAILING_LEGACY_STATUSES = "failing_legacy_statuses"
+    PENDING_CHECK_RUNS = "pending_check_runs"
+    PENDING_LEGACY_STATUSES = "pending_legacy_statuses"
+    SUCCESSFUL_CHECK_RUNS = "successful_check_runs"
+    SUCCESSFUL_LEGACY_STATUSES = "successful_legacy_statuses"
+    NO_OBSERVATIONS = "no_observations"
+    NEUTRAL_OR_SKIPPED = "neutral_or_skipped"
+    INCOMPLETE_COLLECTION = "incomplete_collection"
+    HISTORICAL_UNCAPTURED = "historical_uncaptured"
+
+
 class IngestionState(StringEnum):
     COMPLETE = "complete"
     PARTIAL = "partial"
@@ -145,6 +160,7 @@ class CIObservation(BaseModel):
 
     state: CheckState = CheckState.UNAVAILABLE
     reason: str = Field(min_length=1)
+    reason_code: CIReasonCode = CIReasonCode.NO_OBSERVATIONS
     total_check_runs: int = Field(default=0, ge=0)
     successful_check_runs: int = Field(default=0, ge=0)
     pending_check_runs: int = Field(default=0, ge=0)
@@ -152,8 +168,46 @@ class CIObservation(BaseModel):
     neutral_check_runs: int = Field(default=0, ge=0)
     skipped_check_runs: int = Field(default=0, ge=0)
     concrete_legacy_status_count: int = Field(default=0, ge=0)
+    successful_legacy_statuses: int = Field(default=0, ge=0)
+    pending_legacy_statuses: int = Field(default=0, ge=0)
+    failing_legacy_statuses: int = Field(default=0, ge=0)
+    neutral_legacy_statuses: int = Field(default=0, ge=0)
     skipped_check_names: list[str] = Field(default_factory=list, max_length=8)
     collection_complete: bool = True
+    collection_notes: list[str] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="before")
+    @classmethod
+    def fail_closed_for_uncategorized_historical_legacy_statuses(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        legacy_categories = {
+            "successful_legacy_statuses",
+            "pending_legacy_statuses",
+            "failing_legacy_statuses",
+            "neutral_legacy_statuses",
+        }
+        concrete_count = value.get("concrete_legacy_status_count", 0)
+        if (
+            isinstance(concrete_count, int)
+            and concrete_count > 0
+            and not legacy_categories.issubset(value)
+        ):
+            return {
+                **value,
+                "state": CheckState.UNAVAILABLE,
+                "reason": (
+                    "Historical legacy status categories were not captured; "
+                    "CI observation collection is incomplete and unavailable."
+                ),
+                "reason_code": CIReasonCode.HISTORICAL_UNCAPTURED,
+                "successful_legacy_statuses": 0,
+                "pending_legacy_statuses": 0,
+                "failing_legacy_statuses": 0,
+                "neutral_legacy_statuses": concrete_count,
+                "collection_complete": False,
+            }
+        return value
 
     @field_validator("reason")
     @classmethod
@@ -172,8 +226,20 @@ class CIObservation(BaseModel):
             raise ValueError("skipped check names must be unique")
         return value
 
+    @field_validator("collection_notes")
+    @classmethod
+    def require_unique_nonblank_collection_notes(cls, value: list[str]) -> list[str]:
+        normalized = [note.strip() for note in value]
+        if any(not note for note in normalized):
+            raise ValueError("collection notes must contain non-whitespace text")
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("collection notes must be unique")
+        return normalized
+
     @model_validator(mode="after")
     def validate_check_run_counts(self) -> CIObservation:
+        if self.collection_complete and self.collection_notes:
+            raise ValueError("complete CI collection cannot contain collection notes")
         categorized_runs = (
             self.successful_check_runs
             + self.pending_check_runs
@@ -185,16 +251,172 @@ class CIObservation(BaseModel):
             raise ValueError("total_check_runs must equal the categorized check-run counts")
         if len(self.skipped_check_names) > self.skipped_check_runs:
             raise ValueError("skipped check names cannot exceed skipped check runs")
+        categorized_legacy_statuses = (
+            self.successful_legacy_statuses
+            + self.pending_legacy_statuses
+            + self.failing_legacy_statuses
+            + self.neutral_legacy_statuses
+        )
+        if self.concrete_legacy_status_count != categorized_legacy_statuses:
+            raise ValueError(
+                "concrete_legacy_status_count must equal the categorized legacy status counts"
+            )
+
+        failing_observations = self.failing_check_runs + self.failing_legacy_statuses
+        pending_observations = self.pending_check_runs + self.pending_legacy_statuses
+        successful_observations = self.successful_check_runs + self.successful_legacy_statuses
+        if failing_observations:
+            expected_state = CheckState.FAILING
+        elif pending_observations:
+            expected_state = CheckState.PENDING
+        elif not self.collection_complete:
+            expected_state = CheckState.UNAVAILABLE
+        elif successful_observations:
+            expected_state = CheckState.PASSING
+        else:
+            expected_state = CheckState.UNAVAILABLE
+
+        if self.state is CheckState.PASSING and not successful_observations:
+            raise ValueError("CI observation cannot be passing without a successful observation")
+        if self.state is not expected_state:
+            if not self.collection_complete:
+                raise ValueError("CI observation must be unavailable when collection is incomplete")
+            raise ValueError("CI observation state must match its categorized observations")
+
+        historical_uncaptured = (
+            self.reason_code is CIReasonCode.HISTORICAL_UNCAPTURED
+            and self.state is CheckState.UNAVAILABLE
+            and not self.collection_complete
+            and not categorized_runs
+            and not categorized_legacy_statuses
+        )
+        if failing_observations:
+            reason_code = (
+                CIReasonCode.FAILING_CHECK_RUNS
+                if self.failing_check_runs
+                else CIReasonCode.FAILING_LEGACY_STATUSES
+            )
+        elif pending_observations:
+            reason_code = (
+                CIReasonCode.PENDING_CHECK_RUNS
+                if self.pending_check_runs
+                else CIReasonCode.PENDING_LEGACY_STATUSES
+            )
+        elif not self.collection_complete:
+            reason_code = (
+                CIReasonCode.HISTORICAL_UNCAPTURED
+                if historical_uncaptured
+                else CIReasonCode.INCOMPLETE_COLLECTION
+            )
+        elif successful_observations:
+            reason_code = (
+                CIReasonCode.SUCCESSFUL_CHECK_RUNS
+                if self.successful_check_runs
+                else CIReasonCode.SUCCESSFUL_LEGACY_STATUSES
+            )
+        elif not categorized_runs and not categorized_legacy_statuses:
+            reason_code = CIReasonCode.NO_OBSERVATIONS
+        else:
+            reason_code = CIReasonCode.NEUTRAL_OR_SKIPPED
+
+        if reason_code is CIReasonCode.FAILING_CHECK_RUNS:
+            reason = (
+                f"Observed {self.failing_check_runs} failing check run"
+                f"{'s' if self.failing_check_runs != 1 else ''}."
+            )
+        elif reason_code is CIReasonCode.FAILING_LEGACY_STATUSES:
+            reason = (
+                f"Observed {self.failing_legacy_statuses} concrete failing legacy status"
+                f"{'es' if self.failing_legacy_statuses != 1 else ''}."
+            )
+        elif reason_code is CIReasonCode.PENDING_CHECK_RUNS:
+            reason = (
+                f"Observed {self.pending_check_runs} pending check run"
+                f"{'s' if self.pending_check_runs != 1 else ''}."
+            )
+        elif reason_code is CIReasonCode.PENDING_LEGACY_STATUSES:
+            reason = (
+                f"Observed {self.pending_legacy_statuses} concrete pending legacy status"
+                f"{'es' if self.pending_legacy_statuses != 1 else ''}."
+            )
+        elif reason_code is CIReasonCode.SUCCESSFUL_CHECK_RUNS:
+            suffix = "; no concrete legacy statuses." if not categorized_legacy_statuses else "."
+            reason = (
+                f"Observed {self.successful_check_runs} successful completed check run"
+                f"{'s' if self.successful_check_runs != 1 else ''}{suffix}"
+            )
+        elif reason_code is CIReasonCode.SUCCESSFUL_LEGACY_STATUSES:
+            reason = (
+                f"Observed {self.successful_legacy_statuses} concrete successful legacy status"
+                f"{'es' if self.successful_legacy_statuses != 1 else ''}."
+            )
+        elif reason_code is CIReasonCode.NO_OBSERVATIONS:
+            reason = "No check runs or concrete legacy statuses were observed."
+        elif reason_code is CIReasonCode.NEUTRAL_OR_SKIPPED:
+            if self.skipped_check_runs and not self.neutral_check_runs:
+                reason = (
+                    f"Observed {self.skipped_check_runs} skipped check run"
+                    f"{'s' if self.skipped_check_runs != 1 else ''}; "
+                    "it does not prove passing."
+                )
+            else:
+                reason = "Observed neutral or skipped checks; neither proves passing."
+        elif reason_code is CIReasonCode.HISTORICAL_UNCAPTURED:
+            reason = (
+                "CI observation was not captured in this historical record; "
+                "collection is incomplete and unavailable."
+            )
+        else:
+            reason = "CI observation collection is incomplete."
+            if successful_observations:
+                reason += " Passing cannot be concluded."
+        if (
+            not self.collection_complete
+            and reason_code
+            not in {CIReasonCode.HISTORICAL_UNCAPTURED, CIReasonCode.INCOMPLETE_COLLECTION}
+        ):
+            reason += " CI observation collection is incomplete."
+        self.reason_code = reason_code
+        self.reason = reason
         return self
 
 
 def _historical_ci_observation(check_state: object) -> dict[str, object]:
     """Preserve old saved records while making their missing observation explicit."""
     return {
-        "state": check_state or CheckState.UNAVAILABLE,
-        "reason": "CI observation was not captured in this historical record.",
+        "state": CheckState.UNAVAILABLE,
+        "reason": (
+            "CI observation was not captured in this historical record; "
+            "collection is incomplete and unavailable."
+        ),
+        "reason_code": CIReasonCode.HISTORICAL_UNCAPTURED,
+        "concrete_legacy_status_count": 0,
+        "successful_legacy_statuses": 0,
+        "pending_legacy_statuses": 0,
+        "failing_legacy_statuses": 0,
+        "neutral_legacy_statuses": 0,
         "collection_complete": False,
     }
+
+
+def _requires_historical_ci_fail_closed_migration(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    observation = value.get("ci_observation")
+    if not isinstance(observation, dict):
+        return "ci_observation" not in value
+    concrete_count = observation.get("concrete_legacy_status_count", 0)
+    required_categories = {
+        "successful_legacy_statuses",
+        "pending_legacy_statuses",
+        "failing_legacy_statuses",
+        "neutral_legacy_statuses",
+    }
+    return (
+        isinstance(concrete_count, int)
+        and concrete_count > 0
+        and not required_categories.issubset(observation)
+    )
 
 
 class ActionValidationRecord(BaseModel):
@@ -381,12 +603,15 @@ class PullRequestSnapshot(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def preserve_historical_ci_state(cls, value: object) -> object:
-        if (
-            isinstance(value, dict)
-            and "ci_observation" not in value
-            and "check_state" in value
-        ):
-            return {**value, "ci_observation": _historical_ci_observation(value.get("check_state"))}
+        if isinstance(value, dict) and "check_state" in value:
+            if "ci_observation" not in value:
+                return {
+                    **value,
+                    "check_state": CheckState.UNAVAILABLE,
+                    "ci_observation": _historical_ci_observation(value.get("check_state")),
+                }
+            if _requires_historical_ci_fail_closed_migration(value):
+                return {**value, "check_state": CheckState.UNAVAILABLE}
         return value
 
     @model_validator(mode="after")
@@ -431,12 +656,15 @@ class Review(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def preserve_historical_ci_state(cls, value: object) -> object:
-        if (
-            isinstance(value, dict)
-            and "ci_observation" not in value
-            and "check_state" in value
-        ):
-            return {**value, "ci_observation": _historical_ci_observation(value.get("check_state"))}
+        if isinstance(value, dict) and "check_state" in value:
+            if "ci_observation" not in value:
+                return {
+                    **value,
+                    "check_state": CheckState.UNAVAILABLE,
+                    "ci_observation": _historical_ci_observation(value.get("check_state")),
+                }
+            if _requires_historical_ci_fail_closed_migration(value):
+                return {**value, "check_state": CheckState.UNAVAILABLE}
         return value
 
     @model_validator(mode="after")

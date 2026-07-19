@@ -12,12 +12,19 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import validated_review_state
-from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewState
+from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewBundle, ReviewState
 
 RECORD_VERSION = 2
 _SUPPORTED_RECORD_VERSIONS = (1, RECORD_VERSION)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+_LEGACY_CI_CATEGORIES = {
+    "successful_legacy_statuses",
+    "pending_legacy_statuses",
+    "failing_legacy_statuses",
+    "neutral_legacy_statuses",
+}
 _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED = (
     hasattr(os, "O_DIRECTORY")
     and hasattr(os, "O_NOFOLLOW")
@@ -149,6 +156,55 @@ class JsonReviewStore:
         temporary.replace(target)
         return target
 
+    @staticmethod
+    def _review_payload_needs_ci_gate_migration(review_payload: object) -> bool:
+        if not isinstance(review_payload, dict):
+            return False
+        observation = review_payload.get("ci_observation")
+        if not isinstance(observation, dict):
+            return True
+        concrete_count = observation.get("concrete_legacy_status_count", 0)
+        return (
+            isinstance(concrete_count, int)
+            and concrete_count > 0
+            and not _LEGACY_CI_CATEGORIES.issubset(observation)
+        )
+
+    @classmethod
+    def _state_payload_needs_ci_gate_migration(cls, state_payload: object) -> bool:
+        if not isinstance(state_payload, dict):
+            return False
+        review_payloads = [state_payload.get("review")]
+        active_bundle = state_payload.get("bundle")
+        if isinstance(active_bundle, dict):
+            review_payloads.append(active_bundle.get("review"))
+        history = state_payload.get("analysis_history")
+        if isinstance(history, list):
+            review_payloads.extend(
+                bundle.get("review") for bundle in history if isinstance(bundle, dict)
+            )
+        return any(cls._review_payload_needs_ci_gate_migration(item) for item in review_payloads)
+
+    @staticmethod
+    def _recompute_ci_migrated_gates(state: ReviewState) -> ReviewState:
+        def with_recomputed_gate(bundle: ReviewBundle) -> ReviewBundle:
+            return bundle.model_copy(
+                update={
+                    "gate": evaluate_gate(
+                        bundle.review,
+                        bundle.criteria,
+                        bundle.findings,
+                        bundle.resolutions,
+                    )
+                }
+            )
+
+        bundle = (
+            with_recomputed_gate(state.bundle) if state.bundle is not None else None
+        )
+        history = [with_recomputed_gate(item) for item in state.analysis_history]
+        return state.model_copy(update={"bundle": bundle, "analysis_history": history})
+
     def load(self, review_id: str) -> ReviewState:
         """Load a known record format and validate all nested models."""
         payload = json.loads(self._existing_record_path(review_id).read_text(encoding="utf-8"))
@@ -175,7 +231,11 @@ class JsonReviewStore:
                 for historical_bundle in analysis_history:
                     if isinstance(historical_bundle, dict):
                         historical_bundle["criteria_revision_number"] = "unknown"
-        return validated_review_state(ReviewState.model_validate(state_payload))
+        migrate_ci_gates = self._state_payload_needs_ci_gate_migration(state_payload)
+        state = ReviewState.model_validate(state_payload)
+        if migrate_ci_gates:
+            state = self._recompute_ci_migrated_gates(state)
+        return validated_review_state(state)
 
     @staticmethod
     def detect_head_change(state: ReviewState, snapshot: PullRequestSnapshot) -> HeadChange:

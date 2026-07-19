@@ -83,7 +83,7 @@ def _evidence_type(file: ChangedFile) -> EvidenceType:
     lower_path = file.path.casefold()
     name = path.name.casefold()
     if (
-        "test" in normalized_parts
+        any(part in {"test", "tests"} for part in normalized_parts)
         or any(part in {"eval", "evals"} for part in normalized_parts)
         or name.startswith("test_")
         or ".test." in name

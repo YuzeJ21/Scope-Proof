@@ -237,6 +237,7 @@ def test_active_and_reopened_research_review_show_evidence_boundaries(
     assert state.bundle is not None
     unsafe_skipped_check = "![skipped](https://example.invalid/skipped.png)"
     unsafe_boundary_note = "![boundary](https://example.invalid/boundary.png)"
+    unsafe_collection_note = "![diagnostic](https://example.invalid/diagnostic.png)"
     review = state.review.model_copy(
         update={
             "check_state": CheckState.UNAVAILABLE,
@@ -245,6 +246,8 @@ def test_active_and_reopened_research_review_show_evidence_boundaries(
                 total_check_runs=1,
                 skipped_check_runs=1,
                 skipped_check_names=[unsafe_skipped_check],
+                collection_complete=False,
+                collection_notes=[unsafe_collection_note],
             ),
         }
     )
@@ -273,8 +276,10 @@ def test_active_and_reopened_research_review_show_evidence_boundaries(
     assert "Runtime verification: Not recorded" in active_text
     assert unsafe_skipped_check not in active_text
     assert unsafe_boundary_note not in active_text
+    assert unsafe_collection_note not in active_text
     assert unsafe_skipped_check in [item.value for item in app.text]
     assert unsafe_boundary_note in [item.value for item in app.text]
+    assert unsafe_collection_note in [item.value for item in app.text]
 
     reopened = new_app()
     reopened = select_saved_review(reopened, research_state.review.review_id)
@@ -288,8 +293,10 @@ def test_active_and_reopened_research_review_show_evidence_boundaries(
     assert "Runtime verification: Not recorded" in reopened_text
     assert unsafe_skipped_check not in reopened_text
     assert unsafe_boundary_note not in reopened_text
+    assert unsafe_collection_note not in reopened_text
     assert unsafe_skipped_check in [item.value for item in reopened.text]
     assert unsafe_boundary_note in [item.value for item in reopened.text]
+    assert unsafe_collection_note in [item.value for item in reopened.text]
 
 
 def test_active_and_reopened_review_show_recorded_runtime_verification(

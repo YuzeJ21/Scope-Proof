@@ -377,6 +377,9 @@ def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
         if snapshot.ci_observation.skipped_check_names:
             st.caption("Skipped CI checks (unexecuted):")
             st.text("\n".join(snapshot.ci_observation.skipped_check_names))
+        if snapshot.ci_observation.collection_notes:
+            st.caption("CI collection diagnostics:")
+            st.text("\n".join(snapshot.ci_observation.collection_notes))
 
 
 def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -> None:
@@ -1162,6 +1165,9 @@ else:
         if ci_observation.skipped_check_names:
             st.caption("Skipped CI checks (unexecuted):")
             st.text("\n".join(ci_observation.skipped_check_names))
+        if ci_observation.collection_notes:
+            st.caption("CI collection diagnostics:")
+            st.text("\n".join(ci_observation.collection_notes))
         st.caption(
             "Static candidates and observed CI do not establish runtime verification. "
             "Runtime evidence and reviewer decisions remain separate."

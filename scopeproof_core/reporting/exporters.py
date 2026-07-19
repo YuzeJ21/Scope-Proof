@@ -236,6 +236,17 @@ def export_markdown(bundle: ExportableReview) -> str:
         f"{'complete' if bundle.review.ci_observation.collection_complete else 'incomplete'}",
         *(
             [
+                "**CI collection diagnostics:**",
+                *[
+                    f"  - {_escape_markdown_text(note)}"
+                    for note in bundle.review.ci_observation.collection_notes
+                ],
+            ]
+            if bundle.review.ci_observation.collection_notes
+            else []
+        ),
+        *(
+            [
                 "**Skipped CI checks:** "
                 + ", ".join(
                     _escape_markdown_text(name)
@@ -516,6 +527,7 @@ def export_csv(bundle: ExportableReview) -> str:
         "ci_concrete_legacy_status_count",
         "ci_skipped_check_names",
         "ci_collection_complete",
+        "ci_collection_notes",
         "research_case_id",
         "research_classification",
         "stage1_credit",
@@ -591,6 +603,12 @@ def export_csv(bundle: ExportableReview) -> str:
                     bundle.review.ci_observation.skipped_check_names, ensure_ascii=False
                 ),
                 "ci_collection_complete": bundle.review.ci_observation.collection_complete,
+                "ci_collection_notes": _csv_text(
+                    json.dumps(
+                        bundle.review.ci_observation.collection_notes,
+                        ensure_ascii=False,
+                    )
+                ),
                 "research_case_id": _csv_text(bundle.research_context.case_id)
                 if bundle.research_context
                 else "",
@@ -741,6 +759,18 @@ def export_html(value: ExportableReview) -> str:
                 else ""
             )
             + "</p>",
+            *(
+                [
+                    '<ul aria-label="CI collection diagnostics">',
+                    *[
+                        f"<li>{html.escape(note)}</li>"
+                        for note in bundle.review.ci_observation.collection_notes
+                    ],
+                    "</ul>",
+                ]
+                if bundle.review.ci_observation.collection_notes
+                else []
+            ),
             *(
                 [
                     "<h2>Research Boundary</h2>",

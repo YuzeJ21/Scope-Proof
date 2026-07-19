@@ -10,6 +10,7 @@ from scopeproof_core.reviews.comparison import (
 )
 from scopeproof_core.schemas.models import (
     CheckState,
+    CIObservation,
     Criterion,
     EvidenceItem,
     EvidenceLevel,
@@ -25,6 +26,15 @@ from scopeproof_core.schemas.models import (
     ReviewBundle,
 )
 from scopeproof_core.verification.service import build_findings
+
+
+def passing_ci_observation() -> CIObservation:
+    return CIObservation(
+        state=CheckState.PASSING,
+        reason="Fixture",
+        total_check_runs=1,
+        successful_check_runs=1,
+    )
 
 
 def evidence(
@@ -71,6 +81,7 @@ def bundle_with(*items: EvidenceItem, head_sha: str) -> ReviewBundle:
         base_sha="base",
         head_sha=head_sha,
         check_state=CheckState.PASSING,
+        ci_observation=passing_ci_observation(),
         criteria_confirmed=True,
     )
     item_list = list(items)
@@ -93,6 +104,7 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
         base_sha="base",
         head_sha=head_sha,
         check_state=CheckState.PASSING,
+        ci_observation=passing_ci_observation(),
         criteria_confirmed=True,
         final_acceptance=True,
     )

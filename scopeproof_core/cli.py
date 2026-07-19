@@ -157,6 +157,7 @@ def _review(args: argparse.Namespace) -> int:
         ),
         "skipped_check_names": bundle.review.ci_observation.skipped_check_names,
         "ci_collection_complete": bundle.review.ci_observation.collection_complete,
+        "ci_collection_notes": bundle.review.ci_observation.collection_notes,
         "candidate_evidence": [
             {
                 "criterion_id": item.criterion_id,

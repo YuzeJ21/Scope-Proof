@@ -230,7 +230,7 @@ def test_exports_make_observed_ci_research_and_verification_boundaries_inspectab
         total_check_runs=2,
         skipped_check_runs=2,
         skipped_check_names=["eval", "integration"],
-        collection_complete=False,
+        collection_complete=True,
     ).model_dump(mode="python")
     payload["review"]["check_state"] = CheckState.UNAVAILABLE
     payload["evidence"][0]["evidence_type"] = EvidenceType.TEST
@@ -256,7 +256,7 @@ def test_exports_make_observed_ci_research_and_verification_boundaries_inspectab
     assert json_report["runtime_verification_state"] == "not_recorded"
     assert json_report["reviewer_decision_state"] == "recorded"
     assert "**Observed CI:** unavailable" in markdown
-    assert "Only skipped checks were observed; execution is unavailable." in semantic_markdown
+    assert "Observed 2 skipped check runs; it does not prove passing." in semantic_markdown
     assert "**Skipped CI checks:** eval, integration" in markdown
     assert "Test (E2; test/eval definition shows intent, not execution)" in markdown
     assert "No manual runtime verification was recorded" in markdown
@@ -274,6 +274,38 @@ def test_exports_make_observed_ci_research_and_verification_boundaries_inspectab
     assert "Test (E2; test/eval definition shows intent, not execution)" in html_report
     assert "No manual runtime verification was recorded" in html_report
     assert "Public engineering research" in html_report
+
+
+def test_exports_surface_collection_diagnostics_as_inert_separate_data() -> None:
+    hostile_notes = [
+        "![remote](https://example.invalid/pixel.png)",
+        '=HYPERLINK("https://example.invalid", "open")',
+    ]
+    payload = example_bundle().model_dump(mode="python")
+    payload["review"]["check_state"] = CheckState.UNAVAILABLE
+    payload["review"]["ci_observation"] = CIObservation(
+        state=CheckState.UNAVAILABLE,
+        reason="Caller-controlled reason must be replaced.",
+        total_check_runs=1,
+        successful_check_runs=1,
+        collection_complete=False,
+        collection_notes=hostile_notes,
+    ).model_dump(mode="python")
+    bundle = ReviewBundle.model_validate(payload)
+
+    json_report = json.loads(export_json(bundle))
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert json_report["review"]["ci_observation"]["collection_notes"] == hostile_notes
+    assert "**CI collection diagnostics:**" in markdown
+    assert "\\!\\[remote\\]" in markdown
+    assert "![remote]" not in markdown
+    assert "<ul aria-label=\"CI collection diagnostics\">" in html_report
+    assert "&quot;https://example.invalid&quot;" in html_report
+    assert json.loads(csv_row["ci_collection_notes"]) == hostile_notes
+    assert not csv_row["ci_collection_notes"].startswith(("=", "+", "-", "@"))
 
 
 def test_export_json_and_csv_derive_recorded_runtime_state_from_manual_evidence() -> None:

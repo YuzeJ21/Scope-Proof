@@ -2,6 +2,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.schemas.models import (
     ChangedFile,
@@ -131,6 +133,44 @@ def test_path_segment_classification_is_casefolded_but_not_substring_matched() -
     )
     assert by_path["DOCS/export_result.txt"].evidence_type is EvidenceType.DOCUMENTATION
     assert by_path["evaluations/export_result.yaml"].evidence_type is EvidenceType.IMPLEMENTATION
+
+
+@pytest.mark.parametrize("segment", ["test", "tests", "eval", "evals"])
+def test_exact_test_and_eval_path_segments_are_e2_candidates(segment: str) -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                f"source/{segment}/export_result.yaml",
+                [(LineChangeType.ADDED, 3, "scenario: export evidence result")],
+            )
+        ]
+    )
+
+    evidence = retrieve_evidence(
+        snapshot, [Criterion(criterion_id="AC-99", text="Export evidence result")]
+    )
+
+    assert evidence[0].evidence_type is EvidenceType.TEST
+    assert evidence[0].evidence_level.value == "E2"
+
+
+@pytest.mark.parametrize("segment", ["contest", "evaluations"])
+def test_nonexact_test_and_eval_path_segments_remain_non_test_candidates(segment: str) -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                f"source/{segment}/export_result.yaml",
+                [(LineChangeType.ADDED, 3, "scenario: export evidence result")],
+            )
+        ]
+    )
+
+    evidence = retrieve_evidence(
+        snapshot, [Criterion(criterion_id="AC-99", text="Export evidence result")]
+    )
+
+    assert evidence[0].evidence_type is EvidenceType.IMPLEMENTATION
+    assert evidence[0].evidence_level.value == "E1"
 
 
 def test_r001_structural_matches_diversify_relevant_static_evidence() -> None:

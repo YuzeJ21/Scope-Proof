@@ -220,7 +220,12 @@ def test_incomplete_legacy_status_collection_prevents_a_passing_observation() ->
 
     assert snapshot.check_state is CheckState.UNAVAILABLE
     assert snapshot.ci_observation.collection_complete is False
-    assert "legacy statuses" in snapshot.ci_observation.reason.lower()
+    assert snapshot.ci_observation.reason == (
+        "CI observation collection is incomplete. Passing cannot be concluded."
+    )
+    assert any(
+        "legacy statuses" in note.lower() for note in snapshot.ci_observation.collection_notes
+    )
 
 
 @pytest.mark.parametrize(
@@ -253,7 +258,10 @@ def test_unavailable_ci_endpoint_fails_closed_when_remaining_endpoint_succeeds(
 
     assert snapshot.check_state is CheckState.UNAVAILABLE
     assert snapshot.ci_observation.collection_complete is False
-    assert unavailable_endpoint in snapshot.ci_observation.reason.lower()
+    assert unavailable_endpoint in " ".join(snapshot.ci_observation.collection_notes).lower()
+    assert snapshot.ci_observation.reason == (
+        "CI observation collection is incomplete. Passing cannot be concluded."
+    )
     assert "passing cannot be concluded" in snapshot.ci_observation.reason.lower()
 
 
@@ -274,6 +282,210 @@ def test_empty_legacy_pending_does_not_override_completed_successful_check_run()
         {"check_runs": [{"name": "verify", "status": "completed", "conclusion": "success"}]},
         {"state": "pending", "total_count": 0, "statuses": []},
     ) is CheckState.PASSING
+
+
+@pytest.mark.parametrize("status", ["queued", "in_progress", "requested", "waiting", "pending"])
+def test_nonterminal_check_status_prevents_a_successful_completed_run_from_passing(
+    status: str,
+) -> None:
+    observation = GitHubClient._check_observation(
+        {
+            "check_runs": [
+                {"name": "verify", "status": "completed", "conclusion": "success"},
+                {"name": "delayed", "status": status, "conclusion": None},
+            ]
+        },
+        {"state": "pending", "total_count": 0, "statuses": []},
+    )
+
+    assert observation.state is CheckState.PENDING
+    assert observation.pending_check_runs == 1
+    assert observation.successful_check_runs == 1
+    assert observation.reason == "Observed 1 pending check run."
+
+
+def test_unknown_nonterminal_check_status_fails_closed_as_pending() -> None:
+    observation = GitHubClient._check_observation(
+        {
+            "check_runs": [
+                {"name": "verify", "status": "completed", "conclusion": "success"},
+                {"name": "future-check", "status": "awaiting_dispatch", "conclusion": None},
+            ]
+        },
+        {"state": "pending", "total_count": 0, "statuses": []},
+    )
+
+    assert observation.state is CheckState.PENDING
+    assert observation.pending_check_runs == 1
+    assert observation.successful_check_runs == 1
+
+
+@pytest.mark.parametrize("status", [None, ""])
+def test_success_conclusion_without_completed_status_does_not_prove_passing(
+    status: str | None,
+) -> None:
+    observation = GitHubClient._check_observation(
+        {"check_runs": [{"name": "verify", "status": status, "conclusion": "success"}]},
+        {"state": "pending", "total_count": 0, "statuses": []},
+    )
+
+    assert observation.state is CheckState.UNAVAILABLE
+    assert observation.successful_check_runs == 0
+    assert observation.neutral_check_runs == 0
+    assert observation.collection_complete is False
+
+
+def test_failure_conclusion_without_status_remains_failing() -> None:
+    observation = GitHubClient._check_observation(
+        {"check_runs": [{"name": "verify", "conclusion": "failure"}]},
+        {"state": "pending", "total_count": 0, "statuses": []},
+    )
+
+    assert observation.state is CheckState.FAILING
+    assert observation.failing_check_runs == 1
+
+
+@pytest.mark.parametrize(
+    ("check_data", "status_data"),
+    [
+        (
+            {
+                "total_count": 1,
+                "check_runs": [
+                    {"name": "verify", "status": "completed", "conclusion": "success"},
+                    "malformed-check-run",
+                ],
+            },
+            {"state": "pending", "total_count": 0, "statuses": []},
+        ),
+        (
+            {"total_count": 0, "check_runs": []},
+            {
+                "state": "success",
+                "total_count": 1,
+                "statuses": [{"state": "success"}, "malformed-legacy-status"],
+            },
+        ),
+    ],
+)
+def test_malformed_ci_entries_make_collection_incomplete_and_cannot_prove_passing(
+    check_data: dict, status_data: dict
+) -> None:
+    observation = GitHubClient._check_observation(check_data, status_data)
+
+    assert observation.state is CheckState.UNAVAILABLE
+    assert observation.collection_complete is False
+
+
+@pytest.mark.parametrize(
+    ("check_data", "status_data"),
+    [
+        (
+            {
+                "total_count": 2,
+                "check_runs": [
+                    {"name": "verify", "status": "completed", "conclusion": "success"},
+                    {"name": "broken", "status": None, "conclusion": None},
+                ],
+            },
+            {"total_count": 0, "statuses": []},
+        ),
+        (
+            {
+                "total_count": 2,
+                "check_runs": [
+                    {"name": "verify", "status": "completed", "conclusion": "success"},
+                    {"name": "broken", "status": "completed", "conclusion": None},
+                ],
+            },
+            {"total_count": 0, "statuses": []},
+        ),
+        (
+            {"total_count": 0, "check_runs": []},
+            {
+                "total_count": 2,
+                "statuses": [{"state": "success"}, {"state": None}],
+            },
+        ),
+    ],
+)
+def test_dictionary_shaped_malformed_ci_entries_fail_closed(
+    check_data: dict, status_data: dict
+) -> None:
+    observation = GitHubClient._check_observation(check_data, status_data)
+
+    assert observation.state is CheckState.UNAVAILABLE
+    assert observation.collection_complete is False
+    assert observation.collection_notes
+
+
+@pytest.mark.parametrize(
+    ("check_data", "status_data", "expected_state"),
+    [
+        (
+            {"check_runs": [{"status": None, "conclusion": "failure"}]},
+            {"statuses": []},
+            CheckState.FAILING,
+        ),
+        (
+            {"check_runs": [{"status": "in_progress", "conclusion": None}]},
+            {"statuses": [{"state": None}]},
+            CheckState.PENDING,
+        ),
+    ],
+)
+def test_malformed_ci_structure_preserves_failure_or_pending_precedence(
+    check_data: dict, status_data: dict, expected_state: CheckState
+) -> None:
+    observation = GitHubClient._check_observation(check_data, status_data)
+
+    assert observation.state is expected_state
+    assert observation.collection_complete is False
+
+
+@pytest.mark.parametrize(
+    ("check_data", "status_data"),
+    [
+        (
+            {
+                "total_count": 0,
+                "check_runs": [
+                    {"name": "verify", "status": "completed", "conclusion": "success"}
+                ],
+            },
+            {"total_count": 0, "statuses": []},
+        ),
+        (
+            {"total_count": 0, "check_runs": []},
+            {"total_count": 0, "statuses": [{"state": "success"}]},
+        ),
+        (
+            {
+                "total_count": "one",
+                "check_runs": [
+                    {"name": "verify", "status": "completed", "conclusion": "success"}
+                ],
+            },
+            {"total_count": 0, "statuses": []},
+        ),
+        (
+            {"total_count": True, "check_runs": []},
+            {"total_count": 0, "statuses": []},
+        ),
+        (
+            {"total_count": 0, "check_runs": []},
+            {"total_count": -1, "statuses": []},
+        ),
+    ],
+)
+def test_invalid_or_mismatched_reported_ci_totals_fail_closed(
+    check_data: dict, status_data: dict
+) -> None:
+    observation = GitHubClient._check_observation(check_data, status_data)
+
+    assert observation.state is CheckState.UNAVAILABLE
+    assert observation.collection_complete is False
+    assert observation.collection_notes
 
 
 @pytest.mark.parametrize(
