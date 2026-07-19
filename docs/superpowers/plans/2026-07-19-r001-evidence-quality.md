@@ -94,7 +94,7 @@ diversity-first pass, and attach an optional validated public-research context t
 ### Task 4: Rerun and document R-001
 
 **Files:**
-- Add: `docs/research/r001-microsoft-hve-core/requirements.txt`
+- Add: `docs/research/r001-microsoft-hve-core/acceptance-criteria.txt`
 - Add: `docs/research/r001-microsoft-hve-core/before.md`
 - Add: `docs/research/r001-microsoft-hve-core/after.md`
 - Add: `docs/research/r001-microsoft-hve-core/summary.md`

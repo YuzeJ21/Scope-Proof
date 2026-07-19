@@ -21,7 +21,7 @@ verification or acceptance.
 
 ## Inspectable artifacts
 
-- Exact source requirements: [`requirements.txt`](requirements.txt), SHA-256
+- Exact source acceptance criteria: [`acceptance-criteria.txt`](acceptance-criteria.txt), SHA-256
   `07ee2fa337b4e2b992bd9d6d39753237dd167be48456a548dd2ff36201b8fcdd`
 - [Pre-fix record](before.md), including original report SHA-256
   `bc114f4825aaf8c114b47a0509fc4d3235ff3708d771bc81b8fc0048903c0f39`

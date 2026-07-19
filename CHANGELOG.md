@@ -20,6 +20,8 @@ Candidate version: 0.2.2 (not published).
 - Corrected observed-CI aggregation for empty legacy status aggregates, surfaced relevant static
   eval definitions as E2 test intent, and recorded the hash-bound R-001 Microsoft public-PR
   engineering comparison.
+- Renamed the R-001 acceptance-criteria record so GitHub cannot misclassify research prose as a
+  Python dependency manifest.
 
 ### Boundaries
 

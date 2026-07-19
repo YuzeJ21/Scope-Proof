@@ -1124,12 +1124,13 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
 
 def test_r001_public_engineering_research_record_is_hash_bound_and_stage_safe() -> None:
     research_dir = Path("docs/research/r001-microsoft-hve-core")
-    requirements_path = research_dir / "requirements.txt"
+    requirements_path = research_dir / "acceptance-criteria.txt"
     before_path = research_dir / "before.md"
     after_path = research_dir / "after.md"
     summary_path = research_dir / "summary.md"
 
     assert requirements_path.is_file()
+    assert list(Path("docs/research").rglob("requirements*.txt")) == []
     assert before_path.is_file()
     assert after_path.is_file()
     assert summary_path.is_file()
