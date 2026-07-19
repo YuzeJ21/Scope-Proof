@@ -39,7 +39,7 @@ packages = ["scopeproof_core", "apps"]
 "USE_POLICY.md" = "scopeproof_core/USE_POLICY.md"
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/.scopeproof"]
+exclude = ["/.scopeproof", "/.coverage*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
