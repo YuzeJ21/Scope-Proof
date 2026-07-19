@@ -9,7 +9,7 @@ GitHub metadata and files. Static candidates and observed CI are not runtime pro
 - Issue: [microsoft/hve-core#2148](https://github.com/microsoft/hve-core/issues/2148)
 - Pull request: [microsoft/hve-core#2149](https://github.com/microsoft/hve-core/pull/2149)
 - Reviewed head: [`8e5277e88f0ca650549d41255eb24d74afc74772`](https://github.com/microsoft/hve-core/commit/8e5277e88f0ca650549d41255eb24d74afc74772)
-- Requirements: [`requirements.txt`](requirements.txt), SHA-256
+- Acceptance criteria: [`acceptance-criteria.txt`](acceptance-criteria.txt), SHA-256
   `07ee2fa337b4e2b992bd9d6d39753237dd167be48456a548dd2ff36201b8fcdd`
 
 The original 2026-07-19 report is retained outside the repository at
