@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from scopeproof_core.schemas.models import (
     CheckState,
+    CIObservation,
     Criterion,
     EvidenceItem,
     EvidenceLevel,
@@ -283,6 +284,66 @@ def test_confirmed_complete_review_can_analyze() -> None:
         ingestion_state=IngestionState.COMPLETE,
     )
     assert review.can_analyze is True
+
+
+def test_ci_observation_requires_consistent_counts_and_bounded_skipped_names() -> None:
+    with pytest.raises(ValidationError):
+        CIObservation(
+            state=CheckState.UNAVAILABLE,
+            reason=" ",
+        )
+    with pytest.raises(ValidationError):
+        CIObservation(
+            state=CheckState.PASSING,
+            reason="Observed CI.",
+            total_check_runs=1,
+            successful_check_runs=2,
+        )
+    with pytest.raises(ValidationError):
+        CIObservation(
+            state=CheckState.UNAVAILABLE,
+            reason="Skipped checks were observed.",
+            total_check_runs=9,
+            skipped_check_runs=9,
+            skipped_check_names=[f"check-{index}" for index in range(9)],
+        )
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_ci_observation_must_agree_with_top_level_check_state(model) -> None:
+    payload = review_identity_payload(
+        model,
+        check_state=CheckState.PASSING,
+        ci_observation=CIObservation(
+            state=CheckState.PENDING,
+            reason="Observed 1 pending check run.",
+            total_check_runs=1,
+            pending_check_runs=1,
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="check_state must agree"):
+        model.model_validate(payload)
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_new_records_default_to_an_unavailable_ci_observation(model) -> None:
+    record = model.model_validate(review_identity_payload(model))
+
+    assert record.ci_observation.state is CheckState.UNAVAILABLE
+    assert (
+        record.ci_observation.reason
+        == "No check runs or concrete legacy statuses were observed."
+    )
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_historical_ci_observation_is_incomplete(model) -> None:
+    record = model.model_validate(
+        review_identity_payload(model, check_state=CheckState.PASSING)
+    )
+
+    assert record.ci_observation.collection_complete is False
 
 
 def test_review_preserves_ingestion_limitations_with_backward_compatible_defaults() -> None:

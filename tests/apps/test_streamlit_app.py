@@ -15,6 +15,8 @@ from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import (
     RULESET_VERSION,
+    CheckState,
+    CIObservation,
     EvidenceLevel,
     GateVerdict,
     HumanDecision,
@@ -190,6 +192,37 @@ def test_loaded_source_labels_check_aggregation_as_observed_ci_state() -> None:
 
     caption_text = "\n".join(item.value for item in app.caption)
     assert "Observed CI state: Passing" in caption_text
+
+
+def test_loaded_source_explains_ci_observation_and_skipped_checks() -> None:
+    snapshot = load_demo_snapshot().model_copy(
+        update={
+            "ci_observation": CIObservation(
+                state="unavailable",
+                reason="Observed 1 skipped check run; it does not prove passing.",
+                total_check_runs=1,
+                skipped_check_runs=1,
+                skipped_check_names=["integration"],
+            ),
+            "check_state": CheckState.UNAVAILABLE,
+        }
+    )
+    app = new_app()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/repo/pull/7"
+    ).run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+
+    caption_text = "\n".join(item.value for item in app.caption)
+    assert (
+        "Observed CI reason: Observed 1 skipped check run; it does not prove passing."
+        in caption_text
+    )
+    assert "Skipped CI checks: integration" in caption_text
 
 
 def test_criterion_detail_shows_bounded_candidate_context() -> None:

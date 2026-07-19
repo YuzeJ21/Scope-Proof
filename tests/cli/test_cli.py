@@ -108,6 +108,29 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     assert state.bundle.review.tool_version == __version__
 
 
+def test_fixture_review_metadata_reports_validated_ci_observation(tmp_path: Path, capsys) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+
+    assert main(
+        [
+            "review",
+            "--fixture",
+            "evals/fixtures/complete_implementation_pr.json",
+            "--requirements",
+            str(requirements),
+            "--storage-dir",
+            str(tmp_path / "reviews"),
+        ]
+    ) == 0
+
+    metadata = json.loads(capsys.readouterr().out)
+    assert metadata["ci_state"] == "passing"
+    assert metadata["ci_reason"] == "CI observation was not captured in this historical record."
+    assert metadata["skipped_check_names"] == []
+    assert metadata["ci_collection_complete"] is False
+
+
 def test_partial_fixture_review_reports_and_persists_ingestion_limitations(
     tmp_path: Path, capsys
 ) -> None:

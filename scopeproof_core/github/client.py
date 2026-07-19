@@ -14,6 +14,7 @@ from scopeproof_core.schemas.models import (
     ChangedFile,
     ChangedLine,
     CheckState,
+    CIObservation,
     CommitInfo,
     IngestionState,
     LineChangeType,
@@ -223,18 +224,162 @@ class GitHubClient:
         return candidates
 
     @staticmethod
-    def _check_state(check_runs: dict, commit_status: dict) -> CheckState:
+    def _check_observation(
+        check_runs: dict,
+        commit_status: dict,
+        *,
+        check_runs_available: bool = True,
+        legacy_status_available: bool = True,
+    ) -> CIObservation:
+        """Aggregate concrete GitHub workflow observations conservatively.
+
+        The combined-status endpoint can report ``pending`` with zero statuses.
+        Only its concrete ``statuses`` entries are therefore allowed to affect
+        the aggregate.  Observed CI remains metadata, never runtime proof.
+        """
         runs = check_runs.get("check_runs", [])
-        conclusions = {run.get("conclusion") for run in runs if run.get("conclusion")}
-        statuses = {run.get("status") for run in runs}
-        legacy_state = commit_status.get("state")
-        if conclusions & _FAILING_CONCLUSIONS or legacy_state in {"failure", "error"}:
-            return CheckState.FAILING
-        if "in_progress" in statuses or "queued" in statuses or legacy_state == "pending":
-            return CheckState.PENDING
-        if conclusions & _PASSING_CONCLUSIONS or legacy_state == "success":
-            return CheckState.PASSING
-        return CheckState.UNAVAILABLE
+        if not isinstance(runs, list):
+            runs = []
+        counts = {
+            "successful_check_runs": 0,
+            "pending_check_runs": 0,
+            "failing_check_runs": 0,
+            "neutral_check_runs": 0,
+            "skipped_check_runs": 0,
+        }
+        skipped_names: list[str] = []
+        for run in runs:
+            if not isinstance(run, dict):
+                continue
+            conclusion = run.get("conclusion")
+            status = run.get("status")
+            if conclusion in _FAILING_CONCLUSIONS:
+                counts["failing_check_runs"] += 1
+            elif status in {"in_progress", "queued"}:
+                counts["pending_check_runs"] += 1
+            elif conclusion in _PASSING_CONCLUSIONS:
+                counts["successful_check_runs"] += 1
+            elif conclusion == "skipped":
+                counts["skipped_check_runs"] += 1
+                name = run.get("name")
+                if (
+                    isinstance(name, str)
+                    and name.strip()
+                    and name.strip() not in skipped_names
+                    and len(skipped_names) < 8
+                ):
+                    skipped_names.append(name.strip())
+            else:
+                counts["neutral_check_runs"] += 1
+
+        raw_legacy_statuses = commit_status.get("statuses", [])
+        legacy_statuses = (
+            [status for status in raw_legacy_statuses if isinstance(status, dict)]
+            if isinstance(raw_legacy_statuses, list)
+            else []
+        )
+        legacy_states = [status.get("state") for status in legacy_statuses]
+        failing_legacy_count = sum(state in {"failure", "error"} for state in legacy_states)
+        pending_legacy_count = sum(state == "pending" for state in legacy_states)
+        successful_legacy_count = sum(state == "success" for state in legacy_states)
+        incomplete_collections: list[str] = []
+        if not check_runs_available:
+            incomplete_collections.append("GitHub check-runs endpoint was unavailable")
+        if not legacy_status_available:
+            incomplete_collections.append("GitHub legacy status endpoint was unavailable")
+        check_run_total = check_runs.get("total_count")
+        if (
+            isinstance(check_run_total, int)
+            and not isinstance(check_run_total, bool)
+            and check_run_total > len(runs)
+        ):
+            incomplete_collections.append(
+                f"GitHub reported {check_run_total} check runs but {len(runs)} were retrieved"
+            )
+        legacy_status_total = commit_status.get("total_count")
+        if (
+            isinstance(legacy_status_total, int)
+            and not isinstance(legacy_status_total, bool)
+            and legacy_status_total > len(legacy_statuses)
+        ):
+            incomplete_collections.append(
+                "GitHub reported "
+                f"{legacy_status_total} legacy statuses but {len(legacy_statuses)} were retrieved"
+            )
+
+        if counts["failing_check_runs"]:
+            state = CheckState.FAILING
+            reason = (
+                f"Observed {counts['failing_check_runs']} failing check run"
+                f"{'s' if counts['failing_check_runs'] != 1 else ''}."
+            )
+        elif failing_legacy_count:
+            state = CheckState.FAILING
+            reason = (
+                f"Observed {failing_legacy_count} concrete failing legacy status"
+                f"{'es' if failing_legacy_count != 1 else ''}."
+            )
+        elif counts["pending_check_runs"]:
+            state = CheckState.PENDING
+            reason = (
+                f"Observed {counts['pending_check_runs']} pending check run"
+                f"{'s' if counts['pending_check_runs'] != 1 else ''}."
+            )
+        elif pending_legacy_count:
+            state = CheckState.PENDING
+            reason = (
+                f"Observed {pending_legacy_count} concrete pending legacy status"
+                f"{'es' if pending_legacy_count != 1 else ''}."
+            )
+        elif counts["successful_check_runs"]:
+            state = CheckState.PASSING
+            suffix = (
+                "; no concrete legacy statuses."
+                if not legacy_statuses
+                else "."
+            )
+            reason = (
+                f"Observed {counts['successful_check_runs']} successful completed check run"
+                f"{'s' if counts['successful_check_runs'] != 1 else ''}{suffix}"
+            )
+        elif successful_legacy_count:
+            state = CheckState.PASSING
+            reason = (
+                f"Observed {successful_legacy_count} concrete successful legacy status"
+                f"{'es' if successful_legacy_count != 1 else ''}."
+            )
+        elif not runs and not legacy_statuses:
+            state = CheckState.UNAVAILABLE
+            reason = "No check runs or concrete legacy statuses were observed."
+        else:
+            state = CheckState.UNAVAILABLE
+            reason = "Observed neutral or skipped checks; neither proves passing."
+
+        collection_complete = not incomplete_collections
+        if incomplete_collections:
+            incomplete_reason = "CI observation collection is incomplete: " + "; ".join(
+                incomplete_collections
+            ) + "."
+            if state is CheckState.PASSING:
+                state = CheckState.UNAVAILABLE
+                reason = f"{incomplete_reason} Passing cannot be concluded."
+            else:
+                reason = f"{reason} {incomplete_reason}"
+
+        return CIObservation(
+            state=state,
+            reason=reason,
+            total_check_runs=sum(counts.values()),
+            concrete_legacy_status_count=len(legacy_statuses),
+            skipped_check_names=skipped_names,
+            collection_complete=collection_complete,
+            **counts,
+        )
+
+    @staticmethod
+    def _check_state(check_runs: dict, commit_status: dict) -> CheckState:
+        """Compatibility wrapper for callers that only need the aggregate state."""
+        return GitHubClient._check_observation(check_runs, commit_status).state
 
     def fetch_pull_request(self, url: str) -> PullRequestSnapshot:
         owner, repository, pr_number = parse_pr_url(url)
@@ -247,8 +392,8 @@ class GitHubClient:
         raw_commits = self._get_all(f"{root}/pulls/{pr_number}/commits?per_page=100")
 
         head_sha = pr_data["head"]["sha"]
-        check_response = self._get(f"{root}/commits/{head_sha}/check-runs")
-        status_response = self._get(f"{root}/commits/{head_sha}/status")
+        check_response = self._get(f"{root}/commits/{head_sha}/check-runs?per_page=100")
+        status_response = self._get(f"{root}/commits/{head_sha}/status?per_page=100")
         check_data = check_response.json() if check_response.is_success else {}
         status_data = status_response.json() if status_response.is_success else {}
 
@@ -301,6 +446,12 @@ class GitHubClient:
             )
             for item in raw_commits
         ]
+        ci_observation = self._check_observation(
+            check_data,
+            status_data,
+            check_runs_available=check_response.is_success,
+            legacy_status_available=status_response.is_success,
+        )
         return PullRequestSnapshot(
             repository=f"{owner}/{repository}",
             pr_number=pr_number,
@@ -309,7 +460,8 @@ class GitHubClient:
             html_url=pr_data.get("html_url", url),
             base_sha=pr_data["base"]["sha"],
             head_sha=head_sha,
-            check_state=self._check_state(check_data, status_data),
+            check_state=ci_observation.state,
+            ci_observation=ci_observation,
             ingestion_state=ingestion_state,
             fetched_at=datetime.now(UTC),
             files=files,

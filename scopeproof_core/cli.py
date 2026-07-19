@@ -85,6 +85,7 @@ def _build_bundle(
         base_sha=snapshot.base_sha,
         head_sha=snapshot.head_sha,
         check_state=snapshot.check_state,
+        ci_observation=snapshot.ci_observation,
         criteria_confirmed=True,
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
@@ -123,6 +124,10 @@ def _review(args: argparse.Namespace) -> int:
         "ingestion_state": bundle.review.ingestion_state.value,
         "ingestion_warnings": bundle.review.ingestion_warnings,
         "skipped_files": bundle.review.skipped_files,
+        "ci_state": bundle.review.ci_observation.state.value,
+        "ci_reason": bundle.review.ci_observation.reason,
+        "skipped_check_names": bundle.review.ci_observation.skipped_check_names,
+        "ci_collection_complete": bundle.review.ci_observation.collection_complete,
     }
     if report_target is not None:
         report_path, renderer = report_target

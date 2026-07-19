@@ -211,6 +211,7 @@ def _analyze() -> ReviewBundle:
         base_sha=snapshot.base_sha,
         head_sha=snapshot.head_sha,
         check_state=snapshot.check_state,
+        ci_observation=snapshot.ci_observation,
         criteria_confirmed=st.session_state["criteria_confirmed"],
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
@@ -372,6 +373,12 @@ def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
             f"{_status_label(snapshot.ingestion_state.value)} ingestion"
         )
         st.caption(f"Observed CI state: {_status_label(snapshot.check_state.value)}")
+        st.caption(f"Observed CI reason: {snapshot.ci_observation.reason}")
+        if snapshot.ci_observation.skipped_check_names:
+            st.caption(
+                "Skipped CI checks: "
+                + ", ".join(snapshot.ci_observation.skipped_check_names)
+            )
 
 
 def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -> None:

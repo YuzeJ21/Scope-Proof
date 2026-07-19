@@ -133,6 +133,70 @@ class IngestionState(StringEnum):
     FAILED = "failed"
 
 
+class CIObservation(BaseModel):
+    """A validated summary of observed GitHub check and status metadata.
+
+    This is workflow metadata, not criterion-level runtime verification.  The
+    individual check-run categories partition ``total_check_runs`` so every
+    persisted summary can be checked for internal consistency.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    state: CheckState = CheckState.UNAVAILABLE
+    reason: str = Field(min_length=1)
+    total_check_runs: int = Field(default=0, ge=0)
+    successful_check_runs: int = Field(default=0, ge=0)
+    pending_check_runs: int = Field(default=0, ge=0)
+    failing_check_runs: int = Field(default=0, ge=0)
+    neutral_check_runs: int = Field(default=0, ge=0)
+    skipped_check_runs: int = Field(default=0, ge=0)
+    concrete_legacy_status_count: int = Field(default=0, ge=0)
+    skipped_check_names: list[str] = Field(default_factory=list, max_length=8)
+    collection_complete: bool = True
+
+    @field_validator("reason")
+    @classmethod
+    def require_non_blank_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("reason must contain non-whitespace text")
+        return normalized
+
+    @field_validator("skipped_check_names")
+    @classmethod
+    def require_unique_nonblank_skipped_check_names(cls, value: list[str]) -> list[str]:
+        if any(not name.strip() for name in value):
+            raise ValueError("skipped check names must contain non-whitespace text")
+        if len(value) != len(set(value)):
+            raise ValueError("skipped check names must be unique")
+        return value
+
+    @model_validator(mode="after")
+    def validate_check_run_counts(self) -> CIObservation:
+        categorized_runs = (
+            self.successful_check_runs
+            + self.pending_check_runs
+            + self.failing_check_runs
+            + self.neutral_check_runs
+            + self.skipped_check_runs
+        )
+        if self.total_check_runs != categorized_runs:
+            raise ValueError("total_check_runs must equal the categorized check-run counts")
+        if len(self.skipped_check_names) > self.skipped_check_runs:
+            raise ValueError("skipped check names cannot exceed skipped check runs")
+        return self
+
+
+def _historical_ci_observation(check_state: object) -> dict[str, object]:
+    """Preserve old saved records while making their missing observation explicit."""
+    return {
+        "state": check_state or CheckState.UNAVAILABLE,
+        "reason": "CI observation was not captured in this historical record.",
+        "collection_complete": False,
+    }
+
+
 class ActionValidationRecord(BaseModel):
     """Owner-supplied public Action evidence; validates shape, not GitHub truth."""
 
@@ -295,6 +359,11 @@ class PullRequestSnapshot(BaseModel):
     base_sha: str = Field(min_length=1)
     head_sha: str = Field(min_length=1)
     check_state: CheckState = CheckState.UNAVAILABLE
+    ci_observation: CIObservation = Field(
+        default_factory=lambda: CIObservation(
+            reason="No check runs or concrete legacy statuses were observed."
+        )
+    )
     ingestion_state: IngestionState = IngestionState.COMPLETE
     fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     files: list[ChangedFile] = Field(default_factory=list)
@@ -309,8 +378,21 @@ class PullRequestSnapshot(BaseModel):
             raise ValueError("review identity must contain non-whitespace text")
         return value
 
+    @model_validator(mode="before")
+    @classmethod
+    def preserve_historical_ci_state(cls, value: object) -> object:
+        if (
+            isinstance(value, dict)
+            and "ci_observation" not in value
+            and "check_state" in value
+        ):
+            return {**value, "ci_observation": _historical_ci_observation(value.get("check_state"))}
+        return value
+
     @model_validator(mode="after")
     def limitations_require_noncomplete_ingestion(self) -> PullRequestSnapshot:
+        if self.check_state is not self.ci_observation.state:
+            raise ValueError("check_state must agree with ci_observation.state")
         if self.ingestion_state is IngestionState.COMPLETE and (
             self.warnings or self.skipped_files
         ):
@@ -325,6 +407,11 @@ class Review(BaseModel):
     base_sha: str = Field(min_length=1)
     head_sha: str = Field(min_length=1)
     check_state: CheckState = CheckState.UNAVAILABLE
+    ci_observation: CIObservation = Field(
+        default_factory=lambda: CIObservation(
+            reason="No check runs or concrete legacy statuses were observed."
+        )
+    )
     criteria_confirmed: bool = False
     ingestion_state: IngestionState = IngestionState.COMPLETE
     ingestion_warnings: list[str] = Field(default_factory=list)
@@ -341,8 +428,21 @@ class Review(BaseModel):
             raise ValueError("review identity must contain non-whitespace text")
         return value
 
+    @model_validator(mode="before")
+    @classmethod
+    def preserve_historical_ci_state(cls, value: object) -> object:
+        if (
+            isinstance(value, dict)
+            and "ci_observation" not in value
+            and "check_state" in value
+        ):
+            return {**value, "ci_observation": _historical_ci_observation(value.get("check_state"))}
+        return value
+
     @model_validator(mode="after")
     def limitations_require_noncomplete_ingestion(self) -> Review:
+        if self.check_state is not self.ci_observation.state:
+            raise ValueError("check_state must agree with ci_observation.state")
         if self.ingestion_state is IngestionState.COMPLETE and (
             self.ingestion_warnings or self.skipped_files
         ):

@@ -30,6 +30,10 @@ COERCIVE_REVISION_VALUES = [True, False, "1", "01", 1.0, 2.0]
 def test_review_state_rejects_divergent_active_bundle_review(review_overrides) -> None:
     payload = new_review_state(build_demo_review()).model_dump(mode="python")
     payload["review"].update(review_overrides)
+    if "check_state" in review_overrides:
+        # Keep the deliberately divergent lifecycle review schema-valid so this
+        # test reaches the ReviewState integrity boundary.
+        payload["review"]["ci_observation"]["state"] = review_overrides["check_state"]
 
     with pytest.raises(
         ValidationError, match="active bundle review must match lifecycle review"
