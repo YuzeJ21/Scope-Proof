@@ -1188,27 +1188,22 @@ else:
                 "Reviewer decision": coverage.reviewer_decision,
             }
         )
-    table_headers = [
-        "Criterion",
-        "Requirement",
-        "Priority",
-        "Evidence status",
-        "Evidence types",
-        "Reviewer decision",
-    ]
-    table_lines = [
-        "| " + " | ".join(table_headers) + " |",
-        "|" + "|".join("---" for _ in table_headers) + "|",
-    ]
-    for row in matrix:
-        cells = [
-            str(row[header]).replace("|", "\\|").replace("\n", " ")
-            for header in table_headers
-        ]
-        table_lines.append("| " + " | ".join(cells) + " |")
-    st.markdown("\n".join(table_lines))
     if not matrix:
         st.info("No criteria match the current filters.")
+    else:
+        st.caption(
+            "Each evidence card preserves the criterion, requirement, priority, evidence "
+            "status, evidence types, and reviewer decision without hiding mobile content."
+        )
+        for row in matrix:
+            with st.container(border=True):
+                st.markdown(f"**Criterion:** {row['Criterion']}")
+                st.caption("Requirement")
+                st.text(row["Requirement"])
+                st.caption(f"Priority: {row['Priority']}")
+                st.caption(f"Evidence status: {row['Evidence status']}")
+                st.caption(f"Evidence types: {row['Evidence types']}")
+                st.caption(f"Reviewer decision: {row['Reviewer decision']}")
 
     st.header("4 · Criterion Detail")
     selected_id = st.selectbox(
