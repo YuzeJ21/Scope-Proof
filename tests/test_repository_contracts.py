@@ -399,7 +399,23 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert '__version__ = "0.2.1"' in version_source
+    assert '__version__ = "0.2.2"' in version_source
+
+
+def test_unpublished_candidate_identity_preserves_public_install_boundary() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    candidate_notes = Path("docs/releases/v0.2.2-internal-candidate.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "v0.2.2 internal candidate" in readme
+    assert "not published" in readme
+    assert "Candidate version: 0.2.2 (not published)" in changelog
+    assert "Internal only; not published" in candidate_notes
+    assert "releases/download/v0.2.1/" in readme
+    assert "releases/download/v0.2.2/" not in readme
+    assert "does not advance Stage 1" in candidate_notes
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:

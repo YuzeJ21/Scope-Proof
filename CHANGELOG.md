@@ -9,6 +9,8 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+Candidate version: 0.2.2 (not published).
+
 ### Changed
 
 - Restored the safe first-use hierarchy so the deliberately constructed demo entry appears before
