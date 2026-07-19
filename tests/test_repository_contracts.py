@@ -1,5 +1,6 @@
 import json
 import tomllib
+from hashlib import sha256
 from html.parser import HTMLParser
 from pathlib import Path
 from struct import unpack
@@ -1118,6 +1119,73 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     assert "Incomplete reviews do not become completed feedback outcomes" in site
     assert "participant-selected outcome" in quickstart
     assert "not commercial validation" in outcome
+
+
+def test_r001_public_engineering_research_record_is_hash_bound_and_stage_safe() -> None:
+    research_dir = Path("docs/research/r001-microsoft-hve-core")
+    requirements_path = research_dir / "requirements.txt"
+    before_path = research_dir / "before.md"
+    after_path = research_dir / "after.md"
+    summary_path = research_dir / "summary.md"
+
+    assert requirements_path.is_file()
+    assert before_path.is_file()
+    assert after_path.is_file()
+    assert summary_path.is_file()
+
+    requirements = requirements_path.read_text(encoding="utf-8")
+    assert sha256(requirements.encode("utf-8")).hexdigest() == (
+        "07ee2fa337b4e2b992bd9d6d39753237dd167be48456a548dd2ff36201b8fcdd"
+    )
+    assert len(requirements.splitlines()) == 6
+
+    before = before_path.read_text(encoding="utf-8")
+    after = after_path.read_text(encoding="utf-8")
+    summary = summary_path.read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+    immutable_pr = "https://github.com/microsoft/hve-core/pull/2149"
+    reviewed_head = "8e5277e88f0ca650549d41255eb24d74afc74772"
+    for document in (before, after, summary):
+        assert immutable_pr in document
+        assert reviewed_head in document
+        assert "public engineering research" in document.lower()
+        assert "does not advance Stage 1" in document
+        assert "No Microsoft repository code was executed" in document
+        assert "not runtime proof" in document
+    assert "bc114f4825aaf8c114b47a0509fc4d3235ff3708d771bc81b8fc0048903c0f39" in before
+    assert "/tmp/scopeproof-r001-before.rpLI3m" in before
+    assert "ephemeral provenance" in before
+    for fact in (
+        "Ingestion was `complete`, with zero warnings and zero skipped changed files.",
+        "**94 total**, **89 success**",
+        "**5 skipped** check runs",
+        "Classification: `public_engineering_research`; Stage 1 credit: `0`.",
+        "47 E1 documentation candidates plus one E2 test",
+        "No manual runtime evidence, resolutions, reviewer decisions, or final acceptance exists.",
+        "gate remains `blocked` for `blocking_criteria` and `unresolved_criteria`.",
+    ):
+        assert fact in after
+    for skipped_check in (
+        "`Eval Validation / Eval Report`",
+        "`Eval Validation / Eval Execute (${{ matrix.kind }})`",
+        "`ADR Consistency Validation / Upload ADR SARIF`",
+        "`ADR Consistency Validation / Validate ADR Consistency`",
+        "`Docusaurus Tests / Docusaurus Unit Tests`",
+    ):
+        assert skipped_check in after
+    assert "skipped and provide no runtime proof" in after
+    assert "waiting_for_inbound_public_alpha_submission" in roadmap
+    assert "Entry requires every Stage 1 condition." in roadmap
+    assert (
+        "Entry requires every Stage 1 and Stage 2 condition plus a separate owner decision."
+        in roadmap
+    )
+    assert "Only recurring behavior can justify broader scope." in roadmap
+    assert "r001-microsoft-hve-core" in readme
+    assert "R-001" in changelog
 
 
 def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> None:

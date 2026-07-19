@@ -9,6 +9,11 @@ primary workflow is designed to reach an inspectable coverage report in under fi
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
+The [R-001 Microsoft public-PR research record](docs/research/r001-microsoft-hve-core/summary.md)
+shows a compact, hash-bound engineering rerun: observed CI and static candidates remain distinct
+from runtime verification and human acceptance. It is public engineering research only and does
+not advance Stage 1.
+
 ![ScopeProof deliberately constructed demo evidence matrix](docs/assets/scopeproof-constructed-demo-evidence-matrix.jpg)
 
 *Controlled demo screenshot—not a customer case. It shows deterministic candidate evidence and
