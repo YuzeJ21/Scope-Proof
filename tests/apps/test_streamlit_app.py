@@ -31,7 +31,7 @@ APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
 
 
 def new_app() -> AppTest:
-    return AppTest.from_file(APP_PATH).run()
+    return AppTest.from_file(str(APP_PATH)).run()
 
 
 def load_demo(app: AppTest) -> AppTest:
@@ -71,8 +71,13 @@ def select_saved_review(app: AppTest, review_id: str) -> AppTest:
     return app.selectbox(key="saved_reopen_review_id").set_value(review_id).run()
 
 
-def evidence_matrix_rows(app: AppTest) -> list[dict[str, object]]:
-    return app.dataframe[0].value.to_dict(orient="records")
+def evidence_matrix_criterion_ids(app: AppTest) -> list[str]:
+    prefix = "**Criterion:** "
+    return [
+        item.value.removeprefix(prefix)
+        for item in app.markdown
+        if item.value.startswith(prefix)
+    ]
 
 
 def _main_widget_keys(app: AppTest) -> list[str]:
@@ -171,14 +176,12 @@ def test_primary_workbench_uses_acceptance_coverage_language() -> None:
     )
 
     assert "See which acceptance criteria have credible PR evidence" in visible_text
-    assert list(app.dataframe[0].value.columns) == [
-        "Criterion",
-        "Requirement",
-        "Priority",
-        "Evidence status",
-        "Evidence types",
-        "Reviewer decision",
-    ]
+    matrix_captions = [item.value for item in app.caption]
+    assert "Requirement" in matrix_captions
+    assert "Priority: Must have" in matrix_captions
+    assert "Evidence status: Strong candidate" in matrix_captions
+    assert "Evidence types: Implementation, Test" in matrix_captions
+    assert "Reviewer decision: Unresolved" in matrix_captions
     assert "Prove the PR matches the product intent" not in visible_text
 
 
@@ -1157,12 +1160,10 @@ def test_demo_flow_reaches_blocked_summary() -> None:
     assert app.session_state["criteria_confirmed"] is True
     app = app.button(key="run_analysis").click().run()
     visible_text = "\n".join(markdown.value for markdown in app.markdown)
-    evidence_statuses = {
-        row["Evidence status"] for row in evidence_matrix_rows(app)
-    }
+    evidence_statuses = {item.value for item in app.caption}
     assert "Action required" in visible_text
-    assert "Weak candidate" in evidence_statuses
-    assert "No candidate" in evidence_statuses
+    assert "Evidence status: Weak candidate" in evidence_statuses
+    assert "Evidence status: No candidate" in evidence_statuses
     assert app.session_state["bundle"] is not None
 
 
@@ -2196,8 +2197,7 @@ def test_evidence_matrix_combines_blocker_and_evidence_level_filters() -> None:
     app = app.checkbox(key="blocking_only").check().run()
     app = app.multiselect(key="evidence_level_filter").select(EvidenceLevel.E2).run()
 
-    criterion_ids = [row["Criterion"] for row in evidence_matrix_rows(app)]
-    assert criterion_ids == ["AC-02"]
+    assert evidence_matrix_criterion_ids(app) == ["AC-02"]
 
 
 def test_evidence_matrix_reports_empty_filter_results() -> None:
@@ -2205,40 +2205,33 @@ def test_evidence_matrix_reports_empty_filter_results() -> None:
     app = app.checkbox(key="blocking_only").check().run()
     app = app.multiselect(key="evidence_level_filter").select(EvidenceLevel.E4).run()
 
-    assert evidence_matrix_rows(app) == []
+    assert evidence_matrix_criterion_ids(app) == []
     assert "No criteria match the current filters." in [item.value for item in app.info]
 
 
-def test_evidence_matrix_renders_as_one_reachable_data_grid() -> None:
+def test_evidence_matrix_renders_as_reachable_cards_without_grid_tools() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
 
-    assert len(app.dataframe) == 1
-    frame = app.dataframe[0].value
-    assert list(frame.columns) == [
-        "Criterion",
-        "Requirement",
-        "Priority",
-        "Evidence status",
-        "Evidence types",
-        "Reviewer decision",
-    ]
-    assert frame["Criterion"].tolist() == ["AC-01", "AC-02", "AC-03", "AC-04"]
-    assert frame.loc[0, "Requirement"] == "User can export the research list as CSV"
-    assert frame.loc[0, "Priority"] == "Must have"
-    assert frame.loc[0, "Evidence status"] == "Strong candidate"
-    assert frame.loc[0, "Evidence types"] == "Implementation, Test"
-    assert frame.loc[0, "Reviewer decision"] == "Unresolved"
-    assert frame.loc[3, "Requirement"] == "Successful export records research_exported"
-    assert "Confidence" not in frame.columns
-    assert "Count" not in frame.columns
-    assert "Concern" not in frame.columns
-    assert (
-        "All six evidence columns remain available. On smaller screens, scroll the table "
-        "horizontally to inspect Evidence types and Reviewer decision."
-        in [caption.value for caption in app.caption]
-    )
+    assert len(app.dataframe) == 0
+    assert evidence_matrix_criterion_ids(app) == ["AC-01", "AC-02", "AC-03", "AC-04"]
+    text_values = [item.value for item in app.text]
+    assert "User can export the research list as CSV" in text_values
+    assert "Successful export records research_exported" in text_values
+    matrix_captions = [item.value for item in app.caption]
+    assert "Requirement" in matrix_captions
+    assert "Priority: Must have" in matrix_captions
+    assert "Priority: Should have" in matrix_captions
+    assert "Evidence status: Strong candidate" in matrix_captions
+    assert "Evidence status: Weak candidate" in matrix_captions
+    assert "Evidence status: No candidate" in matrix_captions
+    assert "Evidence types: Implementation, Test" in matrix_captions
+    assert "Evidence types: None" in matrix_captions
+    assert matrix_captions.count("Reviewer decision: Unresolved") == 4
+    assert not any("Confidence:" in value for value in matrix_captions)
+    assert not any("Count:" in value for value in matrix_captions)
+    assert not any("Concern:" in value for value in matrix_captions)
     legacy_table_blocks = [
         markdown.value
         for markdown in app.markdown
@@ -2273,10 +2266,7 @@ def test_evidence_matrix_shows_current_human_resolution() -> None:
     app = app.button(key="save_resolution").click().run()
     app = app.run()
 
-    ac_01_row = next(
-        row for row in evidence_matrix_rows(app) if row["Criterion"] == "AC-01"
-    )
-    assert ac_01_row["Reviewer decision"] == "Accepted"
+    assert "Reviewer decision: Accepted" in [item.value for item in app.caption]
 
 
 def test_successful_resolution_save_clears_form_and_prevents_accidental_repeat() -> None:
