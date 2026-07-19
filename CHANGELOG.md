@@ -11,6 +11,8 @@ its linked release entry for the exact published source and assets.
 
 ### Changed
 
+- Restored the safe first-use hierarchy so the deliberately constructed demo entry appears before
+  public-PR-only inputs and remains visible in the initial desktop viewport.
 - Expanded the deliberately constructed comparison benchmark from one changed-head case to two
   paired cases, adding exact Unchanged coverage while preserving all core classification rules.
 

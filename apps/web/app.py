@@ -589,6 +589,24 @@ alpha_feedback_mode = st.checkbox(
     key="alpha_feedback_mode",
     help="Collect local, consent-controlled feedback from a genuine public-PR participant.",
 )
+if st.button(
+    "Load deliberately constructed demo",
+    key="load_demo",
+    disabled=replacement_blocked or alpha_feedback_mode,
+):
+    labels = load_demo_labels()
+    snapshot = load_demo_snapshot()
+    _record_reopened_source_reload(snapshot)
+    st.session_state["snapshot"] = snapshot
+    st.session_state["source_text"] = labels["source_text"]
+    st.session_state["requirements_input"] = labels["source_text"]
+    st.session_state["criteria"] = [
+        Criterion.model_validate(item) for item in labels["criteria"]
+    ]
+    st.session_state["candidate_files"] = []
+    st.session_state["comparison_base_bundle"] = None
+    _reset_analysis()
+    st.rerun()
 pr_url = st.text_input(
     "Public GitHub pull request URL",
     placeholder="https://github.com/owner/repository/pull/123",
@@ -677,58 +695,36 @@ with st.expander("Advanced source options"):
         )
     )
     st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
-load_column, fetch_column = st.columns(2)
-with load_column:
-    if st.button(
-        "Load deliberately constructed demo",
-        key="load_demo",
-        disabled=replacement_blocked or alpha_feedback_mode,
-        use_container_width=True,
-    ):
-        labels = load_demo_labels()
-        snapshot = load_demo_snapshot()
+if st.button(
+    "Fetch public PR",
+    key="fetch_pr",
+    disabled=(
+        not pr_url_is_valid
+        or not alpha_qualification_ready
+        or replacement_blocked
+    ),
+    use_container_width=True,
+):
+    try:
+        client = GitHubClient(token=github_token or None)
+        snapshot = client.fetch_pull_request(pr_url)
+        candidate_files = client.fetch_candidate_files(
+            snapshot.repository, snapshot.head_sha, candidate_paths
+        )
         _record_reopened_source_reload(snapshot)
         st.session_state["snapshot"] = snapshot
-        st.session_state["source_text"] = labels["source_text"]
-        st.session_state["requirements_input"] = labels["source_text"]
-        st.session_state["criteria"] = [
-            Criterion.model_validate(item) for item in labels["criteria"]
-        ]
-        st.session_state["candidate_files"] = []
-        st.session_state["comparison_base_bundle"] = None
+        st.session_state["candidate_files"] = candidate_files
+        st.session_state["alpha_case_id"] = None
         _reset_analysis()
+        st.session_state["source_load_notice"] = (
+            "Public PR loaded. Add and confirm criteria before analysis."
+        )
         st.rerun()
-with fetch_column:
-    if st.button(
-        "Fetch public PR",
-        key="fetch_pr",
-        disabled=(
-            not pr_url_is_valid
-            or not alpha_qualification_ready
-            or replacement_blocked
-        ),
-        use_container_width=True,
-    ):
-        try:
-            client = GitHubClient(token=github_token or None)
-            snapshot = client.fetch_pull_request(pr_url)
-            candidate_files = client.fetch_candidate_files(
-                snapshot.repository, snapshot.head_sha, candidate_paths
-            )
-            _record_reopened_source_reload(snapshot)
-            st.session_state["snapshot"] = snapshot
-            st.session_state["candidate_files"] = candidate_files
-            st.session_state["alpha_case_id"] = None
-            _reset_analysis()
-            st.session_state["source_load_notice"] = (
-                "Public PR loaded. Add and confirm criteria before analysis."
-            )
-            st.rerun()
-        except (GitHubIngestionError, ValueError) as error:
-            st.error(
-                f"{error} No review data was changed. Verify that the PR is public and "
-                "try again. Use the optional token only if GitHub reports a rate limit."
-            )
+    except (GitHubIngestionError, ValueError) as error:
+        st.error(
+            f"{error} No review data was changed. Verify that the PR is public and "
+            "try again. Use the optional token only if GitHub reports a rate limit."
+        )
 
 source_load_notice = st.session_state.pop("source_load_notice", None)
 if source_load_notice is not None:

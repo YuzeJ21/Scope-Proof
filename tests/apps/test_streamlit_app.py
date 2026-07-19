@@ -81,6 +81,21 @@ def evidence_matrix_table(app: AppTest) -> str:
     )
 
 
+def _main_widget_keys(app: AppTest) -> list[str]:
+    keys: list[str] = []
+
+    def collect(node: object) -> None:
+        key = getattr(node, "key", None)
+        if isinstance(key, str):
+            keys.append(key)
+        children = getattr(node, "children", {})
+        for child in children.values():
+            collect(child)
+
+    collect(app.main)
+    return keys
+
+
 def test_analysis_is_disabled_before_criteria_confirmation() -> None:
     app = new_app()
     assert app.button(key="run_analysis").disabled is True
@@ -262,6 +277,17 @@ def test_reopen_review_is_a_collapsed_secondary_path_before_start_review(
     assert app.button(key="reopen_review").disabled is True
     assert "No saved local reviews found." in [item.value for item in app.caption]
     assert "### Reopen saved review" not in [item.value for item in app.markdown]
+
+
+def test_first_use_demo_precedes_public_pr_inputs() -> None:
+    app = new_app()
+    keys = _main_widget_keys(app)
+
+    assert keys.count("load_demo") == 1
+    assert keys.index("alpha_feedback_mode") < keys.index("load_demo")
+    assert keys.index("load_demo") < keys.index("pr_url")
+    assert keys.index("candidate_paths") < keys.index("fetch_pr")
+    assert keys.index("fetch_pr") < keys.index("requirements_input")
 
 
 def test_saved_review_is_discoverable_and_selectable_in_a_fresh_session(
