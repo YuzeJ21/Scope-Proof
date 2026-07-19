@@ -129,6 +129,55 @@ def test_fixture_review_metadata_reports_validated_ci_observation(tmp_path: Path
     assert metadata["ci_reason"] == "CI observation was not captured in this historical record."
     assert metadata["skipped_check_names"] == []
     assert metadata["ci_collection_complete"] is False
+    assert metadata["ci_total_check_runs"] == 0
+    assert metadata["ci_skipped_check_runs"] == 0
+    assert "research_case_id" not in metadata
+    assert "research_classification" not in metadata
+    assert "stage1_credit" not in metadata
+
+
+def test_fixture_review_persists_fixed_public_engineering_research_context(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+
+    assert main(
+        [
+            "review",
+            "--fixture",
+            "evals/fixtures/complete_implementation_pr.json",
+            "--requirements",
+            str(requirements),
+            "--research-case-id",
+            "R-001",
+            "--storage-dir",
+            str(tmp_path / "reviews"),
+        ]
+    ) == 0
+
+    metadata = json.loads(capsys.readouterr().out)
+    state = JsonReviewStore(tmp_path / "reviews").load(metadata["review_id"])
+    assert metadata["research_case_id"] == "R-001"
+    assert metadata["research_classification"] == "public_engineering_research"
+    assert metadata["stage1_credit"] is False
+    assert metadata["candidate_evidence_proves_correctness"] is False
+    assert metadata["candidate_evidence_boundary"] == (
+        "Candidate evidence does not prove correctness."
+    )
+    assert metadata["runtime_verification_state"] == "not_recorded"
+    assert metadata["reviewer_decision_state"] == "unresolved"
+    assert metadata["candidate_evidence"]
+    assert set(metadata["candidate_evidence"][0]) == {
+        "criterion_id",
+        "evidence_type",
+        "evidence_level",
+    }
+    assert metadata["gate_reason_codes"]
+    assert "blocking_criteria" in metadata
+    assert state.bundle is not None
+    assert state.bundle.research_context is not None
+    assert state.bundle.research_context.case_id == "R-001"
 
 
 def test_partial_fixture_review_reports_and_persists_ingestion_limitations(

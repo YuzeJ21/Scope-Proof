@@ -673,7 +673,45 @@ class GateDecision(BaseModel):
     reason_codes: list[str] = Field(default_factory=list)
 
 
+class RuntimeVerificationState(StringEnum):
+    NOT_RECORDED = "not_recorded"
+    RECORDED = "recorded"
+
+
+class ReviewerDecisionState(StringEnum):
+    UNRESOLVED = "unresolved"
+    PARTIAL = "partial"
+    RECORDED = "recorded"
+
+
+class ResearchContext(BaseModel):
+    """Fixed boundary for a public engineering research review.
+
+    Research cases can improve deterministic engineering evidence, but they are
+    never participants, customer validation, or Stage 1 credit.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: str = Field(pattern=r"^[A-Z][A-Z0-9_-]{0,31}-\d{3,}$")
+    classification: Literal["public_engineering_research"] = (
+        "public_engineering_research"
+    )
+    stage1_credit: Literal[False] = False
+    boundary_note: str = Field(min_length=1)
+
+    @field_validator("boundary_note")
+    @classmethod
+    def require_non_blank_boundary_note(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("boundary note must contain non-whitespace text")
+        return normalized
+
+
 class ReviewBundle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     review: Review
     criteria_revision_number: Annotated[StrictInt, Field(gt=0)] | Literal[
         "unknown"
@@ -685,6 +723,50 @@ class ReviewBundle(BaseModel):
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
     gate: GateDecision
+    research_context: ResearchContext | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_serialized_presentation_fields(cls, value: object) -> object:
+        """Discard serialized presentation values so derived state cannot drift."""
+        if not isinstance(value, dict):
+            return value
+        return {
+            key: item
+            for key, item in value.items()
+            if key
+            not in {
+                "candidate_evidence_proves_correctness",
+                "runtime_verification_state",
+                "reviewer_decision_state",
+            }
+        }
+
+    @computed_field
+    @property
+    def candidate_evidence_proves_correctness(self) -> Literal[False]:
+        """Candidate references are never a correctness claim."""
+        return False
+
+    @computed_field
+    @property
+    def runtime_verification_state(self) -> RuntimeVerificationState:
+        """State derived solely from persisted manual runtime records."""
+        return (
+            RuntimeVerificationState.RECORDED
+            if self.runtime_evidence
+            else RuntimeVerificationState.NOT_RECORDED
+        )
+
+    @computed_field
+    @property
+    def reviewer_decision_state(self) -> ReviewerDecisionState:
+        """Review-wide decision completeness derived from criterion resolutions."""
+        if not self.resolutions:
+            return ReviewerDecisionState.UNRESOLVED
+        if len(self.resolutions) == len(self.criteria):
+            return ReviewerDecisionState.RECORDED
+        return ReviewerDecisionState.PARTIAL
 
     @field_validator("source_text")
     @classmethod

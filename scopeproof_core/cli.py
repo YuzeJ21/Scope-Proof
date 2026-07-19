@@ -34,6 +34,7 @@ from scopeproof_core.schemas.models import (
     ActionValidationRecord,
     Criterion,
     PullRequestSnapshot,
+    ResearchContext,
     Review,
     ReviewBundle,
     SavedReviewListing,
@@ -77,7 +78,10 @@ def _criteria_from_file(path: Path) -> list[Criterion]:
 
 
 def _build_bundle(
-    snapshot: PullRequestSnapshot, criteria: list[Criterion], source_text: str
+    snapshot: PullRequestSnapshot,
+    criteria: list[Criterion],
+    source_text: str,
+    research_case_id: str | None = None,
 ) -> ReviewBundle:
     review = Review(
         repository=snapshot.repository,
@@ -101,6 +105,17 @@ def _build_bundle(
         evidence=evidence,
         findings=findings,
         gate=gate,
+        research_context=(
+            ResearchContext(
+                case_id=research_case_id,
+                boundary_note=(
+                    "This public engineering research case does not advance Stage 1 "
+                    "and is not customer or Alpha validation."
+                ),
+            )
+            if research_case_id is not None
+            else None
+        ),
     )
 
 
@@ -113,7 +128,12 @@ def _review(args: argparse.Namespace) -> int:
         snapshot = PullRequestSnapshot.model_validate_json(fixture_text)
     else:
         snapshot = GitHubClient(token=args.token or None).fetch_pull_request(args.pr)
-    bundle = _build_bundle(snapshot, criteria, requirements_path.read_text(encoding="utf-8"))
+    bundle = _build_bundle(
+        snapshot,
+        criteria,
+        requirements_path.read_text(encoding="utf-8"),
+        args.research_case_id,
+    )
     state = new_review_state(bundle)
     path = JsonReviewStore(Path(args.storage_dir)).save(state)
     metadata = {
@@ -126,9 +146,49 @@ def _review(args: argparse.Namespace) -> int:
         "skipped_files": bundle.review.skipped_files,
         "ci_state": bundle.review.ci_observation.state.value,
         "ci_reason": bundle.review.ci_observation.reason,
+        "ci_total_check_runs": bundle.review.ci_observation.total_check_runs,
+        "ci_successful_check_runs": bundle.review.ci_observation.successful_check_runs,
+        "ci_pending_check_runs": bundle.review.ci_observation.pending_check_runs,
+        "ci_failing_check_runs": bundle.review.ci_observation.failing_check_runs,
+        "ci_neutral_check_runs": bundle.review.ci_observation.neutral_check_runs,
+        "ci_skipped_check_runs": bundle.review.ci_observation.skipped_check_runs,
+        "ci_concrete_legacy_status_count": (
+            bundle.review.ci_observation.concrete_legacy_status_count
+        ),
         "skipped_check_names": bundle.review.ci_observation.skipped_check_names,
         "ci_collection_complete": bundle.review.ci_observation.collection_complete,
+        "candidate_evidence": [
+            {
+                "criterion_id": item.criterion_id,
+                "evidence_type": item.evidence_type.value,
+                "evidence_level": item.evidence_level.value,
+            }
+            for item in sorted(
+                bundle.evidence,
+                key=lambda item: (
+                    item.criterion_id,
+                    item.evidence_type.value,
+                    item.evidence_level.value,
+                    item.evidence_id,
+                ),
+            )
+        ],
+        "candidate_evidence_proves_correctness": bundle.candidate_evidence_proves_correctness,
+        "candidate_evidence_boundary": "Candidate evidence does not prove correctness.",
+        "runtime_verification_state": bundle.runtime_verification_state.value,
+        "reviewer_decision_state": bundle.reviewer_decision_state.value,
+        "gate_reason_codes": bundle.gate.reason_codes,
+        "blocking_criteria": bundle.gate.blocking_criteria,
     }
+    if bundle.research_context is not None:
+        metadata.update(
+            {
+                "research_case_id": bundle.research_context.case_id,
+                "research_classification": bundle.research_context.classification,
+                "stage1_credit": bundle.research_context.stage1_credit,
+                "research_boundary_note": bundle.research_context.boundary_note,
+            }
+        )
     if report_target is not None:
         report_path, renderer = report_target
         report_path.write_text(renderer(state), encoding="utf-8")
@@ -275,6 +335,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     review.add_argument("--storage-dir", default=".scopeproof/reviews")
     review.add_argument("--token", help="Optional GitHub token; never persisted or printed")
+    review.add_argument(
+        "--research-case-id",
+        help="Fixed public engineering research case ID; never grants Stage 1 credit",
+    )
     review.add_argument(
         "--report", help="Write .md, .json, .csv, or .html without overwriting an existing file"
     )

@@ -16,6 +16,7 @@ from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
     HumanResolution,
+    ResearchContext,
     ResolutionEvent,
     Review,
     ReviewBundle,
@@ -296,4 +297,50 @@ def test_review_bundle_integrity_rejects_unknown_gate_references(field: str) -> 
     payload["gate"][field] = ["AC-99"]
 
     with pytest.raises(ValidationError, match=f"{field} must reference known criteria"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_research_context_is_validated_and_can_never_claim_stage_one_credit() -> None:
+    bundle = valid_bundle().model_copy(
+        update={
+            "research_context": ResearchContext(
+                case_id="R-001",
+                boundary_note="Public engineering research does not advance Stage 1.",
+            )
+        }
+    )
+
+    assert bundle.research_context is not None
+    assert bundle.research_context.classification == "public_engineering_research"
+    assert bundle.research_context.stage1_credit is False
+
+    payload = bundle.model_dump(mode="python")
+    payload["research_context"]["stage1_credit"] = True
+    with pytest.raises(ValidationError, match="Input should be False"):
+        ReviewBundle.model_validate(payload)
+
+
+@pytest.mark.parametrize("case_id", ["research-1", "R-1", "R-001 ", "R001"])
+def test_research_context_requires_a_stable_case_identifier(case_id: str) -> None:
+    with pytest.raises(ValidationError):
+        ResearchContext(
+            case_id=case_id,
+            boundary_note="Public engineering research does not advance Stage 1.",
+        )
+
+
+def test_review_bundle_serializes_derived_boundary_states_without_accepting_mutable_input() -> None:
+    bundle = valid_bundle()
+
+    payload = bundle.model_dump(mode="python")
+    assert payload["candidate_evidence_proves_correctness"] is False
+    assert payload["runtime_verification_state"] == "recorded"
+    assert payload["reviewer_decision_state"] == "recorded"
+    assert ReviewBundle.model_validate(payload) == bundle
+
+    payload["runtime_verification_state"] = "not_recorded"
+    assert ReviewBundle.model_validate(payload).runtime_verification_state == "recorded"
+
+    payload["unexpected_persisted_claim"] = "must fail closed"
+    with pytest.raises(ValidationError, match="unexpected_persisted_claim"):
         ReviewBundle.model_validate(payload)

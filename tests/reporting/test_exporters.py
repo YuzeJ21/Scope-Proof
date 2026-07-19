@@ -16,6 +16,7 @@ from scopeproof_core.reporting.exporters import (
 from scopeproof_core.reviews.lifecycle import append_resolution, new_review_state
 from scopeproof_core.schemas.models import (
     CheckState,
+    CIObservation,
     ConfidenceBand,
     Criterion,
     EvidenceItem,
@@ -28,6 +29,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    ResearchContext,
     ResolutionEvent,
     Review,
     ReviewBundle,
@@ -220,6 +222,70 @@ def test_human_readable_exports_show_bounded_context_without_changing_line_link(
     assert "src/export.py#L42-L42" in html_report
 
 
+def test_exports_make_observed_ci_research_and_verification_boundaries_inspectable() -> None:
+    payload = example_bundle().model_dump(mode="python")
+    payload["review"]["ci_observation"] = CIObservation(
+        state=CheckState.UNAVAILABLE,
+        reason="Only skipped checks were observed; execution is unavailable.",
+        total_check_runs=2,
+        skipped_check_runs=2,
+        skipped_check_names=["eval", "integration"],
+        collection_complete=False,
+    ).model_dump(mode="python")
+    payload["review"]["check_state"] = CheckState.UNAVAILABLE
+    payload["evidence"][0]["evidence_type"] = EvidenceType.TEST
+    payload["evidence"][0]["evidence_level"] = EvidenceLevel.E2
+    payload["evidence"][0]["limitations"] = [
+        "Test definition shows intent, not executed verification."
+    ]
+    payload["research_context"] = ResearchContext(
+        case_id="R-001",
+        boundary_note="Public engineering research does not advance Stage 1.",
+    ).model_dump(mode="python")
+    payload["runtime_evidence"] = []
+    bundle = ReviewBundle.model_validate(payload)
+
+    json_report = json.loads(export_json(bundle))
+    markdown = export_markdown(bundle)
+    semantic_markdown = markdown.replace("\\", "")
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert json_report["research_context"]["stage1_credit"] is False
+    assert json_report["candidate_evidence_proves_correctness"] is False
+    assert json_report["runtime_verification_state"] == "not_recorded"
+    assert json_report["reviewer_decision_state"] == "recorded"
+    assert "**Observed CI:** unavailable" in markdown
+    assert "Only skipped checks were observed; execution is unavailable." in semantic_markdown
+    assert "**Skipped CI checks:** eval, integration" in markdown
+    assert "Test (E2; test/eval definition shows intent, not execution)" in markdown
+    assert "No manual runtime verification was recorded" in markdown
+    assert "**Reviewer decision:** Change required" in markdown
+    assert "public engineering research" in markdown.lower()
+    assert "does not advance Stage 1" in markdown
+    assert csv_row["ci_state"] == "unavailable"
+    assert csv_row["ci_skipped_check_names"] == '["eval", "integration"]'
+    assert csv_row["research_case_id"] == "R-001"
+    assert csv_row["stage1_credit"] == "False"
+    assert csv_row["candidate_evidence_proves_correctness"] == "False"
+    assert csv_row["runtime_verification_state"] == "not_recorded"
+    assert csv_row["reviewer_decision_state"] == "recorded"
+    assert "Observed CI: <code>unavailable</code>" in html_report
+    assert "Test (E2; test/eval definition shows intent, not execution)" in html_report
+    assert "No manual runtime verification was recorded" in html_report
+    assert "Public engineering research" in html_report
+
+
+def test_export_json_and_csv_derive_recorded_runtime_state_from_manual_evidence() -> None:
+    bundle = example_bundle()
+
+    json_report = json.loads(export_json(bundle))
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+
+    assert json_report["runtime_verification_state"] == "recorded"
+    assert csv_row["runtime_verification_state"] == "recorded"
+
+
 def test_exports_preserve_tool_and_ruleset_provenance() -> None:
     bundle = example_bundle()
 
@@ -289,6 +355,23 @@ def test_markdown_keeps_all_untrusted_review_text_inert() -> None:
 
     assert report.count(active_markdown) == 1
     assert f"<code>{active_markdown}</code>" in report
+    assert r"\!\[remote\]\(" in report
+
+
+def test_markdown_escapes_untrusted_skipped_ci_check_names() -> None:
+    payload = example_bundle().model_dump(mode="python")
+    payload["review"]["check_state"] = CheckState.UNAVAILABLE
+    payload["review"]["ci_observation"] = CIObservation(
+        reason="No executable check result was observed.",
+        total_check_runs=1,
+        skipped_check_runs=1,
+        skipped_check_names=["![remote](https://example.invalid/pixel.png)"],
+    ).model_dump(mode="python")
+    bundle = ReviewBundle.model_validate(payload)
+
+    report = export_markdown(bundle)
+
+    assert "![remote](https://example.invalid/pixel.png)" not in report
     assert r"\!\[remote\]\(" in report
 
 
