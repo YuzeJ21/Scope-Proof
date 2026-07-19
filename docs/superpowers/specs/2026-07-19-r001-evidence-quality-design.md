@@ -113,4 +113,3 @@ R-001 is rerun anonymously and, only when a session token is already available, 
 Allowed timestamp and review identity fields are normalized before comparing results. A skipped
 eval execution must remain skipped/unavailable runtime verification, and the deterministic gate
 must remain conservative when evidence or human decisions are missing.
-
