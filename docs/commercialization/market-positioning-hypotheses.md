@@ -1,6 +1,6 @@
 # ScopeProof Market Positioning Hypotheses
 
-Last researched: 2026-07-18
+Last researched: 2026-07-20
 
 This document is market research, not customer or market validation. It separates current public
 facts from hypotheses that still require genuine use. ScopeProof has no qualifying completed
