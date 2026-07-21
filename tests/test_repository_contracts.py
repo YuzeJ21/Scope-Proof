@@ -431,6 +431,18 @@ def test_unpublished_candidate_identity_preserves_public_install_boundary() -> N
     assert "pull request, issue comment" not in candidate_notes
 
 
+def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boundary() -> None:
+    candidate_notes = Path("docs/releases/v0.2.2-internal-candidate.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "subsequent local-only changes contained" not in candidate_notes
+    assert "participant quickstart" in changelog.lower()
+    assert "v0.2.1" in changelog
+    assert "engineering evidence only" in changelog
+
+
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
