@@ -437,6 +437,11 @@ def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boun
     )
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     candidate_provenance = " ".join(candidate_notes.split())
+    unreleased = changelog.split("## Unreleased", maxsplit=1)[1].split("\n## ", maxsplit=1)[0]
+    unreleased_changed = unreleased.split("### Changed", maxsplit=1)[1].split(
+        "\n### ", maxsplit=1
+    )[0]
+    unreleased_changed_normalized = " ".join(unreleased_changed.split())
 
     assert "subsequent local-only changes contained" not in candidate_provenance
     assert "historical isolated artifact snapshot" in candidate_provenance
@@ -450,9 +455,11 @@ def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boun
         "Current-HEAD CI is separate from this historical snapshot and must be "
         "evaluated independently."
     ) in candidate_provenance
-    assert "participant quickstart" in changelog.lower()
-    assert "v0.2.1" in changelog
-    assert "engineering evidence only" in changelog
+    assert (
+        "- Added the self-contained public-alpha participant quickstart install path from PR "
+        "#172, pinned to the verified public v0.2.1 wheel. Participant setup and benchmark "
+        "success are engineering evidence only; they do not publish v0.2.2 or advance Stage 1."
+    ) in unreleased_changed_normalized
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
