@@ -762,6 +762,14 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     protocol = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
 
     assert all(f"Minute {minute}" in quickstart for minute in range(1, 11))
+    assert "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/" in quickstart
+    assert "scopeproof-0.2.1-py3-none-any.whl" in quickstart
+    assert "scopeproof benchmark" in quickstart
+    assert "scopeproof-web --host 127.0.0.1 --port 8501" in quickstart
+    assert "setup evidence only" in quickstart
+    assert "does not advance Stage 1" in quickstart
+    assert "releases/download/v0.2.2/" not in quickstart
+    assert "scopeproof-0.2.2" not in quickstart
     assert "Alpha feedback session" in quickstart
     assert "Standard review mode creates no participant record" in quickstart
     assert "source owner" in qualification.lower()
