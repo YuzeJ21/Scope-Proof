@@ -427,6 +427,8 @@ def test_unpublished_candidate_identity_preserves_public_install_boundary() -> N
     assert "releases/download/v0.2.1/" in readme
     assert "releases/download/v0.2.2/" not in readme
     assert "does not advance Stage 1" in candidate_notes
+    assert "Documentation-maintenance pull requests do not publish v0.2.2" in candidate_notes
+    assert "pull request, issue comment" not in candidate_notes
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
