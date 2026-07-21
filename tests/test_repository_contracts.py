@@ -436,8 +436,20 @@ def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boun
         encoding="utf-8"
     )
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    candidate_provenance = " ".join(candidate_notes.split())
 
-    assert "subsequent local-only changes contained" not in candidate_notes
+    assert "subsequent local-only changes contained" not in candidate_provenance
+    assert "historical isolated artifact snapshot" in candidate_provenance
+    assert "including its recorded hashes, is preserved as captured" in candidate_provenance
+    assert (
+        "Later merged changes through current `main` are documentation and "
+        "repository-contract maintenance; they are not part of that historical "
+        "isolated artifact snapshot."
+    ) in candidate_provenance
+    assert (
+        "Current-HEAD CI is separate from this historical snapshot and must be "
+        "evaluated independently."
+    ) in candidate_provenance
     assert "participant quickstart" in changelog.lower()
     assert "v0.2.1" in changelog
     assert "engineering evidence only" in changelog
