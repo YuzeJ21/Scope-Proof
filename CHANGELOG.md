@@ -13,6 +13,9 @@ Candidate version: 0.2.2 (not published).
 
 ### Changed
 
+- Added the self-contained public-alpha participant quickstart install path from PR #172, pinned
+  to the verified public v0.2.1 wheel. Participant setup and benchmark success are engineering
+  evidence only; they do not publish v0.2.2 or advance Stage 1.
 - Restored the safe first-use hierarchy so the deliberately constructed demo entry appears before
   public-PR-only inputs and remains visible in the initial desktop viewport.
 - Expanded the deliberately constructed comparison benchmark from one changed-head case to two
