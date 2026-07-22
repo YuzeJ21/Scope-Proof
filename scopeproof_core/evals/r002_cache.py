@@ -231,8 +231,10 @@ def _revalidate_instance(value: BaseModel, model_type: type[T]) -> tuple[T, byte
         raise R002CacheError("model_type_mismatch")
     try:
         initial = _fixed_canonical_bytes(value, model_type)
-        validated = model_type.model_validate_json(initial, strict=True)
+        validated = model_type.model_validate_json(initial)
         data = _fixed_canonical_bytes(validated, model_type)
+        if data != initial:
+            raise ValueError("noncanonical")
     except (TypeError, ValueError, ValidationError, UnicodeError):
         raise R002CacheError("model_validation_failed") from None
     return validated, data
@@ -240,7 +242,7 @@ def _revalidate_instance(value: BaseModel, model_type: type[T]) -> tuple[T, byte
 
 def _decode_canonical_model(data: bytes, model_type: type[T]) -> T:
     try:
-        value = model_type.model_validate_json(data, strict=True)
+        value = model_type.model_validate_json(data)
         if _fixed_canonical_bytes(value, model_type) != data:
             raise ValueError("noncanonical")
     except (TypeError, ValueError, ValidationError, UnicodeError):
@@ -642,6 +644,7 @@ class R002Cache:
                     raise R002CacheError("content_address_collision")
                 if name != sha256(data).hexdigest():
                     raise R002CacheError("content_address_digest_mismatch")
+                self._fsync(parent_fd, "cache_state_unknown")
                 return self._display_root / relative_name
             if name != sha256(data).hexdigest():
                 raise R002CacheError("content_address_digest_mismatch")
@@ -1420,24 +1423,25 @@ class R002Cache:
         _raise_public(reason)
 
     def _open_scratch_internal(self) -> BinaryIO:
-        with self._open_root() as root_fd:
-            name, fd = self._new_temp(root_fd, prefix=_SCRATCH_PREFIX)
-            duplicate = -1
-            try:
-                self._unlink_created(root_fd, name)
-                self._fsync(root_fd, "scratch_failed")
-                self._verify_file(fd, allow_unlinked=True)
-                duplicate = os.dup(fd)
-            except (OSError, R002CacheError):
-                closed = _close_fd(fd)
-                if duplicate >= 0:
-                    closed = _close_fd(duplicate) and closed
-                if not closed:
+        duplicate = -1
+        try:
+            with self._open_root() as root_fd:
+                name, fd = self._new_temp(root_fd, prefix=_SCRATCH_PREFIX)
+                try:
+                    self._unlink_created(root_fd, name)
+                    self._fsync(root_fd, "scratch_failed")
+                    self._verify_file(fd, allow_unlinked=True)
+                    duplicate = os.dup(fd)
+                except (OSError, R002CacheError):
+                    if not _close_fd(fd):
+                        raise R002CacheError("scratch_failed") from None
                     raise R002CacheError("scratch_failed") from None
+                if not _close_fd(fd):
+                    raise R002CacheError("scratch_failed") from None
+        except BaseException:
+            if duplicate >= 0 and not _close_fd(duplicate):
                 raise R002CacheError("scratch_failed") from None
-            if not _close_fd(fd):
-                _close_fd(duplicate)
-                raise R002CacheError("scratch_failed") from None
+            raise
         try:
             return os.fdopen(duplicate, "w+b", buffering=0)
         except Exception:

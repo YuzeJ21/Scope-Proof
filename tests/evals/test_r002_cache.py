@@ -6,6 +6,8 @@ import json
 import os
 import stat
 import threading
+from contextlib import suppress
+from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 
@@ -31,10 +33,18 @@ from scopeproof_core.evals.r002_models import (
     canonical_sha256,
 )
 from scopeproof_core.schemas.models import (
+    Criterion,
     CriterionSource,
     CriterionType,
     EvidenceLevel,
+    Finding,
+    FindingStatus,
+    GateDecision,
+    GateVerdict,
     Priority,
+    ResearchContext,
+    Review,
+    ReviewBundle,
 )
 
 
@@ -68,6 +78,43 @@ def _criteria_proposal() -> R002CriteriaProposal:
     return R002CriteriaProposal(
         source_manifest_sha256=_sha(900),
         cases=tuple(_criterion_case(number) for number in range(1, 21)),
+    )
+
+
+def _review_bundle() -> ReviewBundle:
+    criterion = Criterion(criterion_id="AC-01", text="Preserve the fixture behavior.")
+    return ReviewBundle(
+        review=Review(
+            review_id="r002-review-001",
+            repository="fixture/repository",
+            pr_number=1,
+            base_sha="base-sha",
+            head_sha="head-sha",
+            criteria_confirmed=True,
+            created_at=datetime(2026, 7, 22, 12, 30, tzinfo=UTC),
+        ),
+        criteria_revision_number=1,
+        source_text="Preserve the fixture behavior.",
+        criteria=[criterion],
+        evidence=[],
+        findings=[
+            Finding(
+                criterion_id="AC-01",
+                status=FindingStatus.MISSING,
+                reason="No implementation evidence was supplied.",
+                missing_evidence=["Implementation evidence"],
+                recommended_action="Collect explicit evidence.",
+            )
+        ],
+        gate=GateDecision(
+            verdict=GateVerdict.BLOCKED,
+            blocking_criteria=["AC-01"],
+            reason_codes=["missing_evidence"],
+        ),
+        research_context=ResearchContext(
+            case_id="R002-001",
+            boundary_note="Public engineering research only; no Stage 1 credit.",
+        ),
     )
 
 
@@ -383,6 +430,50 @@ def test_model_construct_cannot_bypass_revalidation(tmp_path: Path) -> None:
     assert not (tmp_path / "cache" / "criteria-proposal.json").exists()
 
 
+def test_review_bundle_roundtrips_canonical_datetime_json(tmp_path: Path) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    bundle = _review_bundle()
+
+    path = cache.replace_model("reviews/R002-001.json", bundle)
+
+    assert cache.read_model("reviews/R002-001.json", ReviewBundle) == bundle
+    assert json.loads(path.read_bytes())["review"]["created_at"] == "2026-07-22T12:30:00Z"
+
+
+def test_review_bundle_reader_rejects_malformed_datetime_json(tmp_path: Path) -> None:
+    cache_root = tmp_path / "cache"
+    reviews = cache_root / "reviews"
+    reviews.mkdir(parents=True, mode=0o700)
+    cache_root.chmod(0o700)
+    reviews.chmod(0o700)
+    payload = _review_bundle().model_dump(mode="json")
+    payload["review"]["created_at"] = "not-a-datetime"
+    review_path = reviews / "R002-001.json"
+    review_path.write_bytes(canonical_json_bytes(payload))
+    review_path.chmod(0o600)
+
+    with pytest.raises(R002CacheError, match="model_validation_failed"):
+        R002Cache(cache_root).read_model("reviews/R002-001.json", ReviewBundle)
+
+
+def test_review_bundle_reader_rejects_coercible_nonexact_primitive_json(
+    tmp_path: Path,
+) -> None:
+    cache_root = tmp_path / "cache"
+    reviews = cache_root / "reviews"
+    reviews.mkdir(parents=True, mode=0o700)
+    cache_root.chmod(0o700)
+    reviews.chmod(0o700)
+    payload = _review_bundle().model_dump(mode="json")
+    payload["review"]["pr_number"] = "1"
+    review_path = reviews / "R002-001.json"
+    review_path.write_bytes(canonical_json_bytes(payload))
+    review_path.chmod(0o600)
+
+    with pytest.raises(R002CacheError, match="model_validation_failed"):
+        R002Cache(cache_root).read_model("reviews/R002-001.json", ReviewBundle)
+
+
 def test_replace_fsyncs_temp_before_replace_and_directory_after(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -593,6 +684,32 @@ def test_immutable_fsync_failures_leave_no_temp_and_never_claim_success(
     assert not any(
         path.name.startswith(".r002-tmp-") for path in (cache_root / "head-files").iterdir()
     )
+
+
+def test_identical_immutable_retry_requires_containing_directory_fsync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    data = b"immutable-retry-fsync"
+    relative = f"head-files/{sha256(data).hexdigest()}"
+    real_fsync = os.fsync
+    directory_attempts = 0
+
+    def failing_directory_fsync(fd: int) -> None:
+        nonlocal directory_attempts
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            directory_attempts += 1
+            raise OSError("simulated containing-directory fsync failure")
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", failing_directory_fsync)
+    with pytest.raises(R002CacheError, match="cache_state_unknown"):
+        cache.write_bytes(relative, data)
+    assert (tmp_path / "cache" / relative).read_bytes() == data
+
+    with pytest.raises(R002CacheError, match="cache_state_unknown"):
+        cache.write_bytes(relative, data)
+    assert directory_attempts == 2
 
 
 @pytest.mark.parametrize("winner", [b"race-data", b"different"])
@@ -1027,6 +1144,49 @@ def test_scratch_close_failure_is_sanitized(
         pass
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
+
+
+def test_scratch_closes_duplicate_when_root_close_reports_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_close_fd = cache_module._close_fd
+    real_dup = os.dup
+    source_fd = -1
+    duplicate_fd = -1
+
+    def recording_dup(fd: int) -> int:
+        nonlocal source_fd, duplicate_fd
+        source_fd = fd
+        duplicate_fd = real_dup(fd)
+        return duplicate_fd
+
+    def close_root_then_report_failure(fd: int) -> bool:
+        if duplicate_fd >= 0 and stat.S_ISDIR(os.fstat(fd).st_mode):
+            assert real_close_fd(fd)
+            return False
+        return real_close_fd(fd)
+
+    monkeypatch.setattr(cache_module.os, "dup", recording_dup)
+    monkeypatch.setattr(cache_module, "_close_fd", close_root_then_report_failure)
+    try:
+        with (
+            pytest.raises(R002CacheError, match="cache_state_unknown") as caught,
+            R002Cache(tmp_path / "cache").open_unlinked_scratch(),
+        ):
+            pass
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        assert source_fd >= 0
+        assert duplicate_fd >= 0
+        for fd in (source_fd, duplicate_fd):
+            with pytest.raises(OSError):
+                os.fstat(fd)
+    finally:
+        if duplicate_fd >= 0:
+            with suppress(OSError):
+                os.close(duplicate_fd)
 
 
 def test_ambiguous_close_does_not_close_a_reused_descriptor(
