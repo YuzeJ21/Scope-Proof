@@ -10,8 +10,11 @@ from pydantic import ValidationError
 
 from scopeproof_core.evals.r002_models import (
     R002CandidateLabelSet,
+    R002CaseResult,
+    R002CriteriaProposal,
     R002CriteriaSet,
     R002Metric,
+    R002ParsedDiff,
     R002SourceError,
     R002SourceManifest,
     case_projection_sha256,
@@ -156,3 +159,89 @@ def test_loader_rejects_structurally_valid_non_production_source(tmp_path, r002_
     path.write_text(json.dumps(r002_manifest_payload), encoding="utf-8")
     with pytest.raises(R002SourceError, match="source_pin_mismatch"):
         load_source_manifest(path)
+
+
+def test_parsed_diff_rejects_marker_counts_and_unstable_paths():
+    payload = {
+        "stream": "patch",
+        "files": [
+            {
+                "stream": "patch",
+                "path": "b.py",
+                "hunks": [
+                    {
+                        "hunk_id": 1,
+                        "old_start": 1,
+                        "old_count": 1,
+                        "new_start": 1,
+                        "new_count": 1,
+                        "lines": [
+                            {
+                                "change_type": "added",
+                                "old_line_number": 1,
+                                "new_line_number": 1,
+                                "content": "line",
+                                "normalized_line_sha256": "0" * 64,
+                            }
+                        ],
+                    }
+                ],
+                "additions": 0,
+                "deletions": 0,
+            }
+        ],
+        "file_count": 0,
+        "hunk_count": 0,
+        "diff_line_count": 0,
+    }
+    with pytest.raises(ValidationError):
+        R002ParsedDiff.model_validate_json(json.dumps(payload))
+
+
+def test_criteria_proposal_rejects_reversed_cases_and_duplicate_problem_hashes(
+    r002_criteria_payload,
+):
+    proposal = deepcopy(r002_criteria_payload)
+    proposal["benchmark_owner_confirmed"] = False
+    proposal["cases"] = [
+        {**case, "problem_statement": "ScopeProof-authored fixture text."}
+        for case in proposal["cases"]
+    ]
+    proposal["cases"].reverse()
+    with pytest.raises(ValidationError):
+        R002CriteriaProposal.model_validate_json(json.dumps(proposal))
+
+    proposal["cases"].reverse()
+    proposal["cases"][1]["problem_statement_sha256"] = proposal["cases"][0][
+        "problem_statement_sha256"
+    ]
+    with pytest.raises(ValidationError):
+        R002CriteriaProposal.model_validate_json(json.dumps(proposal))
+
+
+def test_case_result_rejects_false_ready_and_non_static_success_signals():
+    payload = {
+        "case_id": "R002-001",
+        "repository": "alpha/one",
+        "pr_number": 1,
+        "head_sha": "0" * 40,
+        "criterion_count": 1,
+        "annotation_candidate_count": 0,
+        "retrieved_candidates": [],
+        "missing_explanations": [],
+        "gate_verdict": "ready",
+        "gate_reason_codes": ["arbitrary"],
+        "blocking_criteria": [],
+        "conditional_criteria": [],
+        "unresolved_criteria": [],
+        "check_state": "passing",
+        "ci_reason_code": "successful_check_runs",
+        "runtime_evidence_count": 1,
+        "resolution_count": 1,
+        "final_acceptance": True,
+        "separation_errors": 1,
+        "reference_errors": 1,
+        "limitations": ["arbitrary"],
+    }
+    with pytest.raises(ValidationError):
+        R002CaseResult.model_validate_json(json.dumps(payload))

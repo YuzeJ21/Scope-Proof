@@ -301,6 +301,18 @@ class R002ParsedLine(R002StrictModel):
     content: str
     normalized_line_sha256: Sha256
 
+    @model_validator(mode="after")
+    def validate_marker_numbers(self) -> Self:
+        expected = {
+            LineChangeType.ADDED: (False, True),
+            LineChangeType.REMOVED: (True, False),
+            LineChangeType.CONTEXT: (True, True),
+        }[self.change_type]
+        actual = (self.old_line_number is not None, self.new_line_number is not None)
+        if actual != expected:
+            raise ValueError("parsed line numbers must match its change marker")
+        return self
+
 
 class R002ParsedHunk(R002StrictModel):
     hunk_id: StrictInt = Field(ge=1)
@@ -310,6 +322,26 @@ class R002ParsedHunk(R002StrictModel):
     new_count: StrictInt = Field(ge=0)
     lines: tuple[R002ParsedLine, ...] = Field(max_length=50000)
 
+    @model_validator(mode="after")
+    def reconstruct_counts_and_line_numbers(self) -> Self:
+        old_number = self.old_start
+        new_number = self.new_start
+        for line in self.lines:
+            if line.old_line_number is not None:
+                if line.old_line_number != old_number:
+                    raise ValueError("parsed hunk old line numbers must be consecutive")
+                old_number += 1
+            if line.new_line_number is not None:
+                if line.new_line_number != new_number:
+                    raise ValueError("parsed hunk new line numbers must be consecutive")
+                new_number += 1
+        if (
+            self.old_count != old_number - self.old_start
+            or self.new_count != new_number - self.new_start
+        ):
+            raise ValueError("parsed hunk counts must match its lines")
+        return self
+
 
 class R002ParsedFile(R002StrictModel):
     stream: R002DiffStream
@@ -317,6 +349,23 @@ class R002ParsedFile(R002StrictModel):
     hunks: tuple[R002ParsedHunk, ...] = Field(max_length=256)
     additions: StrictInt = Field(ge=0)
     deletions: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def reconstruct_counts_and_order(self) -> Self:
+        if any(hunk.hunk_id != number for number, hunk in enumerate(self.hunks, start=1)):
+            raise ValueError("parsed file hunk IDs must be ordered and consecutive")
+        starts = [(hunk.old_start, hunk.new_start) for hunk in self.hunks]
+        if starts != sorted(starts):
+            raise ValueError("parsed file hunks must be stably ordered")
+        additions = sum(
+            line.change_type is LineChangeType.ADDED for hunk in self.hunks for line in hunk.lines
+        )
+        deletions = sum(
+            line.change_type is LineChangeType.REMOVED for hunk in self.hunks for line in hunk.lines
+        )
+        if self.additions != additions or self.deletions != deletions:
+            raise ValueError("parsed file counts must match its hunks")
+        return self
 
 
 class R002ParsedDiff(R002StrictModel):
@@ -326,6 +375,22 @@ class R002ParsedDiff(R002StrictModel):
     hunk_count: StrictInt = Field(ge=0)
     diff_line_count: StrictInt = Field(ge=0)
 
+    @model_validator(mode="after")
+    def reconstruct_counts_and_order(self) -> Self:
+        paths = [item.path for item in self.files]
+        if any(item.stream is not self.stream for item in self.files):
+            raise ValueError("parsed diff files must match the diff stream")
+        if paths != sorted(paths) or len(paths) != len(set(paths)):
+            raise ValueError("parsed diff paths must be sorted and unique")
+        expected = (
+            len(self.files),
+            sum(len(item.hunks) for item in self.files),
+            sum(len(hunk.lines) for item in self.files for hunk in item.hunks),
+        )
+        if (self.file_count, self.hunk_count, self.diff_line_count) != expected:
+            raise ValueError("parsed diff counts must match its files")
+        return self
+
 
 class R002ParsedCase(R002StrictModel):
     case_id: R002CaseId
@@ -333,6 +398,24 @@ class R002ParsedCase(R002StrictModel):
     file_count: StrictInt = Field(ge=0)
     hunk_count: StrictInt = Field(ge=0)
     diff_line_count: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def reconstruct_counts_and_stream_separation(self) -> Self:
+        keys = [(item.stream.value, item.path) for item in self.files]
+        if keys != sorted(keys) or len(keys) != len(set(keys)):
+            raise ValueError("parsed case files must be sorted and unique")
+        patch_paths = {item.path for item in self.files if item.stream is R002DiffStream.PATCH}
+        test_paths = {item.path for item in self.files if item.stream is R002DiffStream.TEST_PATCH}
+        if patch_paths & test_paths:
+            raise ValueError("patch and test_patch paths must remain distinguishable")
+        expected = (
+            len(self.files),
+            sum(len(item.hunks) for item in self.files),
+            sum(len(hunk.lines) for item in self.files for hunk in item.hunks),
+        )
+        if (self.file_count, self.hunk_count, self.diff_line_count) != expected:
+            raise ValueError("parsed case counts must match its files")
+        return self
 
 
 class R002VerifiedLine(R002StrictModel):
@@ -502,17 +585,22 @@ class R002CriterionReviewCase(R002CriterionCase):
     problem_statement: str = Field(min_length=1, max_length=131072)
 
 
+def _validate_criteria_cases(cases: Sequence[R002CriterionCase]) -> None:
+    ids = [case.case_id for case in cases]
+    hashes = [case.problem_statement_sha256 for case in cases]
+    if ids != [f"R002-{number:03d}" for number in range(1, 21)]:
+        raise ValueError("criteria cases must be ordered and complete")
+    if len(hashes) != len(set(hashes)):
+        raise ValueError("criteria cases require complete unique problem hashes")
+
+
 class _CriteriaCollection(R002Manifest):
     source_manifest_sha256: Sha256
     cases: tuple[R002CriterionCase, ...] = Field(min_length=20, max_length=20)
 
     @model_validator(mode="after")
     def bind_cases(self) -> Self:
-        ids = [case.case_id for case in self.cases]
-        if ids != [f"R002-{number:03d}" for number in range(1, 21)]:
-            raise ValueError("criteria cases must be ordered and complete")
-        if len({case.problem_statement_sha256 for case in self.cases}) != 20:
-            raise ValueError("criteria cases require complete unique problem hashes")
+        _validate_criteria_cases(self.cases)
         return self
 
 
@@ -521,6 +609,11 @@ class R002CriteriaProposal(R002Manifest):
     source_owner_confirmed: Literal[False] = False
     benchmark_owner_confirmed: Literal[False] = False
     cases: tuple[R002CriterionReviewCase, ...] = Field(min_length=20, max_length=20)
+
+    @model_validator(mode="after")
+    def bind_cases(self) -> Self:
+        _validate_criteria_cases(self.cases)
+        return self
 
 
 class R002CriteriaSet(_CriteriaCollection):
@@ -731,6 +824,60 @@ class R002CaseResult(R002StrictModel):
     reference_errors: StrictInt = Field(ge=0)
     limitations: tuple[str, ...] = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def reject_non_static_success_signals(self) -> Self:
+        criterion_groups = (
+            self.blocking_criteria,
+            self.conditional_criteria,
+            self.unresolved_criteria,
+        )
+        if self.gate_verdict not in {GateVerdict.BLOCKED, GateVerdict.NEEDS_REVIEW}:
+            raise ValueError("R-002 case results must be blocked or needs_review")
+        if (
+            not self.gate_reason_codes
+            or tuple(sorted(set(self.gate_reason_codes))) != self.gate_reason_codes
+            or any(not re.fullmatch(r"[a-z0-9_]+", code) for code in self.gate_reason_codes)
+        ):
+            raise ValueError("gate reason codes must be sorted stable codes")
+        if any(
+            tuple(sorted(set(group))) != group
+            or any(re.fullmatch(r"AC-\d{2,}", item) is None for item in group)
+            for group in criterion_groups
+        ):
+            raise ValueError("criterion groups must be sorted unique criterion IDs")
+        if self.gate_verdict is GateVerdict.BLOCKED and not (
+            self.blocking_criteria or self.unresolved_criteria
+        ):
+            raise ValueError("blocked R-002 cases require unresolved criteria")
+        if self.gate_verdict is GateVerdict.NEEDS_REVIEW and not (
+            self.conditional_criteria or self.unresolved_criteria
+        ):
+            raise ValueError("needs_review R-002 cases require unresolved criteria")
+        if self.check_state is not CheckState.UNAVAILABLE:
+            raise ValueError("R-002 case results require unavailable CI")
+        if (
+            self.runtime_evidence_count != 0
+            or self.resolution_count != 0
+            or self.final_acceptance
+            or self.separation_errors != 0
+            or self.reference_errors != 0
+        ):
+            raise ValueError("R-002 case results cannot contain success or integrity signals")
+        if self.limitations != R002_RESULT_LIMITATIONS:
+            raise ValueError("R-002 case results require the fixed limitations")
+        if any(
+            candidate.evidence_level not in {EvidenceLevel.E1, EvidenceLevel.E2}
+            or candidate.evidence_type not in R002_STATIC_EVIDENCE_TYPES
+            for candidate in self.retrieved_candidates
+        ):
+            raise ValueError("R-002 candidates must be static E1 or E2 evidence")
+        if any(
+            item.evidence_type not in R002_STATIC_EVIDENCE_TYPES
+            for item in self.missing_explanations
+        ):
+            raise ValueError("R-002 missing explanations must be static evidence types")
+        return self
+
 
 class R002Metrics(R002StrictModel):
     precision: R002Metric
@@ -747,6 +894,22 @@ class R002Metrics(R002StrictModel):
     unexpected_ready_count: StrictInt = Field(ge=0)
     normalized_rerun_mismatches: StrictInt = Field(ge=0)
 
+    @model_validator(mode="after")
+    def require_zero_integrity_errors(self) -> Self:
+        error_counts = (
+            self.implementation_test_separation_errors,
+            self.immutable_reference_integrity_errors,
+            self.parse_errors,
+            self.schema_errors,
+            self.source_hash_errors,
+            self.source_sha_errors,
+            self.unexpected_ready_count,
+            self.normalized_rerun_mismatches,
+        )
+        if any(error_counts):
+            raise ValueError("successful R-002 metrics require zero integrity errors")
+        return self
+
 
 class R002DeterminismProjection(R002Manifest):
     source_manifest_sha256: Sha256
@@ -756,6 +919,15 @@ class R002DeterminismProjection(R002Manifest):
     case_results: tuple[R002CaseResult, ...] = Field(min_length=20, max_length=20)
     metrics: R002Metrics
     limitations: tuple[str, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def bind_safe_case_results(self) -> Self:
+        ids = [result.case_id for result in self.case_results]
+        if ids != [f"R002-{number:03d}" for number in range(1, 21)]:
+            raise ValueError("R-002 case results must be ordered and complete")
+        if self.limitations != R002_RESULT_LIMITATIONS:
+            raise ValueError("R-002 projections require the fixed limitations")
+        return self
 
 
 class R002BenchmarkResult(R002DeterminismProjection):
@@ -767,6 +939,23 @@ class R002BenchmarkResult(R002DeterminismProjection):
     unexpected_ready_count: StrictInt = Field(ge=0)
     normalized_rerun_mismatches: StrictInt = Field(ge=0)
     hard_gate_errors: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def require_successful_run_boundary(self) -> Self:
+        if (
+            self.executed_case_count != 20
+            or self.failed_case_count != 0
+            or self.skipped_case_count != 0
+            or self.confirmed_criterion_count
+            != sum(item.criterion_count for item in self.case_results)
+            or self.annotation_candidate_count
+            != sum(item.annotation_candidate_count for item in self.case_results)
+            or self.unexpected_ready_count != self.metrics.unexpected_ready_count
+            or self.normalized_rerun_mismatches != self.metrics.normalized_rerun_mismatches
+            or self.hard_gate_errors
+        ):
+            raise ValueError("R-002 benchmark result violates the successful-run boundary")
+        return self
 
 
 def canonical_json_bytes(value: BaseModel | dict[str, object]) -> bytes:
