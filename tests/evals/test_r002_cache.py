@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import errno
+import gc
 import json
 import os
 import stat
 import threading
+import weakref
 from contextlib import suppress
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -1447,6 +1449,90 @@ def test_scratch_close_failure_is_sanitized(
         pass
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("exit_path", ["normal", "caller_error"])
+def test_scratch_preclose_failure_drops_all_public_handle_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exit_path: str
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_fdopen = os.fdopen
+    state: dict[str, object] = {}
+    native_detail = "scratch-preclose-native-detail"
+    secret = f"scratch-preclose-secret-{exit_path}".encode()
+
+    class FailingBeforeClose:
+        def __init__(self, wrapped) -> None:
+            self.wrapped = wrapped
+
+        def __getattr__(self, name):
+            return getattr(self.wrapped, name)
+
+        def close(self) -> None:
+            raise OSError(errno.EIO, native_detail)
+
+    def wrapping_fdopen(*args, **kwargs):
+        wrapped = FailingBeforeClose(real_fdopen(*args, **kwargs))
+        state["fd"] = wrapped.fileno()
+        state["reference"] = weakref.ref(wrapped)
+        return wrapped
+
+    monkeypatch.setattr(cache_module.os, "fdopen", wrapping_fdopen)
+    caller_error = R002CacheError("cache_read_failed")
+    with (
+        pytest.raises(R002CacheError) as caught,
+        R002Cache(tmp_path / "cache").open_unlinked_scratch() as scratch,
+    ):
+        scratch.write(secret)
+        scratch.seek(0)
+        if exit_path == "caller_error":
+            raise caller_error
+    del scratch
+    gc.collect()
+
+    if exit_path == "normal":
+        assert caught.value.args == ("scratch_failed",)
+        assert type(caught.value.args[0]) is str
+    else:
+        assert caught.value is caller_error
+        assert caught.value.args == ("cache_read_failed",)
+    _assert_public_error_is_sanitized(
+        caught.value,
+        (native_detail, secret.decode()),
+    )
+
+    retained_handle_names: list[str] = []
+    traceback = caught.value.__traceback__
+    while traceback is not None:
+        if Path(traceback.tb_frame.f_code.co_filename).name == "r002_cache.py":
+            retained_handle_names.extend(
+                name for name in traceback.tb_frame.f_locals if name == "handle"
+            )
+        traceback = traceback.tb_next
+
+    reference = state["reference"]
+    assert isinstance(reference, weakref.ReferenceType)
+    leaked = reference()
+    recovered_secret = False
+    descriptor_was_open = True
+    try:
+        if leaked is not None:
+            leaked.seek(0)
+            recovered_secret = leaked.read() == secret
+        try:
+            os.fstat(state["fd"])  # type: ignore[arg-type]
+        except OSError:
+            descriptor_was_open = False
+    finally:
+        if leaked is not None:
+            with suppress(OSError):
+                leaked.wrapped.close()
+
+    assert not retained_handle_names
+    assert leaked is None
+    assert not recovered_secret
+    assert not descriptor_was_open
 
 
 def test_scratch_closes_duplicate_when_root_close_reports_failure(

@@ -191,6 +191,18 @@ def _close_all(fds: Iterator[int] | tuple[int, ...] | list[int]) -> bool:
     return closed
 
 
+def _close_handle_once(handle: BinaryIO) -> bool:
+    try:
+        handle.close()
+    except BaseException as caught:
+        closed = False
+        del caught
+    else:
+        closed = True
+    del handle
+    return closed
+
+
 def _raise_public(reason_code: str) -> NoReturn:
     raise R002CacheError(reason_code) from None
 
@@ -1799,17 +1811,14 @@ class R002Cache:
             try:
                 yield handle
             except BaseException:
-                with suppress(OSError):
-                    handle.close()
+                _close_handle_once(handle)
+                del handle
                 raise
             else:
-                try:
-                    handle.close()
-                except OSError:
-                    close_failed = True
-                else:
-                    close_failed = False
+                close_failed = not _close_handle_once(handle)
+                del handle
                 if close_failed:
+                    del close_failed
                     _raise_public("scratch_failed")
             return
         _raise_public(reason)
