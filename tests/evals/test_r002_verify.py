@@ -506,6 +506,31 @@ def test_forged_parsed_line_hash_is_revalidated_before_output(
     )
 
 
+def test_parsed_path_subclass_is_rejected_before_stream_classification(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+) -> None:
+    parsed_file = parsed_case.files[0]
+    malformed_file = parsed_file.model_copy(
+        update={"path": _PathStringSubclass(parsed_file.path)}
+    )
+    malformed = parsed_case.model_copy(
+        update={"files": (malformed_file, *parsed_case.files[1:])}
+    )
+
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=malformed,
+            head_file_bytes=head_files,
+        )
+
+    assert captured.value.args == ("model_validation_failed",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
 def test_test_stream_must_remain_test_classified(r002_case_manifest: R002CaseManifest) -> None:
     parsed = parse_case_diffs(
         case_id=r002_case_manifest.case_id,
@@ -740,6 +765,27 @@ def test_verified_sidecar_rejects_nested_model_subclasses(
         case_id=verified_case_lines.case_id,
         head_sha=verified_case_lines.head_sha,
         lines=(first, *verified_case_lines.lines[1:]),
+    )
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as captured:
+        verify_evidence_reference(
+            case=r002_case_manifest,
+            evidence=evidence_item(case=r002_case_manifest),
+            verified_lines=malformed,
+        )
+
+    assert captured.value.args == ("model_validation_failed",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+@pytest.mark.parametrize("field", ["case_id", "head_sha"])
+def test_verified_sidecar_requires_exact_top_level_string_fields(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+    field: str,
+) -> None:
+    malformed = verified_case_lines.model_copy(
+        update={field: _PathStringSubclass(getattr(verified_case_lines, field))}
     )
     with pytest.raises(R002ReferenceError, match="model_validation_failed") as captured:
         verify_evidence_reference(

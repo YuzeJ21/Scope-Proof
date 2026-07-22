@@ -10,6 +10,7 @@ from urllib.parse import quote
 from scopeproof_core.evals.r002_models import (
     R002CandidateLineKey,
     R002CaseManifest,
+    R002DiffStream,
     R002Error,
     R002HeadFileLimits,
     R002ParsedCase,
@@ -201,9 +202,18 @@ def _assert_test_stream_separation(parsed: R002ParsedCase) -> None:
 
 
 def _validated_parsed_snapshot(parsed: R002ParsedCase) -> R002ParsedCase:
-    if type(parsed) is not R002ParsedCase or type(parsed.files) is not tuple:
+    if (
+        type(parsed) is not R002ParsedCase
+        or type(parsed.case_id) is not str
+        or type(parsed.files) is not tuple
+    ):
         raise R002ReferenceError("model_validation_failed")
-    if any(type(file) is not R002ParsedFile for file in parsed.files):
+    if any(
+        type(file) is not R002ParsedFile
+        or type(file.stream) is not R002DiffStream
+        or type(file.path) is not str
+        for file in parsed.files
+    ):
         raise R002ReferenceError("model_validation_failed")
     _assert_test_stream_separation(parsed)
     try:
@@ -216,6 +226,7 @@ def _validated_parsed_snapshot(parsed: R002ParsedCase) -> R002ParsedCase:
         error = None
     if error is not None:
         raise error
+    _assert_test_stream_separation(snapshot)
     return snapshot
 
 
@@ -344,6 +355,8 @@ def _validate_verified_sidecar(
     case: R002CaseManifest, verified_lines: R002VerifiedCaseLines
 ) -> R002VerifiedCaseLines:
     if type(verified_lines) is not R002VerifiedCaseLines:
+        raise R002ReferenceError("model_validation_failed")
+    if type(verified_lines.case_id) is not str or type(verified_lines.head_sha) is not str:
         raise R002ReferenceError("model_validation_failed")
     raw_lines = verified_lines.lines
     if type(raw_lines) is not tuple or any(
