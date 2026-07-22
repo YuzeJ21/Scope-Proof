@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from hashlib import sha256
 
 from pydantic import ValidationError
@@ -29,6 +30,8 @@ _HUNK_HEADER = re.compile(
     r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: .*)?$"
 )
 _NO_NEWLINE_MARKER = r"\ No newline at end of file"
+_MAX_HUNK_START = 2_147_483_647
+_MAX_HUNK_DIGITS = 10
 
 
 class R002DiffError(R002Error):
@@ -63,6 +66,46 @@ class R002DiffError(R002Error):
             "unsupported_rename",
         }
     )
+
+
+def _raise_budget_error(reason: str) -> None:
+    if reason == "file_limit":
+        raise R002DiffError("file_limit")
+    if reason == "hunk_limit":
+        raise R002DiffError("hunk_limit")
+    if reason == "diff_line_limit":
+        raise R002DiffError("diff_line_limit")
+    if reason == "case_limit":
+        raise R002DiffError("case_limit")
+    if reason == "case_diff_line_limit":
+        raise R002DiffError("case_diff_line_limit")
+    raise RuntimeError("unregistered R-002 diff budget reason")
+
+
+@dataclass
+class _DiffBudget:
+    limits: R002DiffLimits
+    file_reason: str
+    hunk_reason: str
+    line_reason: str
+    files: int = 0
+    hunks: int = 0
+    lines: int = 0
+
+    def reserve_file(self) -> None:
+        if self.files >= self.limits.files:
+            _raise_budget_error(self.file_reason)
+        self.files += 1
+
+    def reserve_hunk(self) -> None:
+        if self.hunks >= self.limits.hunks:
+            _raise_budget_error(self.hunk_reason)
+        self.hunks += 1
+
+    def reserve_line(self) -> None:
+        if self.lines >= self.limits.diff_lines:
+            _raise_budget_error(self.line_reason)
+        self.lines += 1
 
 
 def _validate_path(path: str, *, limits: R002DiffLimits) -> str:
@@ -141,8 +184,18 @@ def _parse_hunk_header(record: str) -> tuple[int, int, int, int]:
     if match is None:
         raise R002DiffError("invalid_hunk_header")
     old_start, old_count, new_start, new_count = match.groups()
-    values = (int(old_start), int(old_count or 1), int(new_start), int(new_count or 1))
-    if values[0] < 1 or values[2] < 1:
+    fields = (old_start, old_count or "1", new_start, new_count or "1")
+    if any(len(value) > _MAX_HUNK_DIGITS for value in fields):
+        raise R002DiffError("invalid_hunk_range")
+    values = tuple(int(value) for value in fields)
+    if (
+        values[0] < 1
+        or values[0] > _MAX_HUNK_START
+        or values[1] > _MAX_HUNK_START
+        or values[2] < 1
+        or values[2] > _MAX_HUNK_START
+        or values[3] > _MAX_HUNK_START
+    ):
         raise R002DiffError("invalid_hunk_range")
     return values
 
@@ -160,13 +213,15 @@ def _raise_for_unexpected_record(record: str) -> None:
     raise R002DiffError("invalid_line_marker")
 
 
-def parse_unified_diff(
+def _parse_unified_diff_files(
     raw: bytes,
     *,
     stream: R002DiffStream,
-    limits: R002DiffLimits = DEFAULT_R002_DIFF_LIMITS,
-) -> R002ParsedDiff:
-    """Parse only the R-002 accepted unified-diff grammar, or fail closed."""
+    limits: R002DiffLimits,
+    budget: _DiffBudget,
+    disallowed_paths: set[str] | None = None,
+) -> tuple[R002ParsedFile, ...]:
+    """Parse a stream while reserving every collection item before construction."""
     normalized = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     try:
         records = normalized.decode("utf-8").split("\n")
@@ -177,8 +232,6 @@ def parse_unified_diff(
 
     files: list[R002ParsedFile] = []
     paths: set[str] = set()
-    hunk_count = 0
-    diff_line_count = 0
     index = 0
     try:
         while index < len(records):
@@ -192,8 +245,9 @@ def parse_unified_diff(
                 raise R002DiffError("path_mismatch")
             if path in paths:
                 raise R002DiffError("duplicate_path")
-            if len(files) >= limits.files:
-                raise R002DiffError("file_limit")
+            if disallowed_paths is not None and path in disallowed_paths:
+                raise R002DiffError("duplicate_path_across_streams")
+            budget.reserve_file()
             index += 1
 
             if index < len(records) and records[index].startswith("index "):
@@ -215,8 +269,8 @@ def parse_unified_diff(
             deletions = 0
             while index < len(records) and not records[index].startswith("diff --git"):
                 record = records[index]
-                if record.startswith("@@") and hunk_count >= limits.hunks:
-                    raise R002DiffError("hunk_limit")
+                if record.startswith("@@"):
+                    budget.reserve_hunk()
                 old_start, old_count, new_start, new_count = _parse_hunk_header(record)
                 if previous is not None and (
                     old_start <= previous.old_start
@@ -244,8 +298,7 @@ def parse_unified_diff(
                         continue
                     if not record or record[0] not in {" ", "+", "-"}:
                         _raise_for_unexpected_record(record)
-                    if diff_line_count >= limits.diff_lines:
-                        raise R002DiffError("diff_line_limit")
+                    budget.reserve_line()
                     line = _parsed_line(
                         record[0], record[1:], old_line, new_line, limits=limits
                     )
@@ -260,7 +313,6 @@ def parse_unified_diff(
                     elif line.change_type is LineChangeType.REMOVED:
                         deletions += 1
                     lines.append(line)
-                    diff_line_count += 1
                     last_was_content = True
                     index += 1
                 if (old_seen, new_seen) != (old_count, new_count):
@@ -275,7 +327,6 @@ def parse_unified_diff(
                 )
                 hunks.append(hunk)
                 previous = hunk
-                hunk_count += 1
             if not hunks:
                 raise R002DiffError("invalid_line_marker")
             files.append(
@@ -289,12 +340,32 @@ def parse_unified_diff(
             )
             paths.add(path)
         ordered_files = tuple(sorted(files, key=lambda item: item.path))
+        return ordered_files
+    except ValidationError:
+        raise R002DiffError("model_validation_failed") from None
+
+
+def parse_unified_diff(
+    raw: bytes,
+    *,
+    stream: R002DiffStream,
+    limits: R002DiffLimits = DEFAULT_R002_DIFF_LIMITS,
+) -> R002ParsedDiff:
+    """Parse only the R-002 accepted unified-diff grammar, or fail closed."""
+    budget = _DiffBudget(
+        limits=limits,
+        file_reason="file_limit",
+        hunk_reason="hunk_limit",
+        line_reason="diff_line_limit",
+    )
+    files = _parse_unified_diff_files(raw, stream=stream, limits=limits, budget=budget)
+    try:
         return R002ParsedDiff(
             stream=stream,
-            files=ordered_files,
-            file_count=len(ordered_files),
-            hunk_count=hunk_count,
-            diff_line_count=diff_line_count,
+            files=files,
+            file_count=budget.files,
+            hunk_count=budget.hunks,
+            diff_line_count=budget.lines,
         )
     except ValidationError:
         raise R002DiffError("model_validation_failed") from None
@@ -309,22 +380,33 @@ def parse_case_diffs(
 ) -> R002ParsedCase:
     """Parse the isolated patch streams and impose the combined R-002 bounds."""
     try:
-        parsed = (
-            parse_unified_diff(patch.encode("utf-8"), stream=R002DiffStream.PATCH, limits=limits),
-            parse_unified_diff(
-                test_patch.encode("utf-8"), stream=R002DiffStream.TEST_PATCH, limits=limits
-            ),
-        )
+        patch_raw = patch.encode("utf-8")
+        test_patch_raw = test_patch.encode("utf-8")
     except UnicodeEncodeError:
         raise R002DiffError("invalid_utf8") from None
-    files = tuple(file for diff in parsed for file in diff.files)
+    budget = _DiffBudget(
+        limits=limits,
+        file_reason="case_limit",
+        hunk_reason="case_limit",
+        line_reason="case_diff_line_limit",
+    )
+    try:
+        patch_files = _parse_unified_diff_files(
+            patch_raw, stream=R002DiffStream.PATCH, limits=limits, budget=budget
+        )
+        test_files = _parse_unified_diff_files(
+            test_patch_raw,
+            stream=R002DiffStream.TEST_PATCH,
+            limits=limits,
+            budget=budget,
+            disallowed_paths={file.path for file in patch_files},
+        )
+    except ValidationError:
+        raise R002DiffError("model_validation_failed") from None
+    files = patch_files + test_files
     paths = [file.path for file in files]
     if len(paths) != len(set(paths)):
         raise R002DiffError("duplicate_path_across_streams")
-    if len(files) > limits.files or sum(len(file.hunks) for file in files) > limits.hunks:
-        raise R002DiffError("case_limit")
-    if sum(diff.diff_line_count for diff in parsed) > limits.diff_lines:
-        raise R002DiffError("case_diff_line_limit")
     try:
         return R002ParsedCase(
             case_id=case_id,

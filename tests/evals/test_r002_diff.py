@@ -113,6 +113,22 @@ def test_parser_accepts_omitted_and_zero_hunk_counts() -> None:
 
 
 @pytest.mark.parametrize(
+    "header",
+    [
+        "@@ -" + "9" * 4301 + " +1 @@\n x\n",
+        "@@ -1," + "9" * 4301 + " +1,1 @@\n x\n",
+    ],
+)
+def test_parser_rejects_huge_hunk_numbers_without_native_conversion_details(header: str) -> None:
+    with pytest.raises(R002DiffError, match="invalid_hunk_range") as captured:
+        parse_unified_diff(_file("src/a.py", header), stream=R002DiffStream.PATCH)
+
+    assert captured.value.args == ("invalid_hunk_range",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+@pytest.mark.parametrize(
     ("raw", "reason"),
     [
         (b"\xff", "invalid_utf8"),
@@ -217,6 +233,60 @@ def test_case_parser_rejects_cross_stream_duplicates_and_combined_line_excess() 
     test_patch = _file("tests/test_a.py", _hunk(1, 0, 1, 25001, "+x\n" * 25001)).decode()
     with pytest.raises(R002DiffError, match="case_diff_line_limit"):
         parse_case_diffs(case_id="R002-001", patch=patch, test_patch=test_patch)
+
+
+def test_case_parser_enforces_cross_stream_file_and_hunk_budgets_before_bodies() -> None:
+    patch_files = b"".join(
+        _file(f"src/{number}.py", "@@ -1 +1 @@\n x\n") for number in range(16)
+    ).decode()
+    exact_test_files = b"".join(
+        _file(f"tests/{number}.py", "@@ -1 +1 @@\n x\n") for number in range(16)
+    ).decode()
+    assert parse_case_diffs(
+        case_id="R002-001", patch=patch_files, test_patch=exact_test_files
+    ).file_count == 32
+
+    over_test_files = exact_test_files + "diff --git a/tests/16.py b/tests/16.py\n"
+    with pytest.raises(R002DiffError, match="case_limit"):
+        parse_case_diffs(case_id="R002-001", patch=patch_files, test_patch=over_test_files)
+
+    patch_hunks = _file(
+        "src/a.py", *[_hunk(number, 1, number, 1, " x\n") for number in range(1, 129)]
+    ).decode()
+    exact_test_hunks = _file(
+        "tests/test_a.py",
+        *[_hunk(number, 1, number, 1, " x\n") for number in range(1, 129)],
+    ).decode()
+    assert parse_case_diffs(
+        case_id="R002-001", patch=patch_hunks, test_patch=exact_test_hunks
+    ).hunk_count == 256
+
+    over_test_hunks = exact_test_hunks + "@@ malformed 257th hunk\n"
+    with pytest.raises(R002DiffError, match="case_limit"):
+        parse_case_diffs(case_id="R002-001", patch=patch_hunks, test_patch=over_test_hunks)
+
+
+def test_case_parser_stops_before_constructing_the_50001st_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_line = r002_diff.R002ParsedLine
+    constructed_lines = 0
+
+    def counted_line(*args: object, **kwargs: object) -> object:
+        nonlocal constructed_lines
+        constructed_lines += 1
+        return original_line(*args, **kwargs)
+
+    monkeypatch.setattr(r002_diff, "R002ParsedLine", counted_line)
+    patch = _file("src/a.py", _hunk(1, 0, 1, 25000, "+x\n" * 25000)).decode()
+    test_patch = _file(
+        "tests/test_a.py", _hunk(1, 0, 1, 25001, "+x\n" * 25001)
+    ).decode()
+
+    with pytest.raises(R002DiffError, match="case_diff_line_limit"):
+        parse_case_diffs(case_id="R002-001", patch=patch, test_patch=test_patch)
+
+    assert constructed_lines == 50000
 
 
 def test_parser_errors_do_not_chain_input_or_model_details() -> None:
