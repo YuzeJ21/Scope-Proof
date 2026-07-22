@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import stat
@@ -780,6 +781,87 @@ def test_immutable_publication_uses_link_not_replace(
     path = cache.write_bytes(f"head-files/{digest}", data)
     assert path.read_bytes() == data
     assert path.stat().st_nlink == 1
+
+
+@pytest.mark.parametrize("public_writer", ["write_bytes", "write_model"])
+@pytest.mark.parametrize("outcome", ["exact", "corrupt", "directory_fsync_failure"])
+def test_ambiguous_link_publication_reconciles_only_exact_durable_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    public_writer: str,
+    outcome: str,
+) -> None:
+    cache_root = tmp_path / "cache"
+    cache = R002Cache(cache_root)
+    if public_writer == "write_bytes":
+        expected = b"ambiguous-link-immutable"
+        relative = f"head-files/{sha256(expected).hexdigest()}"
+
+        def write() -> Path:
+            return cache.write_bytes(relative, expected)
+
+    else:
+        proposal = _criteria_proposal()
+        expected = canonical_json_bytes(proposal)
+        relative = "criteria-proposal.json"
+
+        def write() -> Path:
+            return cache.write_model(relative, proposal)
+
+    real_link = os.link
+    real_fsync = os.fsync
+    link_completed = False
+    directory_fsync_attempts = 0
+    native_detail = "ambiguous-link-native-detail"
+
+    def linking_then_raising(src, dst, *, src_dir_fd, dst_dir_fd, follow_symlinks):
+        nonlocal link_completed
+        real_link(
+            src,
+            dst,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+            follow_symlinks=follow_symlinks,
+        )
+        link_completed = True
+        if outcome == "corrupt":
+            fd = os.open(dst, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW, dir_fd=dst_dir_fd)
+            try:
+                os.write(fd, b"X")
+                real_fsync(fd)
+            finally:
+                os.close(fd)
+        raise OSError(errno.EIO, native_detail)
+
+    def recording_fsync(fd: int) -> None:
+        nonlocal directory_fsync_attempts
+        if link_completed and stat.S_ISDIR(os.fstat(fd).st_mode):
+            directory_fsync_attempts += 1
+            if outcome == "directory_fsync_failure":
+                raise OSError(errno.EIO, "ambiguous-link-directory-fsync-detail")
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "link", linking_then_raising)
+    monkeypatch.setattr(os, "fsync", recording_fsync)
+
+    if outcome == "exact":
+        path = write()
+        assert path.read_bytes() == expected
+        if public_writer == "write_model":
+            assert cache.read_model(relative, R002CriteriaProposal) == proposal
+    else:
+        with pytest.raises(R002CacheError, match="cache_state_unknown") as caught:
+            write()
+        assert caught.value.args == ("cache_state_unknown",)
+        _assert_public_error_is_sanitized(
+            caught.value,
+            (native_detail, "ambiguous-link-directory-fsync-detail", relative),
+        )
+        if outcome == "corrupt":
+            assert (cache_root / relative).read_bytes() == b"X"
+
+    assert directory_fsync_attempts == 1
+    assert not tuple(cache_root.rglob(".r002-tmp-*"))
 
 
 @pytest.mark.parametrize("fail_directory", [False, True])

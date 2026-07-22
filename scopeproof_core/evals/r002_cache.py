@@ -82,6 +82,7 @@ _MAX_LARGE_CONTROL_BYTES = 512 * 1024 * 1024
 _TEMP_PREFIX = ".r002-tmp-"
 _SCRATCH_PREFIX = ".r002-scratch-"
 _ANNOTATION_LOCK = ".r002-annotation.lock"
+_LINK_RECONCILE_COUNTS = frozenset({1, 2})
 
 _DIRECTORY_FLAGS = (
     getattr(os, "O_RDONLY", 0)
@@ -312,17 +313,22 @@ class R002Cache:
             raise R002CacheError("cache_directory_security")
 
     @staticmethod
-    def _verify_file(fd: int, *, allow_unlinked: bool = False) -> os.stat_result:
+    def _verify_file(
+        fd: int,
+        *,
+        allow_unlinked: bool = False,
+        allowed_links: frozenset[int] | None = None,
+    ) -> os.stat_result:
         try:
             metadata = os.fstat(fd)
         except OSError:
             raise R002CacheError("cache_file_security") from None
-        expected_links = 0 if allow_unlinked else 1
+        expected_links = allowed_links or frozenset({0 if allow_unlinked else 1})
         if (
             not stat.S_ISREG(metadata.st_mode)
             or metadata.st_uid != os.geteuid()
             or stat.S_IMODE(metadata.st_mode) != 0o600
-            or metadata.st_nlink != expected_links
+            or metadata.st_nlink not in expected_links
         ):
             raise R002CacheError("cache_file_security")
         return metadata
@@ -449,6 +455,7 @@ class R002Cache:
         *,
         max_bytes: int,
         missing_reason: str = "cache_read_failed",
+        allowed_links: frozenset[int] | None = None,
     ) -> tuple[bytes, os.stat_result]:
         try:
             fd = os.open(name, _READ_FLAGS, dir_fd=parent_fd)
@@ -457,7 +464,7 @@ class R002Cache:
         except OSError:
             raise R002CacheError("cache_file_security") from None
         try:
-            before = R002Cache._verify_file(fd)
+            before = R002Cache._verify_file(fd, allowed_links=allowed_links)
             if before.st_size > max_bytes:
                 raise R002CacheError("cache_file_security")
             chunks: list[bytes] = []
@@ -472,13 +479,17 @@ class R002Cache:
                 chunks.append(chunk)
                 remaining -= len(chunk)
             data = b"".join(chunks)
-            after = R002Cache._verify_file(fd)
+            after = R002Cache._verify_file(fd, allowed_links=allowed_links)
             if (
                 len(data) > max_bytes
                 or len(data) != before.st_size
                 or (
                     before.st_dev,
                     before.st_ino,
+                    before.st_mode,
+                    before.st_uid,
+                    before.st_gid,
+                    before.st_nlink,
                     before.st_size,
                     before.st_mtime_ns,
                     before.st_ctime_ns,
@@ -486,6 +497,10 @@ class R002Cache:
                 != (
                     after.st_dev,
                     after.st_ino,
+                    after.st_mode,
+                    after.st_uid,
+                    after.st_gid,
+                    after.st_nlink,
                     after.st_size,
                     after.st_mtime_ns,
                     after.st_ctime_ns,
@@ -514,6 +529,16 @@ class R002Cache:
         return data
 
     def _replace_destination_usable(self, relative_name: str, data: bytes) -> bool:
+        if relative_name.startswith(_RAW_NAMESPACES):
+            return relative_name.rsplit("/", maxsplit=1)[-1] == sha256(data).hexdigest()
+        if relative_name.startswith("rows/"):
+            if relative_name.rsplit("/", maxsplit=1)[-1] != sha256(data).hexdigest():
+                return False
+            try:
+                _decode_canonical_model(data, SWEbenchVerifiedRow)
+            except R002CacheError:
+                return False
+            return True
         expected = {
             "criteria-source-index.json": R002CriteriaSourceIndex,
             "cache-index.json": R002CacheIndex,
@@ -699,7 +724,139 @@ class R002Cache:
                 raise R002CacheError("cache_state_unknown") from None
             raise
 
-    def _publish_no_overwrite(self, parent_fd: int, temp_name: str, final_name: str) -> bool:
+    def _ambiguous_link_snapshot(
+        self,
+        parent_fd: int,
+        name: str,
+        relative_name: str,
+    ) -> tuple[bytes, os.stat_result] | None:
+        try:
+            return self._read_checked_snapshot(
+                parent_fd,
+                name,
+                max_bytes=_byte_limit(relative_name),
+                missing_reason="referenced_object_missing",
+                allowed_links=_LINK_RECONCILE_COUNTS,
+            )
+        except R002CacheError as error:
+            if error.reason_code == "referenced_object_missing":
+                return None
+            raise
+
+    def _remove_ambiguous_temp_and_sync(
+        self,
+        parent_fd: int,
+        temp_name: str,
+        *,
+        require_present: bool,
+    ) -> None:
+        try:
+            os.unlink(temp_name, dir_fd=parent_fd)
+        except FileNotFoundError:
+            if require_present:
+                raise R002CacheError("cache_state_unknown") from None
+        except OSError:
+            raise R002CacheError("cache_state_unknown") from None
+        self._fsync(parent_fd, "cache_state_unknown")
+
+    def _reconcile_ambiguous_link(
+        self,
+        parent_fd: int,
+        temp_name: str,
+        final_name: str,
+        relative_name: str,
+        expected_data: bytes,
+    ) -> bool:
+        try:
+            destination = self._ambiguous_link_snapshot(
+                parent_fd, final_name, relative_name
+            )
+            temp = self._ambiguous_link_snapshot(parent_fd, temp_name, relative_name)
+        except R002CacheError:
+            with suppress(R002CacheError):
+                self._remove_ambiguous_temp_and_sync(
+                    parent_fd, temp_name, require_present=False
+                )
+            raise R002CacheError("cache_state_unknown") from None
+
+        if destination is not None and temp is not None:
+            destination_data, destination_metadata = destination
+            temp_data, temp_metadata = temp
+            same_published_inode = (
+                destination_metadata.st_dev == temp_metadata.st_dev
+                and destination_metadata.st_ino == temp_metadata.st_ino
+                and destination_metadata.st_nlink == 2
+                and temp_metadata.st_nlink == 2
+                and destination_metadata.st_mode == temp_metadata.st_mode
+                and destination_metadata.st_uid == temp_metadata.st_uid
+                and destination_metadata.st_gid == temp_metadata.st_gid
+                and destination_metadata.st_size == temp_metadata.st_size
+                and destination_metadata.st_mtime_ns == temp_metadata.st_mtime_ns
+                and destination_metadata.st_ctime_ns == temp_metadata.st_ctime_ns
+            )
+            exact_usable_publication = (
+                same_published_inode
+                and destination_data == expected_data
+                and temp_data == expected_data
+                and self._replace_destination_usable(relative_name, destination_data)
+            )
+            if exact_usable_publication:
+                self._remove_ambiguous_temp_and_sync(
+                    parent_fd, temp_name, require_present=True
+                )
+                try:
+                    final_data, final_metadata = self._read_checked_snapshot(
+                        parent_fd,
+                        final_name,
+                        max_bytes=_byte_limit(relative_name),
+                        missing_reason="cache_state_unknown",
+                    )
+                except R002CacheError:
+                    raise R002CacheError("cache_state_unknown") from None
+                if (
+                    final_metadata.st_dev != destination_metadata.st_dev
+                    or final_metadata.st_ino != destination_metadata.st_ino
+                    or final_data != expected_data
+                    or not self._replace_destination_usable(relative_name, final_data)
+                ):
+                    raise R002CacheError("cache_state_unknown")
+                return True
+
+        definitely_unchanged = (
+            destination is None
+            and temp is not None
+            and temp[1].st_nlink == 1
+            and temp[0] == expected_data
+            and self._replace_destination_usable(relative_name, temp[0])
+        )
+        try:
+            self._remove_ambiguous_temp_and_sync(
+                parent_fd, temp_name, require_present=definitely_unchanged
+            )
+        except R002CacheError:
+            raise R002CacheError("cache_state_unknown") from None
+        if definitely_unchanged:
+            try:
+                destination_after = self._ambiguous_link_snapshot(
+                    parent_fd, final_name, relative_name
+                )
+                temp_after = self._ambiguous_link_snapshot(
+                    parent_fd, temp_name, relative_name
+                )
+            except R002CacheError:
+                raise R002CacheError("cache_state_unknown") from None
+            if destination_after is None and temp_after is None:
+                raise R002CacheError("cache_write_failed")
+        raise R002CacheError("cache_state_unknown")
+
+    def _publish_no_overwrite(
+        self,
+        parent_fd: int,
+        temp_name: str,
+        final_name: str,
+        relative_name: str,
+        data: bytes,
+    ) -> bool:
         try:
             os.link(
                 temp_name,
@@ -713,8 +870,13 @@ class R002Cache:
             self._fsync(parent_fd, "cache_state_unknown")
             return False
         except OSError:
-            self._unlink_created(parent_fd, temp_name)
-            raise R002CacheError("cache_write_failed") from None
+            return self._reconcile_ambiguous_link(
+                parent_fd,
+                temp_name,
+                final_name,
+                relative_name,
+                data,
+            )
         try:
             self._unlink_created(parent_fd, temp_name)
             self._fsync(parent_fd, "cache_state_unknown")
@@ -747,7 +909,9 @@ class R002Cache:
             if name != sha256(data).hexdigest():
                 raise R002CacheError("content_address_digest_mismatch")
             temp_name = self._prepare_temp(parent_fd, data, limit)
-            published = self._publish_no_overwrite(parent_fd, temp_name, name)
+            published = self._publish_no_overwrite(
+                parent_fd, temp_name, name, relative_name, data
+            )
             observed = self._read_checked(
                 parent_fd, name, max_bytes=limit, missing_reason="cache_state_unknown"
             )
@@ -776,7 +940,9 @@ class R002Cache:
             )
             temp_name = self._prepare_temp(parent_fd, data, limit)
             if create_only:
-                published = self._publish_no_overwrite(parent_fd, temp_name, name)
+                published = self._publish_no_overwrite(
+                    parent_fd, temp_name, name, relative_name, data
+                )
                 if not published:
                     self._preflight_replace_destination(parent_fd, name, relative_name)
                     raise R002CacheError("control_already_exists")
