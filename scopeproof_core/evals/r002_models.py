@@ -636,6 +636,9 @@ class R002HeadFileLimits(R002StrictModel):
     request_count: Literal[128] = 128
 
 
+R002_HEAD_FILE_LIMITS = R002HeadFileLimits()
+
+
 class R002ParsedLine(R002StrictModel):
     change_type: LineChangeType
     old_line_number: StrictInt | None = Field(default=None, ge=1)
@@ -688,7 +691,7 @@ class R002ParsedHunk(R002StrictModel):
 class R002ParsedFile(R002StrictModel):
     stream: R002DiffStream
     path: R002LogicalPath
-    hunks: tuple[R002ParsedHunk, ...] = Field(max_length=256)
+    hunks: tuple[R002ParsedHunk, ...] = Field(min_length=1, max_length=256)
     additions: StrictInt = Field(ge=0)
     deletions: StrictInt = Field(ge=0)
 
@@ -739,7 +742,7 @@ class R002ParsedDiff(R002StrictModel):
 
 class R002ParsedCase(R002StrictModel):
     case_id: R002CaseId
-    files: tuple[R002ParsedFile, ...] = Field(max_length=64)
+    files: tuple[R002ParsedFile, ...] = Field(max_length=32)
     file_count: StrictInt = Field(ge=0)
     hunk_count: StrictInt = Field(ge=0)
     diff_line_count: StrictInt = Field(ge=0)
@@ -829,7 +832,7 @@ class R002VerifiedCaseLines(R002StrictModel):
 class R002CachedHeadFile(R002StrictModel):
     logical_path: R002LogicalPath
     head_sha: GitSha
-    byte_length: StrictInt = Field(ge=0, le=4194304)
+    byte_length: StrictInt = Field(ge=0, le=R002_HEAD_FILE_LIMITS.bytes_per_file)
     content_sha256: Sha256
 
 
@@ -891,6 +894,8 @@ class R002CachedCase(R002StrictModel):
             for line in self.verified_lines
         ):
             raise ValueError("cached verified lines must join exactly one matching head file")
+        if sum(item.byte_length for item in self.head_files) > R002_HEAD_FILE_LIMITS.bytes_per_case:
+            raise ValueError("cached case exceeds the head-file byte limit")
         return self
 
 
@@ -927,6 +932,13 @@ class R002CacheIndex(R002Manifest):
     @model_validator(mode="after")
     def bind_complete_cache(self) -> Self:
         _require_approved_case_ids(self.cases)
+        if sum(len(case.head_files) for case in self.cases) > R002_HEAD_FILE_LIMITS.request_count:
+            raise ValueError("cache index exceeds the head-file request limit")
+        if (
+            sum(item.byte_length for case in self.cases for item in case.head_files)
+            > R002_HEAD_FILE_LIMITS.bytes_per_pack
+        ):
+            raise ValueError("cache index exceeds the head-file byte limit")
         return self
 
 
@@ -957,7 +969,7 @@ class R002CriteriaSourcePreparationResult(R002Manifest):
 class R002PreparationCaseResult(R002StrictModel):
     case_id: R002CaseId
     status: Literal["prepared"]
-    head_file_count: StrictInt = Field(ge=0)
+    head_file_count: StrictInt = Field(ge=0, le=32)
     candidate_line_count: StrictInt = Field(ge=0)
 
 
@@ -968,7 +980,7 @@ class R002PreparationResult(R002Manifest):
     executed_case_count: StrictInt = Field(ge=0)
     failed_case_count: StrictInt = Field(ge=0)
     skipped_case_count: StrictInt = Field(ge=0)
-    head_file_count: StrictInt = Field(ge=0)
+    head_file_count: StrictInt = Field(ge=0, le=R002_HEAD_FILE_LIMITS.request_count)
     candidate_line_count: StrictInt = Field(ge=0)
     cases: tuple[R002PreparationCaseResult, ...] = Field(min_length=20, max_length=20)
     errors: tuple[str, ...] = Field(max_length=0)
@@ -1590,7 +1602,7 @@ class R002BenchmarkResult(R002DeterminismProjection):
     failed_case_count: StrictInt = Field(ge=0)
     skipped_case_count: StrictInt = Field(ge=0)
     confirmed_criterion_count: StrictInt = Field(ge=0)
-    annotation_candidate_count: StrictInt = Field(ge=0)
+    annotation_candidate_count: StrictInt = Field(ge=0, le=250000)
     unexpected_ready_count: StrictInt = Field(ge=0)
     normalized_rerun_mismatches: StrictInt = Field(ge=0)
     hard_gate_errors: tuple[str, ...] = Field(max_length=0)

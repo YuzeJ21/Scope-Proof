@@ -1422,3 +1422,164 @@ def test_result_collection_bounds_fail_before_result_after_validation():
     ]
     with pytest.raises(ValidationError, match="at most 64 items"):
         R002CaseResult.model_validate_json(json.dumps(payload))
+
+
+def test_benchmark_annotation_candidate_count_has_pack_cap():
+    payload = _benchmark_result_payload()
+    for case in payload["case_results"]:  # type: ignore[index]
+        case["annotation_candidate_count"] = 250000
+    payload["annotation_candidate_count"] = 5_000_000
+    with pytest.raises(ValidationError, match="less than or equal to 250000"):
+        r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload))
+
+
+def test_parsed_case_file_and_hunk_bounds_are_exact():
+    zero_hunk_file = {
+        "stream": "patch",
+        "path": "a.py",
+        "hunks": [],
+        "additions": 0,
+        "deletions": 0,
+    }
+    with pytest.raises(ValidationError, match="at least 1 item"):
+        r002_models.R002ParsedFile.model_validate_json(json.dumps(zero_hunk_file))
+
+    files = [
+        {
+            "stream": "patch",
+            "path": f"a{number}.py",
+            "hunks": [
+                {
+                    "hunk_id": f"patch:a{number}.py:H1",
+                    "old_start": 1,
+                    "old_count": 0,
+                    "new_start": 1,
+                    "new_count": 0,
+                    "lines": [],
+                }
+            ],
+            "additions": 0,
+            "deletions": 0,
+        }
+        for number in range(33)
+    ]
+    with pytest.raises(ValidationError, match="at most 32 items"):
+        r002_models.R002ParsedCase.model_validate_json(
+            json.dumps(
+                {
+                    "case_id": "R002-001",
+                    "files": files,
+                    "file_count": 33,
+                    "hunk_count": 33,
+                    "diff_line_count": 0,
+                }
+            )
+        )
+
+
+def _head_bound_cache_index_payload(
+    *, head_counts: list[int], byte_length: int
+) -> dict[str, object]:
+    cases = []
+    for approved, count in zip(r002_models.R002_APPROVED_CASES, head_counts, strict=True):
+        cases.append(
+            {
+                "case_id": approved.case_id,
+                "row_sha256": approved.row_sha256,
+                "problem_statement_sha256": approved.problem_statement_sha256,
+                "patch_sha256": approved.patch_sha256,
+                "test_patch_sha256": approved.test_patch_sha256,
+                "parsed_case_sha256": "3" * 64,
+                "verified_lines": [],
+                "head_files": [
+                    {
+                        "logical_path": f"head-{number}.py",
+                        "head_sha": approved.head_sha,
+                        "byte_length": byte_length,
+                        "content_sha256": f"{number + 1:064x}",
+                    }
+                    for number in range(count)
+                ],
+            }
+        )
+    return {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_sha256": "0" * 64,
+        "manifest_sha256": "1" * 64,
+        "criteria_set_sha256": "2" * 64,
+        "complete": True,
+        "cases": cases,
+    }
+
+
+def test_head_file_request_and_byte_limits_hold_at_preparation_and_cache_pack_layers():
+    preparation_cases = [
+        {
+            "case_id": item.case_id,
+            "status": "prepared",
+            "head_file_count": 7 if number < 8 else 6,
+            "candidate_line_count": 0,
+        }
+        for number, item in enumerate(r002_models.R002_APPROVED_CASES)
+    ]
+    preparation = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "phase": "evidence",
+        "complete": True,
+        "criteria_set_sha256": "0" * 64,
+        "executed_case_count": 20,
+        "failed_case_count": 0,
+        "skipped_case_count": 0,
+        "head_file_count": 128,
+        "candidate_line_count": 0,
+        "cases": preparation_cases,
+        "errors": [],
+        "hard_gate_errors": [],
+    }
+    assert (
+        r002_models.R002PreparationResult.model_validate_json(
+            json.dumps(preparation)
+        ).head_file_count
+        == 128
+    )
+    preparation["cases"][8]["head_file_count"] = 7  # type: ignore[index]
+    preparation["head_file_count"] = 129
+    with pytest.raises(ValidationError, match="less than or equal to 128"):
+        r002_models.R002PreparationResult.model_validate_json(json.dumps(preparation))
+
+    exact = _head_bound_cache_index_payload(head_counts=[7] * 8 + [6] * 12, byte_length=1)
+    assert r002_models.R002CacheIndex.model_validate_json(json.dumps(exact)).complete
+    too_many = _head_bound_cache_index_payload(head_counts=[7] * 9 + [6] * 11, byte_length=1)
+    with pytest.raises(ValidationError, match="request limit"):
+        r002_models.R002CacheIndex.model_validate_json(json.dumps(too_many))
+
+    case_exact = _head_bound_cache_index_payload(
+        head_counts=[4] + [0] * 19, byte_length=4 * 1024 * 1024
+    )
+    assert r002_models.R002CachedCase.model_validate_json(
+        json.dumps(case_exact["cases"][0])
+    ).head_files
+    case_over = _head_bound_cache_index_payload(
+        head_counts=[5] + [0] * 19, byte_length=4 * 1024 * 1024
+    )
+    with pytest.raises(ValidationError, match="case exceeds"):
+        r002_models.R002CachedCase.model_validate_json(json.dumps(case_over["cases"][0]))
+
+    byte_exact = _head_bound_cache_index_payload(
+        head_counts=[7] * 8 + [6] * 12, byte_length=1024 * 1024
+    )
+    assert r002_models.R002CacheIndex.model_validate_json(json.dumps(byte_exact)).complete
+    byte_over = _head_bound_cache_index_payload(
+        head_counts=[7] * 8 + [6] * 12, byte_length=1024 * 1024
+    )
+    byte_over["cases"][0]["head_files"][0]["byte_length"] += 1  # type: ignore[index]
+    with pytest.raises(ValidationError, match="byte limit"):
+        r002_models.R002CacheIndex.model_validate_json(json.dumps(byte_over))
