@@ -83,6 +83,13 @@ def validate_r002_hunk_id(value: str) -> str:
     return value
 
 
+def r002_hunk_index(value: str) -> int:
+    """Return the validated natural one-based index from an R-002 hunk ID."""
+
+    validate_r002_hunk_id(value)
+    return int(value.rsplit(":H", maxsplit=1)[1])
+
+
 R002HunkId = Annotated[
     str,
     Field(min_length=10, max_length=1024),
@@ -779,6 +786,10 @@ class R002VerifiedLine(R002StrictModel):
         return self
 
 
+def _verified_line_order(line: R002VerifiedLine) -> tuple[str, str, int, int]:
+    return (line.stream.value, line.path, line.new_line_number, r002_hunk_index(line.hunk_id))
+
+
 class R002VerifiedCaseLines(R002StrictModel):
     case_id: R002CaseId
     head_sha: GitSha
@@ -789,10 +800,7 @@ class R002VerifiedCaseLines(R002StrictModel):
         approved = _approved_case(self.case_id)
         if self.head_sha != approved.head_sha:
             raise ValueError("verified lines must use the approved head SHA")
-        keys = [
-            (line.stream.value, line.path, line.hunk_id, line.new_line_number)
-            for line in self.lines
-        ]
+        keys = [_verified_line_order(line) for line in self.lines]
         if keys != sorted(keys) or len(keys) != len(set(keys)):
             raise ValueError("verified lines must be sorted and unique")
         for line in self.lines:
@@ -852,10 +860,7 @@ class R002CachedCase(R002StrictModel):
             raise ValueError("cached case hashes must bind the approved projection")
         if any(line.head_sha != approved.head_sha for line in self.verified_lines):
             raise ValueError("cached verified lines must use the approved head SHA")
-        line_keys = [
-            (line.stream.value, line.path, line.hunk_id, line.new_line_number)
-            for line in self.verified_lines
-        ]
+        line_keys = [_verified_line_order(line) for line in self.verified_lines]
         if (
             line_keys != sorted(line_keys)
             or len(line_keys) != len(set(line_keys))
@@ -1039,10 +1044,16 @@ class R002RedactionAudit(R002Manifest):
         return self
 
 
+class R002Criterion(Criterion):
+    """Frozen R-002 copy of the core criterion contract for confirmed persistence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+
 class R002CriterionCase(R002StrictModel):
     case_id: R002CaseId
     problem_statement_sha256: Sha256
-    criteria: tuple[Criterion, ...] = Field(min_length=1, max_length=16)
+    criteria: tuple[R002Criterion, ...] = Field(min_length=1, max_length=16)
 
     @model_validator(mode="before")
     @classmethod
@@ -1060,7 +1071,7 @@ class R002CriterionCase(R002StrictModel):
         }
         for criterion in value["criteria"]:
             fields = (
-                set(criterion.model_fields_set)
+                set(type(criterion).model_fields)
                 if isinstance(criterion, Criterion)
                 else set(criterion)
                 if isinstance(criterion, dict)
@@ -1068,9 +1079,13 @@ class R002CriterionCase(R002StrictModel):
             )
             if fields != required_fields:
                 raise ValueError("R-002 criteria require complete serialized fields")
-        # JSON arrays are the canonical serialization of persisted tuples. Preserve
-        # strict scalar validation while reconstructing this collection boundary.
-        return {**value, "criteria": tuple(value["criteria"])}
+        # JSON arrays are canonical persisted tuples. Core Criterion values are
+        # copied into the frozen R-002 subtype rather than retained by reference.
+        criteria = tuple(
+            criterion.model_dump() if isinstance(criterion, Criterion) else criterion
+            for criterion in value["criteria"]
+        )
+        return {**value, "criteria": criteria}
 
     @model_validator(mode="after")
     def validate_criteria(self) -> Self:
@@ -1221,7 +1236,16 @@ class R002AnnotationReview(R002Manifest):
     source_manifest_sha256: Sha256
     criteria_set_sha256: Sha256
     annotation_universe_sha256: Sha256
-    items: tuple[R002AnnotationReviewItem, ...]
+    items: tuple[R002AnnotationReviewItem, ...] = Field(min_length=1, max_length=250000)
+
+    @model_validator(mode="after")
+    def bind_ordered_unique_items(self) -> Self:
+        keys = [canonical_json_bytes(item.key) for item in self.items]
+        if keys != sorted(keys) or len(keys) != len(set(keys)):
+            raise ValueError("annotation review items must be sorted and unique")
+        # The cache writer additionally compares this collection against the
+        # persisted annotation-universe count and hash when both are available.
+        return self
 
 
 class _LabelCollection(R002Manifest):
@@ -1524,6 +1548,34 @@ class R002DeterminismProjection(R002Manifest):
             for result, approved in zip(self.case_results, R002_APPROVED_CASES, strict=True)
         ):
             raise ValueError("R-002 projections require the approved cohort identities")
+        unique_candidates = {
+            canonical_json_bytes(candidate.key): candidate
+            for result in self.case_results
+            for candidate in result.retrieved_candidates
+        }
+        denominator = len(unique_candidates)
+        numerator = sum(candidate.owner_label_relevant for candidate in unique_candidates.values())
+        expected_precision = R002Metric(
+            state=(R002MetricState.VALUE if denominator else R002MetricState.NOT_APPLICABLE),
+            numerator=numerator,
+            denominator=denominator,
+            value=(numerator / denominator if denominator else None),
+        )
+        if self.metrics.owner_confirmed_label_candidate_precision != expected_precision:
+            raise ValueError(
+                "owner-confirmed candidate precision must reconstruct from case results"
+            )
+        if (
+            self.metrics.implementation_test_separation_errors
+            != sum(result.separation_errors for result in self.case_results)
+            or self.metrics.immutable_reference_integrity_errors
+            != sum(result.reference_errors for result in self.case_results)
+            or self.metrics.unexpected_ready_count
+            != sum(result.gate_verdict is GateVerdict.READY for result in self.case_results)
+        ):
+            raise ValueError("R-002 derivable metric counters must reconstruct from case results")
+        # The remaining coverage/error denominators depend on confirmed labels,
+        # parsed inputs, and two-pass comparison; Task 8 cross-binds them there.
         return self
 
 

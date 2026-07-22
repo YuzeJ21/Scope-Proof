@@ -822,7 +822,12 @@ def _benchmark_result_payload() -> dict[str, object]:
         "scopeproof_commit": "3" * 40,
         "case_results": case_results,
         "metrics": {
-            "owner_confirmed_label_candidate_precision": metric,
+            "owner_confirmed_label_candidate_precision": {
+                "state": "value",
+                "numerator": 1,
+                "denominator": 1,
+                "value": 1.0,
+            },
             "criterion_candidate_coverage": metric,
             "candidate_to_gold_file_coverage": metric,
             "candidate_to_gold_hunk_coverage": metric,
@@ -1198,6 +1203,150 @@ def test_retrieved_matching_rule_and_retrieval_explanation_status_are_closed():
             "reason_code": reason_code,
         }
         assert r002_models.R002MissingExplanation.model_validate_json(json.dumps(explanation))
+
+
+def test_confirmed_r002_criteria_are_deeply_immutable_and_hash_stable(r002_criteria_payload):
+    criteria_set = R002CriteriaSet.model_validate_json(json.dumps(r002_criteria_payload))
+    criterion = criteria_set.cases[0].criteria[0]
+    before = canonical_sha256(criteria_set)
+    assert isinstance(criterion, r002_models.R002Criterion)
+    with pytest.raises(ValidationError):
+        criterion.text = "mutated after confirmation"
+    with pytest.raises(ValidationError):
+        criterion.priority = r002_models.Priority.SHOULD_HAVE
+    assert canonical_sha256(criteria_set) == before
+    core = r002_models.Criterion(
+        criterion_id="AC-01",
+        text="Core criterion input.",
+        source_span="problem_statement:L1-L1",
+    )
+    copied = r002_models.R002CriterionCase.model_validate(
+        {
+            "case_id": "R002-001",
+            "problem_statement_sha256": "0" * 64,
+            "criteria": (core,),
+        }
+    ).criteria[0]
+    assert isinstance(copied, r002_models.R002Criterion)
+    assert copied is not core
+
+
+def test_verified_lines_use_natural_hunk_order_not_lexical_hunk_id_order():
+    lines = []
+    for number in range(1, 11):
+        line = _verified_line_payload()
+        line["hunk_id"] = f"patch:a.py:H{number}"
+        lines.append(line)
+    payload = {
+        "case_id": "R002-001",
+        "head_sha": lines[0]["head_sha"],
+        "lines": lines,
+    }
+    assert (
+        len(r002_models.R002VerifiedCaseLines.model_validate_json(json.dumps(payload)).lines) == 10
+    )
+    approved = r002_models.R002_APPROVED_CASES[0]
+    cache_payload = {
+        "case_id": approved.case_id,
+        "row_sha256": approved.row_sha256,
+        "problem_statement_sha256": approved.problem_statement_sha256,
+        "patch_sha256": approved.patch_sha256,
+        "test_patch_sha256": approved.test_patch_sha256,
+        "parsed_case_sha256": "3" * 64,
+        "verified_lines": lines,
+        "head_files": [
+            {
+                "logical_path": "a.py",
+                "head_sha": approved.head_sha,
+                "byte_length": 1,
+                "content_sha256": "2" * 64,
+            }
+        ],
+    }
+    assert (
+        len(
+            r002_models.R002CachedCase.model_validate_json(json.dumps(cache_payload)).verified_lines
+        )
+        == 10
+    )
+    payload["lines"][1], payload["lines"][9] = payload["lines"][9], payload["lines"][1]
+    with pytest.raises(ValidationError, match="sorted and unique"):
+        r002_models.R002VerifiedCaseLines.model_validate_json(json.dumps(payload))
+    cache_payload["verified_lines"] = payload["lines"]
+    with pytest.raises(ValidationError, match="sorted unique"):
+        r002_models.R002CachedCase.model_validate_json(json.dumps(cache_payload))
+
+
+def test_annotation_review_requires_nonempty_bounded_ordered_unique_items():
+    def item(path: str, digest: str) -> dict[str, object]:
+        return {
+            "key": {
+                "case_id": "R002-001",
+                "criterion_id": "AC-01",
+                "stream": "patch",
+                "path": path,
+                "new_line_number": 1,
+                "normalized_line_sha256": digest * 64,
+            },
+            "line_content": "ScopeProof-authored fixture.",
+        }
+
+    payload = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_manifest_sha256": "0" * 64,
+        "criteria_set_sha256": "1" * 64,
+        "annotation_universe_sha256": "2" * 64,
+        "items": [item("a.py", "0"), item("b.py", "1")],
+    }
+    assert len(r002_models.R002AnnotationReview.model_validate_json(json.dumps(payload)).items) == 2
+    payload["items"].reverse()
+    with pytest.raises(ValidationError, match="sorted"):
+        r002_models.R002AnnotationReview.model_validate_json(json.dumps(payload))
+    payload["items"] = [item("a.py", "0"), item("a.py", "0")]
+    with pytest.raises(ValidationError, match="unique"):
+        r002_models.R002AnnotationReview.model_validate_json(json.dumps(payload))
+    payload["items"] = []
+    with pytest.raises(ValidationError):
+        r002_models.R002AnnotationReview.model_validate_json(json.dumps(payload))
+    bounded_item = r002_models.R002AnnotationReviewItem.model_validate_json(
+        json.dumps(item("a.py", "0"))
+    )
+    with pytest.raises(ValidationError):
+        r002_models.R002AnnotationReview.model_validate(
+            {**payload, "items": (bounded_item,) * 250001}
+        )
+
+
+def test_projection_recomputes_owner_confirmed_candidate_precision():
+    payload = _benchmark_result_payload()
+    payload["metrics"]["owner_confirmed_label_candidate_precision"] = {
+        "state": "value",
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0.0,
+    }
+    with pytest.raises(ValidationError, match="owner-confirmed candidate precision"):
+        r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload))
+    payload["metrics"]["owner_confirmed_label_candidate_precision"] = {
+        "state": "value",
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0,
+    }
+    assert r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload)).metrics
+    no_candidates = _benchmark_result_payload()
+    no_candidates["case_results"][0]["retrieved_candidates"] = []  # type: ignore[index]
+    no_candidates["metrics"]["owner_confirmed_label_candidate_precision"] = {
+        "state": "not_applicable",
+        "numerator": 0,
+        "denominator": 0,
+        "value": None,
+    }
+    assert r002_models.R002BenchmarkResult.model_validate_json(json.dumps(no_candidates)).metrics
     for status in ("missing", "partial", "needs_review"):
         explanation = {
             "case_id": "R002-001",
