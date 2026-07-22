@@ -656,15 +656,22 @@ class R002ParsedLine(R002StrictModel):
         actual = (self.old_line_number is not None, self.new_line_number is not None)
         if actual != expected:
             raise ValueError("parsed line numbers must match its change marker")
+        encoded = self.content.encode("utf-8")
+        if len(encoded) > 65536:
+            raise ValueError("parsed line content must not exceed 65,536 UTF-8 bytes")
+        if "\r" in self.content or "\n" in self.content:
+            raise ValueError("parsed line content must not contain embedded newlines")
+        if sha256(encoded).hexdigest() != self.normalized_line_sha256:
+            raise ValueError("parsed line normalized hash must match UTF-8 content")
         return self
 
 
 class R002ParsedHunk(R002StrictModel):
     hunk_id: R002HunkId
     old_start: StrictInt = Field(ge=1)
-    old_count: StrictInt = Field(ge=0)
+    old_count: StrictInt = Field(ge=0, le=50000)
     new_start: StrictInt = Field(ge=1)
-    new_count: StrictInt = Field(ge=0)
+    new_count: StrictInt = Field(ge=0, le=50000)
     lines: tuple[R002ParsedLine, ...] = Field(max_length=50000)
 
     @model_validator(mode="after")
@@ -692,8 +699,8 @@ class R002ParsedFile(R002StrictModel):
     stream: R002DiffStream
     path: R002LogicalPath
     hunks: tuple[R002ParsedHunk, ...] = Field(min_length=1, max_length=256)
-    additions: StrictInt = Field(ge=0)
-    deletions: StrictInt = Field(ge=0)
+    additions: StrictInt = Field(ge=0, le=50000)
+    deletions: StrictInt = Field(ge=0, le=50000)
 
     @model_validator(mode="after")
     def reconstruct_counts_and_order(self) -> Self:
@@ -719,9 +726,9 @@ class R002ParsedFile(R002StrictModel):
 class R002ParsedDiff(R002StrictModel):
     stream: R002DiffStream
     files: tuple[R002ParsedFile, ...] = Field(max_length=32)
-    file_count: StrictInt = Field(ge=0)
-    hunk_count: StrictInt = Field(ge=0)
-    diff_line_count: StrictInt = Field(ge=0)
+    file_count: StrictInt = Field(ge=0, le=32)
+    hunk_count: StrictInt = Field(ge=0, le=256)
+    diff_line_count: StrictInt = Field(ge=0, le=50000)
 
     @model_validator(mode="after")
     def reconstruct_counts_and_order(self) -> Self:
@@ -743,9 +750,9 @@ class R002ParsedDiff(R002StrictModel):
 class R002ParsedCase(R002StrictModel):
     case_id: R002CaseId
     files: tuple[R002ParsedFile, ...] = Field(max_length=32)
-    file_count: StrictInt = Field(ge=0)
-    hunk_count: StrictInt = Field(ge=0)
-    diff_line_count: StrictInt = Field(ge=0)
+    file_count: StrictInt = Field(ge=0, le=32)
+    hunk_count: StrictInt = Field(ge=0, le=256)
+    diff_line_count: StrictInt = Field(ge=0, le=50000)
 
     @model_validator(mode="after")
     def reconstruct_counts_and_stream_separation(self) -> Self:

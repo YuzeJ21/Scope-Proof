@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from hashlib import sha256
 from typing import get_origin
 
 import pytest
@@ -1583,3 +1584,133 @@ def test_head_file_request_and_byte_limits_hold_at_preparation_and_cache_pack_la
     byte_over["cases"][0]["head_files"][0]["byte_length"] += 1  # type: ignore[index]
     with pytest.raises(ValidationError, match="byte limit"):
         r002_models.R002CacheIndex.model_validate_json(json.dumps(byte_over))
+
+
+def _parsed_line_payload(content: str, *, number: int = 1) -> dict[str, object]:
+    return {
+        "change_type": "added",
+        "old_line_number": None,
+        "new_line_number": number,
+        "content": content,
+        "normalized_line_sha256": sha256(content.encode("utf-8")).hexdigest(),
+    }
+
+
+def test_parsed_line_uses_utf8_byte_bounds_no_newlines_and_exact_hash():
+    exact = _parsed_line_payload("a" * 65536)
+    assert (
+        r002_models.R002ParsedLine.model_validate_json(json.dumps(exact)).content
+        == exact["content"]
+    )
+    with pytest.raises(ValidationError, match="65,536"):
+        r002_models.R002ParsedLine.model_validate_json(
+            json.dumps(_parsed_line_payload("a" * 65537))
+        )
+    assert r002_models.R002ParsedLine.model_validate_json(
+        json.dumps(_parsed_line_payload("é" * 32768))
+    ).content
+    with pytest.raises(ValidationError, match="65,536"):
+        r002_models.R002ParsedLine.model_validate_json(
+            json.dumps(_parsed_line_payload("é" * 32769))
+        )
+    with pytest.raises(ValidationError, match="newlines"):
+        r002_models.R002ParsedLine.model_validate_json(
+            json.dumps(_parsed_line_payload("bad\nline"))
+        )
+    wrong_hash = _parsed_line_payload("valid")
+    wrong_hash["normalized_line_sha256"] = "0" * 64
+    with pytest.raises(ValidationError, match="normalized hash"):
+        r002_models.R002ParsedLine.model_validate_json(json.dumps(wrong_hash))
+    assert (
+        r002_models.R002ParsedLine.model_validate_json(json.dumps(_parsed_line_payload(""))).content
+        == ""
+    )
+
+
+def _parsed_file_with_added_lines(path: str, stream: str, count: int) -> dict[str, object]:
+    return {
+        "stream": stream,
+        "path": path,
+        "hunks": [
+            {
+                "hunk_id": f"{stream}:{path}:H1",
+                "old_start": 1,
+                "old_count": 0,
+                "new_start": 1,
+                "new_count": count,
+                "lines": [
+                    _parsed_line_payload("", number=number) for number in range(1, count + 1)
+                ],
+            }
+        ],
+        "additions": count,
+        "deletions": 0,
+    }
+
+
+def _parsed_file_with_empty_hunks(path: str, count: int) -> dict[str, object]:
+    return {
+        "stream": "patch",
+        "path": path,
+        "hunks": [
+            {
+                "hunk_id": f"patch:{path}:H{number}",
+                "old_start": number,
+                "old_count": 0,
+                "new_start": number,
+                "new_count": 0,
+                "lines": [],
+            }
+            for number in range(1, count + 1)
+        ],
+        "additions": 0,
+        "deletions": 0,
+    }
+
+
+def test_parsed_diff_and_case_enforce_exact_aggregate_hunk_and_line_caps():
+    diff = {
+        "stream": "patch",
+        "files": [_parsed_file_with_empty_hunks("a.py", 256)],
+        "file_count": 1,
+        "hunk_count": 256,
+        "diff_line_count": 0,
+    }
+    assert r002_models.R002ParsedDiff.model_validate_json(json.dumps(diff)).hunk_count == 256
+    diff["files"] = [_parsed_file_with_empty_hunks("a.py", 257)]
+    diff["hunk_count"] = 257
+    with pytest.raises(ValidationError, match="at most 256 items"):
+        r002_models.R002ParsedDiff.model_validate_json(json.dumps(diff))
+
+    split_hunks = {
+        "case_id": "R002-001",
+        "files": [
+            _parsed_file_with_empty_hunks("a.py", 256),
+            _parsed_file_with_empty_hunks("b.py", 1),
+        ],
+        "file_count": 2,
+        "hunk_count": 257,
+        "diff_line_count": 0,
+    }
+    with pytest.raises(ValidationError, match="less than or equal to 256"):
+        r002_models.R002ParsedCase.model_validate_json(json.dumps(split_hunks))
+
+    exact_lines = {
+        "case_id": "R002-001",
+        "files": [
+            _parsed_file_with_added_lines("a.py", "patch", 25000),
+            _parsed_file_with_added_lines("tests/b.py", "test_patch", 25000),
+        ],
+        "file_count": 2,
+        "hunk_count": 2,
+        "diff_line_count": 50000,
+    }
+    assert (
+        r002_models.R002ParsedCase.model_validate_json(json.dumps(exact_lines)).diff_line_count
+        == 50000
+    )
+    over_lines = deepcopy(exact_lines)
+    over_lines["files"][1] = _parsed_file_with_added_lines("tests/b.py", "test_patch", 25001)
+    over_lines["diff_line_count"] = 50001
+    with pytest.raises(ValidationError, match="less than or equal to 50000"):
+        r002_models.R002ParsedCase.model_validate_json(json.dumps(over_lines))
