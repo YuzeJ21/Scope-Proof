@@ -61,7 +61,7 @@ def validate_r002_source_span(value: str) -> str:
     return value
 
 
-R002CaseId = Annotated[str, Field(pattern=r"^R002-\d{3}$")]
+R002CaseId = Annotated[str, Field(pattern=r"^R002-(00[1-9]|01\d|020)$")]
 GitSha = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 R002LogicalPath = Annotated[
@@ -469,21 +469,13 @@ R002_APPROVED_CASES: tuple[R002ApprovedCase, ...] = (
         "d199d4ee685de99f64461d66f3b8424c6544dd38c665812a6ff0d6f3ccfd6f6b",
     ),
 )
-R002_APPROVED_CASE_BY_ID = {case.case_id: case for case in R002_APPROVED_CASES}
 
 
-def _require_approved_case_ids(items: Sequence[object]) -> None:
+def _require_structural_case_ids(items: Sequence[object]) -> None:
     if tuple(item.case_id for item in items) != tuple(  # type: ignore[attr-defined]
-        item.case_id for item in R002_APPROVED_CASES
+        f"R002-{number:03d}" for number in range(1, 21)
     ):
-        raise ValueError("R-002 records must use the ordered approved case IDs")
-
-
-def _approved_case(case_id: str) -> R002ApprovedCase:
-    try:
-        return R002_APPROVED_CASE_BY_ID[case_id]
-    except KeyError as error:
-        raise ValueError("R-002 record has an unapproved case ID") from error
+        raise ValueError("R-002 records must use the ordered structural case IDs")
 
 
 class R002StrictModel(BaseModel):
@@ -501,13 +493,40 @@ class R002Error(Exception):
 
 
 class R002SourceError(R002Error):
-    allowed_reason_codes = frozenset({"source_pin_mismatch", "approved_cohort_mismatch"})
+    allowed_reason_codes = frozenset(
+        {
+            "source_pin_mismatch",
+            "approved_cohort_mismatch",
+            "parquet_bytes_mismatch",
+            "parquet_row_count_mismatch",
+            "parquet_schema_mismatch",
+            "parquet_field_type_mismatch",
+            "parquet_uncompressed_limit",
+            "row_count_mismatch",
+            "unique_instance_count_mismatch",
+            "repository_count_mismatch",
+            "instance_pr_suffix_mismatch",
+            "manifest_selection_mismatch",
+            "manifest_row_mismatch",
+        }
+    )
 
 
 class R002AnnotationError(R002Error):
     allowed_reason_codes = frozenset(
         {
+            "criteria_source_cache_manifest_mismatch",
+            "problem_statement_hash_mismatch",
+            "prepared_cache_evidence_drift",
             "criteria_manifest_drift",
+            "prepared_cache_criteria_drift",
+            "annotation_pair_limit",
+            "label_upstream_hash_drift",
+            "annotation_criterion_drift",
+            "reannotation_required",
+            "expected_missing_drift",
+            "label_proposal_must_be_unconfirmed",
+            "candidate_labels_not_confirmed",
             "criteria_manifest_context_invalid",
             "criteria_manifest_projection_drift",
             "candidate_label_upstream_drift",
@@ -716,6 +735,14 @@ class R002ParsedFile(R002StrictModel):
         starts = [(hunk.old_start, hunk.new_start) for hunk in self.hunks]
         if starts != sorted(starts):
             raise ValueError("parsed file hunks must be stably ordered")
+        for previous, current in zip(self.hunks, self.hunks[1:], strict=False):
+            if current.old_start == previous.old_start or current.new_start == previous.new_start:
+                raise ValueError("parsed file hunks must not have ambiguous duplicate starts")
+            if (
+                current.old_start < previous.old_start + previous.old_count
+                or current.new_start < previous.new_start + previous.new_count
+            ):
+                raise ValueError("parsed file hunk ranges must not overlap")
         additions = sum(
             line.change_type is LineChangeType.ADDED for hunk in self.hunks for line in hunk.lines
         )
@@ -754,9 +781,9 @@ class R002ParsedDiff(R002StrictModel):
 class R002ParsedCase(R002StrictModel):
     case_id: R002CaseId
     files: tuple[R002ParsedFile, ...] = Field(max_length=32)
-    file_count: StrictInt = Field(ge=0, le=32)
-    hunk_count: StrictInt = Field(ge=0, le=256)
-    diff_line_count: StrictInt = Field(ge=0, le=50000)
+    file_count: StrictInt | None = Field(default=None, ge=0, le=32)
+    hunk_count: StrictInt | None = Field(default=None, ge=0, le=256)
+    diff_line_count: StrictInt | None = Field(default=None, ge=0, le=50000)
 
     @model_validator(mode="after")
     def reconstruct_counts_and_stream_separation(self) -> Self:
@@ -772,7 +799,16 @@ class R002ParsedCase(R002StrictModel):
             sum(len(item.hunks) for item in self.files),
             sum(len(hunk.lines) for item in self.files for hunk in item.hunks),
         )
-        if (self.file_count, self.hunk_count, self.diff_line_count) != expected:
+        supplied = (self.file_count, self.hunk_count, self.diff_line_count)
+        if all(value is None for value in supplied):
+            return self.model_copy(
+                update={
+                    "file_count": expected[0],
+                    "hunk_count": expected[1],
+                    "diff_line_count": expected[2],
+                }
+            )
+        if any(value is None for value in supplied) or supplied != expected:
             raise ValueError("parsed case counts must match its files")
         return self
 
@@ -809,31 +845,33 @@ def _verified_line_identity(line: R002VerifiedLine) -> tuple[str, int]:
 
 
 class R002VerifiedCaseLines(R002StrictModel):
+    """Structural Task 6 sidecar; public wrappers cross-bind validated manifest/cache inputs."""
+
     case_id: R002CaseId
     head_sha: GitSha
     lines: tuple[R002VerifiedLine, ...] = Field(max_length=50000)
 
     @model_validator(mode="after")
     def bind_immutable_head_lines(self) -> Self:
-        approved = _approved_case(self.case_id)
-        if self.head_sha != approved.head_sha:
-            raise ValueError("verified lines must use the approved head SHA")
         order_keys = [_verified_line_order(line) for line in self.lines]
         identity_keys = [_verified_line_identity(line) for line in self.lines]
         if order_keys != sorted(order_keys) or len(identity_keys) != len(set(identity_keys)):
             raise ValueError("verified lines must be sorted and unique")
-        for line in self.lines:
-            if (
-                line.head_sha != self.head_sha
-                or _permalink_repository(
-                    line.permalink,
-                    path=line.path,
-                    head_sha=self.head_sha,
-                    line=line.new_line_number,
-                )
-                != approved.repository
-            ):
-                raise ValueError("verified line must bind its approved immutable head")
+        repositories = {
+            _permalink_repository(
+                line.permalink,
+                path=line.path,
+                head_sha=self.head_sha,
+                line=line.new_line_number,
+            )
+            for line in self.lines
+            if line.head_sha == self.head_sha
+        }
+        if any(line.head_sha != self.head_sha for line in self.lines) or len(repositories) > 1:
+            raise ValueError("verified lines must share one immutable head and repository")
+        by_path = {line.path: (line.stream, line.head_file_sha256) for line in self.lines}
+        if any(by_path[line.path] != (line.stream, line.head_file_sha256) for line in self.lines):
+            raise ValueError("verified path lines must share one stream and head-file hash")
         return self
 
     def by_path_and_line(self, path: str, number: int) -> R002VerifiedLine:
@@ -864,45 +902,41 @@ class R002CachedCase(R002StrictModel):
 
     @model_validator(mode="after")
     def bind_approved_cache_case(self) -> Self:
-        approved = _approved_case(self.case_id)
-        if (
-            self.row_sha256,
-            self.problem_statement_sha256,
-            self.patch_sha256,
-            self.test_patch_sha256,
-        ) != (
-            approved.row_sha256,
-            approved.problem_statement_sha256,
-            approved.patch_sha256,
-            approved.test_patch_sha256,
-        ):
-            raise ValueError("cached case hashes must bind the approved projection")
-        if any(line.head_sha != approved.head_sha for line in self.verified_lines):
-            raise ValueError("cached verified lines must use the approved head SHA")
         line_order_keys = [_verified_line_order(line) for line in self.verified_lines]
         line_identity_keys = [_verified_line_identity(line) for line in self.verified_lines]
+        line_heads = {line.head_sha for line in self.verified_lines}
+        line_repositories = {
+            _permalink_repository(
+                line.permalink,
+                path=line.path,
+                head_sha=line.head_sha,
+                line=line.new_line_number,
+            )
+            for line in self.verified_lines
+        }
+        line_paths = {
+            line.path: (line.stream, line.head_file_sha256) for line in self.verified_lines
+        }
         if (
             line_order_keys != sorted(line_order_keys)
             or len(line_identity_keys) != len(set(line_identity_keys))
+            or len(line_heads) > 1
+            or len(line_repositories) > 1
             or any(
-                _permalink_repository(
-                    line.permalink,
-                    path=line.path,
-                    head_sha=approved.head_sha,
-                    line=line.new_line_number,
-                )
-                != approved.repository
+                line_paths[line.path] != (line.stream, line.head_file_sha256)
                 for line in self.verified_lines
             )
         ):
             raise ValueError("cached verified lines must be sorted unique immutable references")
         paths = [item.logical_path for item in self.head_files]
+        head_file_heads = {item.head_sha for item in self.head_files}
         if (
             paths != sorted(paths)
             or len(paths) != len(set(paths))
-            or any(item.head_sha != approved.head_sha for item in self.head_files)
+            or len(head_file_heads) > 1
+            or (line_heads and head_file_heads and line_heads != head_file_heads)
         ):
-            raise ValueError("cached head files must be sorted unique approved-head files")
+            raise ValueError("cached head files must be sorted unique immutable-head files")
         head_files_by_path = {item.logical_path: item for item in self.head_files}
         if any(
             (head_file := head_files_by_path.get(line.path)) is None
@@ -930,16 +964,16 @@ class R002CriteriaSourceIndex(R002Manifest):
 
     @model_validator(mode="after")
     def bind_criteria_sources(self) -> Self:
-        _require_approved_case_ids(self.cases)
-        if any(
-            item.problem_statement_sha256 != _approved_case(item.case_id).problem_statement_sha256
-            for item in self.cases
-        ):
-            raise ValueError("criteria sources must bind approved problem hashes")
+        _require_structural_case_ids(self.cases)
+        hashes = [item.problem_statement_sha256 for item in self.cases]
+        if len(hashes) != len(set(hashes)):
+            raise ValueError("criteria sources require unique structural problem hashes")
         return self
 
 
 class R002CacheIndex(R002Manifest):
+    """Structural Task 6 cache index; production callers cross-bind validated inputs."""
+
     source_sha256: Sha256
     manifest_sha256: Sha256
     criteria_set_sha256: Sha256
@@ -948,7 +982,7 @@ class R002CacheIndex(R002Manifest):
 
     @model_validator(mode="after")
     def bind_complete_cache(self) -> Self:
-        _require_approved_case_ids(self.cases)
+        _require_structural_case_ids(self.cases)
         if sum(len(case.head_files) for case in self.cases) > R002_HEAD_FILE_LIMITS.request_count:
             raise ValueError("cache index exceeds the head-file request limit")
         if (
@@ -978,7 +1012,7 @@ class R002CriteriaSourcePreparationResult(R002Manifest):
             self.case_ids,
             self.errors,
             self.hard_gate_errors,
-        ) != (20, 0, 0, tuple(case.case_id for case in R002_APPROVED_CASES), (), ()):
+        ) != (20, 0, 0, tuple(f"R002-{number:03d}" for number in range(1, 21)), (), ()):
             raise ValueError("criteria-source preparation must be complete 20/0/0")
         return self
 
@@ -1005,7 +1039,7 @@ class R002PreparationResult(R002Manifest):
 
     @model_validator(mode="after")
     def require_complete_evidence_preparation(self) -> Self:
-        _require_approved_case_ids(self.cases)
+        _require_structural_case_ids(self.cases)
         if (
             self.executed_case_count,
             self.failed_case_count,
@@ -1142,6 +1176,15 @@ class R002CriterionCase(R002StrictModel):
 
 class R002CriterionReviewCase(R002CriterionCase):
     problem_statement: str = Field(min_length=1, max_length=131072)
+
+    @model_validator(mode="after")
+    def bind_problem_statement_hash(self) -> Self:
+        if (
+            sha256(self.problem_statement.encode("utf-8")).hexdigest()
+            != self.problem_statement_sha256
+        ):
+            raise ValueError("criterion review problem statement hash must match UTF-8 text")
+        return self
 
 
 def _validate_criteria_cases(cases: Sequence[R002CriterionCase]) -> None:
@@ -1427,13 +1470,6 @@ class R002CaseResult(R002StrictModel):
 
     @model_validator(mode="after")
     def reject_non_static_success_signals(self) -> Self:
-        approved = _approved_case(self.case_id)
-        if (self.repository, self.pr_number, self.head_sha) != (
-            approved.repository,
-            approved.pr_number,
-            approved.head_sha,
-        ):
-            raise ValueError("case result must bind the approved immutable identity")
         criterion_groups = (
             self.blocking_criteria,
             self.conditional_criteria,
@@ -1539,6 +1575,28 @@ class R002CaseResult(R002StrictModel):
                 raise ValueError("result references must remain within the case criteria")
             if int(criterion_id.removeprefix("AC-")) > self.criterion_count:
                 raise ValueError("result references cannot exceed the case criterion count")
+        for explanation in self.missing_explanations:
+            matching = tuple(
+                candidate
+                for candidate in self.retrieved_candidates
+                if (
+                    candidate.key.case_id,
+                    candidate.key.criterion_id,
+                    candidate.evidence_type,
+                )
+                == (explanation.case_id, explanation.criterion_id, explanation.evidence_type)
+            )
+            if any(candidate.owner_label_relevant for candidate in matching):
+                raise ValueError("missing explanations cannot contradict owner-relevant evidence")
+            if explanation.source == "r002_retrieval_comparison":
+                if explanation.reason_code == "no_candidate_retrieved_for_type" and matching:
+                    raise ValueError("no-candidate explanations require no retrieved candidates")
+                if explanation.reason_code == "retrieved_only_owner_labelled_irrelevant" and (
+                    not matching or any(candidate.owner_label_relevant for candidate in matching)
+                ):
+                    raise ValueError(
+                        "irrelevant-only explanations require retrieved irrelevant candidates"
+                    )
         return self
 
 
@@ -1593,6 +1651,8 @@ class R002Metrics(R002StrictModel):
 
 
 class R002DeterminismProjection(R002Manifest):
+    """Structural Task 8 projection; run boundaries cross-bind manifest and cache artifacts."""
+
     source_manifest_sha256: Sha256
     criteria_set_sha256: Sha256
     candidate_label_set_sha256: Sha256
@@ -1605,15 +1665,12 @@ class R002DeterminismProjection(R002Manifest):
 
     @model_validator(mode="after")
     def bind_safe_case_results(self) -> Self:
-        _require_approved_case_ids(self.case_results)
+        _require_structural_case_ids(self.case_results)
         if self.limitations != R002_RESULT_LIMITATIONS:
             raise ValueError("R-002 projections require the fixed limitations")
-        if any(
-            (result.repository, result.pr_number, result.head_sha)
-            != (approved.repository, approved.pr_number, approved.head_sha)
-            for result, approved in zip(self.case_results, R002_APPROVED_CASES, strict=True)
-        ):
-            raise ValueError("R-002 projections require the approved cohort identities")
+        repositories = Counter(result.repository for result in self.case_results)
+        if len(repositories) != 12 or max(repositories.values()) > 2:
+            raise ValueError("R-002 projections require 12 repositories with at most two cases")
         unique_candidates = {
             r002_annotation_key_order(candidate.key): candidate
             for result in self.case_results
@@ -1631,6 +1688,42 @@ class R002DeterminismProjection(R002Manifest):
             raise ValueError(
                 "owner-confirmed candidate precision must reconstruct from case results"
             )
+        expected_numerators = {
+            "criterion_candidate_coverage": len(
+                {
+                    (candidate.key.case_id, candidate.key.criterion_id)
+                    for result in self.case_results
+                    for candidate in result.retrieved_candidates
+                    if candidate.owner_label_relevant
+                }
+            ),
+            "candidate_to_gold_file_coverage": len(
+                {
+                    (candidate.key.case_id, candidate.key.stream, candidate.key.path)
+                    for result in self.case_results
+                    for candidate in result.retrieved_candidates
+                }
+            ),
+            "candidate_to_gold_hunk_coverage": len(
+                {
+                    (candidate.key.case_id, candidate.hunk_id)
+                    for result in self.case_results
+                    for candidate in result.retrieved_candidates
+                }
+            ),
+            "missing_evidence_explanation_completeness": len(
+                {
+                    (explanation.case_id, explanation.criterion_id, explanation.evidence_type)
+                    for result in self.case_results
+                    for explanation in result.missing_explanations
+                }
+            ),
+        }
+        if any(
+            getattr(self.metrics, field).numerator != numerator
+            for field, numerator in expected_numerators.items()
+        ):
+            raise ValueError("observable metric numerators must reconstruct from case results")
         if (
             self.metrics.implementation_test_separation_errors
             != sum(result.separation_errors for result in self.case_results)

@@ -210,8 +210,14 @@ def test_criteria_proposal_rejects_reversed_cases_and_duplicate_problem_hashes(
     proposal = deepcopy(r002_criteria_payload)
     proposal["benchmark_owner_confirmed"] = False
     proposal["cases"] = [
-        {**case, "problem_statement": "ScopeProof-authored fixture text."}
-        for case in proposal["cases"]
+        {
+            **case,
+            "problem_statement": f"ScopeProof-authored fixture text {number}.",
+            "problem_statement_sha256": sha256(
+                f"ScopeProof-authored fixture text {number}.".encode()
+            ).hexdigest(),
+        }
+        for number, case in enumerate(proposal["cases"], start=1)
     ]
     proposal["cases"].reverse()
     with pytest.raises(ValidationError):
@@ -223,6 +229,18 @@ def test_criteria_proposal_rejects_reversed_cases_and_duplicate_problem_hashes(
     ]
     with pytest.raises(ValidationError):
         R002CriteriaProposal.model_validate_json(json.dumps(proposal))
+
+
+def test_criteria_review_case_binds_utf8_problem_statement_hash(r002_criteria_payload):
+    case = deepcopy(r002_criteria_payload["cases"][0])
+    case["problem_statement"] = "évidence"
+    case["problem_statement_sha256"] = sha256("évidence".encode()).hexdigest()
+    assert r002_models.R002CriterionReviewCase.model_validate_json(
+        json.dumps(case)
+    ).problem_statement
+    case["problem_statement"] = "changed"
+    with pytest.raises(ValidationError, match="problem statement hash"):
+        r002_models.R002CriterionReviewCase.model_validate_json(json.dumps(case))
 
 
 def test_case_result_rejects_false_ready_and_non_static_success_signals():
@@ -718,6 +736,11 @@ def test_labels_loader_rejects_self_consistent_keys_and_incomplete_expected_miss
     ]
     if mutation == "unknown_case":
         payload["labels"][0]["key"]["case_id"] = "R002-999"
+        path = tmp_path / "candidate_labels.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(ValidationError):
+            load_confirmed_labels(path, manifest_hash, criteria_hash)
+        return
     elif mutation == "unknown_criterion":
         payload["labels"][0]["key"]["criterion_id"] = "AC-99"
         path = tmp_path / "candidate_labels.json"
@@ -944,7 +967,7 @@ def _benchmark_result_payload() -> dict[str, object]:
             }
         )
         case_results.append(result)
-    metric = {"state": "value", "numerator": 0, "denominator": 1, "value": 0.0}
+    metric = {"state": "value", "numerator": 1, "denominator": 1, "value": 1.0}
     return {
         "pack_id": "R-002",
         "classification": "public_engineering_research",
@@ -967,10 +990,10 @@ def _benchmark_result_payload() -> dict[str, object]:
             "candidate_to_gold_file_coverage": metric,
             "candidate_to_gold_hunk_coverage": metric,
             "missing_evidence_explanation_completeness": {
-                "state": "value",
-                "numerator": 1,
-                "denominator": 1,
-                "value": 1.0,
+                "state": "not_applicable",
+                "numerator": 0,
+                "denominator": 0,
+                "value": None,
             },
             "implementation_test_separation_errors": 0,
             "immutable_reference_integrity_errors": 0,
@@ -999,7 +1022,6 @@ def _benchmark_result_payload() -> dict[str, object]:
         (("confirmed_criterion_count",), 0),
         (("annotation_candidate_count",), 0),
         (("case_results", 1, "repository"), "forged/repository"),
-        (("case_results", 1, "head_sha"), "f" * 40),
     ],
 )
 def test_benchmark_result_rejects_forged_aggregate_or_case_identity(path, value):
@@ -1042,7 +1064,7 @@ def test_missing_explanation_requires_fixed_source_reason_and_status():
         r002_models.R002MissingExplanation.model_validate_json(json.dumps(invalid))
 
 
-def test_cached_case_rejects_any_approved_hash_mutation():
+def test_cached_case_keeps_structural_hashes_for_later_manifest_cross_binding():
     approved = r002_models.R002_APPROVED_CASES[0]
     payload = {
         "case_id": approved.case_id,
@@ -1059,8 +1081,9 @@ def test_cached_case_rejects_any_approved_hash_mutation():
         == approved.case_id
     )
     payload["patch_sha256"] = "f" * 64
-    with pytest.raises(ValidationError, match="approved projection"):
-        r002_models.R002CachedCase.model_validate_json(json.dumps(payload))
+    assert (
+        r002_models.R002CachedCase.model_validate_json(json.dumps(payload)).patch_sha256 == "f" * 64
+    )
 
 
 def _criteria_source_index_payload() -> dict[str, object]:
@@ -1084,13 +1107,17 @@ def _criteria_source_index_payload() -> dict[str, object]:
     }
 
 
-def test_production_indexes_require_exact_approved_order_and_content_hashes():
+def test_structural_indexes_require_exact_order_and_unique_content_hashes():
     source_index = _criteria_source_index_payload()
     assert r002_models.R002CriteriaSourceIndex.model_validate_json(
         json.dumps(source_index)
     ).complete
     source_index["cases"][0]["problem_statement_sha256"] = "f" * 64  # type: ignore[index]
-    with pytest.raises(ValidationError, match="approved problem hashes"):
+    assert r002_models.R002CriteriaSourceIndex.model_validate_json(
+        json.dumps(source_index)
+    ).complete
+    source_index["cases"][1]["problem_statement_sha256"] = "f" * 64  # type: ignore[index]
+    with pytest.raises(ValidationError, match="unique structural problem hashes"):
         r002_models.R002CriteriaSourceIndex.model_validate_json(json.dumps(source_index))
 
     cache_index = {
@@ -1112,7 +1139,7 @@ def test_production_indexes_require_exact_approved_order_and_content_hashes():
     }
     assert r002_models.R002CacheIndex.model_validate_json(json.dumps(cache_index)).complete
     cache_index["cases"].reverse()  # type: ignore[index]
-    with pytest.raises(ValidationError, match="ordered approved case IDs"):
+    with pytest.raises(ValidationError, match="ordered structural case IDs"):
         r002_models.R002CacheIndex.model_validate_json(json.dumps(cache_index))
 
 
@@ -1225,16 +1252,15 @@ def test_verified_permalink_is_canonical_and_cache_lines_join_head_files():
         **line,
         "permalink": line["permalink"].replace("astropy/astropy", "wrong/repository"),
     }
-    with pytest.raises(ValidationError):
-        r002_models.R002VerifiedCaseLines.model_validate_json(
-            json.dumps(
-                {
-                    "case_id": "R002-001",
-                    "head_sha": line["head_sha"],
-                    "lines": [wrong_repository],
-                }
-            )
+    assert r002_models.R002VerifiedCaseLines.model_validate_json(
+        json.dumps(
+            {
+                "case_id": "R002-001",
+                "head_sha": line["head_sha"],
+                "lines": [wrong_repository],
+            }
         )
+    ).lines
 
     approved = r002_models.R002_APPROVED_CASES[0]
     cache_case = {
@@ -1527,6 +1553,17 @@ def test_projection_recomputes_owner_confirmed_candidate_precision():
         "denominator": 0,
         "value": None,
     }
+    for field in (
+        "criterion_candidate_coverage",
+        "candidate_to_gold_file_coverage",
+        "candidate_to_gold_hunk_coverage",
+    ):
+        no_candidates["metrics"][field] = {
+            "state": "value",
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0,
+        }
     assert r002_models.R002BenchmarkResult.model_validate_json(json.dumps(no_candidates)).metrics
     for status in ("missing", "partial", "needs_review"):
         explanation = {
@@ -2007,3 +2044,236 @@ def test_parsed_diff_and_case_enforce_exact_aggregate_hunk_and_line_caps():
     over_lines["diff_line_count"] = 50001
     with pytest.raises(ValidationError, match="less than or equal to 50000"):
         r002_models.R002ParsedCase.model_validate_json(json.dumps(over_lines))
+
+
+def test_parsed_case_direct_constructor_reconstructs_omitted_counts():
+    parsed = r002_models.R002ParsedCase.model_validate({"case_id": "R002-001", "files": ()})
+    assert (parsed.file_count, parsed.hunk_count, parsed.diff_line_count) == (0, 0, 0)
+    assert (
+        r002_models.R002ParsedCase.model_validate_json(json.dumps(parsed.model_dump(mode="json")))
+        == parsed
+    )
+    with pytest.raises(ValidationError, match="counts must match"):
+        r002_models.R002ParsedCase.model_validate_json(
+            json.dumps(
+                {
+                    "case_id": "R002-001",
+                    "files": [],
+                    "file_count": 1,
+                    "hunk_count": 0,
+                    "diff_line_count": 0,
+                }
+            )
+        )
+
+
+def test_parsed_file_rejects_overlapping_hunk_ranges_and_accepts_adjacent_ranges():
+    def hunk(number: int, start: int, count: int) -> dict[str, object]:
+        return {
+            "hunk_id": f"patch:a.py:H{number}",
+            "old_start": start,
+            "old_count": 0,
+            "new_start": start,
+            "new_count": count,
+            "lines": [
+                _parsed_line_payload("x", number=line) for line in range(start, start + count)
+            ],
+        }
+
+    adjacent = {
+        "stream": "patch",
+        "path": "a.py",
+        "hunks": [hunk(1, 1, 1), hunk(2, 2, 1)],
+        "additions": 2,
+        "deletions": 0,
+    }
+    assert r002_models.R002ParsedFile.model_validate_json(json.dumps(adjacent)).hunks
+    overlapping = deepcopy(adjacent)
+    overlapping["hunks"] = [hunk(1, 1, 2), hunk(2, 2, 1)]
+    overlapping["additions"] = 3
+    with pytest.raises(ValidationError, match="overlap"):
+        r002_models.R002ParsedFile.model_validate_json(json.dumps(overlapping))
+    duplicate_zero = deepcopy(adjacent)
+    duplicate_zero["hunks"] = [hunk(1, 1, 0), hunk(2, 1, 0)]
+    duplicate_zero["additions"] = 0
+    with pytest.raises(ValidationError, match="ambiguous"):
+        r002_models.R002ParsedFile.model_validate_json(json.dumps(duplicate_zero))
+
+    def removed_hunk(number: int, start: int, count: int) -> dict[str, object]:
+        return {
+            "hunk_id": f"patch:b.py:H{number}",
+            "old_start": start,
+            "old_count": count,
+            "new_start": start,
+            "new_count": 0,
+            "lines": [
+                {
+                    "change_type": "removed",
+                    "old_line_number": line,
+                    "new_line_number": None,
+                    "content": "x",
+                    "normalized_line_sha256": sha256(b"x").hexdigest(),
+                }
+                for line in range(start, start + count)
+            ],
+        }
+
+    old_overlap = {
+        "stream": "patch",
+        "path": "b.py",
+        "hunks": [removed_hunk(1, 1, 2), removed_hunk(2, 2, 1)],
+        "additions": 0,
+        "deletions": 3,
+    }
+    with pytest.raises(ValidationError, match="overlap"):
+        r002_models.R002ParsedFile.model_validate_json(json.dumps(old_overlap))
+
+
+def test_r002_error_reason_code_allowlists_are_exact_and_closed():
+    source_codes = {
+        "source_pin_mismatch",
+        "approved_cohort_mismatch",
+        "parquet_bytes_mismatch",
+        "parquet_row_count_mismatch",
+        "parquet_schema_mismatch",
+        "parquet_field_type_mismatch",
+        "parquet_uncompressed_limit",
+        "row_count_mismatch",
+        "unique_instance_count_mismatch",
+        "repository_count_mismatch",
+        "instance_pr_suffix_mismatch",
+        "manifest_selection_mismatch",
+        "manifest_row_mismatch",
+    }
+    assert r002_models.R002SourceError.allowed_reason_codes == source_codes
+    assert all(r002_models.R002SourceError(code).reason_code == code for code in source_codes)
+    with pytest.raises(RuntimeError):
+        r002_models.R002SourceError("unregistered")
+
+    annotation_codes = {
+        "criteria_source_cache_manifest_mismatch",
+        "problem_statement_hash_mismatch",
+        "prepared_cache_evidence_drift",
+        "criteria_manifest_drift",
+        "prepared_cache_criteria_drift",
+        "annotation_pair_limit",
+        "label_upstream_hash_drift",
+        "annotation_criterion_drift",
+        "reannotation_required",
+        "expected_missing_drift",
+        "label_proposal_must_be_unconfirmed",
+        "candidate_labels_not_confirmed",
+        "criteria_manifest_context_invalid",
+        "criteria_manifest_projection_drift",
+        "candidate_label_upstream_drift",
+        "annotation_universe_drift",
+    }
+    assert r002_models.R002AnnotationError.allowed_reason_codes == annotation_codes
+    assert all(
+        r002_models.R002AnnotationError(code).reason_code == code for code in annotation_codes
+    )
+    with pytest.raises(RuntimeError):
+        r002_models.R002AnnotationError("unregistered")
+
+
+def test_verified_sidecars_accept_fake_heads_but_require_internal_consistency():
+    head = "f" * 40
+    line = {
+        "stream": "patch",
+        "path": "a.py",
+        "hunk_id": "patch:a.py:H1",
+        "new_line_number": 1,
+        "normalized_line_sha256": "1" * 64,
+        "head_file_sha256": "2" * 64,
+        "head_sha": head,
+        "permalink": f"https://github.com/fixture/repo/blob/{head}/a.py#L1-L1",
+    }
+    payload = {"case_id": "R002-001", "head_sha": head, "lines": [line]}
+    assert r002_models.R002VerifiedCaseLines.model_validate_json(json.dumps(payload)).lines
+    wrong_head = deepcopy(payload)
+    wrong_head["lines"][0]["head_sha"] = "e" * 40
+    wrong_head["lines"][0]["permalink"] = wrong_head["lines"][0]["permalink"].replace(
+        head, "e" * 40
+    )
+    with pytest.raises(ValidationError, match="share one immutable head"):
+        r002_models.R002VerifiedCaseLines.model_validate_json(json.dumps(wrong_head))
+    inconsistent_path = deepcopy(payload)
+    inconsistent_path["lines"].append(
+        {
+            **line,
+            "hunk_id": "patch:a.py:H2",
+            "new_line_number": 2,
+            "head_file_sha256": "3" * 64,
+            "permalink": f"https://github.com/fixture/repo/blob/{head}/a.py#L2-L2",
+        }
+    )
+    with pytest.raises(ValidationError, match="stream and head-file hash"):
+        r002_models.R002VerifiedCaseLines.model_validate_json(json.dumps(inconsistent_path))
+
+
+def test_missing_explanations_cannot_contradict_retrieved_evidence():
+    payload = _safe_case_result_payload()
+    payload["missing_explanations"] = [
+        {
+            "case_id": "R002-001",
+            "criterion_id": "AC-01",
+            "evidence_type": "implementation",
+            "source": "scopeproof_finding",
+            "finding_status": "missing",
+            "reason_code": "scopeproof_finding_explicit_gap",
+        }
+    ]
+    with pytest.raises(ValidationError, match="owner-relevant"):
+        R002CaseResult.model_validate_json(json.dumps(payload))
+
+    payload["retrieved_candidates"][0]["owner_label_relevant"] = False  # type: ignore[index]
+    assert R002CaseResult.model_validate_json(json.dumps(payload)).missing_explanations
+    payload["missing_explanations"][0].update(  # type: ignore[index]
+        {
+            "source": "r002_retrieval_comparison",
+            "finding_status": "evidence_found",
+            "reason_code": "no_candidate_retrieved_for_type",
+        }
+    )
+    with pytest.raises(ValidationError, match="no-candidate"):
+        R002CaseResult.model_validate_json(json.dumps(payload))
+    payload["missing_explanations"][0]["reason_code"] = "retrieved_only_owner_labelled_irrelevant"  # type: ignore[index]
+    assert R002CaseResult.model_validate_json(json.dumps(payload)).missing_explanations
+
+
+def test_projection_recomputes_all_case_observable_metric_numerators():
+    payload = _benchmark_result_payload()
+    for field in (
+        "criterion_candidate_coverage",
+        "candidate_to_gold_file_coverage",
+        "candidate_to_gold_hunk_coverage",
+    ):
+        payload["metrics"][field] = {
+            "state": "value",
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0,
+        }
+        with pytest.raises(ValidationError, match="observable metric numerators"):
+            r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload))
+        payload["metrics"][field] = {
+            "state": "value",
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0,
+        }
+    payload["metrics"]["missing_evidence_explanation_completeness"] = {
+        "state": "value",
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0,
+    }
+    with pytest.raises(ValidationError, match="observable metric numerators"):
+        r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload))
+
+
+def test_structural_projection_accepts_fake_heads_for_private_helpers():
+    payload = _benchmark_result_payload()
+    for result in payload["case_results"]:  # type: ignore[index]
+        result["head_sha"] = "f" * 40
+    assert r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload)).case_results
