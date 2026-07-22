@@ -173,6 +173,10 @@ R002_STATIC_EVIDENCE_TYPES = (
     EvidenceType.DOCUMENTATION,
     EvidenceType.CONTRACT,
 )
+R002_STATIC_EVIDENCE_TYPE_RANK = {
+    evidence_type: rank for rank, evidence_type in enumerate(R002_STATIC_EVIDENCE_TYPES)
+}
+R002_CRITERION_ID_PATTERN = r"^AC-(0[1-9]|1[0-6])$"
 R002_SCHEMA = (
     "repo",
     "instance_id",
@@ -800,6 +804,10 @@ def _verified_line_order(line: R002VerifiedLine) -> tuple[str, str, int, int]:
     return (line.stream.value, line.path, line.new_line_number, r002_hunk_index(line.hunk_id))
 
 
+def _verified_line_identity(line: R002VerifiedLine) -> tuple[str, int]:
+    return (line.path, line.new_line_number)
+
+
 class R002VerifiedCaseLines(R002StrictModel):
     case_id: R002CaseId
     head_sha: GitSha
@@ -810,8 +818,9 @@ class R002VerifiedCaseLines(R002StrictModel):
         approved = _approved_case(self.case_id)
         if self.head_sha != approved.head_sha:
             raise ValueError("verified lines must use the approved head SHA")
-        keys = [_verified_line_order(line) for line in self.lines]
-        if keys != sorted(keys) or len(keys) != len(set(keys)):
+        order_keys = [_verified_line_order(line) for line in self.lines]
+        identity_keys = [_verified_line_identity(line) for line in self.lines]
+        if order_keys != sorted(order_keys) or len(identity_keys) != len(set(identity_keys)):
             raise ValueError("verified lines must be sorted and unique")
         for line in self.lines:
             if (
@@ -870,10 +879,11 @@ class R002CachedCase(R002StrictModel):
             raise ValueError("cached case hashes must bind the approved projection")
         if any(line.head_sha != approved.head_sha for line in self.verified_lines):
             raise ValueError("cached verified lines must use the approved head SHA")
-        line_keys = [_verified_line_order(line) for line in self.verified_lines]
+        line_order_keys = [_verified_line_order(line) for line in self.verified_lines]
+        line_identity_keys = [_verified_line_identity(line) for line in self.verified_lines]
         if (
-            line_keys != sorted(line_keys)
-            or len(line_keys) != len(set(line_keys))
+            line_order_keys != sorted(line_order_keys)
+            or len(line_identity_keys) != len(set(line_identity_keys))
             or any(
                 _permalink_repository(
                     line.permalink,
@@ -1172,11 +1182,24 @@ class R002CriteriaSet(_CriteriaCollection):
 
 class R002CandidateLineKey(R002StrictModel):
     case_id: R002CaseId
-    criterion_id: str = Field(pattern=r"^AC-\d{2,}$")
+    criterion_id: str = Field(pattern=R002_CRITERION_ID_PATTERN)
     stream: R002DiffStream
     path: R002LogicalPath
     new_line_number: StrictInt = Field(ge=1)
     normalized_line_sha256: Sha256
+
+
+def r002_annotation_key_order(
+    key: R002CandidateLineKey,
+) -> tuple[str, str, str, str, int, str]:
+    return (
+        key.case_id,
+        key.criterion_id,
+        key.stream.value,
+        key.path,
+        key.new_line_number,
+        key.normalized_line_sha256,
+    )
 
 
 class R002CandidateLabel(R002StrictModel):
@@ -1209,7 +1232,7 @@ class R002CandidateLabel(R002StrictModel):
 
 class R002ExpectedMissing(R002StrictModel):
     case_id: R002CaseId
-    criterion_id: str = Field(pattern=r"^AC-\d{2,}$")
+    criterion_id: str = Field(pattern=R002_CRITERION_ID_PATTERN)
     evidence_type: Literal[
         EvidenceType.IMPLEMENTATION,
         EvidenceType.TEST,
@@ -1217,6 +1240,14 @@ class R002ExpectedMissing(R002StrictModel):
         EvidenceType.CONTRACT,
     ]
     reason_code: Literal["no_owner_labelled_relevant_candidate"]
+
+
+def _expected_missing_order(item: R002ExpectedMissing) -> tuple[str, str, int]:
+    return (
+        item.case_id,
+        item.criterion_id,
+        R002_STATIC_EVIDENCE_TYPE_RANK[item.evidence_type],
+    )
 
 
 class R002AnnotationUniverse(R002Manifest):
@@ -1227,7 +1258,7 @@ class R002AnnotationUniverse(R002Manifest):
 
     @model_validator(mode="after")
     def bind_keys(self) -> Self:
-        keys = [canonical_json_bytes(key) for key in self.candidate_keys]
+        keys = [r002_annotation_key_order(key) for key in self.candidate_keys]
         if self.candidate_count != len(keys) or len(keys) != len(set(keys)) or keys != sorted(keys):
             raise ValueError("annotation keys must be sorted, unique, and complete")
         return self
@@ -1259,7 +1290,7 @@ class R002AnnotationReview(R002Manifest):
 
     @model_validator(mode="after")
     def bind_ordered_unique_items(self) -> Self:
-        keys = [canonical_json_bytes(item.key) for item in self.items]
+        keys = [r002_annotation_key_order(item.key) for item in self.items]
         if keys != sorted(keys) or len(keys) != len(set(keys)):
             raise ValueError("annotation review items must be sorted and unique")
         # The cache writer additionally compares this collection against the
@@ -1277,18 +1308,18 @@ class _LabelCollection(R002Manifest):
 
     @model_validator(mode="after")
     def bind_labels(self) -> Self:
-        keys = [canonical_json_bytes(label.key) for label in self.labels]
+        keys = [r002_annotation_key_order(label.key) for label in self.labels]
         if (
             self.annotation_count != len(keys)
             or len(keys) != len(set(keys))
             or keys != sorted(keys)
         ):
             raise ValueError("labels must be sorted, unique, and complete")
-        actual_records = tuple(
-            (item.case_id, item.criterion_id, item.evidence_type) for item in self.expected_missing
-        )
-        if len(actual_records) != len(set(actual_records)):
-            raise ValueError("expected missing records must be unique")
+        actual_records = tuple(_expected_missing_order(item) for item in self.expected_missing)
+        if actual_records != tuple(sorted(actual_records)) or len(actual_records) != len(
+            set(actual_records)
+        ):
+            raise ValueError("expected missing records must be sorted and unique")
         return self
 
 
@@ -1340,7 +1371,7 @@ class R002RetrievedCandidate(R002StrictModel):
 
 class R002MissingExplanation(R002StrictModel):
     case_id: R002CaseId
-    criterion_id: str = Field(pattern=r"^AC-\d{2,}$")
+    criterion_id: str = Field(pattern=R002_CRITERION_ID_PATTERN)
     evidence_type: EvidenceType
     source: Literal["scopeproof_finding", "r002_retrieval_comparison"]
     finding_status: FindingStatus
@@ -1486,17 +1517,7 @@ class R002CaseResult(R002StrictModel):
             for item in self.missing_explanations
         ):
             raise ValueError("R-002 missing explanations must be static evidence types")
-        candidate_keys = [
-            (
-                item.key.case_id,
-                item.key.criterion_id,
-                item.key.stream.value,
-                item.key.path,
-                item.key.new_line_number,
-                item.key.normalized_line_sha256,
-            )
-            for item in self.retrieved_candidates
-        ]
+        candidate_keys = [r002_annotation_key_order(item.key) for item in self.retrieved_candidates]
         if candidate_keys != sorted(candidate_keys) or len(candidate_keys) != len(
             set(candidate_keys)
         ):
@@ -1574,7 +1595,7 @@ class R002DeterminismProjection(R002Manifest):
         ):
             raise ValueError("R-002 projections require the approved cohort identities")
         unique_candidates = {
-            canonical_json_bytes(candidate.key): candidate
+            r002_annotation_key_order(candidate.key): candidate
             for result in self.case_results
             for candidate in result.retrieved_candidates
         }

@@ -457,6 +457,114 @@ def test_annotation_universe_rejects_duplicate_or_unstable_candidate_keys(mutati
         R002AnnotationUniverse.model_validate_json(json.dumps(payload))
 
 
+def test_annotation_artifacts_use_one_explicit_structural_key_order():
+    keys = [
+        {
+            "case_id": "R002-001",
+            "criterion_id": "AC-01",
+            "stream": "patch",
+            "path": path,
+            "new_line_number": line,
+            "normalized_line_sha256": digest * 64,
+        }
+        for path, line, digest in (("a.py", 2, "0"), ("z.py", 1, "1"))
+    ]
+    universe = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_manifest_sha256": "0" * 64,
+        "criteria_set_sha256": "1" * 64,
+        "candidate_count": 2,
+        "candidate_keys": keys,
+    }
+    assert R002AnnotationUniverse.model_validate_json(json.dumps(universe)).candidate_keys
+    for mutation in (list(reversed(keys)), [keys[0], keys[0]]):
+        invalid = {**universe, "candidate_keys": mutation}
+        with pytest.raises(ValidationError):
+            R002AnnotationUniverse.model_validate_json(json.dumps(invalid))
+
+    review = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_manifest_sha256": "0" * 64,
+        "criteria_set_sha256": "1" * 64,
+        "annotation_universe_sha256": "2" * 64,
+        "items": [{"key": key, "line_content": "pass"} for key in keys],
+    }
+    assert r002_models.R002AnnotationReview.model_validate_json(json.dumps(review)).items
+    review["items"].reverse()
+    with pytest.raises(ValidationError):
+        r002_models.R002AnnotationReview.model_validate_json(json.dumps(review))
+
+    labels = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_manifest_sha256": "0" * 64,
+        "criteria_set_sha256": "1" * 64,
+        "annotation_universe_sha256": "2" * 64,
+        "annotation_count": 2,
+        "labels": [
+            {"key": key, "relevant": True, "reason_code": "direct_static_candidate"} for key in keys
+        ],
+        "expected_missing": [],
+        "benchmark_owner_confirmed": True,
+    }
+    assert R002CandidateLabelSet.model_validate_json(json.dumps(labels)).labels
+    labels["labels"].reverse()
+    with pytest.raises(ValidationError):
+        R002CandidateLabelSet.model_validate_json(json.dumps(labels))
+
+
+@pytest.mark.parametrize(
+    ("model", "payload"),
+    [
+        (
+            r002_models.R002CandidateLineKey,
+            {
+                "case_id": "R002-001",
+                "criterion_id": "AC-17",
+                "stream": "patch",
+                "path": "a.py",
+                "new_line_number": 1,
+                "normalized_line_sha256": "0" * 64,
+            },
+        ),
+        (
+            r002_models.R002ExpectedMissing,
+            {
+                "case_id": "R002-001",
+                "criterion_id": "AC-17",
+                "evidence_type": "implementation",
+                "reason_code": "no_owner_labelled_relevant_candidate",
+            },
+        ),
+        (
+            r002_models.R002MissingExplanation,
+            {
+                "case_id": "R002-001",
+                "criterion_id": "AC-17",
+                "evidence_type": "implementation",
+                "source": "scopeproof_finding",
+                "finding_status": "missing",
+                "reason_code": "scopeproof_finding_explicit_gap",
+            },
+        ),
+    ],
+)
+def test_persisted_annotation_criterion_ids_are_limited_to_r002_range(model, payload):
+    with pytest.raises(ValidationError):
+        model.model_validate(payload)
+
+
 def _write_bound_manifest_and_criteria(
     tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
 ):
@@ -511,7 +619,7 @@ def test_criteria_loader_rejects_manifest_hash_drift(
         load_confirmed_criteria(criteria_path, "0" * 64)
 
 
-def test_labels_loader_binds_criteria_universe_and_annotation_projection(
+def test_task7_labels_loader_accepts_streamed_structural_annotation_order(
     tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
 ):
     _manifest_path, criteria_path, manifest_hash = _write_bound_manifest_and_criteria(
@@ -522,6 +630,22 @@ def test_labels_loader_binds_criteria_universe_and_annotation_projection(
     payload = _label_payload()
     payload["source_manifest_sha256"] = manifest_hash
     payload["criteria_set_sha256"] = criteria_hash
+    payload["labels"] = [
+        {
+            "key": {
+                "case_id": "R002-001",
+                "criterion_id": "AC-01",
+                "stream": "patch",
+                "path": path,
+                "new_line_number": line,
+                "normalized_line_sha256": digest * 64,
+            },
+            "relevant": True,
+            "reason_code": "direct_static_candidate",
+        }
+        for path, line, digest in (("a.py", 2, "0"), ("z.py", 1, "1"))
+    ]
+    payload["annotation_count"] = 2
     payload["expected_missing"] = [
         {
             "case_id": case.case_id,
@@ -532,6 +656,8 @@ def test_labels_loader_binds_criteria_universe_and_annotation_projection(
         for case in criteria.cases
         for criterion in case.criteria
         for evidence_type in r002_models.R002_STATIC_EVIDENCE_TYPES
+        if (case.case_id, criterion.criterion_id, evidence_type.value)
+        != ("R002-001", "AC-01", "implementation")
     ]
     universe = R002AnnotationUniverse.model_validate_json(
         json.dumps(
@@ -556,7 +682,7 @@ def test_labels_loader_binds_criteria_universe_and_annotation_projection(
     payload["annotation_universe_sha256"] = canonical_sha256(universe)
     path = tmp_path / "candidate_labels.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
-    assert load_confirmed_labels(path, manifest_hash, criteria_hash).annotation_count == 1
+    assert load_confirmed_labels(path, manifest_hash, criteria_hash).annotation_count == 2
 
     payload["labels"][0]["key"]["path"] = "b.py"
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -593,6 +719,11 @@ def test_labels_loader_rejects_self_consistent_keys_and_incomplete_expected_miss
         payload["labels"][0]["key"]["case_id"] = "R002-999"
     elif mutation == "unknown_criterion":
         payload["labels"][0]["key"]["criterion_id"] = "AC-99"
+        path = tmp_path / "candidate_labels.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(ValidationError):
+            load_confirmed_labels(path, manifest_hash, criteria_hash)
+        return
     elif mutation == "omitted":
         payload["expected_missing"].pop()
     elif mutation == "extra":
@@ -746,7 +877,8 @@ def test_expected_missing_is_per_evidence_type_and_ordered():
     ]
     assert R002CandidateLabelSet.model_validate_json(json.dumps(payload)).expected_missing
     payload["expected_missing"].reverse()
-    assert R002CandidateLabelSet.model_validate_json(json.dumps(payload)).expected_missing
+    with pytest.raises(ValidationError, match="expected missing records must be sorted"):
+        R002CandidateLabelSet.model_validate_json(json.dumps(payload))
 
 
 def test_metrics_has_exact_persisted_ratio_field_map():
@@ -882,7 +1014,7 @@ def test_case_result_rejects_cross_case_and_out_of_range_references():
 
     payload = _safe_case_result_payload()
     payload["retrieved_candidates"][0]["key"]["criterion_id"] = "AC-99"  # type: ignore[index]
-    with pytest.raises(ValidationError, match="within the case criteria"):
+    with pytest.raises(ValidationError):
         R002CaseResult.model_validate_json(json.dumps(payload))
 
 
@@ -1238,6 +1370,8 @@ def test_verified_lines_use_natural_hunk_order_not_lexical_hunk_id_order():
     for number in range(1, 11):
         line = _verified_line_payload()
         line["hunk_id"] = f"patch:a.py:H{number}"
+        line["new_line_number"] = number
+        line["permalink"] = line["permalink"].replace("#L7-L7", f"#L{number}-L{number}")
         lines.append(line)
     payload = {
         "case_id": "R002-001",
@@ -1277,6 +1411,44 @@ def test_verified_lines_use_natural_hunk_order_not_lexical_hunk_id_order():
     cache_payload["verified_lines"] = payload["lines"]
     with pytest.raises(ValidationError, match="sorted unique"):
         r002_models.R002CachedCase.model_validate_json(json.dumps(cache_payload))
+
+
+def test_verified_line_identity_excludes_hunk_id_and_resolves_once():
+    first = _verified_line_payload()
+    second = {**first, "hunk_id": "patch:a.py:H2"}
+    verified_payload = {
+        "case_id": "R002-001",
+        "head_sha": first["head_sha"],
+        "lines": [first, second],
+    }
+    with pytest.raises(ValidationError, match="sorted and unique"):
+        r002_models.R002VerifiedCaseLines.model_validate_json(json.dumps(verified_payload))
+
+    approved = r002_models.R002_APPROVED_CASES[0]
+    cache_payload = {
+        "case_id": approved.case_id,
+        "row_sha256": approved.row_sha256,
+        "problem_statement_sha256": approved.problem_statement_sha256,
+        "patch_sha256": approved.patch_sha256,
+        "test_patch_sha256": approved.test_patch_sha256,
+        "parsed_case_sha256": "3" * 64,
+        "verified_lines": [first, second],
+        "head_files": [
+            {
+                "logical_path": "a.py",
+                "head_sha": approved.head_sha,
+                "byte_length": 1,
+                "content_sha256": "2" * 64,
+            }
+        ],
+    }
+    with pytest.raises(ValidationError, match="sorted unique"):
+        r002_models.R002CachedCase.model_validate_json(json.dumps(cache_payload))
+
+    accepted = r002_models.R002VerifiedCaseLines.model_validate_json(
+        json.dumps({**verified_payload, "lines": [first]})
+    )
+    assert accepted.by_path_and_line("a.py", 7).hunk_id == "patch:a.py:H1"
 
 
 def test_annotation_review_requires_nonempty_bounded_ordered_unique_items():
