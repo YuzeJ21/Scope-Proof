@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import traceback
 from hashlib import sha256
 from pathlib import Path
 
@@ -345,6 +346,76 @@ def test_public_adapter_validation_failure_has_no_retained_context(
 
     assert invalid_adapter.value.__cause__ is None
     assert invalid_adapter.value.__context__ is None
+
+
+def _assert_traceback_hides_input_sentinels(error: R002DiffError, *sentinels: str) -> None:
+    captured = traceback.TracebackException.from_exception(error, capture_locals=True)
+    parser_frames = [
+        frame
+        for frame in captured.stack
+        if frame.filename == r002_diff.__file__
+    ]
+    assert parser_frames
+    assert error.args == (error.reason_code,)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    captured_locals = "\n".join(
+        value for frame in parser_frames for value in (frame.locals or {}).values()
+    )
+    assert all(sentinel not in captured_locals for sentinel in sentinels)
+
+
+def test_public_parser_tracebacks_discard_normal_and_invalid_utf8_inputs() -> None:
+    normal_sentinel = "TRACE_NORMAL_RAW_PATH_CONTENT"
+    with pytest.raises(R002DiffError, match="invalid_line_marker") as normal_error:
+        parse_unified_diff(
+            _file(normal_sentinel, "@@ -1 +1 @@\n" + normal_sentinel + "\n"),
+            stream=R002DiffStream.PATCH,
+        )
+    _assert_traceback_hides_input_sentinels(normal_error.value, normal_sentinel)
+
+    utf8_sentinel = "TRACE_INVALID_UTF8_RAW"
+    with pytest.raises(R002DiffError, match="invalid_utf8") as invalid_utf8:
+        parse_unified_diff(
+            b"\xff" + utf8_sentinel.encode(), stream=R002DiffStream.PATCH
+        )
+    _assert_traceback_hides_input_sentinels(invalid_utf8.value, utf8_sentinel)
+
+
+def test_public_case_parser_tracebacks_discard_case_and_model_inputs() -> None:
+    case_sentinel = "TRACE_CASE_PATCH_AND_TEST"
+    with pytest.raises(R002DiffError, match="invalid_line_marker") as invalid_case_patch:
+        parse_case_diffs(
+            case_id="R002-001",
+            patch=_file(case_sentinel, "@@ -1 +1 @@\n" + case_sentinel + "\n").decode(),
+            test_patch=case_sentinel,
+        )
+    _assert_traceback_hides_input_sentinels(invalid_case_patch.value, case_sentinel)
+
+    model_sentinel = "TRACE_INVALID_CASE_ID"
+    with pytest.raises(R002DiffError, match="model_validation_failed") as invalid_case_id:
+        parse_case_diffs(case_id=model_sentinel, patch="", test_patch="")
+    _assert_traceback_hides_input_sentinels(invalid_case_id.value, model_sentinel)
+
+
+def test_public_adapter_traceback_discards_parsed_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter_sentinel = "TRACE_ADAPTER_PARSED_INPUT"
+    parsed = parse_case_diffs(
+        case_id="R002-001",
+        patch=_file(adapter_sentinel, "@@ -1 +1 @@\n x\n").decode(),
+        test_patch="",
+    )
+    original_changed_file = r002_diff.ChangedFile
+
+    def invalid_changed_file(**_: object) -> object:
+        return original_changed_file.model_validate({"path": "", "status": "modified"})
+
+    monkeypatch.setattr(r002_diff, "ChangedFile", invalid_changed_file)
+    with pytest.raises(R002DiffError, match="model_validation_failed") as invalid_adapter:
+        parsed_case_to_changed_files(parsed)
+    _assert_traceback_hides_input_sentinels(invalid_adapter.value, adapter_sentinel)
 
 
 def test_diff_error_reason_allowlist_is_exact_and_closed() -> None:

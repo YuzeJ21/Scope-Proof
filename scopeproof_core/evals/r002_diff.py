@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from hashlib import sha256
+from typing import NoReturn
 
 from pydantic import ValidationError
 
@@ -71,6 +72,11 @@ class R002DiffError(R002Error):
 def _fresh_diff_error(reason: str) -> R002DiffError:
     """Build a stable error that can be raised after exception context has ended."""
     return R002DiffError(reason)
+
+
+def _raise_public_error(reason: str) -> NoReturn:
+    """Raise only a stable reason after all input-bearing frames have unwound."""
+    raise R002DiffError(reason)
 
 
 def _raise_budget_error(reason: str) -> None:
@@ -371,7 +377,7 @@ def _parse_unified_diff_files(
     raise error
 
 
-def parse_unified_diff(
+def _parse_unified_diff(
     raw: bytes,
     *,
     stream: R002DiffStream,
@@ -398,7 +404,22 @@ def parse_unified_diff(
     raise error
 
 
-def parse_case_diffs(
+def parse_unified_diff(
+    raw: bytes,
+    *,
+    stream: R002DiffStream,
+    limits: R002DiffLimits = DEFAULT_R002_DIFF_LIMITS,
+) -> R002ParsedDiff:
+    """Parse a diff without retaining its input in any public error traceback."""
+    try:
+        return _parse_unified_diff(raw, stream=stream, limits=limits)
+    except R002DiffError as caught:
+        reason = caught.reason_code
+    del raw, stream, limits
+    _raise_public_error(reason)
+
+
+def _parse_case_diffs(
     *,
     case_id: R002CaseId,
     patch: str,
@@ -467,7 +488,28 @@ def parse_case_diffs(
     raise error
 
 
-def parsed_case_to_changed_files(parsed: R002ParsedCase) -> list[ChangedFile]:
+def parse_case_diffs(
+    *,
+    case_id: R002CaseId,
+    patch: str,
+    test_patch: str,
+    limits: R002DiffLimits = DEFAULT_R002_DIFF_LIMITS,
+) -> R002ParsedCase:
+    """Parse both streams without retaining their input in public error tracebacks."""
+    try:
+        return _parse_case_diffs(
+            case_id=case_id,
+            patch=patch,
+            test_patch=test_patch,
+            limits=limits,
+        )
+    except R002DiffError as caught:
+        reason = caught.reason_code
+    del case_id, patch, test_patch, limits
+    _raise_public_error(reason)
+
+
+def _parsed_case_to_changed_files(parsed: R002ParsedCase) -> list[ChangedFile]:
     """Adapt parsed patches to the existing retrieval contract without a patch body."""
     try:
         return [
@@ -497,3 +539,13 @@ def parsed_case_to_changed_files(parsed: R002ParsedCase) -> list[ChangedFile]:
     except ValidationError:
         error = _fresh_diff_error("model_validation_failed")
     raise error
+
+
+def parsed_case_to_changed_files(parsed: R002ParsedCase) -> list[ChangedFile]:
+    """Adapt parsed files without retaining parsed input in public error tracebacks."""
+    try:
+        return _parsed_case_to_changed_files(parsed)
+    except R002DiffError as caught:
+        reason = caught.reason_code
+    del parsed
+    _raise_public_error(reason)
