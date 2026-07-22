@@ -362,7 +362,6 @@ class R002Cache:
                 previous = current
                 current = next_fd
                 if not _close_fd(previous):
-                    _close_fd(current)
                     raise R002CacheError("cache_directory_security") from None
                 is_root = index == len(self._root_parts) - 1
                 if created:
@@ -373,7 +372,9 @@ class R002Cache:
                 self._verify_directory(current, owned=created or is_root)
             yield current
         finally:
-            if not _close_fd(current):
+            closing_fd = current
+            current = -1
+            if closing_fd >= 0 and not _close_fd(closing_fd):
                 raise R002CacheError("cache_state_unknown")
 
     @contextmanager
@@ -584,15 +585,21 @@ class R002Cache:
         try:
             self._write_all(fd, data)
             self._fsync(fd)
-            if not _close_fd(fd):
-                raise R002CacheError("cache_state_unknown")
+            closing_fd = fd
             fd = -1
+            if not _close_fd(closing_fd):
+                raise R002CacheError("cache_state_unknown")
             observed = self._read_checked(parent_fd, name, max_bytes=max_bytes)
             if observed != data:
                 raise R002CacheError("cache_write_failed")
             return name
         except BaseException:
-            closed = _close_fd(fd) if fd >= 0 else True
+            if fd >= 0:
+                closing_fd = fd
+                fd = -1
+                closed = _close_fd(closing_fd)
+            else:
+                closed = True
             try:
                 self._unlink_created(parent_fd, name)
             except R002CacheError:
@@ -803,7 +810,7 @@ class R002Cache:
         del relative_name, value, model_type
         _raise_public(reason)
 
-    def _validated_control_bytes(self, relative_name: str, value: BaseModel) -> bytes:
+    def _validated_control(self, relative_name: str, value: BaseModel) -> tuple[BaseModel, bytes]:
         expected = _model_for_name(relative_name)
         if expected is None:
             if relative_name in _STREAMED_ARTIFACTS:
@@ -818,7 +825,7 @@ class R002Cache:
                 or validated.research_context.case_id != expected_case_id
             ):
                 raise R002CacheError("model_validation_failed")
-        return data
+        return validated, data
 
     def write_model(self, relative_name: str, value: BaseModel) -> Path:
         """Create one typed control without overwriting any existing control."""
@@ -826,13 +833,13 @@ class R002Cache:
             relative = _validate_relative_name(relative_name)
             if relative in _RESERVED_MARKERS:
                 raise R002CacheError("completion_marker_requires_publish")
-            data = self._validated_control_bytes(relative, value)
+            validated, data = self._validated_control(relative, value)
             path = self._replace_bytes(relative, data, create_only=True)
             try:
-                reopened = self._read_model_internal(relative, type(value))
+                reopened = self._read_model_internal(relative, type(validated))
             except R002CacheError:
                 raise R002CacheError("cache_state_unknown") from None
-            if _fixed_canonical_bytes(reopened, type(value)) != data:
+            if reopened != validated or _fixed_canonical_bytes(reopened, type(validated)) != data:
                 raise R002CacheError("cache_state_unknown")
             return path
         except R002CacheError as caught:
@@ -848,7 +855,7 @@ class R002Cache:
             relative = _validate_relative_name(relative_name)
             if relative in _RESERVED_MARKERS:
                 raise R002CacheError("completion_marker_requires_publish")
-            data = self._validated_control_bytes(relative, value)
+            validated, data = self._validated_control(relative, value)
             path = self._replace_bytes(relative, data, create_only=False)
             expected = _model_for_name(relative)
             if expected is None:
@@ -857,7 +864,7 @@ class R002Cache:
                 reopened = self._read_model_internal(relative, expected)
             except R002CacheError:
                 raise R002CacheError("cache_state_unknown") from None
-            if _fixed_canonical_bytes(reopened, expected) != data:
+            if reopened != validated or _fixed_canonical_bytes(reopened, expected) != data:
                 raise R002CacheError("cache_state_unknown")
             return path
         except R002CacheError as caught:
@@ -1137,9 +1144,10 @@ class R002Cache:
             try:
                 writer(fd, limit)
                 self._fsync(fd)
-                if not _close_fd(fd):
-                    raise R002CacheError("cache_state_unknown")
+                closing_fd = fd
                 fd = -1
+                if not _close_fd(closing_fd):
+                    raise R002CacheError("cache_state_unknown")
                 data = self._read_checked(root_fd, temp_name, max_bytes=limit)
                 value = _decode_canonical_model(data, model_type)
                 current_destination = self._preflight_replace_destination(root_fd, relative_name)
@@ -1174,7 +1182,12 @@ class R002Cache:
                     raise R002CacheError("cache_state_unknown")
                 return reopened
             finally:
-                closed = _close_fd(fd) if fd >= 0 else True
+                if fd >= 0:
+                    closing_fd = fd
+                    fd = -1
+                    closed = _close_fd(closing_fd)
+                else:
+                    closed = True
                 if created:
                     try:
                         self._unlink_created(root_fd, temp_name)

@@ -430,6 +430,28 @@ def test_model_construct_cannot_bypass_revalidation(tmp_path: Path) -> None:
     assert not (tmp_path / "cache" / "criteria-proposal.json").exists()
 
 
+@pytest.mark.parametrize("writer_name", ["write_model", "replace_model"])
+def test_generic_control_writer_compares_reopened_validated_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, writer_name: str
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    proposal = _criteria_proposal()
+    unequal_reopened = proposal.model_copy()
+    object.__setattr__(unequal_reopened, "__pydantic_private__", {"fault": "injected"})
+    assert unequal_reopened != proposal
+    assert canonical_json_bytes(unequal_reopened) == canonical_json_bytes(proposal)
+    real_read_model = R002Cache._read_model_internal
+
+    def unequal_reopen(self, relative_name, model_type, **kwargs):
+        observed = real_read_model(self, relative_name, model_type, **kwargs)
+        assert observed == proposal
+        return unequal_reopened
+
+    monkeypatch.setattr(R002Cache, "_read_model_internal", unequal_reopen)
+    with pytest.raises(R002CacheError, match="cache_state_unknown"):
+        getattr(cache, writer_name)("criteria-proposal.json", proposal)
+
+
 def test_review_bundle_roundtrips_canonical_datetime_json(tmp_path: Path) -> None:
     cache = R002Cache(tmp_path / "cache")
     bundle = _review_bundle()
@@ -710,6 +732,38 @@ def test_identical_immutable_retry_requires_containing_directory_fsync(
     with pytest.raises(R002CacheError, match="cache_state_unknown"):
         cache.write_bytes(relative, data)
     assert directory_attempts == 2
+
+
+def test_prepare_temp_close_failure_never_retries_a_reused_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_close_fd = cache_module._close_fd
+    replacement_fd = -1
+
+    def close_temp_reuse_number_and_fail(fd: int) -> bool:
+        nonlocal replacement_fd
+        if replacement_fd < 0 and stat.S_ISREG(os.fstat(fd).st_mode):
+            assert real_close_fd(fd)
+            replacement_fd = os.open("/dev/null", os.O_RDONLY)
+            assert replacement_fd == fd
+            return False
+        return real_close_fd(fd)
+
+    monkeypatch.setattr(cache_module, "_close_fd", close_temp_reuse_number_and_fail)
+    data = b"prepare-temp-close-fault"
+    try:
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            R002Cache(tmp_path / "cache").write_bytes(
+                f"head-files/{sha256(data).hexdigest()}", data
+            )
+        assert replacement_fd >= 0
+        assert stat.S_ISCHR(os.fstat(replacement_fd).st_mode)
+    finally:
+        if replacement_fd >= 0:
+            with suppress(OSError):
+                os.close(replacement_fd)
 
 
 @pytest.mark.parametrize("winner", [b"race-data", b"different"])
@@ -1036,6 +1090,40 @@ def test_streamed_replace_then_raise_reports_unknown_state(
         )
 
 
+def test_stream_temp_close_failure_never_retries_a_reused_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_close_fd = cache_module._close_fd
+    replacement_fd = -1
+
+    def close_temp_reuse_number_and_fail(fd: int) -> bool:
+        nonlocal replacement_fd
+        if replacement_fd < 0 and stat.S_ISREG(os.fstat(fd).st_mode):
+            assert real_close_fd(fd)
+            replacement_fd = os.open("/dev/null", os.O_RDONLY)
+            assert replacement_fd == fd
+            return False
+        return real_close_fd(fd)
+
+    monkeypatch.setattr(cache_module, "_close_fd", close_temp_reuse_number_and_fail)
+    try:
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            R002Cache(tmp_path / "cache").write_annotation_universe(
+                source_manifest_sha256=_sha(1),
+                criteria_set_sha256=_sha(2),
+                candidate_count=1,
+                ordered_key_factory=lambda: iter((_key(1),)),
+            )
+        assert replacement_fd >= 0
+        assert stat.S_ISCHR(os.fstat(replacement_fd).st_mode)
+    finally:
+        if replacement_fd >= 0:
+            with suppress(OSError):
+                os.close(replacement_fd)
+
+
 def test_annotation_writers_use_a_single_writer_lock(tmp_path: Path) -> None:
     first_cache = R002Cache(tmp_path / "cache")
     second_cache = R002Cache(tmp_path / "cache")
@@ -1214,6 +1302,39 @@ def test_ambiguous_close_does_not_close_a_reused_descriptor(
     assert replacement_fd >= 0
     assert stat.S_ISCHR(os.fstat(replacement_fd).st_mode)
     real_close(replacement_fd)
+
+
+def test_root_walk_closes_each_owned_descriptor_number_only_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_close_fd = cache_module._close_fd
+    replacement_fds: list[int] = []
+
+    def close_reuse_number_and_fail(fd: int) -> bool:
+        if len(replacement_fds) < 2:
+            assert stat.S_ISDIR(os.fstat(fd).st_mode)
+            assert real_close_fd(fd)
+            replacement = os.open("/dev/null", os.O_RDONLY)
+            assert replacement == fd
+            replacement_fds.append(replacement)
+            return False
+        return real_close_fd(fd)
+
+    monkeypatch.setattr(cache_module, "_close_fd", close_reuse_number_and_fail)
+    try:
+        with pytest.raises(R002CacheError):
+            R002Cache(tmp_path / "cache").replace_model(
+                "criteria-proposal.json", _criteria_proposal()
+            )
+        assert len(replacement_fds) == 2
+        for fd in replacement_fds:
+            assert stat.S_ISCHR(os.fstat(fd).st_mode)
+    finally:
+        for fd in replacement_fds:
+            with suppress(OSError):
+                os.close(fd)
 
 
 def test_unsupported_required_primitive_fails_closed_before_root_creation(
