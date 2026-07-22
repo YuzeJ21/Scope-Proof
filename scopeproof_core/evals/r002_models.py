@@ -535,7 +535,7 @@ with warnings.catch_warnings():
         row_count: StrictInt = Field(gt=0)
         repository_count: StrictInt = Field(gt=0)
         unique_instance_count: StrictInt = Field(gt=0)
-        schema: tuple[str, ...] = Field(min_length=1)
+        schema: tuple[str, ...] = Field(min_length=1, max_length=len(R002_SCHEMA))
 
 
 class R002CaseManifest(R002StrictModel):
@@ -793,7 +793,7 @@ def _verified_line_order(line: R002VerifiedLine) -> tuple[str, str, int, int]:
 class R002VerifiedCaseLines(R002StrictModel):
     case_id: R002CaseId
     head_sha: GitSha
-    lines: tuple[R002VerifiedLine, ...]
+    lines: tuple[R002VerifiedLine, ...] = Field(max_length=50000)
 
     @model_validator(mode="after")
     def bind_immutable_head_lines(self) -> Self:
@@ -840,8 +840,8 @@ class R002CachedCase(R002StrictModel):
     patch_sha256: Sha256
     test_patch_sha256: Sha256
     parsed_case_sha256: Sha256
-    verified_lines: tuple[R002VerifiedLine, ...]
-    head_files: tuple[R002CachedHeadFile, ...]
+    verified_lines: tuple[R002VerifiedLine, ...] = Field(max_length=50000)
+    head_files: tuple[R002CachedHeadFile, ...] = Field(max_length=32)
 
     @model_validator(mode="after")
     def bind_approved_cache_case(self) -> Self:
@@ -937,8 +937,8 @@ class R002CriteriaSourcePreparationResult(R002Manifest):
     failed_case_count: StrictInt = Field(ge=0)
     skipped_case_count: StrictInt = Field(ge=0)
     case_ids: tuple[R002CaseId, ...] = Field(min_length=20, max_length=20)
-    errors: tuple[str, ...]
-    hard_gate_errors: tuple[str, ...]
+    errors: tuple[str, ...] = Field(max_length=0)
+    hard_gate_errors: tuple[str, ...] = Field(max_length=0)
 
     @model_validator(mode="after")
     def require_complete_criteria_source_preparation(self) -> Self:
@@ -971,8 +971,8 @@ class R002PreparationResult(R002Manifest):
     head_file_count: StrictInt = Field(ge=0)
     candidate_line_count: StrictInt = Field(ge=0)
     cases: tuple[R002PreparationCaseResult, ...] = Field(min_length=20, max_length=20)
-    errors: tuple[str, ...]
-    hard_gate_errors: tuple[str, ...]
+    errors: tuple[str, ...] = Field(max_length=0)
+    hard_gate_errors: tuple[str, ...] = Field(max_length=0)
 
     @model_validator(mode="after")
     def require_complete_evidence_preparation(self) -> Self:
@@ -1031,7 +1031,7 @@ class R002RedactionAudit(R002Manifest):
     passed: Literal[True] = True
     tracked_file_count: StrictInt = Field(ge=0)
     raw_value_count: StrictInt = Field(ge=0)
-    checked_value_sha256: tuple[Sha256, ...]
+    checked_value_sha256: tuple[Sha256, ...] = Field(max_length=R002_REDACTION_RAW_VALUE_MAX_BYTES)
 
     @model_validator(mode="after")
     def require_complete_redaction_audit(self) -> Self:
@@ -1254,7 +1254,7 @@ class _LabelCollection(R002Manifest):
     annotation_universe_sha256: Sha256
     annotation_count: StrictInt = Field(ge=1, le=250000)
     labels: tuple[R002CandidateLabel, ...] = Field(min_length=1, max_length=250000)
-    expected_missing: tuple[R002ExpectedMissing, ...]
+    expected_missing: tuple[R002ExpectedMissing, ...] = Field(max_length=20 * 16 * 4)
 
     @model_validator(mode="after")
     def bind_labels(self) -> Self:
@@ -1354,14 +1354,14 @@ class R002CaseResult(R002StrictModel):
     pr_number: StrictInt = Field(gt=0)
     head_sha: GitSha
     criterion_count: StrictInt = Field(ge=1, le=16)
-    annotation_candidate_count: StrictInt = Field(ge=0)
-    retrieved_candidates: tuple[R002RetrievedCandidate, ...]
-    missing_explanations: tuple[R002MissingExplanation, ...]
+    annotation_candidate_count: StrictInt = Field(ge=0, le=250000)
+    retrieved_candidates: tuple[R002RetrievedCandidate, ...] = Field(max_length=250000)
+    missing_explanations: tuple[R002MissingExplanation, ...] = Field(max_length=64)
     gate_verdict: GateVerdict
-    gate_reason_codes: tuple[str, ...]
-    blocking_criteria: tuple[str, ...]
-    conditional_criteria: tuple[str, ...]
-    unresolved_criteria: tuple[str, ...]
+    gate_reason_codes: tuple[str, ...] = Field(max_length=3)
+    blocking_criteria: tuple[str, ...] = Field(max_length=16)
+    conditional_criteria: tuple[str, ...] = Field(max_length=16)
+    unresolved_criteria: tuple[str, ...] = Field(max_length=16)
     check_state: CheckState
     ci_reason_code: CIReasonCode
     runtime_evidence_count: StrictInt = Field(ge=0)
@@ -1369,7 +1369,9 @@ class R002CaseResult(R002StrictModel):
     final_acceptance: bool
     separation_errors: StrictInt = Field(ge=0)
     reference_errors: StrictInt = Field(ge=0)
-    limitations: tuple[str, ...] = Field(min_length=1)
+    limitations: tuple[str, ...] = Field(
+        min_length=len(R002_RESULT_LIMITATIONS), max_length=len(R002_RESULT_LIMITATIONS)
+    )
 
     @model_validator(mode="after")
     def reject_non_static_success_signals(self) -> Self:
@@ -1480,6 +1482,8 @@ class R002CaseResult(R002StrictModel):
             set(candidate_keys)
         ):
             raise ValueError("retrieved candidates must be sorted unique references")
+        if self.annotation_candidate_count < len(candidate_keys):
+            raise ValueError("annotation candidate count must cover unique retrieved candidates")
         explanation_keys = [
             (item.case_id, item.criterion_id, item.evidence_type.value)
             for item in self.missing_explanations
@@ -1531,11 +1535,13 @@ class R002Metrics(R002StrictModel):
 class R002DeterminismProjection(R002Manifest):
     source_manifest_sha256: Sha256
     criteria_set_sha256: Sha256
-    candidate_labels_sha256: Sha256
+    candidate_label_set_sha256: Sha256
     scopeproof_commit: GitSha
     case_results: tuple[R002CaseResult, ...] = Field(min_length=20, max_length=20)
     metrics: R002Metrics
-    limitations: tuple[str, ...] = Field(min_length=1)
+    limitations: tuple[str, ...] = Field(
+        min_length=len(R002_RESULT_LIMITATIONS), max_length=len(R002_RESULT_LIMITATIONS)
+    )
 
     @model_validator(mode="after")
     def bind_safe_case_results(self) -> Self:
@@ -1587,7 +1593,7 @@ class R002BenchmarkResult(R002DeterminismProjection):
     annotation_candidate_count: StrictInt = Field(ge=0)
     unexpected_ready_count: StrictInt = Field(ge=0)
     normalized_rerun_mismatches: StrictInt = Field(ge=0)
-    hard_gate_errors: tuple[str, ...]
+    hard_gate_errors: tuple[str, ...] = Field(max_length=0)
 
     @model_validator(mode="after")
     def require_successful_run_boundary(self) -> Self:

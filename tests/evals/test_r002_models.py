@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from typing import get_origin
 
 import pytest
 from pydantic import ValidationError
@@ -818,7 +819,7 @@ def _benchmark_result_payload() -> dict[str, object]:
         "target_repository_code_executed": False,
         "source_manifest_sha256": "0" * 64,
         "criteria_set_sha256": "1" * 64,
-        "candidate_labels_sha256": "2" * 64,
+        "candidate_label_set_sha256": "2" * 64,
         "scopeproof_commit": "3" * 40,
         "case_results": case_results,
         "metrics": {
@@ -1357,3 +1358,67 @@ def test_projection_recomputes_owner_confirmed_candidate_precision():
             "reason_code": "scopeproof_finding_explicit_gap",
         }
         assert r002_models.R002MissingExplanation.model_validate_json(json.dumps(explanation))
+
+
+def test_projection_uses_only_the_task8_candidate_label_set_hash_field():
+    payload = _benchmark_result_payload()
+    assert r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload))
+    payload["candidate_labels_sha256"] = "f" * 64
+    with pytest.raises(ValidationError):
+        r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload))
+
+
+def test_per_case_annotation_count_covers_retrieved_candidates_and_rejects_redistribution():
+    case = _safe_case_result_payload()
+    case["annotation_candidate_count"] = 0
+    with pytest.raises(ValidationError, match="annotation candidate count"):
+        R002CaseResult.model_validate_json(json.dumps(case))
+
+    result = _benchmark_result_payload()
+    result["case_results"][0]["annotation_candidate_count"] = 0  # type: ignore[index]
+    result["case_results"][1]["annotation_candidate_count"] = 1  # type: ignore[index]
+    with pytest.raises(ValidationError, match="annotation candidate count"):
+        r002_models.R002BenchmarkResult.model_validate_json(json.dumps(result))
+
+
+def test_every_persisted_r002_collection_has_a_finite_parse_time_maximum():
+    pending = list(r002_models.R002StrictModel.__subclasses__())
+    models = set()
+    while pending:
+        model = pending.pop()
+        if model in models:
+            continue
+        models.add(model)
+        pending.extend(model.__subclasses__())
+    unbounded = []
+    for model in models:
+        for name, field in model.model_fields.items():
+            if get_origin(field.annotation) not in {tuple, list}:
+                continue
+            maxima = [getattr(metadata, "max_length", None) for metadata in field.metadata]
+            if not any(isinstance(maximum, int) and maximum >= 0 for maximum in maxima):
+                unbounded.append(f"{model.__name__}.{name}")
+    assert not unbounded
+
+
+def test_result_collection_bounds_fail_before_result_after_validation():
+    payload = _safe_case_result_payload()
+    payload["criterion_count"] = 16
+    payload["blocking_criteria"] = [f"AC-{number:02d}" for number in range(1, 18)]
+    with pytest.raises(ValidationError, match="at most 16 items"):
+        R002CaseResult.model_validate_json(json.dumps(payload))
+
+    payload = _safe_case_result_payload()
+    payload["missing_explanations"] = [
+        {
+            "case_id": "R002-001",
+            "criterion_id": "AC-01",
+            "evidence_type": "implementation",
+            "source": "scopeproof_finding",
+            "finding_status": "missing",
+            "reason_code": "scopeproof_finding_explicit_gap",
+        }
+        for _ in range(65)
+    ]
+    with pytest.raises(ValidationError, match="at most 64 items"):
+        R002CaseResult.model_validate_json(json.dumps(payload))
