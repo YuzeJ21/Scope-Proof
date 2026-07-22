@@ -11,6 +11,7 @@ from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import Annotated, ClassVar, Literal, NamedTuple, Self
+from urllib.parse import quote, unquote
 
 from pydantic import (
     AfterValidator,
@@ -72,6 +73,45 @@ R002SourceSpan = Annotated[str, AfterValidator(validate_r002_source_span)]
 class R002DiffStream(StrEnum):
     PATCH = "patch"
     TEST_PATCH = "test_patch"
+
+
+def validate_r002_hunk_id(value: str) -> str:
+    match = re.fullmatch(r"(patch|test_patch):(.+):H([1-9]\d*)", value)
+    if match is None:
+        raise ValueError("invalid R-002 hunk ID")
+    validate_r002_logical_path(match.group(2))
+    return value
+
+
+R002HunkId = Annotated[
+    str,
+    Field(min_length=10, max_length=1024),
+    AfterValidator(validate_r002_hunk_id),
+]
+
+
+def _permalink_repository(permalink: str, *, path: str, head_sha: str, line: int) -> str:
+    match = re.fullmatch(
+        r"https://github\.com/(?P<repository>[^/]+/[^/]+)/blob/"
+        r"(?P<head>[0-9a-f]{40})/(?P<path>.+)#L(?P<start>[1-9]\d*)-L(?P<end>[1-9]\d*)",
+        permalink,
+    )
+    if match is None:
+        raise ValueError("permalink must be canonical")
+    repository = unquote(match.group("repository"))
+    permalink_path = unquote(match.group("path"))
+    if (
+        not re.fullmatch(GITHUB_REPOSITORY_PATTERN, repository)
+        or validate_r002_logical_path(permalink_path) != path
+        or match.group("head") != head_sha
+        or int(match.group("start")) != line
+        or int(match.group("end")) != line
+        or permalink
+        != f"https://github.com/{quote(repository, safe='/')}/blob/{head_sha}/"
+        f"{quote(path, safe='/')}#L{line}-L{line}"
+    ):
+        raise ValueError("permalink must bind canonical repository, head, path, and line")
+    return repository
 
 
 class R002MetricState(StrEnum):
@@ -610,7 +650,7 @@ class R002ParsedLine(R002StrictModel):
 
 
 class R002ParsedHunk(R002StrictModel):
-    hunk_id: StrictInt = Field(ge=1)
+    hunk_id: R002HunkId
     old_start: StrictInt = Field(ge=1)
     old_count: StrictInt = Field(ge=0)
     new_start: StrictInt = Field(ge=1)
@@ -647,7 +687,10 @@ class R002ParsedFile(R002StrictModel):
 
     @model_validator(mode="after")
     def reconstruct_counts_and_order(self) -> Self:
-        if any(hunk.hunk_id != number for number, hunk in enumerate(self.hunks, start=1)):
+        if any(
+            hunk.hunk_id != f"{self.stream}:{self.path}:H{number}"
+            for number, hunk in enumerate(self.hunks, start=1)
+        ):
             raise ValueError("parsed file hunk IDs must be ordered and consecutive")
         starts = [(hunk.old_start, hunk.new_start) for hunk in self.hunks]
         if starts != sorted(starts):
@@ -716,12 +759,24 @@ class R002ParsedCase(R002StrictModel):
 class R002VerifiedLine(R002StrictModel):
     stream: R002DiffStream
     path: R002LogicalPath
-    hunk_id: StrictInt = Field(ge=1)
+    hunk_id: R002HunkId
     new_line_number: StrictInt = Field(ge=1)
     normalized_line_sha256: Sha256
     head_file_sha256: Sha256
     head_sha: GitSha
-    permalink: str = Field(pattern=r"^https://github\.com/.+/blob/[0-9a-f]{40}/.+#L\d+$")
+    permalink: str
+
+    @model_validator(mode="after")
+    def bind_hunk_and_permalink_fields(self) -> Self:
+        if not self.hunk_id.startswith(f"{self.stream}:{self.path}:H"):
+            raise ValueError("verified line hunk ID must bind stream and path")
+        _permalink_repository(
+            self.permalink,
+            path=self.path,
+            head_sha=self.head_sha,
+            line=self.new_line_number,
+        )
+        return self
 
 
 class R002VerifiedCaseLines(R002StrictModel):
@@ -741,8 +796,15 @@ class R002VerifiedCaseLines(R002StrictModel):
         if keys != sorted(keys) or len(keys) != len(set(keys)):
             raise ValueError("verified lines must be sorted and unique")
         for line in self.lines:
-            if line.head_sha != self.head_sha or not line.permalink.startswith(
-                f"https://github.com/{approved.repository}/blob/{self.head_sha}/{line.path}#L"
+            if (
+                line.head_sha != self.head_sha
+                or _permalink_repository(
+                    line.permalink,
+                    path=line.path,
+                    head_sha=self.head_sha,
+                    line=line.new_line_number,
+                )
+                != approved.repository
             ):
                 raise ValueError("verified line must bind its approved immutable head")
         return self
@@ -798,9 +860,13 @@ class R002CachedCase(R002StrictModel):
             line_keys != sorted(line_keys)
             or len(line_keys) != len(set(line_keys))
             or any(
-                not line.permalink.startswith(
-                    f"https://github.com/{approved.repository}/blob/{approved.head_sha}/{line.path}#L"
+                _permalink_repository(
+                    line.permalink,
+                    path=line.path,
+                    head_sha=approved.head_sha,
+                    line=line.new_line_number,
                 )
+                != approved.repository
                 for line in self.verified_lines
             )
         ):
@@ -812,6 +878,14 @@ class R002CachedCase(R002StrictModel):
             or any(item.head_sha != approved.head_sha for item in self.head_files)
         ):
             raise ValueError("cached head files must be sorted unique approved-head files")
+        head_files_by_path = {item.logical_path: item for item in self.head_files}
+        if any(
+            (head_file := head_files_by_path.get(line.path)) is None
+            or head_file.head_sha != line.head_sha
+            or head_file.content_sha256 != line.head_file_sha256
+            for line in self.verified_lines
+        ):
+            raise ValueError("cached verified lines must join exactly one matching head file")
         return self
 
 
@@ -1167,32 +1241,11 @@ class _LabelCollection(R002Manifest):
             or keys != sorted(keys)
         ):
             raise ValueError("labels must be sorted, unique, and complete")
-        missing = {
-            (item.case_id, item.criterion_id, item.evidence_type) for item in self.expected_missing
-        }
-        if len(missing) != len(self.expected_missing):
-            raise ValueError("expected missing records must be unique")
-        pairs = sorted({(label.key.case_id, label.key.criterion_id) for label in self.labels})
-        relevant_types = {
-            (
-                label.key.case_id,
-                label.key.criterion_id,
-                _evidence_type(ChangedFile(path=label.key.path, status="modified")),
-            )
-            for label in self.labels
-            if label.relevant
-        }
-        expected_records = tuple(
-            (case_id, criterion_id, evidence_type)
-            for case_id, criterion_id in pairs
-            for evidence_type in R002_STATIC_EVIDENCE_TYPES
-            if (case_id, criterion_id, evidence_type) not in relevant_types
-        )
         actual_records = tuple(
             (item.case_id, item.criterion_id, item.evidence_type) for item in self.expected_missing
         )
-        if actual_records != expected_records:
-            raise ValueError("expected missing records must be derived from labels")
+        if len(actual_records) != len(set(actual_records)):
+            raise ValueError("expected missing records must be unique")
         return self
 
 
@@ -1229,11 +1282,17 @@ class R002RetrievedCandidate(R002StrictModel):
     key: R002CandidateLineKey
     evidence_type: EvidenceType
     evidence_level: EvidenceLevel
-    hunk_id: StrictInt = Field(ge=1)
+    hunk_id: R002HunkId
     head_file_sha256: Sha256
-    matching_rule: str = Field(min_length=1)
+    matching_rule: Literal["exact_identifier", "keyword_overlap"]
     relevance_score: float = Field(ge=0, le=1)
     owner_label_relevant: bool
+
+    @model_validator(mode="after")
+    def bind_hunk_to_candidate_key(self) -> Self:
+        if self.hunk_id.startswith(f"{self.key.stream}:{self.key.path}:H"):
+            return self
+        raise ValueError("retrieved candidate hunk ID must bind stream and path")
 
 
 class R002MissingExplanation(R002StrictModel):
@@ -1259,9 +1318,9 @@ class R002MissingExplanation(R002StrictModel):
                 "no_candidate_retrieved_for_type",
                 "retrieved_only_owner_labelled_irrelevant",
             }
-            or self.finding_status is not FindingStatus.MISSING
+            or self.finding_status is not FindingStatus.EVIDENCE_FOUND
         ):
-            raise ValueError("retrieval missing explanations require a missing finding")
+            raise ValueError("retrieval missing explanations require an evidence-found finding")
         return self
 
 
@@ -1270,7 +1329,7 @@ class R002CaseResult(R002StrictModel):
     repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
     pr_number: StrictInt = Field(gt=0)
     head_sha: GitSha
-    criterion_count: StrictInt = Field(ge=1)
+    criterion_count: StrictInt = Field(ge=1, le=16)
     annotation_candidate_count: StrictInt = Field(ge=0)
     retrieved_candidates: tuple[R002RetrievedCandidate, ...]
     missing_explanations: tuple[R002MissingExplanation, ...]
@@ -1304,36 +1363,48 @@ class R002CaseResult(R002StrictModel):
         )
         if self.gate_verdict not in {GateVerdict.BLOCKED, GateVerdict.NEEDS_REVIEW}:
             raise ValueError("R-002 case results must be blocked or needs_review")
-        if any(
-            tuple(sorted(set(group))) != group
-            or any(re.fullmatch(r"AC-\d{2,}", item) is None for item in group)
-            for group in criterion_groups
-        ):
+        if any(tuple(sorted(set(group))) != group for group in criterion_groups):
             raise ValueError("criterion groups must be sorted unique criterion IDs")
+        criterion_universe = {f"AC-{number:02d}" for number in range(1, self.criterion_count + 1)}
+        if any(item not in criterion_universe for group in criterion_groups for item in group):
+            raise ValueError("criterion groups must remain within the case criteria")
+        if any(
+            set(left) & set(right)
+            for left, right in (
+                (self.blocking_criteria, self.conditional_criteria),
+                (self.blocking_criteria, self.unresolved_criteria),
+                (self.conditional_criteria, self.unresolved_criteria),
+            )
+        ):
+            raise ValueError("criterion groups must be pairwise disjoint")
         expected_reasons: tuple[str, ...]
         if self.gate_verdict is GateVerdict.BLOCKED:
             if not self.blocking_criteria:
                 raise ValueError("blocked R-002 cases require blocking criteria")
             expected_reasons = tuple(
-                code
-                for code, criteria in (
-                    ("blocking_criteria", self.blocking_criteria),
-                    ("conditional_criteria", self.conditional_criteria),
-                    ("unresolved_criteria", self.unresolved_criteria),
+                sorted(
+                    code
+                    for code, criteria in (
+                        ("blocking_criteria", self.blocking_criteria),
+                        ("conditional_criteria", self.conditional_criteria),
+                        ("unresolved_criteria", self.unresolved_criteria),
+                    )
+                    if criteria
                 )
-                if criteria
             )
         else:
             if self.blocking_criteria or not self.unresolved_criteria:
                 raise ValueError("needs_review R-002 cases require unresolved criteria only")
             expected_reasons = tuple(
-                code
-                for code, criteria in (
-                    ("conditional_criteria", self.conditional_criteria),
-                    ("unresolved_criteria", self.unresolved_criteria),
-                    ("checks_not_passing", ("ci",)),
+                sorted(
+                    code
+                    for code, criteria in (
+                        ("conditional_criteria", self.conditional_criteria),
+                        ("unresolved_criteria", self.unresolved_criteria),
+                        ("checks_not_passing", ("ci",)),
+                    )
+                    if criteria
                 )
-                if criteria
             )
         if self.gate_reason_codes != expected_reasons:
             raise ValueError("R-002 gate reason codes must match the gate shape")
@@ -1545,6 +1616,43 @@ def load_confirmed_labels(
         or value.criteria_set_sha256 != criteria_sha256
     ):
         raise R002AnnotationError("candidate_label_upstream_drift")
+    try:
+        criteria = load_confirmed_criteria(path.with_name("criteria.json"), manifest_sha256)
+    except (OSError, ValidationError, R002AnnotationError) as error:
+        raise R002AnnotationError("candidate_label_upstream_drift") from error
+    if canonical_sha256(criteria) != criteria_sha256:
+        raise R002AnnotationError("candidate_label_upstream_drift")
+    criterion_pairs = tuple(
+        (case.case_id, criterion.criterion_id)
+        for case in criteria.cases
+        for criterion in case.criteria
+    )
+    criterion_pair_set = set(criterion_pairs)
+    if any(
+        (label.key.case_id, label.key.criterion_id) not in criterion_pair_set
+        for label in value.labels
+    ):
+        raise R002AnnotationError("candidate_label_upstream_drift")
+    relevant_types = {
+        (
+            label.key.case_id,
+            label.key.criterion_id,
+            _evidence_type(ChangedFile(path=label.key.path, status="modified")),
+        )
+        for label in value.labels
+        if label.relevant
+    }
+    expected_records = tuple(
+        (case_id, criterion_id, evidence_type)
+        for case_id, criterion_id in criterion_pairs
+        for evidence_type in R002_STATIC_EVIDENCE_TYPES
+        if (case_id, criterion_id, evidence_type) not in relevant_types
+    )
+    actual_records = tuple(
+        (item.case_id, item.criterion_id, item.evidence_type) for item in value.expected_missing
+    )
+    if actual_records != expected_records:
+        raise R002AnnotationError("candidate_label_upstream_drift")
     universe = R002AnnotationUniverse(
         source_manifest_sha256=value.source_manifest_sha256,
         criteria_set_sha256=value.criteria_set_sha256,
@@ -1553,4 +1661,6 @@ def load_confirmed_labels(
     )
     if canonical_sha256(universe) != value.annotation_universe_sha256:
         raise R002AnnotationError("annotation_universe_drift")
+    # Task 7 additionally compares this reconstructed label universe with the
+    # actual cache annotation universe during production run validation.
     return value

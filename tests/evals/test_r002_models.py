@@ -127,7 +127,7 @@ def test_every_persisted_model_forbids_extra_fields(r002_manifest_payload):
         R002SourceManifest.model_validate_json(json.dumps(r002_manifest_payload))
 
 
-def test_label_set_derives_expected_missing_for_an_unlabelled_relevant_candidate():
+def test_label_set_defers_expected_missing_derivation_to_the_confirmed_criteria_loader():
     payload = {
         "pack_id": "R-002",
         "classification": "public_engineering_research",
@@ -155,8 +155,7 @@ def test_label_set_derives_expected_missing_for_an_unlabelled_relevant_candidate
         ],
         "expected_missing": [],
     }
-    with pytest.raises(ValidationError, match="expected missing records must be derived"):
-        R002CandidateLabelSet.model_validate_json(json.dumps(payload))
+    assert R002CandidateLabelSet.model_validate_json(json.dumps(payload)).expected_missing == ()
 
 
 def test_loader_rejects_structurally_valid_non_production_source(tmp_path, r002_manifest_payload):
@@ -510,8 +509,28 @@ def test_criteria_loader_rejects_manifest_hash_drift(
         load_confirmed_criteria(criteria_path, "0" * 64)
 
 
-def test_labels_loader_binds_annotation_universe_key_projection(tmp_path):
+def test_labels_loader_binds_criteria_universe_and_annotation_projection(
+    tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+):
+    _manifest_path, criteria_path, manifest_hash = _write_bound_manifest_and_criteria(
+        tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+    )
+    criteria = load_confirmed_criteria(criteria_path, manifest_hash)
+    criteria_hash = canonical_sha256(criteria)
     payload = _label_payload()
+    payload["source_manifest_sha256"] = manifest_hash
+    payload["criteria_set_sha256"] = criteria_hash
+    payload["expected_missing"] = [
+        {
+            "case_id": case.case_id,
+            "criterion_id": criterion.criterion_id,
+            "evidence_type": evidence_type.value,
+            "reason_code": "no_owner_labelled_relevant_candidate",
+        }
+        for case in criteria.cases
+        for criterion in case.criteria
+        for evidence_type in r002_models.R002_STATIC_EVIDENCE_TYPES
+    ]
     universe = R002AnnotationUniverse.model_validate_json(
         json.dumps(
             {
@@ -535,12 +554,81 @@ def test_labels_loader_binds_annotation_universe_key_projection(tmp_path):
     payload["annotation_universe_sha256"] = canonical_sha256(universe)
     path = tmp_path / "candidate_labels.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
-    assert load_confirmed_labels(path, "0" * 64, "1" * 64).annotation_count == 1
+    assert load_confirmed_labels(path, manifest_hash, criteria_hash).annotation_count == 1
 
     payload["labels"][0]["key"]["path"] = "b.py"
     path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(r002_models.R002AnnotationError):
-        load_confirmed_labels(path, "0" * 64, "1" * 64)
+        load_confirmed_labels(path, manifest_hash, criteria_hash)
+
+
+@pytest.mark.parametrize(
+    "mutation", ["unknown_case", "unknown_criterion", "omitted", "extra", "wrong_hash"]
+)
+def test_labels_loader_rejects_self_consistent_keys_and_incomplete_expected_missing(
+    mutation, tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+):
+    _manifest_path, criteria_path, manifest_hash = _write_bound_manifest_and_criteria(
+        tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+    )
+    criteria = load_confirmed_criteria(criteria_path, manifest_hash)
+    criteria_hash = canonical_sha256(criteria)
+    payload = _label_payload()
+    payload["source_manifest_sha256"] = manifest_hash
+    payload["criteria_set_sha256"] = criteria_hash
+    payload["expected_missing"] = [
+        {
+            "case_id": case.case_id,
+            "criterion_id": criterion.criterion_id,
+            "evidence_type": evidence_type.value,
+            "reason_code": "no_owner_labelled_relevant_candidate",
+        }
+        for case in criteria.cases
+        for criterion in case.criteria
+        for evidence_type in r002_models.R002_STATIC_EVIDENCE_TYPES
+    ]
+    if mutation == "unknown_case":
+        payload["labels"][0]["key"]["case_id"] = "R002-999"
+    elif mutation == "unknown_criterion":
+        payload["labels"][0]["key"]["criterion_id"] = "AC-99"
+    elif mutation == "omitted":
+        payload["expected_missing"].pop()
+    elif mutation == "extra":
+        payload["expected_missing"].append(
+            {
+                "case_id": "R002-020",
+                "criterion_id": "AC-02",
+                "evidence_type": "implementation",
+                "reason_code": "no_owner_labelled_relevant_candidate",
+            }
+        )
+    else:
+        payload["criteria_set_sha256"] = "f" * 64
+    universe = R002AnnotationUniverse.model_validate_json(
+        json.dumps(
+            {
+                **{
+                    key: payload[key]
+                    for key in (
+                        "pack_id",
+                        "classification",
+                        "eligible_for_stage_1",
+                        "does_not_advance_stage_1",
+                        "target_repository_code_executed",
+                        "source_manifest_sha256",
+                        "criteria_set_sha256",
+                    )
+                },
+                "candidate_count": payload["annotation_count"],
+                "candidate_keys": [label["key"] for label in payload["labels"]],
+            }
+        )
+    )
+    payload["annotation_universe_sha256"] = canonical_sha256(universe)
+    path = tmp_path / "candidate_labels.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises((ValidationError, r002_models.R002AnnotationError)):
+        load_confirmed_labels(path, manifest_hash, criteria_hash)
 
 
 def _safe_case_result_payload() -> dict[str, object]:
@@ -563,9 +651,9 @@ def _safe_case_result_payload() -> dict[str, object]:
                 },
                 "evidence_type": "implementation",
                 "evidence_level": "E1",
-                "hunk_id": 1,
+                "hunk_id": "patch:a.py:H1",
                 "head_file_sha256": "2" * 64,
-                "matching_rule": "rule",
+                "matching_rule": "exact_identifier",
                 "relevance_score": 1.0,
                 "owner_label_relevant": True,
             }
@@ -605,6 +693,7 @@ def test_case_result_rejects_ci_classifier_and_gate_shape_mutations(mutation):
 
 def test_case_result_accepts_evaluate_gate_compatible_blocked_and_needs_review_shapes():
     blocked = _safe_case_result_payload()
+    blocked["criterion_count"] = 3
     blocked["conditional_criteria"] = ["AC-02"]
     blocked["unresolved_criteria"] = ["AC-03"]
     blocked["gate_reason_codes"] = [
@@ -615,14 +704,15 @@ def test_case_result_accepts_evaluate_gate_compatible_blocked_and_needs_review_s
     assert R002CaseResult.model_validate_json(json.dumps(blocked)).gate_verdict.value == "blocked"
 
     review = _safe_case_result_payload()
+    review["criterion_count"] = 3
     review["gate_verdict"] = "needs_review"
     review["blocking_criteria"] = []
     review["conditional_criteria"] = ["AC-02"]
     review["unresolved_criteria"] = ["AC-03"]
     review["gate_reason_codes"] = [
+        "checks_not_passing",
         "conditional_criteria",
         "unresolved_criteria",
-        "checks_not_passing",
     ]
     assert (
         R002CaseResult.model_validate_json(json.dumps(review)).gate_verdict.value == "needs_review"
@@ -654,8 +744,7 @@ def test_expected_missing_is_per_evidence_type_and_ordered():
     ]
     assert R002CandidateLabelSet.model_validate_json(json.dumps(payload)).expected_missing
     payload["expected_missing"].reverse()
-    with pytest.raises(ValidationError):
-        R002CandidateLabelSet.model_validate_json(json.dumps(payload))
+    assert R002CandidateLabelSet.model_validate_json(json.dumps(payload)).expected_missing
 
 
 def test_metrics_has_exact_persisted_ratio_field_map():
@@ -796,14 +885,14 @@ def test_missing_explanation_requires_fixed_source_reason_and_status():
         "criterion_id": "AC-01",
         "evidence_type": "implementation",
         "source": "r002_retrieval_comparison",
-        "finding_status": "missing",
+        "finding_status": "evidence_found",
         "reason_code": "no_candidate_retrieved_for_type",
     }
     assert (
         r002_models.R002MissingExplanation.model_validate_json(json.dumps(valid)).reason_code
         == valid["reason_code"]
     )
-    invalid = {**valid, "finding_status": "evidence_found"}
+    invalid = {**valid, "finding_status": "missing"}
     with pytest.raises(ValidationError, match="retrieval missing explanations"):
         r002_models.R002MissingExplanation.model_validate_json(json.dumps(invalid))
 
@@ -923,3 +1012,199 @@ def test_preparation_and_redaction_audits_reject_partial_or_inconsistent_summari
     audit["checked_value_sha256"].reverse()  # type: ignore[index]
     with pytest.raises(ValidationError, match="sorted unique"):
         r002_models.R002RedactionAudit.model_validate_json(json.dumps(audit))
+
+
+def _verified_line_payload() -> dict[str, object]:
+    approved = r002_models.R002_APPROVED_CASES[0]
+    return {
+        "stream": "patch",
+        "path": "a.py",
+        "hunk_id": "patch:a.py:H1",
+        "new_line_number": 7,
+        "normalized_line_sha256": "1" * 64,
+        "head_file_sha256": "2" * 64,
+        "head_sha": approved.head_sha,
+        "permalink": (
+            f"https://github.com/{approved.repository}/blob/{approved.head_sha}/a.py#L7-L7"
+        ),
+    }
+
+
+def test_hunk_ids_are_bounded_stream_path_bound_strings():
+    parsed_file = {
+        "stream": "patch",
+        "path": "a.py",
+        "hunks": [
+            {
+                "hunk_id": "patch:a.py:H1",
+                "old_start": 1,
+                "old_count": 0,
+                "new_start": 1,
+                "new_count": 0,
+                "lines": [],
+            }
+        ],
+        "additions": 0,
+        "deletions": 0,
+    }
+    assert r002_models.R002ParsedFile.model_validate_json(json.dumps(parsed_file)).hunks[0].hunk_id
+    for hunk_id in ("patch:a.py:H0", "test_patch:a.py:H1", "patch:b.py:H1", "1"):
+        payload = deepcopy(parsed_file)
+        payload["hunks"][0]["hunk_id"] = hunk_id
+        with pytest.raises(ValidationError):
+            r002_models.R002ParsedFile.model_validate_json(json.dumps(payload))
+    duplicated = deepcopy(parsed_file)
+    duplicated["hunks"].append({**duplicated["hunks"][0], "hunk_id": "patch:a.py:H1"})
+    with pytest.raises(ValidationError):
+        r002_models.R002ParsedFile.model_validate_json(json.dumps(duplicated))
+
+
+def test_verified_permalink_is_canonical_and_cache_lines_join_head_files():
+    line = _verified_line_payload()
+    assert (
+        r002_models.R002VerifiedLine.model_validate_json(json.dumps(line)).permalink
+        == line["permalink"]
+    )
+    for permalink in (
+        line["permalink"].replace("#L7-L7", "#L7"),
+        line["permalink"].replace("#L7-L7", "#L6-L7"),
+        line["permalink"].replace("/a.py#", "/wrong.py#"),
+        line["permalink"].replace("271b2875d9aae0a5875acba0b1b27dc4885fd6e5", "f" * 40),
+        line["permalink"] + "?query=forbidden",
+    ):
+        with pytest.raises(ValidationError):
+            r002_models.R002VerifiedLine.model_validate_json(
+                json.dumps({**line, "permalink": permalink})
+            )
+    wrong_repository = {
+        **line,
+        "permalink": line["permalink"].replace("astropy/astropy", "wrong/repository"),
+    }
+    with pytest.raises(ValidationError):
+        r002_models.R002VerifiedCaseLines.model_validate_json(
+            json.dumps(
+                {
+                    "case_id": "R002-001",
+                    "head_sha": line["head_sha"],
+                    "lines": [wrong_repository],
+                }
+            )
+        )
+
+    approved = r002_models.R002_APPROVED_CASES[0]
+    cache_case = {
+        "case_id": approved.case_id,
+        "row_sha256": approved.row_sha256,
+        "problem_statement_sha256": approved.problem_statement_sha256,
+        "patch_sha256": approved.patch_sha256,
+        "test_patch_sha256": approved.test_patch_sha256,
+        "parsed_case_sha256": "3" * 64,
+        "verified_lines": [line],
+        "head_files": [
+            {
+                "logical_path": "a.py",
+                "head_sha": approved.head_sha,
+                "byte_length": 1,
+                "content_sha256": "2" * 64,
+            }
+        ],
+    }
+    assert (
+        r002_models.R002CachedCase.model_validate_json(json.dumps(cache_case)).case_id
+        == approved.case_id
+    )
+    cache_case["head_files"][0]["content_sha256"] = "4" * 64
+    with pytest.raises(ValidationError):
+        r002_models.R002CachedCase.model_validate_json(json.dumps(cache_case))
+    cache_case["head_files"][0]["content_sha256"] = "2" * 64
+    cache_case["head_files"] = []
+    with pytest.raises(ValidationError):
+        r002_models.R002CachedCase.model_validate_json(json.dumps(cache_case))
+
+
+def test_case_result_requires_sorted_reasons_bounded_disjoint_criteria_and_closed_rule():
+    review = _safe_case_result_payload()
+    review["gate_verdict"] = "needs_review"
+    review["blocking_criteria"] = []
+    review["conditional_criteria"] = ["AC-02"]
+    review["unresolved_criteria"] = ["AC-03"]
+    review["criterion_count"] = 3
+    review["gate_reason_codes"] = [
+        "checks_not_passing",
+        "conditional_criteria",
+        "unresolved_criteria",
+    ]
+    review["retrieved_candidates"][0]["hunk_id"] = "patch:a.py:H1"  # type: ignore[index]
+    review["retrieved_candidates"][0]["matching_rule"] = "exact_identifier"  # type: ignore[index]
+    assert R002CaseResult.model_validate_json(json.dumps(review)).gate_reason_codes == tuple(
+        review["gate_reason_codes"]
+    )
+    review["gate_reason_codes"].reverse()  # type: ignore[index]
+    with pytest.raises(ValidationError):
+        R002CaseResult.model_validate_json(json.dumps(review))
+
+    blocked = _safe_case_result_payload()
+    blocked["criterion_count"] = 17
+    blocked["retrieved_candidates"][0]["hunk_id"] = "patch:a.py:H1"  # type: ignore[index]
+    blocked["retrieved_candidates"][0]["matching_rule"] = "exact_identifier"  # type: ignore[index]
+    with pytest.raises(ValidationError):
+        R002CaseResult.model_validate_json(json.dumps(blocked))
+    blocked["criterion_count"] = 2
+    blocked["blocking_criteria"] = ["AC-02"]
+    blocked["conditional_criteria"] = ["AC-02"]
+    with pytest.raises(ValidationError):
+        R002CaseResult.model_validate_json(json.dumps(blocked))
+
+
+def test_retrieved_matching_rule_and_retrieval_explanation_status_are_closed():
+    candidate = {
+        "key": {
+            "case_id": "R002-001",
+            "criterion_id": "AC-01",
+            "stream": "patch",
+            "path": "a.py",
+            "new_line_number": 1,
+            "normalized_line_sha256": "1" * 64,
+        },
+        "evidence_type": "implementation",
+        "evidence_level": "E1",
+        "hunk_id": "patch:a.py:H1",
+        "head_file_sha256": "2" * 64,
+        "matching_rule": "exact_identifier",
+        "relevance_score": 1.0,
+        "owner_label_relevant": True,
+    }
+    assert r002_models.R002RetrievedCandidate.model_validate_json(
+        json.dumps(candidate)
+    ).matching_rule
+    candidate["matching_rule"] = "raw repository text"
+    with pytest.raises(ValidationError):
+        r002_models.R002RetrievedCandidate.model_validate_json(json.dumps(candidate))
+    candidate["matching_rule"] = "keyword_overlap"
+    candidate["hunk_id"] = "test_patch:a.py:H1"
+    with pytest.raises(ValidationError):
+        r002_models.R002RetrievedCandidate.model_validate_json(json.dumps(candidate))
+
+    for reason_code in (
+        "no_candidate_retrieved_for_type",
+        "retrieved_only_owner_labelled_irrelevant",
+    ):
+        explanation = {
+            "case_id": "R002-001",
+            "criterion_id": "AC-01",
+            "evidence_type": "implementation",
+            "source": "r002_retrieval_comparison",
+            "finding_status": "evidence_found",
+            "reason_code": reason_code,
+        }
+        assert r002_models.R002MissingExplanation.model_validate_json(json.dumps(explanation))
+    for status in ("missing", "partial", "needs_review"):
+        explanation = {
+            "case_id": "R002-001",
+            "criterion_id": "AC-01",
+            "evidence_type": "implementation",
+            "source": "scopeproof_finding",
+            "finding_status": status,
+            "reason_code": "scopeproof_finding_explicit_gap",
+        }
+        assert r002_models.R002MissingExplanation.model_validate_json(json.dumps(explanation))
