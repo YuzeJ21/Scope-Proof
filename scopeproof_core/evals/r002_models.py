@@ -781,55 +781,9 @@ class R002ParsedDiff(R002StrictModel):
 class R002ParsedCase(R002StrictModel):
     case_id: R002CaseId
     files: tuple[R002ParsedFile, ...] = Field(max_length=32)
-    file_count: StrictInt = Field(ge=0, le=32)
-    hunk_count: StrictInt = Field(ge=0, le=256)
-    diff_line_count: StrictInt = Field(ge=0, le=50000)
-
-    @model_validator(mode="before")
-    @classmethod
-    def inject_omitted_counts(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-        data = dict(value)
-        files = data.get("files")
-        if files is None:
-            return data
-
-        def strict_hunk(item: object) -> object:
-            if not isinstance(item, dict):
-                return item
-            hunk = dict(item)
-            if isinstance(hunk.get("lines"), list):
-                hunk["lines"] = tuple(hunk["lines"])
-            return hunk
-
-        def strict_file(item: object) -> object:
-            if not isinstance(item, dict):
-                return item
-            file = dict(item)
-            hunks = file.get("hunks")
-            if isinstance(hunks, list):
-                file["hunks"] = tuple(strict_hunk(hunk) for hunk in hunks)
-            return file
-
-        if isinstance(files, list):
-            files = tuple(strict_file(file) for file in files)
-            data["files"] = files
-        if any(field in data for field in ("file_count", "hunk_count", "diff_line_count")):
-            return data
-
-        def field(item: object, name: str) -> object:
-            return item[name] if isinstance(item, dict) else getattr(item, name)
-
-        files_tuple = tuple(files)
-        return {
-            **data,
-            "file_count": len(files_tuple),
-            "hunk_count": sum(len(field(file, "hunks")) for file in files_tuple),
-            "diff_line_count": sum(
-                len(field(hunk, "lines")) for file in files_tuple for hunk in field(file, "hunks")
-            ),
-        }
+    file_count: StrictInt = Field(default=0, ge=0, le=32)
+    hunk_count: StrictInt = Field(default=0, ge=0, le=256)
+    diff_line_count: StrictInt = Field(default=0, ge=0, le=50000)
 
     @model_validator(mode="after")
     def reconstruct_counts_and_stream_separation(self) -> Self:
@@ -845,7 +799,12 @@ class R002ParsedCase(R002StrictModel):
             sum(len(item.hunks) for item in self.files),
             sum(len(hunk.lines) for item in self.files for hunk in item.hunks),
         )
-        if (self.file_count, self.hunk_count, self.diff_line_count) != expected:
+        count_fields = {"file_count", "hunk_count", "diff_line_count"}
+        if not (count_fields & self.model_fields_set):
+            object.__setattr__(self, "file_count", expected[0])
+            object.__setattr__(self, "hunk_count", expected[1])
+            object.__setattr__(self, "diff_line_count", expected[2])
+        elif (self.file_count, self.hunk_count, self.diff_line_count) != expected:
             raise ValueError("parsed case counts must match its files")
         return self
 

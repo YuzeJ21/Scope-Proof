@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import warnings
 from copy import deepcopy
@@ -2129,10 +2130,39 @@ def test_parsed_diff_and_case_enforce_exact_aggregate_hunk_and_line_caps():
 
 
 def test_parsed_case_direct_constructor_reconstructs_omitted_counts():
+    parsed_file = r002_models.R002ParsedFile.model_validate_json(
+        json.dumps(
+            {
+                "stream": "patch",
+                "path": "a.py",
+                "hunks": [
+                    {
+                        "hunk_id": "patch:a.py:H1",
+                        "old_start": 1,
+                        "old_count": 0,
+                        "new_start": 1,
+                        "new_count": 0,
+                        "lines": [],
+                    }
+                ],
+                "additions": 0,
+                "deletions": 0,
+            }
+        )
+    )
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        parsed = r002_models.R002ParsedCase(case_id="R002-001", files=())
-    assert (parsed.file_count, parsed.hunk_count, parsed.diff_line_count) == (0, 0, 0)
+        parsed = r002_models.R002ParsedCase(case_id="R002-001", files=(parsed_file,))
+    assert (parsed.file_count, parsed.hunk_count, parsed.diff_line_count) == (1, 1, 0)
+    signature = inspect.signature(r002_models.R002ParsedCase)
+    assert all(
+        signature.parameters[field].default is not inspect.Parameter.empty
+        for field in ("file_count", "hunk_count", "diff_line_count")
+    )
+    assert all(
+        not r002_models.R002ParsedCase.model_fields[field].is_required()
+        for field in ("file_count", "hunk_count", "diff_line_count")
+    )
     schema = r002_models.R002ParsedCase.model_json_schema()["properties"]
     assert schema["file_count"]["type"] == "integer"
     assert (
@@ -2151,6 +2181,12 @@ def test_parsed_case_direct_constructor_reconstructs_omitted_counts():
                 }
             )
         )
+
+    for malformed_files in ([], "bad", [None], [{}], 7):
+        with pytest.raises(ValidationError):
+            r002_models.R002ParsedCase.model_validate(
+                {"case_id": "R002-001", "files": malformed_files}
+            )
 
 
 def test_parsed_file_rejects_overlapping_hunk_ranges_and_accepts_adjacent_ranges():
