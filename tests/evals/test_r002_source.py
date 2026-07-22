@@ -292,6 +292,78 @@ def test_decode_maps_bad_seekable_handle_before_parquet_construction(monkeypatch
     assert raised.value.args == ("parquet_bytes_mismatch",)
 
 
+def test_decode_stops_reading_an_oversized_stream_after_one_extra_chunk():
+    class OversizedRecordingSource:
+        def __init__(self):
+            self.bytes_returned = 0
+            self.read_calls = 0
+
+        def seek(self, offset):
+            assert offset == 0
+
+        def read(self, size):
+            self.read_calls += 1
+            if self.read_calls > 1:
+                pytest.fail("source was read past the bounded mismatch check")
+            chunk = b"x" * size
+            self.bytes_returned += len(chunk)
+            return chunk
+
+    source = OversizedRecordingSource()
+    pin = SWEbenchSourcePin(
+        dataset_id="fixture/dataset",
+        config="fixture",
+        split="test",
+        revision="c" * 40,
+        source_url="https://huggingface.co/fixture/data.parquet",
+        parquet_path="data/test.parquet",
+        byte_length=1,
+        sha256="0" * 64,
+        row_count=1,
+        repository_count=1,
+        unique_instance_count=1,
+        schema=R002_SCHEMA,
+    )
+    with pytest.raises(R002SourceError) as raised:
+        decode_verified_parquet(source, pin)
+    assert raised.value.args == ("parquet_bytes_mismatch",)
+    assert source.bytes_returned <= pin.byte_length + 64 * 1024
+
+
+@pytest.mark.parametrize("method", ["seek", "read"])
+def test_decode_hides_runtime_handle_prose_with_a_stable_error_code(method):
+    class RuntimeSource:
+        def seek(self, offset):
+            if method == "seek":
+                raise RuntimeError("secret seek prose")
+
+        def read(self, size):
+            if method == "read":
+                raise RuntimeError("secret read prose")
+            return b""
+
+    pin = SWEbenchSourcePin(
+        dataset_id="fixture/dataset",
+        config="fixture",
+        split="test",
+        revision="c" * 40,
+        source_url="https://huggingface.co/fixture/data.parquet",
+        parquet_path="data/test.parquet",
+        byte_length=1,
+        sha256="0" * 64,
+        row_count=1,
+        repository_count=1,
+        unique_instance_count=1,
+        schema=R002_SCHEMA,
+    )
+    with pytest.raises(R002SourceError) as raised:
+        decode_criteria_source_rows(RuntimeSource(), pin)
+    assert raised.value.args == ("parquet_bytes_mismatch",)
+    assert raised.value.__cause__ is None
+    assert raised.value.__suppress_context__ is True
+    assert "secret" not in str(raised.value)
+
+
 @pytest.mark.parametrize("decoder", [decode_criteria_source_rows, decode_verified_parquet])
 def test_decode_maps_parquet_read_failures_without_wrapping_model_validation(
     tmp_path, monkeypatch, decoder
@@ -312,6 +384,27 @@ def test_decode_maps_parquet_read_failures_without_wrapping_model_validation(
     with path.open("rb") as source, pytest.raises(R002SourceError) as raised:
         decoder(source, pin)
     assert raised.value.args == ("parquet_schema_mismatch",)
+
+
+def test_decode_maps_runtime_parquet_read_failures_without_leaking_prose(tmp_path, monkeypatch):
+    path, pin = write_parquet_and_pin(tmp_path, [swebench_row()])
+    real_parquet_file = pq.ParquetFile
+
+    class FailingReadParquetFile:
+        def __init__(self, source):
+            self._inner = real_parquet_file(source)
+            self.metadata = self._inner.metadata
+            self.schema_arrow = self._inner.schema_arrow
+
+        def read(self, columns=None):
+            raise RuntimeError("secret parquet prose")
+
+    monkeypatch.setattr(pq, "ParquetFile", FailingReadParquetFile)
+    with path.open("rb") as source, pytest.raises(R002SourceError) as raised:
+        decode_criteria_source_rows(source, pin)
+    assert raised.value.args == ("parquet_schema_mismatch",)
+    assert raised.value.__cause__ is None
+    assert raised.value.__suppress_context__ is True
 
 
 @pytest.mark.parametrize(
