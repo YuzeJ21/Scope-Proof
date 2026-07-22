@@ -35,19 +35,26 @@ def _validate_parquet_container(source: BinaryIO, pin: SWEbenchSourcePin, *, pa,
         source.seek(0)
         digest = sha256()
         length = 0
-        while chunk := source.read(64 * 1024):
+        while chunk := source.read(min(64 * 1024, pin.byte_length - length + 1)):
             if not isinstance(chunk, bytes):
                 raise TypeError("source must return bytes")
             length += len(chunk)
             if length > pin.byte_length:
                 raise R002SourceError("parquet_bytes_mismatch")
             digest.update(chunk)
-    except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+    except R002SourceError:
+        raise
+    except Exception:
         raise R002SourceError("parquet_bytes_mismatch") from None
     if length != pin.byte_length or digest.hexdigest() != pin.sha256:
         raise R002SourceError("parquet_bytes_mismatch")
     try:
         source.seek(0)
+    except R002SourceError:
+        raise
+    except Exception:
+        raise R002SourceError("parquet_bytes_mismatch") from None
+    try:
         parquet = pq.ParquetFile(source)
         metadata = parquet.metadata
         if metadata.num_rows != pin.row_count:
@@ -65,7 +72,7 @@ def _validate_parquet_container(source: BinaryIO, pin: SWEbenchSourcePin, *, pa,
             raise R002SourceError("parquet_uncompressed_limit")
     except R002SourceError:
         raise
-    except (AttributeError, OSError, RuntimeError, TypeError, ValueError, pa.ArrowException):
+    except Exception:
         raise R002SourceError("parquet_schema_mismatch") from None
     return parquet
 
@@ -81,7 +88,9 @@ def decode_verified_parquet(
     parquet = _validate_parquet_container(source, pin, pa=pa, pq=pq)
     try:
         decoded = parquet.read().to_pylist()
-    except (OSError, RuntimeError, TypeError, ValueError, pa.ArrowException):
+    except R002SourceError:
+        raise
+    except Exception:
         raise R002SourceError("parquet_schema_mismatch") from None
     rows = [SWEbenchVerifiedRow.model_validate(item) for item in decoded]
     validate_row_collection(rows, pin)
@@ -99,7 +108,9 @@ def decode_criteria_source_rows(
     parquet = _validate_parquet_container(source, pin, pa=pa, pq=pq)
     try:
         projected = parquet.read(columns=R002_CRITERIA_SOURCE_COLUMNS).to_pylist()
-    except (OSError, RuntimeError, TypeError, ValueError, pa.ArrowException):
+    except R002SourceError:
+        raise
+    except Exception:
         raise R002SourceError("parquet_schema_mismatch") from None
     rows = [SWEbenchCriteriaSourceRow.model_validate(item) for item in projected]
     if any(len(row.problem_statement.encode("utf-8")) > 128 * 1024 for row in rows):

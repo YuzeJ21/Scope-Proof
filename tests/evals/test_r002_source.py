@@ -330,16 +330,57 @@ def test_decode_stops_reading_an_oversized_stream_after_one_extra_chunk():
     assert source.bytes_returned <= pin.byte_length + 64 * 1024
 
 
+def test_decode_requests_only_one_excess_byte_from_a_size_respecting_stream():
+    class RecordingSource:
+        def __init__(self, payload):
+            self.payload = payload
+            self.offset = 0
+            self.request_sizes = []
+            self.bytes_returned = 0
+
+        def seek(self, offset):
+            self.offset = offset
+
+        def read(self, size):
+            self.request_sizes.append(size)
+            chunk = self.payload[self.offset : self.offset + size]
+            self.offset += len(chunk)
+            self.bytes_returned += len(chunk)
+            return chunk
+
+    source = RecordingSource(b"0123456789x")
+    pin = SWEbenchSourcePin(
+        dataset_id="fixture/dataset",
+        config="fixture",
+        split="test",
+        revision="c" * 40,
+        source_url="https://huggingface.co/fixture/data.parquet",
+        parquet_path="data/test.parquet",
+        byte_length=10,
+        sha256="0" * 64,
+        row_count=1,
+        repository_count=1,
+        unique_instance_count=1,
+        schema=R002_SCHEMA,
+    )
+    with pytest.raises(R002SourceError) as raised:
+        decode_verified_parquet(source, pin)
+    assert raised.value.args == ("parquet_bytes_mismatch",)
+    assert source.request_sizes == [pin.byte_length + 1]
+    assert source.bytes_returned <= pin.byte_length + 1
+
+
+@pytest.mark.parametrize("error_type", [EOFError, RuntimeError])
 @pytest.mark.parametrize("method", ["seek", "read"])
-def test_decode_hides_runtime_handle_prose_with_a_stable_error_code(method):
+def test_decode_hides_ordinary_handle_prose_with_a_stable_error_code(method, error_type):
     class RuntimeSource:
         def seek(self, offset):
             if method == "seek":
-                raise RuntimeError("secret seek prose")
+                raise error_type("secret seek prose")
 
         def read(self, size):
             if method == "read":
-                raise RuntimeError("secret read prose")
+                raise error_type("secret read prose")
             return b""
 
     pin = SWEbenchSourcePin(
@@ -400,6 +441,22 @@ def test_decode_maps_runtime_parquet_read_failures_without_leaking_prose(tmp_pat
             raise RuntimeError("secret parquet prose")
 
     monkeypatch.setattr(pq, "ParquetFile", FailingReadParquetFile)
+    with path.open("rb") as source, pytest.raises(R002SourceError) as raised:
+        decode_criteria_source_rows(source, pin)
+    assert raised.value.args == ("parquet_schema_mismatch",)
+    assert raised.value.__cause__ is None
+    assert raised.value.__suppress_context__ is True
+
+
+def test_decode_maps_eoferror_from_parquet_construction_without_leaking_prose(
+    tmp_path, monkeypatch
+):
+    path, pin = write_parquet_and_pin(tmp_path, [swebench_row()])
+
+    def failed_parquet_construction(source):
+        raise EOFError("secret parquet constructor prose")
+
+    monkeypatch.setattr(pq, "ParquetFile", failed_parquet_construction)
     with path.open("rb") as source, pytest.raises(R002SourceError) as raised:
         decode_criteria_source_rows(source, pin)
     assert raised.value.args == ("parquet_schema_mismatch",)
