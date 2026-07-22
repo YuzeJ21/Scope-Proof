@@ -80,6 +80,14 @@ class _PathStringSubclass(str):
     pass
 
 
+class _SentinelReasonCode(str):
+    def __str__(self) -> str:
+        return "TRACE_REASON_CODE_SENTINEL"
+
+    def __repr__(self) -> str:
+        return "TRACE_REASON_CODE_SENTINEL"
+
+
 class _VerifiedLineSubclass(R002VerifiedLine):
     pass
 
@@ -427,6 +435,45 @@ def test_head_mapping_snapshot_failure_is_closed_and_sanitized(
     assert captured.value.__context__ is None
 
 
+def test_head_mapping_normalizes_input_reference_errors_to_literal_reason(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+) -> None:
+    sentinel = "TRACE_REASON_CODE_SENTINEL"
+
+    class ReferenceErrorMapping(Mapping[str, bytes]):
+        def __iter__(self):  # type: ignore[no-untyped-def]
+            return iter(())
+
+        def __len__(self) -> int:
+            return 0
+
+        def __getitem__(self, key: str) -> bytes:
+            raise KeyError(key)
+
+        def items(self):  # type: ignore[no-untyped-def]
+            raise R002ReferenceError(_SentinelReasonCode("head_file_missing"))
+
+    with pytest.raises(R002ReferenceError, match="head_mapping_invalid") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes=ReferenceErrorMapping(),
+        )
+
+    error = captured.value
+    trace = traceback.TracebackException.from_exception(error, capture_locals=True)
+    frames = [frame for frame in trace.stack if frame.filename == r002_verify.__file__]
+    assert error.args == ("head_mapping_invalid",)
+    assert type(error.args[0]) is str
+    assert str(error) == "head_mapping_invalid"
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert sentinel not in "\n".join(
+        local for frame in frames for local in (frame.locals or {}).values()
+    )
+
+
 def test_head_mapping_rejects_duplicate_pairs_before_dictionary_insertion(
     r002_case_manifest: R002CaseManifest,
     parsed_case: R002ParsedCase,
@@ -558,6 +605,36 @@ def test_head_file_and_case_byte_limits_are_exact(
         verify_case_head_files(
             case=r002_case_manifest, parsed=parsed_case, head_file_bytes=oversized_case
         )
+
+
+def test_head_file_limit_is_checked_before_file_hashing(
+    monkeypatch: pytest.MonkeyPatch,
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+) -> None:
+    hash_called = False
+
+    def hash_probe(_value: bytes) -> object:
+        nonlocal hash_called
+        hash_called = True
+        raise AssertionError("hashing must follow the per-file byte limit")
+
+    monkeypatch.setattr(r002_verify, "sha256", hash_probe)
+    with pytest.raises(R002ReferenceError, match="head_file_limit") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes={
+                **head_files,
+                "src/widget.py": b"x" * (4 * 1024 * 1024 + 1),
+            },
+        )
+
+    assert hash_called is False
+    assert captured.value.args == ("head_file_limit",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
 
 
 def test_newline_whitespace_and_unicode_are_compared_exactly(
@@ -1001,6 +1078,62 @@ def test_parsed_numeric_bounds_fail_before_classification_and_serialization(
 
     assert classifier_calls == 0
     assert serializer_calls == 0
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "reaches_hooks"),
+    [
+        pytest.param("old_start", 2_147_483_647, True, id="old-start-max"),
+        pytest.param("old_start", 2_147_483_648, False, id="old-start-max-plus-one"),
+        pytest.param("new_start", 2_147_483_647, True, id="new-start-max"),
+        pytest.param("new_start", 2_147_483_648, False, id="new-start-max-plus-one"),
+    ],
+)
+def test_parsed_hunk_start_boundary_precedes_classification_and_serialization(
+    monkeypatch: pytest.MonkeyPatch,
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    field: str,
+    value: int,
+    reaches_hooks: bool,
+) -> None:
+    test_file = next(
+        file for file in parsed_case.files if file.stream is R002DiffStream.TEST_PATCH
+    )
+    hunk = test_file.hunks[0].model_copy(update={field: value})
+    malformed_file = test_file.model_copy(update={"hunks": (hunk,)})
+    malformed = R002ParsedCase.model_construct(
+        case_id=r002_case_manifest.case_id,
+        files=(malformed_file,),
+        file_count=1,
+        hunk_count=1,
+        diff_line_count=2,
+    )
+    classifier_called = False
+    serializer_called = False
+
+    def classification_probe(_path: str) -> EvidenceType:
+        nonlocal classifier_called
+        classifier_called = True
+        return EvidenceType.TEST
+
+    def serialization_probe(_model_type: type[object], _instance: object) -> object:
+        nonlocal serializer_called
+        serializer_called = True
+        raise AssertionError("serialization probe")
+
+    monkeypatch.setattr(
+        r002_verify,
+        "classify_changed_path_evidence_type",
+        classification_probe,
+    )
+    monkeypatch.setattr(r002_verify, "_trusted_python_dump", serialization_probe)
+
+    with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+        assert_test_stream_separation(malformed)
+
+    assert classifier_called is reaches_hooks
+    assert serializer_called is reaches_hooks
 
 
 @pytest.mark.parametrize(

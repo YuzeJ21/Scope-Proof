@@ -38,6 +38,7 @@ _MAX_R002_PARSED_LINES = 50_000
 _MAX_R002_VERIFIED_LINES = 50_000
 _MAX_R002_HUNK_ID_CHARACTERS = 1024
 _MAX_R002_LINE_BYTES = 65_536
+_MAX_R002_HUNK_START = 2_147_483_647
 
 
 class R002ReferenceError(R002Error):
@@ -266,11 +267,11 @@ def _prevalidate_parsed_shape(parsed: R002ParsedCase) -> None:
                 or type(hunk.hunk_id) is not str
                 or not 10 <= len(hunk.hunk_id) <= _MAX_R002_HUNK_ID_CHARACTERS
                 or type(hunk.old_start) is not int
-                or hunk.old_start < 1
+                or not 1 <= hunk.old_start <= _MAX_R002_HUNK_START
                 or type(hunk.old_count) is not int
                 or not 0 <= hunk.old_count <= _MAX_R002_PARSED_LINES
                 or type(hunk.new_start) is not int
-                or hunk.new_start < 1
+                or not 1 <= hunk.new_start <= _MAX_R002_HUNK_START
                 or type(hunk.new_count) is not int
                 or not 0 <= hunk.new_count <= _MAX_R002_PARSED_LINES
                 or type(hunk.lines) is not tuple
@@ -373,8 +374,6 @@ def _validate_head_mapping(
             if valid_path != path:
                 raise R002ReferenceError("head_mapping_invalid")
             supplied[path] = value
-    except R002ReferenceError as caught:
-        error = _fresh_reference_error(caught.reason_code)
     except Exception:
         error = _fresh_reference_error("head_mapping_invalid")
     else:
@@ -408,8 +407,8 @@ def _verify_case_head_files(
     verified: list[R002VerifiedLine] = []
     for parsed_file in parsed.files:
         raw = head_files[parsed_file.path]
-        file_hash = sha256(raw).hexdigest()
         lines = _normalized_file_lines(raw, max_bytes=limits.bytes_per_file)
+        file_hash = sha256(raw).hexdigest()
         for hunk in parsed_file.hunks:
             for line in hunk.lines:
                 if line.change_type is LineChangeType.REMOVED:
