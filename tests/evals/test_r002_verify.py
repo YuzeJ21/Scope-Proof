@@ -579,6 +579,25 @@ def test_candidate_permalink_rejects_invalid_direct_inputs(
         candidate_permalink(r002_case_manifest, path, line)
 
 
+def test_candidate_permalink_enforces_logical_path_character_limit(
+    r002_case_manifest: R002CaseManifest,
+) -> None:
+    maximum_path = f"{'a' * 509}.py"
+    oversized_path = f"{'a' * 510}.py"
+
+    assert len(maximum_path) == 512
+    assert candidate_permalink(r002_case_manifest, maximum_path, 1).endswith(
+        f"/{maximum_path}#L1-L1"
+    )
+    assert len(oversized_path) == 513
+    with pytest.raises(R002ReferenceError, match="permalink_input_invalid") as captured:
+        candidate_permalink(r002_case_manifest, oversized_path, 1)
+
+    assert captured.value.args == ("permalink_input_invalid",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
 @pytest.mark.parametrize(
     ("update", "sentinel"),
     [
@@ -684,6 +703,69 @@ def test_test_evidence_requires_test_type_and_e2(
         verify_evidence_reference(
             case=r002_case_manifest, evidence=invalid, verified_lines=verified_case_lines
         )
+
+
+def test_verified_test_stream_requires_test_path_without_reclassifying_patch_stream(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+) -> None:
+    implementation = next(
+        line for line in verified_case_lines.lines if line.path == "src/widget.py"
+    )
+    forged_test_stream = R002VerifiedLine.model_validate(
+        {
+            **implementation.model_dump(mode="python"),
+            "stream": R002DiffStream.TEST_PATCH,
+            "hunk_id": f"test_patch:{implementation.path}:H1",
+        },
+        strict=True,
+    )
+    forged_sidecar = R002VerifiedCaseLines(
+        case_id=verified_case_lines.case_id,
+        head_sha=verified_case_lines.head_sha,
+        lines=(forged_test_stream,),
+    )
+    with pytest.raises(R002ReferenceError, match="test_stream_not_test_evidence") as captured:
+        verify_evidence_reference(
+            case=r002_case_manifest,
+            evidence=evidence_item(
+                case=r002_case_manifest,
+                line_start=implementation.new_line_number,
+            ),
+            verified_lines=forged_sidecar,
+        )
+    assert captured.value.args == ("test_stream_not_test_evidence",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+    test_line = next(
+        line for line in verified_case_lines.lines if line.path == "tests/test_widget.py"
+    )
+    patch_stream_test = R002VerifiedLine.model_validate(
+        {
+            **test_line.model_dump(mode="python"),
+            "stream": R002DiffStream.PATCH,
+            "hunk_id": f"patch:{test_line.path}:H1",
+        },
+        strict=True,
+    )
+    patch_sidecar = R002VerifiedCaseLines(
+        case_id=verified_case_lines.case_id,
+        head_sha=verified_case_lines.head_sha,
+        lines=(patch_stream_test,),
+    )
+    key = verify_evidence_reference(
+        case=r002_case_manifest,
+        evidence=evidence_item(
+            case=r002_case_manifest,
+            file_path=test_line.path,
+            line_start=test_line.new_line_number,
+            evidence_type=EvidenceType.TEST,
+            evidence_level=EvidenceLevel.E2,
+        ),
+        verified_lines=patch_sidecar,
+    )
+    assert key.stream is R002DiffStream.PATCH
 
 
 def test_evidence_sidecar_must_cross_bind_case_head_and_repository(

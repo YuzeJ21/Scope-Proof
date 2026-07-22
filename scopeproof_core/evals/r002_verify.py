@@ -29,6 +29,7 @@ from scopeproof_core.schemas.models import (
 )
 
 DEFAULT_R002_HEAD_LIMITS = R002HeadFileLimits()
+_MAX_R002_LOGICAL_PATH_CHARACTERS = 512
 
 
 class R002ReferenceError(R002Error):
@@ -143,7 +144,7 @@ def _normalized_file_lines(raw: bytes, *, max_bytes: int) -> list[str]:
 def _validate_permalink_inputs(path: str, line_number: int) -> None:
     if type(path) is not str or type(line_number) is not int:
         raise R002ReferenceError("permalink_input_invalid")
-    if line_number < 1:
+    if line_number < 1 or len(path) > _MAX_R002_LOGICAL_PATH_CHARACTERS:
         raise R002ReferenceError("permalink_input_invalid")
     try:
         valid_path = validate_r002_logical_path(path)
@@ -401,6 +402,11 @@ def _validate_verified_sidecar(
         error = None
     if error is not None:
         raise error
+    for line in snapshot.lines:
+        if line.stream is R002DiffStream.TEST_PATCH and (
+            classify_changed_path_evidence_type(line.path) is not EvidenceType.TEST
+        ):
+            raise R002ReferenceError("test_stream_not_test_evidence")
     return snapshot
 
 
