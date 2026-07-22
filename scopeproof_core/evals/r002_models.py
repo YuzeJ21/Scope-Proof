@@ -777,23 +777,26 @@ class _LabelCollection(R002Manifest):
         }
         if len(missing) != len(self.expected_missing):
             raise ValueError("expected missing records must be unique")
-        expected_pairs = {
-            (label.key.case_id, label.key.criterion_id)
-            for label in self.labels
-            if not label.relevant
-            and not any(
-                other.key.case_id == label.key.case_id
-                and other.key.criterion_id == label.key.criterion_id
-                and other.relevant
-                for other in self.labels
+        pairs = sorted({(label.key.case_id, label.key.criterion_id) for label in self.labels})
+        relevant_types = {
+            (
+                label.key.case_id,
+                label.key.criterion_id,
+                _evidence_type(ChangedFile(path=label.key.path, status="modified")),
             )
+            for label in self.labels
+            if label.relevant
         }
-        expected_records = {
+        expected_records = tuple(
             (case_id, criterion_id, evidence_type)
-            for case_id, criterion_id in expected_pairs
+            for case_id, criterion_id in pairs
             for evidence_type in R002_STATIC_EVIDENCE_TYPES
-        }
-        if missing != expected_records:
+            if (case_id, criterion_id, evidence_type) not in relevant_types
+        )
+        actual_records = tuple(
+            (item.case_id, item.criterion_id, item.evidence_type) for item in self.expected_missing
+        )
+        if actual_records != expected_records:
             raise ValueError("expected missing records must be derived from labels")
         return self
 
@@ -852,7 +855,7 @@ class R002CaseResult(R002StrictModel):
     repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
     pr_number: StrictInt = Field(gt=0)
     head_sha: GitSha
-    criterion_count: StrictInt = Field(ge=0)
+    criterion_count: StrictInt = Field(ge=1)
     annotation_candidate_count: StrictInt = Field(ge=0)
     retrieved_candidates: tuple[R002RetrievedCandidate, ...]
     missing_explanations: tuple[R002MissingExplanation, ...]
@@ -887,22 +890,29 @@ class R002CaseResult(R002StrictModel):
             raise ValueError("criterion groups must be sorted unique criterion IDs")
         expected_reasons: tuple[str, ...]
         if self.gate_verdict is GateVerdict.BLOCKED:
-            if self.conditional_criteria or not (
-                self.blocking_criteria or self.unresolved_criteria
-            ):
-                raise ValueError("blocked R-002 cases require blocking or unresolved criteria")
+            if not self.blocking_criteria:
+                raise ValueError("blocked R-002 cases require blocking criteria")
             expected_reasons = tuple(
                 code
                 for code, criteria in (
                     ("blocking_criteria", self.blocking_criteria),
+                    ("conditional_criteria", self.conditional_criteria),
                     ("unresolved_criteria", self.unresolved_criteria),
                 )
                 if criteria
             )
         else:
-            if self.blocking_criteria or self.conditional_criteria or self.unresolved_criteria:
-                raise ValueError("needs_review R-002 cases cannot claim criterion gate groups")
-            expected_reasons = ("checks_not_passing", "final_acceptance_required")
+            if self.blocking_criteria or not self.unresolved_criteria:
+                raise ValueError("needs_review R-002 cases require unresolved criteria only")
+            expected_reasons = tuple(
+                code
+                for code, criteria in (
+                    ("conditional_criteria", self.conditional_criteria),
+                    ("unresolved_criteria", self.unresolved_criteria),
+                    ("checks_not_passing", ("ci",)),
+                )
+                if criteria
+            )
         if self.gate_reason_codes != expected_reasons:
             raise ValueError("R-002 gate reason codes must match the gate shape")
         if (
@@ -942,11 +952,11 @@ class R002CaseResult(R002StrictModel):
 
 
 class R002Metrics(R002StrictModel):
-    precision: R002Metric
-    recall: R002Metric
-    f1: R002Metric
-    implementation_precision: R002Metric
-    test_precision: R002Metric
+    owner_confirmed_label_candidate_precision: R002Metric
+    criterion_candidate_coverage: R002Metric
+    candidate_to_gold_file_coverage: R002Metric
+    candidate_to_gold_hunk_coverage: R002Metric
+    missing_evidence_explanation_completeness: R002Metric
     implementation_test_separation_errors: StrictInt = Field(ge=0)
     immutable_reference_integrity_errors: StrictInt = Field(ge=0)
     parse_errors: StrictInt = Field(ge=0)
@@ -989,6 +999,16 @@ class R002DeterminismProjection(R002Manifest):
             raise ValueError("R-002 case results must be ordered and complete")
         if self.limitations != R002_RESULT_LIMITATIONS:
             raise ValueError("R-002 projections require the fixed limitations")
+        identities = {
+            (result.repository, result.pr_number, result.head_sha) for result in self.case_results
+        }
+        repository_counts = Counter(result.repository for result in self.case_results)
+        if (
+            len(identities) != 20
+            or len(repository_counts) != 12
+            or max(repository_counts.values()) > 2
+        ):
+            raise ValueError("R-002 projections require the fixed cohort identity shape")
         return self
 
 
@@ -1008,6 +1028,8 @@ class R002BenchmarkResult(R002DeterminismProjection):
             self.executed_case_count != 20
             or self.failed_case_count != 0
             or self.skipped_case_count != 0
+            or self.confirmed_criterion_count < 20
+            or self.annotation_candidate_count < 1
             or self.confirmed_criterion_count
             != sum(item.criterion_count for item in self.case_results)
             or self.annotation_candidate_count

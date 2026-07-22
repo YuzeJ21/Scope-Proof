@@ -601,3 +601,83 @@ def test_case_result_rejects_ci_classifier_and_gate_shape_mutations(mutation):
         payload["gate_reason_codes"] = ["arbitrary"]
     with pytest.raises(ValidationError):
         R002CaseResult.model_validate_json(json.dumps(payload))
+
+
+def test_case_result_accepts_evaluate_gate_compatible_blocked_and_needs_review_shapes():
+    blocked = _safe_case_result_payload()
+    blocked["conditional_criteria"] = ["AC-02"]
+    blocked["unresolved_criteria"] = ["AC-03"]
+    blocked["gate_reason_codes"] = [
+        "blocking_criteria",
+        "conditional_criteria",
+        "unresolved_criteria",
+    ]
+    assert R002CaseResult.model_validate_json(json.dumps(blocked)).gate_verdict.value == "blocked"
+
+    review = _safe_case_result_payload()
+    review["gate_verdict"] = "needs_review"
+    review["blocking_criteria"] = []
+    review["conditional_criteria"] = ["AC-02"]
+    review["unresolved_criteria"] = ["AC-03"]
+    review["gate_reason_codes"] = [
+        "conditional_criteria",
+        "unresolved_criteria",
+        "checks_not_passing",
+    ]
+    assert (
+        R002CaseResult.model_validate_json(json.dumps(review)).gate_verdict.value == "needs_review"
+    )
+
+
+def test_expected_missing_is_per_evidence_type_and_ordered():
+    payload = _label_payload()
+    payload["labels"].append(
+        {
+            "key": {
+                **payload["labels"][0]["key"],
+                "stream": "test_patch",
+                "path": "tests/test_scopeproof.py",
+            },
+            "relevant": True,
+            "reason_code": "test_intent_candidate",
+        }
+    )
+    payload["annotation_count"] = 2
+    payload["expected_missing"] = [
+        {
+            "case_id": "R002-001",
+            "criterion_id": "AC-01",
+            "evidence_type": kind,
+            "reason_code": "no_owner_labelled_relevant_candidate",
+        }
+        for kind in ("implementation", "documentation", "contract")
+    ]
+    assert R002CandidateLabelSet.model_validate_json(json.dumps(payload)).expected_missing
+    payload["expected_missing"].reverse()
+    with pytest.raises(ValidationError):
+        R002CandidateLabelSet.model_validate_json(json.dumps(payload))
+
+
+def test_metrics_has_exact_persisted_ratio_field_map():
+    assert set(r002_models.R002Metrics.model_fields) == {
+        "owner_confirmed_label_candidate_precision",
+        "criterion_candidate_coverage",
+        "candidate_to_gold_file_coverage",
+        "candidate_to_gold_hunk_coverage",
+        "missing_evidence_explanation_completeness",
+        "implementation_test_separation_errors",
+        "immutable_reference_integrity_errors",
+        "parse_errors",
+        "schema_errors",
+        "source_hash_errors",
+        "source_sha_errors",
+        "unexpected_ready_count",
+        "normalized_rerun_mismatches",
+    }
+
+
+def test_case_result_rejects_zero_criterion_count():
+    payload = _safe_case_result_payload()
+    payload["criterion_count"] = 0
+    with pytest.raises(ValidationError):
+        R002CaseResult.model_validate_json(json.dumps(payload))
