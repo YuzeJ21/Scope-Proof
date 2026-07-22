@@ -292,7 +292,7 @@ def test_decode_maps_bad_seekable_handle_before_parquet_construction(monkeypatch
     assert raised.value.args == ("parquet_bytes_mismatch",)
 
 
-def test_decode_stops_reading_an_oversized_stream_after_one_extra_chunk():
+def test_decode_stops_reading_an_oversized_stream_after_one_excess_byte():
     class OversizedRecordingSource:
         def __init__(self):
             self.bytes_returned = 0
@@ -327,7 +327,7 @@ def test_decode_stops_reading_an_oversized_stream_after_one_extra_chunk():
     with pytest.raises(R002SourceError) as raised:
         decode_verified_parquet(source, pin)
     assert raised.value.args == ("parquet_bytes_mismatch",)
-    assert source.bytes_returned <= pin.byte_length + 64 * 1024
+    assert source.bytes_returned <= pin.byte_length + 1
 
 
 def test_decode_requests_only_one_excess_byte_from_a_size_respecting_stream():
