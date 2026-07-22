@@ -15,6 +15,8 @@ from scopeproof_core.evals.r002_models import (
     R002HeadFileLimits,
     R002ParsedCase,
     R002ParsedFile,
+    R002ParsedHunk,
+    R002ParsedLine,
     R002VerifiedCaseLines,
     R002VerifiedLine,
     validate_r002_logical_path,
@@ -31,7 +33,11 @@ from scopeproof_core.schemas.models import (
 DEFAULT_R002_HEAD_LIMITS = R002HeadFileLimits()
 _MAX_R002_LOGICAL_PATH_CHARACTERS = 512
 _MAX_R002_PARSED_FILES = 32
+_MAX_R002_PARSED_HUNKS = 256
+_MAX_R002_PARSED_LINES = 50_000
 _MAX_R002_VERIFIED_LINES = 50_000
+_MAX_R002_HUNK_ID_CHARACTERS = 1024
+_MAX_R002_LINE_BYTES = 65_536
 
 
 class R002ReferenceError(R002Error):
@@ -210,21 +216,109 @@ def _assert_test_stream_separation(parsed: R002ParsedCase) -> None:
             raise R002ReferenceError("test_stream_not_test_evidence")
 
 
-def _validated_parsed_snapshot(parsed: R002ParsedCase) -> R002ParsedCase:
+def _prevalidate_parsed_shape(parsed: R002ParsedCase) -> None:
     if (
         type(parsed) is not R002ParsedCase
         or type(parsed.case_id) is not str
+        or len(parsed.case_id) != 8
         or type(parsed.files) is not tuple
         or len(parsed.files) > _MAX_R002_PARSED_FILES
+        or type(parsed.file_count) is not int
+        or not 0 <= parsed.file_count <= _MAX_R002_PARSED_FILES
+        or type(parsed.hunk_count) is not int
+        or not 0 <= parsed.hunk_count <= _MAX_R002_PARSED_HUNKS
+        or type(parsed.diff_line_count) is not int
+        or not 0 <= parsed.diff_line_count <= _MAX_R002_PARSED_LINES
     ):
         raise R002ReferenceError("model_validation_failed")
-    if any(
-        type(file) is not R002ParsedFile
-        or type(file.stream) is not R002DiffStream
-        or type(file.path) is not str
-        for file in parsed.files
-    ):
-        raise R002ReferenceError("model_validation_failed")
+    total_hunks = 0
+    for file in parsed.files:
+        if (
+            type(file) is not R002ParsedFile
+            or type(file.stream) is not R002DiffStream
+            or type(file.path) is not str
+            or not 1 <= len(file.path) <= _MAX_R002_LOGICAL_PATH_CHARACTERS
+            or type(file.hunks) is not tuple
+            or not 1 <= len(file.hunks) <= _MAX_R002_PARSED_HUNKS
+            or type(file.additions) is not int
+            or not 0 <= file.additions <= _MAX_R002_PARSED_LINES
+            or type(file.deletions) is not int
+            or not 0 <= file.deletions <= _MAX_R002_PARSED_LINES
+        ):
+            raise R002ReferenceError("model_validation_failed")
+        try:
+            valid_path = validate_r002_logical_path(file.path)
+        except ValueError:
+            error = _fresh_reference_error("model_validation_failed")
+        else:
+            error = None
+        if error is not None or valid_path != file.path:
+            raise error or R002ReferenceError("model_validation_failed")
+        total_hunks += len(file.hunks)
+        if total_hunks > _MAX_R002_PARSED_HUNKS:
+            raise R002ReferenceError("model_validation_failed")
+
+    total_lines = 0
+    for file in parsed.files:
+        for hunk in file.hunks:
+            if (
+                type(hunk) is not R002ParsedHunk
+                or type(hunk.hunk_id) is not str
+                or not 10 <= len(hunk.hunk_id) <= _MAX_R002_HUNK_ID_CHARACTERS
+                or type(hunk.old_start) is not int
+                or hunk.old_start < 1
+                or type(hunk.old_count) is not int
+                or not 0 <= hunk.old_count <= _MAX_R002_PARSED_LINES
+                or type(hunk.new_start) is not int
+                or hunk.new_start < 1
+                or type(hunk.new_count) is not int
+                or not 0 <= hunk.new_count <= _MAX_R002_PARSED_LINES
+                or type(hunk.lines) is not tuple
+                or len(hunk.lines) > _MAX_R002_PARSED_LINES
+            ):
+                raise R002ReferenceError("model_validation_failed")
+            total_lines += len(hunk.lines)
+            if total_lines > _MAX_R002_PARSED_LINES:
+                raise R002ReferenceError("model_validation_failed")
+
+    for file in parsed.files:
+        for hunk in file.hunks:
+            for line in hunk.lines:
+                if (
+                    type(line) is not R002ParsedLine
+                    or type(line.change_type) is not LineChangeType
+                    or (
+                        line.old_line_number is not None
+                        and (
+                            type(line.old_line_number) is not int
+                            or line.old_line_number < 1
+                        )
+                    )
+                    or (
+                        line.new_line_number is not None
+                        and (
+                            type(line.new_line_number) is not int
+                            or line.new_line_number < 1
+                        )
+                    )
+                    or type(line.content) is not str
+                    or len(line.content) > _MAX_R002_LINE_BYTES
+                    or type(line.normalized_line_sha256) is not str
+                    or len(line.normalized_line_sha256) != 64
+                ):
+                    raise R002ReferenceError("model_validation_failed")
+                try:
+                    content_bytes = line.content.encode("utf-8")
+                except UnicodeEncodeError:
+                    error = _fresh_reference_error("model_validation_failed")
+                else:
+                    error = None
+                if error is not None or len(content_bytes) > _MAX_R002_LINE_BYTES:
+                    raise error or R002ReferenceError("model_validation_failed")
+
+
+def _validated_parsed_snapshot(parsed: R002ParsedCase) -> R002ParsedCase:
+    _prevalidate_parsed_shape(parsed)
     _assert_test_stream_separation(parsed)
     try:
         snapshot = R002ParsedCase.model_validate(
@@ -259,26 +353,34 @@ def _validate_head_mapping(
 ) -> dict[str, bytes]:
     if not isinstance(head_file_bytes, Mapping):
         raise R002ReferenceError("head_mapping_invalid")
+    required_paths = {file.path for file in parsed.files}
+    max_entries = len(required_paths)
     try:
-        supplied = dict(head_file_bytes.items())
+        items = iter(head_file_bytes.items())
+        supplied: dict[str, bytes] = {}
+        for index, item in enumerate(items):
+            if index >= max_entries or type(item) is not tuple or len(item) != 2:
+                raise R002ReferenceError("head_mapping_invalid")
+            path, value = item
+            if type(path) is not str or type(value) is not bytes or path in supplied:
+                raise R002ReferenceError("head_mapping_invalid")
+            if not 1 <= len(path) <= _MAX_R002_LOGICAL_PATH_CHARACTERS:
+                raise R002ReferenceError("head_mapping_invalid")
+            try:
+                valid_path = validate_r002_logical_path(path)
+            except ValueError:
+                raise R002ReferenceError("head_mapping_invalid") from None
+            if valid_path != path:
+                raise R002ReferenceError("head_mapping_invalid")
+            supplied[path] = value
+    except R002ReferenceError as caught:
+        error = _fresh_reference_error(caught.reason_code)
     except Exception:
         error = _fresh_reference_error("head_mapping_invalid")
     else:
         error = None
     if error is not None:
         raise error
-    for path, value in supplied.items():
-        if type(path) is not str or type(value) is not bytes:
-            raise R002ReferenceError("head_mapping_invalid")
-        try:
-            valid_path = validate_r002_logical_path(path)
-        except ValueError:
-            error = _fresh_reference_error("head_mapping_invalid")
-        else:
-            error = None
-        if error is not None or valid_path != path:
-            raise error or R002ReferenceError("head_mapping_invalid")
-    required_paths = {file.path for file in parsed.files}
     supplied_paths = set(supplied)
     if required_paths - supplied_paths:
         raise R002ReferenceError("head_file_missing")
