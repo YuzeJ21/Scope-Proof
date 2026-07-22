@@ -352,20 +352,22 @@ def assert_test_stream_separation(parsed: R002ParsedCase) -> None:
 def _validate_head_mapping(
     parsed: R002ParsedCase, head_file_bytes: Mapping[str, bytes]
 ) -> dict[str, bytes]:
-    if not isinstance(head_file_bytes, Mapping):
-        raise R002ReferenceError("head_mapping_invalid")
-    required_paths = {file.path for file in parsed.files}
-    max_entries = len(required_paths)
     try:
+        if not isinstance(head_file_bytes, Mapping):
+            raise R002ReferenceError("head_mapping_invalid")
+        required_paths = {file.path for file in parsed.files}
+        max_entries = len(required_paths)
         items = iter(head_file_bytes.items())
         supplied: dict[str, bytes] = {}
         for index, item in enumerate(items):
             if index >= max_entries or type(item) is not tuple or len(item) != 2:
                 raise R002ReferenceError("head_mapping_invalid")
             path, value = item
-            if type(path) is not str or type(value) is not bytes or path in supplied:
+            if type(path) is not str or type(value) is not bytes:
                 raise R002ReferenceError("head_mapping_invalid")
             if not 1 <= len(path) <= _MAX_R002_LOGICAL_PATH_CHARACTERS:
+                raise R002ReferenceError("head_mapping_invalid")
+            if path in supplied:
                 raise R002ReferenceError("head_mapping_invalid")
             try:
                 valid_path = validate_r002_logical_path(path)
@@ -483,8 +485,21 @@ def _cross_bind_verified_sidecar(
     identities: set[tuple[str, int]] = set()
     repository_prefix = f"https://github.com/{quote(case.repository, safe='/')}/blob/"
     for line in raw_lines:
-        if type(line.path) is not str or type(line.new_line_number) is not int:
+        if (
+            type(line.path) is not str
+            or not 1 <= len(line.path) <= _MAX_R002_LOGICAL_PATH_CHARACTERS
+            or type(line.new_line_number) is not int
+            or line.new_line_number < 1
+        ):
             raise R002ReferenceError("model_validation_failed")
+        try:
+            valid_path = validate_r002_logical_path(line.path)
+        except ValueError:
+            error = _fresh_reference_error("model_validation_failed")
+        else:
+            error = None
+        if error is not None or valid_path != line.path:
+            raise error or R002ReferenceError("model_validation_failed")
         identity = (line.path, line.new_line_number)
         if identity in identities:
             raise R002ReferenceError("verified_duplicate_identity")

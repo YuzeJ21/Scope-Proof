@@ -474,6 +474,37 @@ def test_head_mapping_normalizes_input_reference_errors_to_literal_reason(
     )
 
 
+def test_head_mapping_normalizes_type_protocol_failure_to_literal_reason(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+) -> None:
+    sentinel = "TRACE_MAPPING_CLASS_SENTINEL"
+
+    class RaisingClassProtocol:
+        @property
+        def __class__(self):  # type: ignore[no-untyped-def]
+            raise RuntimeError(sentinel)
+
+    with pytest.raises(R002ReferenceError, match="head_mapping_invalid") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes=RaisingClassProtocol(),  # type: ignore[arg-type]
+        )
+
+    error = captured.value
+    trace = traceback.TracebackException.from_exception(error, capture_locals=True)
+    frames = [frame for frame in trace.stack if frame.filename == r002_verify.__file__]
+    assert error.args == ("head_mapping_invalid",)
+    assert type(error.args[0]) is str
+    assert str(error) == "head_mapping_invalid"
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert sentinel not in "\n".join(
+        local for frame in frames for local in (frame.locals or {}).values()
+    )
+
+
 def test_head_mapping_rejects_duplicate_pairs_before_dictionary_insertion(
     r002_case_manifest: R002CaseManifest,
     parsed_case: R002ParsedCase,
@@ -633,6 +664,33 @@ def test_head_file_limit_is_checked_before_file_hashing(
 
     assert hash_called is False
     assert captured.value.args == ("head_file_limit",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+def test_invalid_utf8_is_rejected_before_file_hashing(
+    monkeypatch: pytest.MonkeyPatch,
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+) -> None:
+    hash_called = False
+
+    def hash_probe(_value: bytes) -> object:
+        nonlocal hash_called
+        hash_called = True
+        raise AssertionError("hashing must follow UTF-8 validation")
+
+    monkeypatch.setattr(r002_verify, "sha256", hash_probe)
+    with pytest.raises(R002ReferenceError, match="head_file_not_utf8") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes={**head_files, "src/widget.py": b"\xff"},
+        )
+
+    assert hash_called is False
+    assert captured.value.args == ("head_file_not_utf8",)
     assert captured.value.__cause__ is None
     assert captured.value.__context__ is None
 
@@ -1698,6 +1756,36 @@ def test_verified_sidecar_requires_exact_top_level_string_fields(
         )
 
     assert captured.value.args == ("model_validation_failed",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    ("update", "reason"),
+    [
+        ({"path": f"{'a' * 510}.py"}, "model_validation_failed"),
+        ({"new_line_number": 0}, "model_validation_failed"),
+    ],
+)
+def test_verified_identity_is_bounded_before_duplicate_set_hashing(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+    update: dict[str, object],
+    reason: str,
+) -> None:
+    first = verified_case_lines.lines[0].model_copy(update=update)
+    malformed = verified_case_lines.model_copy(
+        update={"lines": (first, *verified_case_lines.lines[1:])}
+    )
+
+    with pytest.raises(R002ReferenceError, match=reason) as captured:
+        verify_evidence_reference(
+            case=r002_case_manifest,
+            evidence=evidence_item(case=r002_case_manifest),
+            verified_lines=malformed,
+        )
+
+    assert captured.value.args == (reason,)
     assert captured.value.__cause__ is None
     assert captured.value.__context__ is None
 
