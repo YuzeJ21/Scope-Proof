@@ -388,6 +388,7 @@ def test_loader_rejects_each_controlled_case_projection_mutation(
     path.write_text(json.dumps(r002_manifest_payload), encoding="utf-8")
     assert load_source_manifest(path) == baseline
     for field, value in {
+        "case_id": "R002-099",
         "instance_id": "wrong__case-1",
         "repository": "wrong/repository",
         "pr_number": 999,
