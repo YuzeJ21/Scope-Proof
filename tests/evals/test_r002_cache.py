@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import errno
 import gc
+import io
 import json
 import os
 import stat
@@ -1407,16 +1408,36 @@ def test_scratch_is_0600_seekable_immediately_unlinked_and_closed(tmp_path: Path
     cache = R002Cache(tmp_path / "cache")
     with cache.open_unlinked_scratch() as scratch:
         fd = scratch.fileno()
+        assert not scratch.closed
+        assert scratch.readable()
+        assert scratch.writable()
+        assert scratch.seekable()
         assert stat.S_IMODE(os.fstat(fd).st_mode) == 0o600
         assert os.fstat(fd).st_nlink == 0
         scratch.write(b"dataset")
+        scratch.flush()
+        assert scratch.tell() == len(b"dataset")
         scratch.seek(0)
         assert scratch.read() == b"dataset"
         assert not any(
             path.name.startswith(".r002-scratch-") for path in (tmp_path / "cache").iterdir()
         )
+    assert scratch.closed
+    with pytest.raises(ValueError):
+        scratch.fileno()
     with pytest.raises(OSError):
         os.fstat(fd)
+
+
+def test_scratch_supports_pyarrow_file_protocol(tmp_path: Path) -> None:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    expected = pa.table({"value": ["fixture"]})
+    with R002Cache(tmp_path / "cache").open_unlinked_scratch() as scratch:
+        pq.write_table(expected, scratch)
+        scratch.seek(0)
+        assert pq.read_table(scratch).equals(expected)
 
 
 def test_scratch_close_failure_is_sanitized(
@@ -1424,7 +1445,7 @@ def test_scratch_close_failure_is_sanitized(
 ) -> None:
     import scopeproof_core.evals.r002_cache as cache_module
 
-    real_fdopen = os.fdopen
+    real_fileio = io.FileIO
 
     class FailingClose:
         def __init__(self, wrapped) -> None:
@@ -1437,11 +1458,14 @@ def test_scratch_close_failure_is_sanitized(
             self.wrapped.close()
             raise OSError("secret close detail")
 
-    monkeypatch.setattr(
-        cache_module.os,
-        "fdopen",
-        lambda *args, **kwargs: FailingClose(real_fdopen(*args, **kwargs)),
-    )
+    class FaultingIO:
+        def __getattr__(self, name):
+            return getattr(io, name)
+
+        def FileIO(self, *args, **kwargs):
+            return FailingClose(real_fileio(*args, **kwargs))
+
+    monkeypatch.setattr(cache_module, "io", FaultingIO(), raising=False)
     with (
         pytest.raises(R002CacheError, match="scratch_failed") as caught,
         R002Cache(tmp_path / "cache").open_unlinked_scratch(),
@@ -1457,7 +1481,7 @@ def test_scratch_preclose_failure_drops_all_public_handle_references(
 ) -> None:
     import scopeproof_core.evals.r002_cache as cache_module
 
-    real_fdopen = os.fdopen
+    real_fileio = io.FileIO
     state: dict[str, object] = {}
     native_detail = "scratch-preclose-native-detail"
     secret = f"scratch-preclose-secret-{exit_path}".encode()
@@ -1472,13 +1496,20 @@ def test_scratch_preclose_failure_drops_all_public_handle_references(
         def close(self) -> None:
             raise OSError(errno.EIO, native_detail)
 
-    def wrapping_fdopen(*args, **kwargs):
-        wrapped = FailingBeforeClose(real_fdopen(*args, **kwargs))
+    def wrapping_fileio(*args, **kwargs):
+        wrapped = FailingBeforeClose(real_fileio(*args, **kwargs))
         state["fd"] = wrapped.fileno()
         state["reference"] = weakref.ref(wrapped)
         return wrapped
 
-    monkeypatch.setattr(cache_module.os, "fdopen", wrapping_fdopen)
+    class FaultingIO:
+        def __getattr__(self, name):
+            return getattr(io, name)
+
+        def FileIO(self, *args, **kwargs):
+            return wrapping_fileio(*args, **kwargs)
+
+    monkeypatch.setattr(cache_module, "io", FaultingIO(), raising=False)
     caller_error = R002CacheError("cache_read_failed")
     with (
         pytest.raises(R002CacheError) as caught,
@@ -1535,42 +1566,89 @@ def test_scratch_preclose_failure_drops_all_public_handle_references(
     assert not descriptor_was_open
 
 
-def test_scratch_fdopen_transfer_failure_does_not_close_reused_descriptor(
+def test_scratch_nonowning_constructor_failure_closes_owned_descriptor_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_close_fd = cache_module._close_fd
+    constructed_fd = -1
+    owned_close_attempts = 0
+    native_detail = "scratch-nonowning-constructor-native-detail"
+
+    class FaultingIO:
+        def __getattr__(self, name):
+            return getattr(io, name)
+
+        def FileIO(self, fd: int, mode: str, *, closefd: bool):
+            nonlocal constructed_fd
+            constructed_fd = fd
+            assert mode == "r+"
+            assert closefd is False
+            raise OSError(errno.EIO, native_detail)
+
+    def recording_close_fd(fd: int) -> bool:
+        nonlocal owned_close_attempts
+        if fd == constructed_fd:
+            owned_close_attempts += 1
+        return real_close_fd(fd)
+
+    monkeypatch.setattr(cache_module, "io", FaultingIO(), raising=False)
+    monkeypatch.setattr(cache_module, "_close_fd", recording_close_fd)
+    with (
+        pytest.raises(R002CacheError, match="scratch_failed") as caught,
+        R002Cache(tmp_path / "cache").open_unlinked_scratch(),
+    ):
+        pass
+    assert caught.value.args == ("scratch_failed",)
+    assert type(caught.value.args[0]) is str
+    _assert_public_error_is_sanitized(caught.value, (native_detail,))
+    assert constructed_fd >= 0
+    assert owned_close_attempts == 1
+    with pytest.raises(OSError):
+        os.fstat(constructed_fd)
+
+
+def test_scratch_constructor_cleanup_never_retries_reused_descriptor(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import scopeproof_core.evals.r002_cache as cache_module
 
     real_close = os.close
     real_close_fd = cache_module._close_fd
+    constructed_fd = -1
     replacement_fd = -1
-    post_transfer_close_attempted = False
+    owned_close_attempts = 0
     filler_fds: list[int] = []
-    native_detail = "scratch-fdopen-transfer-native-detail"
+    native_detail = "scratch-constructor-cleanup-native-detail"
 
-    def consuming_fdopen_then_raising(fd: int, *args, **kwargs):
-        nonlocal replacement_fd
-        while not filler_fds or filler_fds[-1] <= fd:
-            filler_fds.append(os.open("/dev/null", os.O_RDONLY))
-        real_close(fd)
-        replacement_fd = os.open("/dev/null", os.O_RDONLY)
-        assert replacement_fd == fd
-        raise OSError(errno.EIO, native_detail)
-
-    class FaultingOS:
+    class FaultingIO:
         def __getattr__(self, name):
-            return getattr(os, name)
+            return getattr(io, name)
 
-        def fdopen(self, *args, **kwargs):
-            return consuming_fdopen_then_raising(*args, **kwargs)
+        def FileIO(self, fd: int, mode: str, *, closefd: bool):
+            nonlocal constructed_fd
+            constructed_fd = fd
+            assert mode == "r+"
+            assert closefd is False
+            while not filler_fds or filler_fds[-1] <= fd:
+                filler_fds.append(os.open("/dev/null", os.O_RDONLY))
+            raise OSError(errno.EIO, native_detail)
 
-    def recording_close_fd(fd: int) -> bool:
-        nonlocal post_transfer_close_attempted
-        if fd == replacement_fd:
-            post_transfer_close_attempted = True
+    def ambiguous_owned_close(fd: int) -> bool:
+        nonlocal owned_close_attempts, replacement_fd
+        if fd != constructed_fd:
+            return real_close_fd(fd)
+        owned_close_attempts += 1
+        if owned_close_attempts == 1:
+            real_close(fd)
+            replacement_fd = os.open("/dev/null", os.O_RDONLY)
+            assert replacement_fd == fd
+            return False
         return real_close_fd(fd)
 
-    monkeypatch.setattr(cache_module, "os", FaultingOS())
-    monkeypatch.setattr(cache_module, "_close_fd", recording_close_fd)
+    monkeypatch.setattr(cache_module, "io", FaultingIO(), raising=False)
+    monkeypatch.setattr(cache_module, "_close_fd", ambiguous_owned_close)
     try:
         with (
             pytest.raises(R002CacheError, match="scratch_failed") as caught,
@@ -1580,15 +1658,8 @@ def test_scratch_fdopen_transfer_failure_does_not_close_reused_descriptor(
         assert caught.value.args == ("scratch_failed",)
         assert type(caught.value.args[0]) is str
         _assert_public_error_is_sanitized(caught.value, (native_detail,))
-
-        traceback = caught.value.__traceback__
-        while traceback is not None:
-            if Path(traceback.tb_frame.f_code.co_filename).name == "r002_cache.py":
-                assert not {"duplicate", "transferred"} & traceback.tb_frame.f_locals.keys()
-            traceback = traceback.tb_next
-
-        assert replacement_fd >= 0
-        assert not post_transfer_close_attempted
+        assert owned_close_attempts == 1
+        assert replacement_fd == constructed_fd
         assert stat.S_ISCHR(os.fstat(replacement_fd).st_mode)
     finally:
         if replacement_fd >= 0:
@@ -1741,6 +1812,7 @@ def test_module_has_no_pyarrow_or_network_dependency() -> None:
     assert "requests" not in source
     assert "subprocess" not in source
     assert "exec(" not in source
+    assert "os.fdopen" not in source
 
 
 def test_candidate_label_control_mapping_is_typed(tmp_path: Path) -> None:

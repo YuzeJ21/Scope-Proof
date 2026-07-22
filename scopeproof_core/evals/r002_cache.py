@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import errno
 import inspect
+import io
 import os
 import re
 import secrets
@@ -203,6 +204,83 @@ def _close_handle_once(handle: BinaryIO) -> bool:
     return closed
 
 
+class _OwnedScratch(io.RawIOBase):
+    def __init__(self, fd: int, raw: BinaryIO) -> None:
+        super().__init__()
+        self._fd = fd
+        self._raw: BinaryIO | None = raw
+
+    def _open_raw(self) -> BinaryIO:
+        if self._raw is None:
+            raise ValueError("I/O operation on closed file")
+        return self._raw
+
+    @property
+    def closed(self) -> bool:
+        return self._fd < 0
+
+    def fileno(self) -> int:
+        if self._fd < 0:
+            raise ValueError("I/O operation on closed file")
+        return self._fd
+
+    def readable(self) -> bool:
+        return self._open_raw().readable()
+
+    def writable(self) -> bool:
+        return self._open_raw().writable()
+
+    def seekable(self) -> bool:
+        return self._open_raw().seekable()
+
+    def read(self, size: int = -1) -> bytes:
+        return self._open_raw().read(size)
+
+    def readinto(self, buffer) -> int | None:
+        return self._open_raw().readinto(buffer)
+
+    def write(self, buffer) -> int:
+        return self._open_raw().write(buffer)
+
+    def seek(self, offset: int, whence: int = os.SEEK_SET) -> int:
+        return self._open_raw().seek(offset, whence)
+
+    def tell(self) -> int:
+        return self._open_raw().tell()
+
+    def truncate(self, size: int | None = None) -> int:
+        return self._open_raw().truncate(size)
+
+    def flush(self) -> None:
+        self._open_raw().flush()
+
+    def close(self) -> None:
+        if self._fd < 0:
+            return
+        fd = self._fd
+        raw = self._raw
+        self._fd = -1
+        self._raw = None
+        raw_closed = raw is not None and _close_handle_once(raw)
+        fd_closed = _close_fd(fd)
+        del fd, raw
+        if not raw_closed or not fd_closed:
+            raise R002CacheError("scratch_failed")
+
+
+def _open_owned_scratch(fd: int) -> BinaryIO:
+    try:
+        raw = io.FileIO(fd, mode="r+", closefd=False)
+    except Exception as caught:
+        del caught
+        closing_fd = fd
+        fd = -1
+        _close_fd(closing_fd)
+        del closing_fd
+        raise R002CacheError("scratch_failed") from None
+    return _OwnedScratch(fd, raw)
+
+
 def _raise_public(reason_code: str) -> NoReturn:
     raise R002CacheError(reason_code) from None
 
@@ -300,7 +378,7 @@ class R002Cache:
             os.read,
             os.write,
             os.dup,
-            os.fdopen,
+            io.FileIO,
         )
         if (
             not all(required_flags)
@@ -1791,13 +1869,10 @@ class R002Cache:
             if duplicate >= 0 and not _close_fd(duplicate):
                 raise R002CacheError("scratch_failed") from None
             raise
-        transferred = duplicate
-        duplicate = -1
         try:
-            return os.fdopen(transferred, "w+b", buffering=0)
-        except Exception as caught:
-            del caught, transferred
-            raise R002CacheError("scratch_failed") from None
+            return _open_owned_scratch(duplicate)
+        finally:
+            duplicate = -1
 
     @contextmanager
     def open_unlinked_scratch(self) -> ContextManager[BinaryIO]:
