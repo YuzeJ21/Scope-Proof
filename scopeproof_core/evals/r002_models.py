@@ -987,7 +987,7 @@ class R002PreparationCaseResult(R002StrictModel):
     case_id: R002CaseId
     status: Literal["prepared"]
     head_file_count: StrictInt = Field(ge=0, le=32)
-    candidate_line_count: StrictInt = Field(ge=0)
+    candidate_line_count: StrictInt = Field(ge=0, le=50000)
 
 
 class R002PreparationResult(R002Manifest):
@@ -998,7 +998,7 @@ class R002PreparationResult(R002Manifest):
     failed_case_count: StrictInt = Field(ge=0)
     skipped_case_count: StrictInt = Field(ge=0)
     head_file_count: StrictInt = Field(ge=0, le=R002_HEAD_FILE_LIMITS.request_count)
-    candidate_line_count: StrictInt = Field(ge=0)
+    candidate_line_count: StrictInt = Field(ge=0, le=20 * 50000)
     cases: tuple[R002PreparationCaseResult, ...] = Field(min_length=20, max_length=20)
     errors: tuple[str, ...] = Field(max_length=0)
     hard_gate_errors: tuple[str, ...] = Field(max_length=0)
@@ -1274,11 +1274,13 @@ class R002AnnotationReviewItem(R002StrictModel):
 
     @model_validator(mode="after")
     def validate_line_bounds(self) -> Self:
-        if any(
-            value is not None and len(value.encode()) > 65536
-            for value in (self.line_content, self.previous_line, self.next_line)
-        ):
+        lines = (self.line_content, self.previous_line, self.next_line)
+        if any(value is not None and len(value.encode()) > 65536 for value in lines):
             raise ValueError("annotation review lines must not exceed 64 KiB")
+        if any(value is not None and ("\r" in value or "\n" in value) for value in lines):
+            raise ValueError("annotation review lines must not contain newlines")
+        if sha256(self.line_content.encode("utf-8")).hexdigest() != self.key.normalized_line_sha256:
+            raise ValueError("annotation review line content must match its normalized hash")
         return self
 
 
@@ -1569,6 +1571,24 @@ class R002Metrics(R002StrictModel):
         )
         if any(error_counts):
             raise ValueError("successful R-002 metrics require zero integrity errors")
+        completeness = self.missing_evidence_explanation_completeness
+        if not (
+            (
+                completeness.state is R002MetricState.VALUE
+                and completeness.numerator == completeness.denominator
+                and completeness.denominator > 0
+                and completeness.value == 1.0
+            )
+            or (
+                completeness.state is R002MetricState.NOT_APPLICABLE
+                and completeness.numerator == 0
+                and completeness.denominator == 0
+                and completeness.value is None
+            )
+        ):
+            raise ValueError(
+                "successful R-002 metrics require complete missing evidence explanations"
+            )
         return self
 
 

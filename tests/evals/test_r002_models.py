@@ -486,6 +486,7 @@ def test_annotation_artifacts_use_one_explicit_structural_key_order():
         with pytest.raises(ValidationError):
             R002AnnotationUniverse.model_validate_json(json.dumps(invalid))
 
+    review_keys = [{**key, "normalized_line_sha256": sha256(b"pass").hexdigest()} for key in keys]
     review = {
         "pack_id": "R-002",
         "classification": "public_engineering_research",
@@ -495,7 +496,7 @@ def test_annotation_artifacts_use_one_explicit_structural_key_order():
         "source_manifest_sha256": "0" * 64,
         "criteria_set_sha256": "1" * 64,
         "annotation_universe_sha256": "2" * 64,
-        "items": [{"key": key, "line_content": "pass"} for key in keys],
+        "items": [{"key": key, "line_content": "pass"} for key in review_keys],
     }
     assert r002_models.R002AnnotationReview.model_validate_json(json.dumps(review)).items
     review["items"].reverse()
@@ -965,7 +966,12 @@ def _benchmark_result_payload() -> dict[str, object]:
             "criterion_candidate_coverage": metric,
             "candidate_to_gold_file_coverage": metric,
             "candidate_to_gold_hunk_coverage": metric,
-            "missing_evidence_explanation_completeness": metric,
+            "missing_evidence_explanation_completeness": {
+                "state": "value",
+                "numerator": 1,
+                "denominator": 1,
+                "value": 1.0,
+            },
             "implementation_test_separation_errors": 0,
             "immutable_reference_integrity_errors": 0,
             "parse_errors": 0,
@@ -1452,7 +1458,8 @@ def test_verified_line_identity_excludes_hunk_id_and_resolves_once():
 
 
 def test_annotation_review_requires_nonempty_bounded_ordered_unique_items():
-    def item(path: str, digest: str) -> dict[str, object]:
+    def item(path: str) -> dict[str, object]:
+        content = "ScopeProof-authored fixture."
         return {
             "key": {
                 "case_id": "R002-001",
@@ -1460,9 +1467,9 @@ def test_annotation_review_requires_nonempty_bounded_ordered_unique_items():
                 "stream": "patch",
                 "path": path,
                 "new_line_number": 1,
-                "normalized_line_sha256": digest * 64,
+                "normalized_line_sha256": sha256(content.encode("utf-8")).hexdigest(),
             },
-            "line_content": "ScopeProof-authored fixture.",
+            "line_content": content,
         }
 
     payload = {
@@ -1474,20 +1481,20 @@ def test_annotation_review_requires_nonempty_bounded_ordered_unique_items():
         "source_manifest_sha256": "0" * 64,
         "criteria_set_sha256": "1" * 64,
         "annotation_universe_sha256": "2" * 64,
-        "items": [item("a.py", "0"), item("b.py", "1")],
+        "items": [item("a.py"), item("b.py")],
     }
     assert len(r002_models.R002AnnotationReview.model_validate_json(json.dumps(payload)).items) == 2
     payload["items"].reverse()
     with pytest.raises(ValidationError, match="sorted"):
         r002_models.R002AnnotationReview.model_validate_json(json.dumps(payload))
-    payload["items"] = [item("a.py", "0"), item("a.py", "0")]
+    payload["items"] = [item("a.py"), item("a.py")]
     with pytest.raises(ValidationError, match="unique"):
         r002_models.R002AnnotationReview.model_validate_json(json.dumps(payload))
     payload["items"] = []
     with pytest.raises(ValidationError):
         r002_models.R002AnnotationReview.model_validate_json(json.dumps(payload))
     bounded_item = r002_models.R002AnnotationReviewItem.model_validate_json(
-        json.dumps(item("a.py", "0"))
+        json.dumps(item("a.py"))
     )
     with pytest.raises(ValidationError):
         r002_models.R002AnnotationReview.model_validate(
@@ -1531,6 +1538,58 @@ def test_projection_recomputes_owner_confirmed_candidate_precision():
             "reason_code": "scopeproof_finding_explicit_gap",
         }
         assert r002_models.R002MissingExplanation.model_validate_json(json.dumps(explanation))
+
+
+def test_successful_metrics_require_complete_missing_evidence_explanations():
+    payload = _benchmark_result_payload()
+    for incomplete in (
+        {"state": "value", "numerator": 0, "denominator": 1, "value": 0.0},
+        {"state": "value", "numerator": 1, "denominator": 2, "value": 0.5},
+    ):
+        payload["metrics"]["missing_evidence_explanation_completeness"] = incomplete
+        with pytest.raises(ValidationError, match="missing evidence explanations"):
+            r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload))
+
+    payload["metrics"]["missing_evidence_explanation_completeness"] = {
+        "state": "not_applicable",
+        "numerator": 0,
+        "denominator": 0,
+        "value": None,
+    }
+    assert r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload)).metrics
+
+
+def test_annotation_review_text_binds_key_hash_and_single_line_utf8_limits():
+    def item(content: str, *, digest: str | None = None, **context: str) -> dict[str, object]:
+        return {
+            "key": {
+                "case_id": "R002-001",
+                "criterion_id": "AC-01",
+                "stream": "patch",
+                "path": "a.py",
+                "new_line_number": 1,
+                "normalized_line_sha256": digest or sha256(content.encode("utf-8")).hexdigest(),
+            },
+            "line_content": content,
+            **context,
+        }
+
+    assert (
+        r002_models.R002AnnotationReviewItem.model_validate_json(json.dumps(item(""))).line_content
+        == ""
+    )
+    assert r002_models.R002AnnotationReviewItem.model_validate_json(
+        json.dumps(item("é" * 32768))
+    ).line_content
+    for invalid in (
+        item("correct", digest="0" * 64),
+        item("bad\nline"),
+        item("é" * 32769),
+        item("valid", previous_line="bad\rcontext"),
+        item("valid", next_line="bad\ncontext"),
+    ):
+        with pytest.raises(ValidationError):
+            r002_models.R002AnnotationReviewItem.model_validate_json(json.dumps(invalid))
 
 
 def test_projection_uses_only_the_task8_candidate_label_set_hash_field():
@@ -1756,6 +1815,68 @@ def test_head_file_request_and_byte_limits_hold_at_preparation_and_cache_pack_la
     byte_over["cases"][0]["head_files"][0]["byte_length"] += 1  # type: ignore[index]
     with pytest.raises(ValidationError, match="byte limit"):
         r002_models.R002CacheIndex.model_validate_json(json.dumps(byte_over))
+
+
+def test_preparation_candidate_line_counts_have_case_and_pack_limits():
+    def preparation(counts: list[int]) -> dict[str, object]:
+        return {
+            "pack_id": "R-002",
+            "classification": "public_engineering_research",
+            "eligible_for_stage_1": False,
+            "does_not_advance_stage_1": True,
+            "target_repository_code_executed": False,
+            "phase": "evidence",
+            "complete": True,
+            "criteria_set_sha256": "0" * 64,
+            "executed_case_count": 20,
+            "failed_case_count": 0,
+            "skipped_case_count": 0,
+            "head_file_count": 0,
+            "candidate_line_count": sum(counts),
+            "cases": [
+                {
+                    "case_id": case.case_id,
+                    "status": "prepared",
+                    "head_file_count": 0,
+                    "candidate_line_count": count,
+                }
+                for case, count in zip(r002_models.R002_APPROVED_CASES, counts, strict=True)
+            ],
+            "errors": [],
+            "hard_gate_errors": [],
+        }
+
+    exact = preparation([50_000] * 20)
+    assert (
+        r002_models.R002PreparationResult.model_validate_json(
+            json.dumps(exact)
+        ).candidate_line_count
+        == 1_000_000
+    )
+
+    with pytest.raises(ValidationError, match="less than or equal to 50000"):
+        r002_models.R002PreparationCaseResult.model_validate_json(
+            json.dumps(
+                {
+                    "case_id": "R002-001",
+                    "status": "prepared",
+                    "head_file_count": 0,
+                    "candidate_line_count": 50_001,
+                }
+            )
+        )
+    with pytest.raises(ValidationError, match="less than or equal to 1000000"):
+        r002_models.R002PreparationResult.model_validate_json(
+            json.dumps(preparation([50_001] + [50_000] * 19))
+        )
+    with pytest.raises(ValidationError, match="less than or equal to 1000000"):
+        r002_models.R002PreparationResult.model_validate_json(
+            json.dumps(preparation([5_000_000] + [0] * 19))
+        )
+    with pytest.raises(ValidationError, match="less than or equal to 50000"):
+        r002_models.R002PreparationResult.model_validate_json(
+            json.dumps(preparation([50_001, 49_999] + [50_000] * 18))
+        )
 
 
 def _parsed_line_payload(content: str, *, number: int = 1) -> dict[str, object]:
