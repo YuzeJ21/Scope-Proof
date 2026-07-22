@@ -31,30 +31,40 @@ _R = TypeVar("_R", SWEbenchCriteriaSourceRow, SWEbenchVerifiedRow)
 
 
 def _validate_parquet_container(source: BinaryIO, pin: SWEbenchSourcePin, *, pa, pq):
-    source.seek(0)
-    digest = sha256()
-    length = 0
-    while chunk := source.read(64 * 1024):
-        length += len(chunk)
-        digest.update(chunk)
+    try:
+        source.seek(0)
+        digest = sha256()
+        length = 0
+        while chunk := source.read(64 * 1024):
+            if not isinstance(chunk, bytes):
+                raise TypeError("source must return bytes")
+            length += len(chunk)
+            digest.update(chunk)
+    except (AttributeError, OSError, TypeError, ValueError):
+        raise R002SourceError("parquet_bytes_mismatch") from None
     if length != pin.byte_length or digest.hexdigest() != pin.sha256:
         raise R002SourceError("parquet_bytes_mismatch")
-    source.seek(0)
-    parquet = pq.ParquetFile(source)
-    metadata = parquet.metadata
-    if metadata.num_rows != pin.row_count:
-        raise R002SourceError("parquet_row_count_mismatch")
-    if tuple(parquet.schema_arrow.names) != pin.schema:
-        raise R002SourceError("parquet_schema_mismatch")
-    if any(not pa.types.is_string(field.type) for field in parquet.schema_arrow):
-        raise R002SourceError("parquet_field_type_mismatch")
-    uncompressed = sum(
-        metadata.row_group(group).column(column).total_uncompressed_size
-        for group in range(metadata.num_row_groups)
-        for column in range(metadata.num_columns)
-    )
-    if uncompressed > 16 * 1024 * 1024:
-        raise R002SourceError("parquet_uncompressed_limit")
+    try:
+        source.seek(0)
+        parquet = pq.ParquetFile(source)
+        metadata = parquet.metadata
+        if metadata.num_rows != pin.row_count:
+            raise R002SourceError("parquet_row_count_mismatch")
+        if tuple(parquet.schema_arrow.names) != pin.schema:
+            raise R002SourceError("parquet_schema_mismatch")
+        if any(not pa.types.is_string(field.type) for field in parquet.schema_arrow):
+            raise R002SourceError("parquet_field_type_mismatch")
+        uncompressed = sum(
+            metadata.row_group(group).column(column).total_uncompressed_size
+            for group in range(metadata.num_row_groups)
+            for column in range(metadata.num_columns)
+        )
+        if uncompressed > 16 * 1024 * 1024:
+            raise R002SourceError("parquet_uncompressed_limit")
+    except R002SourceError:
+        raise
+    except (AttributeError, OSError, TypeError, ValueError, pa.ArrowException):
+        raise R002SourceError("parquet_schema_mismatch") from None
     return parquet
 
 
@@ -67,7 +77,11 @@ def decode_verified_parquet(
     import pyarrow.parquet as pq
 
     parquet = _validate_parquet_container(source, pin, pa=pa, pq=pq)
-    rows = [SWEbenchVerifiedRow.model_validate(item) for item in parquet.read().to_pylist()]
+    try:
+        decoded = parquet.read().to_pylist()
+    except (OSError, TypeError, ValueError, pa.ArrowException):
+        raise R002SourceError("parquet_schema_mismatch") from None
+    rows = [SWEbenchVerifiedRow.model_validate(item) for item in decoded]
     validate_row_collection(rows, pin)
     return rows
 
@@ -81,7 +95,10 @@ def decode_criteria_source_rows(
     import pyarrow.parquet as pq
 
     parquet = _validate_parquet_container(source, pin, pa=pa, pq=pq)
-    projected = parquet.read(columns=R002_CRITERIA_SOURCE_COLUMNS).to_pylist()
+    try:
+        projected = parquet.read(columns=R002_CRITERIA_SOURCE_COLUMNS).to_pylist()
+    except (OSError, TypeError, ValueError, pa.ArrowException):
+        raise R002SourceError("parquet_schema_mismatch") from None
     rows = [SWEbenchCriteriaSourceRow.model_validate(item) for item in projected]
     if any(len(row.problem_statement.encode("utf-8")) > 128 * 1024 for row in rows):
         raise R002SourceError("manifest_row_mismatch")
@@ -115,12 +132,19 @@ def _select_r002_rows(rows: Sequence[_R], parquet_sha256: str) -> list[_R]:
     grouped: dict[str, list[_R]] = defaultdict(list)
     for row in rows:
         grouped[row.repo].append(row)
+    if len(grouped) != 12:
+        raise R002SourceError("repository_count_mismatch")
+    instance_ids = [row.instance_id for row in rows]
+    if len(instance_ids) != len(set(instance_ids)):
+        raise R002SourceError("unique_instance_count_mismatch")
     repository_order = sorted(grouped, key=lambda repo: (-len(grouped[repo]), repo))
     quotas = {repo: 1 for repo in grouped}
     for repo in repository_order[:8]:
         quotas[repo] += 1
     chosen: list[_R] = []
     for repo, candidates in grouped.items():
+        if len(candidates) < quotas[repo]:
+            raise R002SourceError("manifest_selection_mismatch")
         ranked = sorted(
             candidates,
             key=lambda row: (
@@ -129,6 +153,8 @@ def _select_r002_rows(rows: Sequence[_R], parquet_sha256: str) -> list[_R]:
             ),
         )
         chosen.extend(ranked[: quotas[repo]])
+    if len(chosen) != 20:
+        raise R002SourceError("manifest_selection_mismatch")
     return sorted(chosen, key=lambda row: (row.repo, row.instance_id))
 
 

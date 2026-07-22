@@ -98,11 +98,12 @@ def write_parquet_and_pin(
     rows: list[dict[str, object]],
     *,
     fields: list[pa.Field] | None = None,
+    row_group_size: int | None = None,
 ) -> tuple[Path, SWEbenchSourcePin]:
     path = tmp_path / "fixture.parquet"
     schema = pa.schema(fields or [pa.field(name, pa.string()) for name in R002_SCHEMA])
     table = pa.Table.from_pylist(rows, schema=schema)
-    pq.write_table(table, path, compression=None)
+    pq.write_table(table, path, compression=None, row_group_size=row_group_size)
     return path, _pin(path, rows, tuple(schema.names))
 
 
@@ -245,6 +246,74 @@ def test_decode_hashes_and_rewinds_before_constructing_parquet(tmp_path, monkeyp
     assert len(decode_verified_parquet(source, pin)) == 1
 
 
+def test_decode_maps_hash_matching_invalid_parquet_to_a_closed_source_error():
+    payload = b"this hash-matching payload is not a parquet file"
+    pin = SWEbenchSourcePin(
+        dataset_id="fixture/dataset",
+        config="fixture",
+        split="test",
+        revision="c" * 40,
+        source_url="https://huggingface.co/fixture/data.parquet",
+        parquet_path="data/test.parquet",
+        byte_length=len(payload),
+        sha256=sha256(payload).hexdigest(),
+        row_count=1,
+        repository_count=1,
+        unique_instance_count=1,
+        schema=R002_SCHEMA,
+    )
+    with pytest.raises(R002SourceError) as raised:
+        decode_criteria_source_rows(BytesIO(payload), pin)
+    assert raised.value.args == ("parquet_schema_mismatch",)
+
+
+def test_decode_maps_bad_seekable_handle_before_parquet_construction(monkeypatch):
+    class BadSource:
+        def seek(self, offset):
+            raise TypeError("not a binary source")
+
+    monkeypatch.setattr(pq, "ParquetFile", lambda _source: pytest.fail("unexpected parquet"))
+    pin = SWEbenchSourcePin(
+        dataset_id="fixture/dataset",
+        config="fixture",
+        split="test",
+        revision="c" * 40,
+        source_url="https://huggingface.co/fixture/data.parquet",
+        parquet_path="data/test.parquet",
+        byte_length=1,
+        sha256="0" * 64,
+        row_count=1,
+        repository_count=1,
+        unique_instance_count=1,
+        schema=R002_SCHEMA,
+    )
+    with pytest.raises(R002SourceError) as raised:
+        decode_verified_parquet(BadSource(), pin)
+    assert raised.value.args == ("parquet_bytes_mismatch",)
+
+
+@pytest.mark.parametrize("decoder", [decode_criteria_source_rows, decode_verified_parquet])
+def test_decode_maps_parquet_read_failures_without_wrapping_model_validation(
+    tmp_path, monkeypatch, decoder
+):
+    path, pin = write_parquet_and_pin(tmp_path, [swebench_row()])
+    real_parquet_file = pq.ParquetFile
+
+    class FailingReadParquetFile:
+        def __init__(self, source):
+            self._inner = real_parquet_file(source)
+            self.metadata = self._inner.metadata
+            self.schema_arrow = self._inner.schema_arrow
+
+        def read(self, columns=None):
+            raise pa.ArrowInvalid("fixture read failure")
+
+    monkeypatch.setattr(pq, "ParquetFile", FailingReadParquetFile)
+    with path.open("rb") as source, pytest.raises(R002SourceError) as raised:
+        decoder(source, pin)
+    assert raised.value.args == ("parquet_schema_mismatch",)
+
+
 @pytest.mark.parametrize(
     ("pin_change", "error"),
     [
@@ -283,8 +352,8 @@ def test_decode_rejects_schema_order_non_string_and_nested_types(tmp_path):
 
 def test_decode_rejects_nulls_and_model_content_bounds(tmp_path):
     null_path, null_pin = write_parquet_and_pin(tmp_path, [{**swebench_row(), "patch": None}])
-    with null_path.open("rb"), pytest.raises(ValidationError):
-        decode_verified_parquet(null_path.open("rb"), null_pin)
+    with null_path.open("rb") as source, pytest.raises(ValidationError):
+        decode_verified_parquet(source, null_pin)
 
     for field, value in (
         ("problem_statement", "x" * (128 * 1024 + 1)),
@@ -293,8 +362,8 @@ def test_decode_rejects_nulls_and_model_content_bounds(tmp_path):
         ("hints_text", "x" * (1024 * 1024)),
     ):
         path, pin = write_parquet_and_pin(tmp_path, [swebench_row(**{field: value})])
-        with path.open("rb"), pytest.raises(ValidationError):
-            decode_verified_parquet(path.open("rb"), pin)
+        with path.open("rb") as source, pytest.raises(ValidationError):
+            decode_verified_parquet(source, pin)
 
     criteria_path, criteria_pin = write_parquet_and_pin(
         tmp_path, [swebench_row(problem_statement="x" * (128 * 1024 + 1))]
@@ -309,6 +378,35 @@ def test_decode_rejects_parquet_uncompressed_metadata_over_sixteen_mebibytes(tmp
     with path.open("rb") as source, pytest.raises(R002SourceError) as raised:
         decode_criteria_source_rows(source, pin)
     assert raised.value.args == ("parquet_uncompressed_limit",)
+
+
+def test_decode_sums_all_row_group_uncompressed_sizes(tmp_path):
+    rows = [
+        swebench_row(instance_id="scopeproof__fixture-1", hints_text="x" * (8 * 1024 * 1024)),
+        swebench_row(instance_id="scopeproof__fixture-2", hints_text="y" * (8 * 1024 * 1024)),
+    ]
+    path, pin = write_parquet_and_pin(tmp_path, rows, row_group_size=1)
+    with path.open("rb") as source, pytest.raises(R002SourceError) as raised:
+        decode_criteria_source_rows(source, pin)
+    assert raised.value.args == ("parquet_uncompressed_limit",)
+
+
+def test_multibyte_utf8_problem_and_canonical_bounds_are_byte_based(tmp_path):
+    accepted_problem = "é" * (64 * 1024)
+    path, pin = write_parquet_and_pin(tmp_path, [swebench_row(problem_statement=accepted_problem)])
+    with path.open("rb") as source:
+        assert decode_criteria_source_rows(source, pin)[0].problem_statement == accepted_problem
+
+    rejected_problem = "é" * (64 * 1024 + 1)
+    path, pin = write_parquet_and_pin(tmp_path, [swebench_row(problem_statement=rejected_problem)])
+    with path.open("rb") as source, pytest.raises(R002SourceError) as raised:
+        decode_criteria_source_rows(source, pin)
+    assert raised.value.args == ("manifest_row_mismatch",)
+
+    accepted = SWEbenchVerifiedRow.model_validate(swebench_row(hints_text="é" * 524_000))
+    assert len(canonical_json_bytes(accepted)) <= 1024 * 1024
+    with pytest.raises(ValidationError):
+        SWEbenchVerifiedRow.model_validate(swebench_row(hints_text="é" * 524_288))
 
 
 def test_selection_is_repository_balanced_and_hash_ranked():
@@ -344,6 +442,41 @@ def test_selection_is_permutation_stable_and_outcome_blind():
         for row in rows
     ]
     assert [row.instance_id for row in select_r002_rows(outcome_mutated, SOURCE_SHA)] == baseline
+
+
+def _underrepresented_repositories() -> list[SWEbenchVerifiedRow]:
+    return selection_rows()[:-1]
+
+
+def _overrepresented_repositories() -> list[SWEbenchVerifiedRow]:
+    extra = SWEbenchVerifiedRow.model_validate(
+        swebench_row(repo="mike/one", instance_id="mike__one-1")
+    )
+    return [*selection_rows(), extra]
+
+
+@pytest.mark.parametrize(
+    "rows_factory", [_underrepresented_repositories, _overrepresented_repositories]
+)
+def test_selection_requires_exactly_twelve_repositories(rows_factory):
+    with pytest.raises(R002SourceError) as raised:
+        select_r002_rows(rows_factory(), SOURCE_SHA)
+    assert raised.value.args == ("repository_count_mismatch",)
+
+
+def test_selection_rejects_duplicate_identities_and_unsatisfied_quotas():
+    rows = selection_rows()
+    duplicate = rows.copy()
+    duplicate[-1] = duplicate[-1].model_copy(update={"instance_id": duplicate[0].instance_id})
+    with pytest.raises(R002SourceError) as raised:
+        select_r002_rows(duplicate, SOURCE_SHA)
+    assert raised.value.args == ("unique_instance_count_mismatch",)
+
+    one_per_repository = list({row.repo: row for row in rows}.values())
+    assert len(one_per_repository) == 12
+    with pytest.raises(R002SourceError) as raised:
+        select_r002_rows(one_per_repository, SOURCE_SHA)
+    assert raised.value.args == ("manifest_selection_mismatch",)
 
 
 def test_manifest_validation_checks_selection_fixed_row_identity_and_projection():
