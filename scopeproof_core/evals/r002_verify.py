@@ -30,6 +30,8 @@ from scopeproof_core.schemas.models import (
 
 DEFAULT_R002_HEAD_LIMITS = R002HeadFileLimits()
 _MAX_R002_LOGICAL_PATH_CHARACTERS = 512
+_MAX_R002_PARSED_FILES = 32
+_MAX_R002_VERIFIED_LINES = 50_000
 
 
 class R002ReferenceError(R002Error):
@@ -74,6 +76,12 @@ def _raise_public_reference_error(reason: str) -> NoReturn:
     raise R002ReferenceError(reason)
 
 
+def _trusted_python_dump(model_type: type[object], instance: object) -> object:
+    """Serialize through the fixed class schema, never an instance attribute."""
+    serializer = type.__getattribute__(model_type, "__pydantic_serializer__")
+    return serializer.to_python(instance, mode="python", warnings="error")
+
+
 def _validated_case_snapshot(
     case: R002CaseManifest, *, reason: str
 ) -> R002CaseManifest:
@@ -81,7 +89,7 @@ def _validated_case_snapshot(
         raise R002ReferenceError(reason)
     try:
         snapshot = R002CaseManifest.model_validate(
-            case.model_dump(mode="python", warnings=False), strict=True
+            _trusted_python_dump(R002CaseManifest, case), strict=True
         )
     except Exception:
         error = _fresh_reference_error(reason)
@@ -97,7 +105,7 @@ def _validated_limits_snapshot(limits: R002HeadFileLimits) -> R002HeadFileLimits
         raise R002ReferenceError("model_validation_failed")
     try:
         snapshot = R002HeadFileLimits.model_validate(
-            limits.model_dump(mode="python", warnings=False), strict=True
+            _trusted_python_dump(R002HeadFileLimits, limits), strict=True
         )
     except Exception:
         error = _fresh_reference_error("model_validation_failed")
@@ -113,7 +121,7 @@ def _validated_evidence_snapshot(evidence: EvidenceItem) -> EvidenceItem:
         raise R002ReferenceError("model_validation_failed")
     try:
         snapshot = EvidenceItem.model_validate(
-            evidence.model_dump(mode="python", warnings=False), strict=True
+            _trusted_python_dump(EvidenceItem, evidence), strict=True
         )
     except Exception:
         error = _fresh_reference_error("model_validation_failed")
@@ -207,6 +215,7 @@ def _validated_parsed_snapshot(parsed: R002ParsedCase) -> R002ParsedCase:
         type(parsed) is not R002ParsedCase
         or type(parsed.case_id) is not str
         or type(parsed.files) is not tuple
+        or len(parsed.files) > _MAX_R002_PARSED_FILES
     ):
         raise R002ReferenceError("model_validation_failed")
     if any(
@@ -219,7 +228,7 @@ def _validated_parsed_snapshot(parsed: R002ParsedCase) -> R002ParsedCase:
     _assert_test_stream_separation(parsed)
     try:
         snapshot = R002ParsedCase.model_validate(
-            parsed.model_dump(mode="python", warnings=False), strict=True
+            _trusted_python_dump(R002ParsedCase, parsed), strict=True
         )
     except Exception:
         error = _fresh_reference_error("model_validation_failed")
@@ -352,16 +361,18 @@ def verify_case_head_files(
     _raise_public_reference_error(reason)
 
 
-def _validate_verified_sidecar(
+def _cross_bind_verified_sidecar(
     case: R002CaseManifest, verified_lines: R002VerifiedCaseLines
-) -> R002VerifiedCaseLines:
-    if type(verified_lines) is not R002VerifiedCaseLines:
-        raise R002ReferenceError("model_validation_failed")
+) -> None:
     if type(verified_lines.case_id) is not str or type(verified_lines.head_sha) is not str:
         raise R002ReferenceError("model_validation_failed")
     raw_lines = verified_lines.lines
-    if type(raw_lines) is not tuple or any(
+    if (
+        type(raw_lines) is not tuple
+        or len(raw_lines) > _MAX_R002_VERIFIED_LINES
+        or any(
         type(line) is not R002VerifiedLine for line in raw_lines
+        )
     ):
         raise R002ReferenceError("model_validation_failed")
     if verified_lines.case_id != case.case_id:
@@ -385,15 +396,17 @@ def _validate_verified_sidecar(
             case, line.path, line.new_line_number
         ):
             raise R002ReferenceError("verified_permalink_mismatch")
+
+
+def _validate_verified_sidecar(
+    case: R002CaseManifest, verified_lines: R002VerifiedCaseLines
+) -> R002VerifiedCaseLines:
+    if type(verified_lines) is not R002VerifiedCaseLines:
+        raise R002ReferenceError("model_validation_failed")
+    _cross_bind_verified_sidecar(case, verified_lines)
     try:
         snapshot = R002VerifiedCaseLines.model_validate(
-            {
-                "case_id": verified_lines.case_id,
-                "head_sha": verified_lines.head_sha,
-                "lines": tuple(
-                    line.model_dump(mode="python", warnings=False) for line in raw_lines
-                ),
-            },
+            _trusted_python_dump(R002VerifiedCaseLines, verified_lines),
             strict=True,
         )
     except Exception:
@@ -402,6 +415,7 @@ def _validate_verified_sidecar(
         error = None
     if error is not None:
         raise error
+    _cross_bind_verified_sidecar(case, snapshot)
     for line in snapshot.lines:
         if line.stream is R002DiffStream.TEST_PATCH and (
             classify_changed_path_evidence_type(line.path) is not EvidenceType.TEST

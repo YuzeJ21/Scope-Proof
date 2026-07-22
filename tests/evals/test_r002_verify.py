@@ -92,6 +92,23 @@ class _ThrowingLimit:
         raise RuntimeError("TRACE_LIMIT_SENTINEL")
 
 
+class _SubstitutingSerializer:
+    def __init__(self, replacement: dict[str, object]) -> None:
+        self.replacement = replacement
+
+    def to_python(self, _instance: object, **_kwargs: object) -> dict[str, object]:
+        return self.replacement
+
+
+def _shadow_serialization(
+    instance: object, replacement: dict[str, object], attribute: str
+) -> None:
+    if attribute == "model_dump":
+        object.__setattr__(instance, attribute, lambda **_kwargs: replacement)
+    else:
+        object.__setattr__(instance, attribute, _SubstitutingSerializer(replacement))
+
+
 @pytest.fixture
 def r002_case_manifest() -> R002CaseManifest:
     return R002CaseManifest(
@@ -506,6 +523,30 @@ def test_forged_parsed_line_hash_is_revalidated_before_output(
     )
 
 
+@pytest.mark.parametrize("shadow_attribute", ["model_dump", "__pydantic_serializer__"])
+def test_parsed_case_snapshot_does_not_dispatch_through_shadowed_serialization(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+    shadow_attribute: str,
+) -> None:
+    shadowed = parsed_case.model_copy()
+    substitute = R002ParsedCase(case_id=r002_case_manifest.case_id, files=())
+    _shadow_serialization(
+        shadowed,
+        substitute.model_dump(mode="python"),
+        shadow_attribute,
+    )
+
+    verified = verify_case_head_files(
+        case=r002_case_manifest,
+        parsed=shadowed,
+        head_file_bytes=head_files,
+    )
+
+    assert len(verified.lines) == 5
+
+
 def test_parsed_path_subclass_is_rejected_before_stream_classification(
     r002_case_manifest: R002CaseManifest,
     parsed_case: R002ParsedCase,
@@ -529,6 +570,40 @@ def test_parsed_path_subclass_is_rejected_before_stream_classification(
     assert captured.value.args == ("model_validation_failed",)
     assert captured.value.__cause__ is None
     assert captured.value.__context__ is None
+
+
+def test_oversized_parsed_container_fails_before_path_classification(
+    monkeypatch: pytest.MonkeyPatch,
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+) -> None:
+    test_file = next(
+        file for file in parsed_case.files if file.stream is R002DiffStream.TEST_PATCH
+    )
+    oversized = R002ParsedCase.model_construct(
+        case_id=r002_case_manifest.case_id,
+        files=(test_file,) * 33,
+        file_count=33,
+        hunk_count=33,
+        diff_line_count=66,
+    )
+    classifier_called = False
+
+    def fail_if_called(_path: str) -> EvidenceType:
+        nonlocal classifier_called
+        classifier_called = True
+        raise AssertionError("classification must follow the cardinality check")
+
+    monkeypatch.setattr(
+        r002_verify,
+        "classify_changed_path_evidence_type",
+        fail_if_called,
+    )
+
+    with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+        assert_test_stream_separation(oversized)
+
+    assert classifier_called is False
 
 
 def test_test_stream_must_remain_test_classified(r002_case_manifest: R002CaseManifest) -> None:
@@ -622,6 +697,34 @@ def test_candidate_permalink_revalidates_bypassed_case_fields(
     assert error.__context__ is None
     assert sentinel not in "\n".join(
         local for frame in frames for local in (frame.locals or {}).values()
+    )
+
+
+@pytest.mark.parametrize("shadow_attribute", ["model_dump", "__pydantic_serializer__"])
+def test_case_snapshot_does_not_dispatch_through_shadowed_serialization(
+    r002_case_manifest: R002CaseManifest,
+    shadow_attribute: str,
+) -> None:
+    substitute = R002CaseManifest.model_validate(
+        {
+            **r002_case_manifest.model_dump(mode="python"),
+            "instance_id": "bravo__two-2",
+            "repository": "bravo/two",
+            "pr_number": 2,
+            "pr_url": "https://github.com/bravo/two/pull/2",
+            "verified_pr_head_sha": "7" * 40,
+        },
+        strict=True,
+    )
+    shadowed = r002_case_manifest.model_copy()
+    _shadow_serialization(
+        shadowed,
+        substitute.model_dump(mode="python"),
+        shadow_attribute,
+    )
+
+    assert candidate_permalink(shadowed, "src/widget.py", 1) == (
+        f"https://github.com/alpha/one/blob/{'2' * 40}/src/widget.py#L1-L1"
     )
 
 
@@ -836,6 +939,92 @@ def test_state_changing_verified_line_container_cannot_inject_unchecked_line(
     assert captured.value.__context__ is None
 
 
+@pytest.mark.parametrize("shadow_attribute", ["model_dump", "__pydantic_serializer__"])
+def test_verified_line_snapshot_does_not_dispatch_through_shadowed_serialization(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+    shadow_attribute: str,
+) -> None:
+    target = next(
+        line
+        for line in verified_case_lines.lines
+        if line.path == "src/widget.py" and line.new_line_number == 2
+    )
+    substitute = target.model_copy(update={"normalized_line_sha256": "9" * 64})
+    shadowed_target = target.model_copy()
+    _shadow_serialization(
+        shadowed_target,
+        substitute.model_dump(mode="python"),
+        shadow_attribute,
+    )
+    shadowed_sidecar = verified_case_lines.model_copy(
+        update={
+            "lines": tuple(
+                shadowed_target if line is target else line
+                for line in verified_case_lines.lines
+            )
+        }
+    )
+
+    key = verify_evidence_reference(
+        case=r002_case_manifest,
+        evidence=evidence_item(case=r002_case_manifest),
+        verified_lines=shadowed_sidecar,
+    )
+
+    assert key.normalized_line_sha256 == target.normalized_line_sha256
+
+
+@pytest.mark.parametrize("shadow_attribute", ["model_dump", "__pydantic_serializer__"])
+def test_sidecar_snapshot_does_not_dispatch_through_shadowed_serialization(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+    shadow_attribute: str,
+) -> None:
+    substitute = R002VerifiedCaseLines(
+        case_id=verified_case_lines.case_id,
+        head_sha=verified_case_lines.head_sha,
+        lines=(),
+    )
+    shadowed = verified_case_lines.model_copy()
+    _shadow_serialization(
+        shadowed,
+        substitute.model_dump(mode="python"),
+        shadow_attribute,
+    )
+
+    key = verify_evidence_reference(
+        case=r002_case_manifest,
+        evidence=evidence_item(case=r002_case_manifest),
+        verified_lines=shadowed,
+    )
+
+    assert key.path == "src/widget.py"
+    assert key.new_line_number == 2
+
+
+def test_oversized_sidecar_fails_before_duplicate_scanning(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+) -> None:
+    oversized = R002VerifiedCaseLines.model_construct(
+        case_id=verified_case_lines.case_id,
+        head_sha=verified_case_lines.head_sha,
+        lines=(verified_case_lines.lines[0],) * 50_001,
+    )
+
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as captured:
+        verify_evidence_reference(
+            case=r002_case_manifest,
+            evidence=evidence_item(case=r002_case_manifest),
+            verified_lines=oversized,
+        )
+
+    assert captured.value.args == ("model_validation_failed",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
 def test_verified_sidecar_rejects_nested_model_subclasses(
     r002_case_manifest: R002CaseManifest,
     verified_case_lines: R002VerifiedCaseLines,
@@ -913,6 +1102,59 @@ def test_malformed_limits_and_evidence_are_revalidated_at_public_boundaries(
     assert evidence_error.value.args == ("model_validation_failed",)
     assert evidence_error.value.__cause__ is None
     assert evidence_error.value.__context__ is None
+
+
+@pytest.mark.parametrize("shadow_attribute", ["model_dump", "__pydantic_serializer__"])
+def test_limits_snapshot_does_not_dispatch_through_shadowed_serialization(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+    shadow_attribute: str,
+) -> None:
+    malformed = R002HeadFileLimits().model_copy(update={"bytes_per_file": 1})
+    _shadow_serialization(
+        malformed,
+        R002HeadFileLimits().model_dump(mode="python"),
+        shadow_attribute,
+    )
+
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes=head_files,
+            limits=malformed,
+        )
+
+    assert captured.value.args == ("model_validation_failed",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+@pytest.mark.parametrize("shadow_attribute", ["model_dump", "__pydantic_serializer__"])
+def test_evidence_snapshot_does_not_dispatch_through_shadowed_serialization(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+    shadow_attribute: str,
+) -> None:
+    valid = evidence_item(case=r002_case_manifest)
+    shadowed = valid.model_copy(update={"permalink": "https://github.com/wrong"})
+    _shadow_serialization(
+        shadowed,
+        valid.model_dump(mode="python"),
+        shadow_attribute,
+    )
+
+    with pytest.raises(R002ReferenceError, match="evidence_permalink_mismatch") as captured:
+        verify_evidence_reference(
+            case=r002_case_manifest,
+            evidence=shadowed,
+            verified_lines=verified_case_lines,
+        )
+
+    assert captured.value.args == ("evidence_permalink_mismatch",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
 
 
 def test_malformed_verified_permalink_fails_closed(
