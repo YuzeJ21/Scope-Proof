@@ -557,6 +557,34 @@ class R002CriterionCase(R002StrictModel):
     problem_statement_sha256: Sha256
     criteria: tuple[Criterion, ...] = Field(min_length=1, max_length=16)
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_complete_serialized_criteria(cls, value: object) -> object:
+        if not isinstance(value, dict) or not isinstance(value.get("criteria"), (list, tuple)):
+            return value
+        required_fields = {
+            "criterion_id",
+            "text",
+            "priority",
+            "criterion_type",
+            "criterion_source",
+            "source_span",
+            "required_evidence_level",
+        }
+        for criterion in value["criteria"]:
+            fields = (
+                set(criterion.model_fields_set)
+                if isinstance(criterion, Criterion)
+                else set(criterion)
+                if isinstance(criterion, dict)
+                else set()
+            )
+            if fields != required_fields:
+                raise ValueError("R-002 criteria require complete serialized fields")
+        # JSON arrays are the canonical serialization of persisted tuples. Preserve
+        # strict scalar validation while reconstructing this collection boundary.
+        return {**value, "criteria": tuple(value["criteria"])}
+
     @model_validator(mode="after")
     def validate_criteria(self) -> Self:
         ids = [item.criterion_id for item in self.criteria]

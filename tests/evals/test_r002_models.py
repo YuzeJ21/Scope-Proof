@@ -8,7 +8,9 @@ from copy import deepcopy
 import pytest
 from pydantic import ValidationError
 
+import scopeproof_core.evals.r002_models as r002_models
 from scopeproof_core.evals.r002_models import (
+    R002AnnotationUniverse,
     R002CandidateLabelSet,
     R002CaseResult,
     R002CriteriaProposal,
@@ -18,6 +20,8 @@ from scopeproof_core.evals.r002_models import (
     R002SourceError,
     R002SourceManifest,
     case_projection_sha256,
+    load_confirmed_criteria,
+    load_confirmed_labels,
     load_source_manifest,
     validate_r002_logical_path,
 )
@@ -245,3 +249,206 @@ def test_case_result_rejects_false_ready_and_non_static_success_signals():
     }
     with pytest.raises(ValidationError):
         R002CaseResult.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("dataset_base_commit", "not-a-sha"),
+        ("verified_pr_head_sha", "A" * 40),
+        ("row_sha256", "0" * 63),
+        ("problem_statement_sha256", "x" * 64),
+        ("patch_sha256", "0" * 65),
+        ("test_patch_sha256", "0" * 63),
+        ("source.revision", "0" * 39),
+        ("source.sha256", "f" * 63),
+    ],
+)
+def test_manifest_rejects_malformed_git_and_hash_shapes(r002_manifest_payload, field, value):
+    if field.startswith("source."):
+        r002_manifest_payload["source"][field.removeprefix("source.")] = value
+    else:
+        r002_manifest_payload["cases"][0][field] = value
+    with pytest.raises(ValidationError):
+        R002SourceManifest.model_validate_json(json.dumps(r002_manifest_payload))
+
+
+@pytest.mark.parametrize("mutation", ["eleven_repositories", "three_cases_for_repository"])
+def test_manifest_rejects_repository_count_and_per_repository_bounds(
+    r002_manifest_payload, mutation
+):
+    cases = r002_manifest_payload["cases"]
+    target = cases[-1] if mutation == "eleven_repositories" else cases[-3]
+    target["repository"] = "golf/one"
+    target["instance_id"] = f"golf__one-{target['pr_number']}"
+    target["pr_url"] = f"https://github.com/golf/one/pull/{target['pr_number']}"
+    with pytest.raises(ValidationError):
+        R002SourceManifest.model_validate_json(json.dumps(r002_manifest_payload))
+
+
+@pytest.mark.parametrize(
+    "mutation", ["zero", "seventeen", "no_must_have", "unordered", "incomplete"]
+)
+def test_criteria_reject_collection_size_order_priority_and_missing_serialized_fields(
+    r002_criteria_payload, mutation
+):
+    criteria = r002_criteria_payload["cases"][0]["criteria"]
+    if mutation == "zero":
+        r002_criteria_payload["cases"][0]["criteria"] = []
+    elif mutation == "seventeen":
+        r002_criteria_payload["cases"][0]["criteria"] = criteria * 17
+    elif mutation == "no_must_have":
+        criteria[0]["priority"] = "should_have"
+    elif mutation == "unordered":
+        criteria[0]["criterion_id"] = "AC-02"
+    else:
+        del criteria[0]["required_evidence_level"]
+    with pytest.raises(ValidationError):
+        R002CriteriaSet.model_validate_json(json.dumps(r002_criteria_payload))
+
+
+def test_every_persisted_r002_model_family_declares_extra_forbid():
+    pending = list(r002_models.R002StrictModel.__subclasses__())
+    models = set()
+    while pending:
+        model = pending.pop()
+        if model in models:
+            continue
+        models.add(model)
+        pending.extend(model.__subclasses__())
+    assert models
+    assert {model.model_config.get("extra") for model in models} == {"forbid"}
+
+
+def _label_payload() -> dict[str, object]:
+    return {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_manifest_sha256": "0" * 64,
+        "criteria_set_sha256": "1" * 64,
+        "annotation_universe_sha256": "2" * 64,
+        "annotation_count": 1,
+        "benchmark_owner_confirmed": True,
+        "labels": [
+            {
+                "key": {
+                    "case_id": "R002-001",
+                    "criterion_id": "AC-01",
+                    "stream": "patch",
+                    "path": "scopeproof.py",
+                    "new_line_number": 1,
+                    "normalized_line_sha256": "3" * 64,
+                },
+                "relevant": False,
+                "reason_code": "unrelated_candidate",
+            }
+        ],
+        "expected_missing": [
+            {
+                "case_id": "R002-001",
+                "criterion_id": "AC-01",
+                "evidence_type": kind,
+                "reason_code": "no_owner_labelled_relevant_candidate",
+            }
+            for kind in ("implementation", "test", "documentation", "contract")
+        ],
+    }
+
+
+def test_loader_boundaries_reject_criteria_and_label_upstream_drift_and_extra_fields(
+    tmp_path, r002_criteria_payload
+):
+    criteria_path = tmp_path / "criteria.json"
+    criteria_path.write_text(json.dumps(r002_criteria_payload), encoding="utf-8")
+    with pytest.raises(r002_models.R002AnnotationError, match="criteria_manifest_drift"):
+        load_confirmed_criteria(criteria_path, "0" * 64)
+    r002_criteria_payload["unexpected"] = True
+    criteria_path.write_text(json.dumps(r002_criteria_payload), encoding="utf-8")
+    with pytest.raises(ValidationError):
+        load_confirmed_criteria(criteria_path, "9" * 64)
+
+    labels_path = tmp_path / "labels.json"
+    labels_path.write_text(json.dumps(_label_payload()), encoding="utf-8")
+    with pytest.raises(r002_models.R002AnnotationError, match="candidate_label_upstream_drift"):
+        load_confirmed_labels(labels_path, "9" * 64, "1" * 64)
+
+
+def test_loader_rejects_each_controlled_case_projection_mutation(
+    tmp_path, monkeypatch, r002_manifest_payload
+):
+    r002_manifest_payload["source"] = deepcopy(r002_models.R002_SOURCE)
+    baseline = R002SourceManifest.model_validate_json(json.dumps(r002_manifest_payload))
+    monkeypatch.setattr(
+        r002_models, "R002_APPROVED_CASES_SHA256", case_projection_sha256(baseline.cases)
+    )
+    path = tmp_path / "source_manifest.json"
+    path.write_text(json.dumps(r002_manifest_payload), encoding="utf-8")
+    assert load_source_manifest(path) == baseline
+    for field, value in {
+        "instance_id": "wrong__case-1",
+        "repository": "wrong/repository",
+        "pr_number": 999,
+        "pr_url": "https://github.com/wrong/repository/pull/1",
+        "dataset_base_commit": "f" * 40,
+        "verified_pr_head_sha": "e" * 40,
+        "row_index": 499,
+        "difficulty": "different",
+        "row_sha256": "a" * 64,
+        "problem_statement_sha256": "b" * 64,
+        "patch_sha256": "c" * 64,
+        "test_patch_sha256": "d" * 64,
+    }.items():
+        payload = deepcopy(r002_manifest_payload)
+        payload["cases"][0][field] = value
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises((ValidationError, R002SourceError)):
+            load_source_manifest(path)
+
+
+@pytest.mark.parametrize("mutation", ["reversed", "duplicate_problem_hash"])
+def test_confirmed_criteria_bind_complete_case_order_and_problem_hashes(
+    r002_criteria_payload, mutation
+):
+    if mutation == "reversed":
+        r002_criteria_payload["cases"].reverse()
+    else:
+        r002_criteria_payload["cases"][1]["problem_statement_sha256"] = r002_criteria_payload[
+            "cases"
+        ][0]["problem_statement_sha256"]
+    with pytest.raises(ValidationError):
+        R002CriteriaSet.model_validate_json(json.dumps(r002_criteria_payload))
+
+
+@pytest.mark.parametrize("mutation", ["duplicate", "unsorted"])
+def test_annotation_universe_rejects_duplicate_or_unstable_candidate_keys(mutation):
+    keys = [
+        {
+            "case_id": "R002-001",
+            "criterion_id": "AC-01",
+            "stream": "patch",
+            "path": path,
+            "new_line_number": 1,
+            "normalized_line_sha256": digest * 64,
+        }
+        for path, digest in (("a.py", "0"), ("b.py", "1"))
+    ]
+    if mutation == "duplicate":
+        keys[1] = keys[0]
+    else:
+        keys.reverse()
+    payload = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_manifest_sha256": "0" * 64,
+        "criteria_set_sha256": "1" * 64,
+        "candidate_count": 2,
+        "candidate_keys": keys,
+    }
+    with pytest.raises(ValidationError):
+        R002AnnotationUniverse.model_validate_json(json.dumps(payload))
