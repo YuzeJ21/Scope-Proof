@@ -214,6 +214,31 @@ def _write_universe(cache: R002Cache) -> R002AnnotationUniverse:
     )
 
 
+def _assert_public_error_is_sanitized(
+    error: BaseException, forbidden_values: tuple[str, ...]
+) -> None:
+    pending = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        traceback = current.__traceback__
+        while traceback is not None:
+            if Path(traceback.tb_frame.f_code.co_filename).name == "r002_cache.py":
+                retained = repr(traceback.tb_frame.f_locals)
+                for forbidden in forbidden_values:
+                    assert forbidden not in retained
+            traceback = traceback.tb_next
+        if current.__cause__ is not None:
+            pending.append(current.__cause__)
+        if current.__context__ is not None:
+            pending.append(current.__context__)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+
+
 def test_cache_creates_owned_0700_directories_and_0600_files(tmp_path: Path) -> None:
     cache = R002Cache(tmp_path / "r002")
     proposal = _criteria_proposal()
@@ -452,6 +477,49 @@ def test_generic_control_writer_compares_reopened_validated_value(
         getattr(cache, writer_name)("criteria-proposal.json", proposal)
 
 
+@pytest.mark.parametrize(
+    "writer_name", ["write_content_addressed_model", "write_model", "replace_model"]
+)
+def test_public_postpublication_model_error_discards_sensitive_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    writer_name: str,
+) -> None:
+    native_detail = f"native-{writer_name}-detail"
+    cache_root = tmp_path / f"cache-{writer_name}"
+    cache = R002Cache(cache_root)
+    if writer_name == "write_content_addressed_model":
+        secret = "UNIQUE_PATCH_SECRET_CONTENT_ADDRESSED"
+        value = _row(1).model_copy(update={"patch": secret})
+        canonical = canonical_json_bytes(value).decode()
+        relative = f"rows/{canonical_sha256(value)}"
+        arguments = (relative, value, SWEbenchVerifiedRow)
+    else:
+        secret = f"UNIQUE_SOURCE_SECRET_{writer_name.upper()}"
+        secret_case = _criterion_case(1).model_copy(
+            update={
+                "problem_statement": secret,
+                "problem_statement_sha256": sha256(secret.encode()).hexdigest(),
+            }
+        )
+        proposal = _criteria_proposal().model_copy(
+            update={"cases": (secret_case, *_criteria_proposal().cases[1:])}
+        )
+        canonical = canonical_json_bytes(proposal).decode()
+        arguments = ("criteria-proposal.json", proposal)
+
+    def fail_reopen(*args, **kwargs):
+        raise OSError(native_detail)
+
+    monkeypatch.setattr(R002Cache, "_read_model_internal", fail_reopen)
+    with pytest.raises(R002CacheError, match="cache_write_failed") as caught:
+        getattr(cache, writer_name)(*arguments)
+    _assert_public_error_is_sanitized(
+        caught.value,
+        (secret, canonical, str(cache_root.resolve()), native_detail),
+    )
+
+
 def test_review_bundle_roundtrips_canonical_datetime_json(tmp_path: Path) -> None:
     cache = R002Cache(tmp_path / "cache")
     bundle = _review_bundle()
@@ -539,6 +607,36 @@ def test_failed_pre_replace_preserves_control_and_sanitizes_native_error(
     assert caught.value.__context__ is None
     assert cache.read_model("criteria-proposal.json", R002CriteriaProposal) == first
     assert not any(path.name.startswith(".r002-tmp-") for path in (tmp_path / "cache").iterdir())
+
+
+def test_failed_replace_after_in_place_marker_mutation_is_unknown_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    index = _prepared_cache(cache)
+    marker = cache.publish_index(index)
+
+    def mutate_marker_then_raise(*args, **kwargs) -> None:
+        fd = os.open(
+            args[1],
+            os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW,
+            dir_fd=kwargs["dst_dir_fd"],
+        )
+        try:
+            os.write(fd, b"X")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        raise OSError("native marker mutation detail")
+
+    monkeypatch.setattr(os, "replace", mutate_marker_then_raise)
+    with pytest.raises(R002CacheError, match="cache_state_unknown") as caught:
+        cache.publish_index(index)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert marker.read_bytes() == b"X"
+    with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+        cache.load_index()
 
 
 @pytest.mark.parametrize("attack", ["symlink", "fifo", "hardlink", "mode"])
@@ -1067,6 +1165,41 @@ def test_annotation_review_reader_rejects_stale_universe_pair(tmp_path: Path) ->
     )
     with pytest.raises(R002CacheError, match="annotation_pair_mismatch"):
         cache.read_model("annotation-review.json", R002AnnotationReview)
+
+
+def test_public_stale_annotation_read_discards_sensitive_state(tmp_path: Path) -> None:
+    cache_root = tmp_path / "cache-sensitive-annotation"
+    cache = R002Cache(cache_root)
+    secret = "UNIQUE_ANNOTATION_SOURCE_SECRET"
+    first_key = _key(1, secret)
+    first = cache.write_annotation_universe(
+        source_manifest_sha256=_sha(1),
+        criteria_set_sha256=_sha(2),
+        candidate_count=1,
+        ordered_key_factory=lambda: iter((first_key,)),
+    )
+    review = cache.write_annotation_review(
+        source_manifest_sha256=_sha(1),
+        criteria_set_sha256=_sha(2),
+        annotation_universe_sha256=canonical_sha256(first),
+        candidate_count=1,
+        ordered_item_factory=lambda: iter(
+            (R002AnnotationReviewItem(key=first_key, line_content=secret),)
+        ),
+    )
+    cache.write_annotation_universe(
+        source_manifest_sha256=_sha(1),
+        criteria_set_sha256=_sha(2),
+        candidate_count=1,
+        ordered_key_factory=lambda: iter((_key(2),)),
+    )
+
+    with pytest.raises(R002CacheError, match="annotation_pair_mismatch") as caught:
+        cache.read_model("annotation-review.json", R002AnnotationReview)
+    _assert_public_error_is_sanitized(
+        caught.value,
+        (secret, canonical_json_bytes(review).decode(), str(cache_root.resolve())),
+    )
 
 
 def test_streamed_replace_then_raise_reports_unknown_state(

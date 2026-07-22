@@ -11,6 +11,7 @@ import stat
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager as ContextManager
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import BinaryIO, NoReturn, TypeVar
@@ -43,6 +44,14 @@ except ImportError:  # pragma: no cover - fail-closed portability guard
     fcntl = None  # type: ignore[assignment]
 
 T = TypeVar("T", bound=BaseModel)
+
+
+@dataclass(frozen=True)
+class _ReplaceSnapshot:
+    metadata: tuple[int, int, int, int, int, int, int, int, int]
+    data: bytes
+    usable: bool
+
 
 _SAFE_RELATIVE = re.compile(
     r"^(?:criteria-source-index\.json|cache-index\.json|"
@@ -434,13 +443,13 @@ class R002Cache:
                 raise R002CacheError("cache_state_unknown")
 
     @staticmethod
-    def _read_checked(
+    def _read_checked_snapshot(
         parent_fd: int,
         name: str,
         *,
         max_bytes: int,
         missing_reason: str = "cache_read_failed",
-    ) -> bytes:
+    ) -> tuple[bytes, os.stat_result]:
         try:
             fd = os.open(name, _READ_FLAGS, dir_fd=parent_fd)
         except FileNotFoundError:
@@ -483,40 +492,122 @@ class R002Cache:
                 )
             ):
                 raise R002CacheError("cache_file_security")
-            return data
+            return data, after
         finally:
             if not _close_fd(fd):
                 raise R002CacheError("cache_state_unknown")
 
     @staticmethod
-    def _preflight_replace_destination(parent_fd: int, name: str) -> tuple[int, int] | None:
+    def _read_checked(
+        parent_fd: int,
+        name: str,
+        *,
+        max_bytes: int,
+        missing_reason: str = "cache_read_failed",
+    ) -> bytes:
+        data, _ = R002Cache._read_checked_snapshot(
+            parent_fd,
+            name,
+            max_bytes=max_bytes,
+            missing_reason=missing_reason,
+        )
+        return data
+
+    def _replace_destination_usable(self, relative_name: str, data: bytes) -> bool:
+        expected = {
+            "criteria-source-index.json": R002CriteriaSourceIndex,
+            "cache-index.json": R002CacheIndex,
+            "annotation-universe.json": R002AnnotationUniverse,
+            "annotation-review.json": R002AnnotationReview,
+        }.get(relative_name) or _model_for_name(relative_name)
+        if expected is None:
+            return False
         try:
-            fd = os.open(name, _READ_FLAGS, dir_fd=parent_fd)
-        except FileNotFoundError:
+            value = _decode_canonical_model(data, expected)
+            if relative_name.startswith("reviews/"):
+                expected_case_id = relative_name.removeprefix("reviews/").removesuffix(".json")
+                if (
+                    not isinstance(value, ReviewBundle)
+                    or value.research_context is None
+                    or value.research_context.case_id != expected_case_id
+                ):
+                    return False
+            elif relative_name == "criteria-source-index.json":
+                self._verify_criteria_source_index(value)  # type: ignore[arg-type]
+            elif relative_name == "cache-index.json":
+                self._verify_cache_index(value)  # type: ignore[arg-type]
+            elif relative_name == "annotation-review.json":
+                universe = self._read_model_internal(
+                    "annotation-universe.json", R002AnnotationUniverse
+                )
+                if (
+                    canonical_sha256(universe) != value.annotation_universe_sha256
+                    or universe.source_manifest_sha256 != value.source_manifest_sha256
+                    or universe.criteria_set_sha256 != value.criteria_set_sha256
+                    or universe.candidate_count != len(value.items)
+                    or tuple(universe.candidate_keys) != tuple(item.key for item in value.items)
+                ):
+                    return False
+        except (AttributeError, R002CacheError):
+            return False
+        return True
+
+    def _preflight_replace_destination(
+        self, parent_fd: int, name: str, relative_name: str
+    ) -> _ReplaceSnapshot | None:
+        try:
+            data, metadata = self._read_checked_snapshot(
+                parent_fd,
+                name,
+                max_bytes=_byte_limit(relative_name),
+                missing_reason="referenced_object_missing",
+            )
+        except R002CacheError as error:
+            if error.reason_code != "referenced_object_missing":
+                raise
             return None
-        except OSError:
-            raise R002CacheError("cache_file_security") from None
-        try:
-            metadata = R002Cache._verify_file(fd)
-            return metadata.st_dev, metadata.st_ino
-        finally:
-            if not _close_fd(fd):
-                raise R002CacheError("cache_state_unknown")
+        return _ReplaceSnapshot(
+            metadata=(
+                metadata.st_dev,
+                metadata.st_ino,
+                metadata.st_mode,
+                metadata.st_uid,
+                metadata.st_gid,
+                metadata.st_nlink,
+                metadata.st_size,
+                metadata.st_mtime_ns,
+                metadata.st_ctime_ns,
+            ),
+            data=data,
+            usable=self._replace_destination_usable(relative_name, data),
+        )
 
     def _replace_failure_reason(
         self,
         parent_fd: int,
         name: str,
         temp_name: str,
-        initial_destination: tuple[int, int] | None,
+        relative_name: str,
+        initial_destination: _ReplaceSnapshot | None,
     ) -> str:
         try:
-            current_destination = self._preflight_replace_destination(parent_fd, name)
+            current_destination = self._preflight_replace_destination(
+                parent_fd, name, relative_name
+            )
         except R002CacheError:
             current_destination = object()
         reason = (
             "cache_replace_failed"
-            if current_destination == initial_destination
+            if (
+                (current_destination is None and initial_destination is None)
+                or (
+                    isinstance(current_destination, _ReplaceSnapshot)
+                    and initial_destination is not None
+                    and initial_destination.usable
+                    and current_destination.usable
+                    and current_destination == initial_destination
+                )
+            )
             else "cache_state_unknown"
         )
         try:
@@ -680,12 +771,14 @@ class R002Cache:
             self._open_root() as root_fd,
             self._open_parent(root_fd, relative_name, create=True) as (parent_fd, name),
         ):
-            initial_destination = self._preflight_replace_destination(parent_fd, name)
+            initial_destination = self._preflight_replace_destination(
+                parent_fd, name, relative_name
+            )
             temp_name = self._prepare_temp(parent_fd, data, limit)
             if create_only:
                 published = self._publish_no_overwrite(parent_fd, temp_name, name)
                 if not published:
-                    self._preflight_replace_destination(parent_fd, name)
+                    self._preflight_replace_destination(parent_fd, name, relative_name)
                     raise R002CacheError("control_already_exists")
                 observed = self._read_checked(
                     parent_fd, name, max_bytes=limit, missing_reason="cache_state_unknown"
@@ -696,7 +789,9 @@ class R002Cache:
             replaced = False
             try:
                 try:
-                    current_destination = self._preflight_replace_destination(parent_fd, name)
+                    current_destination = self._preflight_replace_destination(
+                        parent_fd, name, relative_name
+                    )
                 except R002CacheError:
                     self._unlink_created(parent_fd, temp_name)
                     raise
@@ -713,7 +808,11 @@ class R002Cache:
                     replaced = True
                 except OSError:
                     reason = self._replace_failure_reason(
-                        parent_fd, name, temp_name, initial_destination
+                        parent_fd,
+                        name,
+                        temp_name,
+                        relative_name,
+                        initial_destination,
                     )
                     raise R002CacheError(reason) from None
                 observed = self._read_checked(
@@ -773,40 +872,54 @@ class R002Cache:
                 raise R002CacheError("model_validation_failed")
         return value
 
+    def _write_bytes_public_internal(self, relative_name: str, data: bytes) -> Path:
+        relative = _validate_relative_name(relative_name)
+        if relative in _RESERVED_MARKERS:
+            raise R002CacheError("completion_marker_requires_publish")
+        if not relative.startswith(_RAW_NAMESPACES):
+            raise R002CacheError("raw_write_requires_content_namespace")
+        if type(data) is not bytes:
+            raise R002CacheError("cache_write_failed")
+        return self._immutable_bytes(relative, data)
+
     def write_bytes(self, relative_name: str, data: bytes) -> Path:
         try:
-            relative = _validate_relative_name(relative_name)
-            if relative in _RESERVED_MARKERS:
-                raise R002CacheError("completion_marker_requires_publish")
-            if not relative.startswith(_RAW_NAMESPACES):
-                raise R002CacheError("raw_write_requires_content_namespace")
-            if type(data) is not bytes:
-                raise R002CacheError("cache_write_failed")
-            return self._immutable_bytes(relative, data)
+            return self._write_bytes_public_internal(relative_name, data)
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_write_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_write_failed"
+            del caught
         del relative_name, data
         _raise_public(reason)
+
+    def _write_content_addressed_model_public_internal(
+        self, relative_name: str, value: T, model_type: type[T]
+    ) -> Path:
+        relative = _validate_relative_name(relative_name)
+        if not relative.startswith("rows/") or model_type is not SWEbenchVerifiedRow:
+            raise R002CacheError("model_type_mismatch")
+        _, data = _revalidate_instance(value, SWEbenchVerifiedRow)
+        path = self._immutable_bytes(relative, data)
+        reopened = self._read_model_internal(relative, SWEbenchVerifiedRow)
+        if _fixed_canonical_bytes(reopened, SWEbenchVerifiedRow) != data:
+            raise R002CacheError("referenced_object_mismatch")
+        return path
 
     def write_content_addressed_model(
         self, relative_name: str, value: T, model_type: type[T]
     ) -> Path:
         try:
-            relative = _validate_relative_name(relative_name)
-            if not relative.startswith("rows/") or model_type is not SWEbenchVerifiedRow:
-                raise R002CacheError("model_type_mismatch")
-            _, data = _revalidate_instance(value, SWEbenchVerifiedRow)
-            path = self._immutable_bytes(relative, data)
-            reopened = self._read_model_internal(relative, SWEbenchVerifiedRow)
-            if _fixed_canonical_bytes(reopened, SWEbenchVerifiedRow) != data:
-                raise R002CacheError("referenced_object_mismatch")
-            return path
+            return self._write_content_addressed_model_public_internal(
+                relative_name, value, model_type
+            )
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_write_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_write_failed"
+            del caught
         del relative_name, value, model_type
         _raise_public(reason)
 
@@ -827,110 +940,129 @@ class R002Cache:
                 raise R002CacheError("model_validation_failed")
         return validated, data
 
+    def _write_model_public_internal(self, relative_name: str, value: BaseModel) -> Path:
+        relative = _validate_relative_name(relative_name)
+        if relative in _RESERVED_MARKERS:
+            raise R002CacheError("completion_marker_requires_publish")
+        validated, data = self._validated_control(relative, value)
+        path = self._replace_bytes(relative, data, create_only=True)
+        try:
+            reopened = self._read_model_internal(relative, type(validated))
+        except R002CacheError:
+            raise R002CacheError("cache_state_unknown") from None
+        if reopened != validated or _fixed_canonical_bytes(reopened, type(validated)) != data:
+            raise R002CacheError("cache_state_unknown")
+        return path
+
     def write_model(self, relative_name: str, value: BaseModel) -> Path:
         """Create one typed control without overwriting any existing control."""
         try:
-            relative = _validate_relative_name(relative_name)
-            if relative in _RESERVED_MARKERS:
-                raise R002CacheError("completion_marker_requires_publish")
-            validated, data = self._validated_control(relative, value)
-            path = self._replace_bytes(relative, data, create_only=True)
-            try:
-                reopened = self._read_model_internal(relative, type(validated))
-            except R002CacheError:
-                raise R002CacheError("cache_state_unknown") from None
-            if reopened != validated or _fixed_canonical_bytes(reopened, type(validated)) != data:
-                raise R002CacheError("cache_state_unknown")
-            return path
+            return self._write_model_public_internal(relative_name, value)
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_write_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_write_failed"
+            del caught
         del relative_name, value
         _raise_public(reason)
+
+    def _replace_model_public_internal(self, relative_name: str, value: BaseModel) -> Path:
+        relative = _validate_relative_name(relative_name)
+        if relative in _RESERVED_MARKERS:
+            raise R002CacheError("completion_marker_requires_publish")
+        validated, data = self._validated_control(relative, value)
+        path = self._replace_bytes(relative, data, create_only=False)
+        expected = _model_for_name(relative)
+        if expected is None:
+            raise R002CacheError("model_type_mismatch")
+        try:
+            reopened = self._read_model_internal(relative, expected)
+        except R002CacheError:
+            raise R002CacheError("cache_state_unknown") from None
+        if reopened != validated or _fixed_canonical_bytes(reopened, expected) != data:
+            raise R002CacheError("cache_state_unknown")
+        return path
 
     def replace_model(self, relative_name: str, value: BaseModel) -> Path:
         """Atomically replace one typed local control, never a completion marker."""
         try:
-            relative = _validate_relative_name(relative_name)
-            if relative in _RESERVED_MARKERS:
-                raise R002CacheError("completion_marker_requires_publish")
-            validated, data = self._validated_control(relative, value)
-            path = self._replace_bytes(relative, data, create_only=False)
-            expected = _model_for_name(relative)
-            if expected is None:
-                raise R002CacheError("model_type_mismatch")
-            try:
-                reopened = self._read_model_internal(relative, expected)
-            except R002CacheError:
-                raise R002CacheError("cache_state_unknown") from None
-            if reopened != validated or _fixed_canonical_bytes(reopened, expected) != data:
-                raise R002CacheError("cache_state_unknown")
-            return path
+            return self._replace_model_public_internal(relative_name, value)
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_write_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_write_failed"
+            del caught
         del relative_name, value
         _raise_public(reason)
 
+    def _read_bytes_public_internal(self, relative_name: str, expected_sha256: str | None) -> bytes:
+        relative = _validate_relative_name(relative_name)
+        if relative in _RESERVED_MARKERS:
+            raise R002CacheError("completion_marker_requires_publish")
+        if relative in _STREAMED_ARTIFACTS:
+            raise R002CacheError("model_type_mismatch")
+        if expected_sha256 is not None and (
+            type(expected_sha256) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        ):
+            raise R002CacheError("referenced_object_mismatch")
+        return self._read_bytes_internal(relative, expected_sha256=expected_sha256)
+
     def read_bytes(self, relative_name: str, *, expected_sha256: str | None = None) -> bytes:
         try:
-            relative = _validate_relative_name(relative_name)
-            if relative in _RESERVED_MARKERS:
-                raise R002CacheError("completion_marker_requires_publish")
-            if relative in _STREAMED_ARTIFACTS:
-                raise R002CacheError("model_type_mismatch")
-            if expected_sha256 is not None and (
-                type(expected_sha256) is not str
-                or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
-            ):
-                raise R002CacheError("referenced_object_mismatch")
-            return self._read_bytes_internal(relative, expected_sha256=expected_sha256)
+            return self._read_bytes_public_internal(relative_name, expected_sha256)
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_read_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_read_failed"
+            del caught
         del relative_name, expected_sha256
         _raise_public(reason)
 
+    def _read_model_public_internal(self, relative_name: str, model_type: type[T]) -> T:
+        relative = _validate_relative_name(relative_name)
+        if relative in _RESERVED_MARKERS:
+            raise R002CacheError("completion_marker_requires_publish")
+        expected: type[BaseModel] | None
+        if relative.startswith("rows/"):
+            expected = SWEbenchVerifiedRow
+        elif relative == "annotation-universe.json":
+            expected = R002AnnotationUniverse
+        elif relative == "annotation-review.json":
+            expected = R002AnnotationReview
+        else:
+            expected = _model_for_name(relative)
+        if model_type is not expected:
+            raise R002CacheError("model_type_mismatch")
+        if relative == "annotation-review.json":
+            with self._annotation_lock():
+                review = self._read_model_internal(relative, R002AnnotationReview)
+                universe = self._read_model_internal(
+                    "annotation-universe.json", R002AnnotationUniverse
+                )
+                if (
+                    canonical_sha256(universe) != review.annotation_universe_sha256
+                    or universe.source_manifest_sha256 != review.source_manifest_sha256
+                    or universe.criteria_set_sha256 != review.criteria_set_sha256
+                    or universe.candidate_count != len(review.items)
+                    or tuple(universe.candidate_keys) != tuple(item.key for item in review.items)
+                ):
+                    raise R002CacheError("annotation_pair_mismatch")
+                return review  # type: ignore[return-value]
+        return self._read_model_internal(relative, model_type)
+
     def read_model(self, relative_name: str, model_type: type[T]) -> T:
         try:
-            relative = _validate_relative_name(relative_name)
-            if relative in _RESERVED_MARKERS:
-                raise R002CacheError("completion_marker_requires_publish")
-            expected: type[BaseModel] | None
-            if relative.startswith("rows/"):
-                expected = SWEbenchVerifiedRow
-            elif relative == "annotation-universe.json":
-                expected = R002AnnotationUniverse
-            elif relative == "annotation-review.json":
-                expected = R002AnnotationReview
-            else:
-                expected = _model_for_name(relative)
-            if model_type is not expected:
-                raise R002CacheError("model_type_mismatch")
-            if relative == "annotation-review.json":
-                with self._annotation_lock():
-                    review = self._read_model_internal(relative, R002AnnotationReview)
-                    universe = self._read_model_internal(
-                        "annotation-universe.json", R002AnnotationUniverse
-                    )
-                    if (
-                        canonical_sha256(universe) != review.annotation_universe_sha256
-                        or universe.source_manifest_sha256 != review.source_manifest_sha256
-                        or universe.criteria_set_sha256 != review.criteria_set_sha256
-                        or universe.candidate_count != len(review.items)
-                        or tuple(universe.candidate_keys)
-                        != tuple(item.key for item in review.items)
-                    ):
-                        raise R002CacheError("annotation_pair_mismatch")
-                    return review  # type: ignore[return-value]
-            return self._read_model_internal(relative, model_type)
+            return self._read_model_public_internal(relative_name, model_type)
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_read_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_read_failed"
+            del caught
         del relative_name, model_type
         _raise_public(reason)
 
@@ -964,22 +1096,27 @@ class R002Cache:
         self._verify_criteria_source_index(index)
         return index
 
+    def _publish_criteria_source_index_internal(self, index: R002CriteriaSourceIndex) -> Path:
+        validated, data = _revalidate_instance(index, R002CriteriaSourceIndex)
+        self._verify_criteria_source_index(validated)
+        path = self._replace_bytes("criteria-source-index.json", data, create_only=False)
+        try:
+            reopened = self._load_criteria_source_index_internal()
+        except R002CacheError:
+            raise R002CacheError("cache_state_unknown") from None
+        if reopened != validated:
+            raise R002CacheError("cache_state_unknown")
+        return path
+
     def publish_criteria_source_index(self, index: R002CriteriaSourceIndex) -> Path:
         try:
-            validated, data = _revalidate_instance(index, R002CriteriaSourceIndex)
-            self._verify_criteria_source_index(validated)
-            path = self._replace_bytes("criteria-source-index.json", data, create_only=False)
-            try:
-                reopened = self._load_criteria_source_index_internal()
-            except R002CacheError:
-                raise R002CacheError("cache_state_unknown") from None
-            if reopened != validated:
-                raise R002CacheError("cache_state_unknown")
-            return path
+            return self._publish_criteria_source_index_internal(index)
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_write_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_write_failed"
+            del caught
         del index
         _raise_public(reason)
 
@@ -988,8 +1125,10 @@ class R002Cache:
             return self._load_criteria_source_index_internal()
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_read_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_read_failed"
+            del caught
         _raise_public(reason)
 
     def _verify_cache_index(self, index: R002CacheIndex) -> None:
@@ -1046,22 +1185,27 @@ class R002Cache:
         self._verify_cache_index(index)
         return index
 
+    def _publish_index_internal(self, index: R002CacheIndex) -> Path:
+        validated, data = _revalidate_instance(index, R002CacheIndex)
+        self._verify_cache_index(validated)
+        path = self._replace_bytes("cache-index.json", data, create_only=False)
+        try:
+            reopened = self._load_index_internal()
+        except R002CacheError:
+            raise R002CacheError("cache_state_unknown") from None
+        if reopened != validated:
+            raise R002CacheError("cache_state_unknown")
+        return path
+
     def publish_index(self, index: R002CacheIndex) -> Path:
         try:
-            validated, data = _revalidate_instance(index, R002CacheIndex)
-            self._verify_cache_index(validated)
-            path = self._replace_bytes("cache-index.json", data, create_only=False)
-            try:
-                reopened = self._load_index_internal()
-            except R002CacheError:
-                raise R002CacheError("cache_state_unknown") from None
-            if reopened != validated:
-                raise R002CacheError("cache_state_unknown")
-            return path
+            return self._publish_index_internal(index)
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_write_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_write_failed"
+            del caught
         del index
         _raise_public(reason)
 
@@ -1070,8 +1214,10 @@ class R002Cache:
             return self._load_index_internal()
         except R002CacheError as caught:
             reason = _caught_reason(caught, "cache_read_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "cache_read_failed"
+            del caught
         _raise_public(reason)
 
     @contextmanager
@@ -1138,7 +1284,9 @@ class R002Cache:
         limit: int,
     ) -> T:
         with self._open_root() as root_fd:
-            initial_destination = self._preflight_replace_destination(root_fd, relative_name)
+            initial_destination = self._preflight_replace_destination(
+                root_fd, relative_name, relative_name
+            )
             temp_name, fd = self._new_temp(root_fd)
             created = True
             try:
@@ -1150,7 +1298,9 @@ class R002Cache:
                     raise R002CacheError("cache_state_unknown")
                 data = self._read_checked(root_fd, temp_name, max_bytes=limit)
                 value = _decode_canonical_model(data, model_type)
-                current_destination = self._preflight_replace_destination(root_fd, relative_name)
+                current_destination = self._preflight_replace_destination(
+                    root_fd, relative_name, relative_name
+                )
                 if current_destination != initial_destination:
                     raise R002CacheError("cache_replace_failed")
                 try:
@@ -1163,7 +1313,11 @@ class R002Cache:
                     created = False
                 except OSError:
                     reason = self._replace_failure_reason(
-                        root_fd, relative_name, temp_name, initial_destination
+                        root_fd,
+                        relative_name,
+                        temp_name,
+                        relative_name,
+                        initial_destination,
                     )
                     created = False
                     raise R002CacheError(reason) from None
@@ -1293,8 +1447,10 @@ class R002Cache:
             )
         except R002CacheError as caught:
             reason = _caught_reason(caught, "annotation_stream_invalid")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "annotation_stream_invalid"
+            del caught
         del source_manifest_sha256, criteria_set_sha256, candidate_count, ordered_key_factory
         _raise_public(reason)
 
@@ -1424,8 +1580,10 @@ class R002Cache:
             )
         except R002CacheError as caught:
             reason = _caught_reason(caught, "annotation_pair_mismatch")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "annotation_pair_mismatch"
+            del caught
         del (
             source_manifest_sha256,
             criteria_set_sha256,
@@ -1467,8 +1625,10 @@ class R002Cache:
             handle = self._open_scratch_internal()
         except R002CacheError as caught:
             reason = _caught_reason(caught, "scratch_failed")
-        except Exception:
+            del caught
+        except Exception as caught:
             reason = "scratch_failed"
+            del caught
         else:
             try:
                 yield handle
