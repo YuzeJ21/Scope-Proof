@@ -77,10 +77,11 @@ def _line_terms(content: str) -> set[str]:
     return terms
 
 
-def _evidence_type(file: ChangedFile) -> EvidenceType:
-    path = PurePosixPath(file.path)
+def classify_changed_path_evidence_type(path_value: str) -> EvidenceType:
+    """Classify a changed path using the established retrieval rules."""
+    path = PurePosixPath(path_value)
     normalized_parts = tuple(part.casefold() for part in path.parts)
-    lower_path = file.path.casefold()
+    lower_path = path_value.casefold()
     name = path.name.casefold()
     if (
         any(part in {"test", "tests"} for part in normalized_parts)
@@ -97,6 +98,10 @@ def _evidence_type(file: ChangedFile) -> EvidenceType:
     if any(marker in lower_path for marker in ("openapi", "schema", "contract")):
         return EvidenceType.CONTRACT
     return EvidenceType.IMPLEMENTATION
+
+
+def _evidence_type(file: ChangedFile) -> EvidenceType:
+    return classify_changed_path_evidence_type(file.path)
 
 
 def _permalink(

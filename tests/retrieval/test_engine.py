@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from scopeproof_core.retrieval.engine import retrieve_evidence
+from scopeproof_core.retrieval.engine import (
+    _evidence_type,
+    classify_changed_path_evidence_type,
+    retrieve_evidence,
+)
 from scopeproof_core.schemas.models import (
     ChangedFile,
     ChangedLine,
@@ -49,6 +53,25 @@ def changed_file(path: str, lines: list[tuple[LineChangeType, int, str]]) -> Cha
             for kind, number, content in lines
         ],
     )
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("tests/test_widget.py", EvidenceType.TEST),
+        ("DOCS/guide.txt", EvidenceType.DOCUMENTATION),
+        ("src/alembic/versions/v1.py", EvidenceType.CONTRACT),
+        ("src/widget.py", EvidenceType.IMPLEMENTATION),
+        ("src/evaluations/widget.py", EvidenceType.IMPLEMENTATION),
+    ],
+)
+def test_public_path_classifier_preserves_existing_file_classifier(
+    path: str, expected: EvidenceType
+) -> None:
+    file = ChangedFile(path=path, status="modified")
+
+    assert classify_changed_path_evidence_type(path) is expected
+    assert _evidence_type(file) is expected
 
 
 def test_retrieval_links_identifier_and_excludes_deleted_lines() -> None:
