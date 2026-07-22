@@ -318,10 +318,33 @@ def test_parser_errors_do_not_chain_input_or_model_details() -> None:
     with pytest.raises(R002DiffError, match="invalid_utf8") as invalid_utf8:
         parse_unified_diff(b"\xff", stream=R002DiffStream.PATCH)
     assert invalid_utf8.value.__cause__ is None
+    assert invalid_utf8.value.__context__ is None
 
     with pytest.raises(R002DiffError, match="model_validation_failed") as invalid_case:
         parse_case_diffs(case_id="not-a-case", patch="", test_patch="")
     assert invalid_case.value.__cause__ is None
+    assert invalid_case.value.__context__ is None
+
+
+def test_public_adapter_validation_failure_has_no_retained_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parsed = parse_case_diffs(
+        case_id="R002-001",
+        patch=_file("src/a.py", "@@ -1 +1 @@\n x\n").decode(),
+        test_patch="",
+    )
+    original_changed_file = r002_diff.ChangedFile
+
+    def invalid_changed_file(**_: object) -> object:
+        return original_changed_file.model_validate({"path": "", "status": "modified"})
+
+    monkeypatch.setattr(r002_diff, "ChangedFile", invalid_changed_file)
+    with pytest.raises(R002DiffError, match="model_validation_failed") as invalid_adapter:
+        parsed_case_to_changed_files(parsed)
+
+    assert invalid_adapter.value.__cause__ is None
+    assert invalid_adapter.value.__context__ is None
 
 
 def test_diff_error_reason_allowlist_is_exact_and_closed() -> None:
@@ -360,7 +383,7 @@ def test_diff_error_reason_allowlist_is_exact_and_closed() -> None:
         for node in ast.walk(source)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
-        and node.func.id == "R002DiffError"
+        and node.func.id in {"R002DiffError", "_fresh_diff_error"}
         and node.args
         and isinstance(node.args[0], ast.Constant)
         and isinstance(node.args[0].value, str)

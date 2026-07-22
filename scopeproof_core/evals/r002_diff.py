@@ -68,6 +68,11 @@ class R002DiffError(R002Error):
     )
 
 
+def _fresh_diff_error(reason: str) -> R002DiffError:
+    """Build a stable error that can be raised after exception context has ended."""
+    return R002DiffError(reason)
+
+
 def _raise_budget_error(reason: str) -> None:
     if reason == "file_limit":
         raise R002DiffError("file_limit")
@@ -129,7 +134,8 @@ def _validate_path(path: str, *, limits: R002DiffLimits) -> str:
     try:
         return validate_r002_logical_path(path)
     except ValueError:
-        raise R002DiffError("invalid_path") from None
+        error = _fresh_diff_error("invalid_path")
+    raise error
 
 
 def _metadata_error(record: str) -> None:
@@ -241,7 +247,11 @@ def _parse_unified_diff_files(
     try:
         records = normalized.decode("utf-8").split("\n")
     except UnicodeDecodeError:
-        raise R002DiffError("invalid_utf8") from None
+        error = _fresh_diff_error("invalid_utf8")
+    else:
+        error = None
+    if error is not None:
+        raise error
     if records and records[-1] == "":
         records.pop()
 
@@ -357,7 +367,8 @@ def _parse_unified_diff_files(
         ordered_files = tuple(sorted(files, key=lambda item: item.path))
         return ordered_files
     except ValidationError:
-        raise R002DiffError("model_validation_failed") from None
+        error = _fresh_diff_error("model_validation_failed")
+    raise error
 
 
 def parse_unified_diff(
@@ -383,7 +394,8 @@ def parse_unified_diff(
             diff_line_count=budget.lines,
         )
     except ValidationError:
-        raise R002DiffError("model_validation_failed") from None
+        error = _fresh_diff_error("model_validation_failed")
+    raise error
 
 
 def parse_case_diffs(
@@ -398,7 +410,11 @@ def parse_case_diffs(
         patch_raw = patch.encode("utf-8")
         test_patch_raw = test_patch.encode("utf-8")
     except UnicodeEncodeError:
-        raise R002DiffError("invalid_utf8") from None
+        error = _fresh_diff_error("invalid_utf8")
+    else:
+        error = None
+    if error is not None:
+        raise error
     case_budget = _DiffBudget(
         limits=limits,
         file_reason="case_limit",
@@ -432,7 +448,11 @@ def parse_case_diffs(
             disallowed_paths={file.path for file in patch_files},
         )
     except ValidationError:
-        raise R002DiffError("model_validation_failed") from None
+        error = _fresh_diff_error("model_validation_failed")
+    else:
+        error = None
+    if error is not None:
+        raise error
     files = patch_files + test_files
     paths = [file.path for file in files]
     if len(paths) != len(set(paths)):
@@ -443,32 +463,37 @@ def parse_case_diffs(
             files=tuple(sorted(files, key=lambda item: (item.stream.value, item.path))),
         )
     except ValidationError:
-        raise R002DiffError("model_validation_failed") from None
+        error = _fresh_diff_error("model_validation_failed")
+    raise error
 
 
 def parsed_case_to_changed_files(parsed: R002ParsedCase) -> list[ChangedFile]:
     """Adapt parsed patches to the existing retrieval contract without a patch body."""
-    return [
-        ChangedFile(
-            path=file.path,
-            status="modified",
-            additions=file.additions,
-            deletions=file.deletions,
-            changes=file.additions + file.deletions,
-            patch="",
-            lines=[
-                ChangedLine(
-                    change_type=line.change_type,
-                    line_number=(
-                        line.old_line_number
-                        if line.change_type is LineChangeType.REMOVED
-                        else line.new_line_number
-                    ),
-                    content=line.content,
-                )
-                for hunk in file.hunks
-                for line in hunk.lines
-            ],
-        )
-        for file in parsed.files
-    ]
+    try:
+        return [
+            ChangedFile(
+                path=file.path,
+                status="modified",
+                additions=file.additions,
+                deletions=file.deletions,
+                changes=file.additions + file.deletions,
+                patch="",
+                lines=[
+                    ChangedLine(
+                        change_type=line.change_type,
+                        line_number=(
+                            line.old_line_number
+                            if line.change_type is LineChangeType.REMOVED
+                            else line.new_line_number
+                        ),
+                        content=line.content,
+                    )
+                    for hunk in file.hunks
+                    for line in hunk.lines
+                ],
+            )
+            for file in parsed.files
+        ]
+    except ValidationError:
+        error = _fresh_diff_error("model_validation_failed")
+    raise error
