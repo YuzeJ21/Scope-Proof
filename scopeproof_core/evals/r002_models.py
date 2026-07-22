@@ -12,10 +12,20 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    ValidationError,
+    model_validator,
+)
 
+from scopeproof_core.retrieval.engine import _evidence_type
 from scopeproof_core.schemas.models import (
     GITHUB_REPOSITORY_PATTERN,
+    ChangedFile,
     CheckState,
     CIReasonCode,
     Criterion,
@@ -167,7 +177,15 @@ class R002SourceError(R002Error):
 
 
 class R002AnnotationError(R002Error):
-    allowed_reason_codes = frozenset({"criteria_manifest_drift", "candidate_label_upstream_drift"})
+    allowed_reason_codes = frozenset(
+        {
+            "criteria_manifest_drift",
+            "criteria_manifest_context_invalid",
+            "criteria_manifest_projection_drift",
+            "candidate_label_upstream_drift",
+            "annotation_universe_drift",
+        }
+    )
 
 
 class R002Manifest(R002StrictModel):
@@ -861,28 +879,37 @@ class R002CaseResult(R002StrictModel):
         )
         if self.gate_verdict not in {GateVerdict.BLOCKED, GateVerdict.NEEDS_REVIEW}:
             raise ValueError("R-002 case results must be blocked or needs_review")
-        if (
-            not self.gate_reason_codes
-            or tuple(sorted(set(self.gate_reason_codes))) != self.gate_reason_codes
-            or any(not re.fullmatch(r"[a-z0-9_]+", code) for code in self.gate_reason_codes)
-        ):
-            raise ValueError("gate reason codes must be sorted stable codes")
         if any(
             tuple(sorted(set(group))) != group
             or any(re.fullmatch(r"AC-\d{2,}", item) is None for item in group)
             for group in criterion_groups
         ):
             raise ValueError("criterion groups must be sorted unique criterion IDs")
-        if self.gate_verdict is GateVerdict.BLOCKED and not (
-            self.blocking_criteria or self.unresolved_criteria
+        expected_reasons: tuple[str, ...]
+        if self.gate_verdict is GateVerdict.BLOCKED:
+            if self.conditional_criteria or not (
+                self.blocking_criteria or self.unresolved_criteria
+            ):
+                raise ValueError("blocked R-002 cases require blocking or unresolved criteria")
+            expected_reasons = tuple(
+                code
+                for code, criteria in (
+                    ("blocking_criteria", self.blocking_criteria),
+                    ("unresolved_criteria", self.unresolved_criteria),
+                )
+                if criteria
+            )
+        else:
+            if self.blocking_criteria or self.conditional_criteria or self.unresolved_criteria:
+                raise ValueError("needs_review R-002 cases cannot claim criterion gate groups")
+            expected_reasons = ("checks_not_passing", "final_acceptance_required")
+        if self.gate_reason_codes != expected_reasons:
+            raise ValueError("R-002 gate reason codes must match the gate shape")
+        if (
+            self.check_state is not CheckState.UNAVAILABLE
+            or self.ci_reason_code is not CIReasonCode.NO_OBSERVATIONS
         ):
-            raise ValueError("blocked R-002 cases require unresolved criteria")
-        if self.gate_verdict is GateVerdict.NEEDS_REVIEW and not (
-            self.conditional_criteria or self.unresolved_criteria
-        ):
-            raise ValueError("needs_review R-002 cases require unresolved criteria")
-        if self.check_state is not CheckState.UNAVAILABLE:
-            raise ValueError("R-002 case results require unavailable CI")
+            raise ValueError("R-002 case results require unavailable unobserved CI")
         if (
             self.runtime_evidence_count != 0
             or self.resolution_count != 0
@@ -893,12 +920,19 @@ class R002CaseResult(R002StrictModel):
             raise ValueError("R-002 case results cannot contain success or integrity signals")
         if self.limitations != R002_RESULT_LIMITATIONS:
             raise ValueError("R-002 case results require the fixed limitations")
-        if any(
-            candidate.evidence_level not in {EvidenceLevel.E1, EvidenceLevel.E2}
-            or candidate.evidence_type not in R002_STATIC_EVIDENCE_TYPES
-            for candidate in self.retrieved_candidates
-        ):
-            raise ValueError("R-002 candidates must be static E1 or E2 evidence")
+        for candidate in self.retrieved_candidates:
+            planned_type = _evidence_type(ChangedFile(path=candidate.key.path, status="modified"))
+            if candidate.evidence_type is not planned_type:
+                raise ValueError("R-002 candidate type must match its changed path")
+            if candidate.key.stream is R002DiffStream.TEST_PATCH and (
+                candidate.evidence_type is not EvidenceType.TEST
+                or candidate.evidence_level is not EvidenceLevel.E2
+            ):
+                raise ValueError("test_patch candidates must be TEST E2 evidence")
+            if candidate.key.stream is R002DiffStream.PATCH and candidate.evidence_level is not (
+                EvidenceLevel.E2 if planned_type is EvidenceType.TEST else EvidenceLevel.E1
+            ):
+                raise ValueError("patch candidates must match planned evidence level")
         if any(
             item.evidence_type not in R002_STATIC_EVIDENCE_TYPES
             for item in self.missing_explanations
@@ -1019,6 +1053,20 @@ def load_confirmed_criteria(path: Path, manifest_sha256: str) -> R002CriteriaSet
     value = R002CriteriaSet.model_validate_json(path.read_text(encoding="utf-8"))
     if value.source_manifest_sha256 != manifest_sha256:
         raise R002AnnotationError("criteria_manifest_drift")
+    try:
+        manifest = load_source_manifest(path.with_name("source_manifest.json"))
+    except (OSError, ValidationError, R002SourceError) as error:
+        raise R002AnnotationError("criteria_manifest_context_invalid") from error
+    if canonical_sha256(manifest) != manifest_sha256:
+        raise R002AnnotationError("criteria_manifest_drift")
+    criteria_projection = tuple(
+        (case.case_id, case.problem_statement_sha256) for case in value.cases
+    )
+    manifest_projection = tuple(
+        (case.case_id, case.problem_statement_sha256) for case in manifest.cases
+    )
+    if criteria_projection != manifest_projection:
+        raise R002AnnotationError("criteria_manifest_projection_drift")
     return value
 
 
@@ -1031,4 +1079,12 @@ def load_confirmed_labels(
         or value.criteria_set_sha256 != criteria_sha256
     ):
         raise R002AnnotationError("candidate_label_upstream_drift")
+    universe = R002AnnotationUniverse(
+        source_manifest_sha256=value.source_manifest_sha256,
+        criteria_set_sha256=value.criteria_set_sha256,
+        candidate_count=value.annotation_count,
+        candidate_keys=tuple(label.key for label in value.labels),
+    )
+    if canonical_sha256(universe) != value.annotation_universe_sha256:
+        raise R002AnnotationError("annotation_universe_drift")
     return value

@@ -19,6 +19,7 @@ from scopeproof_core.evals.r002_models import (
     R002ParsedDiff,
     R002SourceError,
     R002SourceManifest,
+    canonical_sha256,
     case_projection_sha256,
     load_confirmed_criteria,
     load_confirmed_labels,
@@ -453,3 +454,150 @@ def test_annotation_universe_rejects_duplicate_or_unstable_candidate_keys(mutati
     }
     with pytest.raises(ValidationError):
         R002AnnotationUniverse.model_validate_json(json.dumps(payload))
+
+
+def _write_bound_manifest_and_criteria(
+    tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+):
+    r002_manifest_payload["source"] = deepcopy(r002_models.R002_SOURCE)
+    manifest = R002SourceManifest.model_validate_json(json.dumps(r002_manifest_payload))
+    monkeypatch.setattr(
+        r002_models, "R002_APPROVED_CASES_SHA256", case_projection_sha256(manifest.cases)
+    )
+    manifest_path = tmp_path / "source_manifest.json"
+    manifest_path.write_text(json.dumps(r002_manifest_payload), encoding="utf-8")
+    manifest_hash = canonical_sha256(manifest)
+    r002_criteria_payload["source_manifest_sha256"] = manifest_hash
+    criteria_path = tmp_path / "criteria.json"
+    criteria_path.write_text(json.dumps(r002_criteria_payload), encoding="utf-8")
+    return manifest_path, criteria_path, manifest_hash
+
+
+def test_criteria_loader_binds_its_ordered_problem_hash_projection(
+    tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+):
+    manifest_path, criteria_path, manifest_hash = _write_bound_manifest_and_criteria(
+        tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+    )
+    assert manifest_path.is_file()
+    assert load_confirmed_criteria(criteria_path, manifest_hash).cases[0].case_id == "R002-001"
+
+    mutated = deepcopy(r002_criteria_payload)
+    mutated["cases"][0]["problem_statement_sha256"] = "f" * 64
+    criteria_path.write_text(json.dumps(mutated), encoding="utf-8")
+    with pytest.raises((ValidationError, r002_models.R002AnnotationError)):
+        load_confirmed_criteria(criteria_path, manifest_hash)
+
+    mutated = deepcopy(r002_criteria_payload)
+    mutated["cases"].reverse()
+    criteria_path.write_text(json.dumps(mutated), encoding="utf-8")
+    with pytest.raises((ValidationError, r002_models.R002AnnotationError)):
+        load_confirmed_criteria(criteria_path, manifest_hash)
+
+    manifest_path.unlink()
+    criteria_path.write_text(json.dumps(r002_criteria_payload), encoding="utf-8")
+    with pytest.raises(r002_models.R002AnnotationError):
+        load_confirmed_criteria(criteria_path, manifest_hash)
+
+
+def test_criteria_loader_rejects_manifest_hash_drift(
+    tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+):
+    _, criteria_path, _manifest_hash = _write_bound_manifest_and_criteria(
+        tmp_path, monkeypatch, r002_manifest_payload, r002_criteria_payload
+    )
+    with pytest.raises(r002_models.R002AnnotationError):
+        load_confirmed_criteria(criteria_path, "0" * 64)
+
+
+def test_labels_loader_binds_annotation_universe_key_projection(tmp_path):
+    payload = _label_payload()
+    universe = R002AnnotationUniverse.model_validate_json(
+        json.dumps(
+            {
+                **{
+                    key: payload[key]
+                    for key in (
+                        "pack_id",
+                        "classification",
+                        "eligible_for_stage_1",
+                        "does_not_advance_stage_1",
+                        "target_repository_code_executed",
+                        "source_manifest_sha256",
+                        "criteria_set_sha256",
+                    )
+                },
+                "candidate_count": payload["annotation_count"],
+                "candidate_keys": [label["key"] for label in payload["labels"]],
+            }
+        )
+    )
+    payload["annotation_universe_sha256"] = canonical_sha256(universe)
+    path = tmp_path / "candidate_labels.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert load_confirmed_labels(path, "0" * 64, "1" * 64).annotation_count == 1
+
+    payload["labels"][0]["key"]["path"] = "b.py"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(r002_models.R002AnnotationError):
+        load_confirmed_labels(path, "0" * 64, "1" * 64)
+
+
+def _safe_case_result_payload() -> dict[str, object]:
+    return {
+        "case_id": "R002-001",
+        "repository": "alpha/one",
+        "pr_number": 1,
+        "head_sha": "0" * 40,
+        "criterion_count": 1,
+        "annotation_candidate_count": 1,
+        "retrieved_candidates": [
+            {
+                "key": {
+                    "case_id": "R002-001",
+                    "criterion_id": "AC-01",
+                    "stream": "patch",
+                    "path": "a.py",
+                    "new_line_number": 1,
+                    "normalized_line_sha256": "1" * 64,
+                },
+                "evidence_type": "implementation",
+                "evidence_level": "E1",
+                "hunk_id": 1,
+                "head_file_sha256": "2" * 64,
+                "matching_rule": "rule",
+                "relevance_score": 1.0,
+                "owner_label_relevant": True,
+            }
+        ],
+        "missing_explanations": [],
+        "gate_verdict": "blocked",
+        "gate_reason_codes": ["blocking_criteria"],
+        "blocking_criteria": ["AC-01"],
+        "conditional_criteria": [],
+        "unresolved_criteria": [],
+        "check_state": "unavailable",
+        "ci_reason_code": "no_observations",
+        "runtime_evidence_count": 0,
+        "resolution_count": 0,
+        "final_acceptance": False,
+        "separation_errors": 0,
+        "reference_errors": 0,
+        "limitations": list(r002_models.R002_RESULT_LIMITATIONS),
+    }
+
+
+@pytest.mark.parametrize("mutation", ["ci_reason", "path_type", "stream_type_level", "gate_shape"])
+def test_case_result_rejects_ci_classifier_and_gate_shape_mutations(mutation):
+    payload = _safe_case_result_payload()
+    if mutation == "ci_reason":
+        payload["ci_reason_code"] = "successful_check_runs"
+    elif mutation == "path_type":
+        payload["retrieved_candidates"][0]["evidence_type"] = "test"
+        payload["retrieved_candidates"][0]["evidence_level"] = "E2"
+    elif mutation == "stream_type_level":
+        payload["retrieved_candidates"][0]["key"]["stream"] = "test_patch"
+    else:
+        payload["gate_reason_codes"] = ["arbitrary"]
+    with pytest.raises(ValidationError):
+        R002CaseResult.model_validate_json(json.dumps(payload))
