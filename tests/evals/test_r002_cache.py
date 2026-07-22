@@ -1535,6 +1535,70 @@ def test_scratch_preclose_failure_drops_all_public_handle_references(
     assert not descriptor_was_open
 
 
+def test_scratch_fdopen_transfer_failure_does_not_close_reused_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_close = os.close
+    real_close_fd = cache_module._close_fd
+    replacement_fd = -1
+    post_transfer_close_attempted = False
+    filler_fds: list[int] = []
+    native_detail = "scratch-fdopen-transfer-native-detail"
+
+    def consuming_fdopen_then_raising(fd: int, *args, **kwargs):
+        nonlocal replacement_fd
+        while not filler_fds or filler_fds[-1] <= fd:
+            filler_fds.append(os.open("/dev/null", os.O_RDONLY))
+        real_close(fd)
+        replacement_fd = os.open("/dev/null", os.O_RDONLY)
+        assert replacement_fd == fd
+        raise OSError(errno.EIO, native_detail)
+
+    class FaultingOS:
+        def __getattr__(self, name):
+            return getattr(os, name)
+
+        def fdopen(self, *args, **kwargs):
+            return consuming_fdopen_then_raising(*args, **kwargs)
+
+    def recording_close_fd(fd: int) -> bool:
+        nonlocal post_transfer_close_attempted
+        if fd == replacement_fd:
+            post_transfer_close_attempted = True
+        return real_close_fd(fd)
+
+    monkeypatch.setattr(cache_module, "os", FaultingOS())
+    monkeypatch.setattr(cache_module, "_close_fd", recording_close_fd)
+    try:
+        with (
+            pytest.raises(R002CacheError, match="scratch_failed") as caught,
+            R002Cache(tmp_path / "cache").open_unlinked_scratch(),
+        ):
+            pass
+        assert caught.value.args == ("scratch_failed",)
+        assert type(caught.value.args[0]) is str
+        _assert_public_error_is_sanitized(caught.value, (native_detail,))
+
+        traceback = caught.value.__traceback__
+        while traceback is not None:
+            if Path(traceback.tb_frame.f_code.co_filename).name == "r002_cache.py":
+                assert not {"duplicate", "transferred"} & traceback.tb_frame.f_locals.keys()
+            traceback = traceback.tb_next
+
+        assert replacement_fd >= 0
+        assert not post_transfer_close_attempted
+        assert stat.S_ISCHR(os.fstat(replacement_fd).st_mode)
+    finally:
+        if replacement_fd >= 0:
+            with suppress(OSError):
+                real_close(replacement_fd)
+        for filler_fd in filler_fds:
+            with suppress(OSError):
+                real_close(filler_fd)
+
+
 def test_scratch_closes_duplicate_when_root_close_reports_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1791,10 +1791,12 @@ class R002Cache:
             if duplicate >= 0 and not _close_fd(duplicate):
                 raise R002CacheError("scratch_failed") from None
             raise
+        transferred = duplicate
+        duplicate = -1
         try:
-            return os.fdopen(duplicate, "w+b", buffering=0)
-        except Exception:
-            _close_fd(duplicate)
+            return os.fdopen(transferred, "w+b", buffering=0)
+        except Exception as caught:
+            del caught, transferred
             raise R002CacheError("scratch_failed") from None
 
     @contextmanager
