@@ -17,8 +17,10 @@ from scopeproof_core.evals.r002_diff import parse_case_diffs
 from scopeproof_core.evals.r002_models import (
     R002CaseManifest,
     R002DiffStream,
+    R002HeadFileLimits,
     R002ParsedCase,
     R002VerifiedCaseLines,
+    R002VerifiedLine,
 )
 from scopeproof_core.evals.r002_verify import (
     R002ReferenceError,
@@ -52,6 +54,42 @@ diff --git a/tests/test_widget.py b/tests/test_widget.py
 +def test_added():
 +    assert True
 """
+
+
+class _SpoofingBytes(bytes):
+    def __len__(self) -> int:
+        return 0
+
+    def replace(self, old: bytes, new: bytes, count: int = -1) -> bytes:
+        return b"before\nadded  \nafter\n"
+
+
+class _ThrowingLengthBytes(bytes):
+    def __len__(self) -> int:
+        raise RuntimeError("TRACE_BYTES_LEN_SENTINEL")
+
+
+class _ThrowingReplaceBytes(bytes):
+    def replace(self, old: bytes, new: bytes, count: int = -1) -> bytes:
+        raise RuntimeError("TRACE_BYTES_REPLACE_SENTINEL")
+
+
+class _PathStringSubclass(str):
+    pass
+
+
+class _VerifiedLineSubclass(R002VerifiedLine):
+    pass
+
+
+class _ThrowingInteger(int):
+    def __lt__(self, other: object) -> bool:
+        raise RuntimeError("TRACE_INTEGER_SENTINEL")
+
+
+class _ThrowingLimit:
+    def __lt__(self, other: object) -> bool:
+        raise RuntimeError("TRACE_LIMIT_SENTINEL")
 
 
 @pytest.fixture
@@ -223,6 +261,84 @@ def test_head_mapping_must_be_exact_canonical_bytes_before_budgeting(
         verify_case_head_files(case=r002_case_manifest, parsed=parsed_case, head_file_bytes=files)  # type: ignore[arg-type]
 
 
+def test_bytes_subclass_cannot_spoof_verified_head_content(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+) -> None:
+    spoofed = {
+        **head_files,
+        "src/widget.py": _SpoofingBytes(b"candidate line is absent\n"),
+    }
+
+    with pytest.raises(R002ReferenceError, match="head_mapping_invalid") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes=spoofed,
+        )
+
+    assert captured.value.args == ("head_mapping_invalid",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    ("value", "sentinel"),
+    [
+        (_ThrowingLengthBytes(b"before\nadded  \nafter\n"), "TRACE_BYTES_LEN_SENTINEL"),
+        (
+            _ThrowingReplaceBytes(b"before\nadded  \nafter\n"),
+            "TRACE_BYTES_REPLACE_SENTINEL",
+        ),
+    ],
+)
+def test_bytes_subclass_hooks_fail_closed_without_traceback_input(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+    value: bytes,
+    sentinel: str,
+) -> None:
+    with pytest.raises(R002ReferenceError, match="head_mapping_invalid") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes={**head_files, "src/widget.py": value},
+        )
+
+    error = captured.value
+    trace = traceback.TracebackException.from_exception(error, capture_locals=True)
+    frames = [frame for frame in trace.stack if frame.filename == r002_verify.__file__]
+    assert error.args == ("head_mapping_invalid",)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert sentinel not in "\n".join(
+        local for frame in frames for local in (frame.locals or {}).values()
+    )
+
+
+def test_path_string_subclass_is_not_an_exact_canonical_mapping_key(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+) -> None:
+    subclass_keyed = {
+        _PathStringSubclass(path): value for path, value in head_files.items()
+    }
+
+    with pytest.raises(R002ReferenceError, match="head_mapping_invalid") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes=subclass_keyed,
+        )
+
+    assert captured.value.args == ("head_mapping_invalid",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
 def test_head_mapping_is_snapshotted_before_budgeting_and_line_checks(
     r002_case_manifest: R002CaseManifest,
     parsed_case: R002ParsedCase,
@@ -353,6 +469,43 @@ def test_case_and_parsed_identity_must_match_before_head_verification(
         )
 
 
+def test_forged_parsed_line_hash_is_revalidated_before_output(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+) -> None:
+    forged_hash = "9" * 64
+    parsed_file = parsed_case.files[0]
+    parsed_hunk = parsed_file.hunks[0]
+    forged_line = parsed_hunk.lines[0].model_copy(
+        update={"normalized_line_sha256": forged_hash}
+    )
+    forged_hunk = parsed_hunk.model_copy(
+        update={"lines": (forged_line, *parsed_hunk.lines[1:])}
+    )
+    forged_file = parsed_file.model_copy(update={"hunks": (forged_hunk,)})
+    forged_case = parsed_case.model_copy(
+        update={"files": (forged_file, *parsed_case.files[1:])}
+    )
+
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as captured:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=forged_case,
+            head_file_bytes=head_files,
+        )
+
+    error = captured.value
+    trace = traceback.TracebackException.from_exception(error, capture_locals=True)
+    frames = [frame for frame in trace.stack if frame.filename == r002_verify.__file__]
+    assert error.args == ("model_validation_failed",)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert forged_hash not in "\n".join(
+        local for frame in frames for local in (frame.locals or {}).values()
+    )
+
+
 def test_test_stream_must_remain_test_classified(r002_case_manifest: R002CaseManifest) -> None:
     parsed = parse_case_diffs(
         case_id=r002_case_manifest.case_id,
@@ -399,6 +552,50 @@ def test_candidate_permalink_rejects_invalid_direct_inputs(
 ) -> None:
     with pytest.raises(R002ReferenceError, match="permalink_input_invalid"):
         candidate_permalink(r002_case_manifest, path, line)
+
+
+@pytest.mark.parametrize(
+    ("update", "sentinel"),
+    [
+        ({"repository": "TRACE_CASE_REPOSITORY_SENTINEL"}, "TRACE_CASE_REPOSITORY_SENTINEL"),
+        ({"verified_pr_head_sha": "TRACE_CASE_HEAD_SENTINEL"}, "TRACE_CASE_HEAD_SENTINEL"),
+    ],
+)
+def test_candidate_permalink_revalidates_bypassed_case_fields(
+    r002_case_manifest: R002CaseManifest,
+    update: dict[str, object],
+    sentinel: str,
+) -> None:
+    malformed = r002_case_manifest.model_copy(update=update)
+    with pytest.raises(R002ReferenceError, match="permalink_input_invalid") as captured:
+        candidate_permalink(malformed, "src/widget.py", 1)
+
+    error = captured.value
+    trace = traceback.TracebackException.from_exception(error, capture_locals=True)
+    frames = [frame for frame in trace.stack if frame.filename == r002_verify.__file__]
+    assert error.args == ("permalink_input_invalid",)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert sentinel not in "\n".join(
+        local for frame in frames for local in (frame.locals or {}).values()
+    )
+
+
+def test_candidate_permalink_closes_overridden_integer_operations(
+    r002_case_manifest: R002CaseManifest,
+) -> None:
+    with pytest.raises(R002ReferenceError, match="permalink_input_invalid") as captured:
+        candidate_permalink(r002_case_manifest, "src/widget.py", _ThrowingInteger(1))
+
+    error = captured.value
+    trace = traceback.TracebackException.from_exception(error, capture_locals=True)
+    frames = [frame for frame in trace.stack if frame.filename == r002_verify.__file__]
+    assert error.args == ("permalink_input_invalid",)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert "TRACE_INTEGER_SENTINEL" not in "\n".join(
+        local for frame in frames for local in (frame.locals or {}).values()
+    )
 
 
 @pytest.mark.parametrize(
@@ -492,6 +689,102 @@ def test_evidence_sidecar_must_cross_bind_case_head_and_repository(
             verify_evidence_reference(
                 case=r002_case_manifest, evidence=evidence, verified_lines=sidecar
             )
+
+
+def test_state_changing_verified_line_container_cannot_inject_unchecked_line(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+) -> None:
+    target = next(
+        line
+        for line in verified_case_lines.lines
+        if line.path == "src/widget.py" and line.new_line_number == 2
+    )
+    injected = target.model_copy(update={"normalized_line_sha256": "9" * 64})
+
+    class FlippingLines:
+        def __init__(self) -> None:
+            self.iterations = 0
+
+        def __iter__(self):  # type: ignore[no-untyped-def]
+            self.iterations += 1
+            if self.iterations == 1:
+                return iter(verified_case_lines.lines)
+            return iter((injected,))
+
+    malformed = R002VerifiedCaseLines.model_construct(
+        case_id=verified_case_lines.case_id,
+        head_sha=verified_case_lines.head_sha,
+        lines=FlippingLines(),
+    )
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as captured:
+        verify_evidence_reference(
+            case=r002_case_manifest,
+            evidence=evidence_item(case=r002_case_manifest),
+            verified_lines=malformed,
+        )
+
+    assert captured.value.args == ("model_validation_failed",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+def test_verified_sidecar_rejects_nested_model_subclasses(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+) -> None:
+    first = _VerifiedLineSubclass.model_validate(
+        verified_case_lines.lines[0].model_dump(mode="python")
+    )
+    malformed = R002VerifiedCaseLines.model_construct(
+        case_id=verified_case_lines.case_id,
+        head_sha=verified_case_lines.head_sha,
+        lines=(first, *verified_case_lines.lines[1:]),
+    )
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as captured:
+        verify_evidence_reference(
+            case=r002_case_manifest,
+            evidence=evidence_item(case=r002_case_manifest),
+            verified_lines=malformed,
+        )
+
+    assert captured.value.args == ("model_validation_failed",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+def test_malformed_limits_and_evidence_are_revalidated_at_public_boundaries(
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+    verified_case_lines: R002VerifiedCaseLines,
+) -> None:
+    malformed_limits = R002HeadFileLimits().model_copy(
+        update={"bytes_per_case": _ThrowingLimit()}
+    )
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as limits_error:
+        verify_case_head_files(
+            case=r002_case_manifest,
+            parsed=parsed_case,
+            head_file_bytes=head_files,
+            limits=malformed_limits,
+        )
+    assert limits_error.value.args == ("model_validation_failed",)
+    assert limits_error.value.__cause__ is None
+    assert limits_error.value.__context__ is None
+
+    malformed_evidence = evidence_item(case=r002_case_manifest).model_copy(
+        update={"line_start": "2"}
+    )
+    with pytest.raises(R002ReferenceError, match="model_validation_failed") as evidence_error:
+        verify_evidence_reference(
+            case=r002_case_manifest,
+            evidence=malformed_evidence,
+            verified_lines=verified_case_lines,
+        )
+    assert evidence_error.value.args == ("model_validation_failed",)
+    assert evidence_error.value.__cause__ is None
+    assert evidence_error.value.__context__ is None
 
 
 def test_malformed_verified_permalink_fails_closed(

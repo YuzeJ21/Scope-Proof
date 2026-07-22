@@ -7,14 +7,13 @@ from hashlib import sha256
 from typing import NoReturn
 from urllib.parse import quote
 
-from pydantic import ValidationError
-
 from scopeproof_core.evals.r002_models import (
     R002CandidateLineKey,
     R002CaseManifest,
     R002Error,
     R002HeadFileLimits,
     R002ParsedCase,
+    R002ParsedFile,
     R002VerifiedCaseLines,
     R002VerifiedLine,
     validate_r002_logical_path,
@@ -73,6 +72,56 @@ def _raise_public_reference_error(reason: str) -> NoReturn:
     raise R002ReferenceError(reason)
 
 
+def _validated_case_snapshot(
+    case: R002CaseManifest, *, reason: str
+) -> R002CaseManifest:
+    if type(case) is not R002CaseManifest:
+        raise R002ReferenceError(reason)
+    try:
+        snapshot = R002CaseManifest.model_validate(
+            case.model_dump(mode="python", warnings=False), strict=True
+        )
+    except Exception:
+        error = _fresh_reference_error(reason)
+    else:
+        error = None
+    if error is not None:
+        raise error
+    return snapshot
+
+
+def _validated_limits_snapshot(limits: R002HeadFileLimits) -> R002HeadFileLimits:
+    if type(limits) is not R002HeadFileLimits:
+        raise R002ReferenceError("model_validation_failed")
+    try:
+        snapshot = R002HeadFileLimits.model_validate(
+            limits.model_dump(mode="python", warnings=False), strict=True
+        )
+    except Exception:
+        error = _fresh_reference_error("model_validation_failed")
+    else:
+        error = None
+    if error is not None:
+        raise error
+    return snapshot
+
+
+def _validated_evidence_snapshot(evidence: EvidenceItem) -> EvidenceItem:
+    if type(evidence) is not EvidenceItem:
+        raise R002ReferenceError("model_validation_failed")
+    try:
+        snapshot = EvidenceItem.model_validate(
+            evidence.model_dump(mode="python", warnings=False), strict=True
+        )
+    except Exception:
+        error = _fresh_reference_error("model_validation_failed")
+    else:
+        error = None
+    if error is not None:
+        raise error
+    return snapshot
+
+
 def _normalized_file_lines(raw: bytes, *, max_bytes: int) -> list[str]:
     if len(raw) > max_bytes:
         raise R002ReferenceError("head_file_limit")
@@ -90,14 +139,8 @@ def _normalized_file_lines(raw: bytes, *, max_bytes: int) -> list[str]:
     return values
 
 
-def _validate_permalink_inputs(case: R002CaseManifest, path: str, line_number: int) -> None:
-    if not isinstance(case, R002CaseManifest):
-        raise R002ReferenceError("permalink_input_invalid")
-    if (
-        not isinstance(path, str)
-        or isinstance(line_number, bool)
-        or not isinstance(line_number, int)
-    ):
+def _validate_permalink_inputs(path: str, line_number: int) -> None:
+    if type(path) is not str or type(line_number) is not int:
         raise R002ReferenceError("permalink_input_invalid")
     if line_number < 1:
         raise R002ReferenceError("permalink_input_invalid")
@@ -111,8 +154,10 @@ def _validate_permalink_inputs(case: R002CaseManifest, path: str, line_number: i
         raise error or R002ReferenceError("permalink_input_invalid")
 
 
-def _candidate_permalink(case: R002CaseManifest, path: str, line_number: int) -> str:
-    _validate_permalink_inputs(case, path, line_number)
+def _candidate_permalink_from_snapshot(
+    case: R002CaseManifest, path: str, line_number: int
+) -> str:
+    _validate_permalink_inputs(path, line_number)
     repository = quote(case.repository, safe="/")
     head = quote(case.verified_pr_head_sha, safe="")
     logical_path = quote(path, safe="/")
@@ -122,12 +167,19 @@ def _candidate_permalink(case: R002CaseManifest, path: str, line_number: int) ->
     )
 
 
+def _candidate_permalink(case: R002CaseManifest, path: str, line_number: int) -> str:
+    snapshot = _validated_case_snapshot(case, reason="permalink_input_invalid")
+    return _candidate_permalink_from_snapshot(snapshot, path, line_number)
+
+
 def candidate_permalink(case: R002CaseManifest, path: str, line_number: int) -> str:
     """Return the sole canonical permalink form accepted by R-002."""
     try:
         return _candidate_permalink(case, path, line_number)
     except R002ReferenceError as caught:
         reason = caught.reason_code
+    except Exception:
+        reason = "permalink_input_invalid"
     del case, path, line_number
     _raise_public_reference_error(reason)
 
@@ -148,15 +200,34 @@ def _assert_test_stream_separation(parsed: R002ParsedCase) -> None:
             raise R002ReferenceError("test_stream_not_test_evidence")
 
 
+def _validated_parsed_snapshot(parsed: R002ParsedCase) -> R002ParsedCase:
+    if type(parsed) is not R002ParsedCase or type(parsed.files) is not tuple:
+        raise R002ReferenceError("model_validation_failed")
+    if any(type(file) is not R002ParsedFile for file in parsed.files):
+        raise R002ReferenceError("model_validation_failed")
+    _assert_test_stream_separation(parsed)
+    try:
+        snapshot = R002ParsedCase.model_validate(
+            parsed.model_dump(mode="python", warnings=False), strict=True
+        )
+    except Exception:
+        error = _fresh_reference_error("model_validation_failed")
+    else:
+        error = None
+    if error is not None:
+        raise error
+    return snapshot
+
+
 def assert_test_stream_separation(parsed: R002ParsedCase) -> None:
     """Require test-patch paths to remain test evidence and streams disjoint."""
     error: R002ReferenceError | None = None
     try:
-        _assert_test_stream_separation(parsed)
-    except (AttributeError, TypeError, ValueError, ValidationError):
-        error = _fresh_reference_error("model_validation_failed")
+        _validated_parsed_snapshot(parsed)
     except R002ReferenceError as caught:
         error = _fresh_reference_error(caught.reason_code)
+    except Exception:
+        error = _fresh_reference_error("model_validation_failed")
     del parsed
     if error is not None:
         _raise_public_reference_error(error.reason_code)
@@ -175,14 +246,8 @@ def _validate_head_mapping(
         error = None
     if error is not None:
         raise error
-    required_paths = {file.path for file in parsed.files}
-    supplied_paths = set(supplied)
-    if required_paths - supplied_paths:
-        raise R002ReferenceError("head_file_missing")
-    if supplied_paths != required_paths:
-        raise R002ReferenceError("head_mapping_invalid")
     for path, value in supplied.items():
-        if not isinstance(path, str) or not isinstance(value, bytes):
+        if type(path) is not str or type(value) is not bytes:
             raise R002ReferenceError("head_mapping_invalid")
         try:
             valid_path = validate_r002_logical_path(path)
@@ -192,6 +257,12 @@ def _validate_head_mapping(
             error = None
         if error is not None or valid_path != path:
             raise error or R002ReferenceError("head_mapping_invalid")
+    required_paths = {file.path for file in parsed.files}
+    supplied_paths = set(supplied)
+    if required_paths - supplied_paths:
+        raise R002ReferenceError("head_file_missing")
+    if supplied_paths != required_paths:
+        raise R002ReferenceError("head_mapping_invalid")
     return supplied
 
 
@@ -202,11 +273,11 @@ def _verify_case_head_files(
     head_file_bytes: Mapping[str, bytes],
     limits: R002HeadFileLimits,
 ) -> R002VerifiedCaseLines:
-    if not isinstance(case, R002CaseManifest) or not isinstance(parsed, R002ParsedCase):
-        raise R002ReferenceError("model_validation_failed")
+    case = _validated_case_snapshot(case, reason="model_validation_failed")
+    parsed = _validated_parsed_snapshot(parsed)
+    limits = _validated_limits_snapshot(limits)
     if case.case_id != parsed.case_id:
         raise R002ReferenceError("case_identity_mismatch")
-    _assert_test_stream_separation(parsed)
     head_files = _validate_head_mapping(parsed, head_file_bytes)
     if sum(len(value) for value in head_files.values()) > limits.bytes_per_case:
         raise R002ReferenceError("head_case_limit")
@@ -223,7 +294,8 @@ def _verify_case_head_files(
                 number = line.new_line_number
                 if number is None or number > len(lines):
                     raise R002ReferenceError("head_line_out_of_range")
-                if lines[number - 1] != line.content:
+                head_content = lines[number - 1]
+                if head_content != line.content:
                     raise R002ReferenceError("head_line_mismatch")
                 verified.append(
                     R002VerifiedLine(
@@ -231,10 +303,12 @@ def _verify_case_head_files(
                         path=parsed_file.path,
                         hunk_id=hunk.hunk_id,
                         new_line_number=number,
-                        normalized_line_sha256=line.normalized_line_sha256,
+                        normalized_line_sha256=sha256(head_content.encode("utf-8")).hexdigest(),
                         head_file_sha256=file_hash,
                         head_sha=case.verified_pr_head_sha,
-                        permalink=_candidate_permalink(case, parsed_file.path, number),
+                        permalink=_candidate_permalink_from_snapshot(
+                            case, parsed_file.path, number
+                        ),
                     )
                 )
     return R002VerifiedCaseLines(
@@ -258,20 +332,23 @@ def verify_case_head_files(
         return _verify_case_head_files(
             case=case, parsed=parsed, head_file_bytes=head_file_bytes, limits=limits
         )
-    except ValidationError:
-        reason = "model_validation_failed"
-    except (AttributeError, TypeError, ValueError):
-        reason = "model_validation_failed"
     except R002ReferenceError as caught:
         reason = caught.reason_code
+    except Exception:
+        reason = "model_validation_failed"
     del case, parsed, head_file_bytes, limits
     _raise_public_reference_error(reason)
 
 
 def _validate_verified_sidecar(
     case: R002CaseManifest, verified_lines: R002VerifiedCaseLines
-) -> None:
-    if not isinstance(verified_lines, R002VerifiedCaseLines):
+) -> R002VerifiedCaseLines:
+    if type(verified_lines) is not R002VerifiedCaseLines:
+        raise R002ReferenceError("model_validation_failed")
+    raw_lines = verified_lines.lines
+    if type(raw_lines) is not tuple or any(
+        type(line) is not R002VerifiedLine for line in raw_lines
+    ):
         raise R002ReferenceError("model_validation_failed")
     if verified_lines.case_id != case.case_id:
         raise R002ReferenceError("verified_case_mismatch")
@@ -279,17 +356,39 @@ def _validate_verified_sidecar(
         raise R002ReferenceError("verified_head_mismatch")
     identities: set[tuple[str, int]] = set()
     repository_prefix = f"https://github.com/{quote(case.repository, safe='/')}/blob/"
-    for line in verified_lines.lines:
+    for line in raw_lines:
+        if type(line.path) is not str or type(line.new_line_number) is not int:
+            raise R002ReferenceError("model_validation_failed")
         identity = (line.path, line.new_line_number)
         if identity in identities:
             raise R002ReferenceError("verified_duplicate_identity")
         identities.add(identity)
-        if line.head_sha != case.verified_pr_head_sha:
+        if type(line.head_sha) is not str or line.head_sha != case.verified_pr_head_sha:
             raise R002ReferenceError("verified_head_mismatch")
-        if not line.permalink.startswith(repository_prefix):
+        if type(line.permalink) is not str or not line.permalink.startswith(repository_prefix):
             raise R002ReferenceError("verified_repository_mismatch")
-        if line.permalink != _candidate_permalink(case, line.path, line.new_line_number):
+        if line.permalink != _candidate_permalink_from_snapshot(
+            case, line.path, line.new_line_number
+        ):
             raise R002ReferenceError("verified_permalink_mismatch")
+    try:
+        snapshot = R002VerifiedCaseLines.model_validate(
+            {
+                "case_id": verified_lines.case_id,
+                "head_sha": verified_lines.head_sha,
+                "lines": tuple(
+                    line.model_dump(mode="python", warnings=False) for line in raw_lines
+                ),
+            },
+            strict=True,
+        )
+    except Exception:
+        error = _fresh_reference_error("model_validation_failed")
+    else:
+        error = None
+    if error is not None:
+        raise error
+    return snapshot
 
 
 def _verify_evidence_reference(
@@ -298,9 +397,9 @@ def _verify_evidence_reference(
     evidence: EvidenceItem,
     verified_lines: R002VerifiedCaseLines,
 ) -> R002CandidateLineKey:
-    if not isinstance(case, R002CaseManifest) or not isinstance(evidence, EvidenceItem):
-        raise R002ReferenceError("model_validation_failed")
-    _validate_verified_sidecar(case, verified_lines)
+    case = _validated_case_snapshot(case, reason="model_validation_failed")
+    evidence = _validated_evidence_snapshot(evidence)
+    verified_lines = _validate_verified_sidecar(case, verified_lines)
     if evidence.source_scope is not EvidenceSourceScope.CHANGED_FILE:
         raise R002ReferenceError("evidence_source_scope_mismatch")
     expected_type = classify_changed_path_evidence_type(evidence.file_path)
@@ -342,11 +441,9 @@ def verify_evidence_reference(
         return _verify_evidence_reference(
             case=case, evidence=evidence, verified_lines=verified_lines
         )
-    except ValidationError:
-        reason = "model_validation_failed"
-    except (AttributeError, TypeError, ValueError):
-        reason = "model_validation_failed"
     except R002ReferenceError as caught:
         reason = caught.reason_code
+    except Exception:
+        reason = "model_validation_failed"
     del case, evidence, verified_lines
     _raise_public_reference_error(reason)
