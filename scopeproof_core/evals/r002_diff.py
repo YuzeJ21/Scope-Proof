@@ -27,7 +27,7 @@ DEFAULT_R002_DIFF_LIMITS = R002DiffLimits()
 _DIFF_HEADER = re.compile(r"^diff --git a/(\S*) b/(\S*)$")
 _INDEX = re.compile(r"^index [0-9A-Fa-f]+\.\.[0-9A-Fa-f]+(?: [0-7]{6})?$")
 _HUNK_HEADER = re.compile(
-    r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: .*)?$"
+    r"^@@ -([0-9]+)(?:,([0-9]+))? \+([0-9]+)(?:,([0-9]+))? @@(?: .*)?$"
 )
 _NO_NEWLINE_MARKER = r"\ No newline at end of file"
 _MAX_HUNK_START = 2_147_483_647
@@ -106,6 +106,21 @@ class _DiffBudget:
         if self.lines >= self.limits.diff_lines:
             _raise_budget_error(self.line_reason)
         self.lines += 1
+
+
+def _reserve_file(budgets: tuple[_DiffBudget, ...]) -> None:
+    for budget in budgets:
+        budget.reserve_file()
+
+
+def _reserve_hunk(budgets: tuple[_DiffBudget, ...]) -> None:
+    for budget in budgets:
+        budget.reserve_hunk()
+
+
+def _reserve_line(budgets: tuple[_DiffBudget, ...]) -> None:
+    for budget in budgets:
+        budget.reserve_line()
 
 
 def _validate_path(path: str, *, limits: R002DiffLimits) -> str:
@@ -218,7 +233,7 @@ def _parse_unified_diff_files(
     *,
     stream: R002DiffStream,
     limits: R002DiffLimits,
-    budget: _DiffBudget,
+    budgets: tuple[_DiffBudget, ...],
     disallowed_paths: set[str] | None = None,
 ) -> tuple[R002ParsedFile, ...]:
     """Parse a stream while reserving every collection item before construction."""
@@ -247,7 +262,7 @@ def _parse_unified_diff_files(
                 raise R002DiffError("duplicate_path")
             if disallowed_paths is not None and path in disallowed_paths:
                 raise R002DiffError("duplicate_path_across_streams")
-            budget.reserve_file()
+            _reserve_file(budgets)
             index += 1
 
             if index < len(records) and records[index].startswith("index "):
@@ -270,7 +285,7 @@ def _parse_unified_diff_files(
             while index < len(records) and not records[index].startswith("diff --git"):
                 record = records[index]
                 if record.startswith("@@"):
-                    budget.reserve_hunk()
+                    _reserve_hunk(budgets)
                 old_start, old_count, new_start, new_count = _parse_hunk_header(record)
                 if previous is not None and (
                     old_start <= previous.old_start
@@ -298,7 +313,7 @@ def _parse_unified_diff_files(
                         continue
                     if not record or record[0] not in {" ", "+", "-"}:
                         _raise_for_unexpected_record(record)
-                    budget.reserve_line()
+                    _reserve_line(budgets)
                     line = _parsed_line(
                         record[0], record[1:], old_line, new_line, limits=limits
                     )
@@ -358,7 +373,7 @@ def parse_unified_diff(
         hunk_reason="hunk_limit",
         line_reason="diff_line_limit",
     )
-    files = _parse_unified_diff_files(raw, stream=stream, limits=limits, budget=budget)
+    files = _parse_unified_diff_files(raw, stream=stream, limits=limits, budgets=(budget,))
     try:
         return R002ParsedDiff(
             stream=stream,
@@ -384,21 +399,36 @@ def parse_case_diffs(
         test_patch_raw = test_patch.encode("utf-8")
     except UnicodeEncodeError:
         raise R002DiffError("invalid_utf8") from None
-    budget = _DiffBudget(
+    case_budget = _DiffBudget(
         limits=limits,
         file_reason="case_limit",
         hunk_reason="case_limit",
         line_reason="case_diff_line_limit",
     )
+    patch_budget = _DiffBudget(
+        limits=limits,
+        file_reason="file_limit",
+        hunk_reason="hunk_limit",
+        line_reason="diff_line_limit",
+    )
+    test_patch_budget = _DiffBudget(
+        limits=limits,
+        file_reason="file_limit",
+        hunk_reason="hunk_limit",
+        line_reason="diff_line_limit",
+    )
     try:
         patch_files = _parse_unified_diff_files(
-            patch_raw, stream=R002DiffStream.PATCH, limits=limits, budget=budget
+            patch_raw,
+            stream=R002DiffStream.PATCH,
+            limits=limits,
+            budgets=(patch_budget, case_budget),
         )
         test_files = _parse_unified_diff_files(
             test_patch_raw,
             stream=R002DiffStream.TEST_PATCH,
             limits=limits,
-            budget=budget,
+            budgets=(test_patch_budget, case_budget),
             disallowed_paths={file.path for file in patch_files},
         )
     except ValidationError:

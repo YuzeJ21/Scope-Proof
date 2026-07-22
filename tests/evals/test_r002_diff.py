@@ -170,6 +170,13 @@ def test_parser_rejects_ambiguous_or_unsafe_records(raw: bytes, reason: str) -> 
         parse_unified_diff(raw, stream=R002DiffStream.PATCH)
 
 
+def test_parser_rejects_unicode_hunk_digits_under_the_ascii_only_grammar() -> None:
+    with pytest.raises(R002DiffError, match="invalid_hunk_header"):
+        parse_unified_diff(
+            _file("src/a.py", "@@ -\u0661 +\u0661 @@\n x\n"), stream=R002DiffStream.PATCH
+        )
+
+
 def test_parser_rejects_mismatched_hunk_counts_and_overlapping_ranges() -> None:
     with pytest.raises(R002DiffError, match="hunk_count_mismatch"):
         parse_unified_diff(
@@ -233,6 +240,24 @@ def test_case_parser_rejects_cross_stream_duplicates_and_combined_line_excess() 
     test_patch = _file("tests/test_a.py", _hunk(1, 0, 1, 25001, "+x\n" * 25001)).decode()
     with pytest.raises(R002DiffError, match="case_diff_line_limit"):
         parse_case_diffs(case_id="R002-001", patch=patch, test_patch=test_patch)
+
+
+def test_case_parser_retains_per_stream_limit_codes_before_case_aggregation() -> None:
+    over_files = b"".join(
+        _file(f"src/{number}.py", "@@ -1 +1 @@\n x\n") for number in range(33)
+    ).decode()
+    with pytest.raises(R002DiffError, match="file_limit"):
+        parse_case_diffs(case_id="R002-001", patch=over_files, test_patch="")
+
+    over_hunks = _file(
+        "src/a.py", *[_hunk(number, 1, number, 1, " x\n") for number in range(1, 258)]
+    ).decode()
+    with pytest.raises(R002DiffError, match="hunk_limit"):
+        parse_case_diffs(case_id="R002-001", patch=over_hunks, test_patch="")
+
+    over_lines = _file("src/a.py", _hunk(1, 0, 1, 50001, "+x\n" * 50001)).decode()
+    with pytest.raises(R002DiffError, match="diff_line_limit"):
+        parse_case_diffs(case_id="R002-001", patch=over_lines, test_patch="")
 
 
 def test_case_parser_enforces_cross_stream_file_and_hunk_budgets_before_bodies() -> None:
