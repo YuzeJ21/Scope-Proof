@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, ClassVar, Literal, NamedTuple, Self
 
 from pydantic import (
     AfterValidator,
@@ -156,6 +156,283 @@ R002_SOURCE: dict[str, object] = {
     "schema": list(R002_SCHEMA),
 }
 R002_APPROVED_CASES_SHA256 = "ef091bb60e78abf9311112ff434f9e80613438915db198662aecd5f469cee336"
+
+
+class R002ApprovedCase(NamedTuple):
+    """The immutable, redacted production identity for one approved R-002 case."""
+
+    case_id: str
+    repository: str
+    pr_number: int
+    dataset_base_commit: str
+    head_sha: str
+    row_index: int
+    row_sha256: str
+    problem_statement_sha256: str
+    patch_sha256: str
+    test_patch_sha256: str
+
+
+# This production-only projection is deliberately separate from R002SourceManifest:
+# structural fixtures may model a synthetic cohort, but persisted cache/index/result
+# artifacts must remain tied to the approved, outcome-blind cohort.
+R002_APPROVED_CASES: tuple[R002ApprovedCase, ...] = (
+    R002ApprovedCase(
+        "R002-001",
+        "astropy/astropy",
+        14096,
+        "1a4462d72eb03f30dc83a879b1dd57aac8b2c18b",
+        "271b2875d9aae0a5875acba0b1b27dc4885fd6e5",
+        7,
+        "2ab9bc4442553756efedd9737e68d2c11a68954da353a12acb903c86ba414ec0",
+        "938971021e89cd882f6ea33d61202fe7aa0091d7be4748b100ddc7e164db90cd",
+        "57a810467af331eba7c3238bbcd78268a47e96ad75eed3e2aa8b908da99104bc",
+        "3a6a8ffc9c81264bccb9990b926bc6b1c2253a9aa7ce47810b5d28ad95c2596c",
+    ),
+    R002ApprovedCase(
+        "R002-002",
+        "astropy/astropy",
+        7166,
+        "26d147868f8a891a6009a25cd6a8576d2e1bd747",
+        "3306a25dee0dc9c7583f9ede5155ad9a416279d8",
+        16,
+        "ba1ba98c4ec623be61f8f5efbe700a6afac5390a057f6d6a6fdc4ef254433eb8",
+        "70c79d6da0284ce81f9e951dbab5c77d94bf8a27cd156f54169b424d75d11e43",
+        "b720439fe90e5673cf5d75523a36c25927c9f78f785f280508433447293be578",
+        "b86ae285f129f2941e27ff5f3229511c58199ae4a9e93b2d32e05dd4c2766dd7",
+    ),
+    R002ApprovedCase(
+        "R002-003",
+        "django/django",
+        11087,
+        "8180ffba21bf10f4be905cb0d4890dc2bcff2788",
+        "f110de5c04818b8f915dcf65da37a50c1424c6e6",
+        29,
+        "0469361e971f290aeafbd49942b2e8305400f8c337fe4f0c177ddc19a85204d8",
+        "9bd93972a91db1ad0e44e65720dd0f36f000de6264e770ffdaaeb06996a338f3",
+        "38dfd449272afdf7269e56d798668fd4167db5c34c775614ca0b2fb47eb25789",
+        "00c3a6c821fbf38e48279ab12d29b9f3edffe76295d1ca2a39bb500863a39a86",
+    ),
+    R002ApprovedCase(
+        "R002-004",
+        "django/django",
+        12262,
+        "69331bb851c34f05bc77e9fc24020fe6908b9cd5",
+        "e3d546a1d986f83d8698c32e13afd048b65d06eb",
+        76,
+        "144160660b3e379ed645123e7ae4fff017e8cc3afee680eef9d58868b73c8fe5",
+        "eb0c9b99667bc7666a6ff518747eaa71c6d392f727583d3f90cabe5cf4afe994",
+        "9ec3e3ad1dd4c1993e6c0fb4698939f8f7eb192128fe0d696add4abb969e7037",
+        "769a15faf523189f8c37917ff3c002c381f0e5a517c481020ea71abe5ee58cf9",
+    ),
+    R002ApprovedCase(
+        "R002-005",
+        "matplotlib/matplotlib",
+        20676,
+        "6786f437df54ca7780a047203cbcfaa1db8dc542",
+        "5c08ff65b884bd03d80eba0a6de01a9d24599299",
+        256,
+        "5cd6ca2a9b3f4cd1056da08095356d10d5073a93f26317615efd66d223b2aac7",
+        "c201ac5236b0a5eb57faa1768a12c67f0132074a5538d82feb717a62af9ad01d",
+        "2943065dce13dc7e0f4f5bacc13353a4fe4e3fc3398086c9421b1b4cf4012383",
+        "d39f439303c71d295be1d94a6f1d0501b7ffe7030bce1c6f5fc6845c990ce3eb",
+    ),
+    R002ApprovedCase(
+        "R002-006",
+        "matplotlib/matplotlib",
+        25287,
+        "f8ffce6d44127d4ea7d6491262ab30046b03294b",
+        "264e7d37d2ee89c6019af4e5743653f4748448e1",
+        276,
+        "b12837067251cb70ae564442328e30d10aa23ebf5d0ba30eaefae1b290106da9",
+        "f9bbb7794506f072129a5e7941e265280853fd873550828d7a66e91baa611c7e",
+        "762993a12dfbd18ea1cd9b78c54a5d3262a2e011aa5c79bca562751ff2aba82a",
+        "86204b551acc12241d3bbb5618a57f44e8341deeb867a860d7cd45c9a3b59163",
+    ),
+    R002ApprovedCase(
+        "R002-007",
+        "mwaskom/seaborn",
+        3187,
+        "22cdfb0c93f8ec78492d87edb810f10cb7f57a31",
+        "9372112ea432a8b3d5bd9e11051a999b63905e86",
+        288,
+        "80aa45876204fa0a13ba2c7916e5723b61713622784ca260ebd40f7786abd9d0",
+        "72157e71b5c0ed5d58d66a7eeb30ed7b2fb237374183b9ebee200f5d58abd77b",
+        "578f98370810261561a8936dd7202e8c6644ef8d9ae52a54578a680f3cb4fc1f",
+        "580a0ee004bb0143ba24afcaf0e45ec309635fa4610049ed91a8a15f7e9e1fc8",
+    ),
+    R002ApprovedCase(
+        "R002-008",
+        "pallets/flask",
+        5014,
+        "7ee9ceb71e868944a46e1ff00b506772a53a4f1d",
+        "b8b410014d85f9861acc87c5f21c9a55a42d09c9",
+        289,
+        "5cc7ccbd782cf546cdded80c0811a572ba428ecace70022e5982477ad6a47489",
+        "f77d8eab7dd608172aa78b3b50dfa7e0e9b3a6a1c52d14a1cb02417eb5a0ab00",
+        "087d51d66413bfa35111ac0eca31f1db1636572702cfd967c428049b453f451d",
+        "e16f06b260b5169a49397e9d571b5af70317cd23792e1437232fabf718fe8871",
+    ),
+    R002ApprovedCase(
+        "R002-009",
+        "psf/requests",
+        1766,
+        "847735553aeda6e6633f2b32e14ba14ba86887a4",
+        "92d3616b02fc0ce5b1a89d884a4b1c7d602cb364",
+        292,
+        "35c5b9191de9f49b68c229d1af037792a54c1cdd418b7003bfc5527541c6eec6",
+        "90d541e87a05a5135b7ee242c82702e5cad1e2cae9e5571fcbc032d7d6d80682",
+        "fdf4dc67f564bc801f1fe74b1e6000a3186f19acec083f7585caef1b58671b12",
+        "8104cc2c46abb076affea41d2f19d40a908fbc696aee3115dfffc5b0354662b4",
+    ),
+    R002ApprovedCase(
+        "R002-010",
+        "pydata/xarray",
+        4075,
+        "19b088636eb7d3f65ab7a1046ac672e0689371d8",
+        "5650db2b9076787d848fa180e4b752aa578629c4",
+        304,
+        "8b74893d1cc8df31c7ec8c4bcaf6b05f7dff93c23800f8e497266bb536576e92",
+        "d1cc08eec285573fc56f2a58a623e0b7adf33e6f75fd16b4214dd1db4b3e46a6",
+        "643f8e9f14148cb48741a09de7c02ec50175a2a63d8bef84821ad6ab12c4b141",
+        "ac49c8fe1085bfb95c0d5df8e513f7a0fa9299c9f18ce878be2362e08797517b",
+    ),
+    R002ApprovedCase(
+        "R002-011",
+        "pydata/xarray",
+        6992,
+        "45c0a114e2b7b27b83c9618bc05b36afac82183c",
+        "ca01949cb889ee38aae33560b02de1f7625fd921",
+        316,
+        "b2929496bc01afda4604941fb957f49b6cf64e0a8184e78c2b1bf993f3a8a6ac",
+        "2fd625e5f58b6b7b7c292b9ba90307e8583cad9d4ddb395fe9805bb06c74208b",
+        "2c9df82ff3c01c158b6cf1155a89b46da0d60f6705cd29ededd6bce02e9847e8",
+        "41f0aead689f02738cecae41605836cb9e6aceb17e1e6c0e4b7ffa57191763a8",
+    ),
+    R002ApprovedCase(
+        "R002-012",
+        "pylint-dev/pylint",
+        7080,
+        "3c5eca2ded3dd2b59ebaf23eb289453b5d2930f0",
+        "c744a5357abfd30b84de9d171c901de4d555669b",
+        327,
+        "25624f1c827f50c9cf055262a27ebb1a485ed0bd0305469a849d549d0926c26e",
+        "82319497af035b3cdcd4ee71b5fccd578074989dfa157dc54ecc5bf8ea76ceab",
+        "f908ad1f6d4b8df3755a634c6741abf8ae613bc59278a54c16560c16d255580f",
+        "7d42b9582d23667623d84307132d46e63588cbcfe63c35bccb7a52940bf5ca08",
+    ),
+    R002ApprovedCase(
+        "R002-013",
+        "pytest-dev/pytest",
+        7490,
+        "7f7a36478abe7dd1fa993b115d22606aa0e35e88",
+        "ccad10a82908d7a12cd6024e00be11af413edf1c",
+        344,
+        "0cda868e19eb39388dde21e14ca951ef9d0deea5a32a8cbeab9149945e4e2408",
+        "9a5e8c33368dc3bbe9c5f03d3136a574cebede61fea6c575d39ddf108b92d947",
+        "88a7af7e123619306d887c6a9bd1f905acc4872b454df914094c038b71356e30",
+        "fe5323cfe9d6be9648be22ffb13a95079c6e17c13f09987f4c1b8589d27c690c",
+    ),
+    R002ApprovedCase(
+        "R002-014",
+        "pytest-dev/pytest",
+        7521,
+        "41d211c24a6781843b174379d6d6538f5c17adb9",
+        "8616a5f1d989eec5e2c5f2129040149fe4cf4347",
+        345,
+        "3fc86672e886cb8326e6729b9438d775a377d75f2e41d481e7d1934fb19f0a44",
+        "39f1953e5d5a7481355aa6109b16ecaebbb037957e473cc71e9ab1402d3aa9b9",
+        "e1f62165b6ecc14c60b08bb71a59b927adba0c3b9a8393394481cc6a4f0f8f0e",
+        "5d7b9e51ea700508725976f0643bd1c601afcb5373481118f8741e4660d64e59",
+    ),
+    R002ApprovedCase(
+        "R002-015",
+        "scikit-learn/scikit-learn",
+        13779,
+        "b34751b7ed02b2cfcc36037fb729d4360480a299",
+        "2ca0e6c7958a8c217a4788cad08768249d6a0522",
+        363,
+        "b75c49d788db78afa25500c392c597a2107aed49c439549972836873e6a8ceee",
+        "d32c6ecdfaf0eeb42a35e7cb05bd03fc034571aaef7c7743a452422c2bcdc6bc",
+        "6faf85c3ffaaebff5458d13c730b28c4d6acfded07cc733b80278df6d2166cb4",
+        "fb96b7aa463a986df0b395398d07262b26ee71f60e84696d6e60932db59c7fc1",
+    ),
+    R002ApprovedCase(
+        "R002-016",
+        "scikit-learn/scikit-learn",
+        14496,
+        "d49a6f13af2f22228d430ac64ac2b518937800d0",
+        "8e8a34535f8f8743aedf88553d62e66423118423",
+        367,
+        "8f4615aae668d879679359f06220df42cd8d198653cfed4241724326075ac77b",
+        "7860d59abe6e6a85ed92cbc43c7b632982164bc89105df4df399793154bb15df",
+        "5f9a4088607136868645a435d919f0d07737643a2ab25ab11672234c01ca1853",
+        "ea556bb6d85c2d707dc36a6df92174f9b514c53a04e61c7f492a7dddf5086d9c",
+    ),
+    R002ApprovedCase(
+        "R002-017",
+        "sphinx-doc/sphinx",
+        8459,
+        "68aa4fb29e7dfe521749e1e14f750d7afabb3481",
+        "333e7a447edfcb3092032ac801116e1eec193e44",
+        403,
+        "076da25d826502bcd19d69bcd9eb3a109f8b3e2dd4224482541f36dfc5ad64cc",
+        "5a7af99001528e86ff4d88a9bf03e4b87b08c1c4907ef4230d6dfa05a3375018",
+        "8bf406df3ba81a273c45b95b9c14c70ba7e4ae7c0a5e387c5544d0d608d4900d",
+        "7a3d56dc1bc60a57becc535d9032530e8703309049f50ff28a2ddb196171ea1f",
+    ),
+    R002ApprovedCase(
+        "R002-018",
+        "sphinx-doc/sphinx",
+        9230,
+        "567ff22716ac258b9edd2c1711d766b440ac0b11",
+        "9a132b4f8114f1652a9bc494b740b6632c3545a9",
+        413,
+        "3b12d82c5290396b3a7972957b15d302baf7686662eb0bf65b46c79a4e5c64d6",
+        "e814405fe0885a2284bec4dfdf1efa5bd0386117d02410e9ad0ec98c0e1712ab",
+        "e6cc08c8b1858c3d41964c220e396638c15e601f88fa9cb6493938e5fdd814c6",
+        "0971215a38b16f54484b9a2f11da137413f131dfc453fd9a08de1978d31360b0",
+    ),
+    R002ApprovedCase(
+        "R002-019",
+        "sympy/sympy",
+        20801,
+        "e11d3fed782146eebbffdc9ced0364b223b84b6c",
+        "b5424dd3d0484087ae9d175c014e9a803e91a875",
+        478,
+        "754b459bdbb9a9f094572df632e40c980c09f7e08a25c8957d9f876f5c9f1db0",
+        "d97c4296d41c2a7cdf87b6e2de16dd10a5755318d9bde720c8677b8787c20ec3",
+        "dbec818a9a22bcfeaeeb2f292cf7bba7048f84bca05aa04f38870e483ec803d5",
+        "f84920fc71c885455f40e439ea052707b7936b1367ba6af67a2a7b9c3f626f9c",
+    ),
+    R002ApprovedCase(
+        "R002-020",
+        "sympy/sympy",
+        21612,
+        "b4777fdcef467b7132c055f8ac2c9a5059e6a145",
+        "305d1300055245c26c0261ffaf77575fb2e9f9d9",
+        482,
+        "8a45d630025652ef97b71f933739e60ea6b5ee7768804f9062e20856f4cbb967",
+        "657b0dc782c25c6b54593dac7ccb7c4aaa95bd6da6e1a87b2e4b778f86d29b99",
+        "72e403affa86c748aad0332d53ef48a2bff26cad6ee96d5588c28c1b30982c3e",
+        "d199d4ee685de99f64461d66f3b8424c6544dd38c665812a6ff0d6f3ccfd6f6b",
+    ),
+)
+R002_APPROVED_CASE_BY_ID = {case.case_id: case for case in R002_APPROVED_CASES}
+
+
+def _require_approved_case_ids(items: Sequence[object]) -> None:
+    if tuple(item.case_id for item in items) != tuple(  # type: ignore[attr-defined]
+        item.case_id for item in R002_APPROVED_CASES
+    ):
+        raise ValueError("R-002 records must use the ordered approved case IDs")
+
+
+def _approved_case(case_id: str) -> R002ApprovedCase:
+    try:
+        return R002_APPROVED_CASE_BY_ID[case_id]
+    except KeyError as error:
+        raise ValueError("R-002 record has an unapproved case ID") from error
 
 
 class R002StrictModel(BaseModel):
@@ -452,6 +729,24 @@ class R002VerifiedCaseLines(R002StrictModel):
     head_sha: GitSha
     lines: tuple[R002VerifiedLine, ...]
 
+    @model_validator(mode="after")
+    def bind_immutable_head_lines(self) -> Self:
+        approved = _approved_case(self.case_id)
+        if self.head_sha != approved.head_sha:
+            raise ValueError("verified lines must use the approved head SHA")
+        keys = [
+            (line.stream.value, line.path, line.hunk_id, line.new_line_number)
+            for line in self.lines
+        ]
+        if keys != sorted(keys) or len(keys) != len(set(keys)):
+            raise ValueError("verified lines must be sorted and unique")
+        for line in self.lines:
+            if line.head_sha != self.head_sha or not line.permalink.startswith(
+                f"https://github.com/{approved.repository}/blob/{self.head_sha}/{line.path}#L"
+            ):
+                raise ValueError("verified line must bind its approved immutable head")
+        return self
+
     def by_path_and_line(self, path: str, number: int) -> R002VerifiedLine:
         matches = [
             line for line in self.lines if line.path == path and line.new_line_number == number
@@ -478,6 +773,47 @@ class R002CachedCase(R002StrictModel):
     verified_lines: tuple[R002VerifiedLine, ...]
     head_files: tuple[R002CachedHeadFile, ...]
 
+    @model_validator(mode="after")
+    def bind_approved_cache_case(self) -> Self:
+        approved = _approved_case(self.case_id)
+        if (
+            self.row_sha256,
+            self.problem_statement_sha256,
+            self.patch_sha256,
+            self.test_patch_sha256,
+        ) != (
+            approved.row_sha256,
+            approved.problem_statement_sha256,
+            approved.patch_sha256,
+            approved.test_patch_sha256,
+        ):
+            raise ValueError("cached case hashes must bind the approved projection")
+        if any(line.head_sha != approved.head_sha for line in self.verified_lines):
+            raise ValueError("cached verified lines must use the approved head SHA")
+        line_keys = [
+            (line.stream.value, line.path, line.hunk_id, line.new_line_number)
+            for line in self.verified_lines
+        ]
+        if (
+            line_keys != sorted(line_keys)
+            or len(line_keys) != len(set(line_keys))
+            or any(
+                not line.permalink.startswith(
+                    f"https://github.com/{approved.repository}/blob/{approved.head_sha}/{line.path}#L"
+                )
+                for line in self.verified_lines
+            )
+        ):
+            raise ValueError("cached verified lines must be sorted unique immutable references")
+        paths = [item.logical_path for item in self.head_files]
+        if (
+            paths != sorted(paths)
+            or len(paths) != len(set(paths))
+            or any(item.head_sha != approved.head_sha for item in self.head_files)
+        ):
+            raise ValueError("cached head files must be sorted unique approved-head files")
+        return self
+
 
 class R002CriteriaSourceCase(R002StrictModel):
     case_id: R002CaseId
@@ -491,6 +827,16 @@ class R002CriteriaSourceIndex(R002Manifest):
     complete: Literal[True] = True
     cases: tuple[R002CriteriaSourceCase, ...] = Field(min_length=20, max_length=20)
 
+    @model_validator(mode="after")
+    def bind_criteria_sources(self) -> Self:
+        _require_approved_case_ids(self.cases)
+        if any(
+            item.problem_statement_sha256 != _approved_case(item.case_id).problem_statement_sha256
+            for item in self.cases
+        ):
+            raise ValueError("criteria sources must bind approved problem hashes")
+        return self
+
 
 class R002CacheIndex(R002Manifest):
     source_sha256: Sha256
@@ -498,6 +844,11 @@ class R002CacheIndex(R002Manifest):
     criteria_set_sha256: Sha256
     complete: Literal[True] = True
     cases: tuple[R002CachedCase, ...] = Field(min_length=20, max_length=20)
+
+    @model_validator(mode="after")
+    def bind_complete_cache(self) -> Self:
+        _require_approved_case_ids(self.cases)
+        return self
 
 
 class R002CriteriaSourcePreparationResult(R002Manifest):
@@ -509,6 +860,19 @@ class R002CriteriaSourcePreparationResult(R002Manifest):
     case_ids: tuple[R002CaseId, ...] = Field(min_length=20, max_length=20)
     errors: tuple[str, ...]
     hard_gate_errors: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def require_complete_criteria_source_preparation(self) -> Self:
+        if (
+            self.executed_case_count,
+            self.failed_case_count,
+            self.skipped_case_count,
+            self.case_ids,
+            self.errors,
+            self.hard_gate_errors,
+        ) != (20, 0, 0, tuple(case.case_id for case in R002_APPROVED_CASES), (), ()):
+            raise ValueError("criteria-source preparation must be complete 20/0/0")
+        return self
 
 
 class R002PreparationCaseResult(R002StrictModel):
@@ -530,6 +894,27 @@ class R002PreparationResult(R002Manifest):
     cases: tuple[R002PreparationCaseResult, ...] = Field(min_length=20, max_length=20)
     errors: tuple[str, ...]
     hard_gate_errors: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def require_complete_evidence_preparation(self) -> Self:
+        _require_approved_case_ids(self.cases)
+        if (
+            self.executed_case_count,
+            self.failed_case_count,
+            self.skipped_case_count,
+            self.errors,
+            self.hard_gate_errors,
+        ) != (20, 0, 0, (), ()):
+            raise ValueError("evidence preparation must be complete 20/0/0")
+        if (
+            self.head_file_count,
+            self.candidate_line_count,
+        ) != (
+            sum(case.head_file_count for case in self.cases),
+            sum(case.candidate_line_count for case in self.cases),
+        ):
+            raise ValueError("preparation totals must reconstruct from ordered cases")
+        return self
 
 
 class R002CommandFailure(R002Manifest):
@@ -568,6 +953,16 @@ class R002RedactionAudit(R002Manifest):
     tracked_file_count: StrictInt = Field(ge=0)
     raw_value_count: StrictInt = Field(ge=0)
     checked_value_sha256: tuple[Sha256, ...]
+
+    @model_validator(mode="after")
+    def require_complete_redaction_audit(self) -> Self:
+        if (
+            self.tracked_file_count < 1
+            or self.raw_value_count != len(self.checked_value_sha256)
+            or self.checked_value_sha256 != tuple(sorted(set(self.checked_value_sha256)))
+        ):
+            raise ValueError("redaction audit must report sorted unique checked values")
+        return self
 
 
 class R002CriterionCase(R002StrictModel):
@@ -849,6 +1244,26 @@ class R002MissingExplanation(R002StrictModel):
     finding_status: FindingStatus
     reason_code: str = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def bind_reason_to_its_evidence_source(self) -> Self:
+        if self.source == "scopeproof_finding":
+            if self.reason_code != "scopeproof_finding_explicit_gap" or self.finding_status not in {
+                FindingStatus.PARTIAL,
+                FindingStatus.MISSING,
+                FindingStatus.NEEDS_REVIEW,
+            }:
+                raise ValueError("finding missing explanations require their fixed gap reason")
+        elif (
+            self.reason_code
+            not in {
+                "no_candidate_retrieved_for_type",
+                "retrieved_only_owner_labelled_irrelevant",
+            }
+            or self.finding_status is not FindingStatus.MISSING
+        ):
+            raise ValueError("retrieval missing explanations require a missing finding")
+        return self
+
 
 class R002CaseResult(R002StrictModel):
     case_id: R002CaseId
@@ -875,6 +1290,13 @@ class R002CaseResult(R002StrictModel):
 
     @model_validator(mode="after")
     def reject_non_static_success_signals(self) -> Self:
+        approved = _approved_case(self.case_id)
+        if (self.repository, self.pr_number, self.head_sha) != (
+            approved.repository,
+            approved.pr_number,
+            approved.head_sha,
+        ):
+            raise ValueError("case result must bind the approved immutable identity")
         criterion_groups = (
             self.blocking_criteria,
             self.conditional_criteria,
@@ -948,6 +1370,34 @@ class R002CaseResult(R002StrictModel):
             for item in self.missing_explanations
         ):
             raise ValueError("R-002 missing explanations must be static evidence types")
+        candidate_keys = [
+            (
+                item.key.case_id,
+                item.key.criterion_id,
+                item.key.stream.value,
+                item.key.path,
+                item.key.new_line_number,
+                item.key.normalized_line_sha256,
+            )
+            for item in self.retrieved_candidates
+        ]
+        if candidate_keys != sorted(candidate_keys) or len(candidate_keys) != len(
+            set(candidate_keys)
+        ):
+            raise ValueError("retrieved candidates must be sorted unique references")
+        explanation_keys = [
+            (item.case_id, item.criterion_id, item.evidence_type.value)
+            for item in self.missing_explanations
+        ]
+        if explanation_keys != sorted(explanation_keys) or len(explanation_keys) != len(
+            set(explanation_keys)
+        ):
+            raise ValueError("missing explanations must be sorted unique references")
+        for case_id, criterion_id, *_ in candidate_keys + explanation_keys:
+            if case_id != self.case_id or not re.fullmatch(r"AC-(0[1-9]|1[0-6])", criterion_id):
+                raise ValueError("result references must remain within the case criteria")
+            if int(criterion_id.removeprefix("AC-")) > self.criterion_count:
+                raise ValueError("result references cannot exceed the case criterion count")
         return self
 
 
@@ -994,21 +1444,15 @@ class R002DeterminismProjection(R002Manifest):
 
     @model_validator(mode="after")
     def bind_safe_case_results(self) -> Self:
-        ids = [result.case_id for result in self.case_results]
-        if ids != [f"R002-{number:03d}" for number in range(1, 21)]:
-            raise ValueError("R-002 case results must be ordered and complete")
+        _require_approved_case_ids(self.case_results)
         if self.limitations != R002_RESULT_LIMITATIONS:
             raise ValueError("R-002 projections require the fixed limitations")
-        identities = {
-            (result.repository, result.pr_number, result.head_sha) for result in self.case_results
-        }
-        repository_counts = Counter(result.repository for result in self.case_results)
-        if (
-            len(identities) != 20
-            or len(repository_counts) != 12
-            or max(repository_counts.values()) > 2
+        if any(
+            (result.repository, result.pr_number, result.head_sha)
+            != (approved.repository, approved.pr_number, approved.head_sha)
+            for result, approved in zip(self.case_results, R002_APPROVED_CASES, strict=True)
         ):
-            raise ValueError("R-002 projections require the fixed cohort identity shape")
+            raise ValueError("R-002 projections require the approved cohort identities")
         return self
 
 

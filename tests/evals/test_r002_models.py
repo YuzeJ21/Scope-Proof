@@ -546,9 +546,9 @@ def test_labels_loader_binds_annotation_universe_key_projection(tmp_path):
 def _safe_case_result_payload() -> dict[str, object]:
     return {
         "case_id": "R002-001",
-        "repository": "alpha/one",
-        "pr_number": 1,
-        "head_sha": "0" * 40,
+        "repository": "astropy/astropy",
+        "pr_number": 14096,
+        "head_sha": "271b2875d9aae0a5875acba0b1b27dc4885fd6e5",
         "criterion_count": 1,
         "annotation_candidate_count": 1,
         "retrieved_candidates": [
@@ -681,3 +681,245 @@ def test_case_result_rejects_zero_criterion_count():
     payload["criterion_count"] = 0
     with pytest.raises(ValidationError):
         R002CaseResult.model_validate_json(json.dumps(payload))
+
+
+def test_approved_case_projection_binds_all_persisted_identity_and_content_hashes():
+    cases = r002_models.R002_APPROVED_CASES
+    assert [case.case_id for case in cases] == [f"R002-{number:03d}" for number in range(1, 21)]
+    first = cases[0]
+    assert (first.repository, first.pr_number, first.head_sha) == (
+        "astropy/astropy",
+        14096,
+        "271b2875d9aae0a5875acba0b1b27dc4885fd6e5",
+    )
+    assert (
+        first.row_sha256,
+        first.problem_statement_sha256,
+        first.patch_sha256,
+        first.test_patch_sha256,
+    ) == (
+        "2ab9bc4442553756efedd9737e68d2c11a68954da353a12acb903c86ba414ec0",
+        "938971021e89cd882f6ea33d61202fe7aa0091d7be4748b100ddc7e164db90cd",
+        "57a810467af331eba7c3238bbcd78268a47e96ad75eed3e2aa8b908da99104bc",
+        "3a6a8ffc9c81264bccb9990b926bc6b1c2253a9aa7ce47810b5d28ad95c2596c",
+    )
+
+
+def _benchmark_result_payload() -> dict[str, object]:
+    case_results = []
+    for number, approved in enumerate(r002_models.R002_APPROVED_CASES, start=1):
+        result = _safe_case_result_payload()
+        result.update(
+            {
+                "case_id": approved.case_id,
+                "repository": approved.repository,
+                "pr_number": approved.pr_number,
+                "head_sha": approved.head_sha,
+                "annotation_candidate_count": int(number == 1),
+                "retrieved_candidates": [] if number != 1 else result["retrieved_candidates"],
+            }
+        )
+        case_results.append(result)
+    metric = {"state": "value", "numerator": 0, "denominator": 1, "value": 0.0}
+    return {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_manifest_sha256": "0" * 64,
+        "criteria_set_sha256": "1" * 64,
+        "candidate_labels_sha256": "2" * 64,
+        "scopeproof_commit": "3" * 40,
+        "case_results": case_results,
+        "metrics": {
+            "owner_confirmed_label_candidate_precision": metric,
+            "criterion_candidate_coverage": metric,
+            "candidate_to_gold_file_coverage": metric,
+            "candidate_to_gold_hunk_coverage": metric,
+            "missing_evidence_explanation_completeness": metric,
+            "implementation_test_separation_errors": 0,
+            "immutable_reference_integrity_errors": 0,
+            "parse_errors": 0,
+            "schema_errors": 0,
+            "source_hash_errors": 0,
+            "source_sha_errors": 0,
+            "unexpected_ready_count": 0,
+            "normalized_rerun_mismatches": 0,
+        },
+        "limitations": list(r002_models.R002_RESULT_LIMITATIONS),
+        "executed_case_count": 20,
+        "failed_case_count": 0,
+        "skipped_case_count": 0,
+        "confirmed_criterion_count": 20,
+        "annotation_candidate_count": 1,
+        "unexpected_ready_count": 0,
+        "normalized_rerun_mismatches": 0,
+        "hard_gate_errors": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("confirmed_criterion_count",), 0),
+        (("annotation_candidate_count",), 0),
+        (("case_results", 1, "repository"), "forged/repository"),
+        (("case_results", 1, "head_sha"), "f" * 40),
+    ],
+)
+def test_benchmark_result_rejects_forged_aggregate_or_case_identity(path, value):
+    payload = _benchmark_result_payload()
+    target: object = payload
+    for key in path[:-1]:
+        target = target[key]  # type: ignore[index]
+    target[path[-1]] = value  # type: ignore[index]
+    with pytest.raises(ValidationError):
+        r002_models.R002BenchmarkResult.model_validate_json(json.dumps(payload))
+
+
+def test_case_result_rejects_cross_case_and_out_of_range_references():
+    payload = _safe_case_result_payload()
+    payload["retrieved_candidates"][0]["key"]["case_id"] = "R002-002"  # type: ignore[index]
+    with pytest.raises(ValidationError, match="within the case criteria"):
+        R002CaseResult.model_validate_json(json.dumps(payload))
+
+    payload = _safe_case_result_payload()
+    payload["retrieved_candidates"][0]["key"]["criterion_id"] = "AC-99"  # type: ignore[index]
+    with pytest.raises(ValidationError, match="within the case criteria"):
+        R002CaseResult.model_validate_json(json.dumps(payload))
+
+
+def test_missing_explanation_requires_fixed_source_reason_and_status():
+    valid = {
+        "case_id": "R002-001",
+        "criterion_id": "AC-01",
+        "evidence_type": "implementation",
+        "source": "r002_retrieval_comparison",
+        "finding_status": "missing",
+        "reason_code": "no_candidate_retrieved_for_type",
+    }
+    assert (
+        r002_models.R002MissingExplanation.model_validate_json(json.dumps(valid)).reason_code
+        == valid["reason_code"]
+    )
+    invalid = {**valid, "finding_status": "evidence_found"}
+    with pytest.raises(ValidationError, match="retrieval missing explanations"):
+        r002_models.R002MissingExplanation.model_validate_json(json.dumps(invalid))
+
+
+def test_cached_case_rejects_any_approved_hash_mutation():
+    approved = r002_models.R002_APPROVED_CASES[0]
+    payload = {
+        "case_id": approved.case_id,
+        "row_sha256": approved.row_sha256,
+        "problem_statement_sha256": approved.problem_statement_sha256,
+        "patch_sha256": approved.patch_sha256,
+        "test_patch_sha256": approved.test_patch_sha256,
+        "parsed_case_sha256": "0" * 64,
+        "verified_lines": [],
+        "head_files": [],
+    }
+    assert (
+        r002_models.R002CachedCase.model_validate_json(json.dumps(payload)).case_id
+        == approved.case_id
+    )
+    payload["patch_sha256"] = "f" * 64
+    with pytest.raises(ValidationError, match="approved projection"):
+        r002_models.R002CachedCase.model_validate_json(json.dumps(payload))
+
+
+def _criteria_source_index_payload() -> dict[str, object]:
+    return {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source_sha256": "0" * 64,
+        "manifest_sha256": "1" * 64,
+        "complete": True,
+        "cases": [
+            {
+                "case_id": item.case_id,
+                "problem_statement_sha256": item.problem_statement_sha256,
+                "byte_length": 1,
+            }
+            for item in r002_models.R002_APPROVED_CASES
+        ],
+    }
+
+
+def test_production_indexes_require_exact_approved_order_and_content_hashes():
+    source_index = _criteria_source_index_payload()
+    assert r002_models.R002CriteriaSourceIndex.model_validate_json(
+        json.dumps(source_index)
+    ).complete
+    source_index["cases"][0]["problem_statement_sha256"] = "f" * 64  # type: ignore[index]
+    with pytest.raises(ValidationError, match="approved problem hashes"):
+        r002_models.R002CriteriaSourceIndex.model_validate_json(json.dumps(source_index))
+
+    cache_index = {
+        **_criteria_source_index_payload(),
+        "criteria_set_sha256": "2" * 64,
+        "cases": [
+            {
+                "case_id": item.case_id,
+                "row_sha256": item.row_sha256,
+                "problem_statement_sha256": item.problem_statement_sha256,
+                "patch_sha256": item.patch_sha256,
+                "test_patch_sha256": item.test_patch_sha256,
+                "parsed_case_sha256": "3" * 64,
+                "verified_lines": [],
+                "head_files": [],
+            }
+            for item in r002_models.R002_APPROVED_CASES
+        ],
+    }
+    assert r002_models.R002CacheIndex.model_validate_json(json.dumps(cache_index)).complete
+    cache_index["cases"].reverse()  # type: ignore[index]
+    with pytest.raises(ValidationError, match="ordered approved case IDs"):
+        r002_models.R002CacheIndex.model_validate_json(json.dumps(cache_index))
+
+
+def test_preparation_and_redaction_audits_reject_partial_or_inconsistent_summaries():
+    case_ids = [item.case_id for item in r002_models.R002_APPROVED_CASES]
+    criteria_preparation = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "phase": "criteria_sources",
+        "complete": True,
+        "executed_case_count": 20,
+        "failed_case_count": 0,
+        "skipped_case_count": 0,
+        "case_ids": case_ids,
+        "errors": [],
+        "hard_gate_errors": [],
+    }
+    assert r002_models.R002CriteriaSourcePreparationResult.model_validate_json(
+        json.dumps(criteria_preparation)
+    ).complete
+    criteria_preparation["skipped_case_count"] = 1
+    with pytest.raises(ValidationError, match="complete 20/0/0"):
+        r002_models.R002CriteriaSourcePreparationResult.model_validate_json(
+            json.dumps(criteria_preparation)
+        )
+
+    audit = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "passed": True,
+        "tracked_file_count": 1,
+        "raw_value_count": 2,
+        "checked_value_sha256": ["0" * 64, "1" * 64],
+    }
+    assert r002_models.R002RedactionAudit.model_validate_json(json.dumps(audit)).passed
+    audit["checked_value_sha256"].reverse()  # type: ignore[index]
+    with pytest.raises(ValidationError, match="sorted unique"):
+        r002_models.R002RedactionAudit.model_validate_json(json.dumps(audit))
