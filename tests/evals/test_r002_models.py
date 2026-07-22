@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from copy import deepcopy
 from hashlib import sha256
 from typing import get_origin
@@ -165,6 +166,62 @@ def test_loader_rejects_structurally_valid_non_production_source(tmp_path, r002_
     path.write_text(json.dumps(r002_manifest_payload), encoding="utf-8")
     with pytest.raises(R002SourceError, match="source_pin_mismatch"):
         load_source_manifest(path)
+
+
+def test_load_source_manifest_accepts_unmodified_approved_metadata(tmp_path):
+    difficulties = {
+        "R002-001": "15 min - 1 hour",
+        "R002-002": "<15 min fix",
+        "R002-003": "15 min - 1 hour",
+        "R002-004": "15 min - 1 hour",
+        "R002-005": "<15 min fix",
+        "R002-006": "<15 min fix",
+        "R002-007": "15 min - 1 hour",
+        "R002-008": "<15 min fix",
+        "R002-009": "<15 min fix",
+        "R002-010": "<15 min fix",
+        "R002-011": ">4 hours",
+        "R002-012": "15 min - 1 hour",
+        "R002-013": "15 min - 1 hour",
+        "R002-014": "<15 min fix",
+        "R002-015": "<15 min fix",
+        "R002-016": "<15 min fix",
+        "R002-017": "<15 min fix",
+        "R002-018": "<15 min fix",
+        "R002-019": "15 min - 1 hour",
+        "R002-020": "15 min - 1 hour",
+    }
+    payload = {
+        "pack_id": "R-002",
+        "classification": "public_engineering_research",
+        "eligible_for_stage_1": False,
+        "does_not_advance_stage_1": True,
+        "target_repository_code_executed": False,
+        "source": deepcopy(r002_models.R002_SOURCE),
+        "cases": [
+            {
+                "case_id": case.case_id,
+                "instance_id": case.repository.replace("/", "__") + f"-{case.pr_number}",
+                "repository": case.repository,
+                "pr_number": case.pr_number,
+                "pr_url": f"https://github.com/{case.repository}/pull/{case.pr_number}",
+                "dataset_base_commit": case.dataset_base_commit,
+                "verified_pr_head_sha": case.head_sha,
+                "row_index": case.row_index,
+                "difficulty": difficulties[case.case_id],
+                "row_sha256": case.row_sha256,
+                "problem_statement_sha256": case.problem_statement_sha256,
+                "patch_sha256": case.patch_sha256,
+                "test_patch_sha256": case.test_patch_sha256,
+            }
+            for case in r002_models.R002_APPROVED_CASES
+        ],
+    }
+    path = tmp_path / "source_manifest.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    manifest = load_source_manifest(path)
+    assert manifest.source.model_dump(mode="json") == r002_models.R002_SOURCE
+    assert case_projection_sha256(manifest.cases) == r002_models.R002_APPROVED_CASES_SHA256
 
 
 def test_parsed_diff_rejects_marker_counts_and_unstable_paths():
@@ -1043,6 +1100,31 @@ def test_case_result_rejects_cross_case_and_out_of_range_references():
     payload = _safe_case_result_payload()
     payload["retrieved_candidates"][0]["key"]["criterion_id"] = "AC-99"  # type: ignore[index]
     with pytest.raises(ValidationError):
+        R002CaseResult.model_validate_json(json.dumps(payload))
+
+
+def test_case_result_preserves_core_retrieval_order_while_rejecting_duplicate_keys():
+    payload = _safe_case_result_payload()
+    low_score = payload["retrieved_candidates"][0]
+    high_score = deepcopy(low_score)
+    high_score["key"].update(  # type: ignore[index]
+        {"path": "b.py", "normalized_line_sha256": "3" * 64}
+    )
+    high_score["hunk_id"] = "patch:b.py:H1"
+    high_score["relevance_score"] = 0.9
+    low_score["relevance_score"] = 0.1  # type: ignore[index]
+    payload["retrieved_candidates"] = [high_score, low_score]
+    payload["annotation_candidate_count"] = 2
+    result = R002CaseResult.model_validate_json(json.dumps(payload))
+    assert [candidate.key.path for candidate in result.retrieved_candidates] == ["b.py", "a.py"]
+    assert [
+        item["key"]["path"] for item in result.model_dump(mode="json")["retrieved_candidates"]
+    ] == [
+        "b.py",
+        "a.py",
+    ]
+    payload["retrieved_candidates"] = [high_score, deepcopy(high_score)]
+    with pytest.raises(ValidationError, match="unique"):
         R002CaseResult.model_validate_json(json.dumps(payload))
 
 
@@ -2047,8 +2129,12 @@ def test_parsed_diff_and_case_enforce_exact_aggregate_hunk_and_line_caps():
 
 
 def test_parsed_case_direct_constructor_reconstructs_omitted_counts():
-    parsed = r002_models.R002ParsedCase.model_validate({"case_id": "R002-001", "files": ()})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        parsed = r002_models.R002ParsedCase(case_id="R002-001", files=())
     assert (parsed.file_count, parsed.hunk_count, parsed.diff_line_count) == (0, 0, 0)
+    schema = r002_models.R002ParsedCase.model_json_schema()["properties"]
+    assert schema["file_count"]["type"] == "integer"
     assert (
         r002_models.R002ParsedCase.model_validate_json(json.dumps(parsed.model_dump(mode="json")))
         == parsed
