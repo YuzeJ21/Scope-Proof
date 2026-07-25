@@ -2722,7 +2722,7 @@ git commit -m "feat: score R-002 research evidence offline"
 - Consumes: `prepare_criteria_sources`, `prepare_r002`, `annotate_r002`, and `run_r002`; locates `evals/r002` with `Path(__file__).resolve().parents[2]`.
 - Produces: the two explicit `prepare` phases plus `annotate` and `run`, deterministic bounded JSON stdout on post-parse domain success or failure, nonzero exit on an unmet gate, and an installed-wheel command surface. Standard `argparse` help and usage errors remain pre-dispatch stderr/`SystemExit` behavior and make no product-result claim.
 
-- [ ] **Step 1: Write failing command tests**
+- [x] **Step 1: Write failing command tests**
 
 Call `main(["prepare", "--phase", "criteria-sources", "--cache-dir", str(cache)], transport=mock_transport)` and the corresponding evidence/annotate/run argument lists directly. Assert the two prepare phases are the only network-capable paths, `annotate` rejects unconfirmed/missing criteria before reading patches, `run` works with networking disabled, no command imports `datasets`, and importing/running `run` does not import `pyarrow`.
 
@@ -2787,7 +2787,7 @@ def test_checkout_commit_must_be_clean_head(clean_git_checkout):
         resolve_scopeproof_commit(head, checkout_root=clean_git_checkout.path)
 ```
 
-- [ ] **Step 2: Run command tests and verify RED**
+- [x] **Step 2: Run command tests and verify RED**
 
 Run:
 
@@ -2798,7 +2798,7 @@ uv run pytest -q tests/evals/test_r002_cli.py \
 
 Expected: FAIL because `r002_swebench.py` and the final command contract do not exist.
 
-- [ ] **Step 3: Implement the standalone dispatcher**
+- [x] **Step 3: Implement the standalone dispatcher**
 
 Do not modify `scopeproof_core/cli.py`. Require `--phase criteria-sources|evidence` on `prepare`, permit `--cache-dir` on every command, and additionally permit `--scopeproof-commit` on `run` so a clean installed wheel can record its source commit. In a source checkout, default the commit from `git rev-parse HEAD`; outside a checkout, require the explicit 40-character lowercase SHA.
 
@@ -2912,7 +2912,7 @@ Define `R002_EXPECTED_ERRORS` as the closed tuple of R-002 domain errors plus Py
 
 Argument parsing intentionally occurs before this domain-error boundary. Add tests proving `--help`, a missing subcommand, a missing `--phase`, and a malformed `--scopeproof-commit` retain ordinary bounded `argparse` help/usage behavior on stderr and never emit a misleading `R002CommandFailure`. JSON output guarantees begin only after a syntactically valid command has been dispatched.
 
-- [ ] **Step 4: Strengthen repository and CI contracts**
+- [x] **Step 4: Strengthen repository and CI contracts**
 
 Add the final exact packaged-name assertion only in Task 12, after both confirmation artifacts exist:
 
@@ -2947,7 +2947,7 @@ run: python -m uv sync --extra dev --extra research --locked
 
 for the locked job. CI runs the controlled full pytest suite but never calls live R-002 preparation, GitHub, Hugging Face, Docker, or target-repository code. At this task add only the installed-wheel `python -m scopeproof_core.evals.r002_swebench --help` check; add the bounded missing-cache assertion after the source manifest is committed in Task 10 so the expected failure order is deterministic.
 
-- [ ] **Step 5: Document the opt-in engineering command surface**
+- [x] **Step 5: Document the opt-in engineering command surface**
 
 Add a development-guide section containing the four exact invocations (`prepare --phase criteria-sources`, `prepare --phase evidence`, `annotate`, and `run`), `uv sync --extra dev --extra research --locked`, the two required owner confirmations, the ignored cache location, and these exact boundaries:
 
@@ -2959,7 +2959,7 @@ Stage 1. Both explicit `prepare` phases are the only networked paths; `annotate`
 
 Do not add first-run metrics or claim that the benchmark exists until Tasks 10–11 complete.
 
-- [ ] **Step 6: Run command, repository, and CI-contract tests**
+- [x] **Step 6: Run command, repository, and CI-contract tests**
 
 Run:
 
@@ -2972,7 +2972,7 @@ uv lock --check
 
 Expected: every test passes with no new skip; lock check succeeds; CI contains no live R-002 command.
 
-- [ ] **Step 7: Commit the command and controlled-CI slice**
+- [x] **Step 7: Commit the command and controlled-CI slice**
 
 ```bash
 git add scopeproof_core/evals/r002_swebench.py tests/evals/test_r002_cli.py \

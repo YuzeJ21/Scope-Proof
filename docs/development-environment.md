@@ -7,10 +7,31 @@ ScopeProof supports Python 3.11 and newer. The contributor baseline is Python 3.
 Install [uv](https://docs.astral.sh/uv/) once, then run from the repository root:
 
 ```bash
-uv sync --extra dev --locked
+uv sync --extra dev --extra research --locked
 ```
 
 `--locked` refuses to change the lock file. If dependency declarations intentionally change, run `uv lock`, inspect the resulting diff, and repeat the locked checks below.
+
+## Opt-in R-002 engineering benchmark
+
+Install the locked research dependency and use the four explicit local phases:
+
+```bash
+uv sync --extra dev --extra research --locked
+uv run python -m scopeproof_core.evals.r002_swebench prepare --phase criteria-sources
+uv run python -m scopeproof_core.evals.r002_swebench prepare --phase evidence
+uv run python -m scopeproof_core.evals.r002_swebench annotate
+uv run python -m scopeproof_core.evals.r002_swebench run
+```
+
+The criteria proposal requires explicit benchmark-owner confirmation before the evidence phase.
+The complete candidate-label proposal requires a second explicit benchmark-owner confirmation
+before `run`. Raw source material and local review bundles remain under the ignored
+`.scopeproof/research/r002/` cache and must never be committed.
+
+R-002 is public engineering research only. It does not execute target-repository code, prove
+correctness, provide runtime verification, constitute customer/Alpha validation, or advance
+Stage 1. Both explicit `prepare` phases are the only networked paths; `annotate` and `run` are offline.
 
 ## Verify the same environment
 
