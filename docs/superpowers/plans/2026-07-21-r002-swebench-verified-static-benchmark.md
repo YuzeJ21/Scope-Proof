@@ -2258,7 +2258,7 @@ git commit -m "feat: freeze R-002 research annotations"
 - Consumes: all confirmed packaged inputs and a complete cache; calls `retrieve_evidence`, `build_findings`, and `evaluate_gate` directly.
 - Produces: `build_r002_review`, `evaluate_r002_case`, `metric`, `build_determinism_projection`, `run_r002`, and the local-only `audit_r002_redaction` helper.
 
-- [ ] **Step 1: Write failing review-boundary and gate tests**
+- [x] **Step 1: Write failing review-boundary and gate tests**
 
 Use 20 generated ScopeProof-owned cached cases and confirmed labels. Assert exact unavailable CI, zero runtime evidence, zero resolutions, false final acceptance, research context, E1/E2 ceiling, test-patch TEST/E2 separation, and only the two allowed gate shapes.
 
@@ -2311,7 +2311,7 @@ def test_missing_explanations_are_derived_from_run_output_not_copied_labels(
     assert changed.missing_explanations != result.missing_explanations
 ```
 
-- [ ] **Step 2: Write failing metric, redaction, and determinism tests**
+- [x] **Step 2: Write failing metric, redaction, and determinism tests**
 
 Cover every fixed numerator/denominator, `not_applicable` zero denominators, unlabelled/out-of-universe candidates, missing explanations derived from actual findings/retrieval, a deliberately omitted explanation producing completeness below 100% and a hard-gate failure, invalid references, `unexpected_ready_count`, exact 20/0/0 executed/failed/skipped, and projection stability across UUID/time/cache-root changes.
 
@@ -2384,7 +2384,7 @@ def test_redaction_audit_allows_test_name_inside_approved_path(
     assert audit.passed is True
 ```
 
-- [ ] **Step 3: Run runner tests and verify RED**
+- [x] **Step 3: Run runner tests and verify RED**
 
 Run:
 
@@ -2394,7 +2394,7 @@ uv run pytest -q tests/evals/test_r002_runner.py
 
 Expected: FAIL because review construction, scoring, metrics, and determinism are incomplete.
 
-- [ ] **Step 4: Implement exact offline review construction**
+- [x] **Step 4: Implement exact offline review construction**
 
 Read cached row and head files through validated cache methods, recheck every upstream hash, parse and reverify lines, and build the review without `demo.build_review` or `cli._build_bundle`.
 
@@ -2455,7 +2455,7 @@ def build_r002_review(
     )
 ```
 
-- [ ] **Step 5: Implement candidate mapping and per-case redaction**
+- [x] **Step 5: Implement candidate mapping and per-case redaction**
 
 Map every retrieved item through `verify_evidence_reference`; require its key in the frozen label dictionary; attach only the key, evidence type/level, matching-rule code, score, hunk ID, head-file hash, and relevance boolean to `R002CaseResult`. Save the full bundle only as ignored `reviews/<case-id>.json`.
 
@@ -2531,7 +2531,7 @@ def evaluate_r002_case(
 
 The helper rejects duplicate findings, stable-sorts explanations by case/criterion/evidence type, and returns no entry when the expected criterion has no finding. That omission lowers the completeness numerator and is then a hard integrity failure; it is never backfilled from labels.
 
-- [ ] **Step 6: Implement the fixed aggregate metrics**
+- [x] **Step 6: Implement the fixed aggregate metrics**
 
 Use these exact numerator/denominator definitions, counting unique stable candidate keys, paths, and hunk IDs:
 
@@ -2610,7 +2610,7 @@ Open each allowlisted candidate with `O_RDONLY | O_NOFOLLOW`, require a regular 
 
 There is no unrelated aggregate candidate-pack limit: the caller supplies a fixed, repository-contract-bounded file list, and each file uses the same 512 MiB ceiling as the largest approved persisted artifact. Return only checked file/value counts and sorted SHA-256 hashes. Tests cover a safe candidate above 8 MiB; a forbidden decoded JSON scalar split across chunks; Markdown scalar/body detection; symlink, non-regular, and per-file-limit failures; deterministic output under different chunk sizes; and the pinned-cohort collision where raw test name `test_relational` appears only inside allowed path `tests/test_relational.py`.
 
-- [ ] **Step 7: Implement two-run determinism and hard integrity gates**
+- [x] **Step 7: Implement two-run determinism and hard integrity gates**
 
 `run_r002` validates manifest/criteria/labels/cache hashes and performs the entire offline evaluation twice without a skip path. The first pass atomically saves each full local bundle to `reviews/<case-id>.json`; the second pass is read-only and does not overwrite those nondeterministic local bundles. Build one projection per pass containing only stable manifest identity, criteria/label hashes, candidate keys, evidence classifications/levels, finding/gate enums, reason codes, reference hashes, limitations, and metrics.
 
@@ -2688,7 +2688,7 @@ def build_determinism_projection(result: R002BenchmarkResult) -> R002Determinism
 
 Reject unless: executed/failed/skipped are exactly `20/0/0`; all objects validate; every source/hash/SHA/reference error count is zero; every test-stream candidate is TEST/E2; no evidence exceeds E2; all expected missing pairs have explanations; all cases have unavailable/empty CI, no runtime evidence/resolutions/final acceptance; every gate has an allowed shape; `unexpected_ready_count == 0`; both projection hashes match; and Task 3's two existing benchmark results remain exact.
 
-- [ ] **Step 8: Run runner tests and verify GREEN**
+- [x] **Step 8: Run runner tests and verify GREEN**
 
 Run:
 
@@ -2702,7 +2702,7 @@ uv run ruff check scopeproof_core/evals/r002_runner.py tests/evals/test_r002_run
 
 Expected: all focused tests pass; both existing benchmark outputs retain their exact counts and have no mismatches.
 
-- [ ] **Step 9: Commit the offline runner slice**
+- [x] **Step 9: Commit the offline runner slice**
 
 ```bash
 git add scopeproof_core/evals/r002_runner.py tests/evals/test_r002_runner.py
