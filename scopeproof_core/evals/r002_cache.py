@@ -11,7 +11,7 @@ import secrets
 import stat
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager as ContextManager
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager, nullcontext, suppress
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -1320,8 +1320,13 @@ class R002Cache:
             expected = _model_for_name(relative)
         if model_type is not expected:
             raise R002CacheError("model_type_mismatch")
-        if relative == "annotation-review.json":
+        if relative in {"annotation-universe.json", "annotation-review.json"}:
             with self._annotation_lock():
+                if relative == "annotation-universe.json":
+                    return self._read_model_internal(
+                        relative,
+                        R002AnnotationUniverse,
+                    )  # type: ignore[return-value]
                 review = self._read_model_internal(relative, R002AnnotationReview)
                 universe = self._read_model_internal(
                     "annotation-universe.json", R002AnnotationUniverse
@@ -1640,6 +1645,7 @@ class R002Cache:
         criteria_set_sha256: str,
         candidate_count: int,
         ordered_key_factory: Callable[[], Iterator[R002CandidateLineKey]],
+        already_locked: bool = False,
     ) -> R002AnnotationUniverse:
         if (
             type(source_manifest_sha256) is not str
@@ -1701,7 +1707,8 @@ class R002Cache:
                 raise R002CacheError("annotation_stream_invalid")
             self._stream_piece(fd, suffix, size=size, limit=limit)
 
-        with self._annotation_lock():
+        lock = nullcontext() if already_locked else self._annotation_lock()
+        with lock:
             universe = self._stream_replace(
                 "annotation-universe.json",
                 R002AnnotationUniverse,
@@ -1745,6 +1752,7 @@ class R002Cache:
         annotation_universe_sha256: str,
         candidate_count: int,
         ordered_item_factory: Callable[[], Iterator[R002AnnotationReviewItem]],
+        already_locked: bool = False,
     ) -> R002AnnotationReview:
         if (
             type(source_manifest_sha256) is not str
@@ -1759,7 +1767,8 @@ class R002Cache:
             raise R002CacheError("annotation_pair_mismatch")
         if candidate_count < 1 or candidate_count > 250000:
             raise R002CacheError("annotation_pair_limit")
-        with self._annotation_lock():
+        lock = nullcontext() if already_locked else self._annotation_lock()
+        with lock:
             universe = self._read_model_internal(
                 "annotation-universe.json",
                 R002AnnotationUniverse,
@@ -1875,6 +1884,104 @@ class R002Cache:
             ordered_item_factory,
         )
         _raise_public(reason)
+
+    def _optional_annotation_bytes(self, relative_name: str) -> bytes | None:
+        try:
+            return self._read_bytes_internal(
+                relative_name,
+                missing_reason="referenced_object_missing",
+            )
+        except R002CacheError as error:
+            if error.reason_code == "referenced_object_missing":
+                return None
+            raise
+
+    def _remove_annotation_artifact(self, relative_name: str) -> None:
+        with (
+            self._open_root() as root_fd,
+            self._open_parent(
+                root_fd,
+                relative_name,
+                create=False,
+            ) as (parent_fd, name),
+        ):
+            destination = self._preflight_replace_destination(
+                parent_fd,
+                name,
+                relative_name,
+            )
+            if destination is None:
+                return
+            try:
+                os.unlink(name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                return
+            except OSError:
+                raise R002CacheError("cache_state_unknown") from None
+            self._fsync(parent_fd, "cache_state_unknown")
+
+    def _restore_annotation_artifact(
+        self,
+        relative_name: str,
+        previous: bytes | None,
+    ) -> None:
+        if previous is None:
+            self._remove_annotation_artifact(relative_name)
+        else:
+            self._replace_bytes(relative_name, previous, create_only=False)
+
+    def write_annotation_pair(
+        self,
+        *,
+        source_manifest_sha256: str,
+        criteria_set_sha256: str,
+        candidate_count: int,
+        ordered_key_factory: Callable[[], Iterator[R002CandidateLineKey]],
+        ordered_item_factory: Callable[[], Iterator[R002AnnotationReviewItem]],
+    ) -> tuple[R002AnnotationUniverse, R002AnnotationReview]:
+        """Publish the universe/review pair or restore the exact prior pair."""
+        names = ("annotation-universe.json", "annotation-review.json")
+        previous: tuple[bytes | None, bytes | None] = (None, None)
+        snapshot_complete = False
+        with self._annotation_lock():
+            try:
+                previous = tuple(
+                    self._optional_annotation_bytes(relative_name)
+                    for relative_name in names
+                )
+                snapshot_complete = True
+                universe = self._write_annotation_universe_internal(
+                    source_manifest_sha256=source_manifest_sha256,
+                    criteria_set_sha256=criteria_set_sha256,
+                    candidate_count=candidate_count,
+                    ordered_key_factory=ordered_key_factory,
+                    already_locked=True,
+                )
+                review = self._write_annotation_review_internal(
+                    source_manifest_sha256=source_manifest_sha256,
+                    criteria_set_sha256=criteria_set_sha256,
+                    annotation_universe_sha256=canonical_sha256(universe),
+                    candidate_count=candidate_count,
+                    ordered_item_factory=ordered_item_factory,
+                    already_locked=True,
+                )
+            except BaseException:
+                if not snapshot_complete:
+                    raise
+                try:
+                    for relative_name, prior_bytes in zip(
+                        names,
+                        previous,
+                        strict=True,
+                    ):
+                        self._restore_annotation_artifact(
+                            relative_name,
+                            prior_bytes,
+                        )
+                except BaseException:
+                    raise R002CacheError("cache_state_unknown") from None
+                raise
+        return universe, review
 
     def _open_scratch_internal(self) -> BinaryIO:
         duplicate = -1

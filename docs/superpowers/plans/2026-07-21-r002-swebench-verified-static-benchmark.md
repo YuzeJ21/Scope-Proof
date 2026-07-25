@@ -1835,7 +1835,7 @@ git commit -m "feat: prepare R-002 sources read only"
 - Consumes: the problem-only criteria-source index for proposal authoring; after confirmation, the complete evidence cache, source-manifest hash, and owner-authored criteria supplied without any pre-gate patch/test-patch reads.
 - Produces: `build_criteria_proposal(manifest, cache, criteria_by_case)`, `confirmed_criteria_from_proposal(proposal)`, `build_annotation_universe(manifest, criteria, cache)` with its matching local raw review artifact, `derive_expected_missing(criteria, universe, labels)`, `validate_complete_label_proposal(criteria, universe, labels)`, and `validate_complete_labels(criteria, universe, labels)`.
 
-- [ ] **Step 1: Write failing criteria-isolation tests**
+- [x] **Step 1: Write failing criteria-isolation tests**
 
 Use a recording cache double and assert that criteria proposal construction reads only each selected row's `problem_statement` and its pinned hash. It must not return or inspect `patch`, `test_patch`, hints, test-name fields, ScopeProof evidence, or prior output.
 
@@ -1863,7 +1863,7 @@ def test_design_approval_cannot_confirm_criteria(r002_criteria_proposal):
 
 Also assert every criterion explicitly serializes `criterion_id`, `text`, `priority`, `criterion_type`, `criterion_source`, `source_span`, and `required_evidence_level`; only `CriterionSource.USER_CONFIRMED` is accepted in a final set; text is a single line of at most 512 characters; and source spans match `^problem_statement:L[1-9]\d*-L[1-9]\d*$`, have start ≤ end, and stay within the actual normalized problem-statement line count, never copied source text.
 
-- [ ] **Step 2: Write failing annotation-universe and label tests**
+- [x] **Step 2: Write failing annotation-universe and label tests**
 
 Build the exact cross-product of each confirmed criterion and every added/context line from both streams. Assert removed lines are absent, order is stable, the tuple key is exact, the pack hard-fails above 250,000 pairs without truncation, universe JSON fails before exceeding 256 MiB, annotation-review JSON fails before exceeding 512 MiB, and any missing/extra/duplicate/changed key forces reannotation. Mutate each top-level source/manifest/criteria/universe hash in turn and mutate case IDs, problem hashes, row hashes, and criterion IDs on both sides of every zip; each must fail before a candidate is written or a label is accepted.
 
@@ -1909,7 +1909,7 @@ def test_labels_must_equal_the_full_frozen_universe(
         validate_complete_labels(confirmed_criteria, annotation_universe, missing_one)
 ```
 
-- [ ] **Step 3: Run annotation tests and verify RED**
+- [x] **Step 3: Run annotation tests and verify RED**
 
 Run:
 
@@ -1919,7 +1919,7 @@ uv run pytest -q tests/evals/test_r002_annotation.py
 
 Expected: FAIL because the proposal and annotation functions do not exist.
 
-- [ ] **Step 4: Implement criteria proposal and confirmation transformation**
+- [x] **Step 4: Implement criteria proposal and confirmation transformation**
 
 Change the fixed signature to accept explicitly authored criteria; there is no automatic criterion generator in the product.
 
@@ -1979,7 +1979,7 @@ def confirmed_criteria_from_proposal(proposal: R002CriteriaProposal) -> R002Crit
 
 `validate_criterion_spans` requires every span to match `R002SourceSpan`, end within the normalized problem-statement line count, criterion text to be one nonblank line of at most 512 characters, and every field to be explicitly present in `Criterion.model_fields_set`. `R002CriterionReviewCase` and `R002CriteriaProposal` may contain raw problem text only because they are validated ignored-cache models. `R002CriteriaSet` cannot contain that field. Add `criteria-proposal.json` and `criteria-review.json` to the cache allowlist; never add either file to Git.
 
-- [ ] **Step 5: Implement streamed annotation-universe construction**
+- [x] **Step 5: Implement streamed annotation-universe construction**
 
 Read patch/test-patch only after `load_confirmed_criteria` succeeds. Perform one bounded count pass before writing any candidate; then stream canonical key objects into a same-directory temporary JSON array, fsync, reopen as `R002AnnotationUniverse`, verify the canonical SHA-256, and atomically publish `annotation-universe.json`. Do not retain raw line content in this hash-only artifact.
 
@@ -2133,7 +2133,7 @@ The wrapper imports no network module or `pyarrow`, rejects an absent/unconfirme
 
 `R002Cache.write_annotation_universe` writes the five literal research-boundary fields and both upstream hashes in canonical key order, opens `candidate_keys` as a JSON array, streams each already ordered canonical key with comma separators, counts bytes before every write, aborts before `R002_ANNOTATION_UNIVERSE_MAX_BYTES`, checks the emitted count, closes the object, fsyncs, reopens it through `R002AnnotationUniverse.model_validate_json`, verifies canonical bytes and SHA-256, atomically replaces `annotation-universe.json`, and reopens once more. `write_annotation_review` then separately streams the exact matching local-only item sequence, including marker-free raw line, one neighboring new-side line on each side within the hunk, and unset decision fields; it aborts before `R002_ANNOTATION_REVIEW_MAX_BYTES`, validates the complete strict model and universe-key equality, and atomically replaces `annotation-review.json`. These limits fail the whole annotation phase and require an explicit design revision—never truncation. The review artifact exists only to let the benchmark owner label content; the final label set strips all raw text.
 
-- [ ] **Step 6: Implement label completeness and expected-missing derivation**
+- [x] **Step 6: Implement label completeness and expected-missing derivation**
 
 Require exact ordered key equality between the universe and labels. Derive expected missing for the fixed static types from owner-confirmed relevant labels; do not let the author hand-edit this list.
 
@@ -2219,7 +2219,7 @@ def validate_complete_labels(
     _validate_label_content(criteria, universe, labels)
 ```
 
-- [ ] **Step 7: Run annotation tests and verify GREEN**
+- [x] **Step 7: Run annotation tests and verify GREEN**
 
 Run:
 
@@ -2231,7 +2231,16 @@ uv run ruff check scopeproof_core/evals/r002_runner.py tests/evals/test_r002_ann
 
 Expected: all tests pass and Ruff reports no findings.
 
-- [ ] **Step 8: Commit the two-pass annotation slice**
+Local engineering verification on 2026-07-24: 13 focused annotation tests passed,
+including a concurrent-writer rollback regression, and the combined
+annotation/model/cache suite passed 241 tests. The full suite passed 1,490 tests
+with one pre-existing skip and 95.04% line coverage using coverage.py's Python 3.12
+sysmon core; Ruff, diff hygiene, the offline lock, installed dependency compatibility,
+and both existing deterministic benchmarks passed. All fixtures are ScopeProof-authored
+controlled engineering evidence; no target repository code or live network was used,
+and Stage 1 remains unchanged.
+
+- [x] **Step 8: Commit the two-pass annotation slice**
 
 ```bash
 git add scopeproof_core/evals/r002_runner.py scopeproof_core/evals/r002_cache.py \
