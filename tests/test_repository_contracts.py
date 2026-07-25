@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from PIL import Image
 
+from scopeproof_core.evals.r002_models import R002_SOURCE, load_source_manifest
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
 
 
@@ -60,6 +61,27 @@ def test_r002_module_commands_are_packaged_but_not_live_ci() -> None:
     assert "python -m scopeproof_core.evals.r002_swebench run" not in workflow
     assert "python -m pip install -e '.[dev,research]'" in workflow
     assert "python -m uv sync --extra dev --extra research --locked" in workflow
+
+
+def test_r002_source_manifest_is_exact_and_redacted() -> None:
+    path = Path("evals/r002/source_manifest.json")
+    manifest = load_source_manifest(path)
+
+    assert manifest.source.model_dump(mode="json") == R002_SOURCE
+    assert [case.case_id for case in manifest.cases] == [
+        f"R002-{number:03d}" for number in range(1, 21)
+    ]
+    assert len({case.repository for case in manifest.cases}) == 12
+    raw = path.read_text(encoding="utf-8")
+    for forbidden_key in (
+        '"problem_statement":',
+        '"patch":',
+        '"test_patch":',
+        '"hints_text":',
+        '"FAIL_TO_PASS":',
+        '"PASS_TO_PASS":',
+    ):
+        assert forbidden_key not in raw
 
 
 def _mp4_duration_seconds(path: Path) -> float:
