@@ -460,3 +460,48 @@ def test_diff_error_reason_allowlist_is_exact_and_closed() -> None:
         and isinstance(node.args[0].value, str)
     }
     assert raise_literals == R002DiffError.allowed_reason_codes
+
+
+def test_internal_diff_guards_cover_unregistered_budget_and_line_marker() -> None:
+    with pytest.raises(RuntimeError, match="unregistered"):
+        r002_diff._raise_budget_error("unknown")
+    with pytest.raises(R002DiffError, match="invalid_line_marker"):
+        r002_diff._parsed_line(
+            "?", "value", 1, 1, limits=r002_diff.DEFAULT_R002_DIFF_LIMITS
+        )
+
+
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        (b"diff --git a/src/a.py b/src/a.py\nunexpected\n", "path_mismatch"),
+        (b"diff --git a/src/a.py b/src/a.py\n--- src/a.py\n", "path_mismatch"),
+        (b"diff --git a/src/a.py b/src/b.py\n", "path_mismatch"),
+        (
+            b"diff --git a/src/a.py b/src/a.py\nindex invalid\n--- a/src/a.py\n"
+            b"+++ b/src/a.py\n@@ -1 +1 @@\n-a\n+b\n",
+            "invalid_index",
+        ),
+        (
+            b"diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n",
+            "invalid_line_marker",
+        ),
+        (
+            b"diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n+++ b/src/a.py\n",
+            "invalid_line_marker",
+        ),
+        (
+            b"diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n+++ b/src/a.py\n"
+            b"not-a-hunk\n",
+            "invalid_hunk_header",
+        ),
+        (b"index abc..def 100644\n", "invalid_index"),
+        (b"\\ No newline at end of file\n", "invalid_no_newline_marker"),
+        (b"@@ malformed\n", "invalid_hunk_header"),
+    ],
+)
+def test_malformed_diff_boundary_records_fail_with_stable_reasons(
+    raw: bytes, reason: str
+) -> None:
+    with pytest.raises(R002DiffError, match=reason):
+        parse_unified_diff(raw, stream=R002DiffStream.PATCH)

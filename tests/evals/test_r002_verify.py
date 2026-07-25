@@ -1986,3 +1986,212 @@ def test_reference_error_reason_allowlist_is_closed_and_matches_raise_sites() ->
         and isinstance(node.args[0].value, str)
     }
     assert literals == R002ReferenceError.allowed_reason_codes
+
+
+def test_verifier_exact_type_guards_reject_constructed_substitutes() -> None:
+    with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+        r002_verify._validated_case_snapshot(object(), reason="model_validation_failed")
+    with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+        r002_verify._validated_limits_snapshot(object())
+    with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+        r002_verify._validated_evidence_snapshot(object())
+    with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+        r002_verify._validate_verified_sidecar(object(), object())
+
+
+def test_public_verifier_wrappers_normalize_unexpected_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    r002_case_manifest: R002CaseManifest,
+    parsed_case: R002ParsedCase,
+    head_files: dict[str, bytes],
+    verified_case_lines: R002VerifiedCaseLines,
+) -> None:
+    operations = (
+        (
+            "_candidate_permalink",
+            lambda: candidate_permalink(r002_case_manifest, "src/widget.py", 1),
+            "permalink_input_invalid",
+        ),
+        (
+            "_validated_parsed_snapshot",
+            lambda: assert_test_stream_separation(parsed_case),
+            "model_validation_failed",
+        ),
+        (
+            "_verify_case_head_files",
+            lambda: verify_case_head_files(
+                case=r002_case_manifest,
+                parsed=parsed_case,
+                head_file_bytes=head_files,
+            ),
+            "model_validation_failed",
+        ),
+        (
+            "_verify_evidence_reference",
+            lambda: verify_evidence_reference(
+                case=r002_case_manifest,
+                evidence=evidence_item(case=r002_case_manifest),
+                verified_lines=verified_case_lines,
+            ),
+            "model_validation_failed",
+        ),
+    )
+    for name, operation, reason in operations:
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                r002_verify,
+                name,
+                lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("internal")),
+            )
+            with pytest.raises(R002ReferenceError, match=reason):
+                operation()
+
+
+def test_prevalidation_rejects_invalid_paths_unicode_and_aggregate_limits(
+    monkeypatch: pytest.MonkeyPatch,
+    parsed_case: R002ParsedCase,
+) -> None:
+    original_file = parsed_case.files[0]
+    invalid_path_file = original_file.model_construct(
+        **{**original_file.__dict__, "path": "../unsafe"}
+    )
+    invalid_path_case = parsed_case.model_construct(
+        **{**parsed_case.__dict__, "files": (invalid_path_file,)}
+    )
+    with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+        r002_verify._prevalidate_parsed_shape(invalid_path_case)
+
+    original_hunk = original_file.hunks[0]
+    original_line = original_hunk.lines[0]
+    invalid_line = original_line.model_construct(
+        **{**original_line.__dict__, "content": "\ud800"}
+    )
+    invalid_hunk = original_hunk.model_construct(
+        **{**original_hunk.__dict__, "lines": (invalid_line,)}
+    )
+    invalid_file = original_file.model_construct(
+        **{**original_file.__dict__, "hunks": (invalid_hunk,)}
+    )
+    invalid_unicode_case = parsed_case.model_construct(
+        **{**parsed_case.__dict__, "files": (invalid_file,)}
+    )
+    with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+        r002_verify._prevalidate_parsed_shape(invalid_unicode_case)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(r002_verify, "_MAX_R002_PARSED_HUNKS", 1)
+        with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+            r002_verify._prevalidate_parsed_shape(parsed_case)
+
+
+def test_verified_sidecar_constructed_drift_is_rejected(
+    r002_case_manifest: R002CaseManifest,
+    verified_case_lines: R002VerifiedCaseLines,
+) -> None:
+    line = verified_case_lines.lines[0]
+    cases = (
+        verified_case_lines.model_construct(
+            **{**verified_case_lines.__dict__, "lines": [line]}
+        ),
+        verified_case_lines.model_construct(
+            **{**verified_case_lines.__dict__, "case_id": 123}
+        ),
+        verified_case_lines.model_construct(
+            **{
+                **verified_case_lines.__dict__,
+                "lines": (
+                    line.model_construct(**{**line.__dict__, "path": "../unsafe"}),
+                ),
+            }
+        ),
+        verified_case_lines.model_construct(
+            **{
+                **verified_case_lines.__dict__,
+                "lines": (
+                    line,
+                    line.model_copy(update={"hunk_id": "different-hunk"}),
+                ),
+            }
+        ),
+        verified_case_lines.model_construct(
+            **{
+                **verified_case_lines.__dict__,
+                "lines": (
+                    line.model_construct(**{**line.__dict__, "head_sha": "0" * 40}),
+                ),
+            }
+        ),
+        verified_case_lines.model_construct(
+            **{
+                **verified_case_lines.__dict__,
+                "lines": (
+                    line.model_construct(
+                        **{
+                            **line.__dict__,
+                            "permalink": line.permalink.replace("#L1-L1", "#L2-L2"),
+                        }
+                    ),
+                ),
+            }
+        ),
+    )
+    for sidecar in cases:
+        with pytest.raises(R002ReferenceError):
+            r002_verify._cross_bind_verified_sidecar(r002_case_manifest, sidecar)
+
+
+def test_head_mapping_private_guard_rejects_nonmapping_long_and_unsafe_keys(
+    parsed_case: R002ParsedCase,
+) -> None:
+    with pytest.raises(R002ReferenceError, match="head_mapping_invalid"):
+        r002_verify._validate_head_mapping(parsed_case, object())
+
+    for path in ("x" * 513, "../unsafe"):
+        with pytest.raises(R002ReferenceError, match="head_mapping_invalid"):
+            r002_verify._validate_head_mapping(
+                parsed_case,
+                {
+                    path: b"value",
+                    parsed_case.files[1].path: b"value",
+                },
+            )
+
+
+def test_prevalidation_enforces_aggregate_hunk_and_line_budgets(
+    monkeypatch: pytest.MonkeyPatch,
+    parsed_case: R002ParsedCase,
+) -> None:
+    one_hunk_files = tuple(
+        file.model_construct(
+            **{
+                **file.__dict__,
+                "hunks": (
+                    file.hunks[0].model_construct(
+                        **{
+                            **file.hunks[0].__dict__,
+                            "lines": (file.hunks[0].lines[0],),
+                        }
+                    ),
+                ),
+            }
+        )
+        for file in parsed_case.files
+    )
+    bounded = parsed_case.model_construct(
+        **{
+            **parsed_case.__dict__,
+            "files": one_hunk_files,
+            "hunk_count": 1,
+            "diff_line_count": 1,
+        }
+    )
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(r002_verify, "_MAX_R002_PARSED_HUNKS", 1)
+        with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+            r002_verify._prevalidate_parsed_shape(bounded)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(r002_verify, "_MAX_R002_PARSED_LINES", 1)
+        with pytest.raises(R002ReferenceError, match="model_validation_failed"):
+            r002_verify._prevalidate_parsed_shape(bounded)

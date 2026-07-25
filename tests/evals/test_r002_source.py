@@ -13,6 +13,7 @@ import pyarrow.parquet as pq
 import pytest
 from pydantic import ValidationError
 
+from scopeproof_core.evals import r002_source
 from scopeproof_core.evals.r002_models import (
     R002_SCHEMA,
     R002CaseManifest,
@@ -173,6 +174,101 @@ def test_source_error_allowlist_is_closed_and_exact():
         assert R002SourceError(reason).args == (reason,)
     with pytest.raises(RuntimeError):
         R002SourceError("unregistered")
+
+
+def test_source_container_rejects_nonbytes_and_second_rewind_failure() -> None:
+    pin = SWEbenchSourcePin(
+        dataset_id="fixture/dataset",
+        config="fixture",
+        split="test",
+        revision="c" * 40,
+        source_url="https://huggingface.co/fixture/data.parquet",
+        parquet_path="data/test.parquet",
+        byte_length=1,
+        sha256=sha256(b"x").hexdigest(),
+        row_count=1,
+        repository_count=1,
+        unique_instance_count=1,
+        schema=R002_SCHEMA,
+    )
+
+    class TextReturningSource:
+        def seek(self, offset):
+            return offset
+
+        def read(self, size):
+            return "x"
+
+    with pytest.raises(R002SourceError, match="parquet_bytes_mismatch"):
+        r002_source._validate_parquet_container(
+            TextReturningSource(), pin, pa=pa, pq=pq
+        )
+
+    class SecondSeekFailure(BytesIO):
+        def __init__(self) -> None:
+            super().__init__(b"x")
+            self.seeks = 0
+
+        def seek(self, offset, whence=0):
+            self.seeks += 1
+            if self.seeks == 2:
+                raise RuntimeError("second seek")
+            return super().seek(offset, whence)
+
+    with pytest.raises(R002SourceError, match="parquet_bytes_mismatch"):
+        r002_source._validate_parquet_container(
+            SecondSeekFailure(), pin, pa=pa, pq=pq
+        )
+
+
+def test_source_decode_preserves_explicit_closed_read_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path, pin = write_parquet_and_pin(tmp_path, [swebench_row()])
+    real_parquet_file = pq.ParquetFile
+
+    class ClosedReadFailure:
+        def __init__(self, source):
+            self._inner = real_parquet_file(source)
+            self.metadata = self._inner.metadata
+            self.schema_arrow = self._inner.schema_arrow
+
+        def read(self, columns=None):
+            raise R002SourceError("parquet_schema_mismatch")
+
+    monkeypatch.setattr(pq, "ParquetFile", ClosedReadFailure)
+    for decoder in (decode_verified_parquet, decode_criteria_source_rows):
+        with path.open("rb") as source, pytest.raises(
+            R002SourceError, match="parquet_schema_mismatch"
+        ):
+            decoder(source, pin)
+
+
+def test_source_collection_and_manifest_selection_mismatches_are_closed() -> None:
+    rows = selection_rows()
+    manifest = make_manifest(rows)
+    with pytest.raises(R002SourceError, match="row_count_mismatch"):
+        r002_source.validate_row_collection(rows[:-1], manifest.source)
+
+    criteria_rows = [
+        SWEbenchCriteriaSourceRow.model_validate(
+            row.model_dump(
+                include={
+                    "repo",
+                    "instance_id",
+                    "base_commit",
+                    "problem_statement",
+                    "difficulty",
+                }
+            )
+        )
+        for row in rows
+    ]
+    with pytest.raises(R002SourceError, match="manifest_selection_mismatch"):
+        validate_manifest_criteria_sources(
+            manifest.model_copy(update={"cases": tuple(reversed(manifest.cases))}),
+            criteria_rows,
+        )
 
 
 def test_pyarrow_is_not_imported_at_module_load_time():
