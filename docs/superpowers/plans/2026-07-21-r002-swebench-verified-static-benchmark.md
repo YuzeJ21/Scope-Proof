@@ -1513,7 +1513,7 @@ git commit -m "feat: persist R-002 cache atomically"
 - Consumes: Tasks 1–5, `httpx.Client`, the fixed source manifest, and the ignored `R002Cache`.
 - Produces: `R002ReadOnlyClient`, `prepare_criteria_sources(manifest_path, cache_root, transport=None) -> R002CriteriaSourcePreparationResult`, `prepare_r002(manifest_path, criteria_path, cache_root, transport=None) -> R002PreparationResult`, `R002CriteriaSourceIndex`, and the final validated `R002CacheIndex`.
 
-- [ ] **Step 1: Write failing URL and redirect tests**
+- [x] **Step 1: Write failing URL and redirect tests**
 
 Use only `httpx.MockTransport`; install a guard that raises if any request escapes the transport. Test the exact query-free source URL, at most three HTTPS redirects, allowed `huggingface.co`/`.hf.co` redirect hosts, and rejections for HTTP, credentials, non-default ports, IP literals, other hosts, fragments, GitHub redirects, metadata paths outside the manifest PR, raw paths outside the manifest repo/head/path, and any method other than GET. Allow an opaque provider-supplied query only on an already validated Hugging Face redirect target; never accept a query on the initial URL or any GitHub URL, persist it, print it, or carry it to another host.
 
@@ -1545,7 +1545,7 @@ def test_dataset_redirect_limit_is_three(source_url, tmp_path):
             pytest.fail("fourth redirect must not be followed")
 ```
 
-- [ ] **Step 2: Write failing download, PR metadata, and head-file tests**
+- [x] **Step 2: Write failing download, PR metadata, and head-file tests**
 
 Cover response content encoding, missing/wrong `Content-Length`, streamed byte excess at byte 2,090,471, truncated body, SHA mismatch, wrong Parquet metadata, wrong 20-case selection, PR 404, PR not closed/merged, base mismatch, head mismatch, repository/number mismatch, JSON metadata bodies over 1 MiB, raw-file request count >128, 4 MiB/file, 16 MiB/case, and 128 MiB/pack limits. The success fixture uses constructed data and exact fake hashes; CI must use zero live network. Put the implementation in private `_prepare_criteria_sources_from_manifest(manifest, ...)` and `_prepare_evidence_from_inputs(manifest, criteria, ...)` helpers that accept already validated models. Controlled tests call those helpers with structural fixtures; public `prepare_criteria_sources`/`prepare_r002` wrappers always call the non-injectable exact production loader first, and wrapper tests prove test pins are rejected before HTTP. Instrument Parquet column reads and assert the criteria-source phase never requests patch/test-patch/hint/test-name columns and performs no GitHub request.
 
@@ -1600,7 +1600,7 @@ def test_criteria_source_phase_publishes_only_problem_sources(preparation_fixtur
     assert preparation_fixture.parquet_columns_read == list(R002_CRITERIA_SOURCE_COLUMNS)
 ```
 
-- [ ] **Step 3: Run preparation tests and verify RED**
+- [x] **Step 3: Run preparation tests and verify RED**
 
 Run:
 
@@ -1610,7 +1610,7 @@ uv run pytest -q tests/evals/test_r002_prepare.py
 
 Expected: FAIL because `r002_prepare.py` does not exist.
 
-- [ ] **Step 4: Implement the allowlisted GET client**
+- [x] **Step 4: Implement the allowlisted GET client**
 
 The client owns `httpx.Client(follow_redirects=False, timeout=15.0)`, exposes no generic request method, and validates every URL before each GET. Every response stays streaming from request creation through bounded consumption; never call buffered `client.get()`.
 
@@ -1652,7 +1652,7 @@ class R002ReadOnlyClient:
 
 `fetch_head_file` permits exactly `https://raw.githubusercontent.com/<repository>/<verified-head>/<percent-encoded-logical-path>`, no redirect/query, a final 200, identity/no content encoding, 4 MiB per file, 16 MiB per case, 128 MiB across the pack, and 128 total head-file requests. A declared length cannot exceed the applicable bounds, and streamed bytes enforce them even when length is absent or false. It returns bytes only; logical paths remain index data and never local filesystem paths.
 
-- [ ] **Step 5: Implement criteria-source and post-confirmation evidence preparation**
+- [x] **Step 5: Implement criteria-source and post-confirmation evidence preparation**
 
 The first phase downloads and validates the exact Parquet but projects only the five criteria-source columns. It recomputes the fixed selection, validates each selected problem hash, writes exactly 20 problem bodies, publishes `criteria-source-index.json` last, closes and destroys the full-source scratch descriptor, and never contacts GitHub or calls the full-row/diff parser.
 
@@ -1796,7 +1796,7 @@ def _prepare_evidence_from_inputs(
 
 `prepare_r002` must load and validate the confirmed criteria file before constructing `R002ReadOnlyClient`, opening the Parquet scratch descriptor, decoding a patch column, reading a row object, or issuing any request. The full phase redownloads the exact 2 MB pin, decodes and validates all 500 rows, then materializes only the selected 20 full rows and their required head files. Do not catch a per-case error and continue. Any exception prevents a new full cache index from being published and leaves the earlier complete index unchanged; the shared CLI boundary later emits an operation-level failure object, never partial case counts. No replacement case is selected, and both full-source temporary downloads are destroyed on success or failure.
 
-- [ ] **Step 6: Run preparation tests and verify GREEN**
+- [x] **Step 6: Run preparation tests and verify GREEN**
 
 Run:
 
@@ -1808,7 +1808,15 @@ uv run ruff check scopeproof_core/evals/r002_prepare.py tests/evals/test_r002_pr
 
 Expected: all controlled fixture tests pass with zero live HTTP requests.
 
-- [ ] **Step 7: Commit the preparation slice**
+Local engineering verification on 2026-07-24: 36 focused preparation tests and
+355 related R-002 tests passed using controlled transports with socket-level DNS and connect
+guard. Ruff, diff hygiene, the offline lock, installed dependency compatibility, and both
+existing deterministic benchmarks passed. The full suite passed with 1,477 tests, one
+pre-existing skip, and 95.04% line coverage after cleanup hardening; the focused cleanup
+regressions were rerun after the last review correction. This remains constructed engineering
+evidence and does not advance Stage 1.
+
+- [x] **Step 7: Commit the preparation slice**
 
 ```bash
 git add scopeproof_core/evals/r002_prepare.py tests/evals/test_r002_prepare.py
