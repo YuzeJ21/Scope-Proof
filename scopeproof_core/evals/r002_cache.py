@@ -205,9 +205,9 @@ def _close_handle_once(handle: BinaryIO) -> bool:
 
 
 class _OwnedScratch(io.RawIOBase):
-    def __init__(self, fd: int, raw: BinaryIO) -> None:
+    def __init__(self, raw: BinaryIO) -> None:
         super().__init__()
-        self._fd = fd
+        self._fd = -1
         self._raw: BinaryIO | None = raw
 
     def _open_raw(self) -> BinaryIO:
@@ -268,17 +268,44 @@ class _OwnedScratch(io.RawIOBase):
             raise R002CacheError("scratch_failed")
 
 
+def _transfer_scratch_fd(scratch: _OwnedScratch, fd: int) -> None:
+    object.__setattr__(scratch, "_fd", fd)
+
+
+def _finish_scratch_transfer(scratch: _OwnedScratch) -> BinaryIO:
+    return scratch
+
+
 def _open_owned_scratch(fd: int) -> BinaryIO:
+    raw: BinaryIO | None = None
+    scratch: _OwnedScratch | None = None
     try:
         raw = io.FileIO(fd, mode="r+", closefd=False)
-    except Exception as caught:
+        scratch = _OwnedScratch(raw)
+        _transfer_scratch_fd(scratch, fd)
+        return _finish_scratch_transfer(scratch)
+    except BaseException as caught:
+        public_failure = isinstance(caught, Exception)
         del caught
-        closing_fd = fd
-        fd = -1
-        _close_fd(closing_fd)
-        del closing_fd
-        raise R002CacheError("scratch_failed") from None
-    return _OwnedScratch(fd, raw)
+        transferred = (
+            scratch is not None and object.__getattribute__(scratch, "_fd") == fd
+        )
+        if transferred:
+            fd = -1
+            _close_handle_once(scratch)
+            scratch = None
+            raw = None
+        elif raw is not None:
+            _close_handle_once(raw)
+            raw = None
+        if fd >= 0:
+            closing_fd = fd
+            fd = -1
+            _close_fd(closing_fd)
+            del closing_fd
+        if public_failure:
+            raise R002CacheError("scratch_failed") from None
+        raise
 
 
 def _raise_public(reason_code: str) -> NoReturn:

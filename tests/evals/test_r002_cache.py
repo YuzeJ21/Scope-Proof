@@ -1670,6 +1670,121 @@ def test_scratch_constructor_cleanup_never_retries_reused_descriptor(
                 real_close(filler_fd)
 
 
+def test_scratch_wrapper_constructor_failure_closes_local_descriptor_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_close_fd = cache_module._close_fd
+    constructed_fd = -1
+    owned_close_attempts = 0
+    raw_reference: weakref.ReferenceType[io.FileIO] | None = None
+    native_detail = "scratch-wrapper-constructor-native-detail"
+    secret = "scratch-wrapper-constructor-secret"
+
+    def failing_owner_constructor(*constructor_args: object) -> None:
+        nonlocal constructed_fd, raw_reference
+        raw = constructor_args[-1]
+        assert isinstance(raw, io.FileIO)
+        constructed_fd = raw.fileno()
+        assert raw.closefd is False
+        raw_reference = weakref.ref(raw)
+        raise OSError(errno.EIO, f"{native_detail}:{secret}")
+
+    def recording_close_fd(fd: int) -> bool:
+        nonlocal owned_close_attempts
+        if fd == constructed_fd:
+            owned_close_attempts += 1
+        return real_close_fd(fd)
+
+    monkeypatch.setattr(cache_module, "_OwnedScratch", failing_owner_constructor)
+    monkeypatch.setattr(cache_module, "_close_fd", recording_close_fd)
+    with (
+        pytest.raises(R002CacheError, match="scratch_failed") as caught,
+        R002Cache(tmp_path / "cache").open_unlinked_scratch(),
+    ):
+        pass
+    gc.collect()
+
+    assert caught.value.args == ("scratch_failed",)
+    assert type(caught.value.args[0]) is str
+    _assert_public_error_is_sanitized(caught.value, (native_detail, secret))
+    assert constructed_fd >= 0
+    assert raw_reference is not None
+    assert raw_reference() is None
+
+    descriptor_open = True
+    try:
+        os.fstat(constructed_fd)
+    except OSError:
+        descriptor_open = False
+    if descriptor_open:
+        os.close(constructed_fd)
+
+    assert owned_close_attempts == 1
+    assert not descriptor_open
+
+
+def test_scratch_transfer_interruption_closes_transferred_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    real_transfer = cache_module._transfer_scratch_fd
+    transferred_fd = -1
+
+    def transfer_then_interrupt(scratch, fd: int) -> None:
+        nonlocal transferred_fd
+        real_transfer(scratch, fd)
+        transferred_fd = fd
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(cache_module, "_transfer_scratch_fd", transfer_then_interrupt)
+    with (
+        pytest.raises(KeyboardInterrupt),
+        R002Cache(tmp_path / "cache").open_unlinked_scratch(),
+    ):
+        pass
+
+    assert transferred_fd >= 0
+    with pytest.raises(OSError):
+        os.fstat(transferred_fd)
+
+
+def test_scratch_post_transfer_interruption_closes_descriptor_while_trace_is_retained(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    transferred_fd = -1
+    retained: KeyboardInterrupt | None = None
+    real_transfer = cache_module._transfer_scratch_fd
+
+    def recording_transfer(scratch, fd: int) -> None:
+        nonlocal transferred_fd
+        real_transfer(scratch, fd)
+        transferred_fd = fd
+
+    def interrupt_after_transfer(scratch):
+        del scratch
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(cache_module, "_transfer_scratch_fd", recording_transfer)
+    monkeypatch.setattr(cache_module, "_finish_scratch_transfer", interrupt_after_transfer)
+    try:
+        with (
+            pytest.raises(KeyboardInterrupt) as caught,
+            R002Cache(tmp_path / "cache").open_unlinked_scratch(),
+        ):
+            pass
+        retained = caught.value
+        assert transferred_fd >= 0
+        with pytest.raises(OSError):
+            os.fstat(transferred_fd)
+    finally:
+        del retained
+
+
 def test_scratch_closes_duplicate_when_root_close_reports_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1831,3 +1946,790 @@ def test_persisted_control_is_canonical_json_without_terminal_newline(tmp_path: 
     assert path.read_bytes() == canonical_json_bytes(proposal)
     assert not path.read_bytes().endswith(b"\n")
     assert json.loads(path.read_bytes()) == proposal.model_dump(mode="json")
+
+
+def test_scratch_wrapper_exercises_binary_protocol_and_closed_guards(
+    tmp_path: Path,
+) -> None:
+    with R002Cache(tmp_path / "cache").open_unlinked_scratch() as scratch:
+        assert scratch.write(b"abcdef") == 6
+        assert scratch.tell() == 6
+        assert scratch.seek(0) == 0
+        target = bytearray(3)
+        assert scratch.readinto(target) == 3
+        assert bytes(target) == b"abc"
+        assert scratch.truncate(4) == 4
+        scratch.flush()
+        scratch.close()
+        scratch.close()
+        assert scratch.closed is True
+        with pytest.raises(ValueError, match="closed file"):
+            scratch.fileno()
+        with pytest.raises(ValueError, match="closed file"):
+            scratch.read(1)
+
+
+def test_public_cache_wrappers_sanitize_unexpected_internal_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    cache = R002Cache(tmp_path / "cache")
+    secret = "unexpected-internal-secret"
+
+    def unexpected(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise RuntimeError(secret)
+
+    cases = (
+        (
+            "_write_bytes_public_internal",
+            lambda: cache.write_bytes(f"head-files/{_sha(1)}", b"value"),
+            "cache_write_failed",
+        ),
+        (
+            "_write_content_addressed_model_public_internal",
+            lambda: cache.write_content_addressed_model(
+                f"rows/{_sha(2)}", _row(1), SWEbenchVerifiedRow
+            ),
+            "cache_write_failed",
+        ),
+        (
+            "_write_model_public_internal",
+            lambda: cache.write_model("criteria-proposal.json", _criteria_proposal()),
+            "cache_write_failed",
+        ),
+        (
+            "_replace_model_public_internal",
+            lambda: cache.replace_model("criteria-proposal.json", _criteria_proposal()),
+            "cache_write_failed",
+        ),
+        (
+            "_read_bytes_public_internal",
+            lambda: cache.read_bytes(f"head-files/{_sha(3)}"),
+            "cache_read_failed",
+        ),
+        (
+            "_read_model_public_internal",
+            lambda: cache.read_model("criteria-proposal.json", R002CriteriaProposal),
+            "cache_read_failed",
+        ),
+        (
+            "_publish_criteria_source_index_internal",
+            lambda: cache.publish_criteria_source_index(
+                R002CriteriaSourceIndex.model_construct()
+            ),
+            "cache_write_failed",
+        ),
+        (
+            "_load_criteria_source_index_internal",
+            cache.load_criteria_source_index,
+            "cache_read_failed",
+        ),
+        (
+            "_publish_index_internal",
+            lambda: cache.publish_index(R002CacheIndex.model_construct()),
+            "cache_write_failed",
+        ),
+        (
+            "_load_index_internal",
+            cache.load_index,
+            "cache_read_failed",
+        ),
+        (
+            "_write_annotation_universe_internal",
+            lambda: cache.write_annotation_universe(
+                source_manifest_sha256=_sha(4),
+                criteria_set_sha256=_sha(5),
+                candidate_count=1,
+                ordered_key_factory=lambda: iter(()),
+            ),
+            "annotation_stream_invalid",
+        ),
+        (
+            "_write_annotation_review_internal",
+            lambda: cache.write_annotation_review(
+                source_manifest_sha256=_sha(4),
+                criteria_set_sha256=_sha(5),
+                annotation_universe_sha256=_sha(6),
+                candidate_count=1,
+                ordered_item_factory=lambda: iter(()),
+            ),
+            "annotation_pair_mismatch",
+        ),
+        (
+            "_open_scratch_internal",
+            lambda: cache.open_unlinked_scratch().__enter__(),
+            "scratch_failed",
+        ),
+    )
+
+    for method_name, operation, reason in cases:
+        with monkeypatch.context() as scoped:
+            scoped.setattr(cache_module.R002Cache, method_name, unexpected)
+            with pytest.raises(R002CacheError, match=reason) as caught:
+                operation()
+        _assert_public_error_is_sanitized(caught.value, (secret,))
+
+
+def test_low_level_cache_failures_are_closed_and_classified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    file_path = tmp_path / "plain"
+    file_path.write_bytes(b"value")
+    file_fd = os.open(file_path, os.O_RDONLY)
+    directory_fd = os.open(tmp_path, os.O_RDONLY)
+    try:
+        with pytest.raises(R002CacheError, match="symlink_or_nondirectory"):
+            cache_module.R002Cache._verify_directory(file_fd, owned=False)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(cache_module.os, "fstat", lambda fd: (_ for _ in ()).throw(OSError()))
+            with pytest.raises(R002CacheError, match="cache_directory_security"):
+                cache_module.R002Cache._verify_directory(directory_fd, owned=False)
+            with pytest.raises(R002CacheError, match="cache_file_security"):
+                cache_module.R002Cache._verify_file(file_fd)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(cache_module, "_close_fd", lambda fd: False)
+            assert cache_module._close_all([file_fd]) is False
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module.os,
+                "open",
+                lambda *args, **kwargs: (_ for _ in ()).throw(FileExistsError()),
+            )
+            with pytest.raises(R002CacheError, match="temp_collision"):
+                cache_module.R002Cache._new_temp(directory_fd)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module.os,
+                "open",
+                lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+            )
+            with pytest.raises(R002CacheError, match="cache_write_failed"):
+                cache_module.R002Cache._new_temp(directory_fd)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module.os,
+                "unlink",
+                lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+            )
+            with pytest.raises(R002CacheError, match="cache_state_unknown"):
+                cache_module.R002Cache._unlink_created(directory_fd, "temp")
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module.os,
+                "write",
+                lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+            )
+            with pytest.raises(R002CacheError, match="cache_write_failed"):
+                cache_module.R002Cache._write_all(file_fd, b"value")
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(cache_module.os, "write", lambda *args, **kwargs: 0)
+            with pytest.raises(R002CacheError, match="cache_write_failed"):
+                cache_module.R002Cache._write_all(file_fd, b"value")
+    finally:
+        os.close(file_fd)
+        os.close(directory_fd)
+
+    with (
+        pytest.raises(R002CacheError, match="cache_directory_security"),
+        R002Cache(Path("/"))._open_root(),
+    ):
+        pass
+
+
+def test_public_read_and_annotation_validation_failure_paths(tmp_path: Path) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    body = b"head"
+    digest = sha256(body).hexdigest()
+    cache.write_bytes(f"head-files/{digest}", body)
+
+    with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+        cache.read_bytes(f"head-files/{digest}", expected_sha256=_sha(99))
+    with pytest.raises(R002CacheError, match="model_type_mismatch"):
+        cache.read_bytes("annotation-universe.json")
+    with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+        cache.read_bytes(f"head-files/{digest}", expected_sha256="not-a-hash")
+
+    invalid_universe_calls = (
+        {
+            "source_manifest_sha256": "bad",
+            "criteria_set_sha256": _sha(2),
+            "candidate_count": 1,
+            "ordered_key_factory": lambda: iter((_key(1),)),
+        },
+        {
+            "source_manifest_sha256": _sha(1),
+            "criteria_set_sha256": _sha(2),
+            "candidate_count": 0,
+            "ordered_key_factory": lambda: iter(()),
+        },
+    )
+    for arguments in invalid_universe_calls:
+        with pytest.raises(
+            R002CacheError,
+            match=r"annotation_stream_invalid|annotation_pair_limit",
+        ):
+            cache.write_annotation_universe(**arguments)
+
+    invalid_review_calls = (
+        {
+            "source_manifest_sha256": "bad",
+            "criteria_set_sha256": _sha(2),
+            "annotation_universe_sha256": _sha(3),
+            "candidate_count": 1,
+            "ordered_item_factory": lambda: iter(()),
+        },
+        {
+            "source_manifest_sha256": _sha(1),
+            "criteria_set_sha256": _sha(2),
+            "annotation_universe_sha256": _sha(3),
+            "candidate_count": 0,
+            "ordered_item_factory": lambda: iter(()),
+        },
+    )
+    for arguments in invalid_review_calls:
+        with pytest.raises(
+            R002CacheError,
+            match=r"annotation_pair_mismatch|annotation_pair_limit",
+        ):
+            cache.write_annotation_review(**arguments)
+
+
+class _IteratorFailure:
+    def __init__(self, *, fail_during_iter: bool) -> None:
+        self.fail_during_iter = fail_during_iter
+
+    def __iter__(self):
+        if self.fail_during_iter:
+            raise KeyboardInterrupt()
+        return self
+
+    def __next__(self):
+        raise KeyboardInterrupt()
+
+
+@pytest.mark.parametrize("fail_during_iter", [True, False])
+def test_annotation_universe_normalizes_iterator_base_exceptions(
+    tmp_path: Path, fail_during_iter: bool
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    with pytest.raises(R002CacheError, match="annotation_stream_invalid"):
+        cache.write_annotation_universe(
+            source_manifest_sha256=_sha(1),
+            criteria_set_sha256=_sha(2),
+            candidate_count=1,
+            ordered_key_factory=lambda: _IteratorFailure(
+                fail_during_iter=fail_during_iter
+            ),
+        )
+
+
+@pytest.mark.parametrize("fail_during_iter", [True, False])
+def test_annotation_review_normalizes_iterator_base_exceptions(
+    tmp_path: Path, fail_during_iter: bool
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    key = _key(1)
+    universe = cache.write_annotation_universe(
+        source_manifest_sha256=_sha(1),
+        criteria_set_sha256=_sha(2),
+        candidate_count=1,
+        ordered_key_factory=lambda: iter((key,)),
+    )
+    with pytest.raises(R002CacheError, match="annotation_pair_mismatch"):
+        cache.write_annotation_review(
+            source_manifest_sha256=_sha(1),
+            criteria_set_sha256=_sha(2),
+            annotation_universe_sha256=canonical_sha256(universe),
+            candidate_count=1,
+            ordered_item_factory=lambda: _IteratorFailure(
+                fail_during_iter=fail_during_iter
+            ),
+        )
+
+
+def test_criteria_source_index_maps_corruption_and_reopen_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    index = _prepared_cache(cache)
+    criteria_index = cache.load_criteria_source_index()
+
+    first = criteria_index.cases[0]
+    source_path = tmp_path / "cache" / "criteria-sources" / first.problem_statement_sha256
+    source_path.write_bytes(b"same-length-wrong")
+    source_path.chmod(0o600)
+    with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+        cache.load_criteria_source_index()
+
+    cache = R002Cache(tmp_path / "second-cache")
+    _prepared_cache(cache)
+    current = cache.load_criteria_source_index()
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            cache,
+            "_load_criteria_source_index_internal",
+            lambda: current.model_copy(update={"manifest_sha256": _sha(777)}),
+        )
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            cache._publish_criteria_source_index_internal(current)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            cache,
+            "_load_criteria_source_index_internal",
+            lambda: (_ for _ in ()).throw(R002CacheError("completion_marker_missing")),
+        )
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            cache._publish_criteria_source_index_internal(current)
+
+    assert index.complete is True
+
+
+def test_cache_index_maps_missing_corrupt_objects_and_reopen_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    index = _prepared_cache(cache)
+    cache.publish_index(index)
+
+    first = index.cases[0]
+    row_path = tmp_path / "cache" / "rows" / first.row_sha256
+    row_path.unlink()
+    with pytest.raises(R002CacheError, match="referenced_object_missing"):
+        cache.load_index()
+
+    cache = R002Cache(tmp_path / "second-cache")
+    index = _prepared_cache(cache)
+    head = index.cases[0].head_files[0]
+    head_path = tmp_path / "second-cache" / "head-files" / head.content_sha256
+    head_path.write_bytes(b"wrong")
+    head_path.chmod(0o600)
+    with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+        cache.publish_index(index)
+
+    cache = R002Cache(tmp_path / "third-cache")
+    index = _prepared_cache(cache)
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            cache,
+            "_load_index_internal",
+            lambda: index.model_copy(update={"criteria_set_sha256": _sha(778)}),
+        )
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            cache._publish_index_internal(index)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            cache,
+            "_load_index_internal",
+            lambda: (_ for _ in ()).throw(R002CacheError("completion_marker_missing")),
+        )
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            cache._publish_index_internal(index)
+
+
+def test_annotation_lock_release_and_stream_limits_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    cache = R002Cache(tmp_path / "cache")
+    real_flock = cache_module.fcntl.flock
+
+    def unlock_failure(fd: int, operation: int) -> None:
+        if operation == cache_module.fcntl.LOCK_UN:
+            raise OSError("simulated unlock failure")
+        real_flock(fd, operation)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(cache_module.fcntl, "flock", unlock_failure)
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            cache.write_annotation_universe(
+                source_manifest_sha256=_sha(1),
+                criteria_set_sha256=_sha(2),
+                candidate_count=1,
+                ordered_key_factory=lambda: iter((_key(1),)),
+            )
+
+    read_fd = os.open("/dev/null", os.O_RDONLY)
+    try:
+        with pytest.raises(R002CacheError, match="annotation_pair_limit"):
+            cache._stream_piece(read_fd, b"ab", size=1, limit=2)
+    finally:
+        os.close(read_fd)
+
+
+def test_stream_replace_detects_destination_drift_and_cleanup_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    calls = 0
+    real_preflight = cache._preflight_replace_destination
+
+    def drifting_preflight(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        result = real_preflight(*args, **kwargs)
+        if calls == 2:
+            return ("drifted",)
+        return result
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(cache, "_preflight_replace_destination", drifting_preflight)
+        with pytest.raises(R002CacheError, match="cache_replace_failed"):
+            _write_universe(cache)
+
+    cache = R002Cache(tmp_path / "cleanup-cache")
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            cache,
+            "_unlink_created",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                R002CacheError("cache_state_unknown")
+            ),
+        )
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            cache.write_annotation_universe(
+                source_manifest_sha256=_sha(1),
+                criteria_set_sha256=_sha(2),
+                candidate_count=1,
+                ordered_key_factory=lambda: (_ for _ in ()).throw(RuntimeError("writer")),
+            )
+
+
+def test_annotation_reopen_drift_and_invalid_items_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    universe = _write_universe(cache)
+    real_read = cache._read_model_internal
+
+    def drifting_universe(relative_name, model_type, **kwargs):
+        value = real_read(relative_name, model_type, **kwargs)
+        if relative_name == "annotation-universe.json":
+            return value.model_copy(update={"criteria_set_sha256": _sha(999)})
+        return value
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(cache, "_read_model_internal", drifting_universe)
+        with pytest.raises(R002CacheError, match="annotation_pair_mismatch"):
+            cache._write_annotation_universe_internal(
+                source_manifest_sha256=_sha(1),
+                criteria_set_sha256=_sha(2),
+                candidate_count=2,
+                ordered_key_factory=lambda: iter((_key(1), _key(2))),
+            )
+
+    invalid = R002AnnotationReviewItem.model_construct(key=_key(1), line_content=object())
+    with pytest.raises(R002CacheError, match="annotation_pair_mismatch"):
+        cache.write_annotation_review(
+            source_manifest_sha256=_sha(1),
+            criteria_set_sha256=_sha(2),
+            annotation_universe_sha256=canonical_sha256(universe),
+            candidate_count=2,
+            ordered_item_factory=lambda: iter((invalid,)),
+        )
+
+
+def test_cache_destination_usability_rejects_unbound_or_invalid_objects(
+    tmp_path: Path,
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    row = _row(1)
+    row_bytes = canonical_json_bytes(row)
+
+    assert not cache._replace_destination_usable(f"rows/{_sha(1)}", row_bytes)
+    assert not cache._replace_destination_usable(
+        f"rows/{sha256(b'not-json').hexdigest()}", b"not-json"
+    )
+    assert not cache._replace_destination_usable("unknown.json", b"{}")
+
+    review = _review_bundle()
+    review_bytes = canonical_json_bytes(review)
+    assert not cache._replace_destination_usable("reviews/R002-999.json", review_bytes)
+
+    universe = _write_universe(cache)
+    mismatched_review = R002AnnotationReview(
+        source_manifest_sha256=_sha(1),
+        criteria_set_sha256=_sha(2),
+        annotation_universe_sha256=_sha(999),
+        items=tuple(
+            R002AnnotationReviewItem(key=_key(number), line_content=f"line {number}")
+            for number in (1, 2)
+        ),
+    )
+    assert not cache._replace_destination_usable(
+        "annotation-review.json", canonical_json_bytes(mismatched_review)
+    )
+    assert canonical_sha256(universe) != mismatched_review.annotation_universe_sha256
+
+
+def test_low_level_snapshot_and_temp_failures_are_conservative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    cache = R002Cache(tmp_path / "cache")
+    with cache._open_root() as root_fd:
+        with pytest.raises(R002CacheError, match="cache_file_security"):
+            cache._prepare_temp(root_fd, b"too-large", 1)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(cache, "_read_checked", lambda *args, **kwargs: b"different")
+            with pytest.raises(R002CacheError, match="cache_write_failed"):
+                cache._prepare_temp(root_fd, b"expected", 100)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module.os,
+                "fsync",
+                lambda fd: (_ for _ in ()).throw(OSError("fsync")),
+            )
+            with pytest.raises(R002CacheError, match="cache_fsync_failed"):
+                cache._fsync(root_fd)
+
+        assert cache._ambiguous_link_snapshot(
+            root_fd, "missing", "criteria-proposal.json"
+        ) is None
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module.os,
+                "unlink",
+                lambda *args, **kwargs: (_ for _ in ()).throw(FileNotFoundError()),
+            )
+            with pytest.raises(R002CacheError, match="cache_state_unknown"):
+                cache._remove_ambiguous_temp_and_sync(
+                    root_fd, "missing", require_present=True
+                )
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module.os,
+                "unlink",
+                lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+            )
+            with pytest.raises(R002CacheError, match="cache_state_unknown"):
+                cache._remove_ambiguous_temp_and_sync(
+                    root_fd, "missing", require_present=False
+                )
+
+
+def test_read_snapshot_rejects_oversize_read_failure_and_close_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scopeproof_core.evals.r002_cache as cache_module
+
+    path = tmp_path / "value"
+    path.write_bytes(b"content")
+    path.chmod(0o600)
+    parent_fd = os.open(tmp_path, os.O_RDONLY)
+    try:
+        with pytest.raises(R002CacheError, match="cache_file_security"):
+            R002Cache._read_checked_snapshot(parent_fd, "value", max_bytes=1)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module.os,
+                "read",
+                lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+            )
+            with pytest.raises(R002CacheError, match="cache_read_failed"):
+                R002Cache._read_checked_snapshot(parent_fd, "value", max_bytes=100)
+
+        leaked_fds: list[int] = []
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                cache_module,
+                "_close_fd",
+                lambda fd: leaked_fds.append(fd) and False,
+            )
+            with pytest.raises(R002CacheError, match="cache_state_unknown"):
+                R002Cache._read_checked_snapshot(parent_fd, "value", max_bytes=100)
+        for leaked_fd in leaked_fds:
+            os.close(leaked_fd)
+    finally:
+        os.close(parent_fd)
+
+
+def test_index_internal_corruption_mappings_cover_length_rows_and_heads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    index = _prepared_cache(cache)
+    criteria_index = cache.load_criteria_source_index()
+
+    first_source = criteria_index.cases[0]
+    with monkeypatch.context() as scoped:
+        scoped.setattr(cache, "_read_bytes_internal", lambda *args, **kwargs: b"x")
+        with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+            cache._verify_criteria_source_index(
+                criteria_index.model_copy(
+                    update={
+                        "cases": (
+                            first_source.model_copy(update={"byte_length": 2}),
+                            *criteria_index.cases[1:],
+                        )
+                    }
+                )
+            )
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            cache,
+            "_read_model_internal",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                R002CacheError("model_validation_failed")
+            ),
+        )
+        with pytest.raises(R002CacheError, match="criteria_source_index_mismatch"):
+            cache._load_criteria_source_index_internal()
+        with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+            cache._load_index_internal()
+
+    first_case = index.cases[0]
+    with monkeypatch.context() as scoped:
+        real_read_model = cache._read_model_internal
+
+        def wrong_row(relative_name, model_type, **kwargs):
+            if relative_name.startswith("rows/"):
+                return _row(999)
+            return real_read_model(relative_name, model_type, **kwargs)
+
+        scoped.setattr(
+            cache,
+            "_read_model_internal",
+            wrong_row,
+        )
+        with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+            cache._verify_cache_index(index)
+
+    with monkeypatch.context() as scoped:
+        real_read_model = cache._read_model_internal
+
+        def row_then_real(relative_name, model_type, **kwargs):
+            if relative_name.startswith("rows/"):
+                return real_read_model(relative_name, model_type, **kwargs)
+            return real_read_model(relative_name, model_type, **kwargs)
+
+        scoped.setattr(cache, "_read_model_internal", row_then_real)
+        real_read_bytes = cache._read_bytes_internal
+
+        def fail_head(relative_name, **kwargs):
+            if relative_name.startswith("head-files/"):
+                raise R002CacheError("cache_file_security")
+            return real_read_bytes(relative_name, **kwargs)
+
+        scoped.setattr(
+            cache,
+            "_read_bytes_internal",
+            fail_head,
+        )
+        with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+            cache._verify_cache_index(index)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(cache, "_read_model_internal", cache._read_model_internal)
+        real_read_bytes = cache._read_bytes_internal
+
+        def short_head(relative_name, **kwargs):
+            if relative_name.startswith("head-files/"):
+                return b"x"
+            return real_read_bytes(relative_name, **kwargs)
+
+        scoped.setattr(cache, "_read_bytes_internal", short_head)
+        with pytest.raises(R002CacheError, match="referenced_object_mismatch"):
+            cache._verify_cache_index(
+                index.model_copy(
+                    update={
+                        "cases": (
+                            first_case.model_copy(
+                                update={
+                                    "head_files": (
+                                        first_case.head_files[0].model_copy(
+                                            update={"byte_length": 2}
+                                        ),
+                                    )
+                                }
+                            ),
+                            *index.cases[1:],
+                        )
+                    }
+                )
+            )
+
+
+def test_annotation_invalid_constructed_values_and_reopen_failures_are_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    invalid_key = R002CandidateLineKey.model_construct(path="../unsafe")
+    with pytest.raises(R002CacheError, match="annotation_stream_invalid"):
+        cache.write_annotation_universe(
+            source_manifest_sha256=_sha(1),
+            criteria_set_sha256=_sha(2),
+            candidate_count=1,
+            ordered_key_factory=lambda: iter((invalid_key,)),
+        )
+
+    universe = _write_universe(cache)
+    item = R002AnnotationReviewItem(key=_key(1), line_content="line 1")
+    item_two = R002AnnotationReviewItem(key=_key(2), line_content="line 2")
+    with pytest.raises(R002CacheError, match="annotation_pair_mismatch"):
+        cache.write_annotation_review(
+            source_manifest_sha256=_sha(1),
+            criteria_set_sha256=_sha(2),
+            annotation_universe_sha256=canonical_sha256(universe),
+            candidate_count=2,
+            ordered_item_factory=lambda: iter((item, item_two, item)),
+        )
+    with pytest.raises(R002CacheError, match="annotation_pair_mismatch"):
+        cache.write_annotation_review(
+            source_manifest_sha256=_sha(1),
+            criteria_set_sha256=_sha(2),
+            annotation_universe_sha256=canonical_sha256(universe),
+            candidate_count=2,
+            ordered_item_factory=lambda: iter((item,)),
+        )
+
+    cache = R002Cache(tmp_path / "reopen-cache")
+    real_read_checked = cache._read_checked
+    calls = 0
+
+    def fail_reopen(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls >= 2:
+            raise R002CacheError("cache_read_failed")
+        return real_read_checked(*args, **kwargs)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(cache, "_read_checked", fail_reopen)
+        with pytest.raises(R002CacheError, match="cache_state_unknown"):
+            _write_universe(cache)
+
+
+def test_public_criteria_index_publish_preserves_closed_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = R002Cache(tmp_path / "cache")
+    monkeypatch.setattr(
+        cache,
+        "_publish_criteria_source_index_internal",
+        lambda index: (_ for _ in ()).throw(
+            R002CacheError("criteria_source_index_mismatch")
+        ),
+    )
+    with pytest.raises(R002CacheError, match="criteria_source_index_mismatch"):
+        cache.publish_criteria_source_index(R002CriteriaSourceIndex.model_construct())

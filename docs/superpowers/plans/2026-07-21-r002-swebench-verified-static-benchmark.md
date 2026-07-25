@@ -1369,7 +1369,7 @@ git commit -m "feat: bind R-002 evidence to immutable lines"
 - Consumes: `R002CriteriaSourceIndex`, `R002CacheIndex`, `R002CachedCase`, `R002CachedHeadFile`, `R002StrictModel`, `canonical_json_bytes`, and `canonical_sha256`.
 - Produces: every `R002Cache` method defined in **Fixed interfaces and constants**, including the two reserved completion-marker publication pairs, the two typed streamed annotation writers, and the secure unlinked scratch-descriptor context used by the downloader.
 
-- [ ] **Step 1: Write failing safe-cache tests**
+- [x] **Step 1: Write failing safe-cache tests**
 
 Cover mode `0700` cache directories, mode `0600` files, same-directory temporary files, fsync before replace, content-addressed object reuse, rejection of changed existing objects, and index publication as the sole completion marker.
 
@@ -1421,7 +1421,7 @@ def test_raw_bytes_cannot_bypass_control_model_validation(tmp_path, control):
         R002Cache(tmp_path / "r002").write_bytes(control, b"{}")
 ```
 
-- [ ] **Step 2: Write failing filesystem-attack tests**
+- [x] **Step 2: Write failing filesystem-attack tests**
 
 Create symlinks at the cache root, an existing ancestor, destination, and temporary-file candidate; create non-regular destinations; pass `../`, absolute, backslash, NUL, and non-hash object names. Each must fail before reading or writing through the unsafe path.
 
@@ -1440,7 +1440,7 @@ def test_cache_rejects_symlink_root(tmp_path):
         R002Cache(linked).write_bytes("criteria-proposal.json", b"{}")
 ```
 
-- [ ] **Step 3: Run cache tests and verify RED**
+- [x] **Step 3: Run cache tests and verify RED**
 
 Run:
 
@@ -1450,7 +1450,7 @@ uv run pytest -q tests/evals/test_r002_cache.py
 
 Expected: FAIL because `r002_cache.py` is absent.
 
-- [ ] **Step 4: Implement safe path creation and atomic persistence**
+- [x] **Step 4: Implement safe path creation and atomic persistence**
 
 Allow only the literal control filenames in `_SAFE_RELATIVE` plus content-addressed selected `rows`, `criteria-sources`, and `head-files` objects and `reviews/<R002-case>.json`. The complete 500-row Parquet is a descriptor-backed temporary download, never a persisted cache object. Never derive a local filename from a repository path.
 
@@ -1479,7 +1479,7 @@ For replaceable local controls, use the same descriptor-relative temporary seque
 
 The downloader obtains a secure scratch descriptor from the cache using the same dirfd policy, immediately unlinks its random name while keeping the descriptor open, writes and rewinds through that descriptor, and passes a duplicate seekable binary handle to `pyarrow`. Closing the context removes the only remaining reference. No full-source filename appears in the cache index or survives either preparation phase.
 
-- [ ] **Step 5: Run cache tests and verify GREEN**
+- [x] **Step 5: Run cache tests and verify GREEN**
 
 Run:
 
@@ -1490,7 +1490,13 @@ uv run ruff check scopeproof_core/evals/r002_cache.py tests/evals/test_r002_cach
 
 Expected: all tests pass and Ruff reports no findings.
 
-- [ ] **Step 6: Commit the cache slice**
+- [x] **Step 6: Commit the cache slice**
+
+Task 5 exact-head verification before the local commit: 1,439 tests passed with one intentional
+live-GitHub skip; the repository coverage gate reached 95.00% without exclusions or threshold
+changes; Ruff, diff hygiene, the offline locked resolution, dependency compatibility, the 12-case
+benchmark, and the two-case comparison benchmark passed. These are local engineering checks only
+and do not advance Stage 1.
 
 ```bash
 git add scopeproof_core/evals/r002_cache.py tests/evals/test_r002_cache.py
