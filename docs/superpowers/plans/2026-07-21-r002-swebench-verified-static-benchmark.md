@@ -2992,7 +2992,7 @@ git commit -m "feat: expose opt-in R-002 research commands"
 - Consumes: the approved cohort table in the design, the exact row/hash table in this plan, `prepare --phase criteria-sources`, and the criteria-proposal path.
 - Produces: one tracked source manifest, one complete problem-only criteria-source index, and one unconfirmed 20-case criteria proposal. This task performs no GitHub request, full-row decode, patch/test-patch inspection, head-file fetch, or ScopeProof retrieval.
 
-- [ ] **Step 1: Add the complete redacted source manifest with `apply_patch`**
+- [x] **Step 1: Add the complete redacted source manifest with `apply_patch`**
 
 Create one canonical `R002SourceManifest` JSON object. Use the fixed source dictionary, identity table, difficulty mapping, and row/hash table above. Every case has this exact shape:
 
@@ -3016,7 +3016,7 @@ Create one canonical `R002SourceManifest` JSON object. Use the fixed source dict
 
 Repeat the same explicit field set for `R002-002` through `R002-020` using only the fixed tables in this plan; do not generate or infer an issue URL. Re-open the patched file with `load_source_manifest` and compare `canonical_json_bytes(reopened)` with the pre-patch canonical model bytes. The checked-in text may have the one conventional terminal newline added by `apply_patch`; identity hashes always use newline-free canonical model bytes.
 
-- [ ] **Step 2: Strengthen the source-manifest repository contract**
+- [x] **Step 2: Strengthen the source-manifest repository contract**
 
 Add exact source identity and redaction assertions:
 
@@ -3037,7 +3037,7 @@ def test_r002_source_manifest_is_exact_and_redacted() -> None:
         assert forbidden_key not in raw
 ```
 
-- [ ] **Step 3: Validate and commit the source manifest before networking**
+- [x] **Step 3: Validate and commit the source manifest before networking**
 
 Run:
 
@@ -3069,7 +3069,7 @@ uv run python -c 'from pathlib import Path; from scopeproof_core.evals.r002_mode
 
 Expected: all validations pass, the diff contains no raw dataset body, and the commit succeeds. Build the wheel once here and assert its `run` command emits a validated bounded `R002CommandFailure` with `reason_code="criteria_missing"`; the documented run-preflight order is source manifest, confirmed criteria, confirmed labels, then complete cache, so this assertion is stable before the later two owner-gated inputs exist.
 
-- [ ] **Step 4: Run the real problem-only preparation phase**
+- [x] **Step 4: Run the real problem-only preparation phase**
 
 Run:
 
@@ -3081,7 +3081,7 @@ uv run python -m scopeproof_core.evals.r002_swebench prepare \
 
 Expected: exact source size/hash/schema/500 rows/12 repositories/500 unique IDs; exact 20 selected cases; `executed_case_count=20`, `failed_case_count=0`, `skipped_case_count=0`; exactly 20 hash-addressed problem-statement objects and one complete validated `criteria-source-index.json`. The instrumentation/protocol guarantees zero reads of patch, test-patch, hint, test-name, or other non-criteria columns and zero GitHub requests. The full 500-row Parquet scratch descriptor is closed and gone. A network failure is a preparation failure, not a skipped case; retry the same immutable source without changing the manifest.
 
-- [ ] **Step 5: Prove no third-party raw material became tracked**
+- [x] **Step 5: Prove no third-party raw material became tracked**
 
 Run:
 
@@ -3096,7 +3096,7 @@ test ! -d .scopeproof/research/r002/head-files
 
 Expected: `.scopeproof/research/r002/` is ignored; only `evals/r002/source_manifest.json` is tracked in the new pack; no problem statement or cache object appears in tracked files; and no full cache index, selected full-row object, head-file directory, patch, test patch, hint, test name, parsed diff, or source excerpt exists locally yet.
 
-- [ ] **Step 6: Author the complete criteria proposal from problem statements only**
+- [x] **Step 6: Author the complete criteria proposal from problem statements only**
 
 For cases in `R002-001` through `R002-020` order, read only the local `criteria-sources/<problem_statement_sha256>` object through `R002Cache.read_bytes`. There is no cached full-row object at this stage. Author 1–16 atomic criteria per case, including at least one `MUST_HAVE`, and explicitly set every field:
 
@@ -3114,7 +3114,7 @@ For cases in `R002-001` through `R002-020` order, read only the local `criteria-
 
 Do not open or search `patch`, `test_patch`, `FAIL_TO_PASS`, `PASS_TO_PASS`, hints, raw head files, GitHub diff views, ScopeProof output, or earlier annotations. Pass the complete mapping into `build_criteria_proposal`, write the returned strict object to ignored `criteria-proposal.json`, and generate ignored `criteria-review.json` with the source text/hash and proposed fields for all 20 cases.
 
-- [ ] **Step 7: Validate criteria isolation and proposal completeness**
+- [x] **Step 7: Validate criteria isolation and proposal completeness**
 
 Run:
 
