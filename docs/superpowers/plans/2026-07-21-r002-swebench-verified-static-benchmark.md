@@ -3275,11 +3275,11 @@ Required response: explicit batch confirmation. Do not create `evals/r002/candid
 - Consumes: the explicitly approved complete label proposal, the committed source/criteria inputs, and the complete immutable cache.
 - Produces: one frozen label-set commit, one exact scored commit SHA, one deterministic redacted first-run result, truthful docs, full verification evidence, and a local handoff. It does not push, release, or advance Stage 1.
 
-- [ ] **Step 1: Transform and add the confirmed label set**
+- [x] **Step 1: Transform and add the confirmed label set**
 
 Create `R002CandidateLabelSet` from the approved proposal with `benchmark_owner_confirmed=true`; preserve the source-manifest, criteria-set, universe hashes, every key/boolean/reason, and the derived expected-missing list exactly. Strip all raw line/context text. Add the canonical JSON with `apply_patch`.
 
-- [ ] **Step 2: Remove the pre-materialization allowance and require all exact packaged files**
+- [x] **Step 2: Remove the pre-materialization allowance and require all exact packaged files**
 
 The final repository contract must require:
 
@@ -3308,7 +3308,7 @@ assert labels.benchmark_owner_confirmed is True
 
 Keep the recursive forbidden-field/key scan. In this step create `tests/fixtures/r002_redaction/sentinels.json` with clearly artificial problem/patch/test-name/source/excerpt/context/UUID/timestamp/path/header strings and no third-party text. CI tests compare tracked R-002 outputs only with those ScopeProof-authored sentinels; they never depend on the ignored local cache. Add a separate one-off local audit command in Step 5 that extracts bounded hashes from the real ignored cache and compares them with tracked candidate bytes without copying raw sentinels into tests, logs, or Git.
 
-- [ ] **Step 3: Validate and commit labels before any scored run**
+- [x] **Step 3: Validate and commit labels before any scored run**
 
 Run:
 
@@ -3325,7 +3325,7 @@ test "$(wc -c < /tmp/scopeproof-r002-scored-commit.txt | tr -d ' ')" -eq 41
 
 Expected: the exact confirmed inputs are committed before scoring, all tests pass, and `R002_SCORED_COMMIT` is the lowercase 40-character commit that the result will record.
 
-- [ ] **Step 4: Run the real 20-case benchmark offline**
+- [x] **Step 4: Run the real 20-case benchmark offline**
 
 Disable network at the process boundary if the platform supports it, then run:
 
@@ -3338,7 +3338,7 @@ uv run python -m scopeproof_core.evals.r002_swebench run \
 
 Expected: the internal two runs each execute exactly 20 cases with zero failed/skipped cases; every object/hash/SHA/permalink validates; every test-patch candidate stays TEST/E2; no E3/E4, concrete CI check/status observation, runtime evidence, resolution, or final acceptance appears; each validated CI observation remains exactly unavailable/`no_observations` with complete collection and all counts zero; every gate is exactly an allowed blocked/needs-review shape; missing-explanation completeness is 100% when applicable; `unexpected_ready_count=0`; normalized rerun mismatches are zero. Precision and coverage are reported as observed baselines with numerator/denominator or `not_applicable`, never used as retroactive thresholds.
 
-- [ ] **Step 5: Re-open the result through Pydantic and audit redaction**
+- [x] **Step 5: Re-open the result through Pydantic and audit redaction**
 
 Run:
 
@@ -3351,7 +3351,7 @@ uv run python -c 'from pathlib import Path; from scopeproof_core.evals.r002_mode
 
 The dedicated local-only helper reads the real ignored cache, checks typed raw values against the three packaged inputs plus the candidate result, and emits only pass/fail counters and value hashes. It asserts that no problem statement, patch, standalone decoded test-name scalar, source/excerpt/context body, absolute cache path, timestamp, UUID, or HTTP metadata field is present; a short test-name substring inside an otherwise allowed repository path is not misclassified as a leak. This command is not part of CI and never saves raw values.
 
-- [ ] **Step 6: Build, inspect, and clean-install from the exact scored commit**
+- [x] **Step 6: Build, inspect, and clean-install from the exact scored commit**
 
 Do this while the checkout is still clean at the label commit, before adding result or documentation files:
 
@@ -3383,7 +3383,7 @@ cmp /tmp/scopeproof-r002-result.json /tmp/scopeproof-r002-installed-result.json
 
 Expected: the wheel was built while tracked and untracked Git state was clean at exactly `R002_SCORED_COMMIT`; it contains exactly the three redacted inputs and no local/raw artifacts; its SHA-256 is retained; it installs outside the checkout; and it emits byte-identical output. The official result's provenance comes from the source-checkout resolver, which rejects dirty or mismatched HEAD. The outside-checkout explicit SHA is accepted only for this package-equivalence check and is not described as independent provenance verification.
 
-- [ ] **Step 7: Add the exact redacted result with `apply_patch`**
+- [x] **Step 7: Add the exact redacted result with `apply_patch`**
 
 Copy the validated canonical one-line result bytes—not raw local bundles—from `/tmp/scopeproof-r002-result.json` into `docs/research/r002-swebench-verified/result.json` using `apply_patch`, preserving compact sorted-key JSON with no trailing newline. Then run:
 
@@ -3395,7 +3395,7 @@ uv run python -c 'import os; from pathlib import Path; from scopeproof_core.eval
 
 Expected: raw bytes are identical to the first validated run, including the absence of a terminal newline. A valid but transcribed, reformatted, reordered, or otherwise changed result is rejected.
 
-- [ ] **Step 8: Write the truthful engineering summary and align product status**
+- [x] **Step 8: Write the truthful engineering summary and align product status**
 
 The summary must include: immutable dataset revision/file SHA; deterministic selection algorithm; 20-case/12-repository scope; criteria and label confirmation hashes; no target-code execution; exact executed/failed/skipped counts; every metric with numerator/denominator/state; zero integrity/separation/Ready/rerun errors; gate distribution; fixed limitations; and a link to the redacted result. Use these exact claims:
 
@@ -3416,7 +3416,7 @@ participants, repositories, or reuse signals. Stages 2–4 remain gated.
 
 Do not add a release, version bump, tag, external post, issue, comment, email, DM, or monitoring task.
 
-- [ ] **Step 9: Run focused R-002 and repository verification**
+- [x] **Step 9: Run focused R-002 and repository verification**
 
 Run:
 
@@ -3433,7 +3433,7 @@ git diff --check
 
 Expected: all tests and checks pass with zero R-002 skips or live network.
 
-- [ ] **Step 10: Run the full regression and existing deterministic benchmarks**
+- [x] **Step 10: Run the full regression and existing deterministic benchmarks**
 
 Run:
 
@@ -3447,7 +3447,7 @@ uv run python -c 'import json; a=json.load(open("/tmp/scopeproof-constructed-res
 
 Expected: complete suite passes at or above 95% coverage; the existing constructed benchmark and comparison outputs remain exact.
 
-- [ ] **Step 11: Audit branch scope and commit the verified research result**
+- [x] **Step 11: Audit branch scope and commit the verified research result**
 
 Run:
 
