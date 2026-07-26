@@ -389,7 +389,7 @@ Model validators enforce these exact rules:
 - Consumes: `Criterion`, `EvidenceType`, `GateVerdict`, and `LineChangeType` from `scopeproof_core.schemas.models`.
 - Produces: every R-002 type named in **Fixed interfaces and constants**, including strict draft/confirmed criteria and label types used by Tasks 6–10.
 
-- [ ] **Step 1: Write failing strict-model and manifest tests**
+- [x] **Step 1: Write failing strict-model and manifest tests**
 
 Add JSON-shaped fixtures containing exactly `R002-001` through `R002-020`, exactly 12 repositories, at most two cases per repository, and the fixed research literals. Because `R002StrictModel` is strict, validate those dictionaries with `model_validate_json(json.dumps(payload))`; use `model_validate` only when the fixture already contains tuples, enum instances, and nested model instances. Mutate copied JSON dictionaries for invalid cases so every intended Pydantic validator executes.
 
@@ -453,7 +453,7 @@ uv run pytest -q tests/evals/test_r002_models.py \
 
 Expected: collection fails because `scopeproof_core.evals.r002_models` and `evals/r002/` do not exist.
 
-- [ ] **Step 3: Implement the strict base and source models**
+- [x] **Step 3: Implement the strict base and source models**
 
 Use strict annotated IDs and literal research boundaries. Canonical bytes are compact UTF-8 JSON with sorted keys, `ensure_ascii=False`, and no trailing newline.
 
@@ -581,7 +581,7 @@ Define `R002SourceError` and `R002AnnotationError` beside the loaders in `r002_m
 
 Place the three loader functions after all model class definitions in the real file so every return type is defined at import time.
 
-- [ ] **Step 4: Implement criteria, annotation, cache, and result contracts**
+- [x] **Step 4: Implement criteria, annotation, cache, and result contracts**
 
 Add these exact model families to the same file. Draft models permit `benchmark_owner_confirmed=False`; final packaged models require `Literal[True]`. `R002CriteriaSet` rejects `source_owner_confirmed=True`, binds all 20 problem hashes, enforces 1–16 criteria with at least one `MUST_HAVE`, unique ordered IDs, and complete non-default serialized criterion fields. `R002CandidateLabelSet` binds both upstream hashes, sorted unique keys, exact universe count/hash, complete labels, derived expected-missing records, and owner confirmation.
 
@@ -698,7 +698,7 @@ class R002Metric(R002StrictModel):
 
 Implement every remaining class in **Exact persisted-model field map** with those exact names and fields. Apply every validator in the rule list immediately below that table; use tuples with explicit `Field` bounds for persisted collections and reject unknown, duplicate, missing, or unsorted cross-references.
 
-- [ ] **Step 5: Add the initial repository redaction contract**
+- [x] **Step 5: Add the initial repository redaction contract**
 
 Add this test before the real input files exist; it permits an absent/partial directory only until Task 12 replaces it with the exact three-file contract.
 
@@ -730,11 +730,11 @@ def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
                 stack.extend(value)
 ```
 
-- [ ] **Step 6: Run tests and verify GREEN**
+- [x] **Step 6: Run tests and verify GREEN**
 
 Run the Step 2 command. Expected: all R-002 model tests and the initial redaction contract pass.
 
-- [ ] **Step 7: Commit the contracts slice**
+- [x] **Step 7: Commit the contracts slice**
 
 ```bash
 git add scopeproof_core/evals/r002_models.py tests/evals/conftest.py \
@@ -754,7 +754,7 @@ git commit -m "feat: define strict R-002 research contracts"
 - Consumes: `SWEbenchSourcePin`, `SWEbenchCriteriaSourceRow`, `SWEbenchVerifiedRow`, `R002SourceManifest`, `canonical_json_bytes`, and `canonical_sha256` from Task 1.
 - Produces: `decode_criteria_source_rows(source, pin)`, `decode_verified_parquet(source, pin)`, the criteria-source and full-row `select_r002_*` functions, `manifest_case_from_row(case_id, row_index, row, verified_pr_head_sha)`, and both `validate_manifest_*` functions.
 
-- [ ] **Step 1: Add the exact free research dependency**
+- [x] **Step 1: Add the exact free research dependency**
 
 Add the group without changing normal application dependencies:
 
@@ -779,7 +779,7 @@ uv sync --extra dev --extra research --locked
 
 Expected: both commands exit zero, `uv.lock` contains `pyarrow` 25.0.0, and the ScopeProof package records `research` as an optional dependency. The implementation must describe this as R-002's direct preparation dependency; it must not claim that normal Streamlit dependency resolution can never include pyarrow transitively.
 
-- [ ] **Step 2: Write failing Parquet/source tests**
+- [x] **Step 2: Write failing Parquet/source tests**
 
 Construct a tiny valid Parquet file in `tmp_path` with the exact 13 string columns and use a structurally valid test-only pin whose row/repository counts and file hash match the fixture. Test strict schema order/type, nested-type rejection, row/null/unique-instance/repository counts, 16 MiB metadata bound, selected-row 1 MiB canonical bound, 128 KiB problem bound, 512 KiB per patch stream, canonical Unicode preservation, and outcome-blind selection. Add a recording Parquet wrapper proving `decode_criteria_source_rows` requests only `repo`, `instance_id`, `base_commit`, `problem_statement`, and `difficulty`; any access to `patch`, `test_patch`, `hints_text`, `FAIL_TO_PASS`, or `PASS_TO_PASS` before criteria confirmation fails the test.
 
@@ -815,7 +815,7 @@ uv run pytest -q tests/evals/test_r002_source.py
 
 Expected: FAIL because `r002_source.py` is absent.
 
-- [ ] **Step 4: Implement canonical row validation and selection**
+- [x] **Step 4: Implement canonical row validation and selection**
 
 Keep the `pyarrow` imports inside the two decode functions. Both take a seekable binary handle produced by the secure downloader, validate the complete file size/hash and Parquet metadata before calling `read()`, and sum every row-group column's `total_uncompressed_size`. `decode_criteria_source_rows` then reads only the five allowlisted projected columns and validates repository/instance counts and deterministic selection without constructing `SWEbenchVerifiedRow`; `decode_verified_parquet` alone reads all 13 columns, and it is never called before confirmed criteria load succeeds.
 
@@ -954,7 +954,7 @@ The shared private `_validate_parquet_container` returns a `ParquetFile` over th
 
 The closed `R002SourceError` allowlist is exactly: `source_pin_mismatch`, `approved_cohort_mismatch`, `parquet_bytes_mismatch`, `parquet_row_count_mismatch`, `parquet_schema_mismatch`, `parquet_field_type_mismatch`, `parquet_uncompressed_limit`, `row_count_mismatch`, `unique_instance_count_mismatch`, `repository_count_mismatch`, `instance_pr_suffix_mismatch`, `manifest_selection_mismatch`, and `manifest_row_mismatch`. The criteria-only validator reuses `manifest_selection_mismatch` and `manifest_row_mismatch`; no source exception includes a case ID or prose in its args. Tests enumerate the raise literals and require exact equality with this allowlist.
 
-- [ ] **Step 5: Run source tests and verify GREEN**
+- [x] **Step 5: Run source tests and verify GREEN**
 
 Run:
 
@@ -966,7 +966,7 @@ uv run ruff check scopeproof_core/evals/r002_models.py scopeproof_core/evals/r00
 
 Expected: all tests pass and Ruff reports no findings.
 
-- [ ] **Step 6: Commit the source slice**
+- [x] **Step 6: Commit the source slice**
 
 ```bash
 git add pyproject.toml uv.lock scopeproof_core/evals/r002_source.py \
@@ -986,7 +986,7 @@ git commit -m "feat: validate pinned R-002 source rows"
 - Consumes: `R002DiffStream`, parsed models, `ChangedFile`, `ChangedLine`, and `LineChangeType`.
 - Produces: `parse_unified_diff`, `parse_case_diffs`, `parsed_case_to_changed_files`, and `classify_changed_path_evidence_type(path: str) -> EvidenceType`.
 
-- [ ] **Step 1: Write failing path-classification and valid-parser tests**
+- [x] **Step 1: Write failing path-classification and valid-parser tests**
 
 Use ScopeProof-authored diff bytes containing two files, three hunks, CRLF, lone CR, tabs, blank added lines, removed lines, and context lines. Assert exact old/new line numbers and hashes of the marker-free, newline-free UTF-8 content.
 
@@ -1010,7 +1010,7 @@ def test_test_patch_path_uses_existing_test_classification():
     assert classify_changed_path_evidence_type("tests/test_widget.py") is EvidenceType.TEST
 ```
 
-- [ ] **Step 2: Write failing adversarial parser tests**
+- [x] **Step 2: Write failing adversarial parser tests**
 
 Parameterize exact rejected forms: invalid UTF-8; absolute, `..`, NUL, backslash, blank, or >512-character paths; `rename from/to`, `copy from/to`, binary markers, new-file/deleted-file modes, `/dev/null`; mismatched `diff --git`/`---`/`+++` paths; malformed/overlapping hunk ranges; hunk count mismatch; duplicate path inside one stream or across streams; >32 files, >256 hunks, >50,000 diff lines, and >64 KiB marker-free line bytes. Add a cross-stream case with individually valid streams whose combined lines exceed 50,000 and require `case_diff_line_limit`. Each test asserts `R002DiffError` with a stable reason code rather than partial output.
 
@@ -1038,7 +1038,7 @@ uv run pytest -q tests/evals/test_r002_diff.py tests/retrieval/test_engine.py
 
 Expected: FAIL because the R-002 parser and public path-classification helper do not exist.
 
-- [ ] **Step 4: Extract the existing classifier without changing behavior**
+- [x] **Step 4: Extract the existing classifier without changing behavior**
 
 Move only the path-based body from `_evidence_type` into a public pure function and keep `_evidence_type` as a wrapper so existing call sites and outputs remain unchanged.
 
@@ -1067,7 +1067,7 @@ def _evidence_type(file: ChangedFile) -> EvidenceType:
     return classify_changed_path_evidence_type(file.path)
 ```
 
-- [ ] **Step 5: Implement the bounded parser and adapter**
+- [x] **Step 5: Implement the bounded parser and adapter**
 
 Normalize bytes with `raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")`, decode strict UTF-8, split only on `"\n"`, count and reject before appending, and require exact file/hunk state transitions. The hunk loop must use marker-specific counters and reject any observed count that differs from its header.
 
@@ -1133,7 +1133,7 @@ def parsed_case_to_changed_files(parsed: R002ParsedCase) -> list[ChangedFile]:
 
 Complete `parse_unified_diff` with this only accepted file grammar: `diff --git a/<path> b/<path>`, one optional `index <hex>..<hex>[ <mode>]` line, exact `--- a/<path>`, exact `+++ b/<path>`, then one or more hunks. Reject every other file metadata line, including mode changes. Use hunk grammar `^@@ -old_start[,old_count] +new_start[,new_count] @@(?: .*)?$`, default omitted count `1`, stable `hunk_id = "<stream>:<path>:H<one-based-index>"`, strict count reconciliation, and every rejection listed in Step 2. Accept `\ No newline at end of file` only immediately after a hunk content line, do not count it as content, and reject it elsewhere. Require successive old-side and new-side hunk ranges to be non-overlapping. Do not call the simpler `_parse_patch` in `github/client.py`.
 
-- [ ] **Step 6: Run parser tests and both existing benchmarks**
+- [x] **Step 6: Run parser tests and both existing benchmarks**
 
 Run:
 
@@ -1145,7 +1145,7 @@ uv run scopeproof comparison-benchmark
 
 Expected: focused tests pass; the constructed benchmark executes exactly 12 cases with no mismatches; comparison executes exactly two cases with counts `unchanged=1`, `relocated=1`, `modified=1`, `added=3`, `removed=3` and no mismatches.
 
-- [ ] **Step 7: Commit the parser slice**
+- [x] **Step 7: Commit the parser slice**
 
 ```bash
 git add scopeproof_core/evals/r002_diff.py scopeproof_core/retrieval/engine.py \
@@ -1163,7 +1163,7 @@ git commit -m "feat: parse bounded R-002 diffs"
 - Consumes: `R002CaseManifest`, `R002ParsedCase`, `R002VerifiedLine`, `R002VerifiedCaseLines`, `R002CandidateLineKey`, `EvidenceItem`, and `classify_changed_path_evidence_type`.
 - Produces: `verify_case_head_files`, `verify_evidence_reference`, `candidate_permalink`, and `assert_test_stream_separation`.
 
-- [ ] **Step 1: Write failing immutable-line tests**
+- [x] **Step 1: Write failing immutable-line tests**
 
 Create one parsed implementation file and one parsed test file from ScopeProof-authored diffs, then provide head-file bytes keyed by repository-relative path. Cover both added and context lines and prove removed lines are ignored.
 
@@ -1204,7 +1204,7 @@ def test_evidence_mapping_uses_sidecar_line_not_trimmed_excerpt(
     assert key.normalized_line_sha256 == sha256(b"added  ").hexdigest()
 ```
 
-- [ ] **Step 2: Write failing integrity and separation tests**
+- [x] **Step 2: Write failing integrity and separation tests**
 
 Assert fail-closed errors for missing head file, non-UTF-8 bytes, file >4 MiB, case total >16 MiB, line number beyond EOF, changed whitespace/content, wrong head SHA, wrong permalink, duplicate `(path,new_line_number)`, test-stream path classified as non-test, implementation/test path collision, and evidence not present in the verified sidecar.
 
@@ -1245,7 +1245,7 @@ uv run pytest -q tests/evals/test_r002_verify.py
 
 Expected: FAIL because `r002_verify.py` does not exist.
 
-- [ ] **Step 4: Implement line normalization, verification, and permalink binding**
+- [x] **Step 4: Implement line normalization, verification, and permalink binding**
 
 Normalize file bytes with the same CRLF/lone-CR rule as the parser, split only on LF, retain all whitespace, and index lines from one. Keep removed lines out of the verified candidate set.
 
@@ -1340,7 +1340,7 @@ def verify_evidence_reference(
 
 `assert_test_stream_separation` calls `classify_changed_path_evidence_type(file.path)` and requires every `test_patch` file to be `EvidenceType.TEST`; it never overwrites a classification. `verify_evidence_reference` also checks that test-stream evidence is exactly TEST/E2 and that no item is E3 or E4.
 
-- [ ] **Step 5: Run verifier tests and verify GREEN**
+- [x] **Step 5: Run verifier tests and verify GREEN**
 
 Run:
 
@@ -1352,12 +1352,17 @@ uv run ruff check scopeproof_core/evals/r002_verify.py tests/evals/test_r002_ver
 
 Expected: all tests pass and Ruff reports no findings.
 
-- [ ] **Step 6: Commit the immutable-reference slice**
+- [x] **Step 6: Commit the immutable-reference slice**
 
 ```bash
 git add scopeproof_core/evals/r002_verify.py tests/evals/test_r002_verify.py
 git commit -m "feat: bind R-002 evidence to immutable lines"
 ```
+
+Retrospective reconciliation on 2026-07-25 marked only the Task 1–4 steps proven by the
+current implementations, focused tests, benchmarks, and slice commits. The four historical RED
+execution steps remain unchecked because the committed repository cannot prove that those
+pre-implementation failures were actually observed without rewriting history.
 
 ### Task 5: Add a symlink-safe, atomic, content-addressed research cache
 
