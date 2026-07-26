@@ -13,6 +13,10 @@ Candidate version: 0.2.2 (not published).
 
 ### Changed
 
+- Completed the
+  [R-002 SWE-bench Verified static engineering benchmark](docs/research/r002-swebench-verified/summary.md):
+  20 historical public PRs across 12 repositories, frozen research labels, two byte-identical
+  offline runs, zero unexpected Ready outcomes, and no target-code execution.
 - Added the self-contained public-alpha participant quickstart install path from PR #172, pinned
   to the verified public v0.2.1 wheel. Participant setup and benchmark success are engineering
   evidence only; they do not publish v0.2.2 or advance Stage 1.
@@ -28,6 +32,8 @@ Candidate version: 0.2.2 (not published).
 
 ### Boundaries
 
+- R-002 measures static engineering behavior against benchmark-owner research labels. It is not
+  customer precision, correctness, runtime verification, acceptance, or Stage 1 evidence.
 - The added case and its runtime result remain engineering evidence only. They do not advance
   Stage 1 or constitute correctness, customer, market, participant, or external-use evidence.
 - R-001 records public engineering research only: no Microsoft code was executed, skipped eval

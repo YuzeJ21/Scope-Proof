@@ -26,6 +26,13 @@ Status: complete when v0.2.0 release verification passes.
 - [x] R-001 public engineering research now records hash-bound before/after evidence quality:
   corrected observed-CI aggregation and explicit E2 eval-definition intent without claiming test
   execution, runtime verification, acceptance, or Stage 1 credit.
+- [x] R-002 records a deterministic 20-case, 12-repository static engineering baseline with
+  frozen research criteria and labels, immutable references, zero unexpected Ready outcomes, and
+  two identical offline runs.
+
+Stage 1 remains `waiting_for_inbound_public_alpha_submission`. R-002 is engineering evidence only;
+its 20 cases, 12 repositories, outcomes, and timing contribute zero genuine Alpha reviews,
+participants, repositories, or reuse signals. Stages 2–4 remain gated.
 
 ## Stage 1 — Genuine public alpha
 

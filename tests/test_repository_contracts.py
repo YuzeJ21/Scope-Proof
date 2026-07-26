@@ -10,6 +10,7 @@ from PIL import Image
 
 from scopeproof_core.evals.r002_models import (
     R002_SOURCE,
+    R002BenchmarkResult,
     canonical_sha256,
     load_confirmed_criteria,
     load_confirmed_labels,
@@ -75,6 +76,38 @@ def test_r002_tracked_outputs_exclude_scopeproof_authored_redaction_sentinels() 
     for path in tracked:
         text = path.read_text(encoding="utf-8")
         assert all(value not in text for value in values)
+
+
+def test_r002_engineering_result_is_linked_without_advancing_product_stages() -> None:
+    result_path = Path("docs/research/r002-swebench-verified/result.json")
+    summary_path = Path("docs/research/r002-swebench-verified/summary.md")
+    result = R002BenchmarkResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    summary = summary_path.read_text(encoding="utf-8")
+    public_link = "docs/research/r002-swebench-verified/summary.md"
+    development_link = "research/r002-swebench-verified/summary.md"
+
+    assert result.executed_case_count == 20
+    assert result.failed_case_count == 0
+    assert result.skipped_case_count == 0
+    assert result.unexpected_ready_count == 0
+    assert result.normalized_rerun_mismatches == 0
+    assert result.target_repository_code_executed is False
+    assert result.does_not_advance_stage_1 is True
+    assert "20 historical public PRs" in summary
+    assert "12 repositories" in summary
+    assert "No target-repository code was executed." in summary
+    assert "does not measure customer precision" in summary
+
+    readme = Path("README.md").read_text(encoding="utf-8")
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    environment = Path("docs/development-environment.md").read_text(encoding="utf-8")
+    assert public_link in readme
+    assert public_link in changelog
+    assert development_link in environment
+    assert "R-002 is engineering evidence only" in roadmap
+    assert "contribute zero genuine Alpha reviews" in roadmap
+    assert "Stages 2\u20134 remain gated" in roadmap
 
 
 def test_r002_module_commands_are_packaged_but_not_live_ci() -> None:

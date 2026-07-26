@@ -14,6 +14,10 @@ shows a compact, hash-bound engineering rerun: observed CI and static candidates
 from runtime verification and human acceptance. It is public engineering research only and does
 not advance Stage 1.
 
+The [R-002 SWE-bench Verified static engineering benchmark](docs/research/r002-swebench-verified/summary.md)
+adds a frozen 20-case, 12-repository deterministic baseline for candidate matching and immutable
+references. It executes no target code and contributes zero Stage 1 validation credit.
+
 ![ScopeProof deliberately constructed demo evidence matrix](docs/assets/scopeproof-constructed-demo-evidence-matrix.jpg)
 
 *Controlled demo screenshot—not a customer case. It shows deterministic candidate evidence and

@@ -32,6 +32,8 @@ before `run`. Raw source material and local review bundles remain under the igno
 R-002 is public engineering research only. It does not execute target-repository code, prove
 correctness, provide runtime verification, constitute customer/Alpha validation, or advance
 Stage 1. Both explicit `prepare` phases are the only networked paths; `annotate` and `run` are offline.
+The completed [R-002 engineering record](research/r002-swebench-verified/summary.md) reports the
+frozen 20-case baseline and exact package-equivalence evidence.
 
 ## Verify the same environment
 
