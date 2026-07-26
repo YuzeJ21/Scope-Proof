@@ -3246,7 +3246,7 @@ uv run python -c 'from pathlib import Path; from scopeproof_core.evals.r002_mode
 
 Expected: exact key equality, exact count and universe hash, no duplicates, no missing/extra keys, only allowed reason codes, derived expected-missing equality, and false confirmation.
 
-- [ ] **Step 8: Present the frozen label summary and stop at Owner Gate 2**
+- [x] **Step 8: Present the frozen label summary and stop at Owner Gate 2**
 
 Present per-case criterion count, candidate-line count, pair count, relevant/irrelevant counts by reason code, implementation/test path counts, expected-missing counts, and the exact universe/proposal hashes. Show a bounded sample of decisions from each reason code; keep raw content local and out of Git. State exactly:
 
