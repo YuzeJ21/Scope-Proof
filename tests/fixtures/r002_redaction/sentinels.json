@@ -1,0 +1,12 @@
+{
+  "absolute_path": "/scopeproof-synthetic/r002/private-cache/body.txt",
+  "context": "SCOPEPROOF_SYNTHETIC_NEIGHBOR_CONTEXT_R002",
+  "excerpt": "SCOPEPROOF_SYNTHETIC_EXCERPT_R002",
+  "header": "ETag: SCOPEPROOF-SYNTHETIC-R002",
+  "patch": "diff --git a/scopeproof_synthetic_old.py b/scopeproof_synthetic_new.py",
+  "problem": "SCOPEPROOF_SYNTHETIC_PROBLEM_STATEMENT_R002",
+  "source": "SCOPEPROOF_SYNTHETIC_SOURCE_BODY_R002",
+  "test_name": "test_scopeproof_synthetic_redaction_sentinel_r002",
+  "timestamp": "2099-12-31T23:59:59Z",
+  "uuid": "00000000-1111-4222-8333-444444444444"
+}

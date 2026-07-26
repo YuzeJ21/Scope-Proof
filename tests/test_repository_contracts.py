@@ -8,21 +8,33 @@ from urllib.parse import urlsplit
 
 from PIL import Image
 
-from scopeproof_core.evals.r002_models import R002_SOURCE, load_source_manifest
+from scopeproof_core.evals.r002_models import (
+    R002_SOURCE,
+    canonical_sha256,
+    load_confirmed_criteria,
+    load_confirmed_labels,
+    load_source_manifest,
+)
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
 
 
 def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
     root = Path("evals/r002")
-    allowed = {"source_manifest.json", "criteria.json", "candidate_labels.json"}
+    expected = {"source_manifest.json", "criteria.json", "candidate_labels.json"}
     assert not root.is_symlink()
-    if not root.exists():
-        return
     assert root.is_dir()
     entries = tuple(root.rglob("*"))
     assert all(path.is_file() and not path.is_symlink() for path in entries)
     assert all(path.parent == root for path in entries)
-    assert {path.relative_to(root).as_posix() for path in entries} <= allowed
+    assert {path.relative_to(root).as_posix() for path in entries} == expected
+    source = load_source_manifest(root / "source_manifest.json")
+    criteria = load_confirmed_criteria(root / "criteria.json", canonical_sha256(source))
+    labels = load_confirmed_labels(
+        root / "candidate_labels.json",
+        canonical_sha256(source),
+        canonical_sha256(criteria),
+    )
+    assert labels.benchmark_owner_confirmed is True
     forbidden_keys = {
         "problem_statement",
         "patch",
@@ -44,6 +56,25 @@ def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
                 stack.extend(value.values())
             elif isinstance(value, list):
                 stack.extend(value)
+
+
+def test_r002_tracked_outputs_exclude_scopeproof_authored_redaction_sentinels() -> None:
+    sentinels = json.loads(
+        Path("tests/fixtures/r002_redaction/sentinels.json").read_text(encoding="utf-8")
+    )
+    assert isinstance(sentinels, dict)
+    assert sentinels
+    values = tuple(sentinels.values())
+    assert all(isinstance(value, str) and value for value in values)
+
+    tracked = [
+        *sorted(Path("evals/r002").glob("*.json")),
+        *sorted(Path("docs/research/r002-swebench-verified").glob("*")),
+    ]
+    assert tracked
+    for path in tracked:
+        text = path.read_text(encoding="utf-8")
+        assert all(value not in text for value in values)
 
 
 def test_r002_module_commands_are_packaged_but_not_live_ci() -> None:
