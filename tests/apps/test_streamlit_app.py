@@ -1402,7 +1402,10 @@ def test_optional_token_uses_password_input() -> None:
     assert token.proto.type == token.proto.PASSWORD
 
 
-def test_demo_can_save_and_reopen_durable_review_state() -> None:
+def test_demo_can_save_and_reopen_durable_review_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
@@ -1776,7 +1779,10 @@ def test_discard_requirements_draft_restores_authoritative_saved_state(
     assert "Available — Review evidence and export" in sidebar
 
 
-def test_prepare_criteria_consumes_pending_requirements_draft() -> None:
+def test_prepare_criteria_consumes_pending_requirements_draft(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
     app, _ = saved_demo_review(new_app())
     requirements_draft = "Export PDF\nRecord the export event"
     app = app.text_area(key="requirements_input").set_value(requirements_draft).run()
