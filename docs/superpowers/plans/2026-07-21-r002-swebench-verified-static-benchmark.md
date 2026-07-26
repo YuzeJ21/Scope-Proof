@@ -3130,7 +3130,7 @@ uv run pytest -q tests/evals/test_r002_annotation.py::test_criteria_proposal_rea
 
 Expected: proposal validates, all 20 cases are present, and the isolation test proves no patch/test/output access.
 
-- [ ] **Step 8: Present the complete criteria review and stop at Owner Gate 1**
+- [x] **Step 8: Present the complete criteria review and stop at Owner Gate 1**
 
 Present all 20 case IDs, public PR URLs, problem hashes, and complete criterion objects to the benchmark owner. State exactly:
 
@@ -3155,7 +3155,7 @@ Required response: an explicit confirmation of the complete criterion wording an
 - Consumes: the explicitly approved `R002CriteriaProposal`, exact source manifest/problem-only cache, and no ScopeProof scored output.
 - Produces: one tracked confirmed criteria set, one complete criteria-bound evidence cache prepared only after that commit, and one complete unconfirmed candidate-label proposal for Owner Gate 2.
 
-- [ ] **Step 1: Transform the approved proposal into the redacted confirmed criteria set**
+- [x] **Step 1: Transform the approved proposal into the redacted confirmed criteria set**
 
 Call `confirmed_criteria_from_proposal`; assert the result keeps `source_owner_confirmed=false`, sets `benchmark_owner_confirmed=true`, strips every raw problem statement, and preserves all approved criterion fields byte-for-byte. Add the canonical output with `apply_patch` to `evals/r002/criteria.json`.
 
@@ -3167,7 +3167,7 @@ assert confirmed.benchmark_owner_confirmed is True
 assert "problem_statement" not in canonical_json_bytes(confirmed).decode("utf-8")
 ```
 
-- [ ] **Step 2: Validate and commit the confirmed criteria before patch inspection**
+- [x] **Step 2: Validate and commit the confirmed criteria before patch inspection**
 
 Run:
 
@@ -3182,7 +3182,7 @@ git commit -m "data: freeze R-002 research criteria"
 
 Expected: every test passes, no raw problem text is tracked, and criteria remain explicitly non-source-owner-confirmed.
 
-- [ ] **Step 3: Run the post-confirmation evidence preparation phase**
+- [x] **Step 3: Run the post-confirmation evidence preparation phase**
 
 Now—and only after the confirmed criteria commit exists—run:
 
@@ -3193,7 +3193,7 @@ uv run python -m scopeproof_core.evals.r002_swebench prepare \
 
 Expected: the command first validates `criteria.json` and its manifest hash, then redownloads the exact source into a secure unlinked scratch descriptor, decodes the full rows, validates the 20 selected row/patch/test-patch hashes, verifies all 20 public closed merged PR base/head SHAs, parses the two diff streams, fetches and verifies the exact immutable head files, materializes only the selected 20 rows and referenced head files, and publishes `cache-index.json` last with the criteria-set hash. Expected counts are `20/0/0`, 47 immutable head files, zero source/hash/SHA/line/reference errors, and no target code execution. Network or integrity failure invalidates the new phase rather than skipping or replacing a case.
 
-- [ ] **Step 4: Audit selected-only cache integrity before annotation**
+- [x] **Step 4: Audit selected-only cache integrity before annotation**
 
 Run a local cache audit through `R002Cache` and the strict models: revalidate `criteria-source-index.json` and `cache-index.json`; require the latter's source, manifest, and criteria hashes to equal the tracked inputs; enumerate exactly 20 `rows/<row_sha256>` objects and only the head-file digests referenced by the index; rehash every object; and prove no persistent Parquet source object, HTTP metadata, credentials, absolute paths, or unindexed raw file exists. Then run:
 
@@ -3205,7 +3205,7 @@ git ls-files .scopeproof evals/r002
 
 Expected: all raw selected rows, patches, test patches, problem text, and head-file bodies remain ignored and local; tracked inputs remain only redacted manifest and confirmed criteria; the full 500-row Parquet no longer exists.
 
-- [ ] **Step 5: Build the independent annotation universe offline**
+- [x] **Step 5: Build the independent annotation universe offline**
 
 Now—and only now—run:
 
@@ -3215,7 +3215,7 @@ uv run python -m scopeproof_core.evals.r002_swebench annotate
 
 Expected: the command loads confirmed criteria, reads cached patch/test-patch and verified sidecars, builds the complete sorted criterion × added/context-line universe, enforces the 250,000-pair cap without truncation, and writes validated ignored `annotation-universe.json` plus raw ignored `annotation-review.json`. It must not call `retrieve_evidence`, `build_findings`, `evaluate_gate`, or any network function.
 
-- [ ] **Step 6: Label every frozen pair independently**
+- [x] **Step 6: Label every frozen pair independently**
 
 Review each local annotation item using its criterion, stream, repository-relative path, new-side line number, raw marker-free line, and bounded neighboring context. Set exactly one boolean and one stable reason code for every key:
 
@@ -3236,7 +3236,7 @@ Review each local annotation item using its criterion, stream, repository-relati
 
 Use `direct_static_candidate`, `supporting_static_candidate`, `test_intent_candidate`, `unrelated_candidate`, or `insufficient_context` as the only reason codes. Do not run ScopeProof, inspect its retrieved candidates, change criteria, change the cohort, or omit difficult pairs. Generate `expected_missing` solely through `derive_expected_missing` after all booleans are present.
 
-- [ ] **Step 7: Validate the complete unconfirmed label proposal**
+- [x] **Step 7: Validate the complete unconfirmed label proposal**
 
 Write ignored `candidate-label-proposal.json` as a strict draft whose owner confirmation is false. Run:
 
