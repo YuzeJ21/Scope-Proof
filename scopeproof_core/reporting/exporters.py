@@ -27,12 +27,22 @@ from scopeproof_core.reviews.comparison import (
     EvidenceReference,
     ReviewComparison,
 )
-from scopeproof_core.schemas.models import EvidenceItem, ReviewBundle, ReviewState
+from scopeproof_core.schemas.models import (
+    CriterionRetrievalDiagnostic,
+    EvidenceItem,
+    ReviewBundle,
+    ReviewState,
+)
 
 ExportableReview = ReviewBundle | ReviewState
 
 _MARKDOWN_PUNCTUATION = frozenset(set(string.punctuation) - {"&", ";"})
 _SPREADSHEET_FORMULA_PREFIXES = frozenset(("=", "+", "-", "@", "\t", "\r"))
+_RETRIEVAL_BOUNDARY = (
+    "Search diagnostics explain retrieval; they are not evidence that the criterion "
+    "is satisfied or missing from the repository."
+)
+_RETRIEVAL_FALLBACK = "Retrieval diagnostics were not recorded for this review."
 
 
 def _escape_markdown_text(value: str) -> str:
@@ -73,6 +83,108 @@ def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewStat
             raise ValueError("A confirmed analysis is required before exporting a review state")
         return value.bundle, value
     return value, None
+
+
+def _retrieval_outcome_label(diagnostic: CriterionRetrievalDiagnostic) -> str:
+    return diagnostic.outcome.value.replace("_", " ").title()
+
+
+def _retrieval_diagnostic_markdown(
+    diagnostic: CriterionRetrievalDiagnostic | None,
+) -> list[str]:
+    if diagnostic is None:
+        return ["", "**How ScopeProof searched:**", _RETRIEVAL_FALLBACK]
+    searched_paths = (
+        ", ".join(_render_markdown_code(path) for path in diagnostic.searched_paths)
+        or "None"
+    )
+    return [
+        "",
+        "**How ScopeProof searched:**",
+        f"- Outcome: {_retrieval_outcome_label(diagnostic)}",
+        "- Searched terms: "
+        + (
+            ", ".join(_render_markdown_code(term) for term in diagnostic.searched_terms)
+            or "None"
+        ),
+        "- Exact identifiers: "
+        + (
+            ", ".join(
+                _render_markdown_code(identifier)
+                for identifier in diagnostic.exact_identifiers
+            )
+            or "None"
+        ),
+        f"- Searched paths: {searched_paths}",
+        "- Searched evidence types: "
+        + (
+            ", ".join(
+                _escape_markdown_text(item.value)
+                for item in diagnostic.searched_evidence_types
+            )
+            or "None"
+        ),
+        (
+            "- Counts: "
+            f"{diagnostic.inspectable_line_count} inspectable lines; "
+            f"{diagnostic.exact_identifier_match_line_count} exact-identifier matches; "
+            f"{diagnostic.term_overlap_line_count} term-overlap lines; "
+            f"{diagnostic.below_threshold_line_count} below threshold; "
+            f"{diagnostic.accepted_candidate_count} accepted candidates."
+        ),
+        _RETRIEVAL_BOUNDARY,
+    ]
+
+
+def _retrieval_diagnostic_html(
+    criterion_id: str,
+    diagnostic: CriterionRetrievalDiagnostic | None,
+) -> str:
+    heading = (
+        f"<h3>{html.escape(criterion_id)} — How ScopeProof searched</h3>"
+    )
+    if diagnostic is None:
+        return heading + f"<p>{html.escape(_RETRIEVAL_FALLBACK)}</p>"
+    searched_paths = (
+        ", ".join(f"<code>{html.escape(path)}</code>" for path in diagnostic.searched_paths)
+        or "None"
+    )
+    searched_terms = (
+        ", ".join(f"<code>{html.escape(term)}</code>" for term in diagnostic.searched_terms)
+        or "None"
+    )
+    exact_identifiers = (
+        ", ".join(
+            f"<code>{html.escape(identifier)}</code>"
+            for identifier in diagnostic.exact_identifiers
+        )
+        or "None"
+    )
+    evidence_types = (
+        ", ".join(
+            html.escape(item.value) for item in diagnostic.searched_evidence_types
+        )
+        or "None"
+    )
+    return "".join(
+        [
+            heading,
+            "<ul>",
+            f"<li>Outcome: {html.escape(_retrieval_outcome_label(diagnostic))}</li>",
+            f"<li>Searched terms: {searched_terms}</li>",
+            f"<li>Exact identifiers: {exact_identifiers}</li>",
+            f"<li>Searched paths: {searched_paths}</li>",
+            f"<li>Searched evidence types: {evidence_types}</li>",
+            "<li>Counts: "
+            f"{diagnostic.inspectable_line_count} inspectable lines; "
+            f"{diagnostic.exact_identifier_match_line_count} exact-identifier matches; "
+            f"{diagnostic.term_overlap_line_count} term-overlap lines; "
+            f"{diagnostic.below_threshold_line_count} below threshold; "
+            f"{diagnostic.accepted_candidate_count} accepted candidates.</li>",
+            "</ul>",
+            f'<p class="note">{html.escape(_RETRIEVAL_BOUNDARY)}</p>',
+        ]
+    )
 
 
 def export_json(bundle: ExportableReview) -> str:
@@ -203,6 +315,10 @@ def export_markdown(bundle: ExportableReview) -> str:
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
+    diagnostic_by_id = {
+        diagnostic.criterion_id: diagnostic
+        for diagnostic in bundle.retrieval_diagnostics
+    }
     review_status = review_status_label(bundle.gate.verdict)
     coverage_by_id = {
         row.criterion_id: row for row in criterion_coverage_rows(bundle)
@@ -343,6 +459,11 @@ def export_markdown(bundle: ExportableReview) -> str:
                 f"{evidence_status_text(coverage.evidence_status)}",
                 f"**Reason:** {_escape_markdown_text(finding.reason)}",
             ]
+        )
+        lines.extend(
+            _retrieval_diagnostic_markdown(
+                diagnostic_by_id.get(criterion.criterion_id)
+            )
         )
         if finding.missing_evidence:
             lines.extend(
@@ -500,6 +621,10 @@ def export_csv(bundle: ExportableReview) -> str:
     bundle, state = _bundle_and_state(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
+    diagnostic_by_id = {
+        diagnostic.criterion_id: diagnostic
+        for diagnostic in bundle.retrieval_diagnostics
+    }
     evidence_by_criterion: dict[str, list[EvidenceItem]] = defaultdict(list)
     for item in bundle.evidence:
         evidence_by_criterion[item.criterion_id].append(item)
@@ -552,6 +677,7 @@ def export_csv(bundle: ExportableReview) -> str:
         "evidence_count",
         "concern",
         "evidence_links",
+        "retrieval_diagnostic",
         "missing_evidence",
         "human_decision",
         "reviewer_decision",
@@ -660,6 +786,17 @@ def export_csv(bundle: ExportableReview) -> str:
                     ],
                     ensure_ascii=False,
                 ),
+                "retrieval_diagnostic": json.dumps(
+                    (
+                        diagnostic_by_id[criterion.criterion_id].model_dump(
+                            mode="json"
+                        )
+                        if criterion.criterion_id in diagnostic_by_id
+                        else None
+                    ),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
                 "missing_evidence": json.dumps(
                     finding.missing_evidence, ensure_ascii=False
                 ),
@@ -683,10 +820,15 @@ def export_html(value: ExportableReview) -> str:
     bundle, state = _bundle_and_state(value)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
+    diagnostic_by_id = {
+        diagnostic.criterion_id: diagnostic
+        for diagnostic in bundle.retrieval_diagnostics
+    }
     coverage_by_id = {
         row.criterion_id: row for row in criterion_coverage_rows(bundle)
     }
     rows = []
+    diagnostic_sections = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         coverage = coverage_by_id[criterion.criterion_id]
@@ -708,6 +850,12 @@ def export_html(value: ExportableReview) -> str:
             f"<td>{html.escape(finding.reason)}</td>"
             f"<td>{evidence}</td>"
             "</tr>"
+        )
+        diagnostic_sections.append(
+            _retrieval_diagnostic_html(
+                criterion.criterion_id,
+                diagnostic_by_id.get(criterion.criterion_id),
+            )
         )
     revision = state.criteria_revision.number if state else 1
     review_status = html.escape(review_status_label(bundle.gate.verdict))
@@ -806,6 +954,8 @@ def export_html(value: ExportableReview) -> str:
             "<th>Evidence</th></tr></thead><tbody>",
             *rows,
             "</tbody></table>",
+            "<h2>Retrieval Diagnostics</h2>",
+            *diagnostic_sections,
             *(
                 [
                     "<h2>Review Status Reasons</h2><ul>",

@@ -106,6 +106,10 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     assert state.review.tool_version == __version__
     assert state.bundle is not None
     assert state.bundle.review.tool_version == __version__
+    assert len(state.bundle.retrieval_diagnostics) == len(state.bundle.criteria) == 1
+    diagnostic = state.bundle.retrieval_diagnostics[0]
+    assert diagnostic.criterion_id == "AC-01"
+    assert diagnostic.accepted_candidate_count == len(state.bundle.evidence)
 
 
 def test_fixture_review_metadata_reports_validated_ci_observation(tmp_path: Path, capsys) -> None:

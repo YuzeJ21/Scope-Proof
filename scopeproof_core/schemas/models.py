@@ -78,6 +78,15 @@ class EvidenceType(StringEnum):
     HUMAN = "human"
 
 
+class RetrievalOutcome(StringEnum):
+    CANDIDATES_FOUND = "candidates_found"
+    NO_SEARCHABLE_TERMS = "no_searchable_terms"
+    NO_INSPECTABLE_LINES = "no_inspectable_lines"
+    EXACT_IDENTIFIER_NOT_FOUND = "exact_identifier_not_found"
+    NO_TERM_OVERLAP = "no_term_overlap"
+    BELOW_RELEVANCE_THRESHOLD = "below_relevance_threshold"
+
+
 class EvidenceSourceScope(StringEnum):
     CHANGED_FILE = "changed_file"
     UNCHANGED_CANDIDATE = "unchanged_candidate"
@@ -741,6 +750,70 @@ class EvidenceItem(BaseModel):
         return self
 
 
+class CriterionRetrievalDiagnostic(BaseModel):
+    """Deterministic search metadata that is never criterion evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    criterion_id: str = Field(min_length=1)
+    outcome: RetrievalOutcome
+    searched_terms: list[str]
+    exact_identifiers: list[str]
+    searched_paths: list[str]
+    searched_evidence_types: list[EvidenceType]
+    changed_file_count: int = Field(ge=0)
+    unchanged_candidate_file_count: int = Field(ge=0)
+    inspectable_line_count: int = Field(ge=0)
+    exact_identifier_match_line_count: int = Field(ge=0)
+    term_overlap_line_count: int = Field(ge=0)
+    below_threshold_line_count: int = Field(ge=0)
+    accepted_candidate_count: int = Field(ge=0)
+
+    @field_validator("criterion_id")
+    @classmethod
+    def require_non_blank_criterion_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("criterion ID must contain non-whitespace text")
+        return normalized
+
+    @field_validator(
+        "searched_terms",
+        "exact_identifiers",
+        "searched_paths",
+        mode="before",
+    )
+    @classmethod
+    def normalize_sorted_text_lists(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                return value
+            text = item.strip()
+            if not text:
+                raise ValueError("search metadata must contain non-whitespace text")
+            normalized.append(text)
+        return sorted(set(normalized))
+
+    @field_validator("searched_evidence_types")
+    @classmethod
+    def normalize_sorted_evidence_types(
+        cls, value: list[EvidenceType]
+    ) -> list[EvidenceType]:
+        return sorted(set(value), key=lambda item: item.value)
+
+
+class EvidenceRetrievalResult(BaseModel):
+    """Validated evidence candidates and their separate retrieval diagnostics."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence: list[EvidenceItem]
+    diagnostics: list[CriterionRetrievalDiagnostic]
+
+
 class RuntimeEvidence(BaseModel):
     """Human-supplied runtime observation; never inferred from static code."""
 
@@ -947,6 +1020,9 @@ class ReviewBundle(BaseModel):
     source_text: str
     criteria: list[Criterion]
     evidence: list[EvidenceItem]
+    retrieval_diagnostics: list[CriterionRetrievalDiagnostic] = Field(
+        default_factory=list
+    )
     runtime_evidence: list[RuntimeEvidence] = Field(default_factory=list)
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
@@ -1016,6 +1092,27 @@ class ReviewBundle(BaseModel):
         evidence_by_id = {item.evidence_id: item for item in self.evidence}
         if any(item.criterion_id not in known_criteria for item in self.evidence):
             raise ValueError("evidence criterion IDs must reference known criteria")
+
+        if self.retrieval_diagnostics:
+            diagnostic_ids = [
+                diagnostic.criterion_id for diagnostic in self.retrieval_diagnostics
+            ]
+            if len(diagnostic_ids) != len(set(diagnostic_ids)):
+                raise ValueError("diagnostic criterion IDs must be unique")
+            if set(diagnostic_ids) != known_criteria:
+                raise ValueError("diagnostics must match criteria exactly")
+            evidence_count_by_criterion = {
+                criterion_id: sum(
+                    item.criterion_id == criterion_id for item in self.evidence
+                )
+                for criterion_id in known_criteria
+            }
+            if any(
+                diagnostic.accepted_candidate_count
+                != evidence_count_by_criterion[diagnostic.criterion_id]
+                for diagnostic in self.retrieval_diagnostics
+            ):
+                raise ValueError("diagnostic candidate count must match evidence")
 
         finding_ids = [finding.criterion_id for finding in self.findings]
         if len(finding_ids) != len(set(finding_ids)):

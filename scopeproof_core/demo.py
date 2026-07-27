@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from scopeproof_core.gates.evaluator import evaluate_gate
-from scopeproof_core.retrieval.engine import retrieve_evidence
+from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.schemas.models import (
     Criterion,
     HumanResolution,
@@ -46,7 +46,8 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
         skipped_files=snapshot.skipped_files,
         final_acceptance=labels.get("final_acceptance", False),
     )
-    evidence = retrieve_evidence(snapshot, criteria)
+    retrieval_result = retrieve_evidence_with_diagnostics(snapshot, criteria)
+    evidence = retrieval_result.evidence
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
     resolutions = [
         HumanResolution.model_validate(item) for item in labels.get("resolutions", [])
@@ -57,6 +58,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
         source_text=labels["source_text"],
         criteria=criteria,
         evidence=evidence,
+        retrieval_diagnostics=retrieval_result.diagnostics,
         findings=findings,
         resolutions=resolutions,
         gate=gate,

@@ -28,7 +28,7 @@ from scopeproof_core.reporting.exporters import (
     export_json,
     export_markdown,
 )
-from scopeproof_core.retrieval.engine import retrieve_evidence
+from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import (
     ActionValidationRecord,
@@ -95,7 +95,8 @@ def _build_bundle(
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
     )
-    evidence = retrieve_evidence(snapshot, criteria)
+    retrieval_result = retrieve_evidence_with_diagnostics(snapshot, criteria)
+    evidence = retrieval_result.evidence
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
     gate = evaluate_gate(review, criteria, findings, [])
     return ReviewBundle(
@@ -103,6 +104,7 @@ def _build_bundle(
         source_text=source_text,
         criteria=criteria,
         evidence=evidence,
+        retrieval_diagnostics=retrieval_result.diagnostics,
         findings=findings,
         gate=gate,
         research_context=(

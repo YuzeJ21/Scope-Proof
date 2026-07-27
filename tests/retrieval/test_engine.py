@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import scopeproof_core.retrieval.engine as retrieval_engine
 from scopeproof_core.retrieval.engine import (
     _evidence_type,
     classify_changed_path_evidence_type,
@@ -17,6 +18,7 @@ from scopeproof_core.schemas.models import (
     EvidenceType,
     LineChangeType,
     PullRequestSnapshot,
+    RetrievedFile,
 )
 
 
@@ -310,3 +312,184 @@ def test_ci_is_not_created_as_criterion_evidence() -> None:
         snapshot, [Criterion(criterion_id="AC-01", text="Export CSV")]
     )
     assert evidence == []
+
+
+def test_retrieval_result_reports_candidate_search_scope_without_changing_evidence() -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                "src/export.py",
+                [(LineChangeType.ADDED, 42, "def export_csv(rows):")],
+            )
+        ]
+    )
+    criterion = Criterion(criterion_id="AC-01", text="Export CSV")
+
+    result = retrieval_engine.retrieve_evidence_with_diagnostics(snapshot, [criterion])
+
+    assert result.evidence == retrieve_evidence(snapshot, [criterion])
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.criterion_id == "AC-01"
+    assert diagnostic.outcome.value == "candidates_found"
+    assert diagnostic.searched_terms == ["csv", "export"]
+    assert diagnostic.exact_identifiers == []
+    assert diagnostic.searched_paths == ["src/export.py"]
+    assert diagnostic.searched_evidence_types == [EvidenceType.IMPLEMENTATION]
+    assert diagnostic.changed_file_count == 1
+    assert diagnostic.unchanged_candidate_file_count == 0
+    assert diagnostic.inspectable_line_count == 1
+    assert diagnostic.exact_identifier_match_line_count == 0
+    assert diagnostic.term_overlap_line_count == 1
+    assert diagnostic.below_threshold_line_count == 0
+    assert diagnostic.accepted_candidate_count == 1
+
+
+def test_retrieval_result_reports_no_searchable_terms_for_each_criterion() -> None:
+    snapshot = snapshot_with_files([])
+    criterion = Criterion(criterion_id="AC-01", text="The user should be on the current")
+
+    result = retrieval_engine.retrieve_evidence_with_diagnostics(snapshot, [criterion])
+
+    assert result.evidence == []
+    assert result.diagnostics[0].outcome.value == "no_searchable_terms"
+    assert result.diagnostics[0].searched_terms == []
+    assert result.diagnostics[0].inspectable_line_count == 0
+
+
+def test_retrieval_result_reports_no_inspectable_lines() -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                "src/export.py",
+                [(LineChangeType.REMOVED, 42, "def export_csv(rows):")],
+            )
+        ]
+    )
+
+    result = retrieval_engine.retrieve_evidence_with_diagnostics(
+        snapshot,
+        [Criterion(criterion_id="AC-01", text="Export CSV")],
+    )
+
+    assert result.evidence == []
+    assert result.diagnostics[0].outcome.value == "no_inspectable_lines"
+    assert result.diagnostics[0].searched_paths == ["src/export.py"]
+    assert result.diagnostics[0].inspectable_line_count == 0
+
+
+def test_retrieval_result_reports_missing_exact_identifier_before_overlap() -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                "src/analytics.py",
+                [(LineChangeType.ADDED, 5, 'track("record_export_event")')],
+            )
+        ]
+    )
+
+    result = retrieval_engine.retrieve_evidence_with_diagnostics(
+        snapshot,
+        [Criterion(criterion_id="AC-01", text="Record research_exported")],
+    )
+
+    diagnostic = result.diagnostics[0]
+    assert result.evidence == []
+    assert diagnostic.outcome.value == "exact_identifier_not_found"
+    assert diagnostic.exact_identifiers == ["research_exported"]
+    assert diagnostic.exact_identifier_match_line_count == 0
+    assert diagnostic.term_overlap_line_count == 1
+    assert diagnostic.below_threshold_line_count == 0
+
+
+def test_retrieval_result_reports_no_term_overlap() -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                "src/unrelated.py",
+                [(LineChangeType.ADDED, 5, "def render_dashboard():")],
+            )
+        ]
+    )
+
+    result = retrieval_engine.retrieve_evidence_with_diagnostics(
+        snapshot,
+        [Criterion(criterion_id="AC-01", text="Export CSV")],
+    )
+
+    diagnostic = result.diagnostics[0]
+    assert result.evidence == []
+    assert diagnostic.outcome.value == "no_term_overlap"
+    assert diagnostic.term_overlap_line_count == 0
+    assert diagnostic.below_threshold_line_count == 0
+
+
+def test_retrieval_result_reports_lines_below_existing_threshold() -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                "src/export.py",
+                [(LineChangeType.ADDED, 5, "export = True")],
+            )
+        ]
+    )
+
+    result = retrieval_engine.retrieve_evidence_with_diagnostics(
+        snapshot,
+        [
+            Criterion(
+                criterion_id="AC-01",
+                text="Export archive report dashboard widget safely",
+            )
+        ],
+    )
+
+    diagnostic = result.diagnostics[0]
+    assert result.evidence == []
+    assert diagnostic.outcome.value == "below_relevance_threshold"
+    assert diagnostic.term_overlap_line_count == 1
+    assert diagnostic.below_threshold_line_count == 1
+
+
+def test_retrieval_result_sorts_changed_and_unchanged_search_scope() -> None:
+    snapshot = snapshot_with_files(
+        [
+            changed_file(
+                "tests/test_export.py",
+                [(LineChangeType.ADDED, 3, "def test_export_csv():")],
+            ),
+            changed_file(
+                "src/export.py",
+                [(LineChangeType.ADDED, 42, "def export_csv(rows):")],
+            ),
+        ]
+    )
+    unchanged = RetrievedFile(
+        path="docs/export.md",
+        content="Export CSV guidance",
+        commit_sha=snapshot.head_sha,
+        retrieval_reason="Requirement names this document",
+    )
+
+    result = retrieval_engine.retrieve_evidence_with_diagnostics(
+        snapshot,
+        [Criterion(criterion_id="AC-01", text="Export CSV")],
+        unchanged_files=[unchanged],
+    )
+
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.searched_paths == [
+        "docs/export.md",
+        "src/export.py",
+        "tests/test_export.py",
+    ]
+    assert diagnostic.searched_evidence_types == [
+        EvidenceType.DOCUMENTATION,
+        EvidenceType.IMPLEMENTATION,
+        EvidenceType.TEST,
+    ]
+    assert diagnostic.changed_file_count == 2
+    assert diagnostic.unchanged_candidate_file_count == 1
+    assert diagnostic.inspectable_line_count == 3
+    assert diagnostic.term_overlap_line_count == 3
+    assert diagnostic.accepted_candidate_count == 3

@@ -2547,6 +2547,23 @@ def test_missing_criterion_detail_shows_action_and_no_candidate_state() -> None:
     assert "No candidate evidence is linked to this provisional finding." in caption_text
 
 
+def test_criterion_detail_explains_retrieval_without_presenting_it_as_evidence() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+
+    markdown_text = "\n".join(item.value for item in app.markdown)
+    caption_text = "\n".join(item.value for item in app.caption)
+
+    assert "How ScopeProof searched" in markdown_text
+    assert "Search outcome: Below Relevance Threshold" in caption_text
+    assert "Searched terms:" in caption_text
+    assert "Searched paths:" in caption_text
+    assert (
+        "Search diagnostics explain retrieval; they are not evidence that the criterion "
+        "is satisfied or missing from the repository."
+    ) in caption_text
+
+
 def test_compound_criterion_can_be_split_in_workbench() -> None:
     app = new_app()
     app = app.text_area(key="requirements_input").set_value("Export CSV and record analytics").run()
