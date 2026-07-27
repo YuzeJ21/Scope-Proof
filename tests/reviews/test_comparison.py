@@ -175,6 +175,38 @@ def test_comparison_reports_evidence_status_resolution_and_gate_changes() -> Non
     assert comparison.changed_human_resolutions[0].current_decision is HumanDecision.ACCEPTED
     assert comparison.previous_gate is GateVerdict.BLOCKED
     assert comparison.current_gate is GateVerdict.READY
+    assert comparison.criteria_requiring_decision_review == ["AC-01"]
+
+
+def test_unchanged_evidence_does_not_require_prior_decision_review() -> None:
+    previous = bundle(
+        head_sha="same-head",
+        status=FindingStatus.EVIDENCE_FOUND,
+        with_evidence=True,
+    )
+    current = previous.model_copy(deep=True)
+
+    comparison = compare_reviews(previous, current)
+
+    assert comparison.criteria_requiring_decision_review == []
+
+
+def test_changed_evidence_requires_review_even_when_decision_text_is_unchanged() -> None:
+    previous = bundle(
+        head_sha="old-head",
+        status=FindingStatus.EVIDENCE_FOUND,
+        with_evidence=True,
+    )
+    current = bundle(
+        head_sha="new-head",
+        status=FindingStatus.EVIDENCE_FOUND,
+        with_evidence=True,
+    )
+
+    comparison = compare_reviews(previous, current)
+
+    assert comparison.changed_human_resolutions == []
+    assert comparison.criteria_requiring_decision_review == ["AC-01"]
 
 
 def test_exact_candidate_reference_is_unchanged() -> None:

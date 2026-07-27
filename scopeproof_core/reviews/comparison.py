@@ -148,6 +148,16 @@ class ReviewComparison(BaseModel):
     previous_gate: GateVerdict
     current_gate: GateVerdict
     ruleset_version_changed: bool
+    criteria_requiring_decision_review: list[str] = Field(default_factory=list)
+
+    @field_validator("criteria_requiring_decision_review")
+    @classmethod
+    def _decision_review_ids_are_canonical(cls, value: list[str]) -> list[str]:
+        if value != sorted(set(value)) or any(not item.strip() for item in value):
+            raise ValueError(
+                "criteria requiring decision review must be sorted unique IDs"
+            )
+        return value
 
     @computed_field
     @property
@@ -435,15 +445,32 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
         for criterion_id in sorted(set(previous_resolutions) | set(current_resolutions))
         if previous_resolutions.get(criterion_id) != current_resolutions.get(criterion_id)
     ]
+    evidence_changes = _compare_evidence(previous.evidence, current.evidence)
+    changed_criterion_ids = {
+        change.criterion_id
+        for change in evidence_changes
+        if change.kind is not EvidenceChangeKind.UNCHANGED
+    }
+    changed_criterion_ids.update(
+        change.criterion_id for change in changed_findings
+    )
+    if (
+        previous.review.head_sha != current.review.head_sha
+        or previous.review.ruleset_version != current.review.ruleset_version
+    ):
+        changed_criterion_ids.update(previous_resolutions)
     return ReviewComparison(
         previous_head_sha=previous.review.head_sha,
         current_head_sha=current.review.head_sha,
-        evidence_changes=_compare_evidence(previous.evidence, current.evidence),
+        evidence_changes=evidence_changes,
         changed_finding_statuses=changed_findings,
         changed_human_resolutions=changed_resolutions,
         previous_gate=previous.gate.verdict,
         current_gate=current.gate.verdict,
         ruleset_version_changed=(
             previous.review.ruleset_version != current.review.ruleset_version
+        ),
+        criteria_requiring_decision_review=sorted(
+            set(previous_resolutions) & changed_criterion_ids
         ),
     )

@@ -81,6 +81,28 @@ from scopeproof_core.storage.json_store import (
 from scopeproof_core.verification.service import build_findings
 
 st.set_page_config(page_title="ScopeProof", page_icon="🔎", layout="wide")
+st.markdown(
+    """
+    <style>
+    :where(
+        button,
+        a,
+        input,
+        textarea,
+        select,
+        [role="button"],
+        [role="checkbox"],
+        [role="combobox"],
+        [tabindex]
+    ):focus-visible {
+        outline: 3px solid #ffbf47 !important;
+        outline-offset: 3px !important;
+        box-shadow: 0 0 0 2px #0e1117 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 _STATE_DEFAULTS = {
     "snapshot": None,
@@ -1137,6 +1159,12 @@ else:
                     else "None"
                 )
                 st.markdown(f"- {change.criterion_id}: {previous} → {current}")
+        if comparison.criteria_requiring_decision_review:
+            st.warning(
+                "Prior decisions must be revisited for: "
+                + ", ".join(comparison.criteria_requiring_decision_review)
+                + ". ScopeProof never carries acceptance to a changed head."
+            )
         st.caption(
             "Ruleset changed between reviews."
             if comparison.ruleset_version_changed
@@ -1196,6 +1224,22 @@ else:
     coverage_by_id = {
         row.criterion_id: row for row in criterion_coverage_rows(bundle)
     }
+    evidence_strength_counts = {
+        EvidenceStatus.STRONG_CANDIDATE: 0,
+        EvidenceStatus.WEAK_CANDIDATE: 0,
+        EvidenceStatus.NO_CANDIDATE: 0,
+        EvidenceStatus.ANALYSIS_INCOMPLETE: 0,
+    }
+    for row in coverage_by_id.values():
+        if row.evidence_status in evidence_strength_counts:
+            evidence_strength_counts[row.evidence_status] += 1
+    st.markdown(
+        "**Candidate strength:** "
+        f"Strong {evidence_strength_counts[EvidenceStatus.STRONG_CANDIDATE]} · "
+        f"Weak {evidence_strength_counts[EvidenceStatus.WEAK_CANDIDATE]} · "
+        f"None {evidence_strength_counts[EvidenceStatus.NO_CANDIDATE]} · "
+        f"Incomplete {evidence_strength_counts[EvidenceStatus.ANALYSIS_INCOMPLETE]}"
+    )
     status_filter = st.multiselect(
         "Filter evidence status",
         options=list(EvidenceStatus),
@@ -1257,6 +1301,22 @@ else:
                 st.caption(f"Evidence status: {row['Evidence status']}")
                 st.caption(f"Evidence types: {row['Evidence types']}")
                 st.caption(f"Reviewer decision: {row['Reviewer decision']}")
+
+    unresolved_ids = [
+        criterion.criterion_id
+        for criterion in bundle.criteria
+        if criterion.criterion_id not in resolution_by_id
+    ]
+    if unresolved_ids:
+        st.markdown("### Unresolved criteria queue")
+        st.caption(
+            "Review candidate evidence and record an explicit human decision for each item."
+        )
+        for criterion_id in unresolved_ids:
+            st.markdown(
+                f"- **{criterion_id}** — "
+                f"{finding_by_id[criterion_id].recommended_action}"
+            )
 
     st.header("4 · Criterion Detail")
     selected_id = st.selectbox(

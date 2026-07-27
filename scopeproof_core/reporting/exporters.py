@@ -295,6 +295,23 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
                 f"{_render_markdown_code(previous)} → {_render_markdown_code(current)}"
             )
         lines.append("")
+    if comparison.criteria_requiring_decision_review:
+        lines.extend(
+            [
+                "## Prior Decisions Requiring Review",
+                "",
+                *[
+                    f"- {_escape_markdown_text(criterion_id)}"
+                    for criterion_id in comparison.criteria_requiring_decision_review
+                ],
+                "",
+                (
+                    "ScopeProof never carries acceptance to a changed head. Review current "
+                    "evidence and record a new decision."
+                ),
+                "",
+            ]
+        )
     lines.extend(
         [
             "## Comparison Boundary",

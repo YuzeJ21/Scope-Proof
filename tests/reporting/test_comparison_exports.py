@@ -78,6 +78,7 @@ def example_comparison() -> ReviewComparison:
         previous_gate=GateVerdict.BLOCKED,
         current_gate=GateVerdict.NEEDS_REVIEW,
         ruleset_version_changed=False,
+        criteria_requiring_decision_review=["AC-01"],
     )
 
 
@@ -97,6 +98,7 @@ def test_comparison_json_is_validated_deterministic_and_counted() -> None:
     assert payload["evidence_change_counts"]["removed"] == 1
     assert payload["evidence_changes"][0]["previous"]["commit_sha"] == "old"
     assert payload["evidence_changes"][0]["current"]["commit_sha"] == "new"
+    assert payload["criteria_requiring_decision_review"] == ["AC-01"]
 
 
 def test_comparison_markdown_shows_two_sides_and_evidence_boundary() -> None:
@@ -111,6 +113,9 @@ def test_comparison_markdown_shows_two_sides_and_evidence_boundary() -> None:
     assert "EV-old" in report and "EV-new" in report
     assert "does not prove criterion satisfaction" in report
     assert "review the current evidence" in report.lower()
+    assert "Prior Decisions Requiring Review" in report
+    assert "AC\\-01" in report
+    assert "never carries acceptance to a changed head" in report
 
 
 def test_comparison_markdown_escapes_repository_controlled_text() -> None:

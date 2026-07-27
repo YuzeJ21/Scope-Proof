@@ -115,6 +115,13 @@ def test_product_disclaimer_is_visible() -> None:
     assert "No paid LLM API" in visible_text
 
 
+def test_workbench_defines_visible_keyboard_focus_treatment() -> None:
+    source = APP_PATH.read_text(encoding="utf-8")
+
+    assert ":focus-visible" in source
+    assert "outline: 3px solid #ffbf47" in source
+
+
 def test_standard_review_hides_alpha_research_fields() -> None:
     app = new_app()
 
@@ -1317,6 +1324,20 @@ def test_demo_summary_explains_non_prescriptive_next_actions() -> None:
     visible_text = "\n".join(markdown.value for markdown in app.markdown)
     assert "What to do next" in visible_text
     assert "unresolved criteria: AC-01" in visible_text
+
+
+def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> None:
+    app = analyzed_demo(new_app())
+    visible_text = "\n".join(
+        item.value for item in [*app.markdown, *app.caption, *app.info]
+    )
+
+    assert "Candidate strength:" in visible_text
+    assert "Strong" in visible_text
+    assert "Weak" in visible_text
+    assert "None" in visible_text
+    assert "Unresolved criteria queue" in visible_text
+    assert "Review candidate evidence and record an explicit human decision" in visible_text
     assert "ScopeProof does not decide them" in visible_text
     assert "Gate reasons: Blocking Criteria" in visible_text
 
