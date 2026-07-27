@@ -551,6 +551,22 @@ def test_unpublished_candidate_identity_preserves_public_install_boundary() -> N
     assert "pull request, issue comment" not in candidate_notes
 
 
+def test_v023_status_docs_record_verified_internal_candidate() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status_audit = Path(
+        "docs/releases/v0.2.3-status-and-next-stages.md"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        "Current engineering track | v0.2.3 Evidence Quality; "
+        "verified internal candidate"
+    ) in roadmap
+    assert "verification in progress" not in roadmap
+    assert "Preserve the verified v0.2.3 internal candidate" in status_audit
+    assert "Finish the current v0.2.3 internal-candidate verification" not in status_audit
+    assert "Complete and record current-head v0.2.3 verification" not in status_audit
+
+
 def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boundary() -> None:
     candidate_notes = Path("docs/releases/v0.2.2-internal-candidate.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")

@@ -15,7 +15,7 @@ automated activity. The current external state is
 | Published install | v0.2.1 |
 | Active source candidate | v0.2.3, internal and unpublished |
 | Public `main` | Does not contain the active local R-002 and v0.2.3 engineering line |
-| Current engineering track | v0.2.3 Evidence Quality; implementation complete, verification in progress |
+| Current engineering track | v0.2.3 Evidence Quality; verified internal candidate |
 | Product validation | Stage 0 complete; Stage 1 waiting; Stages 2–4 gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
@@ -55,7 +55,7 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 
 ## Current engineering track — v0.2.3 Evidence Quality
 
-Status: implementation complete; internal-candidate verification in progress. This work can proceed while Stage 1 waits but
+Status: verified internal candidate; unpublished. This work can proceed while Stage 1 waits but
 does not advance Stage 1.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
@@ -73,7 +73,7 @@ does not advance Stage 1.
   is complete, but cohort generation awaits a separate explicit owner approval.
 - [x] Complete fresh packaging, clean-install, accessibility, and available-platform verification
   before calling v0.2.3 an internal release candidate.
-- [ ] Keep publication as a separate owner-controlled decision.
+- [x] Keep publication as a separate owner-controlled decision.
 
 Do not retune against the frozen R-002 cohort, weaken thresholds, add model-generated verdicts, or
 promote search diagnostics into evidence or correctness claims.
