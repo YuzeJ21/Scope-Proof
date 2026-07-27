@@ -532,22 +532,22 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert '__version__ = "0.2.2"' in version_source
+    assert '__version__ = "0.2.3"' in version_source
 
 
 def test_unpublished_candidate_identity_preserves_public_install_boundary() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    candidate_notes = Path("docs/releases/v0.2.2-internal-candidate.md").read_text(encoding="utf-8")
+    candidate_notes = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(encoding="utf-8")
 
-    assert "v0.2.2 internal candidate" in readme
+    assert "v0.2.3 internal candidate" in readme
     assert "not published" in readme
-    assert "Candidate version: 0.2.2 (not published)" in changelog
+    assert "Candidate version: 0.2.3 (not published)" in changelog
     assert "Internal only; not published" in candidate_notes
     assert "releases/download/v0.2.1/" in readme
-    assert "releases/download/v0.2.2/" not in readme
+    assert "releases/download/v0.2.3/" not in readme
     assert "does not advance Stage 1" in candidate_notes
-    assert "Documentation-maintenance pull requests do not publish v0.2.2" in candidate_notes
+    assert "Local commits do not publish v0.2.3" in candidate_notes
     assert "pull request, issue comment" not in candidate_notes
 
 
@@ -576,7 +576,8 @@ def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boun
     assert (
         "- Added the self-contained public-alpha participant quickstart install path from PR "
         "#172, pinned to the verified public v0.2.1 wheel. Participant setup and benchmark "
-        "success are engineering evidence only; they do not publish v0.2.2 or advance Stage 1."
+        "success are engineering evidence only; they did not publish v0.2.2 and do not advance "
+        "Stage 1."
     ) in unreleased_changed_normalized
 
 

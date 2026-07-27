@@ -86,7 +86,7 @@ Python 3.11 or newer is required.
 Install the verified v0.2.1 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
-The source checkout is the **v0.2.2 internal candidate** and is not published; the verified public
+The source checkout is the **v0.2.3 internal candidate** and is not published; the verified public
 install path below therefore remains v0.2.1 until a separate publication decision.
 
 ```bash

@@ -9,17 +9,25 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Candidate version: 0.2.2 (not published).
+Candidate version: 0.2.3 (not published).
 
 ### Changed
 
+- Added deterministic per-criterion retrieval diagnostics across stored reviews, the workbench,
+  CLI-created reviews, the constructed demo, and JSON, Markdown, CSV, and HTML exports. Diagnostics
+  explain the search path but remain explicitly non-evidentiary.
+- Added a frozen-result R-002 miss taxonomy: 14 threshold rejections and one unsupported evidence
+  form, with no retuning or rescoring of the completed benchmark.
+- Added evidence-delta guidance that requires revisiting prior decisions after relevant re-review
+  changes, plus a compact candidate-strength summary, unresolved-criteria queue, and visible
+  keyboard-focus treatment.
 - Completed the
   [R-002 SWE-bench Verified static engineering benchmark](docs/research/r002-swebench-verified/summary.md):
   20 historical public PRs across 12 repositories, frozen research labels, two byte-identical
   offline runs, zero unexpected Ready outcomes, and no target-code execution.
 - Added the self-contained public-alpha participant quickstart install path from PR #172, pinned
   to the verified public v0.2.1 wheel. Participant setup and benchmark success are engineering
-  evidence only; they do not publish v0.2.2 or advance Stage 1.
+  evidence only; they did not publish v0.2.2 and do not advance Stage 1.
 - Restored the safe first-use hierarchy so the deliberately constructed demo entry appears before
   public-PR-only inputs and remains visible in the initial desktop viewport.
 - Expanded the deliberately constructed comparison benchmark from one changed-head case to two

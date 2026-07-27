@@ -13,9 +13,9 @@ automated activity. The current external state is
 | Area | Current state |
 |---|---|
 | Published install | v0.2.1 |
-| Active source candidate | v0.2.2, internal and unpublished |
+| Active source candidate | v0.2.3, internal and unpublished |
 | Public `main` | Does not contain the active local R-002 and v0.2.3 engineering line |
-| Current engineering track | v0.2.3 Evidence Quality; design approved, implementation pending |
+| Current engineering track | v0.2.3 Evidence Quality; implementation complete, verification in progress |
 | Product validation | Stage 0 complete; Stage 1 waiting; Stages 2–4 gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
@@ -55,21 +55,22 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 
 ## Current engineering track — v0.2.3 Evidence Quality
 
-Status: design approved; implementation pending. This work can proceed while Stage 1 waits but
+Status: implementation complete; internal-candidate verification in progress. This work can proceed while Stage 1 waits but
 does not advance Stage 1.
 
-- [ ] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
-- [ ] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
+- [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
+- [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
   counts, and accepted-candidate counts without changing retrieval behavior.
-- [ ] Persist diagnostics in new reviews while preserving historical reviews without inventing
+- [x] Persist diagnostics in new reviews while preserving historical reviews without inventing
   diagnostics.
-- [ ] Render diagnostics in the workbench, CLI-created reviews, constructed demo, and Markdown,
+- [x] Render diagnostics in the workbench, CLI-created reviews, constructed demo, and Markdown,
   JSON, CSV, and HTML exports.
-- [ ] Prove existing evidence IDs, scores, references, findings, and gate decisions are unchanged.
-- [ ] Prove the completed R-002 canonical inputs and result remain byte-identical.
-- [ ] Classify R-002 misses only after diagnostics exist. Convert genuine retrieval defects into
+- [x] Prove existing evidence IDs, scores, references, findings, and gate decisions are unchanged.
+- [x] Prove the completed R-002 canonical inputs and result remain byte-identical.
+- [x] Classify R-002 misses only after diagnostics exist. Convert genuine retrieval defects into
   separate constructed regression fixtures.
-- [ ] Freeze a new holdout before using it to evaluate a retrieval algorithm change.
+- [ ] Freeze a new holdout before using it to evaluate a retrieval algorithm change. R-003 design
+  is complete, but cohort generation awaits a separate explicit owner approval.
 - [ ] Complete fresh packaging, clean-install, accessibility, and available-platform verification
   before calling v0.2.3 an internal release candidate.
 - [ ] Keep publication as a separate owner-controlled decision.
