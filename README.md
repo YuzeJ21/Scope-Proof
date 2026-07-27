@@ -5,7 +5,9 @@
 ScopeProof is a reviewer-controlled acceptance-coverage assistant for public GitHub pull requests.
 It maps each confirmed criterion to inspectable implementation or test candidates, makes missing
 evidence visible, records attributable human decisions, and exports a reproducible review. The
-primary workflow is designed to reach an inspectable coverage report in under five minutes.
+primary workflow has a product target of reaching an inspectable coverage report in under five
+minutes. That target has not yet been independently observed and is separate from the Stage 1
+under-ten-minute completed-review gate.
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
@@ -266,11 +268,11 @@ case-level mismatches, immutable evidence-link errors, and unexecuted required c
 nonzero when a known must-have False Ready, label mismatch, evidence-link error, or unexecuted
 category is present.
 
-The second command executes a paired previous/current review case and checks deterministic
-re-review classification, including conservative handling of ambiguous duplicate candidates. The
-paired case is deliberately constructed engineering evidence. It does not advance Stage 1. This
-engineering evidence does not prove correctness, does not constitute customer validation, and
-does not show external use.
+The second command executes two paired previous/current review cases and checks deterministic
+re-review classification, including exact Unchanged coverage and conservative handling of
+ambiguous duplicate candidates. This corpus is deliberately constructed engineering evidence.
+It does not advance Stage 1. It does not prove correctness.
+It does not constitute customer validation. It does not show external use.
 Both benchmark commands execute local JSON inputs only; they do not run fixture repository code.
 
 Run the opt-in live public GitHub smoke test:

@@ -8,9 +8,22 @@ This roadmap advances on genuine use evidence, not elapsed time, releases, stars
 automated activity. The current external state is
 `waiting_for_inbound_public_alpha_submission`.
 
+## Current release and validation state
+
+| Area | Current state |
+|---|---|
+| Published install | v0.2.1 |
+| Active source candidate | v0.2.2, internal and unpublished |
+| Public `main` | Does not contain the active local R-002 and v0.2.3 engineering line |
+| Current engineering track | v0.2.3 Evidence Quality; design approved, implementation pending |
+| Product validation | Stage 0 complete; Stage 1 waiting; Stages 2–4 gated |
+
+Verify live GitHub and current release records before relying on publication state. Engineering
+milestones can proceed while Stage 1 waits, but they do not advance product-validation stages.
+
 ## Stage 0 — Reviewer-first product reset
 
-Status: complete when v0.2.0 release verification passes.
+Status: complete.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
@@ -23,20 +36,60 @@ Status: complete when v0.2.0 release verification passes.
 - [x] The GitHub Action remains an advanced, non-default preview.
 - [x] **Software license decision:** the evaluation-only use policy remains unchanged and no
   open-source license is granted.
-- [x] R-001 public engineering research now records hash-bound before/after evidence quality:
-  corrected observed-CI aggregation and explicit E2 eval-definition intent without claiming test
-  execution, runtime verification, acceptance, or Stage 1 credit.
-- [x] R-002 records a deterministic 20-case, 12-repository static engineering baseline with
-  frozen research criteria and labels, immutable references, zero unexpected Ready outcomes, and
-  two identical offline runs.
 
-Stage 1 remains `waiting_for_inbound_public_alpha_submission`. R-002 is engineering evidence only;
-its 20 cases, 12 repositories, outcomes, and timing contribute zero genuine Alpha reviews,
-participants, repositories, or reuse signals. Stages 2–4 remain gated.
+## Completed engineering evidence — does not advance Stage 1
+
+- [x] R-001 records a hash-bound public-PR engineering comparison with corrected observed-CI
+  aggregation and explicit E2 eval-definition intent. It does not establish test execution,
+  runtime verification, acceptance, or Stage 1 credit.
+- [x] R-002 records a deterministic 20-case, 12-repository static baseline with frozen
+  benchmark-owner research criteria and labels, immutable references, zero unexpected Ready
+  outcomes, and two identical offline runs.
+- [x] R-002 executed 20/20 cases with zero failures, skipped cases, or rerun mismatches. It
+  recorded 18/22 benchmark-label candidate precision, 5/20 criterion candidate coverage, and
+  41/41 missing-evidence explanation completeness.
+
+These cases, repositories, outcomes, and timing contribute zero genuine Alpha reviews,
+participants, repositories, timing observations, False Ready rate evidence, or reuse signals.
+R-002 is engineering evidence only. Stages 2–4 remain gated.
+
+## Current engineering track — v0.2.3 Evidence Quality
+
+Status: design approved; implementation pending. This work can proceed while Stage 1 waits but
+does not advance Stage 1.
+
+- [ ] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
+- [ ] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
+  counts, and accepted-candidate counts without changing retrieval behavior.
+- [ ] Persist diagnostics in new reviews while preserving historical reviews without inventing
+  diagnostics.
+- [ ] Render diagnostics in the workbench, CLI-created reviews, constructed demo, and Markdown,
+  JSON, CSV, and HTML exports.
+- [ ] Prove existing evidence IDs, scores, references, findings, and gate decisions are unchanged.
+- [ ] Prove the completed R-002 canonical inputs and result remain byte-identical.
+- [ ] Classify R-002 misses only after diagnostics exist. Convert genuine retrieval defects into
+  separate constructed regression fixtures.
+- [ ] Freeze a new holdout before using it to evaluate a retrieval algorithm change.
+- [ ] Complete fresh packaging, clean-install, accessibility, and available-platform verification
+  before calling v0.2.3 an internal release candidate.
+- [ ] Keep publication as a separate owner-controlled decision.
+
+Do not retune against the frozen R-002 cohort, weaken thresholds, add model-generated verdicts, or
+promote search diagnostics into evidence or correctness claims.
 
 ## Stage 1 — Genuine public alpha
 
 Status: `waiting_for_inbound_public_alpha_submission`.
+
+Current measured state:
+
+- 0/5 qualifying reviews.
+- 0/3 independent practitioners.
+- 0/3 represented public repositories.
+- 0/3 independently observed under-ten-minute completions.
+- 0/2 reuse-intent signals.
+- Zero participant False Ready observations across zero participant reviews; this is not a
+  validated False Ready rate.
 
 All exit conditions are required:
 
@@ -56,6 +109,9 @@ The [concierge host checklist](docs/alpha/concierge-host-checklist.md) indexes t
 research path. It helps collect evidence but does not satisfy any gate by itself.
 
 ## Stage 2 — Commercial discovery
+
+Status: gated; do not begin commercial claims or productization until every Stage 1 condition is
+met.
 
 Entry requires every Stage 1 condition. The current free, public-repository-only design-partner
 review remains research; no paid product or billing is active.
@@ -82,6 +138,8 @@ requirements. Genuine completed reviews are required to validate or reject them.
 
 ## Stage 3 — Limited beta
 
+Status: gated; requires Stages 1–2, genuine repeat use, and a separate owner decision.
+
 Entry requires every Stage 1 and Stage 2 condition plus a separate owner decision. The beta
 remains supervised and public-repository-only unless that decision explicitly changes the scope.
 
@@ -96,6 +154,8 @@ Exit conditions:
 - Confirmed False Ready remains zero.
 
 ## Stage 4 — Evidence-guided expansion decision
+
+Status: gated; only repeated genuine behavior may justify expansion.
 
 Only recurring behavior can justify broader scope. Candidate directions include clearer
 requirements intake, better evidence explanations, and narrower collaboration handoffs. Private
