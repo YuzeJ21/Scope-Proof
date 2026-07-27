@@ -71,12 +71,17 @@ does not advance Stage 1.
   separate constructed regression fixtures.
 - [ ] Freeze a new holdout before using it to evaluate a retrieval algorithm change. R-003 design
   is complete, but cohort generation awaits a separate explicit owner approval.
-- [ ] Complete fresh packaging, clean-install, accessibility, and available-platform verification
+- [x] Complete fresh packaging, clean-install, accessibility, and available-platform verification
   before calling v0.2.3 an internal release candidate.
 - [ ] Keep publication as a separate owner-controlled decision.
 
 Do not retune against the frozen R-002 cohort, weaken thresholds, add model-generated verdicts, or
 promote search diagnostics into evidence or correctness claims.
+
+Current product, gap, and next-stage details are maintained in the
+[v0.2.3 status audit](docs/releases/v0.2.3-status-and-next-stages.md). Current official-source
+competitive research is maintained separately in the
+[2026-07-26 market comparison](docs/commercialization/market-comparison-2026-07-26.md).
 
 ## Stage 1 — Genuine public alpha
 

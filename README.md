@@ -89,6 +89,10 @@ cloning the repository.
 The source checkout is the **v0.2.3 internal candidate** and is not published; the verified public
 install path below therefore remains v0.2.1 until a separate publication decision.
 
+See the
+[v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
+for the implemented feature ledger, current gaps, and evidence-gated Stage 1–4 roadmap.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
