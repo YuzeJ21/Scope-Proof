@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
+import scopeproof_core.evals.r002_taxonomy as taxonomy_module
 from scopeproof_core.evals.r002_taxonomy import (
     R002MissCategory,
     R002MissEntry,
     R002MissTaxonomy,
+    build_r002_miss_taxonomy,
     classify_r002_miss,
+    main,
 )
 from scopeproof_core.schemas.models import RetrievalOutcome
 
@@ -139,3 +143,72 @@ def test_frozen_taxonomy_is_hash_bound_and_preserves_research_boundary() -> None
     assert taxonomy.source_manifest_sha256 == result["source_manifest_sha256"]
     assert taxonomy.criteria_set_sha256 == result["criteria_set_sha256"]
     assert taxonomy.candidate_label_set_sha256 == result["candidate_label_set_sha256"]
+
+
+def test_empty_taxonomy_build_is_hash_bound_and_keeps_all_categories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = object()
+    criteria = object()
+    labels = SimpleNamespace(labels=[])
+    hashes = iter(("0" * 64, "1" * 64, "2" * 64))
+    monkeypatch.setattr(taxonomy_module, "load_source_manifest", lambda _: manifest)
+    monkeypatch.setattr(
+        taxonomy_module,
+        "load_confirmed_criteria",
+        lambda _path, _manifest_hash: criteria,
+    )
+    monkeypatch.setattr(
+        taxonomy_module,
+        "load_confirmed_labels",
+        lambda _path, _manifest_hash, _criteria_hash: labels,
+    )
+    monkeypatch.setattr(taxonomy_module, "canonical_sha256", lambda _: next(hashes))
+    monkeypatch.setattr(taxonomy_module, "_prepare_run_cases", lambda **_: ())
+
+    result = build_r002_miss_taxonomy(
+        pack_root=tmp_path / "pack",
+        cache_root=tmp_path / "cache",
+    )
+
+    assert result.misses == ()
+    assert result.source_manifest_sha256 == "0" * 64
+    assert result.criteria_set_sha256 == "1" * 64
+    assert result.candidate_label_set_sha256 == "2" * 64
+    assert result.category_counts == {category: 0 for category in R002MissCategory}
+
+
+def test_taxonomy_cli_emits_canonical_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsysbinary: pytest.CaptureFixture[bytes],
+) -> None:
+    payload = R002MissTaxonomy(
+        source_manifest_sha256="0" * 64,
+        criteria_set_sha256="1" * 64,
+        candidate_label_set_sha256="2" * 64,
+        misses=(),
+        category_counts={category: 0 for category in R002MissCategory},
+    )
+    captured: dict[str, Path] = {}
+
+    def fake_build(*, pack_root: Path, cache_root: Path) -> R002MissTaxonomy:
+        captured.update(pack_root=pack_root, cache_root=cache_root)
+        return payload
+
+    monkeypatch.setattr(taxonomy_module, "build_r002_miss_taxonomy", fake_build)
+
+    assert main(
+        [
+            "--pack-root",
+            str(tmp_path / "pack"),
+            "--cache-dir",
+            str(tmp_path / "cache"),
+        ]
+    ) == 0
+
+    assert captured == {
+        "pack_root": tmp_path / "pack",
+        "cache_root": tmp_path / "cache",
+    }
+    assert json.loads(capsysbinary.readouterr().out) == payload.model_dump(mode="json")
