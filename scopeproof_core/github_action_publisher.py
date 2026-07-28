@@ -25,12 +25,19 @@ def publish_comment(
     with httpx.Client(
         base_url="https://api.github.com", headers=headers, transport=transport, timeout=15.0
     ) as client:
-        comments_response = client.get(
-            f"/repos/{context.repository}/issues/{context.pr_number}/comments",
-            params={"per_page": 100},
-        )
-        comments_response.raise_for_status()
-        plan = plan_comment(context, comments_response.json(), summary)
+        comments: list[dict] = []
+        page = 1
+        while True:
+            comments_response = client.get(
+                f"/repos/{context.repository}/issues/{context.pr_number}/comments",
+                params={"per_page": 100, "page": page},
+            )
+            comments_response.raise_for_status()
+            comments.extend(comments_response.json())
+            if "next" not in comments_response.links:
+                break
+            page += 1
+        plan = plan_comment(context, comments, summary)
         if plan.mode.value == "create":
             response = client.post(
                 f"/repos/{context.repository}/issues/{context.pr_number}/comments",
