@@ -16,6 +16,8 @@ Candidate version: 0.2.3 (public draft PR #174; not published).
 - Updated the transitive GitPython lock from 3.1.52 to 3.1.57 after GitHub reported five
   high-severity advisories. GitPython remains an indirect Streamlit dependency; no direct runtime
   dependency or target-repository execution path was added.
+- Fixed the advanced Action publisher so same-head reruns find an existing ScopeProof marker beyond
+  the first 100 issue comments instead of creating a duplicate audit comment.
 - Added deterministic per-criterion retrieval diagnostics across stored reviews, the workbench,
   CLI-created reviews, the constructed demo, and JSON, Markdown, CSV, and HTML exports. Diagnostics
   explain the search path but remain explicitly non-evidentiary.
