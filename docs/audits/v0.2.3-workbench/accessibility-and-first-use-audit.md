@@ -21,6 +21,18 @@ criteria-confirmation and analysis buttons could not be confirmed with the
 harness. A packaged keyboard and assistive-technology pass remains required
 before any accessibility-readiness claim.
 
+On 2026-07-28, a clean-wheel continuation repeated the installed flow in the
+in-app Chromium browser. Pointer automation loaded the constructed demo,
+confirmed its four criteria, ran deterministic analysis, and exposed the
+evidence matrix, unresolved queue, criterion detail, external-verification
+boundary, blocked gate reasons, and four export actions. The page exposed no
+unlabelled primary controls in the bounded DOM inspection, logged no browser
+warnings or errors, and showed no page-level horizontal overflow at 640 x 720.
+The automation interface still did not reliably demonstrate native keyboard
+activation, and its zoom shortcut did not change the measured viewport or
+device scale. Those two rows therefore remain open rather than being inferred
+from pointer or responsive evidence.
+
 ## Numbered first-use walkthrough
 
 1. Start a review from a deliberately constructed local demo or a public PR.
@@ -60,8 +72,8 @@ before any accessibility-readiness claim.
 | Focus visibility | Remediation added; packaged recheck open | The inspected `Inspect criterion` combobox initially reported no visible outline or box shadow. The candidate adds a 3 px gold `:focus-visible` outline with dark separation and a source-level regression check. Recheck it in the packaged candidate. |
 | Reading order | Partial pass | Snapshot order followed sidebar status, product boundary, source loading, criteria, evidence matrix, unresolved queue, and criterion detail. No assistive-technology reading-order test was run. |
 | Text contrast | Sampled pass | Computed body text `rgb(250,250,250)` on `rgb(14,17,23)` measured 18.11:1. Sidebar link `rgb(61,157,243)` on the same background measured 6.58:1. This was a bounded sample, not a complete color-state inventory. |
-| Narrow responsive layout | Pass for sampled route | At 390 x 844, the evidence matrix reflowed without observed horizontal overflow. Other browsers and OS text scaling remain untested. |
-| 200% browser zoom | Not executed | The controlled browser did not expose a reliable zoom control for this audit. Do not infer zoom support from the narrow-width check. |
+| Narrow responsive layout | Pass for sampled route | At 390 x 844, the evidence matrix reflowed without observed horizontal overflow. A later installed check at 640 x 720 also had no page-level horizontal overflow. Other browsers and OS text scaling remain untested. |
+| 200% browser zoom | Attempted but not verified | The controlled browser's zoom shortcut did not change the measured viewport or device scale. Do not infer zoom support from the narrow-width check. |
 | macOS | Executed | Current local engineering environment only. |
 | Windows | Not executed | No Windows environment was available. |
 | Linux | Not executed | No Linux desktop environment was available. |
