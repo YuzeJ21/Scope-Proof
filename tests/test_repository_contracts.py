@@ -547,20 +547,22 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert '__version__ = "0.2.3"' in version_source
 
 
-def test_unpublished_candidate_identity_preserves_public_install_boundary() -> None:
+def test_public_draft_candidate_identity_preserves_public_install_boundary() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     candidate_notes = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(encoding="utf-8")
+    readme_copy = " ".join(readme.split())
 
-    assert "v0.2.3 internal candidate" in readme
-    assert "not published" in readme
-    assert "Candidate version: 0.2.3 (not published)" in changelog
-    assert "Internal only; not published" in candidate_notes
+    assert "v0.2.3 public draft candidate" in readme
+    assert "draft PR #174" in readme
+    assert "not merged, tagged, or released" in readme_copy
+    assert "Candidate version: 0.2.3 (public draft PR #174; not published)" in changelog
+    assert "Status: Public draft candidate; not merged, tagged, or released" in candidate_notes
     assert "releases/download/v0.2.1/" in readme
     assert "releases/download/v0.2.3/" not in readme
     assert "does not advance Stage 1" in candidate_notes
     assert "Local commits do not publish v0.2.3" in candidate_notes
-    assert "pull request, issue comment" not in candidate_notes
+    assert "No push, pull request" not in candidate_notes
 
 
 def test_v023_status_docs_record_verified_internal_candidate() -> None:
@@ -577,6 +579,24 @@ def test_v023_status_docs_record_verified_internal_candidate() -> None:
     assert "Preserve the verified v0.2.3 internal candidate" in status_audit
     assert "Finish the current v0.2.3 internal-candidate verification" not in status_audit
     assert "Complete and record current-head v0.2.3 verification" not in status_audit
+    assert "v0.2.3, public draft PR #174; not merged or released" in roadmap
+    assert "Repository state: public draft PR #174; not merged, tagged, or released" in status_audit
+    assert "Python 3.11 CI passed at the exact public draft head" in status_audit
+    assert "Merge PR #174, tag, and create a release" in status_audit
+
+
+def test_current_intake_policy_keeps_linkedin_material_archived_and_owner_gated() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(encoding="utf-8")
+    draft = Path("docs/launch/linkedin-draft.md").read_text(encoding="utf-8")
+
+    boundary = "Archived preparation; not authorized under the current passive-intake policy."
+    assert boundary in playbook
+    assert boundary in draft
+    assert "Do not publish or use this material without a separate owner decision" in playbook
+    assert "The owner may publish the post" not in playbook
+    assert "If separately reauthorized" in playbook
+    assert "archived LinkedIn preparation" in readme
 
 
 def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boundary() -> None:

@@ -1,8 +1,8 @@
 # v0.2.3 Workbench Accessibility and First-Use Audit
 
-Status: internal engineering audit  
-Date: 2026-07-26  
-Environment: macOS, Streamlit local server, in-app Chromium browser  
+Status: internal engineering audit
+Date: 2026-07-26
+Environment: macOS, Streamlit local server, in-app Chromium browser
 Boundary: this is an owner-operated engineering rehearsal. It is not a
 participant usability study, customer validation, or a WCAG conformance claim.
 

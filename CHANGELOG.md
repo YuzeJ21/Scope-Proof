@@ -9,10 +9,13 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Candidate version: 0.2.3 (not published).
+Candidate version: 0.2.3 (public draft PR #174; not published).
 
 ### Changed
 
+- Updated the transitive GitPython lock from 3.1.52 to 3.1.57 after GitHub reported five
+  high-severity advisories. GitPython remains an indirect Streamlit dependency; no direct runtime
+  dependency or target-repository execution path was added.
 - Added deterministic per-criterion retrieval diagnostics across stored reviews, the workbench,
   CLI-created reviews, the constructed demo, and JSON, Markdown, CSV, and HTML exports. Diagnostics
   explain the search path but remain explicitly non-evidentiary.

@@ -1,7 +1,7 @@
 # ScopeProof market comparison and product adjustment
 
-Date: 2026-07-26  
-Status: current product and competitor-documentation audit  
+Date: 2026-07-28
+Status: current product and competitor-documentation audit
 Boundary: competitor capabilities below are vendor-advertised unless explicitly
 labelled as a ScopeProof implementation fact. This document is not customer or
 market validation.
@@ -40,9 +40,21 @@ criterion is supported at this exact head.”
 - [CodeRabbit documentation](https://docs.coderabbit.ai/) advertises
   context-aware PR reviews, bug detection, standards enforcement, suggested
   fixes, and IDE/CLI/PR surfaces.
+- [CodeRabbit linked-issue validation](https://docs.coderabbit.ai/issues/pr-validation)
+  compares issue requirements with PR changes and reports Addressed, Not
+  addressed, or Unclear. Requirement checking alone is therefore not a
+  ScopeProof distinction.
+- [CodeRabbit rate-limit documentation](https://docs.coderabbit.ai/management/plans)
+  states that a rate-limited push receives a passing check even though no new
+  review ran and a prior approval remains. This supports ScopeProof's proposed
+  fail-closed wedge: no valid current-head evidence means no valid current-head
+  decision.
 - [Qodo code review documentation](https://docs.qodo.ai/code-review) advertises
   multi-agent PR findings, rule enforcement, repository context, and
   requirement-gap detection.
+- [Qodo requirement-gap documentation](https://docs.qodo.ai/code-review/view-requirement-gaps-in-findings)
+  labels its specification comparison as a Research Preview and advises users
+  to validate outputs before relying on them.
 - [GitHub Copilot code review documentation](https://docs.github.com/en/copilot/concepts/agents/code-review)
   describes AI-generated PR feedback and suggested fixes; it also states the
   feature is available on paid Copilot plans and consumes AI credits.
@@ -94,7 +106,9 @@ criterion is supported at this exact head.”
 
 ### Build now — evidence trust and first-use quality
 
-1. Finish v0.2.3 packaging and current-head verification.
+1. Keep v0.2.3 dependency health, exact-head verification, packaging, and
+   release-status evidence aligned until the public draft is ready for an
+   owner-controlled merge decision.
 2. Preserve retrieval diagnostics as explanations, never verdict evidence.
 3. Improve conservative retrieval only through new constructed regressions and
    a prospectively frozen holdout; do not retune on R-002.

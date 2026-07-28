@@ -1,15 +1,18 @@
 # ScopeProof LinkedIn Public-Alpha Playbook
 
-This playbook turns the copy-ready post into a truthful, privacy-safe inbound path. The owner may
-publish the post but does not contact potential participants. Do not send email or direct messages,
-automate outreach, scrape profiles, create synthetic participants, or report an outcome that a real
-participant did not provide.
+> Archived preparation; not authorized under the current passive-intake policy.
+> Do not publish or use this material without a separate owner decision.
+
+This archived playbook was prepared to turn the copy-ready post into a truthful, privacy-safe
+inbound path. If separately reauthorized, the owner would publish manually without contacting
+potential participants. Do not send email or direct messages, automate outreach, scrape profiles,
+create synthetic participants, or report an outcome that a real participant did not provide.
 
 The owner runs an accepted case through the single
 [concierge host checklist](../alpha/concierge-host-checklist.md), which links to the authoritative
 qualification, confirmation, review, and outcome instructions.
 
-## Publish the image-led post
+## Historical publication steps — do not execute without reauthorization
 
 1. Open a new LinkedIn post and choose visibility **Anyone**.
 2. Upload `docs/assets/scopeproof-linkedin-alpha.png` as the post image.

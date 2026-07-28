@@ -86,8 +86,10 @@ Python 3.11 or newer is required.
 Install the verified v0.2.1 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
-The source checkout is the **v0.2.3 internal candidate** and is not published; the verified public
-install path below therefore remains v0.2.1 until a separate publication decision.
+The source checkout is the **v0.2.3 public draft candidate** in
+[draft PR #174](https://github.com/YuzeJ21/Scope-Proof/pull/174). It is not merged, tagged, or
+released; the verified public install path below therefore remains v0.2.1 until a separate
+publication decision.
 
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
@@ -373,9 +375,11 @@ inbound workflow, evidence gates, stop rules, and capabilities that remain defer
 adjacent traceability, test-management, and code-review workflows and records only hypotheses that
 still require genuine participant evidence.
 
-The [launch evidence matrix](docs/launch/evidence-matrix.md) and
-[review-before-posting LinkedIn draft](docs/launch/linkedin-draft.md) keep the
-constructed-demo and technical-smoke boundaries explicit.
+The [launch evidence matrix](docs/launch/evidence-matrix.md) and archived LinkedIn preparation in
+the [draft](docs/launch/linkedin-draft.md) and
+[playbook](docs/launch/linkedin-alpha-playbook.md) preserve prior launch research and its
+constructed-demo boundaries. The current policy is passive GitHub intake; those LinkedIn materials
+are not authorized for publication without a separate owner decision.
 
 ## GitHub Action advanced preview
 
