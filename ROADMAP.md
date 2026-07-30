@@ -13,8 +13,8 @@ automated activity. The current external state is
 | Area | Current state |
 |---|---|
 | Published install | v0.2.1 |
-| Active source candidate | v0.2.3, public draft PR #174; not merged or released |
-| Public `main` | Does not contain the active R-002 and v0.2.3 public-draft engineering line |
+| Active source candidate | v0.2.3, merged to `main` via PR #174; not released |
+| Public `main` | Contains the verified R-002 and v0.2.3 engineering candidate at merge commit `178df8a1c8034edc4d3240d790e3e4c668dfa82a` |
 | Current engineering track | v0.2.3 Evidence Quality; verified internal candidate |
 | Product validation | Stage 0 complete; Stage 1 waiting; Stages 2–4 gated |
 
@@ -55,8 +55,8 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 
 ## Current engineering track — v0.2.3 Evidence Quality
 
-Status: verified internal candidate in public draft PR #174; not merged, tagged, or released. This
-work can proceed while Stage 1 waits but does not advance Stage 1.
+Status: verified internal candidate merged to `main` via PR #174; not tagged or released. This work
+can proceed while Stage 1 waits but does not advance Stage 1.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering

@@ -86,10 +86,10 @@ Python 3.11 or newer is required.
 Install the verified v0.2.1 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
-The source checkout is the **v0.2.3 public draft candidate** in
-[draft PR #174](https://github.com/YuzeJ21/Scope-Proof/pull/174). It is not merged, tagged, or
-released; the verified public install path below therefore remains v0.2.1 until a separate
-publication decision.
+The **v0.2.3 source candidate** from
+[merged PR #174](https://github.com/YuzeJ21/Scope-Proof/pull/174) is now on `main`. The source is
+merged to `main`, but it is not tagged or released; the verified public install path below
+therefore remains v0.2.1 until a separate publication decision.
 
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
