@@ -547,21 +547,21 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert '__version__ = "0.2.3"' in version_source
 
 
-def test_public_draft_candidate_identity_preserves_public_install_boundary() -> None:
+def test_merged_candidate_identity_preserves_public_install_boundary() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     candidate_notes = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(encoding="utf-8")
     readme_copy = " ".join(readme.split())
 
-    assert "v0.2.3 public draft candidate" in readme
-    assert "draft PR #174" in readme
-    assert "not merged, tagged, or released" in readme_copy
-    assert "Candidate version: 0.2.3 (public draft PR #174; not published)" in changelog
-    assert "Status: Public draft candidate; not merged, tagged, or released" in candidate_notes
+    assert "v0.2.3 source candidate" in readme
+    assert "merged PR #174" in readme
+    assert "merged to `main`, but it is not tagged or released" in readme_copy
+    assert "Candidate version: 0.2.3 (merged to `main` via PR #174; not published)" in changelog
+    assert "Status: Merged to `main` via PR #174; not tagged or released" in candidate_notes
     assert "releases/download/v0.2.1/" in readme
     assert "releases/download/v0.2.3/" not in readme
     assert "does not advance Stage 1" in candidate_notes
-    assert "Local commits do not publish v0.2.3" in candidate_notes
+    assert "A source merge does not publish v0.2.3" in candidate_notes
     assert "No push, pull request" not in candidate_notes
 
 
@@ -579,10 +579,10 @@ def test_v023_status_docs_record_verified_internal_candidate() -> None:
     assert "Preserve the verified v0.2.3 internal candidate" in status_audit
     assert "Finish the current v0.2.3 internal-candidate verification" not in status_audit
     assert "Complete and record current-head v0.2.3 verification" not in status_audit
-    assert "v0.2.3, public draft PR #174; not merged or released" in roadmap
-    assert "Repository state: public draft PR #174; not merged, tagged, or released" in status_audit
-    assert "Python 3.11 CI passed at the exact public draft head" in status_audit
-    assert "Merge PR #174, tag, and create a release" in status_audit
+    assert "v0.2.3, merged to `main` via PR #174; not released" in roadmap
+    assert "Repository state: PR #174 merged to `main`; not tagged or released" in status_audit
+    assert "Python 3.11 CI passed at the exact merged PR head" in status_audit
+    assert "create a tag and GitHub Release" in status_audit
 
 
 def test_current_intake_policy_keeps_linkedin_material_archived_and_owner_gated() -> None:
