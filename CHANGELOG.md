@@ -9,7 +9,7 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Candidate version: 0.2.3 (public draft PR #174; not published).
+Candidate version: 0.2.3 (merged to `main` via PR #174; not published).
 
 ### Changed
 
