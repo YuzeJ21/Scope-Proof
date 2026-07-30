@@ -107,8 +107,8 @@ criterion is supported at this exact head.”
 ### Build now — evidence trust and first-use quality
 
 1. Keep v0.2.3 dependency health, exact-head verification, packaging, and
-   release-status evidence aligned until the public draft is ready for an
-   owner-controlled merge decision.
+   release-status evidence aligned after the source merge and before any
+   owner-controlled tag or GitHub Release decision.
 2. Preserve retrieval diagnostics as explanations, never verdict evidence.
 3. Improve conservative retrieval only through new constructed regressions and
    a prospectively frozen holdout; do not retune on R-002.
