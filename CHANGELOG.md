@@ -11,6 +11,21 @@ its linked release entry for the exact published source and assets.
 
 Candidate version: 0.2.3 (merged to `main` via PR #174; not published).
 
+### Known release blockers
+
+- The post-merge audit reproduced core final-acceptance and
+  manual-verification bypasses that can produce a schema-valid `Ready` state
+  without all current decisions or paired runtime evidence.
+- Unencoded candidate-path metacharacters can prevent the GitHub `ref`
+  parameter from being transmitted while the retrieved record still claims
+  the requested SHA; exact-head candidate retrieval therefore needs a
+  request-level repair.
+
+These findings were reproduced against current `main`. v0.2.3 is not
+release-ready; both defects require regression coverage and full current-head
+verification before any publication decision. The audit did not determine
+whether the published v0.2.1 package is affected.
+
 ### Changed
 
 - Updated the transitive GitPython lock from 3.1.52 to 3.1.57 after GitHub reported five
