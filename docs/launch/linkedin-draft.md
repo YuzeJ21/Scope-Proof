@@ -1,5 +1,7 @@
 # LinkedIn Post — ScopeProof Public Alpha
 
+> Archived preparation; not authorized under the current passive-intake policy.
+
 ## Copy-ready post
 
 Green CI is useful. It is not the same as complete product intent.
@@ -26,6 +28,7 @@ This is a deliberately constructed demo case. ScopeProof uses deterministic evid
 
 ## Publication boundary
 
-Post only after completing `linkedin-alpha-playbook.md`. Public repository visibility does not
-grant an open-source license; ScopeProof remains available for evaluation and review under its
+Do not post under the current passive-intake policy. A future separate owner decision would require
+rechecking `linkedin-alpha-playbook.md` first. Public repository visibility does not grant an
+open-source license; ScopeProof remains available for evaluation and review under its
 [use policy](../../USE_POLICY.md).

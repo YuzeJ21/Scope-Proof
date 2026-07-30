@@ -10,12 +10,15 @@ from scopeproof_core.schemas.models import (
     ChangedFile,
     ChangedLine,
     Criterion,
+    CriterionRetrievalDiagnostic,
     EvidenceItem,
     EvidenceLevel,
+    EvidenceRetrievalResult,
     EvidenceSourceScope,
     EvidenceType,
     LineChangeType,
     PullRequestSnapshot,
+    RetrievalOutcome,
     RetrievedFile,
 )
 
@@ -77,10 +80,11 @@ def _line_terms(content: str) -> set[str]:
     return terms
 
 
-def _evidence_type(file: ChangedFile) -> EvidenceType:
-    path = PurePosixPath(file.path)
+def classify_changed_path_evidence_type(path_value: str) -> EvidenceType:
+    """Classify a changed path using the established retrieval rules."""
+    path = PurePosixPath(path_value)
     normalized_parts = tuple(part.casefold() for part in path.parts)
-    lower_path = file.path.casefold()
+    lower_path = path_value.casefold()
     name = path.name.casefold()
     if (
         any(part in {"test", "tests"} for part in normalized_parts)
@@ -97,6 +101,10 @@ def _evidence_type(file: ChangedFile) -> EvidenceType:
     if any(marker in lower_path for marker in ("openapi", "schema", "contract")):
         return EvidenceType.CONTRACT
     return EvidenceType.IMPLEMENTATION
+
+
+def _evidence_type(file: ChangedFile) -> EvidenceType:
+    return classify_changed_path_evidence_type(file.path)
 
 
 def _permalink(
@@ -137,36 +145,51 @@ def _context_excerpt(changed_file: ChangedFile, line_number: int) -> str:
     return "\n".join(line.content for line in inspectable[start:end])
 
 
-def retrieve_evidence(
+def retrieve_evidence_with_diagnostics(
     snapshot: PullRequestSnapshot,
     criteria: list[Criterion],
     unchanged_files: list[RetrievedFile] | None = None,
-) -> list[EvidenceItem]:
-    """Return ordered line candidates with fully explainable matching metadata."""
+) -> EvidenceRetrievalResult:
+    """Return unchanged evidence candidates plus separate deterministic search metadata."""
     evidence: list[EvidenceItem] = []
+    diagnostics: list[CriterionRetrievalDiagnostic] = []
+    unchanged_candidates = unchanged_files or []
+    inputs = [
+        (file, EvidenceSourceScope.CHANGED_FILE, snapshot.head_sha)
+        for file in snapshot.files
+    ]
+    inputs.extend(
+        (_candidate_file(file), EvidenceSourceScope.UNCHANGED_CANDIDATE, file.commit_sha)
+        for file in unchanged_candidates
+    )
+    searched_paths = sorted({changed_file.path for changed_file, _, _ in inputs})
+    searched_evidence_types = sorted(
+        {_evidence_type(changed_file) for changed_file, _, _ in inputs},
+        key=lambda item: item.value,
+    )
+
     for criterion in criteria:
         criterion_terms, identifiers = _criterion_terms(criterion.text)
-        if not criterion_terms:
-            continue
+        inspectable_line_count = 0
+        exact_identifier_match_line_count = 0
+        term_overlap_line_count = 0
+        below_threshold_line_count = 0
         matches: list[
             tuple[float, ChangedFile, int, str, set[str], bool, EvidenceSourceScope, str]
         ] = []
-        inputs = [
-            (file, EvidenceSourceScope.CHANGED_FILE, snapshot.head_sha)
-            for file in snapshot.files
-        ]
-        inputs.extend(
-            (_candidate_file(file), EvidenceSourceScope.UNCHANGED_CANDIDATE, file.commit_sha)
-            for file in (unchanged_files or [])
-        )
         for changed_file, source_scope, commit_sha in inputs:
             kind = _evidence_type(changed_file)
             for line in changed_file.lines:
                 if line.change_type is LineChangeType.REMOVED or line.line_number is None:
                     continue
+                inspectable_line_count += 1
                 line_terms = _line_terms(line.content)
                 matched = criterion_terms & line_terms
                 exact_identifier = bool(identifiers & line_terms)
+                if exact_identifier:
+                    exact_identifier_match_line_count += 1
+                if matched:
+                    term_overlap_line_count += 1
                 if identifiers and not exact_identifier:
                     continue
                 if not matched:
@@ -175,8 +198,10 @@ def retrieve_evidence(
                 if exact_identifier:
                     score = max(score, 0.9)
                 if kind is EvidenceType.TEST and score < 0.4 and not exact_identifier:
+                    below_threshold_line_count += 1
                     continue
                 if score < 0.25:
+                    below_threshold_line_count += 1
                     continue
                 matches.append(
                     (
@@ -246,4 +271,50 @@ def retrieve_evidence(
                     limitations=limitations,
                 )
             )
-    return evidence
+
+        accepted_candidate_count = len(selected_matches[:8])
+        if accepted_candidate_count:
+            outcome = RetrievalOutcome.CANDIDATES_FOUND
+        elif not criterion_terms:
+            outcome = RetrievalOutcome.NO_SEARCHABLE_TERMS
+        elif inspectable_line_count == 0:
+            outcome = RetrievalOutcome.NO_INSPECTABLE_LINES
+        elif identifiers and exact_identifier_match_line_count == 0:
+            outcome = RetrievalOutcome.EXACT_IDENTIFIER_NOT_FOUND
+        elif term_overlap_line_count == 0:
+            outcome = RetrievalOutcome.NO_TERM_OVERLAP
+        else:
+            outcome = RetrievalOutcome.BELOW_RELEVANCE_THRESHOLD
+
+        diagnostics.append(
+            CriterionRetrievalDiagnostic(
+                criterion_id=criterion.criterion_id,
+                outcome=outcome,
+                searched_terms=sorted(criterion_terms),
+                exact_identifiers=sorted(identifiers),
+                searched_paths=searched_paths,
+                searched_evidence_types=searched_evidence_types,
+                changed_file_count=len(snapshot.files),
+                unchanged_candidate_file_count=len(unchanged_candidates),
+                inspectable_line_count=inspectable_line_count,
+                exact_identifier_match_line_count=exact_identifier_match_line_count,
+                term_overlap_line_count=term_overlap_line_count,
+                below_threshold_line_count=below_threshold_line_count,
+                accepted_candidate_count=accepted_candidate_count,
+            )
+        )
+
+    return EvidenceRetrievalResult(evidence=evidence, diagnostics=diagnostics)
+
+
+def retrieve_evidence(
+    snapshot: PullRequestSnapshot,
+    criteria: list[Criterion],
+    unchanged_files: list[RetrievedFile] | None = None,
+) -> list[EvidenceItem]:
+    """Compatibility wrapper returning the established ordered evidence candidates."""
+    return retrieve_evidence_with_diagnostics(
+        snapshot,
+        criteria,
+        unchanged_files=unchanged_files,
+    ).evidence

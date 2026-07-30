@@ -45,7 +45,7 @@ from scopeproof_core.presentation import (
 )
 from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
-from scopeproof_core.retrieval.engine import retrieve_evidence
+from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.comparison import EvidenceReference, compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
@@ -81,6 +81,28 @@ from scopeproof_core.storage.json_store import (
 from scopeproof_core.verification.service import build_findings
 
 st.set_page_config(page_title="ScopeProof", page_icon="🔎", layout="wide")
+st.markdown(
+    """
+    <style>
+    :where(
+        button,
+        a,
+        input,
+        textarea,
+        select,
+        [role="button"],
+        [role="checkbox"],
+        [role="combobox"],
+        [tabindex]
+    ):focus-visible {
+        outline: 3px solid #ffbf47 !important;
+        outline-offset: 3px !important;
+        box-shadow: 0 0 0 2px #0e1117 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 _STATE_DEFAULTS = {
     "snapshot": None,
@@ -217,9 +239,10 @@ def _analyze() -> ReviewBundle:
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
     )
-    evidence = retrieve_evidence(
+    retrieval_result = retrieve_evidence_with_diagnostics(
         snapshot, criteria, unchanged_files=st.session_state["candidate_files"]
     )
+    evidence = retrieval_result.evidence
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
     resolutions = st.session_state["resolutions"]
     gate = evaluate_gate(review, criteria, findings, resolutions)
@@ -228,6 +251,7 @@ def _analyze() -> ReviewBundle:
         source_text=st.session_state["source_text"],
         criteria=criteria,
         evidence=evidence,
+        retrieval_diagnostics=retrieval_result.diagnostics,
         findings=findings,
         resolutions=resolutions,
         gate=gate,
@@ -1135,6 +1159,12 @@ else:
                     else "None"
                 )
                 st.markdown(f"- {change.criterion_id}: {previous} → {current}")
+        if comparison.criteria_requiring_decision_review:
+            st.warning(
+                "Prior decisions must be revisited for: "
+                + ", ".join(comparison.criteria_requiring_decision_review)
+                + ". ScopeProof never carries acceptance to a changed head."
+            )
         st.caption(
             "Ruleset changed between reviews."
             if comparison.ruleset_version_changed
@@ -1184,12 +1214,32 @@ else:
             )
             st.text(bundle.research_context.boundary_note)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
+    diagnostic_by_id = {
+        diagnostic.criterion_id: diagnostic
+        for diagnostic in bundle.retrieval_diagnostics
+    }
     resolution_by_id = {
         resolution.criterion_id: resolution for resolution in bundle.resolutions
     }
     coverage_by_id = {
         row.criterion_id: row for row in criterion_coverage_rows(bundle)
     }
+    evidence_strength_counts = {
+        EvidenceStatus.STRONG_CANDIDATE: 0,
+        EvidenceStatus.WEAK_CANDIDATE: 0,
+        EvidenceStatus.NO_CANDIDATE: 0,
+        EvidenceStatus.ANALYSIS_INCOMPLETE: 0,
+    }
+    for row in coverage_by_id.values():
+        if row.evidence_status in evidence_strength_counts:
+            evidence_strength_counts[row.evidence_status] += 1
+    st.markdown(
+        "**Candidate strength:** "
+        f"Strong {evidence_strength_counts[EvidenceStatus.STRONG_CANDIDATE]} · "
+        f"Weak {evidence_strength_counts[EvidenceStatus.WEAK_CANDIDATE]} · "
+        f"None {evidence_strength_counts[EvidenceStatus.NO_CANDIDATE]} · "
+        f"Incomplete {evidence_strength_counts[EvidenceStatus.ANALYSIS_INCOMPLETE]}"
+    )
     status_filter = st.multiselect(
         "Filter evidence status",
         options=list(EvidenceStatus),
@@ -1251,6 +1301,22 @@ else:
                 st.caption(f"Evidence status: {row['Evidence status']}")
                 st.caption(f"Evidence types: {row['Evidence types']}")
                 st.caption(f"Reviewer decision: {row['Reviewer decision']}")
+
+    unresolved_ids = [
+        criterion.criterion_id
+        for criterion in bundle.criteria
+        if criterion.criterion_id not in resolution_by_id
+    ]
+    if unresolved_ids:
+        st.markdown("### Unresolved criteria queue")
+        st.caption(
+            "Review candidate evidence and record an explicit human decision for each item."
+        )
+        for criterion_id in unresolved_ids:
+            st.markdown(
+                f"- **{criterion_id}** — "
+                f"{finding_by_id[criterion_id].recommended_action}"
+            )
 
     st.header("4 · Criterion Detail")
     selected_id = st.selectbox(
@@ -1326,6 +1392,50 @@ else:
         f"**Human resolution:** {selected_resolution}"
     )
     st.write(selected_finding.reason)
+    st.markdown("### How ScopeProof searched")
+    selected_diagnostic = diagnostic_by_id.get(selected_id)
+    if selected_diagnostic is None:
+        st.caption("Retrieval diagnostics were not recorded for this review.")
+    else:
+        st.caption(
+            f"Search outcome: {_status_label(selected_diagnostic.outcome.value)}"
+        )
+        st.caption(
+            "Searched terms: "
+            + (", ".join(selected_diagnostic.searched_terms) or "None")
+        )
+        st.caption(
+            "Exact identifiers: "
+            + (", ".join(selected_diagnostic.exact_identifiers) or "None")
+        )
+        st.caption(
+            "Searched evidence types: "
+            + (
+                ", ".join(
+                    _status_label(item.value)
+                    for item in selected_diagnostic.searched_evidence_types
+                )
+                or "None"
+            )
+        )
+        st.caption(f"Searched paths: {len(selected_diagnostic.searched_paths)}")
+        if selected_diagnostic.searched_paths:
+            with st.expander("Inspect searched paths"):
+                st.code("\n".join(selected_diagnostic.searched_paths), language=None)
+        st.caption(
+            "Inspectable lines: "
+            f"{selected_diagnostic.inspectable_line_count} · "
+            "Term-overlap lines: "
+            f"{selected_diagnostic.term_overlap_line_count} · "
+            "Below-threshold lines: "
+            f"{selected_diagnostic.below_threshold_line_count} · "
+            "Accepted candidates: "
+            f"{selected_diagnostic.accepted_candidate_count}"
+        )
+        st.caption(
+            "Search diagnostics explain retrieval; they are not evidence that the criterion "
+            "is satisfied or missing from the repository."
+        )
     if selected_finding.missing_evidence:
         st.markdown("**Missing evidence**")
         for missing in selected_finding.missing_evidence:

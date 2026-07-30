@@ -5,7 +5,9 @@
 ScopeProof is a reviewer-controlled acceptance-coverage assistant for public GitHub pull requests.
 It maps each confirmed criterion to inspectable implementation or test candidates, makes missing
 evidence visible, records attributable human decisions, and exports a reproducible review. The
-primary workflow is designed to reach an inspectable coverage report in under five minutes.
+primary workflow has a product target of reaching an inspectable coverage report in under five
+minutes. That target has not yet been independently observed and is separate from the Stage 1
+under-ten-minute completed-review gate.
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
@@ -13,6 +15,10 @@ The [R-001 Microsoft public-PR research record](docs/research/r001-microsoft-hve
 shows a compact, hash-bound engineering rerun: observed CI and static candidates remain distinct
 from runtime verification and human acceptance. It is public engineering research only and does
 not advance Stage 1.
+
+The [R-002 SWE-bench Verified static engineering benchmark](docs/research/r002-swebench-verified/summary.md)
+adds a frozen 20-case, 12-repository deterministic baseline for candidate matching and immutable
+references. It executes no target code and contributes zero Stage 1 validation credit.
 
 ![ScopeProof deliberately constructed demo evidence matrix](docs/assets/scopeproof-constructed-demo-evidence-matrix.jpg)
 
@@ -80,8 +86,14 @@ Python 3.11 or newer is required.
 Install the verified v0.2.1 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
-The source checkout is the **v0.2.2 internal candidate** and is not published; the verified public
-install path below therefore remains v0.2.1 until a separate publication decision.
+The source checkout is the **v0.2.3 public draft candidate** in
+[draft PR #174](https://github.com/YuzeJ21/Scope-Proof/pull/174). It is not merged, tagged, or
+released; the verified public install path below therefore remains v0.2.1 until a separate
+publication decision.
+
+See the
+[v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
+for the implemented feature ledger, current gaps, and evidence-gated Stage 1–4 roadmap.
 
 ```bash
 python3 -m venv .venv
@@ -262,11 +274,11 @@ case-level mismatches, immutable evidence-link errors, and unexecuted required c
 nonzero when a known must-have False Ready, label mismatch, evidence-link error, or unexecuted
 category is present.
 
-The second command executes a paired previous/current review case and checks deterministic
-re-review classification, including conservative handling of ambiguous duplicate candidates. The
-paired case is deliberately constructed engineering evidence. It does not advance Stage 1. This
-engineering evidence does not prove correctness, does not constitute customer validation, and
-does not show external use.
+The second command executes two paired previous/current review cases and checks deterministic
+re-review classification, including exact Unchanged coverage and conservative handling of
+ambiguous duplicate candidates. This corpus is deliberately constructed engineering evidence.
+It does not advance Stage 1. It does not prove correctness.
+It does not constitute customer validation. It does not show external use.
 Both benchmark commands execute local JSON inputs only; they do not run fixture repository code.
 
 Run the opt-in live public GitHub smoke test:
@@ -363,9 +375,11 @@ inbound workflow, evidence gates, stop rules, and capabilities that remain defer
 adjacent traceability, test-management, and code-review workflows and records only hypotheses that
 still require genuine participant evidence.
 
-The [launch evidence matrix](docs/launch/evidence-matrix.md) and
-[review-before-posting LinkedIn draft](docs/launch/linkedin-draft.md) keep the
-constructed-demo and technical-smoke boundaries explicit.
+The [launch evidence matrix](docs/launch/evidence-matrix.md) and archived LinkedIn preparation in
+the [draft](docs/launch/linkedin-draft.md) and
+[playbook](docs/launch/linkedin-alpha-playbook.md) preserve prior launch research and its
+constructed-demo boundaries. The current policy is passive GitHub intake; those LinkedIn materials
+are not authorized for publication without a separate owner decision.
 
 ## GitHub Action advanced preview
 

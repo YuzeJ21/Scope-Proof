@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+import scopeproof_core.schemas.models as schema_models
 from scopeproof_core.schemas.models import (
     CheckState,
     ConfidenceBand,
@@ -107,6 +108,154 @@ def valid_bundle() -> ReviewBundle:
 
 def bundle_payload() -> dict[str, object]:
     return valid_bundle().model_dump(mode="python")
+
+
+def valid_retrieval_diagnostic_payload() -> dict[str, object]:
+    return {
+        "criterion_id": "AC-01",
+        "outcome": "candidates_found",
+        "searched_terms": ["error", "export", "fail"],
+        "exact_identifiers": [],
+        "searched_paths": ["src/export.py"],
+        "searched_evidence_types": [EvidenceType.IMPLEMENTATION],
+        "changed_file_count": 1,
+        "unchanged_candidate_file_count": 0,
+        "inspectable_line_count": 1,
+        "exact_identifier_match_line_count": 0,
+        "term_overlap_line_count": 1,
+        "below_threshold_line_count": 0,
+        "accepted_candidate_count": 1,
+    }
+
+
+def test_retrieval_diagnostic_normalizes_lists_and_forbids_extra_fields() -> None:
+    payload = valid_retrieval_diagnostic_payload()
+    payload.update(
+        {
+            "searched_terms": ["export", "error", "export"],
+            "exact_identifiers": ["research_exported", "export_csv", "export_csv"],
+            "searched_paths": ["tests/test_export.py", "src/export.py", "src/export.py"],
+            "searched_evidence_types": [
+                EvidenceType.TEST,
+                EvidenceType.IMPLEMENTATION,
+                EvidenceType.TEST,
+            ],
+        }
+    )
+
+    diagnostic = schema_models.CriterionRetrievalDiagnostic.model_validate(payload)
+
+    assert diagnostic.searched_terms == ["error", "export"]
+    assert diagnostic.exact_identifiers == ["export_csv", "research_exported"]
+    assert diagnostic.searched_paths == ["src/export.py", "tests/test_export.py"]
+    assert diagnostic.searched_evidence_types == [
+        EvidenceType.IMPLEMENTATION,
+        EvidenceType.TEST,
+    ]
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        schema_models.CriterionRetrievalDiagnostic.model_validate({**payload, "proof": True})
+
+
+@pytest.mark.parametrize("field_name", ["searched_terms", "exact_identifiers", "searched_paths"])
+def test_retrieval_diagnostic_rejects_blank_search_metadata(field_name: str) -> None:
+    payload = valid_retrieval_diagnostic_payload()
+    payload[field_name] = ["valid", "   "]
+
+    with pytest.raises(ValidationError, match="non-whitespace"):
+        schema_models.CriterionRetrievalDiagnostic.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "changed_file_count",
+        "unchanged_candidate_file_count",
+        "inspectable_line_count",
+        "exact_identifier_match_line_count",
+        "term_overlap_line_count",
+        "below_threshold_line_count",
+        "accepted_candidate_count",
+    ],
+)
+def test_retrieval_diagnostic_rejects_negative_counts(field_name: str) -> None:
+    payload = valid_retrieval_diagnostic_payload()
+    payload[field_name] = -1
+
+    with pytest.raises(ValidationError, match="greater than or equal to 0"):
+        schema_models.CriterionRetrievalDiagnostic.model_validate(payload)
+
+
+def test_evidence_retrieval_result_validates_evidence_and_diagnostics() -> None:
+    bundle = valid_bundle()
+    diagnostic = schema_models.CriterionRetrievalDiagnostic.model_validate(
+        valid_retrieval_diagnostic_payload()
+    )
+
+    result = schema_models.EvidenceRetrievalResult(
+        evidence=bundle.evidence,
+        diagnostics=[diagnostic],
+    )
+
+    assert result.evidence == bundle.evidence
+    assert result.diagnostics == [diagnostic]
+
+
+def test_historical_review_bundle_defaults_to_no_retrieval_diagnostics() -> None:
+    assert valid_bundle().retrieval_diagnostics == []
+
+
+def test_review_bundle_accepts_complete_retrieval_diagnostics() -> None:
+    payload = bundle_payload()
+    payload["retrieval_diagnostics"] = [valid_retrieval_diagnostic_payload()]
+
+    bundle = ReviewBundle.model_validate(payload)
+
+    assert bundle.retrieval_diagnostics[0].criterion_id == "AC-01"
+
+
+def test_review_bundle_rejects_duplicate_retrieval_diagnostic_criteria() -> None:
+    payload = bundle_payload()
+    diagnostic = valid_retrieval_diagnostic_payload()
+    payload["retrieval_diagnostics"] = [diagnostic, diagnostic.copy()]
+
+    with pytest.raises(ValidationError, match="diagnostic criterion IDs must be unique"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_review_bundle_rejects_incomplete_retrieval_diagnostic_coverage() -> None:
+    payload = bundle_payload()
+    second_criterion = payload["criteria"][0].copy()
+    second_criterion["criterion_id"] = "AC-02"
+    payload["criteria"].append(second_criterion)
+    second_finding = payload["findings"][0].copy()
+    second_finding.update({"criterion_id": "AC-02", "evidence_ids": []})
+    payload["findings"].append(second_finding)
+    payload["retrieval_diagnostics"] = [valid_retrieval_diagnostic_payload()]
+
+    with pytest.raises(ValidationError, match="diagnostics must match criteria exactly"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_review_bundle_rejects_unknown_retrieval_diagnostic_criterion() -> None:
+    payload = bundle_payload()
+    diagnostic = valid_retrieval_diagnostic_payload()
+    diagnostic["criterion_id"] = "AC-99"
+    payload["retrieval_diagnostics"] = [diagnostic]
+
+    with pytest.raises(ValidationError, match="diagnostics must match criteria exactly"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_review_bundle_rejects_retrieval_candidate_count_mismatch() -> None:
+    payload = bundle_payload()
+    diagnostic = valid_retrieval_diagnostic_payload()
+    diagnostic["accepted_candidate_count"] = 0
+    payload["retrieval_diagnostics"] = [diagnostic]
+
+    with pytest.raises(
+        ValidationError, match="diagnostic candidate count must match evidence"
+    ):
+        ReviewBundle.model_validate(payload)
 
 
 def test_review_bundle_integrity_allows_valid_json_round_trip() -> None:

@@ -1,0 +1,507 @@
+from __future__ import annotations
+
+import ast
+import traceback
+from hashlib import sha256
+from pathlib import Path
+
+import pytest
+
+from scopeproof_core.evals import r002_diff
+from scopeproof_core.evals.r002_diff import (
+    R002DiffError,
+    parse_case_diffs,
+    parse_unified_diff,
+    parsed_case_to_changed_files,
+)
+from scopeproof_core.evals.r002_models import R002DiffStream, R002ParsedCase
+from scopeproof_core.schemas.models import LineChangeType
+
+
+def _file(path: str, *hunks: str) -> bytes:
+    return (
+        f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n"
+        + "".join(hunks)
+    ).encode()
+
+
+def _hunk(old_start: int, old_count: int, new_start: int, new_count: int, body: str) -> str:
+    return f"@@ -{old_start},{old_count} +{new_start},{new_count} @@\n{body}"
+
+
+def test_parser_preserves_new_side_identity_whitespace_and_normalized_newlines() -> None:
+    parsed = parse_unified_diff(
+        b"diff --git a/src/a.py b/src/a.py\r\n--- a/src/a.py\r\n+++ b/src/a.py\r\n"
+        b"@@ -2,2 +2,3 @@\r\n keep\r+\tadded  \r\n-old\r\n+\r\n"
+        b"diff --git a/tests/test_a.py b/tests/test_a.py\n--- a/tests/test_a.py\n"
+        b"+++ b/tests/test_a.py\n@@ -8 +8 @@\n-old test\n+new test\n"
+        b"@@ -20,1 +20,1 @@\n context\n",
+        stream=R002DiffStream.PATCH,
+    )
+
+    assert [(item.path, len(item.hunks)) for item in parsed.files] == [
+        ("src/a.py", 1),
+        ("tests/test_a.py", 2),
+    ]
+    lines = parsed.files[0].hunks[0].lines
+    assert [
+        (line.change_type.value, line.old_line_number, line.new_line_number, line.content)
+        for line in lines
+    ] == [
+        ("context", 2, 2, "keep"),
+        ("added", None, 3, "\tadded  "),
+        ("removed", 3, None, "old"),
+        ("added", None, 4, ""),
+    ]
+    assert lines[1].normalized_line_sha256 == sha256(b"\tadded  ").hexdigest()
+    assert parsed.files[0].hunks[0].hunk_id == "patch:src/a.py:H1"
+
+
+def test_parser_accepts_no_newline_marker_only_after_content_line() -> None:
+    parsed = parse_unified_diff(
+        _file("src/a.py", _hunk(1, 1, 1, 1, "-before\n\\ No newline at end of file\n+after\n")),
+        stream=R002DiffStream.PATCH,
+    )
+
+    assert [line.content for line in parsed.files[0].hunks[0].lines] == ["before", "after"]
+
+
+def test_adapter_preserves_removed_old_numbers_and_has_no_patch_body() -> None:
+    parsed = parse_unified_diff(
+        _file("src/a.py", _hunk(2, 2, 2, 3, " keep\n+added\n-removed\n+\n")),
+        stream=R002DiffStream.PATCH,
+    )
+
+    changed = parsed_case_to_changed_files(
+        R002ParsedCase(case_id="R002-001", files=parsed.files)
+    )[0]
+
+    assert (
+        changed.status,
+        changed.additions,
+        changed.deletions,
+        changed.changes,
+        changed.patch,
+    ) == (
+        "modified",
+        2,
+        1,
+        3,
+        "",
+    )
+    assert [(line.change_type, line.line_number, line.content) for line in changed.lines] == [
+        (LineChangeType.CONTEXT, 2, "keep"),
+        (LineChangeType.ADDED, 3, "added"),
+        (LineChangeType.REMOVED, 3, "removed"),
+        (LineChangeType.ADDED, 4, ""),
+    ]
+
+
+def test_parser_accepts_omitted_and_zero_hunk_counts() -> None:
+    parsed = parse_unified_diff(
+        _file(
+            "src/a.py",
+            "@@ -1,0 +1 @@\n+created\n",
+            "@@ -4 +5,0 @@\n-removed\n",
+        ),
+        stream=R002DiffStream.PATCH,
+    )
+
+    assert [(hunk.old_count, hunk.new_count) for hunk in parsed.files[0].hunks] == [
+        (0, 1),
+        (1, 0),
+    ]
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "@@ -" + "9" * 4301 + " +1 @@\n x\n",
+        "@@ -1," + "9" * 4301 + " +1,1 @@\n x\n",
+    ],
+)
+def test_parser_rejects_huge_hunk_numbers_without_native_conversion_details(header: str) -> None:
+    with pytest.raises(R002DiffError, match="invalid_hunk_range") as captured:
+        parse_unified_diff(_file("src/a.py", header), stream=R002DiffStream.PATCH)
+
+    assert captured.value.args == ("invalid_hunk_range",)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        (b"\xff", "invalid_utf8"),
+        (b"diff --git a//x b//x\n", "invalid_path"),
+        (b"diff --git a/../x b/../x\n", "invalid_path"),
+        (b"diff --git a/a\\b b/a\\b\n", "invalid_path"),
+        (b"diff --git a/x\x00 b/x\x00\n", "invalid_path"),
+        (b"diff --git a/" + b"x" * 513 + b" b/" + b"x" * 513 + b"\n", "invalid_path"),
+        (b"diff --git a/x b/x\nrename from x\nrename to y\n", "unsupported_rename"),
+        (b"diff --git a/x b/x\ncopy from x\ncopy to y\n", "unsupported_copy"),
+        (b"diff --git a/x b/x\nBinary files a/x and b/x differ\n", "binary_diff"),
+        (b"diff --git a/x b/x\nnew file mode 100644\n", "unsupported_mode_change"),
+        (b"diff --git a/x b/x\ndeleted file mode 100644\n", "unsupported_mode_change"),
+        (
+            b"diff --git a/x b/x\n--- /dev/null\n+++ b/x\n@@ -1 +1 @@\n+x\n",
+            "dev_null_path",
+        ),
+        (
+            b"diff --git a/x b/x\n--- a/y\n+++ b/x\n@@ -1 +1 @@\n x\n",
+            "path_mismatch",
+        ),
+        (
+            b"diff --git \"a/x\" \"b/x\"\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n x\n",
+            "invalid_diff_header",
+        ),
+        (
+            b"diff --git a/x b/x\nindex not-a-hash\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n x\n",
+            "invalid_index",
+        ),
+        (_file("x", "@@ -0,1 +1,1 @@\n x\n"), "invalid_hunk_range"),
+        (_file("x", "@@ -1,no +1,1 @@\n x\n"), "invalid_hunk_header"),
+        (_file("x", "@@ -1 +1 @@\n\\ No newline at end of file\n"), "invalid_no_newline_marker"),
+        (_file("x", "@@ -1 +1 @@\nplain marker-free text\n"), "invalid_line_marker"),
+        (_file("x", "@@ -1 +1 @@\n\n"), "invalid_line_marker"),
+    ],
+)
+def test_parser_rejects_ambiguous_or_unsafe_records(raw: bytes, reason: str) -> None:
+    with pytest.raises(R002DiffError, match=reason):
+        parse_unified_diff(raw, stream=R002DiffStream.PATCH)
+
+
+def test_parser_rejects_unicode_hunk_digits_under_the_ascii_only_grammar() -> None:
+    with pytest.raises(R002DiffError, match="invalid_hunk_header"):
+        parse_unified_diff(
+            _file("src/a.py", "@@ -\u0661 +\u0661 @@\n x\n"), stream=R002DiffStream.PATCH
+        )
+
+
+def test_parser_rejects_mismatched_hunk_counts_and_overlapping_ranges() -> None:
+    with pytest.raises(R002DiffError, match="hunk_count_mismatch"):
+        parse_unified_diff(
+            _file("x", "@@ -1,2 +1,1 @@\n x\n"), stream=R002DiffStream.PATCH
+        )
+
+    with pytest.raises(R002DiffError, match="hunk_overlap"):
+        parse_unified_diff(
+            _file("x", "@@ -1 +1 @@\n x\n@@ -1 +2 @@\n y\n"),
+            stream=R002DiffStream.PATCH,
+        )
+
+
+def test_parser_rejects_duplicate_path_within_stream() -> None:
+    raw = _file("src/a.py", "@@ -1 +1 @@\n x\n") + _file(
+        "src/a.py", "@@ -2 +2 @@\n y\n"
+    )
+
+    with pytest.raises(R002DiffError, match="duplicate_path"):
+        parse_unified_diff(raw, stream=R002DiffStream.PATCH)
+
+
+def test_parser_enforces_exact_per_stream_boundaries_before_model_construction() -> None:
+    exact_files = b"".join(_file(f"src/{number}.py", "@@ -1 +1 @@\n x\n") for number in range(32))
+    assert parse_unified_diff(exact_files, stream=R002DiffStream.PATCH).file_count == 32
+    over_files = exact_files + b"diff --git a/src/32.py b/src/32.py\n"
+    with pytest.raises(R002DiffError, match="file_limit"):
+        parse_unified_diff(over_files, stream=R002DiffStream.PATCH)
+
+    exact_hunks = _file(
+        "src/a.py",
+        *[
+            _hunk(number, 1, number, 1, " x\n")
+            for number in range(1, 257)
+        ],
+    )
+    assert parse_unified_diff(exact_hunks, stream=R002DiffStream.PATCH).hunk_count == 256
+    over_hunks = exact_hunks + b"@@ malformed 257th hunk\n"
+    with pytest.raises(R002DiffError, match="hunk_limit"):
+        parse_unified_diff(over_hunks, stream=R002DiffStream.PATCH)
+
+    exact_lines = _file("src/a.py", _hunk(1, 0, 1, 50000, "+x\n" * 50000))
+    assert parse_unified_diff(exact_lines, stream=R002DiffStream.PATCH).diff_line_count == 50000
+    over_lines = _file("src/a.py", _hunk(1, 0, 1, 50001, "+x\n" * 50001))
+    with pytest.raises(R002DiffError, match="diff_line_limit"):
+        parse_unified_diff(over_lines, stream=R002DiffStream.PATCH)
+
+    exact_content = _file("src/a.py", _hunk(1, 0, 1, 1, "+" + "x" * 65536 + "\n"))
+    assert parse_unified_diff(exact_content, stream=R002DiffStream.PATCH).files
+    over_content = _file("src/a.py", _hunk(1, 0, 1, 1, "+" + "x" * 65537 + "\n"))
+    with pytest.raises(R002DiffError, match="line_limit"):
+        parse_unified_diff(over_content, stream=R002DiffStream.PATCH)
+
+
+def test_case_parser_rejects_cross_stream_duplicates_and_combined_line_excess() -> None:
+    duplicate = _file("src/a.py", "@@ -1 +1 @@\n x\n").decode()
+    with pytest.raises(R002DiffError, match="duplicate_path_across_streams"):
+        parse_case_diffs(case_id="R002-001", patch=duplicate, test_patch=duplicate)
+
+    patch = _file("src/a.py", _hunk(1, 0, 1, 25000, "+x\n" * 25000)).decode()
+    test_patch = _file("tests/test_a.py", _hunk(1, 0, 1, 25001, "+x\n" * 25001)).decode()
+    with pytest.raises(R002DiffError, match="case_diff_line_limit"):
+        parse_case_diffs(case_id="R002-001", patch=patch, test_patch=test_patch)
+
+
+def test_case_parser_retains_per_stream_limit_codes_before_case_aggregation() -> None:
+    over_files = b"".join(
+        _file(f"src/{number}.py", "@@ -1 +1 @@\n x\n") for number in range(33)
+    ).decode()
+    with pytest.raises(R002DiffError, match="file_limit"):
+        parse_case_diffs(case_id="R002-001", patch=over_files, test_patch="")
+
+    over_hunks = _file(
+        "src/a.py", *[_hunk(number, 1, number, 1, " x\n") for number in range(1, 258)]
+    ).decode()
+    with pytest.raises(R002DiffError, match="hunk_limit"):
+        parse_case_diffs(case_id="R002-001", patch=over_hunks, test_patch="")
+
+    over_lines = _file("src/a.py", _hunk(1, 0, 1, 50001, "+x\n" * 50001)).decode()
+    with pytest.raises(R002DiffError, match="diff_line_limit"):
+        parse_case_diffs(case_id="R002-001", patch=over_lines, test_patch="")
+
+
+def test_case_parser_enforces_cross_stream_file_and_hunk_budgets_before_bodies() -> None:
+    patch_files = b"".join(
+        _file(f"src/{number}.py", "@@ -1 +1 @@\n x\n") for number in range(16)
+    ).decode()
+    exact_test_files = b"".join(
+        _file(f"tests/{number}.py", "@@ -1 +1 @@\n x\n") for number in range(16)
+    ).decode()
+    assert parse_case_diffs(
+        case_id="R002-001", patch=patch_files, test_patch=exact_test_files
+    ).file_count == 32
+
+    over_test_files = exact_test_files + "diff --git a/tests/16.py b/tests/16.py\n"
+    with pytest.raises(R002DiffError, match="case_limit"):
+        parse_case_diffs(case_id="R002-001", patch=patch_files, test_patch=over_test_files)
+
+    patch_hunks = _file(
+        "src/a.py", *[_hunk(number, 1, number, 1, " x\n") for number in range(1, 129)]
+    ).decode()
+    exact_test_hunks = _file(
+        "tests/test_a.py",
+        *[_hunk(number, 1, number, 1, " x\n") for number in range(1, 129)],
+    ).decode()
+    assert parse_case_diffs(
+        case_id="R002-001", patch=patch_hunks, test_patch=exact_test_hunks
+    ).hunk_count == 256
+
+    over_test_hunks = exact_test_hunks + "@@ malformed 257th hunk\n"
+    with pytest.raises(R002DiffError, match="case_limit"):
+        parse_case_diffs(case_id="R002-001", patch=patch_hunks, test_patch=over_test_hunks)
+
+
+def test_case_parser_stops_before_constructing_the_50001st_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_line = r002_diff.R002ParsedLine
+    constructed_lines = 0
+
+    def counted_line(*args: object, **kwargs: object) -> object:
+        nonlocal constructed_lines
+        constructed_lines += 1
+        return original_line(*args, **kwargs)
+
+    monkeypatch.setattr(r002_diff, "R002ParsedLine", counted_line)
+    patch = _file("src/a.py", _hunk(1, 0, 1, 25000, "+x\n" * 25000)).decode()
+    test_patch = _file(
+        "tests/test_a.py", _hunk(1, 0, 1, 25001, "+x\n" * 25001)
+    ).decode()
+
+    with pytest.raises(R002DiffError, match="case_diff_line_limit"):
+        parse_case_diffs(case_id="R002-001", patch=patch, test_patch=test_patch)
+
+    assert constructed_lines == 50000
+
+
+def test_parser_errors_do_not_chain_input_or_model_details() -> None:
+    with pytest.raises(R002DiffError, match="invalid_utf8") as invalid_utf8:
+        parse_unified_diff(b"\xff", stream=R002DiffStream.PATCH)
+    assert invalid_utf8.value.__cause__ is None
+    assert invalid_utf8.value.__context__ is None
+
+    with pytest.raises(R002DiffError, match="model_validation_failed") as invalid_case:
+        parse_case_diffs(case_id="not-a-case", patch="", test_patch="")
+    assert invalid_case.value.__cause__ is None
+    assert invalid_case.value.__context__ is None
+
+
+def test_public_adapter_validation_failure_has_no_retained_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parsed = parse_case_diffs(
+        case_id="R002-001",
+        patch=_file("src/a.py", "@@ -1 +1 @@\n x\n").decode(),
+        test_patch="",
+    )
+    original_changed_file = r002_diff.ChangedFile
+
+    def invalid_changed_file(**_: object) -> object:
+        return original_changed_file.model_validate({"path": "", "status": "modified"})
+
+    monkeypatch.setattr(r002_diff, "ChangedFile", invalid_changed_file)
+    with pytest.raises(R002DiffError, match="model_validation_failed") as invalid_adapter:
+        parsed_case_to_changed_files(parsed)
+
+    assert invalid_adapter.value.__cause__ is None
+    assert invalid_adapter.value.__context__ is None
+
+
+def _assert_traceback_hides_input_sentinels(error: R002DiffError, *sentinels: str) -> None:
+    captured = traceback.TracebackException.from_exception(error, capture_locals=True)
+    parser_frames = [
+        frame
+        for frame in captured.stack
+        if frame.filename == r002_diff.__file__
+    ]
+    assert parser_frames
+    assert error.args == (error.reason_code,)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    captured_locals = "\n".join(
+        value for frame in parser_frames for value in (frame.locals or {}).values()
+    )
+    assert all(sentinel not in captured_locals for sentinel in sentinels)
+
+
+def test_public_parser_tracebacks_discard_normal_and_invalid_utf8_inputs() -> None:
+    normal_sentinel = "TRACE_NORMAL_RAW_PATH_CONTENT"
+    with pytest.raises(R002DiffError, match="invalid_line_marker") as normal_error:
+        parse_unified_diff(
+            _file(normal_sentinel, "@@ -1 +1 @@\n" + normal_sentinel + "\n"),
+            stream=R002DiffStream.PATCH,
+        )
+    _assert_traceback_hides_input_sentinels(normal_error.value, normal_sentinel)
+
+    utf8_sentinel = "TRACE_INVALID_UTF8_RAW"
+    with pytest.raises(R002DiffError, match="invalid_utf8") as invalid_utf8:
+        parse_unified_diff(
+            b"\xff" + utf8_sentinel.encode(), stream=R002DiffStream.PATCH
+        )
+    _assert_traceback_hides_input_sentinels(invalid_utf8.value, utf8_sentinel)
+
+
+def test_public_case_parser_tracebacks_discard_case_and_model_inputs() -> None:
+    case_sentinel = "TRACE_CASE_PATCH_AND_TEST"
+    with pytest.raises(R002DiffError, match="invalid_line_marker") as invalid_case_patch:
+        parse_case_diffs(
+            case_id="R002-001",
+            patch=_file(case_sentinel, "@@ -1 +1 @@\n" + case_sentinel + "\n").decode(),
+            test_patch=case_sentinel,
+        )
+    _assert_traceback_hides_input_sentinels(invalid_case_patch.value, case_sentinel)
+
+    model_sentinel = "TRACE_INVALID_CASE_ID"
+    with pytest.raises(R002DiffError, match="model_validation_failed") as invalid_case_id:
+        parse_case_diffs(case_id=model_sentinel, patch="", test_patch="")
+    _assert_traceback_hides_input_sentinels(invalid_case_id.value, model_sentinel)
+
+
+def test_public_adapter_traceback_discards_parsed_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter_sentinel = "TRACE_ADAPTER_PARSED_INPUT"
+    parsed = parse_case_diffs(
+        case_id="R002-001",
+        patch=_file(adapter_sentinel, "@@ -1 +1 @@\n x\n").decode(),
+        test_patch="",
+    )
+    original_changed_file = r002_diff.ChangedFile
+
+    def invalid_changed_file(**_: object) -> object:
+        return original_changed_file.model_validate({"path": "", "status": "modified"})
+
+    monkeypatch.setattr(r002_diff, "ChangedFile", invalid_changed_file)
+    with pytest.raises(R002DiffError, match="model_validation_failed") as invalid_adapter:
+        parsed_case_to_changed_files(parsed)
+    _assert_traceback_hides_input_sentinels(invalid_adapter.value, adapter_sentinel)
+
+
+def test_diff_error_reason_allowlist_is_exact_and_closed() -> None:
+    assert R002DiffError.allowed_reason_codes == frozenset(
+        {
+            "binary_diff",
+            "case_diff_line_limit",
+            "case_limit",
+            "dev_null_path",
+            "diff_line_limit",
+            "duplicate_path",
+            "duplicate_path_across_streams",
+            "file_limit",
+            "hunk_count_mismatch",
+            "hunk_limit",
+            "hunk_overlap",
+            "invalid_diff_header",
+            "invalid_hunk_header",
+            "invalid_hunk_range",
+            "invalid_index",
+            "invalid_line_marker",
+            "invalid_no_newline_marker",
+            "invalid_path",
+            "invalid_utf8",
+            "line_limit",
+            "model_validation_failed",
+            "path_mismatch",
+            "unsupported_copy",
+            "unsupported_mode_change",
+            "unsupported_rename",
+        }
+    )
+    source = ast.parse(Path(r002_diff.__file__).read_text(encoding="utf-8"))
+    raise_literals = {
+        node.args[0].value
+        for node in ast.walk(source)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"R002DiffError", "_fresh_diff_error"}
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    }
+    assert raise_literals == R002DiffError.allowed_reason_codes
+
+
+def test_internal_diff_guards_cover_unregistered_budget_and_line_marker() -> None:
+    with pytest.raises(RuntimeError, match="unregistered"):
+        r002_diff._raise_budget_error("unknown")
+    with pytest.raises(R002DiffError, match="invalid_line_marker"):
+        r002_diff._parsed_line(
+            "?", "value", 1, 1, limits=r002_diff.DEFAULT_R002_DIFF_LIMITS
+        )
+
+
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        (b"diff --git a/src/a.py b/src/a.py\nunexpected\n", "path_mismatch"),
+        (b"diff --git a/src/a.py b/src/a.py\n--- src/a.py\n", "path_mismatch"),
+        (b"diff --git a/src/a.py b/src/b.py\n", "path_mismatch"),
+        (
+            b"diff --git a/src/a.py b/src/a.py\nindex invalid\n--- a/src/a.py\n"
+            b"+++ b/src/a.py\n@@ -1 +1 @@\n-a\n+b\n",
+            "invalid_index",
+        ),
+        (
+            b"diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n",
+            "invalid_line_marker",
+        ),
+        (
+            b"diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n+++ b/src/a.py\n",
+            "invalid_line_marker",
+        ),
+        (
+            b"diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n+++ b/src/a.py\n"
+            b"not-a-hunk\n",
+            "invalid_hunk_header",
+        ),
+        (b"index abc..def 100644\n", "invalid_index"),
+        (b"\\ No newline at end of file\n", "invalid_no_newline_marker"),
+        (b"@@ malformed\n", "invalid_hunk_header"),
+    ],
+)
+def test_malformed_diff_boundary_records_fail_with_stable_reasons(
+    raw: bytes, reason: str
+) -> None:
+    with pytest.raises(R002DiffError, match=reason):
+        parse_unified_diff(raw, stream=R002DiffStream.PATCH)

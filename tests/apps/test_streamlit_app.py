@@ -115,6 +115,13 @@ def test_product_disclaimer_is_visible() -> None:
     assert "No paid LLM API" in visible_text
 
 
+def test_workbench_defines_visible_keyboard_focus_treatment() -> None:
+    source = APP_PATH.read_text(encoding="utf-8")
+
+    assert ":focus-visible" in source
+    assert "outline: 3px solid #ffbf47" in source
+
+
 def test_standard_review_hides_alpha_research_fields() -> None:
     app = new_app()
 
@@ -1317,6 +1324,20 @@ def test_demo_summary_explains_non_prescriptive_next_actions() -> None:
     visible_text = "\n".join(markdown.value for markdown in app.markdown)
     assert "What to do next" in visible_text
     assert "unresolved criteria: AC-01" in visible_text
+
+
+def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> None:
+    app = analyzed_demo(new_app())
+    visible_text = "\n".join(
+        item.value for item in [*app.markdown, *app.caption, *app.info]
+    )
+
+    assert "Candidate strength:" in visible_text
+    assert "Strong" in visible_text
+    assert "Weak" in visible_text
+    assert "None" in visible_text
+    assert "Unresolved criteria queue" in visible_text
+    assert "Review candidate evidence and record an explicit human decision" in visible_text
     assert "ScopeProof does not decide them" in visible_text
     assert "Gate reasons: Blocking Criteria" in visible_text
 
@@ -1402,7 +1423,10 @@ def test_optional_token_uses_password_input() -> None:
     assert token.proto.type == token.proto.PASSWORD
 
 
-def test_demo_can_save_and_reopen_durable_review_state() -> None:
+def test_demo_can_save_and_reopen_durable_review_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
@@ -1776,7 +1800,10 @@ def test_discard_requirements_draft_restores_authoritative_saved_state(
     assert "Available — Review evidence and export" in sidebar
 
 
-def test_prepare_criteria_consumes_pending_requirements_draft() -> None:
+def test_prepare_criteria_consumes_pending_requirements_draft(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
     app, _ = saved_demo_review(new_app())
     requirements_draft = "Export PDF\nRecord the export event"
     app = app.text_area(key="requirements_input").set_value(requirements_draft).run()
@@ -2539,6 +2566,23 @@ def test_missing_criterion_detail_shows_action_and_no_candidate_state() -> None:
     assert finding.recommended_action in info_text
     assert "Candidate evidence" in markdown_text
     assert "No candidate evidence is linked to this provisional finding." in caption_text
+
+
+def test_criterion_detail_explains_retrieval_without_presenting_it_as_evidence() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+
+    markdown_text = "\n".join(item.value for item in app.markdown)
+    caption_text = "\n".join(item.value for item in app.caption)
+
+    assert "How ScopeProof searched" in markdown_text
+    assert "Search outcome: Below Relevance Threshold" in caption_text
+    assert "Searched terms:" in caption_text
+    assert "Searched paths:" in caption_text
+    assert (
+        "Search diagnostics explain retrieval; they are not evidence that the criterion "
+        "is satisfied or missing from the repository."
+    ) in caption_text
 
 
 def test_compound_criterion_can_be_split_in_workbench() -> None:

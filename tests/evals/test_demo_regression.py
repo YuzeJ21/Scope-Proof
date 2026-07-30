@@ -20,6 +20,24 @@ def test_demo_is_deliberately_blocked_for_missing_must_haves() -> None:
     assert bundle.gate.verdict is GateVerdict.BLOCKED
 
 
+def test_demo_records_one_retrieval_diagnostic_per_criterion() -> None:
+    bundle = build_demo_review()
+
+    assert [item.criterion_id for item in bundle.retrieval_diagnostics] == [
+        criterion.criterion_id for criterion in bundle.criteria
+    ]
+    assert {
+        item.criterion_id: item.accepted_candidate_count
+        for item in bundle.retrieval_diagnostics
+    } == {
+        criterion.criterion_id: sum(
+            evidence.criterion_id == criterion.criterion_id
+            for evidence in bundle.evidence
+        )
+        for criterion in bundle.criteria
+    }
+
+
 def test_benchmark_reports_zero_must_have_false_ready() -> None:
     result = run_bundled_benchmark()
     assert result.must_have_false_ready == 0

@@ -8,7 +8,144 @@ from urllib.parse import urlsplit
 
 from PIL import Image
 
+from scopeproof_core.evals.r002_models import (
+    R002_SOURCE,
+    R002BenchmarkResult,
+    canonical_sha256,
+    load_confirmed_criteria,
+    load_confirmed_labels,
+    load_source_manifest,
+)
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
+
+
+def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
+    root = Path("evals/r002")
+    expected = {"source_manifest.json", "criteria.json", "candidate_labels.json"}
+    assert not root.is_symlink()
+    assert root.is_dir()
+    entries = tuple(root.rglob("*"))
+    assert all(path.is_file() and not path.is_symlink() for path in entries)
+    assert all(path.parent == root for path in entries)
+    assert {path.relative_to(root).as_posix() for path in entries} == expected
+    source = load_source_manifest(root / "source_manifest.json")
+    criteria = load_confirmed_criteria(root / "criteria.json", canonical_sha256(source))
+    labels = load_confirmed_labels(
+        root / "candidate_labels.json",
+        canonical_sha256(source),
+        canonical_sha256(criteria),
+    )
+    assert labels.benchmark_owner_confirmed is True
+    forbidden_keys = {
+        "problem_statement",
+        "patch",
+        "test_patch",
+        "hints_text",
+        "FAIL_TO_PASS",
+        "PASS_TO_PASS",
+        "source_text",
+        "excerpt",
+        "context_excerpt",
+    }
+    for path in entries:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        stack = [payload]
+        while stack:
+            value = stack.pop()
+            if isinstance(value, dict):
+                assert forbidden_keys.isdisjoint(value)
+                stack.extend(value.values())
+            elif isinstance(value, list):
+                stack.extend(value)
+
+
+def test_r002_tracked_outputs_exclude_scopeproof_authored_redaction_sentinels() -> None:
+    sentinels = json.loads(
+        Path("tests/fixtures/r002_redaction/sentinels.json").read_text(encoding="utf-8")
+    )
+    assert isinstance(sentinels, dict)
+    assert sentinels
+    values = tuple(sentinels.values())
+    assert all(isinstance(value, str) and value for value in values)
+
+    tracked = [
+        *sorted(Path("evals/r002").glob("*.json")),
+        *sorted(Path("docs/research/r002-swebench-verified").glob("*")),
+    ]
+    assert tracked
+    for path in tracked:
+        text = path.read_text(encoding="utf-8")
+        assert all(value not in text for value in values)
+
+
+def test_r002_engineering_result_is_linked_without_advancing_product_stages() -> None:
+    result_path = Path("docs/research/r002-swebench-verified/result.json")
+    summary_path = Path("docs/research/r002-swebench-verified/summary.md")
+    result = R002BenchmarkResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    summary = summary_path.read_text(encoding="utf-8")
+    public_link = "docs/research/r002-swebench-verified/summary.md"
+    development_link = "research/r002-swebench-verified/summary.md"
+
+    assert result.executed_case_count == 20
+    assert result.failed_case_count == 0
+    assert result.skipped_case_count == 0
+    assert result.unexpected_ready_count == 0
+    assert result.normalized_rerun_mismatches == 0
+    assert result.target_repository_code_executed is False
+    assert result.does_not_advance_stage_1 is True
+    assert "20 historical public PRs" in summary
+    assert "12 repositories" in summary
+    assert "No target-repository code was executed." in summary
+    assert "does not measure customer precision" in summary
+
+    readme = Path("README.md").read_text(encoding="utf-8")
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    environment = Path("docs/development-environment.md").read_text(encoding="utf-8")
+    assert public_link in readme
+    assert public_link in changelog
+    assert development_link in environment
+    assert "R-002 is engineering evidence only" in roadmap
+    assert "contribute zero genuine Alpha reviews" in roadmap
+    assert "Stages 2\u20134 remain gated" in roadmap
+
+
+def test_r002_module_commands_are_packaged_but_not_live_ci() -> None:
+    module = Path("scopeproof_core/evals/r002_swebench.py")
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert module.is_file() and not module.is_symlink()
+    assert (
+        project["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]["evals"] == "evals"
+    )
+    assert "python -m scopeproof_core.evals.r002_swebench --help" in workflow
+    assert "python -m scopeproof_core.evals.r002_swebench prepare" not in workflow
+    assert "python -m scopeproof_core.evals.r002_swebench annotate" not in workflow
+    assert "python -m scopeproof_core.evals.r002_swebench run" not in workflow
+    assert "python -m pip install -e '.[dev,research]'" in workflow
+    assert "python -m uv sync --extra dev --extra research --locked" in workflow
+
+
+def test_r002_source_manifest_is_exact_and_redacted() -> None:
+    path = Path("evals/r002/source_manifest.json")
+    manifest = load_source_manifest(path)
+
+    assert manifest.source.model_dump(mode="json") == R002_SOURCE
+    assert [case.case_id for case in manifest.cases] == [
+        f"R002-{number:03d}" for number in range(1, 21)
+    ]
+    assert len({case.repository for case in manifest.cases}) == 12
+    raw = path.read_text(encoding="utf-8")
+    for forbidden_key in (
+        '"problem_statement":',
+        '"patch":',
+        '"test_patch":',
+        '"hints_text":',
+        '"FAIL_TO_PASS":',
+        '"PASS_TO_PASS":',
+    ):
+        assert forbidden_key not in raw
 
 
 def _mp4_duration_seconds(path: Path) -> float:
@@ -166,9 +303,7 @@ def test_sdist_excludes_local_development_state() -> None:
 def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
-    comparison_files = {
-        path.name for path in Path("evals/comparisons").glob("*.json")
-    }
+    comparison_files = {path.name for path in Path("evals/comparisons").glob("*.json")}
     expected_files = {
         "previous_pr.json",
         "previous_labels.json",
@@ -196,9 +331,7 @@ def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> No
         assert "does not show external use" in document
 
     manifest = json.loads(
-        Path("evals/comparisons/rereview_evidence_integrity.json").read_text(
-            encoding="utf-8"
-        )
+        Path("evals/comparisons/rereview_evidence_integrity.json").read_text(encoding="utf-8")
     )
     aggregate_counts = {kind.value: 0 for kind in EvidenceChangeKind}
     for case in manifest["cases"]:
@@ -210,13 +343,9 @@ def test_comparison_benchmark_corpus_and_docs_preserve_research_boundary() -> No
 
 def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None:
     rehearsal_dir = Path("evals/rehearsals")
-    requirements = (rehearsal_dir / "owner_rehearsal_criteria.txt").read_text(
-        encoding="utf-8"
-    )
+    requirements = (rehearsal_dir / "owner_rehearsal_criteria.txt").read_text(encoding="utf-8")
     guide = Path("docs/alpha/owner-rehearsal.md").read_text(encoding="utf-8")
-    development_guide = Path("docs/development-environment.md").read_text(
-        encoding="utf-8"
-    )
+    development_guide = Path("docs/development-environment.md").read_text(encoding="utf-8")
     development_copy = development_guide.replace("\n", " ")
 
     assert not list(rehearsal_dir.glob("*requirements*.txt"))
@@ -266,7 +395,7 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert Path(".python-version").read_text(encoding="utf-8").strip() == "3.12"
     assert 'name = "scopeproof"' in lock
     assert 'name = "streamlit"' in lock
-    assert "uv sync --extra dev --locked" in guide
+    assert "uv sync --extra dev --extra research --locked" in guide
     assert "uv run pytest" in guide
     assert "uv run scopeproof benchmark" in guide
     assert "Streamlit 1.59.2" in guide
@@ -275,14 +404,23 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "locked-environment:" in workflow
     assert "astral-sh/setup-uv@" not in workflow
     assert "python -m pip install uv==0.11.29" in workflow
-    assert "python -m uv sync --extra dev --locked" in workflow
-    assert (
-        "python -m uv run python -m pytest -q tests/test_repository_contracts.py"
-        in workflow
-    )
+    assert "python -m uv sync --extra dev --extra research --locked" in workflow
+    assert "python -m uv run python -m pytest -q tests/test_repository_contracts.py" in workflow
     assert "python -m uv run scopeproof benchmark" in workflow
     assert "needs: [compatibility-python-311, locked-environment]" in workflow
     assert "[reproducible development environment](docs/development-environment.md)" in readme
+
+
+def test_locked_gitpython_excludes_known_command_execution_advisories() -> None:
+    lock = tomllib.loads(Path("uv.lock").read_text(encoding="utf-8"))
+    versions = [
+        package["version"]
+        for package in lock["package"]
+        if package["name"].casefold() == "gitpython"
+    ]
+
+    assert len(versions) == 1
+    assert tuple(int(part) for part in versions[0].split(".")) >= (3, 1, 55)
 
 
 def test_ci_avoids_duplicate_feature_branch_runs() -> None:
@@ -310,15 +448,11 @@ def test_ci_executes_comparison_benchmark_in_locked_and_installed_environments()
     locked = workflow.split("  locked-environment:", maxsplit=1)[1].split(
         "\n  verify:", maxsplit=1
     )[0]
-    installed_wheel = workflow.split("      - name: Installed wheel smoke", maxsplit=1)[
-        1
-    ]
+    installed_wheel = workflow.split("      - name: Installed wheel smoke", maxsplit=1)[1]
 
     required_commands = {
         "locked environment": "python -m uv run scopeproof comparison-benchmark",
-        "installed wheel smoke": (
-            '(cd "$RUNNER_TEMP" && scopeproof comparison-benchmark)'
-        ),
+        "installed wheel smoke": ('(cd "$RUNNER_TEMP" && scopeproof comparison-benchmark)'),
     }
     missing = {
         environment: command
@@ -410,37 +544,69 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert '__version__ = "0.2.2"' in version_source
+    assert '__version__ = "0.2.3"' in version_source
 
 
-def test_unpublished_candidate_identity_preserves_public_install_boundary() -> None:
+def test_public_draft_candidate_identity_preserves_public_install_boundary() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    candidate_notes = Path("docs/releases/v0.2.2-internal-candidate.md").read_text(
-        encoding="utf-8"
-    )
+    candidate_notes = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(encoding="utf-8")
+    readme_copy = " ".join(readme.split())
 
-    assert "v0.2.2 internal candidate" in readme
-    assert "not published" in readme
-    assert "Candidate version: 0.2.2 (not published)" in changelog
-    assert "Internal only; not published" in candidate_notes
+    assert "v0.2.3 public draft candidate" in readme
+    assert "draft PR #174" in readme
+    assert "not merged, tagged, or released" in readme_copy
+    assert "Candidate version: 0.2.3 (public draft PR #174; not published)" in changelog
+    assert "Status: Public draft candidate; not merged, tagged, or released" in candidate_notes
     assert "releases/download/v0.2.1/" in readme
-    assert "releases/download/v0.2.2/" not in readme
+    assert "releases/download/v0.2.3/" not in readme
     assert "does not advance Stage 1" in candidate_notes
-    assert "Documentation-maintenance pull requests do not publish v0.2.2" in candidate_notes
-    assert "pull request, issue comment" not in candidate_notes
+    assert "Local commits do not publish v0.2.3" in candidate_notes
+    assert "No push, pull request" not in candidate_notes
+
+
+def test_v023_status_docs_record_verified_internal_candidate() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status_audit = Path(
+        "docs/releases/v0.2.3-status-and-next-stages.md"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        "Current engineering track | v0.2.3 Evidence Quality; "
+        "verified internal candidate"
+    ) in roadmap
+    assert "verification in progress" not in roadmap
+    assert "Preserve the verified v0.2.3 internal candidate" in status_audit
+    assert "Finish the current v0.2.3 internal-candidate verification" not in status_audit
+    assert "Complete and record current-head v0.2.3 verification" not in status_audit
+    assert "v0.2.3, public draft PR #174; not merged or released" in roadmap
+    assert "Repository state: public draft PR #174; not merged, tagged, or released" in status_audit
+    assert "Python 3.11 CI passed at the exact public draft head" in status_audit
+    assert "Merge PR #174, tag, and create a release" in status_audit
+
+
+def test_current_intake_policy_keeps_linkedin_material_archived_and_owner_gated() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(encoding="utf-8")
+    draft = Path("docs/launch/linkedin-draft.md").read_text(encoding="utf-8")
+
+    boundary = "Archived preparation; not authorized under the current passive-intake policy."
+    assert boundary in playbook
+    assert boundary in draft
+    assert "Do not publish or use this material without a separate owner decision" in playbook
+    assert "The owner may publish the post" not in playbook
+    assert "If separately reauthorized" in playbook
+    assert "archived LinkedIn preparation" in readme
 
 
 def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boundary() -> None:
-    candidate_notes = Path("docs/releases/v0.2.2-internal-candidate.md").read_text(
-        encoding="utf-8"
-    )
+    candidate_notes = Path("docs/releases/v0.2.2-internal-candidate.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     candidate_provenance = " ".join(candidate_notes.split())
     unreleased = changelog.split("## Unreleased", maxsplit=1)[1].split("\n## ", maxsplit=1)[0]
-    unreleased_changed = unreleased.split("### Changed", maxsplit=1)[1].split(
-        "\n### ", maxsplit=1
-    )[0]
+    unreleased_changed = unreleased.split("### Changed", maxsplit=1)[1].split("\n### ", maxsplit=1)[
+        0
+    ]
     unreleased_changed_normalized = " ".join(unreleased_changed.split())
 
     assert "subsequent local-only changes contained" not in candidate_provenance
@@ -458,7 +624,8 @@ def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boun
     assert (
         "- Added the self-contained public-alpha participant quickstart install path from PR "
         "#172, pinned to the verified public v0.2.1 wheel. Participant setup and benchmark "
-        "success are engineering evidence only; they do not publish v0.2.2 or advance Stage 1."
+        "success are engineering evidence only; they did not publish v0.2.2 and do not advance "
+        "Stage 1."
     ) in unreleased_changed_normalized
 
 
@@ -542,9 +709,7 @@ def test_launch_matrix_keeps_action_as_an_advanced_preview() -> None:
 def test_public_docs_do_not_require_or_offer_external_fork_validation() -> None:
     public_docs = {
         "README.md": Path("README.md").read_text(encoding="utf-8"),
-        "docs/privacy-readiness.md": Path("docs/privacy-readiness.md").read_text(
-            encoding="utf-8"
-        ),
+        "docs/privacy-readiness.md": Path("docs/privacy-readiness.md").read_text(encoding="utf-8"),
     }
     combined = "\n".join(public_docs.values()).lower()
 
@@ -612,9 +777,7 @@ def test_changelog_discloses_v021_rereview_evidence_boundaries() -> None:
 
 def test_public_contribution_templates_preserve_evidence_boundaries() -> None:
     defect = Path(".github/ISSUE_TEMPLATE/defect.yml").read_text(encoding="utf-8")
-    feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
-        encoding="utf-8"
-    )
+    feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(encoding="utf-8")
     pull_request = Path(".github/pull_request_template.md").read_text(encoding="utf-8")
 
     assert "Do not include tokens" in defect
@@ -653,17 +816,12 @@ def test_readme_shows_disclosed_constructed_demo_visual() -> None:
 
 def test_linkedin_alpha_launch_package_is_current_and_truthful() -> None:
     draft = Path("docs/launch/linkedin-draft.md").read_text(encoding="utf-8")
-    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
-        encoding="utf-8"
-    )
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(encoding="utf-8")
     disclosure = (
         "This is a deliberately constructed demo case. ScopeProof uses deterministic "
         "evidence rules and human review; it does not guarantee correctness or replace QA."
     )
-    issue_url = (
-        "https://github.com/YuzeJ21/Scope-Proof/issues/new"
-        "?template=public-alpha-case.yml"
-    )
+    issue_url = "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml"
 
     for required_text in (
         "https://github.com/YuzeJ21/Scope-Proof",
@@ -690,13 +848,8 @@ def test_linkedin_alpha_launch_package_is_current_and_truthful() -> None:
 
 def test_linkedin_alpha_intake_is_inbound_only_and_owner_passive() -> None:
     draft = Path("docs/launch/linkedin-draft.md").read_text(encoding="utf-8")
-    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
-        encoding="utf-8"
-    )
-    issue_url = (
-        "https://github.com/YuzeJ21/Scope-Proof/issues/new"
-        "?template=public-alpha-case.yml"
-    )
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(encoding="utf-8")
+    issue_url = "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml"
 
     for required_text in (
         "## Inbound-only intake",
@@ -724,9 +877,7 @@ def test_linkedin_alpha_intake_is_inbound_only_and_owner_passive() -> None:
 
 def test_concierge_host_checklist_indexes_real_alpha_without_contact_data() -> None:
     checklist_path = Path("docs/alpha/concierge-host-checklist.md")
-    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(
-        encoding="utf-8"
-    )
+    playbook = Path("docs/launch/linkedin-alpha-playbook.md").read_text(encoding="utf-8")
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
 
     assert checklist_path.is_file()
@@ -761,10 +912,7 @@ def test_concierge_host_checklist_indexes_real_alpha_without_contact_data() -> N
     )
     assert all(field not in checklist.lower() for field in prohibited_fields)
     assert "../alpha/concierge-host-checklist.md" in playbook
-    assert (
-        "[concierge host checklist](docs/alpha/concierge-host-checklist.md)"
-        in roadmap
-    )
+    assert "[concierge host checklist](docs/alpha/concierge-host-checklist.md)" in roadmap
 
 
 def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
@@ -779,15 +927,13 @@ def test_linkedin_alpha_visual_has_publishable_dimensions() -> None:
 
 
 def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
-    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(
-        encoding="utf-8"
-    )
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
     qualification = Path("docs/alpha/public-pr-qualification-checklist.md").read_text(
         encoding="utf-8"
     )
-    criteria = Path(
-        "docs/alpha/acceptance-criteria-confirmation-template.md"
-    ).read_text(encoding="utf-8")
+    criteria = Path("docs/alpha/acceptance-criteria-confirmation-template.md").read_text(
+        encoding="utf-8"
+    )
     outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
     readme = Path("README.md").read_text(encoding="utf-8")
     protocol = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
@@ -814,20 +960,13 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     prohibited = ("participant name", "email address", "linkedin profile", "dm transcript")
     combined = "\n".join((quickstart, qualification, criteria, outcome)).lower()
     assert all(term not in combined for term in prohibited)
-    assert (
-        "[public-alpha participant quickstart](docs/alpha/participant-quickstart.md)"
-        in readme
-    )
+    assert "[public-alpha participant quickstart](docs/alpha/participant-quickstart.md)" in readme
     assert "docs/alpha/participant-quickstart.md" in protocol
 
 
 def test_participant_evidence_unblocker_prevents_empty_monitoring_loops() -> None:
-    unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(
-        encoding="utf-8"
-    )
-    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(
-        encoding="utf-8"
-    )
+    unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(encoding="utf-8")
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
 
     assert "[participant evidence unblocker](participant-evidence-unblocker.md)" in checklist
     assert "waiting_for_inbound_public_alpha_submission" in unblocker
@@ -835,8 +974,7 @@ def test_participant_evidence_unblocker_prevents_empty_monitoring_loops() -> Non
     assert "public HTTPS requirements source" in unblocker
     assert "explicit authority to confirm criteria" in unblocker
     assert (
-        "explicit confirmation that no private or confidential information is included"
-        in unblocker
+        "explicit confirmation that no private or confidential information is included" in unblocker
     )
     assert "Do not start another overnight monitor" in unblocker
     assert "/goal Run ScopeProof's first genuine public-alpha case" in unblocker
@@ -857,19 +995,12 @@ def test_inbound_alpha_case_submission_path_is_public_safe_and_owner_passive() -
     template_path = Path(".github/ISSUE_TEMPLATE/public-alpha-case.yml")
     template = template_path.read_text(encoding="utf-8")
     site = Path("site/index.html").read_text(encoding="utf-8")
-    unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(
-        encoding="utf-8"
-    )
-    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(
-        encoding="utf-8"
-    )
+    unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(encoding="utf-8")
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
 
-    issue_url = (
-        "https://github.com/YuzeJ21/Scope-Proof/issues/new"
-        "?template=public-alpha-case.yml"
-    )
+    issue_url = "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml"
     assert "name: Public-alpha case submission" in template
-    assert "title: \"[Alpha case]: \"" in template
+    assert 'title: "[Alpha case]: "' in template
     assert "public_pr_url" in template
     assert "public_requirements_url" in template
     assert "criteria_authority" in template
@@ -919,10 +1050,7 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert html.count("<h1") == 1
     assert disclosure in html
     assert disclosure in transcript
-    assert (
-        "Public PR → Confirm criteria → Review coverage → Record decisions → Export"
-        in html
-    )
+    assert "Public PR → Confirm criteria → Review coverage → Record decisions → Export" in html
     assert "Likes, views, stars, impressions, and downloads are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
     assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.1" in html
@@ -936,9 +1064,7 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     )
     assert qualification_url in parser.links
     assert "Check whether your PR qualifies" in html
-    assert not any(
-        urlsplit(link).hostname == "www.linkedin.com" for link in parser.links
-    )
+    assert not any(urlsplit(link).hostname == "www.linkedin.com" for link in parser.links)
     assert "DM me" not in html
     assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md" in html
     assert parser.forms == 0
@@ -1006,9 +1132,7 @@ def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
 
 
 def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
-    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
-        encoding="utf-8"
-    )
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(encoding="utf-8")
     for field_id in (
         "public_pr",
         "alpha_case_issue",
@@ -1052,34 +1176,23 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
 
 
 def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -> None:
-    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(
-        encoding="utf-8"
-    )
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
     readme = Path("README.md").read_text(encoding="utf-8")
     site = Path("site/index.html").read_text(encoding="utf-8")
-    feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
-        encoding="utf-8"
-    )
-    sprint = Path("docs/commercialization/design-partner-sprint.md").read_text(
-        encoding="utf-8"
-    )
-    case_url = (
-        "https://github.com/YuzeJ21/Scope-Proof/issues/new?"
-        "template=public-alpha-case.yml"
-    )
+    feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(encoding="utf-8")
+    sprint = Path("docs/commercialization/design-partner-sprint.md").read_text(encoding="utf-8")
+    case_url = "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml"
 
     assert quickstart.index(case_url) < quickstart.index("## Ten-minute path")
     assert "Submit the inbound public-alpha case form before starting locally" in quickstart
     assert "submit the inbound\npublic-alpha case form before starting locally" in readme
     assert "incomplete review" not in site
 
-    outcome_block = feedback.split("id: outcome", maxsplit=1)[1].split(
-        "validations:", maxsplit=1
-    )[0]
+    outcome_block = feedback.split("id: outcome", maxsplit=1)[1].split("validations:", maxsplit=1)[
+        0
+    ]
     assert [
-        line.strip()[2:]
-        for line in outcome_block.splitlines()
-        if line.strip().startswith("- ")
+        line.strip()[2:] for line in outcome_block.splitlines() if line.strip().startswith("- ")
     ] == [
         "Found a useful previously unknown gap",
         "Produced only already-known information",
@@ -1119,19 +1232,14 @@ def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() 
 def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     site = Path("site/index.html").read_text(encoding="utf-8")
-    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(
-        encoding="utf-8"
-    )
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
     outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
-    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(
-        encoding="utf-8"
-    )
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
     public_surfaces = "\n".join((readme, site))
 
     guide = "docs/commercialization/design-partner-sprint.md"
     feedback_url = (
-        "https://github.com/YuzeJ21/Scope-Proof/issues/new?"
-        "template=public-alpha-feedback.yml"
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml"
     )
     assert guide in readme
     assert "../commercialization/design-partner-sprint.md" in quickstart

@@ -19,6 +19,7 @@ from scopeproof_core.schemas.models import (
     CIObservation,
     ConfidenceBand,
     Criterion,
+    CriterionRetrievalDiagnostic,
     EvidenceItem,
     EvidenceLevel,
     EvidenceType,
@@ -31,6 +32,7 @@ from scopeproof_core.schemas.models import (
     IngestionState,
     ResearchContext,
     ResolutionEvent,
+    RetrievalOutcome,
     Review,
     ReviewBundle,
     RuntimeEvidence,
@@ -91,6 +93,23 @@ def example_bundle() -> ReviewBundle:
         source_text="Failed export shows an error",
         criteria=[criterion],
         evidence=[evidence],
+        retrieval_diagnostics=[
+            CriterionRetrievalDiagnostic(
+                criterion_id="AC-01",
+                outcome=RetrievalOutcome.CANDIDATES_FOUND,
+                searched_terms=["error", "export", "fail"],
+                exact_identifiers=[],
+                searched_paths=["src/export.py"],
+                searched_evidence_types=[EvidenceType.IMPLEMENTATION],
+                changed_file_count=1,
+                unchanged_candidate_file_count=0,
+                inspectable_line_count=1,
+                exact_identifier_match_line_count=0,
+                term_overlap_line_count=1,
+                below_threshold_line_count=0,
+                accepted_candidate_count=1,
+            )
+        ],
         runtime_evidence=[
             RuntimeEvidence(
                 criterion_id="AC-01",
@@ -220,6 +239,48 @@ def test_human_readable_exports_show_bounded_context_without_changing_line_link(
     assert "<pre>def prepare_rows():\ndef export_csv(rows):" in html_report
     assert "src/export.py#L42-L42" in markdown
     assert "src/export.py#L42-L42" in html_report
+
+
+def test_exports_render_retrieval_diagnostics_as_non_evidence_metadata() -> None:
+    bundle = example_bundle()
+
+    json_report = json.loads(export_json(bundle))
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert json_report["retrieval_diagnostics"][0]["outcome"] == "candidates_found"
+    assert "**How ScopeProof searched:**" in markdown
+    assert "Outcome: Candidates Found" in markdown
+    assert "Searched paths: <code>src/export.py</code>" in markdown
+    assert (
+        "Search diagnostics explain retrieval; they are not evidence that the criterion "
+        "is satisfied or missing from the repository."
+    ) in markdown
+    csv_diagnostic = json.loads(csv_row["retrieval_diagnostic"])
+    assert csv_diagnostic["outcome"] == "candidates_found"
+    assert csv_diagnostic["accepted_candidate_count"] == 1
+    assert "<h3>AC-01 — How ScopeProof searched</h3>" in html_report
+    assert "Candidates Found" in html_report
+    assert (
+        "Search diagnostics explain retrieval; they are not evidence that the criterion "
+        "is satisfied or missing from the repository."
+    ) in html_report
+
+
+def test_historical_exports_do_not_invent_retrieval_diagnostics() -> None:
+    payload = example_bundle().model_dump(mode="python")
+    payload["retrieval_diagnostics"] = []
+    bundle = ReviewBundle.model_validate(payload)
+
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    fallback = "Retrieval diagnostics were not recorded for this review"
+    assert fallback in markdown
+    assert json.loads(csv_row["retrieval_diagnostic"]) is None
+    assert fallback in html_report
 
 
 def test_exports_make_observed_ci_research_and_verification_boundaries_inspectable() -> None:
