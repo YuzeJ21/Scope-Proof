@@ -76,13 +76,14 @@ The release gate uses explicit precedence:
    every criterion, and final human acceptance.
 
 The post-merge v0.2.3 audit found two core integrity defects in the intended
-flow. The current repair branch now rejects ineligible final acceptance,
-requires paired runtime evidence for manual verification at lifecycle,
-validation, persistence, comparison, presentation, and export boundaries, and
-transmits encoded candidate paths with the exact head SHA as a separate GitHub
-query parameter. Request-level and adversarial regressions cover the prior
-bypasses. v0.2.3 remains unpublished: merging this repair and publishing a tag
-and GitHub Release are separate owner decisions. The audit did not determine
+flow. [PR #177](https://github.com/YuzeJ21/Scope-Proof/pull/177) merged the
+Stage 0 integrity repairs, so public `main` now rejects ineligible final
+acceptance, requires paired runtime evidence for manual verification at
+lifecycle, validation, persistence, comparison, presentation, and export
+boundaries, and transmits encoded candidate paths with the exact head SHA as a
+separate GitHub query parameter. Request-level and adversarial regressions
+cover the prior bypasses. v0.2.3 remains unpublished; tagging and publishing a
+GitHub Release require a separate owner decision. The audit did not determine
 whether the published v0.2.1 package is affected.
 
 GitHub exposes visible check runs but does not reliably expose every repository's required-check
@@ -97,9 +98,12 @@ Install the verified v0.2.1 release wheel in an isolated environment. This path 
 cloning the repository.
 
 The **v0.2.3 source candidate** from
-[merged PR #174](https://github.com/YuzeJ21/Scope-Proof/pull/174) is now on `main`. The source is
-merged to `main`, but it is not tagged or released; the verified public install path below
-therefore remains v0.2.1 until a separate publication decision.
+[merged PR #174](https://github.com/YuzeJ21/Scope-Proof/pull/174), including
+the Stage 0 integrity repairs merged by
+[PR #177](https://github.com/YuzeJ21/Scope-Proof/pull/177), is now on `main`.
+The source is merged to `main`, but it is not tagged or released; the verified
+public install path below therefore remains v0.2.1 until a separate
+publication decision.
 
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)

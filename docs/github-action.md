@@ -53,9 +53,12 @@ When a review completes, the workflow uploads its Markdown export as the
 artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
-revision because ScopeProof is not distributed on PyPI. Review and update that
-pin deliberately when adopting a newer public release; do not replace it with
-an unpinned package or branch reference.
+revision because ScopeProof is not distributed on PyPI. The reviewed pin is
+`3d88808f12f46b68059b9e89c40c7ccd595d9032`, the public-main merge containing
+the v0.2.3 Stage 0 integrity repairs; it remains source-candidate installation,
+not a published v0.2.3 release. Review and update that pin deliberately when
+adopting a newer public release; do not replace it with an unpinned package or
+branch reference.
 
 This trigger is intentionally privileged only for its narrowly scoped comment
 permission. Do not add a pull-request-head checkout, `git fetch`, `gh pr

@@ -555,9 +555,15 @@ def test_merged_candidate_identity_preserves_public_install_boundary() -> None:
 
     assert "v0.2.3 source candidate" in readme
     assert "merged PR #174" in readme
+    assert "PR #177" in readme
     assert "merged to `main`, but it is not tagged or released" in readme_copy
-    assert "Candidate version: 0.2.3 (merged to `main` via PR #174; not published)" in changelog
+    assert (
+        "Candidate version: 0.2.3 (candidate merged via PR #174; "
+        "Stage 0 integrity repairs merged via PR #177; not published)"
+    ) in changelog
     assert "Status: Merged to `main` via PR #174; not tagged or released" in candidate_notes
+    assert "Stage 0 integrity repairs merged via PR #177" in candidate_notes
+    assert "3d88808f12f46b68059b9e89c40c7ccd595d9032" in candidate_notes
     assert "releases/download/v0.2.1/" in readme
     assert "releases/download/v0.2.3/" not in readme
     assert "does not advance Stage 1" in candidate_notes
@@ -572,9 +578,17 @@ def test_v023_status_docs_record_repaired_post_merge_integrity_findings() -> Non
     status_audit = Path(
         "docs/releases/v0.2.3-status-and-next-stages.md"
     ).read_text(encoding="utf-8")
+    readiness_audit = Path(
+        "docs/releases/v0.2.3-post-merge-release-readiness.md"
+    ).read_text(encoding="utf-8")
+    platform_matrix = Path(
+        "docs/releases/v0.2.3-platform-package-matrix.md"
+    ).read_text(encoding="utf-8")
+    review_map = Path("docs/releases/v0.2.3-pr-review-map.md").read_text(encoding="utf-8")
     readme_normalized = " ".join(readme.split())
     changelog_normalized = " ".join(changelog.split())
     status_audit_normalized = " ".join(status_audit.split())
+    current_main = "3d88808f12f46b68059b9e89c40c7ccd595d9032"
 
     assert (
         "Current engineering track | v0.2.3 Evidence Quality; "
@@ -582,20 +596,56 @@ def test_v023_status_docs_record_repaired_post_merge_integrity_findings() -> Non
     ) in roadmap
     assert "Stage 0 integrity repairs verified" in roadmap
     assert "verification in progress" not in roadmap
-    assert "Stage 0 complete on the verified repair branch" in status_audit
-    assert "ready for a later merge/release decision" in status_audit_normalized
+    assert "Stage 0 complete on public `main`" in status_audit
+    assert "ready for a separate release decision" in status_audit_normalized
     assert "Final-acceptance and runtime-verification bypass" in status_audit
     assert "Exact-head candidate retrieval" in status_audit
-    assert "current repair branch now rejects ineligible final acceptance" in readme_normalized
+    assert "public `main` now rejects ineligible final acceptance" in readme_normalized
     assert "### Integrity repairs" in changelog
     assert "Restricted `MANUALLY_VERIFIED` decisions" in changelog_normalized
     assert "Encoded bounded candidate paths" in changelog_normalized
     assert "Finish the current v0.2.3 internal-candidate verification" not in status_audit
     assert "Complete and record current-head v0.2.3 verification" not in status_audit
-    assert "v0.2.3, merged to `main` via PR #174; not released" in roadmap
-    assert "Repository state: PR #174 merged to `main`; not tagged or released" in status_audit
+    assert "Stage 0 integrity repairs merged via PR #177" in roadmap
+    assert "Repository state: PR #177 merged the Stage 0 integrity repairs" in status_audit
     assert "Python 3.11 CI passed at the exact merged PR head" in status_audit
     assert "create a tag and GitHub Release" in status_audit
+    for document in (roadmap, status_audit, readiness_audit, platform_matrix, review_map):
+        assert current_main in document
+    assert "Stage 0 integrity repairs merged via PR #177" in readiness_audit
+    assert "Stage 0 integrity repairs merged via PR #177" in platform_matrix
+    assert "Stage 0 integrity repairs merged via PR #177" in review_map
+
+
+def test_v023_release_alignment_records_current_engineering_evidence_and_boundaries() -> None:
+    readiness = Path(
+        "docs/releases/v0.2.3-post-merge-release-readiness.md"
+    ).read_text(encoding="utf-8")
+    matrix = Path("docs/releases/v0.2.3-platform-package-matrix.md").read_text(
+        encoding="utf-8"
+    )
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Decision: `READY FOR RELEASE DECISION`" in readiness
+    assert "1,633 tests passed and one intentional skip" in readiness
+    assert "95.10%" in readiness
+    assert "20/20 R-002 cases" in readiness
+    assert "0 unexpected Ready outcomes" in readiness
+    assert "b9be88867c4880058d822fd7af17c736077210151fecd8b4e191d1af1bdd12c4" in matrix
+    assert "98 wheel entries and 520 source-distribution entries" in matrix
+    assert "47 compatible packages" in matrix
+    assert "pointer-operated installed-workbench flow passed" in matrix
+    assert "keyboard-only completion remains unverified" in matrix
+    assert "actual 200% browser zoom remains unverified" in matrix
+    assert "## Prioritized post-release decision candidates" in status
+    assert "Exact-SHA GitHub Check lifecycle" in status
+    assert "Criteria-source snapshot and staleness detection" in status
+    assert "CLI lifecycle parity" in status
+    assert "Non-executing evidence adapters" in status
+    assert "Reviewer identity and scoped verification records" in status
+    assert "Real-browser regression coverage" in status
 
 
 def test_current_intake_policy_keeps_linkedin_material_archived_and_owner_gated() -> None:

@@ -9,7 +9,7 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Candidate version: 0.2.3 (merged to `main` via PR #174; not published).
+Candidate version: 0.2.3 (candidate merged via PR #174; Stage 0 integrity repairs merged via PR #177; not published).
 
 ### Integrity repairs
 
@@ -29,9 +29,9 @@ Candidate version: 0.2.3 (merged to `main` via PR #174; not published).
   GitHub Actions bot, moved Pages write/OIDC permissions to the deployment
   job, and made the repository Action use the checked-in locked environment.
 
-These repairs restore the Stage 0 engineering gate on the verified branch.
-They do not publish v0.2.3, establish customer validation, or determine whether
-the published v0.2.1 package is affected.
+These repairs restore the Stage 0 engineering gate on public `main`. They do
+not publish v0.2.3, establish customer validation, or determine whether the
+published v0.2.1 package is affected.
 
 ### Changed
 
