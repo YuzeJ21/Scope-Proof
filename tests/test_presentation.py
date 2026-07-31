@@ -17,6 +17,7 @@ from scopeproof_core.schemas.models import (
     HumanResolution,
     Review,
     ReviewBundle,
+    RuntimeEvidence,
 )
 
 
@@ -61,11 +62,29 @@ def _bundle(
         recommended_action="Review the cited line.",
     )
     resolutions = [resolution] if resolution else []
+    runtime_evidence = (
+        [
+            RuntimeEvidence(
+                criterion_id=resolution.criterion_id,
+                artifact_reference="https://example.test/run/1",
+                scenario="Export filtered rows",
+                environment="staging",
+                result="passed",
+                reviewer=resolution.reviewer,
+                evidence_level=resolution.claimed_evidence_level,
+            )
+        ]
+        if resolution
+        and resolution.decision is HumanDecision.MANUALLY_VERIFIED
+        and resolution.claimed_evidence_level is not None
+        else []
+    )
     return ReviewBundle(
         review=review,
         source_text=criterion.text,
         criteria=[criterion],
         evidence=candidates,
+        runtime_evidence=runtime_evidence,
         findings=[finding],
         resolutions=resolutions,
         gate=evaluate_gate(review, [criterion], [finding], resolutions),

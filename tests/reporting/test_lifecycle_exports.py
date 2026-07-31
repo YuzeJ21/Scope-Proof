@@ -14,6 +14,7 @@ from scopeproof_core.reviews.lifecycle import (
     revise_criteria,
 )
 from scopeproof_core.schemas.models import (
+    EvidenceLevel,
     GateVerdict,
     HumanDecision,
     HumanResolution,
@@ -233,6 +234,45 @@ def test_lifecycle_exports_reject_forged_ready_without_resolution_events(exporte
 
     with pytest.raises(
         ValueError, match="active bundle resolutions must match active resolution events"
+    ):
+        exporter(state)
+
+
+@pytest.mark.parametrize("exporter", [export_json, export_markdown])
+def test_lifecycle_exports_reject_manual_verification_without_runtime_evidence(
+    exporter,
+) -> None:
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    event = ResolutionEvent(
+        event_id="manual-without-runtime",
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        claimed_evidence_level=EvidenceLevel.E3,
+        reviewer="QA",
+        comment="Observed the scenario",
+        criteria_revision_number=1,
+    )
+    state.resolution_events = [event]
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            claimed_evidence_level=EvidenceLevel.E3,
+            reviewer="QA",
+            comment="Observed the scenario",
+            timestamp=event.timestamp,
+        )
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match=r"manual.*verifi.*matching runtime evidence"
     ):
         exporter(state)
 

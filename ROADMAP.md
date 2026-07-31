@@ -14,22 +14,28 @@ automated activity. The current external state is
 |---|---|
 | Published install | v0.2.1 |
 | Active source candidate | v0.2.3, merged to `main` via PR #174; not released |
-| Public `main` | Contains the verified R-002 and v0.2.3 engineering candidate at merge commit `178df8a1c8034edc4d3240d790e3e4c668dfa82a` |
-| Current engineering track | v0.2.3 Evidence Quality; verified internal candidate |
-| Product validation | Stage 0 complete; Stage 1 waiting; Stages 2–4 gated |
+| Public `main` | Current verified head `f836d64a9b9b6bf63b7dddddabb49ca892f4f91d`; contains the v0.2.3 candidate merged by PR #174 and post-merge alignment from PR #176 |
+| Current engineering track | v0.2.3 Evidence Quality; Stage 0 integrity repairs verified on `codex/v023-readiness-sync` |
+| Product validation | Stage 0 complete on the repair branch; Stage 1 waiting; Stages 2–4 gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
 milestones can proceed while Stage 1 waits, but they do not advance product-validation stages.
 
 ## Stage 0 — Reviewer-first product reset
 
-Status: complete.
+Status: complete on the verified repair branch; merge and publication remain
+separate owner decisions.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
-- [x] External verification records runtime evidence and its decision atomically.
-- [x] Final acceptance requires complete ingestion, passing observed CI, and a current accepted
-  decision for every criterion.
+- [x] Enforce at the core boundary that manual verification records runtime
+  evidence and its decision atomically, and reject unpaired reconstructed
+  bundles or states at every trusted boundary.
+- [x] Enforce at the core boundary that final acceptance requires complete
+  ingestion, passing observed CI, and a current accepted decision for every
+  criterion.
+- [x] Encode unchanged-candidate paths, transmit the exact head SHA separately,
+  and reject malformed or unanchored candidate responses.
 - [x] Optional alpha feedback stays separate, local, consent-controlled, and off by default.
 - [x] Re-review comparison preserves both bundles and reports head, evidence, decision, and status
   changes.
@@ -55,8 +61,9 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 
 ## Current engineering track — v0.2.3 Evidence Quality
 
-Status: verified internal candidate merged to `main` via PR #174; not tagged or released. This work
-can proceed while Stage 1 waits but does not advance Stage 1.
+Status: internal candidate merged to `main` via PR #174; not tagged or
+released. The post-merge Stage 0 integrity findings are repaired and verified
+on `codex/v023-readiness-sync`. This work does not advance Stage 1.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
@@ -69,10 +76,15 @@ can proceed while Stage 1 waits but does not advance Stage 1.
 - [x] Prove the completed R-002 canonical inputs and result remain byte-identical.
 - [x] Classify R-002 misses only after diagnostics exist. Convert genuine retrieval defects into
   separate constructed regression fixtures.
+- [x] Reject ineligible final-acceptance and unpaired manual-verification
+  events in the core lifecycle, with regression coverage.
+- [x] Preserve exact-head candidate retrieval across URL metacharacters and
+  Unicode paths, with request-level regression coverage.
 - [ ] Freeze a new holdout before using it to evaluate a retrieval algorithm change. R-003 design
   is complete, but cohort generation awaits a separate explicit owner approval.
-- [x] Complete fresh packaging, clean-install, accessibility, and available-platform verification
-  before calling v0.2.3 an internal release candidate.
+- [x] Complete fresh packaging, clean-install, and a bounded accessibility and platform audit in
+  the available environment before calling v0.2.3 an internal release candidate; unsupported
+  environments and interactions remain explicitly unverified.
 - [x] Keep publication as a separate owner-controlled decision.
 
 Do not retune against the frozen R-002 cohort, weaken thresholds, add model-generated verdicts, or
@@ -81,11 +93,15 @@ promote search diagnostics into evidence or correctness claims.
 Current product, gap, and next-stage details are maintained in the
 [v0.2.3 status audit](docs/releases/v0.2.3-status-and-next-stages.md). Current official-source
 competitive research is maintained separately in the
-[2026-07-26 market comparison](docs/commercialization/market-comparison-2026-07-26.md).
+[current official-source market comparison](docs/commercialization/market-comparison-2026-07-26.md).
+The exact current-main package, security, and environment evidence is recorded
+in the [post-merge release-readiness audit](docs/releases/v0.2.3-post-merge-release-readiness.md).
 
 ## Stage 1 — Genuine public alpha
 
-Status: `waiting_for_inbound_public_alpha_submission`.
+Status: `waiting_for_inbound_public_alpha_submission`; the repaired source is
+engineering-ready for a later merge decision, but no genuine qualifying
+submission exists.
 
 Current measured state:
 

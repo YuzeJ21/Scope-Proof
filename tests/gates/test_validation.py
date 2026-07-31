@@ -8,10 +8,12 @@ from scopeproof_core.gates.validation import (
 )
 from scopeproof_core.reviews.lifecycle import new_review_state, revise_criteria
 from scopeproof_core.schemas.models import (
+    EvidenceLevel,
     GateVerdict,
     HumanDecision,
     HumanResolution,
     ResolutionEvent,
+    RuntimeEvidence,
 )
 
 
@@ -43,6 +45,68 @@ def test_validated_review_state_rejects_a_non_deterministic_historical_gate() ->
         validated_review_state(revised)
 
 
+def test_validated_review_state_rejects_forged_ready_historical_projection_without_events() -> (
+    None
+):
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        "Updated requirements",
+    )
+    historical = revised.analysis_history[0]
+    historical.review.final_acceptance = True
+    historical.resolutions = [
+        HumanResolution(
+            criterion_id=criterion.criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            comment="Forged historical acceptance",
+        )
+        for criterion in historical.criteria
+    ]
+    historical.gate = evaluate_gate(
+        historical.review,
+        historical.criteria,
+        historical.findings,
+        historical.resolutions,
+    )
+    assert historical.gate.verdict is GateVerdict.READY
+
+    with pytest.raises(
+        ValueError,
+        match="historical bundle resolutions must match historical resolution events",
+    ):
+        validated_review_state(revised)
+
+
+def test_validated_review_state_rejects_forged_historical_final_acceptance_without_event() -> (
+    None
+):
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        "Updated requirements",
+    )
+    historical = revised.analysis_history[0]
+    historical.review.final_acceptance = True
+    historical.gate = evaluate_gate(
+        historical.review,
+        historical.criteria,
+        historical.findings,
+        historical.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "historical bundle final acceptance must match historical "
+            "resolution events"
+        ),
+    ):
+        validated_review_state(revised)
+
+
 def test_validated_review_state_rejects_resolutions_without_active_events() -> None:
     state = new_review_state(build_demo_review())
     assert state.bundle is not None
@@ -63,6 +127,196 @@ def test_validated_review_state_rejects_resolutions_without_active_events() -> N
 
     with pytest.raises(
         ValueError, match="active bundle resolutions must match active resolution events"
+    ):
+        validated_review_state(state)
+
+
+def test_validated_review_bundle_rejects_final_acceptance_without_resolutions() -> None:
+    bundle = build_demo_review()
+    bundle.review.final_acceptance = True
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match="final acceptance requires accepted current resolutions"
+    ):
+        validated_review_bundle(bundle)
+
+
+def test_validated_review_bundle_rejects_unpaired_manual_verification() -> None:
+    bundle = build_demo_review()
+    bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            claimed_evidence_level=EvidenceLevel.E3,
+            reviewer="QA",
+            comment="Observed the scenario",
+        )
+    ]
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match="manually verified resolutions require matching runtime evidence"
+    ):
+        validated_review_bundle(bundle)
+
+
+def test_validated_review_bundle_accepts_paired_manual_verification() -> None:
+    bundle = build_demo_review()
+    bundle.runtime_evidence = [
+        RuntimeEvidence(
+            criterion_id="AC-01",
+            artifact_reference="https://example.test/run/1",
+            scenario="Export CSV",
+            environment="staging",
+            result="passed",
+            reviewer="QA",
+            evidence_level=EvidenceLevel.E3,
+        )
+    ]
+    bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            claimed_evidence_level=EvidenceLevel.E3,
+            reviewer="QA",
+            comment="Observed the scenario",
+        )
+    ]
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+
+    assert validated_review_bundle(bundle) == bundle
+
+
+def test_validated_review_state_rejects_unpaired_manual_verification_event() -> None:
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    event = ResolutionEvent(
+        event_id="manual-without-runtime",
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        claimed_evidence_level=EvidenceLevel.E3,
+        reviewer="QA",
+        comment="Observed the scenario",
+        criteria_revision_number=1,
+    )
+    state.resolution_events = [event]
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            claimed_evidence_level=EvidenceLevel.E3,
+            reviewer="QA",
+            comment="Observed the scenario",
+            timestamp=event.timestamp,
+        )
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match=r"manual.*verifi.*matching runtime evidence"
+    ):
+        validated_review_state(state)
+
+
+def test_validated_review_state_rejects_final_acceptance_recorded_too_early() -> None:
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    final_event = ResolutionEvent(
+        event_id="premature-final",
+        final_acceptance=True,
+        criteria_revision_number=1,
+    )
+    criterion_events = [
+        ResolutionEvent(
+            event_id=f"accepted-{criterion.criterion_id}",
+            criterion_id=criterion.criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            criteria_revision_number=1,
+        )
+        for criterion in state.bundle.criteria
+    ]
+    state.resolution_events = [final_event, *criterion_events]
+    state.review.final_acceptance = True
+    state.bundle.review.final_acceptance = True
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id=event.criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            timestamp=event.timestamp,
+        )
+        for event in criterion_events
+        if event.criterion_id is not None
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+    assert state.bundle.gate.verdict is GateVerdict.READY
+
+    with pytest.raises(
+        ValueError, match="positive final acceptance event was recorded before prerequisites"
+    ):
+        validated_review_state(state)
+
+
+def test_validated_review_state_rejects_superseded_unpaired_manual_event() -> None:
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    manual_event = ResolutionEvent(
+        event_id="unpaired-manual",
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        claimed_evidence_level=EvidenceLevel.E3,
+        reviewer="QA",
+        comment="Observed the scenario",
+        criteria_revision_number=1,
+    )
+    accepted_event = ResolutionEvent(
+        event_id="superseding-acceptance",
+        criterion_id="AC-01",
+        decision=HumanDecision.ACCEPTED,
+        criteria_revision_number=1,
+    )
+    state.resolution_events = [manual_event, accepted_event]
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            timestamp=accepted_event.timestamp,
+        )
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match="manual verification events require matching runtime evidence"
     ):
         validated_review_state(state)
 
@@ -155,7 +409,7 @@ def test_validated_review_state_preserves_prior_revision_events() -> None:
     revised.resolution_events.append(
         ResolutionEvent(
             event_id="prior-acceptance",
-            final_acceptance=True,
+            final_acceptance=False,
             criteria_revision_number=1,
         )
     )

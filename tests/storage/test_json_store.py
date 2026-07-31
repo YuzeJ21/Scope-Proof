@@ -18,10 +18,12 @@ from scopeproof_core.reviews.lifecycle import (
     revise_criteria,
 )
 from scopeproof_core.schemas.models import (
+    EvidenceLevel,
     GateVerdict,
     HumanDecision,
     HumanResolution,
     PullRequestSnapshot,
+    ResolutionEvent,
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
@@ -422,6 +424,47 @@ def test_save_rejects_forged_ready_state_without_resolution_events(tmp_path: Pat
 
     with pytest.raises(
         ValueError, match="active bundle resolutions must match active resolution events"
+    ):
+        store.save(state)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_save_rejects_manual_verification_without_runtime_evidence(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    assert state.bundle is not None
+    event = ResolutionEvent(
+        event_id="manual-without-runtime",
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        claimed_evidence_level=EvidenceLevel.E3,
+        reviewer="QA",
+        comment="Observed the scenario",
+        criteria_revision_number=1,
+    )
+    state.resolution_events = [event]
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            claimed_evidence_level=EvidenceLevel.E3,
+            reviewer="QA",
+            comment="Observed the scenario",
+            timestamp=event.timestamp,
+        )
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match=r"manual.*verifi.*matching runtime evidence"
     ):
         store.save(state)
 

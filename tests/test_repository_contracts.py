@@ -565,18 +565,31 @@ def test_merged_candidate_identity_preserves_public_install_boundary() -> None:
     assert "No push, pull request" not in candidate_notes
 
 
-def test_v023_status_docs_record_verified_internal_candidate() -> None:
+def test_v023_status_docs_record_repaired_post_merge_integrity_findings() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
     status_audit = Path(
         "docs/releases/v0.2.3-status-and-next-stages.md"
     ).read_text(encoding="utf-8")
+    readme_normalized = " ".join(readme.split())
+    changelog_normalized = " ".join(changelog.split())
+    status_audit_normalized = " ".join(status_audit.split())
 
     assert (
         "Current engineering track | v0.2.3 Evidence Quality; "
-        "verified internal candidate"
+        "Stage 0 integrity repairs verified"
     ) in roadmap
+    assert "Stage 0 integrity repairs verified" in roadmap
     assert "verification in progress" not in roadmap
-    assert "Preserve the verified v0.2.3 internal candidate" in status_audit
+    assert "Stage 0 complete on the verified repair branch" in status_audit
+    assert "ready for a later merge/release decision" in status_audit_normalized
+    assert "Final-acceptance and runtime-verification bypass" in status_audit
+    assert "Exact-head candidate retrieval" in status_audit
+    assert "current repair branch now rejects ineligible final acceptance" in readme_normalized
+    assert "### Integrity repairs" in changelog
+    assert "Restricted `MANUALLY_VERIFIED` decisions" in changelog_normalized
+    assert "Encoded bounded candidate paths" in changelog_normalized
     assert "Finish the current v0.2.3 internal-candidate verification" not in status_audit
     assert "Complete and record current-head v0.2.3 verification" not in status_audit
     assert "v0.2.3, merged to `main` via PR #174; not released" in roadmap

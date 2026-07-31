@@ -36,7 +36,14 @@ def test_rerun_updates_same_head_comment_without_creating_another() -> None:
         requests.append(request)
         if request.method == "GET":
             return httpx.Response(
-                200, json=[{"id": 7, "body": f"<!-- scopeproof:{HEAD_SHA} -->"}]
+                200,
+                json=[
+                    {
+                        "id": 7,
+                        "body": f"<!-- scopeproof:{HEAD_SHA} -->",
+                        "user": {"login": "github-actions[bot]", "type": "Bot"},
+                    }
+                ],
             )
         assert request.method == "PATCH"
         assert request.url.path.endswith("/issues/comments/7")
@@ -68,7 +75,14 @@ def test_rerun_finds_same_head_comment_after_first_comment_page() -> None:
             )
         if request.method == "GET" and page == "2":
             return httpx.Response(
-                200, json=[{"id": 77, "body": f"<!-- scopeproof:{HEAD_SHA} -->"}]
+                200,
+                json=[
+                    {
+                        "id": 77,
+                        "body": f"<!-- scopeproof:{HEAD_SHA} -->",
+                        "user": {"login": "github-actions[bot]", "type": "Bot"},
+                    }
+                ],
             )
         if request.method == "POST":
             return httpx.Response(201, json={"id": 78})
@@ -80,6 +94,31 @@ def test_rerun_finds_same_head_comment_after_first_comment_page() -> None:
 
     assert result.mode is CommentMode.UPDATE
     assert [request.method for request in requests] == ["GET", "GET", "PATCH"]
+
+
+def test_rerun_does_not_update_untrusted_same_head_marker() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": 7,
+                        "body": f"<!-- scopeproof:{HEAD_SHA} -->",
+                        "user": {"login": "unrelated-user", "type": "User"},
+                    }
+                ],
+            )
+        assert request.method == "POST"
+        return httpx.Response(201, json={"id": 8})
+
+    result = publish_comment(context(), "Summary", "secret", httpx.MockTransport(handler))
+
+    assert result.mode is CommentMode.CREATE
+    assert [request.method for request in requests] == ["GET", "POST"]
 
 
 def test_new_head_creates_marker_comment() -> None:

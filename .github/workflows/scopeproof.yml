@@ -25,8 +25,10 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.12'
-      - name: Install ScopeProof
-        run: pip install .
+      - name: Install locked ScopeProof environment
+        run: |
+          python -m pip install uv==0.11.29
+          python -m uv sync --frozen
       - name: Review public PR evidence (informational)
         continue-on-error: true
         env:
@@ -35,16 +37,16 @@ jobs:
           echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
           echo "SCOPEPROOF_REQUIREMENTS_CONFIRMED=false" >> "$GITHUB_ENV"
           if [ -f .scopeproof/requirements.txt ] && [ -f .scopeproof/requirements-confirmation.json ]; then
-            scopeproof validate-requirements-confirmation \
+            python -m uv run --frozen scopeproof validate-requirements-confirmation \
               --requirements .scopeproof/requirements.txt \
               --confirmation .scopeproof/requirements-confirmation.json
             echo "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" >> "$GITHUB_ENV"
-            scopeproof review --pr "$PR_URL" \
+            python -m uv run --frozen scopeproof review --pr "$PR_URL" \
               --requirements .scopeproof/requirements.txt \
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
-            python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
-            review_id=$(python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
-            scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.md"
+            python -m uv run --frozen python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
+            review_id=$(python -m uv run --frozen python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
+            python -m uv run --frozen scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.md"
           fi
       - name: Upload ScopeProof report artifact
         if: always()
@@ -61,12 +63,12 @@ jobs:
             content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
           fi
           if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" = "true" ]; then
-            python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
               --event-path "$GITHUB_EVENT_PATH" \
               --requirements-confirmed \
               --verdict "$SCOPEPROOF_VERDICT" "${content_args[@]}"
           else
-            python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
               --event-path "$GITHUB_EVENT_PATH" \
               --content "Checked-in .scopeproof/requirements.txt is missing."
           fi
@@ -83,7 +85,7 @@ jobs:
           if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
             content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
           fi
-          python -m scopeproof_core.github_action_runner \
+          python -m uv run --frozen python -m scopeproof_core.github_action_runner \
             --event-path "$GITHUB_EVENT_PATH" \
             --requirements-confirmed \
             --verdict "$SCOPEPROOF_VERDICT" \

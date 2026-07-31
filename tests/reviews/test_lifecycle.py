@@ -591,6 +591,36 @@ def test_resolution_event_requires_an_active_analysis_bundle() -> None:
         )
 
 
+def test_resolution_event_rejects_ineligible_positive_final_acceptance() -> None:
+    state = initial_state()
+
+    assert can_record_final_acceptance(state) is False
+
+    with pytest.raises(
+        ValueError, match="final acceptance prerequisites are not satisfied"
+    ):
+        append_resolution(
+            state,
+            ResolutionEvent(final_acceptance=True, comment="Premature acceptance"),
+        )
+
+
+def test_resolution_event_rejects_unpaired_manual_verification() -> None:
+    with pytest.raises(
+        ValueError, match="append_external_verification"
+    ):
+        append_resolution(
+            initial_state(),
+            ResolutionEvent(
+                criterion_id="AC-01",
+                decision=HumanDecision.MANUALLY_VERIFIED,
+                claimed_evidence_level=EvidenceLevel.E3,
+                reviewer="QA",
+                comment="Observed the scenario",
+            ),
+        )
+
+
 def test_resolution_event_must_reference_an_active_criterion() -> None:
     with pytest.raises(
         ValueError, match="resolution event must reference a criterion in the active review"
@@ -606,10 +636,7 @@ def test_resolution_event_must_reference_an_active_criterion() -> None:
 
 
 def test_resolution_event_is_revalidated_before_it_can_make_gate_ready() -> None:
-    state = append_resolution(
-        initial_state(),
-        ResolutionEvent(final_acceptance=True, comment="Final review complete"),
-    )
+    state = initial_state()
     event = ResolutionEvent(
         criterion_id="AC-01",
         decision=HumanDecision.ACCEPTED,
@@ -721,6 +748,50 @@ def test_final_acceptance_event_allows_ready_after_criterion_resolution() -> Non
     assert state.review.final_acceptance is True
     assert state.bundle is not None
     assert state.bundle.gate.verdict is GateVerdict.READY
+
+
+def test_final_acceptance_must_be_revoked_before_invalidating_a_decision() -> None:
+    accepted = append_resolution(
+        initial_state(),
+        ResolutionEvent(
+            event_id="criterion-accepted",
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+        ),
+    )
+    accepted = append_resolution(
+        accepted,
+        ResolutionEvent(event_id="review-accepted", final_acceptance=True),
+    )
+
+    with pytest.raises(
+        ValueError, match="final acceptance requires accepted current resolutions"
+    ):
+        append_resolution(
+            accepted,
+            ResolutionEvent(
+                event_id="decision-invalidated-too-early",
+                criterion_id="AC-01",
+                decision=HumanDecision.CHANGE_REQUIRED,
+            ),
+        )
+
+    revoked = append_resolution(
+        accepted,
+        ResolutionEvent(event_id="review-revoked", final_acceptance=False),
+    )
+    changed = append_resolution(
+        revoked,
+        ResolutionEvent(
+            event_id="decision-invalidated",
+            criterion_id="AC-01",
+            decision=HumanDecision.CHANGE_REQUIRED,
+        ),
+    )
+
+    assert changed.review.final_acceptance is False
+    assert changed.bundle is not None
+    assert changed.bundle.gate.verdict is GateVerdict.BLOCKED
 
 
 def test_runtime_evidence_is_append_only_and_does_not_change_gate() -> None:

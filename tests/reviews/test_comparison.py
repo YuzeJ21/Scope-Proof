@@ -97,6 +97,31 @@ def bundle_with(*items: EvidenceItem, head_sha: str) -> ReviewBundle:
     )
 
 
+def test_comparison_rejects_unpaired_manual_verification() -> None:
+    previous = bundle_with(head_sha="old")
+    current = bundle_with(head_sha="new")
+    current.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            claimed_evidence_level=EvidenceLevel.E3,
+            reviewer="QA",
+            comment="Observed the scenario",
+        )
+    ]
+    current.gate = evaluate_gate(
+        current.review,
+        current.criteria,
+        current.findings,
+        current.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError, match="manually verified resolutions require matching runtime evidence"
+    ):
+        compare_reviews(previous, current)
+
+
 def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> ReviewBundle:
     review = Review(
         repository="acme/widget",
@@ -106,7 +131,7 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
         check_state=CheckState.PASSING,
         ci_observation=passing_ci_observation(),
         criteria_confirmed=True,
-        final_acceptance=True,
+        final_acceptance=with_evidence,
     )
     evidence = []
     if with_evidence:

@@ -17,6 +17,16 @@ def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> N
     assert "git fetch" not in workflow
 
 
+def test_repository_action_workflow_uses_the_locked_environment() -> None:
+    workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
+
+    assert "python -m pip install uv==0.11.29" in workflow
+    assert "python -m uv sync --frozen" in workflow
+    assert "python -m uv run --frozen scopeproof review --pr" in workflow
+    assert "python -m uv run --frozen scopeproof export" in workflow
+    assert "run: pip install ." not in workflow
+
+
 def test_example_requires_checked_in_confirmed_requirements_file() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
 

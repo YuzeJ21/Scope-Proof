@@ -22,6 +22,21 @@ class CommentMode(StrEnum):
     SKIP = "skip"
 
 
+_TRUSTED_COMMENT_AUTHOR = {
+    "login": "github-actions[bot]",
+    "type": "Bot",
+}
+
+
+def _is_trusted_action_comment(comment: dict[str, Any]) -> bool:
+    """Return whether GitHub attributes the comment to its Actions bot identity."""
+
+    user = comment.get("user")
+    return isinstance(user, dict) and all(
+        user.get(key) == value for key, value in _TRUSTED_COMMENT_AUTHOR.items()
+    )
+
+
 class EventContext(BaseModel):
     """The minimum trusted pull-request context needed for publication policy."""
 
@@ -77,7 +92,9 @@ def plan_comment(
     marker = comment_marker(context.head_sha)
     body = f"{summary.rstrip()}\n\n{marker}"
     for comment in existing_comments:
-        if marker in str(comment.get("body", "")):
+        if _is_trusted_action_comment(comment) and marker in str(
+            comment.get("body", "")
+        ):
             comment_id = comment.get("id")
             if isinstance(comment_id, int):
                 return CommentPlan(
