@@ -12,7 +12,10 @@ from scopeproof_core.alpha.storage import (
 )
 from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.github.client import GitHubNetworkError
-from scopeproof_core.reviews.lifecycle import append_resolution
+from scopeproof_core.reviews.lifecycle import (
+    append_external_verification,
+    append_resolution,
+)
 from scopeproof_core.schemas.models import (
     RULESET_VERSION,
     CheckState,
@@ -50,7 +53,13 @@ def analyzed_demo(app: AppTest) -> AppTest:
 
 def resolve_all_criteria(app: AppTest) -> AppTest:
     state = app.session_state["review_state"]
+    resolved_criterion_ids = {
+        resolution.criterion_id
+        for resolution in (state.bundle.resolutions if state.bundle is not None else [])
+    }
     for criterion in state.criteria_revision.criteria:
+        if criterion.criterion_id in resolved_criterion_ids:
+            continue
         state = append_resolution(
             state,
             ResolutionEvent(
@@ -203,7 +212,10 @@ def test_loaded_source_labels_check_aggregation_as_observed_ci_state() -> None:
     assert "Observed CI state: Passing" in caption_text
 
 
-def test_loaded_source_explains_ci_observation_and_skipped_checks() -> None:
+def test_loaded_source_explains_ci_observation_and_skipped_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
     snapshot = load_demo_snapshot().model_copy(
         update={
             "ci_observation": CIObservation(
@@ -351,7 +363,10 @@ def test_criterion_detail_shows_bounded_candidate_context() -> None:
     )
 
 
-def test_partial_public_pr_fetch_shows_bounded_analysis_and_skipped_paths() -> None:
+def test_partial_public_pr_fetch_shows_bounded_analysis_and_skipped_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
     snapshot = load_demo_snapshot().model_copy(
         update={
             "ingestion_state": IngestionState.PARTIAL,
@@ -1396,8 +1411,9 @@ def test_human_events_store_the_trimmed_decision_reviewer() -> None:
     first_event = app.session_state["review_state"].resolution_events[0]
     assert first_event.reviewer == "Controlled reviewer"
 
+    app = resolve_all_criteria(app)
     app = app.button(key="record_final_acceptance").click().run()
-    final_event = app.session_state["review_state"].resolution_events[1]
+    final_event = app.session_state["review_state"].resolution_events[-1]
     assert final_event.final_acceptance is True
     assert final_event.reviewer == "Controlled reviewer"
 
@@ -2297,11 +2313,13 @@ def test_analysis_is_disabled_with_active_bundle_and_enabled_for_pending_revisio
 def test_reanalysis_preserves_review_lineage_and_prior_events() -> None:
     app = analyzed_demo(new_app())
     original_review_id = app.session_state["review_state"].review.review_id
+    app = resolve_all_criteria(app)
     app = app.button(key="record_final_acceptance").click().run()
     original_bundle = app.session_state["review_state"].bundle.model_copy(deep=True)
-    original_event = app.session_state["review_state"].resolution_events[0].model_copy(
-        deep=True
-    )
+    original_events = [
+        event.model_copy(deep=True)
+        for event in app.session_state["review_state"].resolution_events
+    ]
     edited_criterion = "User can export the edited research list as a downloadable CSV"
 
     app = app.text_input(key="criterion_text_AC-01").set_value(edited_criterion).run()
@@ -2311,7 +2329,7 @@ def test_reanalysis_preserves_review_lineage_and_prior_events() -> None:
     assert pending_state.review.review_id == original_review_id
     assert pending_state.criteria_revision.number == 2
     assert len(pending_state.analysis_history) == 1
-    assert len(pending_state.resolution_events) == 1
+    assert len(pending_state.resolution_events) == len(original_events)
 
     app = app.button(key="run_analysis").click().run()
     state = app.session_state["review_state"]
@@ -2321,9 +2339,9 @@ def test_reanalysis_preserves_review_lineage_and_prior_events() -> None:
         state.criteria_revision.number,
         len(state.analysis_history),
         len(state.resolution_events),
-    ) == (original_review_id, 2, 1, 1)
+    ) == (original_review_id, 2, 1, len(original_events))
     assert state.analysis_history == [original_bundle]
-    assert state.resolution_events == [original_event]
+    assert state.resolution_events == original_events
     assert state.resolution_events[0].criteria_revision_number == 1
     assert state.bundle.criteria[0].text == edited_criterion
     assert state.review.final_acceptance is False
@@ -2604,10 +2622,11 @@ def test_human_decision_and_final_acceptance_append_history() -> None:
     app = app.button(key="run_analysis").click().run()
     app = app.selectbox(key="resolution_decision").set_value(HumanDecision.ACCEPTED).run()
     app = app.button(key="save_resolution").click().run()
+    app = resolve_all_criteria(app)
     app = app.button(key="record_final_acceptance").click().run()
 
     state = app.session_state["review_state"]
-    assert len(state.resolution_events) == 2
+    assert len(state.resolution_events) == len(state.criteria_revision.criteria) + 1
     assert state.review.final_acceptance is True
     assert "Resolution history" in "\n".join(markdown.value for markdown in app.markdown)
 
@@ -2634,8 +2653,19 @@ def test_resolution_history_distinguishes_current_and_superseded_decisions() -> 
 def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None:
     app = analyzed_demo(new_app())
     review_state = app.session_state["review_state"].model_copy(deep=True)
-    review_state = append_resolution(
+    recorded_at = datetime(2026, 7, 14, 19, 45, tzinfo=UTC)
+    review_state = append_external_verification(
         review_state,
+        RuntimeEvidence(
+            criterion_id="AC-01",
+            artifact_reference="https://example.test/run/manual-audit-event",
+            scenario="Controlled verification scenario",
+            environment="staging",
+            result="passed",
+            reviewer="Controlled reviewer",
+            evidence_level=EvidenceLevel.E3,
+            timestamp=recorded_at,
+        ),
         ResolutionEvent(
             event_id="manual-audit-event",
             criterion_id="AC-01",
@@ -2643,7 +2673,7 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
             comment="Controlled verification note",
             reviewer="Controlled reviewer",
             claimed_evidence_level=EvidenceLevel.E3,
-            timestamp=datetime(2026, 7, 14, 19, 45, tzinfo=UTC),
+            timestamp=recorded_at,
             criteria_revision_number=1,
         ),
     )

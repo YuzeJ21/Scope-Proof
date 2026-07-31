@@ -6,7 +6,7 @@ import base64
 import re
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -167,9 +167,11 @@ class GitHubClient:
         self.max_candidate_bytes = max_candidate_bytes
         self.last_request_authorized = "Authorization" in headers
 
-    def _get(self, path: str) -> httpx.Response:
+    def _get(
+        self, path: str, *, params: dict[str, str] | None = None
+    ) -> httpx.Response:
         try:
-            response = self._client.get(path)
+            response = self._client.get(path, params=params)
         except httpx.HTTPError as error:
             message = "Could not reach GitHub. Retry without losing criteria."
             raise GitHubNetworkError(message) from error
@@ -216,19 +218,43 @@ class GitHubClient:
             raise ValueError("repository must be owner/name")
         if len(paths) > self.max_candidate_files:
             raise DiffLimitExceeded("Candidate file count exceeds the configured safety limit.")
+        if not paths:
+            return []
+        if not re.fullmatch(r"[0-9a-f]{40}", head_sha):
+            raise ValueError("head SHA must be a 40-character lowercase commit SHA")
         total_bytes = 0
         candidates: list[RetrievedFile] = []
         for path in paths:
             path = self._validate_candidate_path(path)
-            response = self._get(f"/repos/{repository}/contents/{path}?ref={head_sha}")
+            encoded_path = quote(path, safe="/")
+            response = self._get(
+                f"/repos/{repository}/contents/{encoded_path}",
+                params={"ref": head_sha},
+            )
             self._raise_for_pr(response)
-            payload = response.json()
-            if payload.get("type") != "file" or payload.get("encoding") != "base64":
-                raise GitHubIngestionError(f"Candidate {path} is not a readable text file.")
+            expected_path = f"/repos/{repository}/contents/{encoded_path}".encode()
+            request_path = response.request.url.raw_path.split(b"?", maxsplit=1)[0]
+            request_params = response.request.url.params.multi_items()
+            if request_path != expected_path or request_params != [("ref", head_sha)]:
+                raise GitHubIngestionError(
+                    f"Candidate {path} response is not anchored to the requested path and SHA."
+                )
             try:
-                content = base64.b64decode(payload.get("content", "")).decode("utf-8")
-            except (UnicodeDecodeError, ValueError) as error:
-                raise GitHubIngestionError(f"Candidate {path} is not UTF-8 text.") from error
+                payload = response.json()
+                encoded_content = payload.get("content") if isinstance(payload, dict) else None
+                if (
+                    not isinstance(payload, dict)
+                    or payload.get("type") != "file"
+                    or payload.get("encoding") != "base64"
+                    or not isinstance(encoded_content, str)
+                ):
+                    raise ValueError("unexpected GitHub contents payload")
+                compact_content = "".join(encoded_content.split())
+                content = base64.b64decode(compact_content, validate=True).decode("utf-8")
+            except (TypeError, UnicodeDecodeError, ValueError) as error:
+                raise GitHubIngestionError(
+                    f"Candidate {path} is not a readable UTF-8 text file."
+                ) from error
             total_bytes += len(content.encode("utf-8"))
             if total_bytes > self.max_candidate_bytes:
                 raise DiffLimitExceeded("Candidate file bytes exceed the configured safety limit.")

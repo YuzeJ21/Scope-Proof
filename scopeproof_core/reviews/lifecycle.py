@@ -40,11 +40,12 @@ def _validated_state(state: ReviewState) -> ReviewState:
 
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
     """Initialize lifecycle state from a revalidated analysis bundle."""
-    bundle = validated_review_bundle(bundle)
+    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
     if bundle.resolutions:
         raise ValueError("initial analysis bundle must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("initial analysis bundle must not contain final acceptance")
+    bundle = validated_review_bundle(bundle)
     active_bundle = bundle.model_copy(
         update={"criteria_revision_number": 1}, deep=True
     )
@@ -107,7 +108,7 @@ def confirm_criteria(state: ReviewState) -> ReviewState:
 def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
     """Attach validated static analysis to a confirmed pending revision."""
     state = _validated_state(state)
-    bundle = validated_review_bundle(bundle)
+    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
     if state.bundle is not None:
         raise ValueError(
             "analysis attachment requires a pending revision without an active bundle"
@@ -118,6 +119,7 @@ def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
         raise ValueError("attached analysis must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("attached analysis must not contain final acceptance")
+    bundle = validated_review_bundle(bundle)
     if bundle.criteria != state.criteria_revision.criteria:
         raise ValueError("attached analysis criteria must match the active revision")
     if bundle.source_text != state.criteria_revision.source_text:
@@ -189,6 +191,12 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
         raise ValueError("resolution event ID must be unique")
     if state.bundle is None:
         raise ValueError("Run a confirmed analysis before recording a resolution")
+    if event.decision is HumanDecision.MANUALLY_VERIFIED:
+        raise ValueError(
+            "manual verification must be recorded with append_external_verification"
+        )
+    if event.final_acceptance is True and not can_record_final_acceptance(state):
+        raise ValueError("final acceptance prerequisites are not satisfied")
     if event.criterion_id is not None and event.criterion_id not in {
         criterion.criterion_id for criterion in state.bundle.criteria
     }:
@@ -201,7 +209,7 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
     )
     updated_events = [*state.resolution_events, bound_event]
     updated = state.model_copy(update={"resolution_events": updated_events})
-    return _recalculate(updated)
+    return validated_review_state(_recalculate(updated))
 
 
 def append_runtime_evidence(state: ReviewState, evidence: RuntimeEvidence) -> ReviewState:
