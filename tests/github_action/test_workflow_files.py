@@ -36,12 +36,15 @@ def test_example_requires_checked_in_confirmed_requirements_file() -> None:
 
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+    guide = Path("docs/github-action.md").read_text(encoding="utf-8")
+    reviewed_revision = "3d88808f12f46b68059b9e89c40c7ccd595d9032"
 
     assert "pip install scopeproof" not in example
     assert (
         "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@"
-        "ebe1b2628f8464725e921bfaac3a7e973ff476a3"
+        f"{reviewed_revision}"
     ) in example
+    assert reviewed_revision in guide
 
 
 def test_single_account_alpha_policy_explicitly_skips_external_fork_testing() -> None:

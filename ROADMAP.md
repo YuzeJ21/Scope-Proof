@@ -13,18 +13,18 @@ automated activity. The current external state is
 | Area | Current state |
 |---|---|
 | Published install | v0.2.1 |
-| Active source candidate | v0.2.3, merged to `main` via PR #174; not released |
-| Public `main` | Current verified head `f836d64a9b9b6bf63b7dddddabb49ca892f4f91d`; contains the v0.2.3 candidate merged by PR #174 and post-merge alignment from PR #176 |
-| Current engineering track | v0.2.3 Evidence Quality; Stage 0 integrity repairs verified on `codex/v023-readiness-sync` |
-| Product validation | Stage 0 complete on the repair branch; Stage 1 waiting; Stages 2–4 gated |
+| Active source candidate | v0.2.3 candidate merged via PR #174; Stage 0 integrity repairs merged via PR #177; not released |
+| Public `main` | Current verified head `3d88808f12f46b68059b9e89c40c7ccd595d9032`; contains the v0.2.3 candidate, post-merge alignment, and integrity repairs from PRs #174, #176, and #177 |
+| Current engineering track | v0.2.3 Evidence Quality; Stage 0 integrity repairs verified on public `main` |
+| Product validation | Stage 0 complete on public `main`; Stage 1 waiting; Stages 2–4 gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
 milestones can proceed while Stage 1 waits, but they do not advance product-validation stages.
 
 ## Stage 0 — Reviewer-first product reset
 
-Status: complete on the verified repair branch; merge and publication remain
-separate owner decisions.
+Status: complete on public `main`; publication remains a separate owner
+decision.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
@@ -62,8 +62,8 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 ## Current engineering track — v0.2.3 Evidence Quality
 
 Status: internal candidate merged to `main` via PR #174; not tagged or
-released. The post-merge Stage 0 integrity findings are repaired and verified
-on `codex/v023-readiness-sync`. This work does not advance Stage 1.
+released. The post-merge Stage 0 integrity findings are repaired, merged via
+PR #177, and verified on public `main`. This work does not advance Stage 1.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
@@ -100,8 +100,8 @@ in the [post-merge release-readiness audit](docs/releases/v0.2.3-post-merge-rele
 ## Stage 1 — Genuine public alpha
 
 Status: `waiting_for_inbound_public_alpha_submission`; the repaired source is
-engineering-ready for a later merge decision, but no genuine qualifying
-submission exists.
+merged and engineering-ready for a separate release decision, but no genuine
+qualifying submission exists.
 
 Current measured state:
 
