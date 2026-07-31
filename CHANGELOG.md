@@ -11,20 +11,27 @@ its linked release entry for the exact published source and assets.
 
 Candidate version: 0.2.3 (merged to `main` via PR #174; not published).
 
-### Known release blockers
+### Integrity repairs
 
-- The post-merge audit reproduced core final-acceptance and
-  manual-verification bypasses that can produce a schema-valid `Ready` state
-  without all current decisions or paired runtime evidence.
-- Unencoded candidate-path metacharacters can prevent the GitHub `ref`
-  parameter from being transmitted while the retrieved record still claims
-  the requested SHA; exact-head candidate retrieval therefore needs a
-  request-level repair.
+- Rejected ineligible positive final-acceptance events at the core lifecycle
+  boundary and independently validate final-acceptance prerequisites before
+  persistence, comparison, presentation, or export.
+- Restricted `MANUALLY_VERIFIED` decisions to the atomic external-verification
+  path and require matching runtime evidence for the same criterion, reviewer,
+  and claimed evidence level at every trusted bundle/state boundary.
+- Encoded bounded candidate paths, transmitted the immutable head SHA through
+  a separate HTTP `ref` parameter, validated full lowercase commit SHAs, and
+  failed closed on malformed or unanchored content responses.
+- Added regressions for the reproduced False Ready paths, maliciously
+  reconstructed states, persisted/exported/comparison boundaries, `?`, `#`,
+  `%`, spaces, Unicode, traversal, and actual transmitted request provenance.
+- Restricted same-head Action comment updates to comments attributed to the
+  GitHub Actions bot, moved Pages write/OIDC permissions to the deployment
+  job, and made the repository Action use the checked-in locked environment.
 
-These findings were reproduced against current `main`. v0.2.3 is not
-release-ready; both defects require regression coverage and full current-head
-verification before any publication decision. The audit did not determine
-whether the published v0.2.1 package is affected.
+These repairs restore the Stage 0 engineering gate on the verified branch.
+They do not publish v0.2.3, establish customer validation, or determine whether
+the published v0.2.1 package is affected.
 
 ### Changed
 

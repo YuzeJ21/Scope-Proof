@@ -75,14 +75,15 @@ The release gate uses explicit precedence:
 4. **Review complete** only after complete ingestion, passing observed CI, current decisions for
    every criterion, and final human acceptance.
 
-The post-merge v0.2.3 audit found that direct core lifecycle calls do not yet
-enforce every prerequisite in this intended flow: final-acceptance and
-manual-verification events can bypass their eligibility helpers, and an
-unencoded candidate path can prevent the exact-head `ref` from reaching
-GitHub while the local record still claims that SHA. Therefore, v0.2.3 must
-not be released until both integrity defects are repaired with regression
-coverage. The finding was reproduced against current `main`; this audit did
-not determine whether the published v0.2.1 package is affected.
+The post-merge v0.2.3 audit found two core integrity defects in the intended
+flow. The current repair branch now rejects ineligible final acceptance,
+requires paired runtime evidence for manual verification at lifecycle,
+validation, persistence, comparison, presentation, and export boundaries, and
+transmits encoded candidate paths with the exact head SHA as a separate GitHub
+query parameter. Request-level and adversarial regressions cover the prior
+bypasses. v0.2.3 remains unpublished: merging this repair and publishing a tag
+and GitHub Release are separate owner decisions. The audit did not determine
+whether the published v0.2.1 package is affected.
 
 GitHub exposes visible check runs but does not reliably expose every repository's required-check
 policy to anonymous clients. ScopeProof therefore labels this value **Observed CI state** and counts
