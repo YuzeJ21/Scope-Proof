@@ -31,11 +31,42 @@ def test_fork_event_is_non_mutating_even_with_write_token() -> None:
 
 def test_existing_marker_for_same_head_is_updated_not_duplicated() -> None:
     marker = comment_marker(HEAD_SHA)
-    plan = plan_comment(context(), [{"id": 7, "body": f"old\n{marker}"}], "new summary")
+    plan = plan_comment(
+        context(),
+        [
+            {
+                "id": 7,
+                "body": f"old\n{marker}",
+                "user": {"login": "github-actions[bot]", "type": "Bot"},
+            }
+        ],
+        "new summary",
+    )
 
     assert plan.mode is CommentMode.UPDATE
     assert plan.comment_id == 7
     assert plan.body.endswith(marker)
+
+
+@pytest.mark.parametrize(
+    "user",
+    [
+        {"login": "unrelated-user", "type": "User"},
+        {"login": "github-actions[bot]", "type": "User"},
+        {"login": "lookalike-actions[bot]", "type": "Bot"},
+        {},
+        None,
+    ],
+)
+def test_same_head_marker_from_untrusted_author_is_not_updated(user: object) -> None:
+    plan = plan_comment(
+        context(),
+        [{"id": 7, "body": comment_marker(HEAD_SHA), "user": user}],
+        "summary",
+    )
+
+    assert plan.mode is CommentMode.CREATE
+    assert plan.comment_id is None
 
 
 def test_existing_marker_for_another_head_creates_a_new_auditable_comment() -> None:
