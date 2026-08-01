@@ -60,6 +60,7 @@ from scopeproof_core.reviews.lifecycle import (
 )
 from scopeproof_core.schemas.models import (
     RULESET_VERSION,
+    CheckState,
     Criterion,
     EvidenceLevel,
     HumanDecision,
@@ -396,14 +397,55 @@ def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
             f"{changed_file_count} changed {changed_file_label} fetched · "
             f"{_status_label(snapshot.ingestion_state.value)} ingestion"
         )
-        st.caption(f"Observed CI state: {_status_label(snapshot.check_state.value)}")
-        st.caption(f"Observed CI reason: {snapshot.ci_observation.reason}")
-        if snapshot.ci_observation.skipped_check_names:
-            st.caption("Skipped CI checks (unexecuted):")
-            st.text("\n".join(snapshot.ci_observation.skipped_check_names))
-        if snapshot.ci_observation.collection_notes:
-            st.caption("CI collection diagnostics:")
-            st.text("\n".join(snapshot.ci_observation.collection_notes))
+
+
+def _render_ci_observation_summary(bundle: ReviewBundle) -> None:
+    observation = bundle.review.ci_observation
+    with st.container(border=True):
+        st.markdown("**Observed CI and verification boundary**")
+        st.caption(f"Observed CI: {_status_label(observation.state.value)}")
+        st.caption(
+            f"Collection: {'Complete' if observation.collection_complete else 'Incomplete'}"
+        )
+        st.caption(
+            f"{observation.total_check_runs} total · "
+            f"{observation.successful_check_runs} successful · "
+            f"{observation.pending_check_runs} pending · "
+            f"{observation.failing_check_runs} failing · "
+            f"{observation.neutral_check_runs} neutral · "
+            f"{observation.skipped_check_runs} skipped · "
+            f"{observation.concrete_legacy_status_count} concrete legacy statuses"
+        )
+        st.caption("Deterministic reason")
+        st.text(observation.reason)
+        st.caption(
+            "Runtime verification: "
+            f"{bundle.runtime_verification_state.value.replace('_', ' ').capitalize()}"
+        )
+        if observation.state is not CheckState.PASSING or not observation.collection_complete:
+            st.warning(
+                "Observed CI has a limiting state. Review its deterministic reason before "
+                "relying on the gate."
+            )
+
+    with st.expander("CI details and evidence boundary", expanded=False):
+        if observation.skipped_check_names:
+            st.caption("Skipped CI checks (unexecuted)")
+            for name in observation.skipped_check_names:
+                st.text(name)
+        if observation.collection_notes:
+            st.caption("CI collection diagnostics")
+            for note in observation.collection_notes:
+                st.text(note)
+        st.caption(
+            "Static candidates and observed CI do not establish runtime verification. "
+            "Runtime evidence and reviewer decisions remain separate."
+        )
+        if bundle.research_context is not None:
+            st.caption("Public engineering research · Stage 1 credit: 0")
+            st.caption("Case ID")
+            st.code(bundle.research_context.case_id, language=None)
+            st.text(bundle.research_context.boundary_note)
 
 
 def _render_ingestion_limitations(source: PullRequestSnapshot | Review | None) -> None:
@@ -1220,45 +1262,7 @@ else:
         "Evidence status describes deterministic candidates, not correctness. Evidence types "
         "keep implementation, test, and externally recorded runtime observations separate."
     )
-    with st.container(border=True):
-        st.markdown("**Observed CI and verification boundary**")
-        st.caption(
-            f"Observed CI state: {_status_label(bundle.review.ci_observation.state.value)}"
-        )
-        st.caption(f"Observed CI reason: {bundle.review.ci_observation.reason}")
-        ci_observation = bundle.review.ci_observation
-        st.caption(
-            "Observed CI check runs: "
-            f"{ci_observation.total_check_runs} total · "
-            f"{ci_observation.successful_check_runs} successful · "
-            f"{ci_observation.pending_check_runs} pending · "
-            f"{ci_observation.failing_check_runs} failing · "
-            f"{ci_observation.neutral_check_runs} neutral · "
-            f"{ci_observation.skipped_check_runs} skipped · "
-            f"{ci_observation.concrete_legacy_status_count} concrete legacy statuses · "
-            f"{'complete' if ci_observation.collection_complete else 'incomplete'} collection"
-        )
-        if ci_observation.skipped_check_names:
-            st.caption("Skipped CI checks (unexecuted):")
-            st.text("\n".join(ci_observation.skipped_check_names))
-        if ci_observation.collection_notes:
-            st.caption("CI collection diagnostics:")
-            st.text("\n".join(ci_observation.collection_notes))
-        st.caption(
-            "Static candidates and observed CI do not establish runtime verification. "
-            "Runtime evidence and reviewer decisions remain separate."
-        )
-        st.caption(
-            "Runtime verification: "
-            f"{bundle.runtime_verification_state.value.replace('_', ' ').capitalize()}"
-        )
-        if bundle.research_context is not None:
-            st.markdown("**Public engineering research**")
-            st.caption(
-                f"Case ID: {bundle.research_context.case_id} · Stage 1 credit: 0 "
-                "(permanently excluded)"
-            )
-            st.text(bundle.research_context.boundary_note)
+    _render_ci_observation_summary(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     diagnostic_by_id = {
         diagnostic.criterion_id: diagnostic

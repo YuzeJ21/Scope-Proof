@@ -205,14 +205,34 @@ def test_primary_workbench_uses_acceptance_coverage_language() -> None:
     assert "Prove the PR matches the product intent" not in visible_text
 
 
-def test_loaded_source_labels_check_aggregation_as_observed_ci_state() -> None:
+def test_loaded_source_identity_does_not_repeat_ci_diagnostics() -> None:
     app = load_demo(new_app())
 
-    caption_text = "\n".join(item.value for item in app.caption)
-    assert "Observed CI state: Passing" in caption_text
+    captions = "\n".join(item.value for item in app.caption)
+
+    assert "Loaded source" in "\n".join(item.value for item in app.markdown)
+    assert "head-demo-002" in [item.value for item in app.code]
+    assert "Observed CI state:" not in captions
+    assert "Observed CI reason:" not in captions
 
 
-def test_loaded_source_explains_ci_observation_and_skipped_checks(
+def test_evidence_matrix_ci_summary_is_compact_complete_and_deterministic() -> None:
+    app = analyzed_demo(new_app())
+    details = next(
+        item for item in app.expander if item.label == "CI details and evidence boundary"
+    )
+    visible = "\n".join(item.value for item in [*app.caption, *app.text, *app.warning])
+
+    assert details.proto.expanded is False
+    assert "Observed CI: Passing" in visible
+    assert "Collection: Complete" in visible
+    assert "1 total · 1 successful · 0 pending · 0 failing" in visible
+    assert "0 neutral · 0 skipped · 0 concrete legacy statuses" in visible
+    assert "Runtime verification: Not recorded" in visible
+    assert app.session_state["review_state"].review.ci_observation.reason in visible
+
+
+def test_limiting_ci_warning_is_visible_outside_collapsed_details(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -224,27 +244,32 @@ def test_loaded_source_explains_ci_observation_and_skipped_checks(
                 total_check_runs=1,
                 skipped_check_runs=1,
                 skipped_check_names=["integration"],
+                collection_complete=False,
+                collection_notes=["Check-run collection was incomplete."],
             ),
             "check_state": CheckState.UNAVAILABLE,
         }
     )
-    app = new_app()
-    app = app.text_input(key="pr_url").set_value(
-        "https://github.com/acme/repo/pull/7"
-    ).run()
-    with patch(
-        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
-        return_value=snapshot,
-    ):
-        app = app.button(key="fetch_pr").click().run()
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=snapshot):
+        app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
 
-    caption_text = "\n".join(item.value for item in app.caption)
-    assert (
-        "Observed CI reason: Observed 1 skipped check run; it does not prove passing."
-        in caption_text
+    details = next(
+        item for item in app.expander if item.label == "CI details and evidence boundary"
     )
-    assert "Skipped CI checks (unexecuted):" in caption_text
-    assert "integration" in [item.value for item in app.text]
+    visible = "\n".join(item.value for item in [*app.caption, *app.warning])
+    details_text = "\n".join(item.value for item in details.text)
+
+    assert details.proto.expanded is False
+    assert (
+        "Observed CI has a limiting state. Review its deterministic reason before relying on "
+        "the gate."
+    ) in "\n".join(item.value for item in app.warning)
+    assert "integration" not in visible
+    assert "Check-run collection was incomplete." not in visible
+    assert "integration" in details_text
+    assert "Check-run collection was incomplete." in details_text
 
 
 def test_active_and_reopened_research_review_show_evidence_boundaries(
@@ -290,7 +315,7 @@ def test_active_and_reopened_research_review_show_evidence_boundaries(
     )
     assert "Public engineering research" in active_text
     assert "Stage 1 credit: 0" in active_text
-    assert "Observed CI reason:" in active_text
+    assert "Deterministic reason" in active_text
     assert "Static candidates and observed CI do not establish runtime verification." in active_text
     assert "Runtime verification: Not recorded" in active_text
     assert unsafe_skipped_check not in active_text
@@ -308,7 +333,7 @@ def test_active_and_reopened_research_review_show_evidence_boundaries(
     )
     assert "Public engineering research" in reopened_text
     assert "Stage 1 credit: 0" in reopened_text
-    assert "Observed CI reason:" in reopened_text
+    assert "Deterministic reason" in reopened_text
     assert "Runtime verification: Not recorded" in reopened_text
     assert unsafe_skipped_check not in reopened_text
     assert unsafe_boundary_note not in reopened_text
