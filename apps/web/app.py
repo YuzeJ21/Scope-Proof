@@ -1802,6 +1802,7 @@ else:
             runtime_environment = st.text_input("Environment (required)", key="runtime_environment")
             runtime_result = st.text_input("Observed result (required)", key="runtime_result")
             runtime_reviewer = st.text_input("Runtime reviewer (required)", key="runtime_reviewer")
+            normalized_runtime_reviewer = runtime_reviewer.strip()
             runtime_limitations = st.text_area(
                 "Runtime limitations (optional)", key="runtime_limitations"
             )
@@ -1822,7 +1823,7 @@ else:
                 ("Runtime scenario", runtime_scenario),
                 ("Environment", runtime_environment),
                 ("Observed result", runtime_result),
-                ("Runtime reviewer", runtime_reviewer),
+                ("Runtime reviewer", normalized_runtime_reviewer),
             )
             missing_runtime_fields = [
                 label for label, value in required_runtime_fields if not value.strip()
@@ -1849,7 +1850,7 @@ else:
                             scenario=runtime_scenario,
                             environment=runtime_environment,
                             result=runtime_result,
-                            reviewer=runtime_reviewer,
+                            reviewer=normalized_runtime_reviewer,
                             evidence_level=runtime_level,
                             limitations=[
                                 line.strip()
@@ -1862,7 +1863,7 @@ else:
                             decision=HumanDecision.MANUALLY_VERIFIED,
                             comment=f"Externally observed result: {runtime_result.strip()}",
                             claimed_evidence_level=runtime_level,
-                            reviewer=runtime_reviewer.strip(),
+                            reviewer=normalized_runtime_reviewer,
                         )
                         review_state = append_external_verification(
                             review_state, runtime_evidence, verification_event
@@ -1936,9 +1937,15 @@ else:
             final_acceptance_recorded
             or not final_acceptance_eligible
             or not decision_reviewer_ready
+            or has_pending_review_input
         ),
     ):
-        if review_state is None:
+        if has_pending_review_input:
+            st.error(
+                "Final acceptance cannot be recorded while review inputs are pending. "
+                "Submit or clear them before trying again."
+            )
+        elif review_state is None:
             st.error("Run analysis before recording final acceptance.")
         else:
             try:

@@ -2702,6 +2702,37 @@ def test_final_acceptance_requires_resolutions_and_then_completes_gate() -> None
     assert "Reviewer recorded final acceptance" in [item.value for item in app.text]
 
 
+def test_pending_contradictory_resolution_blocks_final_acceptance_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
+    review_id = authoritative_state.review.review_id
+    assert app.button(key="record_final_acceptance").disabled is False
+
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.CHANGE_REQUIRED
+    ).run()
+
+    assert app.button(key="record_final_acceptance").disabled is True
+    app = app.button(key="record_final_acceptance").click().run()
+    assert app.session_state["review_state"] == authoritative_state
+    assert not any(
+        event.final_acceptance
+        for event in app.session_state["review_state"].resolution_events
+    )
+
+    app = app.button(key="clear_criterion_detail_drafts").click().run()
+
+    assert app.session_state["review_state"] == authoritative_state
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) == authoritative_state
+    assert app.selectbox(key="resolution_decision").value is None
+    assert app.button(key="record_final_acceptance").disabled is False
+
+
 def test_final_acceptance_failure_preserves_retryable_state_without_raw_details() -> None:
     app = resolve_all_criteria(analyzed_demo(new_app()))
     review_state = app.session_state["review_state"].model_copy(deep=True)
@@ -3501,6 +3532,30 @@ def test_manual_runtime_evidence_can_be_recorded_without_changing_static_finding
     bundle = app.session_state["review_state"].bundle
     assert bundle.findings[0].status is finding_status
     assert bundle.runtime_evidence[0].artifact_reference.endswith("/1")
+
+
+def test_external_verification_normalizes_reviewer_for_atomic_records() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/run/normalized-reviewer"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("passed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("  QA  ").run()
+
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    review_state = app.session_state["review_state"]
+    manual_events = [
+        event
+        for event in review_state.resolution_events
+        if event.decision is HumanDecision.MANUALLY_VERIFIED
+    ]
+    assert len(review_state.bundle.runtime_evidence) == 1
+    assert len(manual_events) == 1
+    assert review_state.bundle.runtime_evidence[0].reviewer == "QA"
+    assert manual_events[0].reviewer == "QA"
 
 
 def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
