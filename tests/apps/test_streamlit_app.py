@@ -81,6 +81,26 @@ def saved_demo_review(app: AppTest) -> tuple[AppTest, str]:
     return app, review_id
 
 
+def _assert_pending_draft_preserves_authoritative_review(
+    app: AppTest,
+    *,
+    review_id: str,
+    authoritative_state: ReviewState,
+) -> None:
+    download_keys = [button.key for button in app.download_button]
+
+    assert app.session_state["review_state"] == authoritative_state
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) == authoritative_state
+    assert download_keys == [
+        "download_markdown",
+        "download_json",
+        "download_csv",
+    ]
+    assert all(app.download_button(key=key).disabled for key in download_keys)
+
+
 def _review_fingerprint_for_test(state: ReviewState) -> str:
     return sha256(state.model_dump_json().encode("utf-8")).hexdigest()
 
@@ -1820,8 +1840,8 @@ def test_pending_criterion_draft_is_not_claimed_saved_or_exportable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app, review_id = saved_demo_review(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
 
     app = app.text_input(key="runtime_artifact_reference").set_value(
         "pending-runtime-artifact"
@@ -1842,11 +1862,14 @@ def test_pending_criterion_draft_is_not_claimed_saved_or_exportable(
         "Submit them through the matching form or clear them before continuing."
     ) in warnings
     assert app.button(key="save_review").disabled is True
-    assert all(button.disabled for button in app.download_button)
     assert app.button(key="load_demo").disabled is True
     assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
     assert app.button(key="clear_criterion_detail_drafts").disabled is False
-    assert app.session_state["review_state"] == review_state
+    _assert_pending_draft_preserves_authoritative_review(
+        app,
+        review_id=review_id,
+        authoritative_state=authoritative_state,
+    )
 
 
 def test_clear_pending_criterion_draft_restores_saved_exportable_state(
@@ -1913,8 +1936,8 @@ def test_pending_criteria_edit_is_not_claimed_saved_or_exportable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app, review_id = saved_demo_review(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
 
     app = app.text_input(key="criterion_text_AC-01").set_value(
         "Pending revised export requirement"
@@ -1934,12 +1957,15 @@ def test_pending_criteria_edit_is_not_claimed_saved_or_exportable(
         "before relying on this review ID."
     ) in captions
     assert app.button(key="save_review").disabled is True
-    assert all(button.disabled for button in app.download_button)
     assert app.button(key="load_demo").disabled is True
     assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
     assert app.button(key="discard_criteria_draft").disabled is False
     assert "Pending — Resolve inputs before export" in sidebar
-    assert app.session_state["review_state"] == review_state
+    _assert_pending_draft_preserves_authoritative_review(
+        app,
+        review_id=review_id,
+        authoritative_state=authoritative_state,
+    )
 
 
 def test_discard_unconfirmed_criteria_edits_restores_saved_exportable_state(
@@ -2007,8 +2033,8 @@ def test_pending_criteria_authoring_draft_is_not_claimed_saved_or_exportable(
     submit_key: str,
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app, review_id = saved_demo_review(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
 
     widget = getattr(app, input_kind)(key=input_key)
     app = widget.set_value(input_value).run()
@@ -2021,13 +2047,16 @@ def test_pending_criteria_authoring_draft_is_not_claimed_saved_or_exportable(
         "clear them before relying on this review ID."
     ) in captions
     assert app.button(key="save_review").disabled is True
-    assert all(button.disabled for button in app.download_button)
     assert app.button(key="load_demo").disabled is True
     assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
     assert app.button(key="clear_criteria_authoring_drafts").disabled is False
     assert app.button(key=submit_key).disabled is False
     assert "Pending — Resolve inputs before export" in sidebar
-    assert app.session_state["review_state"] == review_state
+    _assert_pending_draft_preserves_authoritative_review(
+        app,
+        review_id=review_id,
+        authoritative_state=authoritative_state,
+    )
 
 
 def test_clear_criteria_authoring_drafts_restores_saved_exportable_state(
@@ -2097,8 +2126,8 @@ def test_pending_requirements_draft_is_not_claimed_saved_or_exportable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app, review_id = saved_demo_review(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
     requirements_draft = (
         f"{app.session_state['source_text']}\nDraft requirement not yet prepared"
     )
@@ -2113,13 +2142,16 @@ def test_pending_requirements_draft_is_not_claimed_saved_or_exportable(
         "them before relying on this review ID."
     ) in captions
     assert app.button(key="save_review").disabled is True
-    assert all(button.disabled for button in app.download_button)
     assert app.button(key="load_demo").disabled is True
     assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
     assert app.button(key="discard_requirements_draft").disabled is False
     assert app.button(key="prepare_criteria").disabled is False
     assert "Pending — Resolve inputs before export" in sidebar
-    assert app.session_state["review_state"] == review_state
+    _assert_pending_draft_preserves_authoritative_review(
+        app,
+        review_id=review_id,
+        authoritative_state=authoritative_state,
+    )
 
     app = app.text_input(key="new_criterion_text").set_value(
         "Unrelated criterion edit"
