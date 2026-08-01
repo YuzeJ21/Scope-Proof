@@ -851,41 +851,46 @@ else:
         "E3 = manually recorded runtime verification. Static PR analysis can produce "
         "only E1 or E2."
     )
+    criteria_summary_placeholder = st.empty()
+    criteria_validation_placeholder = st.container()
+    confirm_action_placeholder = st.empty()
     analysis_continuation_placeholder = st.empty()
-    new_criterion_text = st.text_input("Add criterion", key="new_criterion_text")
-    if st.button(
-        "Add criterion",
-        key="add_criterion_ui",
-        disabled=not new_criterion_text.strip() or authoring_submission_blocked,
-    ):
-        _apply_criteria_update(
-            partial(add_criterion, criteria, new_criterion_text),
-            "Criterion added. Confirm the updated set before analysis.",
-            consumed_input_keys=("new_criterion_text",),
+    criterion_validation_placeholders = {}
+    with st.expander("Add or split criteria", expanded=False):
+        new_criterion_text = st.text_input("Add criterion", key="new_criterion_text")
+        if st.button(
+            "Add criterion",
+            key="add_criterion_ui",
+            disabled=not new_criterion_text.strip() or authoring_submission_blocked,
+        ):
+            _apply_criteria_update(
+                partial(add_criterion, criteria, new_criterion_text),
+                "Criterion added. Confirm the updated set before analysis.",
+                consumed_input_keys=("new_criterion_text",),
+            )
+        split_target = st.selectbox(
+            "Split criterion",
+            options=[item.criterion_id for item in criteria],
+            key="split_criterion_id",
         )
-    split_target = st.selectbox(
-        "Split criterion",
-        options=[item.criterion_id for item in criteria],
-        key="split_criterion_id",
-    )
-    split_text = st.text_area(
-        "Split criterion into one behavior per line",
-        key="split_criterion_text",
-    )
-    if st.button(
-        "Split criterion",
-        key="split_criterion_ui",
-        disabled=(
-            len([line for line in split_text.splitlines() if line.strip()]) < 2
-            or authoring_submission_blocked
-        ),
-    ):
-        split_texts = [line.strip() for line in split_text.splitlines() if line.strip()]
-        _apply_criteria_update(
-            partial(split_criterion, criteria, split_target, split_texts),
-            "Criterion split. Confirm the updated set before analysis.",
-            consumed_input_keys=("split_criterion_text",),
+        split_text = st.text_area(
+            "Split criterion into one behavior per line",
+            key="split_criterion_text",
         )
+        if st.button(
+            "Split criterion",
+            key="split_criterion_ui",
+            disabled=(
+                len([line for line in split_text.splitlines() if line.strip()]) < 2
+                or authoring_submission_blocked
+            ),
+        ):
+            split_texts = [line.strip() for line in split_text.splitlines() if line.strip()]
+            _apply_criteria_update(
+                partial(split_criterion, criteria, split_target, split_texts),
+                "Criterion split. Confirm the updated set before analysis.",
+                consumed_input_keys=("split_criterion_text",),
+            )
     criteria_authoring_clear_notice = st.session_state.pop(
         "criteria_authoring_clear_notice", None
     )
@@ -906,51 +911,67 @@ else:
     edited_criteria: list[Criterion] = []
     blank_criterion_ids: list[str] = []
     for position, criterion in enumerate(criteria):
-        text_column, priority_column, level_column, actions_column = st.columns([5, 2, 2, 2])
-        with text_column:
-            edited_text = st.text_input(
-                criterion.criterion_id,
-                value=criterion.text,
-                key=f"criterion_text_{criterion.criterion_id}",
+        displayed_priority = st.session_state.get(
+            f"criterion_priority_{criterion.criterion_id}", criterion.priority
+        )
+        displayed_level = st.session_state.get(
+            f"criterion_level_{criterion.criterion_id}", criterion.required_evidence_level
+        )
+        editor_label = (
+            f"{criterion.criterion_id} · {_status_label(displayed_priority.value)} · "
+            f"{displayed_level.value}"
+        )
+        with st.expander(editor_label, expanded=False):
+            st.caption("Confirmed requirement")
+            st.text(criterion.text)
+            text_column, priority_column, level_column, actions_column = st.columns(
+                [5, 2, 2, 2]
             )
-        with priority_column:
-            priority = st.selectbox(
-                f"Priority for {criterion.criterion_id}",
-                options=list(Priority),
-                index=list(Priority).index(criterion.priority),
-                format_func=lambda item: _status_label(item.value),
-                key=f"criterion_priority_{criterion.criterion_id}",
-            )
-        with level_column:
-            level = st.selectbox(
-                f"Required evidence for {criterion.criterion_id}",
-                options=[EvidenceLevel.E1, EvidenceLevel.E2, EvidenceLevel.E3],
-                index=[EvidenceLevel.E1, EvidenceLevel.E2, EvidenceLevel.E3].index(
-                    criterion.required_evidence_level
-                ),
-                key=f"criterion_level_{criterion.criterion_id}",
-            )
-        with actions_column:
-            if st.button(
-                f"Remove {criterion.criterion_id}",
-                key=f"remove_{criterion.criterion_id}",
-                disabled=replacement_blocked,
-            ):
-                _apply_criteria_update(
-                    partial(remove_criterion, criteria, criterion.criterion_id),
-                    "Criterion removed. Confirm the updated set before analysis.",
+            with text_column:
+                edited_text = st.text_input(
+                    criterion.criterion_id,
+                    value=criterion.text,
+                    key=f"criterion_text_{criterion.criterion_id}",
                 )
-            if position > 0 and st.button(
-                f"Move {criterion.criterion_id} up",
-                key=f"move_up_{criterion.criterion_id}",
-                disabled=replacement_blocked,
-            ):
-                order = [item.criterion_id for item in criteria]
-                order[position - 1], order[position] = order[position], order[position - 1]
-                _apply_criteria_update(
-                    partial(reorder_criteria, criteria, order),
-                    "Criterion order changed. Confirm the updated set before analysis.",
+            with priority_column:
+                priority = st.selectbox(
+                    f"Priority for {criterion.criterion_id}",
+                    options=list(Priority),
+                    index=list(Priority).index(criterion.priority),
+                    format_func=lambda item: _status_label(item.value),
+                    key=f"criterion_priority_{criterion.criterion_id}",
                 )
+            with level_column:
+                level = st.selectbox(
+                    f"Required evidence for {criterion.criterion_id}",
+                    options=[EvidenceLevel.E1, EvidenceLevel.E2, EvidenceLevel.E3],
+                    index=[EvidenceLevel.E1, EvidenceLevel.E2, EvidenceLevel.E3].index(
+                        criterion.required_evidence_level
+                    ),
+                    key=f"criterion_level_{criterion.criterion_id}",
+                )
+            with actions_column:
+                if st.button(
+                    f"Remove {criterion.criterion_id}",
+                    key=f"remove_{criterion.criterion_id}",
+                    disabled=replacement_blocked,
+                ):
+                    _apply_criteria_update(
+                        partial(remove_criterion, criteria, criterion.criterion_id),
+                        "Criterion removed. Confirm the updated set before analysis.",
+                    )
+                if position > 0 and st.button(
+                    f"Move {criterion.criterion_id} up",
+                    key=f"move_up_{criterion.criterion_id}",
+                    disabled=replacement_blocked,
+                ):
+                    order = [item.criterion_id for item in criteria]
+                    order[position - 1], order[position] = order[position], order[position - 1]
+                    _apply_criteria_update(
+                        partial(reorder_criteria, criteria, order),
+                        "Criterion order changed. Confirm the updated set before analysis.",
+                    )
+            criterion_validation_placeholders[criterion.criterion_id] = st.empty()
         if not edited_text.strip():
             blank_criterion_ids.append(criterion.criterion_id)
             edited_criteria.append(criterion)
@@ -965,12 +986,38 @@ else:
                     required_evidence_level=level,
                 )
             )
-    for criterion_id in blank_criterion_ids:
-        st.warning(f"{criterion_id}: Criterion text cannot be blank.")
     warnings = validate_criteria(edited_criteria)
-    for warning in warnings:
-        st.warning(f"{warning.criterion_id}: {warning.message}")
     criteria_edits_pending = _criteria_draft_pending(criteria)
+    criteria_summary_placeholder.caption(
+        f"Criteria: {len(criteria)} · "
+        f"Confirmation: {'Confirmed' if st.session_state['criteria_confirmed'] else 'Required'} · "
+        f"Pending edits: {'Present' if criteria_edits_pending else 'None'}"
+    )
+    with criteria_validation_placeholder:
+        for criterion_id in blank_criterion_ids:
+            st.warning(f"{criterion_id}: Criterion text cannot be blank.")
+        for warning in warnings:
+            st.warning(f"{warning.criterion_id}: {warning.message}")
+
+    warnings_by_criterion: dict[str, list[str]] = {
+        criterion.criterion_id: [] for criterion in criteria
+    }
+    for criterion_id in blank_criterion_ids:
+        warnings_by_criterion[criterion_id].append("Criterion text cannot be blank.")
+    for warning in warnings:
+        warnings_by_criterion[warning.criterion_id].append(warning.message)
+    for criterion_id, placeholder in criterion_validation_placeholders.items():
+        with placeholder.container():
+            for message in warnings_by_criterion[criterion_id]:
+                st.warning(message)
+
+    confirm_clicked = confirm_action_placeholder.button(
+        "Confirm criteria",
+        key="confirm_criteria",
+        disabled=bool(blank_criterion_ids)
+        or (st.session_state["criteria_confirmed"] and not criteria_edits_pending),
+        use_container_width=True,
+    )
     criteria_draft_discard_notice = st.session_state.pop(
         "criteria_draft_discard_notice", None
     )
@@ -985,12 +1032,7 @@ else:
             "Unconfirmed criteria edits discarded without changing the review."
         )
         st.rerun()
-    if st.button(
-        "Confirm criteria",
-        key="confirm_criteria",
-        disabled=bool(blank_criterion_ids)
-        or (st.session_state["criteria_confirmed"] and not criteria_edits_pending),
-    ):
+    if confirm_clicked:
         state: ReviewState | None = st.session_state["review_state"]
         alpha_case = None
         try:
@@ -1383,7 +1425,8 @@ else:
         if selected_id in resolution_by_id
         else "Unresolved"
     )
-    st.markdown(f"### {selected_id} · {selected_criterion.text}")
+    st.markdown(f"### {selected_id}")
+    st.text(selected_criterion.text)
     selected_coverage = coverage_by_id[selected_id]
     st.markdown(
         f"**Evidence status:** {evidence_status_text(selected_coverage.evidence_status)}"

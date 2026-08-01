@@ -20,3 +20,12 @@ def test_repeated_criterion_controls_name_their_target() -> None:
     assert 'f"Move {criterion.criterion_id} up"' in app_source
     assert 'st.button("Remove",' not in app_source
     assert 'st.button("Move up",' not in app_source
+
+
+def test_criterion_text_is_rendered_inertly_outside_markdown_headings() -> None:
+    app_source = Path("apps/web/app.py").read_text(encoding="utf-8")
+
+    assert "st.text(criterion.text)" in app_source
+    assert "st.text(selected_criterion.text)" in app_source
+    assert 'st.markdown(f"### {selected_id} · {selected_criterion.text}")' not in app_source
+    assert 'st.markdown(f"### {criterion.criterion_id} · {criterion.text}")' not in app_source

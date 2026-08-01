@@ -93,7 +93,7 @@ def evidence_matrix_criterion_ids(app: AppTest) -> list[str]:
     ]
 
 
-def _main_widget_keys(app: AppTest) -> list[str]:
+def _main_widget_keys(app: object) -> list[str]:
     keys: list[str] = []
 
     def collect(node: object) -> None:
@@ -104,7 +104,7 @@ def _main_widget_keys(app: AppTest) -> list[str]:
         for child in children.values():
             collect(child)
 
-    collect(app.main)
+    collect(getattr(app, "main", app))
     return keys
 
 
@@ -1244,6 +1244,61 @@ def test_sidebar_uses_active_review_ruleset_provenance(
     )
 
 
+def test_criteria_summary_and_confirmation_precede_long_editor_list() -> None:
+    app = load_demo(new_app())
+    keys = _main_widget_keys(app)
+    visible = "\n".join(item.value for item in [*app.caption, *app.markdown])
+
+    assert keys.count("confirm_criteria") == 1
+    assert keys.index("confirm_criteria") < keys.index("criterion_text_AC-01")
+    assert keys.index("confirm_criteria") < keys.index("new_criterion_text")
+    assert "Criteria: 4" in visible
+    assert "Confirmation: Required" in visible
+    assert "Pending edits: None" in visible
+
+
+def test_criterion_editors_are_collapsed_and_keep_requirement_text_inert() -> None:
+    app = load_demo(new_app())
+    criterion_expanders = [item for item in app.expander if item.label.startswith("AC-")]
+
+    assert [item.label for item in criterion_expanders] == [
+        "AC-01 · Must Have · E1",
+        "AC-02 · Must Have · E1",
+        "AC-03 · Must Have · E1",
+        "AC-04 · Should Have · E1",
+    ]
+    assert all(item.proto.expanded is False for item in criterion_expanders)
+    for criterion, expander in zip(app.session_state["criteria"], criterion_expanders, strict=True):
+        assert criterion.text in [item.value for item in expander.text]
+        assert criterion.text not in expander.label
+
+
+def test_add_and_split_controls_are_one_collapsed_secondary_group() -> None:
+    app = load_demo(new_app())
+    editor = next(item for item in app.expander if item.label == "Add or split criteria")
+    child_keys = _main_widget_keys(editor)
+
+    assert editor.proto.expanded is False
+    assert child_keys == [
+        "new_criterion_text",
+        "add_criterion_ui",
+        "split_criterion_id",
+        "split_criterion_text",
+        "split_criterion_ui",
+    ]
+
+
+def test_markdown_shaped_confirmed_requirement_remains_inert() -> None:
+    unsafe_text = "![criterion](https://example.invalid/criterion.png)"
+    app = load_demo(new_app())
+    app = app.text_input(key="criterion_text_AC-01").set_value(unsafe_text).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert unsafe_text in [item.value for item in app.text]
+    assert all(unsafe_text not in item.label for item in app.expander)
+    assert all(unsafe_text not in item.value for item in app.markdown)
+
+
 @pytest.mark.parametrize("text", ["", "   ", "\t\n"])
 def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: str) -> None:
     app = analyzed_demo(new_app())
@@ -1257,6 +1312,10 @@ def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: st
     assert app.button(key="run_analysis").disabled is True
     assert "AC-01: Criterion text cannot be blank." in [
         item.value for item in app.warning
+    ]
+    criterion_editor = next(item for item in app.expander if item.label.startswith("AC-01"))
+    assert "Criterion text cannot be blank." in [
+        item.value for item in criterion_editor.warning
     ]
 
 
