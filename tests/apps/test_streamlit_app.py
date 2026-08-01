@@ -795,6 +795,38 @@ def test_delete_saved_review_race_uses_fixed_recovery_without_raw_details(
     assert str(tmp_path) not in rendered_recovery
 
 
+def test_open_review_delete_race_records_suppression_and_exposes_save_now(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    state = app.session_state["review_state"]
+    fingerprint = _review_fingerprint_for_test(state)
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    JsonReviewStore(default_local_review_directory()).delete(review_id)
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.list_review_ids",
+        return_value=[review_id],
+    ):
+        app = app.button(key="delete_saved_review").click().run()
+
+    assert app.session_state["review_state"] == state
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] == fingerprint
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
+
+    app = app.run()
+
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
+    assert app.button(key="save_review").label == "Save now"
+    assert app.button(key="save_review").disabled is False
+
+
 def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2150,6 +2182,75 @@ def test_confirmed_criteria_edit_with_no_bundle_autosaves_authoritative_review(
     assert "Criteria edits are pending confirmation." not in "\n".join(
         item.value for item in app.warning
     )
+
+
+def test_bundleless_failed_autosave_exposes_retry_and_persists_on_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Confirmed bundleless requirement after save failure"
+    ).run()
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.save",
+        side_effect=OSError("disk full at /private/secret/path"),
+    ) as save:
+        app = app.button(key="confirm_criteria").click().run()
+        assert save.call_count == 1
+        app = app.run()
+        assert save.call_count == 1
+
+    state = app.session_state["review_state"]
+    assert state.bundle is None
+    assert app.session_state["failed_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.button(key="save_review").label == "Retry local save"
+    assert app.button(key="save_review").disabled is False
+
+    app = app.button(key="save_review").click().run()
+
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.session_state["failed_review_save_fingerprint"] is None
+
+
+def test_bundleless_deleted_review_exposes_save_now_and_recreates_on_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Confirmed bundleless requirement before deletion"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+    state = app.session_state["review_state"]
+    assert state.bundle is None
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+
+    app = app.button(key="delete_saved_review").click().run()
+    app = app.run()
+
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
+    assert app.session_state["deleted_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.button(key="save_review").label == "Save now"
+    assert app.button(key="save_review").disabled is False
+
+    app = app.button(key="save_review").click().run()
+
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.session_state["deleted_review_save_fingerprint"] is None
 
 
 @pytest.mark.parametrize(

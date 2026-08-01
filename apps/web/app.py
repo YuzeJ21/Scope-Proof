@@ -222,6 +222,111 @@ def _autosave_review_if_eligible(
     return True
 
 
+def _mark_open_review_deleted(review_id: str) -> bool:
+    current: ReviewState | None = st.session_state["review_state"]
+    if current is None or current.review.review_id != review_id:
+        return False
+    current_fingerprint = _review_state_fingerprint(current)
+    st.session_state["saved_review_fingerprint"] = None
+    st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
+    if st.session_state["failed_review_save_fingerprint"] == current_fingerprint:
+        st.session_state["failed_review_save_fingerprint"] = None
+    return True
+
+
+def _render_review_persistence(
+    *,
+    state: ReviewState | None,
+    store: JsonReviewStore,
+    store_available: bool,
+    review_matches_local_save: bool,
+    has_pending_review_input: bool,
+    has_pending_criteria_draft: bool,
+    has_pending_criteria_authoring_draft: bool,
+    has_pending_requirements_draft: bool,
+    has_pending_criterion_detail_draft: bool,
+    exports_available: bool,
+) -> None:
+    review_save_notice = st.session_state.pop("review_save_notice", None)
+    if state is None:
+        return
+    st.caption(
+        "Current review ID — save this review before using the ID in a future session."
+    )
+    st.code(state.review.review_id, language=None)
+    if has_pending_criteria_draft:
+        st.caption(
+            "Pending criteria edits are not saved or exported. Confirm or discard them "
+            "before relying on this review ID."
+        )
+    if has_pending_criteria_authoring_draft:
+        st.caption(
+            "Pending add or split criterion inputs are not saved or exported. Submit or "
+            "clear them before relying on this review ID."
+        )
+    if has_pending_requirements_draft:
+        st.caption(
+            "Pending requirements changes are not saved or exported. Prepare or discard "
+            "them before relying on this review ID."
+        )
+    if has_pending_criterion_detail_draft:
+        st.caption(
+            "Pending criterion-detail inputs are not saved or exported. Submit or clear "
+            "them before relying on this review ID."
+        )
+    if review_matches_local_save:
+        st.caption("Saved locally — current review matches the last local save.")
+    elif not has_pending_review_input:
+        st.caption("Unsaved changes — save locally before relying on this review ID.")
+    if not store_available:
+        if exports_available:
+            export_availability = (
+                "exports remain unavailable until pending review inputs are confirmed, "
+                "submitted, discarded, or cleared."
+                if has_pending_review_input
+                else "exports remain available."
+            )
+            st.warning(
+                "Local saving is unavailable. The current review remains open as unsaved "
+                f"work, and {export_availability} Verify that the ScopeProof review "
+                "directory is a regular local directory; ScopeProof will recheck it on "
+                "the next interaction."
+            )
+        else:
+            st.warning(
+                "Local saving is unavailable. The current review remains open as unsaved "
+                "work. Verify that the ScopeProof review directory is a regular local "
+                "directory; ScopeProof will recheck it on the next interaction."
+            )
+    if st.button(
+        (
+            "Retry local save"
+            if st.session_state["failed_review_save_fingerprint"]
+            == _review_state_fingerprint(state)
+            else "Save now"
+        ),
+        key="save_review",
+        disabled=(
+            review_matches_local_save
+            or has_pending_review_input
+            or not store_available
+        ),
+    ):
+        if not _persist_review_state(state, store):
+            st.error(
+                "The review could not be saved locally. The current review remains open "
+                "as unsaved work. Verify the local review directory and review integrity, "
+                "then try again."
+            )
+        else:
+            st.session_state["review_save_notice"] = (
+                f"Review saved locally. ID: {state.review.review_id}."
+            )
+            st.rerun()
+    if review_save_notice is not None:
+        st.success(review_save_notice)
+
+
 def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
     """Compare a reopened review with the same PR before invalidating its analysis."""
     state: ReviewState | None = st.session_state["review_state"]
@@ -828,6 +933,7 @@ with st.expander("Resume a saved review", expanded=False):
             try:
                 review_store.delete(reopen_id)
             except FileNotFoundError:
+                _mark_open_review_deleted(reopen_id)
                 st.session_state["saved_review_delete_notice"] = (
                     "The selected saved review was already removed. Refresh the saved "
                     "review list."
@@ -838,18 +944,7 @@ with st.expander("Resume a saved review", expanded=False):
                     "directory and try again."
                 )
             else:
-                current = st.session_state["review_state"]
-                if current is not None and current.review.review_id == reopen_id:
-                    current_fingerprint = _review_state_fingerprint(current)
-                    st.session_state["saved_review_fingerprint"] = None
-                    st.session_state["deleted_review_save_fingerprint"] = (
-                        current_fingerprint
-                    )
-                    if (
-                        st.session_state["failed_review_save_fingerprint"]
-                        == current_fingerprint
-                    ):
-                        st.session_state["failed_review_save_fingerprint"] = None
+                if _mark_open_review_deleted(reopen_id):
                     st.session_state["saved_review_delete_notice"] = (
                         "Saved review deleted. The open review remains available as "
                         "unsaved work."
@@ -1248,6 +1343,11 @@ if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis
 
 review_state: ReviewState | None = st.session_state["review_state"]
 bundle: ReviewBundle | None = review_state.bundle if review_state else st.session_state["bundle"]
+review_matches_local_save = bool(
+    review_state is not None
+    and _review_matches_local_save(review_state)
+    and not has_pending_review_input
+)
 st.header("3 · Evidence Matrix")
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
@@ -1914,80 +2014,6 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
-    review_save_notice = st.session_state.pop("review_save_notice", None)
-    review_matches_local_save = bool(
-        review_state is not None
-        and _review_matches_local_save(review_state)
-        and not has_pending_review_input
-    )
-    if review_state is not None:
-        st.caption(
-            "Current review ID — save this review before using the ID in a future session."
-        )
-        st.code(review_state.review.review_id, language=None)
-        if has_pending_criteria_draft:
-            st.caption(
-                "Pending criteria edits are not saved or exported. Confirm or discard them "
-                "before relying on this review ID."
-            )
-        if has_pending_criteria_authoring_draft:
-            st.caption(
-                "Pending add or split criterion inputs are not saved or exported. Submit or "
-                "clear them before relying on this review ID."
-            )
-        if has_pending_requirements_draft:
-            st.caption(
-                "Pending requirements changes are not saved or exported. Prepare or discard "
-                "them before relying on this review ID."
-            )
-        if has_pending_criterion_detail_draft:
-            st.caption(
-                "Pending criterion-detail inputs are not saved or exported. Submit or clear "
-                "them before relying on this review ID."
-            )
-        if review_matches_local_save:
-            st.caption("Saved locally — current review matches the last local save.")
-        elif not has_pending_review_input:
-            st.caption("Unsaved changes — save locally before relying on this review ID.")
-    if review_state is not None and not review_store_available:
-        export_availability = (
-            "exports remain unavailable until pending review inputs are confirmed, "
-            "submitted, discarded, or cleared."
-            if has_pending_review_input
-            else "exports remain available."
-        )
-        st.warning(
-            "Local saving is unavailable. The current review remains open as unsaved work, "
-            f"and {export_availability} Verify that the ScopeProof review directory is a "
-            "regular local directory; ScopeProof will recheck it on the next interaction."
-        )
-    if review_state is not None and st.button(
-        (
-            "Retry local save"
-            if st.session_state["failed_review_save_fingerprint"]
-            == _review_state_fingerprint(review_state)
-            else "Save now"
-        ),
-        key="save_review",
-        disabled=(
-            review_matches_local_save
-            or has_pending_review_input
-            or not review_store_available
-        ),
-    ):
-        if not _persist_review_state(review_state, review_store):
-            st.error(
-                "The review could not be saved locally. The current review remains open "
-                "as unsaved work. Verify the local review directory and review integrity, "
-                "then try again."
-            )
-        else:
-            st.session_state["review_save_notice"] = (
-                f"Review saved locally. ID: {review_state.review.review_id}."
-            )
-            st.rerun()
-    if review_save_notice is not None:
-        st.success(review_save_notice)
     if alpha_feedback_mode and st.session_state["alpha_case_id"] is not None:
         st.markdown("### Alpha feedback outcome")
         st.caption(
@@ -2122,6 +2148,19 @@ else:
             mime="text/csv",
             disabled=has_pending_review_input,
         )
+
+_render_review_persistence(
+    state=review_state,
+    store=review_store,
+    store_available=review_store_available,
+    review_matches_local_save=review_matches_local_save,
+    has_pending_review_input=has_pending_review_input,
+    has_pending_criteria_draft=has_pending_criteria_draft,
+    has_pending_criteria_authoring_draft=has_pending_criteria_authoring_draft,
+    has_pending_requirements_draft=has_pending_requirements_draft,
+    has_pending_criterion_detail_draft=has_pending_criterion_detail_draft,
+    exports_available=bundle is not None,
+)
 
 st.divider()
 st.caption(
