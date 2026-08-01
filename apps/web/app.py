@@ -118,6 +118,8 @@ _STATE_DEFAULTS = {
     "reopened_review_id": None,
     "source_reload_notice": None,
     "saved_review_fingerprint": None,
+    "failed_review_save_fingerprint": None,
+    "deleted_review_save_fingerprint": None,
     "review_save_notice": None,
     "replace_unsaved_review_confirmed": False,
     "replace_unsaved_review_reset_pending": False,
@@ -144,6 +146,8 @@ def _reset_analysis() -> None:
     st.session_state["review_state"] = None
     st.session_state["reopened_review_id"] = None
     st.session_state["saved_review_fingerprint"] = None
+    st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
 
@@ -178,6 +182,44 @@ def _review_state_fingerprint(state: ReviewState) -> str:
 def _review_matches_local_save(state: ReviewState) -> bool:
     saved_fingerprint = st.session_state["saved_review_fingerprint"]
     return bool(saved_fingerprint and saved_fingerprint == _review_state_fingerprint(state))
+
+
+def _persist_review_state(state: ReviewState, store: JsonReviewStore) -> bool:
+    fingerprint = _review_state_fingerprint(state)
+    try:
+        store.save(state)
+    except (OSError, ValueError):
+        st.session_state["failed_review_save_fingerprint"] = fingerprint
+        return False
+    st.session_state["saved_review_fingerprint"] = fingerprint
+    st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["deleted_review_save_fingerprint"] = None
+    return True
+
+
+def _autosave_review_if_eligible(
+    *,
+    state: ReviewState | None,
+    store: JsonReviewStore,
+    store_available: bool,
+    has_pending_review_input: bool,
+) -> bool:
+    if state is None or not store_available or has_pending_review_input:
+        return False
+    fingerprint = _review_state_fingerprint(state)
+    suppressed = {
+        st.session_state["saved_review_fingerprint"],
+        st.session_state["failed_review_save_fingerprint"],
+        st.session_state["deleted_review_save_fingerprint"],
+    }
+    if fingerprint in suppressed:
+        return False
+    if not _persist_review_state(state, store):
+        return False
+    st.session_state["review_save_notice"] = (
+        f"Review saved automatically. ID: {state.review.review_id}."
+    )
+    return True
 
 
 def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
@@ -219,6 +261,8 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["reopened_review_id"] = state.review.review_id
     st.session_state["source_reload_notice"] = None
     st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(state)
+    st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["candidate_files"] = []
     st.session_state["comparison_base_bundle"] = None
@@ -494,13 +538,15 @@ if criteria_authoring_reset_keys:
 if st.session_state.pop("requirements_draft_reset_pending", False):
     _clear_requirements_draft()
 
-st.title("ScopeProof")
-st.subheader("See which acceptance criteria have credible PR evidence—and which still need review.")
-st.markdown(
-    "> ScopeProof surfaces auditable candidate evidence. "
-    "It does not replace QA or prove correctness."
-)
-st.caption("No paid LLM API. Deterministic rules. Human acceptance stays visible.")
+storage_directory = default_local_review_directory()
+review_store = JsonReviewStore(Path(storage_directory))
+try:
+    saved_review_ids = review_store.list_review_ids()
+except (OSError, UnsafeReviewStore):
+    saved_review_ids = []
+    review_store_available = False
+else:
+    review_store_available = True
 
 current_review_state: ReviewState | None = st.session_state["review_state"]
 has_pending_criteria_draft = _criteria_draft_pending(st.session_state["criteria"])
@@ -513,6 +559,25 @@ has_pending_review_input = (
     or has_pending_requirements_draft
     or has_pending_criterion_detail_draft
 )
+autosaved = _autosave_review_if_eligible(
+    state=current_review_state,
+    store=review_store,
+    store_available=review_store_available,
+    has_pending_review_input=has_pending_review_input,
+)
+if autosaved and current_review_state is not None:
+    saved_review_ids = sorted(
+        {*saved_review_ids, current_review_state.review.review_id}
+    )
+
+st.title("ScopeProof")
+st.subheader("See which acceptance criteria have credible PR evidence—and which still need review.")
+st.markdown(
+    "> ScopeProof surfaces auditable candidate evidence. "
+    "It does not replace QA or prove correctness."
+)
+st.caption("No paid LLM API. Deterministic rules. Human acceptance stays visible.")
+
 has_unsaved_review = bool(
     current_review_state is not None
     and (
@@ -708,15 +773,6 @@ if fetch_action_placeholder.button(
             "try again. Use the optional token only if GitHub reports a rate limit."
         )
 
-storage_directory = default_local_review_directory()
-review_store = JsonReviewStore(Path(storage_directory))
-try:
-    saved_review_ids = review_store.list_review_ids()
-except (OSError, UnsafeReviewStore):
-    saved_review_ids = []
-    review_store_available = False
-else:
-    review_store_available = True
 with st.expander("Resume a saved review", expanded=False):
     if not review_store_available:
         reopen_id = ""
@@ -784,7 +840,16 @@ with st.expander("Resume a saved review", expanded=False):
             else:
                 current = st.session_state["review_state"]
                 if current is not None and current.review.review_id == reopen_id:
+                    current_fingerprint = _review_state_fingerprint(current)
                     st.session_state["saved_review_fingerprint"] = None
+                    st.session_state["deleted_review_save_fingerprint"] = (
+                        current_fingerprint
+                    )
+                    if (
+                        st.session_state["failed_review_save_fingerprint"]
+                        == current_fingerprint
+                    ):
+                        st.session_state["failed_review_save_fingerprint"] = None
                     st.session_state["saved_review_delete_notice"] = (
                         "Saved review deleted. The open review remains available as "
                         "unsaved work."
@@ -793,6 +858,8 @@ with st.expander("Resume a saved review", expanded=False):
                     st.session_state["saved_review_delete_notice"] = (
                         "Saved review deleted."
                     )
+            if not has_pending_requirements_draft:
+                st.session_state["requirements_draft_reset_pending"] = True
             st.session_state["delete_saved_review_reset_pending"] = True
             st.rerun()
 saved_review_delete_notice = st.session_state.pop("saved_review_delete_notice", None)
@@ -1895,7 +1962,12 @@ else:
             "regular local directory; ScopeProof will recheck it on the next interaction."
         )
     if review_state is not None and st.button(
-        "Save local review",
+        (
+            "Retry local save"
+            if st.session_state["failed_review_save_fingerprint"]
+            == _review_state_fingerprint(review_state)
+            else "Save now"
+        ),
         key="save_review",
         disabled=(
             review_matches_local_save
@@ -1903,18 +1975,13 @@ else:
             or not review_store_available
         ),
     ):
-        try:
-            review_store.save(review_state)
-        except (OSError, ValueError):
+        if not _persist_review_state(review_state, review_store):
             st.error(
                 "The review could not be saved locally. The current review remains open "
                 "as unsaved work. Verify the local review directory and review integrity, "
                 "then try again."
             )
         else:
-            st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(
-                review_state
-            )
             st.session_state["review_save_notice"] = (
                 f"Review saved locally. ID: {review_state.review.review_id}."
             )

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,6 +28,7 @@ from scopeproof_core.schemas.models import (
     Priority,
     ResearchContext,
     ResolutionEvent,
+    ReviewState,
     RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import (
@@ -76,8 +78,11 @@ def resolve_all_criteria(app: AppTest) -> AppTest:
 def saved_demo_review(app: AppTest) -> tuple[AppTest, str]:
     app = analyzed_demo(app)
     review_id = app.session_state["review_state"].review.review_id
-    app = app.button(key="save_review").click().run()
     return app, review_id
+
+
+def _review_fingerprint_for_test(state: ReviewState) -> str:
+    return sha256(state.model_dump_json().encode("utf-8")).hexdigest()
 
 
 def select_saved_review(app: AppTest, review_id: str) -> AppTest:
@@ -169,7 +174,6 @@ def test_alpha_mode_creates_case_after_confirming_criteria(
 
     app = app.button(key="run_analysis").click().run()
     assert app.button(key="record_alpha_outcome").disabled is True
-    app = app.button(key="save_review").click().run()
     app = app.selectbox(key="alpha_outcome").set_value(
         AlphaOutcome.FOUND_USEFUL_GAP
     ).run()
@@ -456,7 +460,6 @@ def test_reopened_partial_review_keeps_ingestion_recovery_details(
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
     review_id = app.session_state["review_state"].review.review_id
-    app = app.button(key="save_review").click().run()
 
     fresh = select_saved_review(new_app(), review_id)
     fresh = fresh.button(key="reopen_review").click().run()
@@ -525,6 +528,74 @@ def test_saved_review_is_discoverable_and_selectable_in_a_fresh_session(
     )
 
 
+def test_authoritative_review_autosaves_without_manual_action(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    app = analyzed_demo(new_app())
+    state = app.session_state["review_state"]
+    stored = JsonReviewStore(default_local_review_directory()).load(
+        state.review.review_id
+    )
+
+    assert stored == state
+    assert app.session_state["saved_review_fingerprint"] is not None
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+    assert app.button(key="save_review").disabled is True
+    assert "Review saved automatically" in "\n".join(
+        item.value for item in app.success
+    )
+
+
+def test_unchanged_authoritative_review_does_not_autosave_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_demo(new_app())
+
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        app = app.run()
+
+    save.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("widget_collection", "key", "value"),
+    [
+        ("text_input", "criterion_text_AC-01", "Pending revised requirement"),
+        ("text_input", "new_criterion_text", "Pending additional criterion"),
+        ("text_area", "requirements_input", "Pending source requirement"),
+        (
+            "text_input",
+            "runtime_artifact_reference",
+            "pending-runtime-artifact",
+        ),
+    ],
+)
+def test_pending_draft_categories_block_autosave(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    widget_collection: str,
+    key: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    store = JsonReviewStore(default_local_review_directory())
+    persisted_before = store.load(review_id)
+    app.session_state["saved_review_fingerprint"] = None
+
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        widget = getattr(app, widget_collection)(key=key)
+        app = widget.set_value(value).run()
+
+    save.assert_not_called()
+    assert store.load(review_id) == persisted_before
+    assert all(button.disabled for button in app.download_button)
+
+
 def test_delete_saved_review_requires_selection_and_confirmation_and_deletes_only_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -563,6 +634,7 @@ def test_delete_selected_saved_review_preserves_other_open_review(
     app = app.button(key="reopen_review").click().run()
     open_state = app.session_state["review_state"]
     saved_fingerprint = app.session_state["saved_review_fingerprint"]
+    deleted_fingerprint = app.session_state["deleted_review_save_fingerprint"]
 
     app = select_saved_review(app, second_review_id)
     app = app.checkbox(key="delete_saved_review_confirmed").check().run()
@@ -570,6 +642,10 @@ def test_delete_selected_saved_review_preserves_other_open_review(
 
     assert app.session_state["review_state"] == open_state
     assert app.session_state["saved_review_fingerprint"] == saved_fingerprint
+    assert (
+        app.session_state["deleted_review_save_fingerprint"]
+        == deleted_fingerprint
+    )
     assert app.selectbox(key="saved_reopen_review_id").options == [first_review_id]
     assert second_review_id not in app.selectbox(key="saved_reopen_review_id").options
 
@@ -605,9 +681,92 @@ def test_delete_saved_open_review_preserves_exact_state_as_unsaved_work(
 
     assert app.session_state["review_state"] == open_state
     assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(open_state)
+    )
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
     assert (
         "Saved review deleted. The open review remains available as unsaved work."
         in [message.value for message in app.success]
+    )
+
+    app = app.run()
+
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(open_state)
+    )
+
+
+def test_save_now_recreates_deleted_open_review_and_clears_suppression(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+    app = app.button(key="reopen_review").click().run()
+    open_state = app.session_state["review_state"]
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    app = app.button(key="delete_saved_review").click().run()
+    app = app.run()
+
+    assert app.button(key="save_review").label == "Save now"
+    assert app.button(key="save_review").disabled is False
+    app = app.button(key="save_review").click().run()
+
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == open_state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(open_state)
+    )
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+
+
+def test_new_resolution_after_delete_changes_fingerprint_and_autosaves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+    app = app.button(key="reopen_review").click().run()
+    deleted_state = app.session_state["review_state"]
+    deleted_fingerprint = _review_fingerprint_for_test(deleted_state)
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    app = app.button(key="delete_saved_review").click().run()
+
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+    app = app.button(key="save_resolution").click().run()
+    app = app.run()
+
+    revised_state = app.session_state["review_state"]
+    revised_fingerprint = _review_fingerprint_for_test(revised_state)
+    assert revised_fingerprint != deleted_fingerprint
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == revised_state
+    assert app.session_state["saved_review_fingerprint"] == revised_fingerprint
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+
+
+def test_reopening_unchanged_review_does_not_rewrite_local_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        app = app.button(key="reopen_review").click().run()
+
+    save.assert_not_called()
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(app.session_state["review_state"])
     )
 
 
@@ -656,7 +815,10 @@ def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     assert not [item for item in app.selectbox if item.key == "saved_reopen_review_id"]
     assert app.button(key="reopen_review").disabled is True
 
-    app = analyzed_demo(app)
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        app = analyzed_demo(app)
+
+    save.assert_not_called()
     review_state = app.session_state["review_state"].model_copy(deep=True)
     recovery = (
         "Local saving is unavailable. The current review remains open as unsaved work, "
@@ -713,7 +875,10 @@ def test_regular_file_review_store_has_safe_recovery_and_disables_storage_action
     assert not [item for item in app.selectbox if item.key == "saved_reopen_review_id"]
     assert app.button(key="reopen_review").disabled is True
 
-    app = analyzed_demo(app)
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        app = analyzed_demo(app)
+
+    save.assert_not_called()
     assert app.button(key="save_review").disabled is True
     assert store_root.read_text(encoding="utf-8") == "not a directory"
 
@@ -1156,7 +1321,6 @@ def test_criteria_edit_failure_preserves_review_and_retry_without_raw_details(
     input_value: str | None,
 ) -> None:
     app = analyzed_demo(new_app())
-    app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
     if input_key is not None and input_value is not None:
         widget = (
             app.text_area(key=input_key)
@@ -1199,7 +1363,7 @@ def test_criteria_edit_failure_preserves_review_and_retry_without_raw_details(
     assert app.session_state["bundle"] == bundle
     assert app.session_state["criteria"] == criteria
     assert app.session_state["criteria_confirmed"] is True
-    assert app.session_state["replace_unsaved_review_confirmed"] is True
+    assert app.session_state["replace_unsaved_review_confirmed"] is False
     if input_key is not None and input_value is not None:
         widget = (
             app.text_area(key=input_key)
@@ -1556,7 +1720,7 @@ def test_optional_token_uses_password_input() -> None:
     assert token.proto.type == token.proto.PASSWORD
 
 
-def test_demo_can_save_and_reopen_durable_review_state(
+def test_demo_can_autosave_and_reopen_durable_review_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1565,8 +1729,9 @@ def test_demo_can_save_and_reopen_durable_review_state(
     app = app.button(key="run_analysis").click().run()
     review_id = app.session_state["review_state"].review.review_id
 
-    app = app.button(key="save_review").click().run()
-    assert "Review saved locally" in "\n".join(message.value for message in app.success)
+    assert "Review saved automatically" in "\n".join(
+        message.value for message in app.success
+    )
     app = select_saved_review(app, review_id)
     app = app.button(key="reopen_review").click().run()
 
@@ -1575,7 +1740,7 @@ def test_demo_can_save_and_reopen_durable_review_state(
     assert "Review reopened from local storage" in success_text
 
 
-def test_current_review_id_is_copyable_and_used_in_save_confirmation(
+def test_current_review_id_is_copyable_and_used_in_autosave_confirmation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1586,14 +1751,11 @@ def test_current_review_id_is_copyable_and_used_in_save_confirmation(
     caption_text = "\n".join(item.value for item in app.caption)
     assert "Current review ID" in caption_text
     assert "save this review before using the ID in a future session" in caption_text
-    assert "Unsaved changes — save locally before relying on this review ID." in caption_text
-    assert app.button(key="save_review").disabled is False
-
-    app = app.button(key="save_review").click().run()
-    assert f"Review saved locally. ID: {review_id}." in [item.value for item in app.success]
-    caption_text = "\n".join(item.value for item in app.caption)
     assert "Saved locally — current review matches the last local save." in caption_text
     assert app.button(key="save_review").disabled is True
+    assert f"Review saved automatically. ID: {review_id}." in [
+        item.value for item in app.success
+    ]
 
 
 def test_pending_criterion_draft_is_not_claimed_saved_or_exportable(
@@ -1662,7 +1824,7 @@ def test_submitted_runtime_draft_restores_authoritative_save_and_export(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
+    app, review_id = saved_demo_review(new_app())
     app = app.text_input(key="runtime_artifact_reference").set_value(
         "https://example.test/run/authoritative"
     ).run()
@@ -1681,9 +1843,12 @@ def test_submitted_runtime_draft_restores_authoritative_save_and_export(
     assert app.text_input(key="runtime_artifact_reference").value == ""
     captions = "\n".join(item.value for item in app.caption)
     assert "Pending criterion-detail inputs are not saved or exported." not in captions
-    assert "Unsaved changes — save locally before relying on this review ID." in captions
-    assert app.button(key="save_review").disabled is False
+    assert "Saved locally — current review matches the last local save." in captions
+    assert app.button(key="save_review").disabled is True
     assert all(not button.disabled for button in app.download_button)
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == (
+        app.session_state["review_state"]
+    )
 
 
 def test_pending_criteria_edit_is_not_claimed_saved_or_exportable(
@@ -1956,11 +2121,11 @@ def test_prepare_criteria_consumes_pending_requirements_draft(
     ]
 
 
-def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
+def test_confirmed_criteria_edit_with_no_bundle_autosaves_authoritative_review(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
+    app, review_id = saved_demo_review(new_app())
     app = app.text_input(key="criterion_text_AC-01").set_value(
         "Confirmed revised export requirement"
     ).run()
@@ -1973,6 +2138,12 @@ def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
         "Confirmed revised export requirement"
     )
     assert review_state.bundle is None
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) == review_state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(review_state)
+    )
     assert app.session_state["criteria_confirmed"] is True
     assert app.button(key="confirm_criteria").disabled is True
     assert app.button(key="run_analysis").disabled is False
@@ -1983,64 +2154,68 @@ def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
 
 @pytest.mark.parametrize(
     "save_error",
-    [
-        OSError("disk full at /private/secret/path"),
-        ValueError("invalid record at /private/secret/path"),
-    ],
+    [OSError("disk full at /private/secret/path"), ValueError("invalid state")],
 )
-def test_local_save_failure_preserves_retryable_unsaved_review_without_raw_details(
+def test_autosave_failure_attempts_once_and_preserves_explicit_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     save_error: OSError | ValueError,
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app = analyzed_demo(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
-
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
     with patch(
         "scopeproof_core.storage.json_store.JsonReviewStore.save",
         side_effect=save_error,
-    ):
-        app = app.button(key="save_review").click().run()
+    ) as save:
+        app = app.button(key="run_analysis").click().run()
+        assert save.call_count == 1
+        app = app.run()
+        assert save.call_count == 1
 
-    recovery = (
-        "The review could not be saved locally. The current review remains open as "
-        "unsaved work. Verify the local review directory and review integrity, then try "
-        "again."
-    )
-    assert recovery in [message.value for message in app.error]
-    assert not app.exception
-    rendered_recovery = "\n".join(
-        message.value
-        for message in [
-            *app.error,
-            *app.warning,
-            *app.info,
-            *app.success,
-            *app.caption,
-            *app.markdown,
-            *app.code,
-        ]
-    )
-    assert str(save_error) not in rendered_recovery
-    assert "/private/secret/path" not in rendered_recovery
-    assert app.session_state["review_state"] == review_state
+    state = app.session_state["review_state"]
     assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["failed_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.button(key="save_review").label == "Retry local save"
     assert app.button(key="save_review").disabled is False
-    assert (
-        "Unsaved changes — save locally before relying on this review ID."
-        in [message.value for message in app.caption]
-    )
-    assert "Review saved locally" not in "\n".join(
-        message.value for message in app.success
+    assert all(not button.disabled for button in app.download_button)
+    assert "/private/secret/path" not in "\n".join(
+        item.value for item in [*app.error, *app.warning, *app.caption]
     )
 
 
-def test_post_save_resolution_marks_review_unsaved_again(
+def test_explicit_retry_after_autosave_failure_persists_and_clears_markers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.save",
+        side_effect=OSError("disk full"),
+    ):
+        app = app.button(key="run_analysis").click().run()
+
+    state = app.session_state["review_state"]
+    app = app.button(key="save_review").click().run()
+
+    assert JsonReviewStore(default_local_review_directory()).load(
+        state.review.review_id
+    ) == state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+
+
+def test_post_save_resolution_autosaves_review_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
     assert app.button(key="save_review").disabled is True
 
     app = app.selectbox(key="resolution_decision").set_value(
@@ -2049,8 +2224,11 @@ def test_post_save_resolution_marks_review_unsaved_again(
     app = app.button(key="save_resolution").click().run()
 
     caption_text = "\n".join(item.value for item in app.caption)
-    assert "Unsaved changes — save locally before relying on this review ID." in caption_text
-    assert app.button(key="save_review").disabled is False
+    assert "Saved locally — current review matches the last local save." in caption_text
+    assert app.button(key="save_review").disabled is True
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == (
+        app.session_state["review_state"]
+    )
 
 
 def test_unsaved_review_requires_explicit_approval_before_replacement(
@@ -2075,8 +2253,8 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
     assert app.button(key="load_demo").disabled is True
     assert app.button(key="fetch_pr").disabled is True
     assert app.button(key="prepare_criteria").disabled is True
-    assert app.button(key="add_criterion_ui").disabled is True
-    assert app.button(key="split_criterion_ui").disabled is True
+    assert app.button(key="add_criterion_ui").disabled is False
+    assert app.button(key="split_criterion_ui").disabled is False
     assert all(
         button.disabled
         for button in app.button
@@ -2100,6 +2278,9 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
 
 def test_replacing_unsaved_review_consumes_replacement_approval() -> None:
     app = analyzed_demo(new_app())
+    app = app.text_input(key="new_criterion_text").set_value(
+        "Pending criterion before replacement"
+    ).run()
     app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
     app = app.button(key="load_demo").click().run()
 
@@ -2386,7 +2567,9 @@ def test_final_acceptance_failure_preserves_retryable_state_without_raw_details(
     assert "/private/secret/final.json" not in rendered
     assert app.session_state["review_state"] == review_state
     assert app.session_state["bundle"] == review_state.bundle
-    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(review_state)
+    )
     assert len(app.session_state["review_state"].resolution_events) == len(
         review_state.bundle.criteria
     )
@@ -2676,7 +2859,9 @@ def test_criterion_resolution_failure_preserves_retryable_state_without_raw_deta
     assert "/private/secret/resolution.json" not in rendered
     assert app.session_state["review_state"] == review_state
     assert app.session_state["bundle"] == review_state.bundle
-    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(review_state)
+    )
     assert app.session_state["review_state"].resolution_events == []
     assert app.selectbox(key="resolution_decision").value is HumanDecision.ACCEPTED
     assert app.text_area(key="resolution_note").value == "Controlled reviewer note"
@@ -3022,7 +3207,9 @@ def test_runtime_evidence_validation_failure_is_safe_and_retryable() -> None:
     assert raw_error not in rendered
     assert "/private/secret/runtime.json" not in rendered
     assert app.session_state["review_state"] == review_state
-    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(review_state)
+    )
     assert app.session_state["review_state"].bundle.runtime_evidence == []
     assert app.text_input(key="runtime_artifact_reference").value == values[
         "runtime_artifact_reference"
