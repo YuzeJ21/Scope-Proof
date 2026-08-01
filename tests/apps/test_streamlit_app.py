@@ -216,6 +216,20 @@ def test_loaded_source_identity_does_not_repeat_ci_diagnostics() -> None:
     assert "Observed CI reason:" not in captions
 
 
+def test_loaded_source_identity_renders_repository_as_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repository = "![untrusted repository](https://example.invalid/repository.png)"
+    snapshot = load_demo_snapshot().model_copy(update={"repository": repository})
+
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=snapshot):
+        app = load_demo(new_app())
+
+    assert repository not in "\n".join(item.value for item in app.markdown)
+    assert f"{repository} · PR #{snapshot.pr_number}" in [item.value for item in app.text]
+
+
 def test_evidence_matrix_ci_summary_is_compact_complete_and_deterministic() -> None:
     app = analyzed_demo(new_app())
     details = next(

@@ -390,7 +390,7 @@ def _render_loaded_source_identity(snapshot: PullRequestSnapshot) -> None:
     changed_file_label = "file" if changed_file_count == 1 else "files"
     with st.container(border=True):
         st.markdown("**Loaded source**")
-        st.markdown(f"{snapshot.repository} · PR #{snapshot.pr_number}")
+        st.text(f"{snapshot.repository} · PR #{snapshot.pr_number}")
         st.caption("Head SHA")
         st.code(snapshot.head_sha, language=None)
         st.caption(
