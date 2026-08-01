@@ -234,52 +234,30 @@ def _mark_open_review_deleted(review_id: str) -> bool:
     return True
 
 
-def _render_review_persistence(
+def _render_local_review_storage(
+    state: ReviewState,
     *,
-    state: ReviewState | None,
     store: JsonReviewStore,
     store_available: bool,
-    review_matches_local_save: bool,
     has_pending_review_input: bool,
-    has_pending_criteria_draft: bool,
-    has_pending_criteria_authoring_draft: bool,
-    has_pending_requirements_draft: bool,
-    has_pending_criterion_detail_draft: bool,
-    exports_available: bool,
+    pending_messages: list[str],
 ) -> None:
-    review_save_notice = st.session_state.pop("review_save_notice", None)
-    if state is None:
-        return
-    st.caption(
-        "Current review ID — save this review before using the ID in a future session."
+    current_fingerprint = _review_state_fingerprint(state)
+    review_matches_local_save = bool(
+        _review_matches_local_save(state) and not has_pending_review_input
     )
-    st.code(state.review.review_id, language=None)
-    if has_pending_criteria_draft:
-        st.caption(
-            "Pending criteria edits are not saved or exported. Confirm or discard them "
-            "before relying on this review ID."
-        )
-    if has_pending_criteria_authoring_draft:
-        st.caption(
-            "Pending add or split criterion inputs are not saved or exported. Submit or "
-            "clear them before relying on this review ID."
-        )
-    if has_pending_requirements_draft:
-        st.caption(
-            "Pending requirements changes are not saved or exported. Prepare or discard "
-            "them before relying on this review ID."
-        )
-    if has_pending_criterion_detail_draft:
-        st.caption(
-            "Pending criterion-detail inputs are not saved or exported. Submit or clear "
-            "them before relying on this review ID."
-        )
-    if review_matches_local_save:
-        st.caption("Saved locally — current review matches the last local save.")
-    elif not has_pending_review_input:
-        st.caption("Unsaved changes — save locally before relying on this review ID.")
-    if not store_available:
-        if exports_available:
+    save_failed = (
+        st.session_state["failed_review_save_fingerprint"] == current_fingerprint
+    )
+    save_deleted = (
+        st.session_state["deleted_review_save_fingerprint"] == current_fingerprint
+    )
+    with st.expander("Local review storage", expanded=save_failed):
+        st.caption("Current review ID")
+        st.code(state.review.review_id, language=None)
+        for message in pending_messages:
+            st.caption(message)
+        if not store_available:
             export_availability = (
                 "exports remain unavailable until pending review inputs are confirmed, "
                 "submitted, discarded, or cleared."
@@ -287,44 +265,42 @@ def _render_review_persistence(
                 else "exports remain available."
             )
             st.warning(
-                "Local saving is unavailable. The current review remains open as unsaved "
-                f"work, and {export_availability} Verify that the ScopeProof review "
-                "directory is a regular local directory; ScopeProof will recheck it on "
-                "the next interaction."
+                "Local saving is unavailable. The current review remains open as unsaved work, "
+                f"and {export_availability} Verify that the ScopeProof review directory is a "
+                "regular local directory; ScopeProof will recheck it on the next interaction."
             )
-        else:
-            st.warning(
-                "Local saving is unavailable. The current review remains open as unsaved "
-                "work. Verify that the ScopeProof review directory is a regular local "
-                "directory; ScopeProof will recheck it on the next interaction."
-            )
-    if st.button(
-        (
-            "Retry local save"
-            if st.session_state["failed_review_save_fingerprint"]
-            == _review_state_fingerprint(state)
-            else "Save now"
-        ),
-        key="save_review",
-        disabled=(
-            review_matches_local_save
-            or has_pending_review_input
-            or not store_available
-        ),
-    ):
-        if not _persist_review_state(state, store):
+        elif review_matches_local_save:
+            st.caption("Saved locally — current review matches local storage.")
+        elif save_failed:
             st.error(
-                "The review could not be saved locally. The current review remains open "
-                "as unsaved work. Verify the local review directory and review integrity, "
-                "then try again."
+                "The review could not be saved locally. The current review remains open as "
+                "unsaved work. Verify the local review directory and review integrity, then "
+                "try again."
             )
-        else:
-            st.session_state["review_save_notice"] = (
-                f"Review saved locally. ID: {state.review.review_id}."
-            )
-            st.rerun()
-    if review_save_notice is not None:
-        st.success(review_save_notice)
+        elif save_deleted:
+            st.caption("Deleted locally — use Save now to recreate this review.")
+        save_label = "Retry local save" if save_failed else "Save now"
+        save_clicked = st.button(
+            save_label,
+            key="save_review",
+            disabled=(
+                review_matches_local_save
+                or has_pending_review_input
+                or not store_available
+            ),
+        )
+        if save_clicked:
+            if _persist_review_state(state, store):
+                st.session_state["review_save_notice"] = (
+                    f"Review saved locally. ID: {state.review.review_id}."
+                )
+                st.rerun()
+            else:
+                st.error(
+                    "The review could not be saved locally. The current review remains open "
+                    "as unsaved work. Verify the local review directory and review integrity, "
+                    "then try again."
+                )
 
 
 def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
@@ -664,6 +640,27 @@ has_pending_review_input = (
     or has_pending_requirements_draft
     or has_pending_criterion_detail_draft
 )
+pending_storage_messages: list[str] = []
+if has_pending_criteria_draft:
+    pending_storage_messages.append(
+        "Pending criteria edits are not saved or exported. Confirm or discard them "
+        "before relying on this review ID."
+    )
+if has_pending_criteria_authoring_draft:
+    pending_storage_messages.append(
+        "Pending add or split criterion inputs are not saved or exported. Submit or "
+        "clear them before relying on this review ID."
+    )
+if has_pending_requirements_draft:
+    pending_storage_messages.append(
+        "Pending requirements changes are not saved or exported. Prepare or discard "
+        "them before relying on this review ID."
+    )
+if has_pending_criterion_detail_draft:
+    pending_storage_messages.append(
+        "Pending criterion-detail inputs are not saved or exported. Submit or clear "
+        "them before relying on this review ID."
+    )
 autosaved = _autosave_review_if_eligible(
     state=current_review_state,
     store=review_store,
@@ -1348,9 +1345,20 @@ review_matches_local_save = bool(
     and _review_matches_local_save(review_state)
     and not has_pending_review_input
 )
+review_save_notice = st.session_state.pop("review_save_notice", None)
 st.header("3 · Evidence Matrix")
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
+    if review_save_notice is not None:
+        st.success(review_save_notice)
+    if review_state is not None:
+        _render_local_review_storage(
+            review_state,
+            store=review_store,
+            store_available=review_store_available,
+            has_pending_review_input=has_pending_review_input,
+            pending_messages=pending_storage_messages,
+        )
 else:
     comparison_base: ReviewBundle | None = st.session_state["comparison_base_bundle"]
     if comparison_base is not None:
@@ -2014,97 +2022,6 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
-    if alpha_feedback_mode and st.session_state["alpha_case_id"] is not None:
-        st.markdown("### Alpha feedback outcome")
-        st.caption(
-            "Record one voluntary outcome for this local case. This is participant feedback, "
-            "not proof of correctness, market demand, or repeat use."
-        )
-        st.code(st.session_state["alpha_case_id"], language=None)
-        alpha_store = JsonAlphaCaseStore(default_alpha_case_directory())
-        try:
-            alpha_record = alpha_store.load(st.session_state["alpha_case_id"])
-        except (OSError, ValueError):
-            st.warning(
-                "The local alpha case is unavailable. The review and exports remain unchanged."
-            )
-        else:
-            if alpha_record.outcome is not None:
-                st.success(
-                    "Alpha feedback completed locally: "
-                    f"{_status_label(alpha_record.outcome.value)}."
-                )
-            else:
-                alpha_outcome = st.selectbox(
-                    "Participant outcome",
-                    options=list(AlphaOutcome),
-                    index=None,
-                    placeholder="Select one outcome",
-                    format_func=lambda item: _status_label(item.value),
-                    key="alpha_outcome",
-                )
-                friction_stage = None
-                if alpha_outcome is AlphaOutcome.CREATED_FRICTION:
-                    friction_stage = st.selectbox(
-                        "Friction stage",
-                        options=list(AlphaFrictionStage),
-                        format_func=lambda item: _status_label(item.value),
-                        key="alpha_friction_stage",
-                    )
-                outcome_notes = st.text_area(
-                    "Outcome notes (optional)", key="alpha_outcome_notes"
-                )
-                report_consent = st.checkbox(
-                    "Allow this case in an anonymized aggregate report",
-                    value=False,
-                    key="alpha_report_consent",
-                )
-                quote_consent = st.checkbox(
-                    "Allow a direct quotation from the optional notes",
-                    value=False,
-                    key="alpha_quote_consent",
-                )
-                alpha_outcome_ready = bool(
-                    alpha_outcome is not None
-                    and review_state is not None
-                    and review_matches_local_save
-                )
-                if not review_matches_local_save:
-                    st.caption(
-                        "Save the current review locally before recording participant feedback."
-                    )
-                if st.button(
-                    "Record alpha outcome",
-                    key="record_alpha_outcome",
-                    disabled=not alpha_outcome_ready,
-                ):
-                    assert review_state is not None
-                    assert alpha_outcome is not None
-                    try:
-                        completed_alpha_record = record_alpha_outcome(
-                            alpha_record,
-                            review_id=review_state.review.review_id,
-                            reviewed_head_sha=review_state.review.head_sha,
-                            outcome=alpha_outcome,
-                            friction_stage=friction_stage,
-                            outcome_notes=outcome_notes.strip() or None,
-                            report_consent=report_consent,
-                            quote_consent=quote_consent,
-                        )
-                        alpha_store.update(completed_alpha_record)
-                    except (OSError, ValueError):
-                        st.error(
-                            "Alpha feedback could not be recorded. The review and existing "
-                            "alpha case remain unchanged."
-                        )
-                    else:
-                        st.session_state["alpha_outcome_notice"] = (
-                            "Alpha feedback outcome recorded locally."
-                        )
-                        st.rerun()
-        alpha_outcome_notice = st.session_state.pop("alpha_outcome_notice", None)
-        if alpha_outcome_notice is not None:
-            st.success(alpha_outcome_notice)
     review_status = review_status_label(bundle.gate.verdict)
     st.markdown(f"## Review status: **{review_status}**")
     if bundle.gate.reason_codes:
@@ -2114,11 +2031,16 @@ else:
     if guidance:
         st.markdown("### What to do next")
         for message in guidance:
-            st.markdown(f"- {message}")
+            st.text(message)
     st.caption(
         f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
         "results are reproducible from the exported review"
     )
+    if has_pending_review_input:
+        st.warning(
+            "Resolve, submit, discard, or clear pending inputs before exporting the "
+            "authoritative review."
+        )
     export_source = review_state if review_state is not None else bundle
     markdown_report = export_markdown(export_source)
     json_report = export_json(export_source)
@@ -2131,6 +2053,7 @@ else:
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.md",
             mime="text/markdown",
             disabled=has_pending_review_input,
+            key="download_markdown",
         )
     with json_column:
         st.download_button(
@@ -2139,6 +2062,7 @@ else:
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.json",
             mime="application/json",
             disabled=has_pending_review_input,
+            key="download_json",
         )
     with csv_column:
         st.download_button(
@@ -2147,20 +2071,111 @@ else:
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.csv",
             mime="text/csv",
             disabled=has_pending_review_input,
+            key="download_csv",
         )
-
-_render_review_persistence(
-    state=review_state,
-    store=review_store,
-    store_available=review_store_available,
-    review_matches_local_save=review_matches_local_save,
-    has_pending_review_input=has_pending_review_input,
-    has_pending_criteria_draft=has_pending_criteria_draft,
-    has_pending_criteria_authoring_draft=has_pending_criteria_authoring_draft,
-    has_pending_requirements_draft=has_pending_requirements_draft,
-    has_pending_criterion_detail_draft=has_pending_criterion_detail_draft,
-    exports_available=bundle is not None,
-)
+    if review_save_notice is not None:
+        st.success(review_save_notice)
+    if review_state is not None:
+        _render_local_review_storage(
+            review_state,
+            store=review_store,
+            store_available=review_store_available,
+            has_pending_review_input=has_pending_review_input,
+            pending_messages=pending_storage_messages,
+        )
+    if alpha_feedback_mode and st.session_state["alpha_case_id"] is not None:
+        with st.expander("Alpha feedback outcome (optional)"):
+            st.caption(
+                "Record one voluntary outcome for this local case. This is participant "
+                "feedback, not proof of correctness, market demand, or repeat use."
+            )
+            st.code(st.session_state["alpha_case_id"], language=None)
+            alpha_store = JsonAlphaCaseStore(default_alpha_case_directory())
+            try:
+                alpha_record = alpha_store.load(st.session_state["alpha_case_id"])
+            except (OSError, ValueError):
+                st.warning(
+                    "The local alpha case is unavailable. The review and exports remain "
+                    "unchanged."
+                )
+            else:
+                if alpha_record.outcome is not None:
+                    st.success(
+                        "Alpha feedback completed locally: "
+                        f"{_status_label(alpha_record.outcome.value)}."
+                    )
+                else:
+                    alpha_outcome = st.selectbox(
+                        "Participant outcome",
+                        options=list(AlphaOutcome),
+                        index=None,
+                        placeholder="Select one outcome",
+                        format_func=lambda item: _status_label(item.value),
+                        key="alpha_outcome",
+                    )
+                    friction_stage = None
+                    if alpha_outcome is AlphaOutcome.CREATED_FRICTION:
+                        friction_stage = st.selectbox(
+                            "Friction stage",
+                            options=list(AlphaFrictionStage),
+                            format_func=lambda item: _status_label(item.value),
+                            key="alpha_friction_stage",
+                        )
+                    outcome_notes = st.text_area(
+                        "Outcome notes (optional)", key="alpha_outcome_notes"
+                    )
+                    report_consent = st.checkbox(
+                        "Allow this case in an anonymized aggregate report",
+                        value=False,
+                        key="alpha_report_consent",
+                    )
+                    quote_consent = st.checkbox(
+                        "Allow a direct quotation from the optional notes",
+                        value=False,
+                        key="alpha_quote_consent",
+                    )
+                    alpha_outcome_ready = bool(
+                        alpha_outcome is not None
+                        and review_state is not None
+                        and review_matches_local_save
+                    )
+                    if not review_matches_local_save:
+                        st.caption(
+                            "Save the current review locally before recording participant "
+                            "feedback."
+                        )
+                    if st.button(
+                        "Record alpha outcome",
+                        key="record_alpha_outcome",
+                        disabled=not alpha_outcome_ready,
+                    ):
+                        assert review_state is not None
+                        assert alpha_outcome is not None
+                        try:
+                            completed_alpha_record = record_alpha_outcome(
+                                alpha_record,
+                                review_id=review_state.review.review_id,
+                                reviewed_head_sha=review_state.review.head_sha,
+                                outcome=alpha_outcome,
+                                friction_stage=friction_stage,
+                                outcome_notes=outcome_notes.strip() or None,
+                                report_consent=report_consent,
+                                quote_consent=quote_consent,
+                            )
+                            alpha_store.update(completed_alpha_record)
+                        except (OSError, ValueError):
+                            st.error(
+                                "Alpha feedback could not be recorded. The review and "
+                                "existing alpha case remain unchanged."
+                            )
+                        else:
+                            st.session_state["alpha_outcome_notice"] = (
+                                "Alpha feedback outcome recorded locally."
+                            )
+                            st.rerun()
+            alpha_outcome_notice = st.session_state.pop("alpha_outcome_notice", None)
+            if alpha_outcome_notice is not None:
+                st.success(alpha_outcome_notice)
 
 st.divider()
 st.caption(
