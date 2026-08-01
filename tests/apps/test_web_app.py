@@ -29,3 +29,12 @@ def test_criterion_text_is_rendered_inertly_outside_markdown_headings() -> None:
     assert "st.text(selected_criterion.text)" in app_source
     assert 'st.markdown(f"### {selected_id} · {selected_criterion.text}")' not in app_source
     assert 'st.markdown(f"### {criterion.criterion_id} · {criterion.text}")' not in app_source
+    unsafe_selected_criterion_interpolations = [
+        'f"This record will be attached to {selected_id} — {selected_criterion.text}. "',
+        'f"This decision will be recorded for {selected_id} — {selected_criterion.text}. "',
+    ]
+    assert [
+        interpolation
+        for interpolation in unsafe_selected_criterion_interpolations
+        if interpolation in app_source
+    ] == []

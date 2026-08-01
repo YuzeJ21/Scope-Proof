@@ -1299,6 +1299,18 @@ def test_markdown_shaped_confirmed_requirement_remains_inert() -> None:
     assert all(unsafe_text not in item.value for item in app.markdown)
 
 
+def test_markdown_shaped_selected_requirement_remains_inert_in_detail_contexts() -> None:
+    unsafe_text = "![criterion](https://example.invalid/criterion.png)"
+    app = load_demo(new_app())
+    app = app.text_input(key="criterion_text_AC-01").set_value(unsafe_text).run()
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    assert unsafe_text in [item.value for item in app.text]
+    assert all(unsafe_text not in item.value for item in app.caption)
+    assert all(unsafe_text not in item.value for item in app.markdown)
+
+
 @pytest.mark.parametrize("text", ["", "   ", "\t\n"])
 def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: str) -> None:
     app = analyzed_demo(new_app())
@@ -2591,27 +2603,14 @@ def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
     app = analyzed_demo(new_app())
     caption_text = "\n".join(caption.value for caption in app.caption)
 
-    resolution_context = next(
-        markdown.value
-        for markdown in app.markdown
-        if markdown.value.startswith("### Criterion resolution")
-    )
-    assert (
-        "This decision will be recorded for AC-01 — User can export the research list as CSV. "
-        "It does not record final review acceptance."
-    ) in resolution_context
+    assert "### Criterion resolution" in [item.value for item in app.markdown]
+    assert "This decision will be recorded for the selected criterion." in caption_text
+    assert "It does not record final review acceptance." in caption_text
+    assert "User can export the research list as CSV" in [item.value for item in app.text]
     assert "Select a decision to see its deterministic gate impact." in caption_text
 
     app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
-    resolution_context = next(
-        markdown.value
-        for markdown in app.markdown
-        if markdown.value.startswith("### Criterion resolution")
-    )
-    assert (
-        "This decision will be recorded for AC-03 — Failed export shows an error message. "
-        "It does not record final review acceptance."
-    ) in resolution_context
+    assert "Failed export shows an error message" in [item.value for item in app.text]
 
 
 def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> None:
@@ -2946,10 +2945,11 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
         for caption in app.caption
         if caption.value.startswith("This record will be attached to")
     )
-    assert (
-        "This record will be attached to AC-01 — User can export the research list as CSV."
-    ) in target_context
-    assert "Record a human-supplied observation only." in target_context
+    assert target_context == "This record will be attached to the selected criterion."
+    assert "User can export the research list as CSV" in [item.value for item in app.text]
+    assert "Record a human-supplied observation only." in "\n".join(
+        item.value for item in app.caption
+    )
 
     level_context = next(
         caption.value
@@ -2974,11 +2974,8 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
         if caption.value.startswith("This record will be attached to")
     ]
     assert len(target_captions) == 1
-    assert (
-        "This record will be attached to AC-03 — Failed export shows an error message."
-        in target_captions[0]
-    )
-    assert "Record a human-supplied observation only." in target_captions[0]
+    assert target_captions[0] == "This record will be attached to the selected criterion."
+    assert "Failed export shows an error message" in [item.value for item in app.text]
 
 
 def test_criterion_change_clears_pending_target_specific_drafts() -> None:

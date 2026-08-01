@@ -1517,10 +1517,11 @@ else:
     )
 
     st.markdown("### Record external verification")
+    st.caption("This record will be attached to the selected criterion.")
+    st.text(selected_criterion.text)
     st.caption(
-        f"This record will be attached to {selected_id} — {selected_criterion.text}. "
-        "Record a human-supplied observation only. ScopeProof does not run PR code "
-        "or infer runtime results. Saving records the evidence and the criterion's "
+        "Record a human-supplied observation only. ScopeProof does not run PR code or "
+        "infer runtime results. Saving records the evidence and the criterion's "
         "manual-verification decision together."
     )
     runtime_artifact = st.text_input(
@@ -1647,11 +1648,10 @@ else:
     if not decision_reviewer_ready:
         st.caption("Decision reviewer is required for an attributable audit event.")
 
-    st.markdown(
-        "### Criterion resolution\n\n"
-        f"This decision will be recorded for {selected_id} — {selected_criterion.text}. "
-        "It does not record final review acceptance."
-    )
+    st.markdown("### Criterion resolution")
+    st.caption("This decision will be recorded for the selected criterion.")
+    st.text(selected_criterion.text)
+    st.caption("It does not record final review acceptance.")
     decision_options = [
         HumanDecision.ACCEPTED,
         HumanDecision.CHANGE_REQUIRED,
