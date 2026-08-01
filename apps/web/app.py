@@ -510,6 +510,161 @@ requirements_submission_blocked = bool(
     and not replace_unsaved_review_confirmed
 )
 
+st.header("1 · Start Review")
+st.markdown("**Public PR → Confirm criteria → Review coverage → Record decisions → Export**")
+st.caption(
+    "Five bounded stages keep source loading, human confirmation, candidate analysis, "
+    "reviewer decisions, and exports separate."
+)
+pr_url = st.text_input(
+    "Public GitHub pull request URL",
+    placeholder="https://github.com/owner/repository/pull/123",
+    key="pr_url",
+)
+pr_url_is_valid = False
+if pr_url.strip():
+    try:
+        parse_pr_url(pr_url)
+    except InvalidPullRequestUrl:
+        st.warning(
+            "Enter a public GitHub pull request URL in this format: "
+            "`https://github.com/OWNER/REPO/pull/NUMBER`."
+        )
+    else:
+        pr_url_is_valid = True
+fetch_action_placeholder = st.empty()
+alpha_feedback_mode = bool(st.session_state.get("alpha_feedback_mode", False))
+
+with st.expander("Try ScopeProof", expanded=False):
+    if st.button(
+        "Load deliberately constructed demo",
+        key="load_demo",
+        disabled=replacement_blocked or alpha_feedback_mode,
+    ):
+        labels = load_demo_labels()
+        snapshot = load_demo_snapshot()
+        _record_reopened_source_reload(snapshot)
+        st.session_state["snapshot"] = snapshot
+        st.session_state["source_text"] = labels["source_text"]
+        st.session_state["requirements_input"] = labels["source_text"]
+        st.session_state["criteria"] = [
+            Criterion.model_validate(item) for item in labels["criteria"]
+        ]
+        st.session_state["candidate_files"] = []
+        st.session_state["comparison_base_bundle"] = None
+        _reset_analysis()
+        st.rerun()
+
+with st.expander("Alpha feedback session (optional)", expanded=False):
+    alpha_feedback_mode = st.checkbox(
+        "Collect local alpha feedback for this review",
+        value=False,
+        key="alpha_feedback_mode",
+    )
+
+    if alpha_feedback_mode:
+        st.caption(
+            "Qualification is session-only. Confirm a genuine public case before fetching; "
+            "ScopeProof does not store these preflight fields here."
+        )
+        requirements_source_url = st.text_input(
+            "Public requirements source URL",
+            placeholder="https://github.com/owner/repository/issues/123",
+            key="requirements_source_url",
+        )
+        participant_role = st.selectbox(
+            "Participant role",
+            options=[role.value for role in ParticipantRole],
+            key="participant_role",
+        )
+        source_owner_confirmed = st.checkbox(
+            "I am the source owner or directly authorized to confirm these requirements",
+            key="source_owner_confirmed",
+        )
+        no_confidential_information = st.checkbox(
+            "This review contains no confidential information, secrets, or private links",
+            key="no_confidential_information",
+        )
+alpha_qualification_ready = True
+alpha_qualification: AlphaQualification | None = None
+if alpha_feedback_mode:
+    alpha_qualification_ready = False
+    if (
+        pr_url_is_valid
+        and requirements_source_url.strip()
+        and source_owner_confirmed
+        and no_confidential_information
+    ):
+        try:
+            alpha_qualification = AlphaQualification(
+                public_pr_url=pr_url,
+                requirements_source_url=requirements_source_url,
+                participant_role=ParticipantRole(participant_role),
+                source_owner_confirmed=True,
+                no_confidential_information=True,
+            )
+        except ValueError:
+            st.warning("Use a public HTTPS requirements source and a canonical public PR URL.")
+        else:
+            alpha_qualification_ready = True
+else:
+    st.caption("Standard review mode does not create participant research records.")
+
+with st.expander("Advanced source options", expanded=False):
+    github_token = st.text_input(
+        "Optional GitHub token",
+        type="password",
+        help=(
+            "Used only in this session to increase free GitHub rate limits. "
+            "Never exported or saved."
+        ),
+        key="github_token",
+    )
+    candidate_paths_text = st.text_area(
+        "Bounded unchanged candidate paths (optional)",
+        key="candidate_paths",
+        help=(
+            "One explicit repository-relative file path per line. ScopeProof does not "
+            "infer paths or scan the repository."
+        ),
+    )
+    candidate_paths = list(
+        dict.fromkeys(
+            line.strip() for line in candidate_paths_text.splitlines() if line.strip()
+        )
+    )
+    st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
+if fetch_action_placeholder.button(
+    "Fetch public PR",
+    key="fetch_pr",
+    disabled=(
+        not pr_url_is_valid
+        or not alpha_qualification_ready
+        or replacement_blocked
+    ),
+    use_container_width=True,
+):
+    try:
+        client = GitHubClient(token=github_token or None)
+        snapshot = client.fetch_pull_request(pr_url)
+        candidate_files = client.fetch_candidate_files(
+            snapshot.repository, snapshot.head_sha, candidate_paths
+        )
+        _record_reopened_source_reload(snapshot)
+        st.session_state["snapshot"] = snapshot
+        st.session_state["candidate_files"] = candidate_files
+        st.session_state["alpha_case_id"] = None
+        _reset_analysis()
+        st.session_state["source_load_notice"] = (
+            "Public PR loaded. Add and confirm criteria before analysis."
+        )
+        st.rerun()
+    except (GitHubIngestionError, ValueError) as error:
+        st.error(
+            f"{error} No review data was changed. Verify that the PR is public and "
+            "try again. Use the optional token only if GitHub reports a rate limit."
+        )
+
 storage_directory = default_local_review_directory()
 review_store = JsonReviewStore(Path(storage_directory))
 try:
@@ -519,7 +674,7 @@ except (OSError, UnsafeReviewStore):
     review_store_available = False
 else:
     review_store_available = True
-with st.expander("Reopen saved review", expanded=False):
+with st.expander("Resume a saved review", expanded=False):
     if not review_store_available:
         reopen_id = ""
         st.error(
@@ -606,157 +761,6 @@ if saved_review_delete_notice is not None:
 review_reopen_notice = st.session_state.pop("review_reopen_notice", None)
 if review_reopen_notice is not None:
     st.success(review_reopen_notice)
-
-st.header("1 · Start Review")
-st.markdown(
-    "**Public PR → Confirm criteria → Review coverage → Record decisions → Export**"
-)
-st.caption(
-    "Five bounded stages keep source loading, human confirmation, candidate analysis, "
-    "reviewer decisions, and exports separate."
-)
-alpha_feedback_mode = st.checkbox(
-    "Alpha feedback session (optional)",
-    value=False,
-    key="alpha_feedback_mode",
-    help="Collect local, consent-controlled feedback from a genuine public-PR participant.",
-)
-if st.button(
-    "Load deliberately constructed demo",
-    key="load_demo",
-    disabled=replacement_blocked or alpha_feedback_mode,
-):
-    labels = load_demo_labels()
-    snapshot = load_demo_snapshot()
-    _record_reopened_source_reload(snapshot)
-    st.session_state["snapshot"] = snapshot
-    st.session_state["source_text"] = labels["source_text"]
-    st.session_state["requirements_input"] = labels["source_text"]
-    st.session_state["criteria"] = [
-        Criterion.model_validate(item) for item in labels["criteria"]
-    ]
-    st.session_state["candidate_files"] = []
-    st.session_state["comparison_base_bundle"] = None
-    _reset_analysis()
-    st.rerun()
-pr_url = st.text_input(
-    "Public GitHub pull request URL",
-    placeholder="https://github.com/owner/repository/pull/123",
-    key="pr_url",
-)
-pr_url_is_valid = False
-if pr_url.strip():
-    try:
-        parse_pr_url(pr_url)
-    except InvalidPullRequestUrl:
-        st.warning(
-            "Enter a public GitHub pull request URL in this format: "
-            "`https://github.com/OWNER/REPO/pull/NUMBER`."
-        )
-    else:
-        pr_url_is_valid = True
-alpha_qualification_ready = True
-alpha_qualification: AlphaQualification | None = None
-if alpha_feedback_mode:
-    st.caption(
-        "Qualification is session-only. Confirm a genuine public case before fetching; "
-        "ScopeProof does not store these preflight fields here."
-    )
-    requirements_source_url = st.text_input(
-        "Public requirements source URL",
-        placeholder="https://github.com/owner/repository/issues/123",
-        key="requirements_source_url",
-    )
-    participant_role = st.selectbox(
-        "Participant role",
-        options=[role.value for role in ParticipantRole],
-        key="participant_role",
-    )
-    source_owner_confirmed = st.checkbox(
-        "I am the source owner or directly authorized to confirm these requirements",
-        key="source_owner_confirmed",
-    )
-    no_confidential_information = st.checkbox(
-        "This review contains no confidential information, secrets, or private links",
-        key="no_confidential_information",
-    )
-    alpha_qualification_ready = False
-    if (
-        pr_url_is_valid
-        and requirements_source_url.strip()
-        and source_owner_confirmed
-        and no_confidential_information
-    ):
-        try:
-            alpha_qualification = AlphaQualification(
-                public_pr_url=pr_url,
-                requirements_source_url=requirements_source_url,
-                participant_role=ParticipantRole(participant_role),
-                source_owner_confirmed=True,
-                no_confidential_information=True,
-            )
-        except ValueError:
-            st.warning("Use a public HTTPS requirements source and a canonical public PR URL.")
-        else:
-            alpha_qualification_ready = True
-else:
-    st.caption(
-        "Standard review mode does not create participant research records."
-    )
-with st.expander("Advanced source options"):
-    github_token = st.text_input(
-        "Optional GitHub token",
-        type="password",
-        help=(
-            "Used only in this session to increase free GitHub rate limits. "
-            "Never exported or saved."
-        ),
-        key="github_token",
-    )
-    candidate_paths_text = st.text_area(
-        "Bounded unchanged candidate paths (optional)",
-        key="candidate_paths",
-        help=(
-            "One explicit repository-relative file path per line. ScopeProof does not "
-            "infer paths or scan the repository."
-        ),
-    )
-    candidate_paths = list(
-        dict.fromkeys(
-            line.strip() for line in candidate_paths_text.splitlines() if line.strip()
-        )
-    )
-    st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
-if st.button(
-    "Fetch public PR",
-    key="fetch_pr",
-    disabled=(
-        not pr_url_is_valid
-        or not alpha_qualification_ready
-        or replacement_blocked
-    ),
-    use_container_width=True,
-):
-    try:
-        client = GitHubClient(token=github_token or None)
-        snapshot = client.fetch_pull_request(pr_url)
-        candidate_files = client.fetch_candidate_files(
-            snapshot.repository, snapshot.head_sha, candidate_paths
-        )
-        _record_reopened_source_reload(snapshot)
-        st.session_state["snapshot"] = snapshot
-        st.session_state["candidate_files"] = candidate_files
-        st.session_state["alpha_case_id"] = None
-        _reset_analysis()
-        st.session_state["source_load_notice"] = (
-            "Public PR loaded. Add and confirm criteria before analysis."
-        )
-        st.rerun()
-    except (GitHubIngestionError, ValueError) as error:
-        st.error(
-            f"{error} No review data was changed. Verify that the PR is public and "
-            "try again. Use the optional token only if GitHub reports a rate limit."
-        )
 
 source_load_notice = st.session_state.pop("source_load_notice", None)
 if source_load_notice is not None:

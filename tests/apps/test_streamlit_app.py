@@ -429,31 +429,33 @@ def test_reopened_partial_review_keeps_ingestion_recovery_details(
     assert "src/reopen-skipped.py" in code_text
 
 
-def test_reopen_review_is_a_collapsed_secondary_path_before_start_review(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    app = new_app()
-
-    assert [item.label for item in app.expander] == [
-        "Reopen saved review",
-        "Advanced source options",
-    ]
-    assert app.text_input(key="reopen_review_id").value == ""
-    assert app.button(key="reopen_review").disabled is True
-    assert "No saved local reviews found." in [item.value for item in app.caption]
-    assert "### Reopen saved review" not in [item.value for item in app.markdown]
-
-
-def test_first_use_demo_precedes_public_pr_inputs() -> None:
+def test_public_pr_entry_precedes_optional_start_review_controls() -> None:
     app = new_app()
     keys = _main_widget_keys(app)
 
-    assert keys.count("load_demo") == 1
-    assert keys.index("alpha_feedback_mode") < keys.index("load_demo")
-    assert keys.index("load_demo") < keys.index("pr_url")
-    assert keys.index("candidate_paths") < keys.index("fetch_pr")
+    assert keys.count("pr_url") == 1
+    assert keys.count("fetch_pr") == 1
+    assert keys.index("pr_url") < keys.index("fetch_pr")
+    assert keys.index("fetch_pr") < keys.index("load_demo")
+    assert keys.index("fetch_pr") < keys.index("alpha_feedback_mode")
+    assert keys.index("fetch_pr") < keys.index("github_token")
+    assert keys.index("fetch_pr") < keys.index("candidate_paths")
+    assert keys.index("fetch_pr") < keys.index("reopen_review_id")
     assert keys.index("fetch_pr") < keys.index("requirements_input")
+
+
+def test_start_review_secondary_paths_are_collapsed_after_public_pr_entry() -> None:
+    app = new_app()
+
+    assert [item.label for item in app.expander[:4]] == [
+        "Try ScopeProof",
+        "Alpha feedback session (optional)",
+        "Advanced source options",
+        "Resume a saved review",
+    ]
+    assert all(item.proto.expanded is False for item in app.expander[:4])
+    assert app.button(key="load_demo").label == "Load deliberately constructed demo"
+    assert app.button(key="reopen_review").disabled is True
 
 
 def test_saved_review_is_discoverable_and_selectable_in_a_fresh_session(
