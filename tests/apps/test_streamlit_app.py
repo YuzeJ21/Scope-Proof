@@ -429,7 +429,10 @@ def test_reopened_partial_review_keeps_ingestion_recovery_details(
     assert "src/reopen-skipped.py" in code_text
 
 
-def test_public_pr_entry_precedes_optional_start_review_controls() -> None:
+def test_public_pr_entry_precedes_optional_start_review_controls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
     app = new_app()
     keys = _main_widget_keys(app)
 
