@@ -395,7 +395,7 @@ def test_active_and_reopened_review_show_recorded_runtime_verification(
 def test_criterion_detail_shows_bounded_candidate_context() -> None:
     app = analyzed_demo(new_app())
 
-    assert "**Bounded context:**" in [item.value for item in app.markdown]
+    assert "Bounded context" in [item.value for item in app.caption]
     assert any(
         "export_research_list_csv" in item.value and "filtered_rows" in item.value
         for item in app.code
@@ -871,9 +871,9 @@ def test_loaded_public_pr_shows_validated_source_identity_before_criteria_confir
         }
     )
     app = new_app()
-    app = app.text_input(key="pr_url").set_value(
-        "https://github.com/operator/entered/pull/42"
-    ).run()
+    app = (
+        app.text_input(key="pr_url").set_value("https://github.com/operator/entered/pull/42").run()
+    )
 
     with patch(
         "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
@@ -881,24 +881,26 @@ def test_loaded_public_pr_shows_validated_source_identity_before_criteria_confir
     ):
         app = app.button(key="fetch_pr").click().run()
 
-    markdown_text = "\n".join(item.value for item in app.markdown)
+    text_values = [item.value for item in app.text]
     code_text = "\n".join(item.value for item in app.code)
     caption_text = "\n".join(item.value for item in app.caption)
-    assert "acme/widget · PR #7" in markdown_text
+    assert "acme/widget · PR #7" in text_values
     assert head_sha in code_text
     assert "2 changed files fetched" in caption_text
     assert "Complete ingestion" in caption_text
     assert app.button(key="run_analysis").disabled is True
 
-    app = app.text_area(key="requirements_input").set_value(
-        "The loaded source identity remains visible while criteria are edited."
-    ).run()
+    app = (
+        app.text_area(key="requirements_input")
+        .set_value("The loaded source identity remains visible while criteria are edited.")
+        .run()
+    )
 
-    markdown_text = "\n".join(item.value for item in app.markdown)
+    text_values = [item.value for item in app.text]
     code_text = "\n".join(item.value for item in app.code)
     caption_text = "\n".join(item.value for item in app.caption)
-    assert "acme/widget · PR #7" in markdown_text
-    assert "operator/entered · PR #42" not in markdown_text
+    assert "acme/widget · PR #7" in text_values
+    assert "operator/entered · PR #42" not in text_values
     assert head_sha in code_text
     assert "2 changed files fetched" in caption_text
     assert "Complete ingestion" in caption_text
@@ -2345,11 +2347,10 @@ def test_final_acceptance_requires_resolutions_and_then_completes_gate() -> None
     assert "Final acceptance appended to the local review history." in [
         item.value for item in app.success
     ]
-    history = [item.value for item in app.markdown if "Final acceptance:" in item.value]
-    assert history == [
-        "- **Current · revision 1** — Final acceptance: Recorded — "
-        "Reviewer recorded final acceptance"
-    ]
+    assert "Current · revision 1" in [item.value for item in app.text]
+    assert "Final acceptance" in [item.value for item in app.code]
+    assert "Recorded" in [item.value for item in app.text]
+    assert "Reviewer recorded final acceptance" in [item.value for item in app.text]
 
 
 def test_final_acceptance_failure_preserves_retryable_state_without_raw_details() -> None:
@@ -2549,17 +2550,70 @@ def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summar
     app = analyzed_demo(new_app())
     markdown_text = [item.value for item in app.markdown]
     visible_markdown = "\n".join(markdown_text)
+    text_values = [item.value for item in app.text]
 
+    assert "E1" in text_values
+    assert "E2" in text_values
+    assert "High" in text_values
+    assert "4" in text_values
+    assert "Unresolved" in text_values
     assert (
-        "**Required evidence:** E1 · **Observed evidence:** E2 · "
-        "**Confidence:** High · **Candidates:** 4 · **Human resolution:** Unresolved"
-    ) in markdown_text
-    assert "Strong candidate evidence was found; a reviewer must still judge sufficiency." in (
-        item.value for item in app.markdown
+        "Strong candidate evidence was found; a reviewer must still judge sufficiency."
+        in text_values
     )
     assert "**AC-01 — Evidence Found** · User can export the research list as CSV" not in (
         visible_markdown
     )
+
+
+def test_ordinary_resolution_precedes_optional_external_verification() -> None:
+    app = analyzed_demo(new_app())
+    keys = _main_widget_keys(app)
+    optional = next(
+        item
+        for item in app.expander
+        if item.label == "Record optional external verification (E3/E4)"
+    )
+
+    assert keys.index("decision_reviewer") < keys.index("resolution_decision")
+    assert keys.index("save_resolution") < keys.index("runtime_artifact_reference")
+    assert keys.index("runtime_artifact_reference") < keys.index("save_runtime_evidence")
+    assert optional.proto.expanded is False
+
+
+def test_candidate_evidence_groups_by_path_and_type_without_losing_items() -> None:
+    app = analyzed_demo(new_app())
+    groups = [item for item in app.expander if item.label.startswith("Evidence group ")]
+
+    assert [item.label for item in groups] == [
+        "Evidence group 1 · Implementation · 2 items",
+        "Evidence group 2 · Test · 2 items",
+    ]
+    assert [groups[0].code[0].value, groups[1].code[0].value] == [
+        "src/export.py",
+        "tests/test_export.py",
+    ]
+    rendered_ids = [
+        value
+        for group in groups
+        for value in [item.value for item in group.code]
+        if value.startswith("EV-")
+    ]
+    assert rendered_ids == [
+        "EV-AC-01-01",
+        "EV-AC-01-04",
+        "EV-AC-01-02",
+        "EV-AC-01-03",
+    ]
+
+
+def test_selected_requirement_and_candidate_values_are_not_raw_markdown() -> None:
+    app = analyzed_demo(new_app())
+    selected_text = app.session_state["criteria"][0].text
+    markdown_values = [item.value for item in app.markdown]
+
+    assert selected_text in [item.value for item in app.text]
+    assert all(selected_text not in value for value in markdown_values)
 
 
 def test_evidence_matrix_shows_current_human_resolution() -> None:
@@ -2643,7 +2697,7 @@ def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
     caption_text = "\n".join(caption.value for caption in app.caption)
 
     assert "### Criterion resolution" in [item.value for item in app.markdown]
-    assert "This decision will be recorded for the selected criterion." in caption_text
+    assert "This decision will be recorded for the selected criterion above." in caption_text
     assert "It does not record final review acceptance." in caption_text
     assert "User can export the research list as CSV" in [item.value for item in app.text]
     assert "Select a decision to see its deterministic gate impact." in caption_text
@@ -2660,16 +2714,20 @@ def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> N
 
     markdown_text = "\n".join(item.value for item in app.markdown)
     caption_text = "\n".join(item.value for item in app.caption)
-    info_text = "\n".join(item.value for item in app.info)
+    code_text = "\n".join(item.value for item in app.code)
+    text_values = [item.value for item in app.text]
 
     assert "Recommended next action" in markdown_text
-    assert finding.recommended_action in info_text
+    assert finding.recommended_action in code_text
     assert "Candidate evidence" in markdown_text
-    assert f"**Matching rationale:** {evidence.relevance_reason}" in markdown_text
-    assert f"Matching rule: {evidence.matching_rule}" in caption_text
-    assert f"Limitation: {evidence.limitations[0]}" in caption_text
+    assert "Matching rationale" in caption_text
+    assert evidence.relevance_reason in text_values
+    assert "Matching rule" in caption_text
+    assert evidence.matching_rule in text_values
+    assert "Limitation" in caption_text
+    assert evidence.limitations[0] in text_values
     assert evidence.excerpt in [item.value for item in app.code]
-    assert "Open immutable GitHub evidence" in markdown_text
+    assert f"](<{evidence.permalink}>)" in markdown_text
 
 
 def test_missing_criterion_detail_shows_action_and_no_candidate_state() -> None:
@@ -2679,11 +2737,11 @@ def test_missing_criterion_detail_shows_action_and_no_candidate_state() -> None:
     finding = next(item for item in bundle.findings if item.criterion_id == "AC-03")
 
     markdown_text = "\n".join(item.value for item in app.markdown)
-    info_text = "\n".join(item.value for item in app.info)
+    code_text = "\n".join(item.value for item in app.code)
     caption_text = "\n".join(item.value for item in app.caption)
 
     assert "Recommended next action" in markdown_text
-    assert finding.recommended_action in info_text
+    assert finding.recommended_action in code_text
     assert "Candidate evidence" in markdown_text
     assert "No candidate evidence is linked to this provisional finding." in caption_text
 
@@ -2694,11 +2752,13 @@ def test_criterion_detail_explains_retrieval_without_presenting_it_as_evidence()
 
     markdown_text = "\n".join(item.value for item in app.markdown)
     caption_text = "\n".join(item.value for item in app.caption)
+    text_values = [item.value for item in app.text]
 
     assert "How ScopeProof searched" in markdown_text
-    assert "Search outcome: Below Relevance Threshold" in caption_text
-    assert "Searched terms:" in caption_text
-    assert "Searched paths:" in caption_text
+    assert "Search outcome" in caption_text
+    assert "Below Relevance Threshold" in text_values
+    assert "Searched terms" in caption_text
+    assert "Searched paths" in caption_text
     assert (
         "Search diagnostics explain retrieval; they are not evidence that the criterion "
         "is satisfied or missing from the repository."
@@ -2735,17 +2795,17 @@ def test_human_decision_and_final_acceptance_append_history() -> None:
 
 def test_resolution_history_distinguishes_current_and_superseded_decisions() -> None:
     app = analyzed_demo(new_app())
-    app = app.selectbox(key="resolution_decision").set_value(
-        HumanDecision.REJECTED_FINDING
-    ).run()
+    app = app.selectbox(key="resolution_decision").set_value(HumanDecision.REJECTED_FINDING).run()
     app = app.button(key="save_resolution").click().run()
     app = app.selectbox(key="resolution_decision").set_value(HumanDecision.ACCEPTED).run()
     app = app.button(key="save_resolution").click().run()
 
-    markdown_text = "\n".join(item.value for item in app.markdown)
+    text_values = [item.value for item in app.text]
     caption_text = "\n".join(item.value for item in app.caption)
-    assert "Superseded · revision 1 — AC-01: Rejected Finding" in markdown_text
-    assert "Current · revision 1** — AC-01: Accepted" in markdown_text
+    assert "Superseded · revision 1" in text_values
+    assert "Current · revision 1" in text_values
+    assert "Rejected Finding" in text_values
+    assert "Accepted" in text_values
     assert (
         "Current events are the latest recorded inputs for the active revision. Superseded and "
         "prior-revision events remain audit history and do not independently control the gate."
@@ -2783,10 +2843,10 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
     app.session_state["bundle"] = review_state.bundle
     app = app.run()
 
-    assert (
-        "Reviewer: Controlled reviewer · Recorded at (UTC): 2026-07-14T19:45:00Z · "
-        "Claimed evidence level: E3"
-    ) in [item.value for item in app.caption]
+    text_values = [item.value for item in app.text]
+    assert "Controlled reviewer" in text_values
+    assert "2026-07-14T19:45:00Z" in text_values
+    assert "E3" in text_values
 
 
 def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> None:
@@ -2809,11 +2869,10 @@ def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> Non
     app = app.run()
 
     captions = [item.value for item in app.caption]
-    assert (
-        "Reviewer: Controlled reviewer · Recorded at (UTC): 2026-07-14T19:50:00Z"
-        in captions
-    )
-    assert not any("Claimed evidence level" in item for item in captions)
+    text_values = [item.value for item in app.text]
+    assert "Controlled reviewer" in text_values
+    assert "2026-07-14T19:50:00Z" in text_values
+    assert "Claimed evidence level" not in captions
 
 
 def test_runtime_evidence_guidance_lists_only_missing_required_fields() -> None:
@@ -3099,78 +3158,60 @@ def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
     app = app.button(key="save_runtime_evidence").click().run()
 
     runtime_rows = [
-        item.value.replace("\\", "")
-        for item in app.markdown
-        if "artifact\\-42" in item.value
+        item.value.replace("\\", "") for item in app.markdown if "artifact\\-42" in item.value
     ]
-    assert runtime_rows == ["artifact-42 — Fixture scenario"]
+    assert runtime_rows == ["artifact-42"]
+    assert "Fixture scenario" in [item.value for item in app.text]
 
 
 def test_runtime_record_shows_reviewer_and_limitations() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
-        "artifact-complete-record"
-    ).run()
-    app = app.text_area(key="runtime_scenario").set_value(
-        "Controlled export scenario"
-    ).run()
-    app = app.text_input(key="runtime_environment").set_value(
-        "Controlled environment"
-    ).run()
-    app = app.text_input(key="runtime_result").set_value(
-        "Controlled observed result"
-    ).run()
-    app = app.text_input(key="runtime_reviewer").set_value(
-        "Controlled reviewer"
-    ).run()
-    app = app.text_area(key="runtime_limitations").set_value(
-        "Browser-only observation\nMobile behavior not observed"
-    ).run()
+    app = (
+        app.text_input(key="runtime_artifact_reference").set_value("artifact-complete-record").run()
+    )
+    app = app.text_area(key="runtime_scenario").set_value("Controlled export scenario").run()
+    app = app.text_input(key="runtime_environment").set_value("Controlled environment").run()
+    app = app.text_input(key="runtime_result").set_value("Controlled observed result").run()
+    app = app.text_input(key="runtime_reviewer").set_value("Controlled reviewer").run()
+    app = (
+        app.text_area(key="runtime_limitations")
+        .set_value("Browser-only observation\nMobile behavior not observed")
+        .run()
+    )
 
     app = app.button(key="save_runtime_evidence").click().run()
 
-    rendered = [item.value.replace("\\", "") for item in app.markdown]
-    assert "artifact-complete-record — Controlled export scenario" in rendered
-    assert "**Environment:** Controlled environment" in rendered
-    assert "**Observed result:** Controlled observed result" in rendered
-    assert "**Evidence level:** E3" in rendered
-    assert "**Reviewer:** Controlled reviewer" in rendered
-    assert "**Limitations**" in rendered
-    assert "- Browser-only observation" in rendered
-    assert "- Mobile behavior not observed" in rendered
+    rendered_markdown = [item.value.replace("\\", "") for item in app.markdown]
+    rendered_text = [item.value for item in app.text]
+    captions = [item.value for item in app.caption]
+    assert "artifact-complete-record" in rendered_markdown
+    assert "Controlled export scenario" in rendered_text
+    assert "Controlled environment" in rendered_text
+    assert "Controlled observed result" in rendered_text
+    assert "E3" in rendered_text
+    assert "Controlled reviewer" in rendered_text
+    assert "Limitations" in captions
+    assert "Browser-only observation" in rendered_text
+    assert "Mobile behavior not observed" in rendered_text
     assert "No limitations recorded." not in [item.value for item in app.caption]
 
 
 def test_runtime_record_shows_persisted_utc_timestamp() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
-        "artifact-timestamped"
-    ).run()
-    app = app.text_area(key="runtime_scenario").set_value(
-        "Controlled timestamp scenario"
-    ).run()
-    app = app.text_input(key="runtime_environment").set_value(
-        "Controlled environment"
-    ).run()
-    app = app.text_input(key="runtime_result").set_value(
-        "Controlled observed result"
-    ).run()
-    app = app.text_input(key="runtime_reviewer").set_value(
-        "Controlled reviewer"
-    ).run()
+    app = app.text_input(key="runtime_artifact_reference").set_value("artifact-timestamped").run()
+    app = app.text_area(key="runtime_scenario").set_value("Controlled timestamp scenario").run()
+    app = app.text_input(key="runtime_environment").set_value("Controlled environment").run()
+    app = app.text_input(key="runtime_result").set_value("Controlled observed result").run()
+    app = app.text_input(key="runtime_reviewer").set_value("Controlled reviewer").run()
     app = app.button(key="save_runtime_evidence").click().run()
 
     review_state = app.session_state["review_state"].model_copy(deep=True)
-    review_state.bundle.runtime_evidence[0].timestamp = datetime(
-        2026, 7, 14, 12, 10, tzinfo=UTC
-    )
+    review_state.bundle.runtime_evidence[0].timestamp = datetime(2026, 7, 14, 12, 10, tzinfo=UTC)
     app.session_state["review_state"] = review_state
     app.session_state["bundle"] = review_state.bundle
     app = app.run()
 
-    assert "**Recorded at (UTC):** 2026-07-14T12:10:00Z" in [
-        item.value for item in app.markdown
-    ]
+    assert "2026-07-14T12:10:00Z" in [item.value for item in app.text]
 
 
 def test_runtime_record_shows_explicit_empty_limitations_state() -> None:

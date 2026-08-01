@@ -9,6 +9,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from apps.web.view_models import group_candidate_evidence
 from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
@@ -1429,293 +1430,315 @@ else:
         if selected_id in resolution_by_id
         else "Unresolved"
     )
-    st.markdown(f"### {selected_id}")
+    st.markdown("### Selected criterion")
+    st.caption("Criterion ID")
+    st.code(selected_id, language=None)
+    st.caption("Confirmed requirement")
     st.text(selected_criterion.text)
+    evidence_column, decision_column = st.columns([3, 2], gap="large")
     selected_coverage = coverage_by_id[selected_id]
-    st.markdown(
-        f"**Evidence status:** {evidence_status_text(selected_coverage.evidence_status)}"
-    )
-    st.markdown(
-        f"**Required evidence:** {selected_criterion.required_evidence_level.value} · "
-        f"**Observed evidence:** {selected_finding.evidence_level.value} · "
-        f"**Confidence:** {selected_finding.confidence_band.value.title()} · "
-        f"**Candidates:** {len(selected_finding.evidence_ids)} · "
-        f"**Human resolution:** {selected_resolution}"
-    )
-    st.write(selected_finding.reason)
-    st.markdown("### How ScopeProof searched")
-    selected_diagnostic = diagnostic_by_id.get(selected_id)
-    if selected_diagnostic is None:
-        st.caption("Retrieval diagnostics were not recorded for this review.")
-    else:
-        st.caption(
-            f"Search outcome: {_status_label(selected_diagnostic.outcome.value)}"
-        )
-        st.caption(
-            "Searched terms: "
-            + (", ".join(selected_diagnostic.searched_terms) or "None")
-        )
-        st.caption(
-            "Exact identifiers: "
-            + (", ".join(selected_diagnostic.exact_identifiers) or "None")
-        )
-        st.caption(
-            "Searched evidence types: "
-            + (
+    with evidence_column:
+        st.markdown("### Evidence")
+        st.caption("Evidence status")
+        st.text(evidence_status_text(selected_coverage.evidence_status))
+        st.caption("Required evidence")
+        st.text(selected_criterion.required_evidence_level.value)
+        st.caption("Observed evidence")
+        st.text(selected_finding.evidence_level.value)
+        st.caption("Confidence")
+        st.text(selected_finding.confidence_band.value.title())
+        st.caption("Candidate count")
+        st.text(str(len(selected_finding.evidence_ids)))
+        st.caption("Human resolution")
+        st.text(selected_resolution)
+        st.caption("Finding rationale")
+        st.text(selected_finding.reason)
+        st.markdown("### How ScopeProof searched")
+        selected_diagnostic = diagnostic_by_id.get(selected_id)
+        if selected_diagnostic is None:
+            st.caption("Retrieval diagnostics were not recorded for this review.")
+        else:
+            st.caption("Search outcome")
+            st.text(_status_label(selected_diagnostic.outcome.value))
+            st.caption("Searched terms")
+            st.text(", ".join(selected_diagnostic.searched_terms) or "None")
+            st.caption("Exact identifiers")
+            st.text(", ".join(selected_diagnostic.exact_identifiers) or "None")
+            st.caption("Searched evidence types")
+            st.text(
                 ", ".join(
                     _status_label(item.value)
                     for item in selected_diagnostic.searched_evidence_types
                 )
                 or "None"
             )
+            st.caption("Searched paths")
+            st.text(str(len(selected_diagnostic.searched_paths)))
+            if selected_diagnostic.searched_paths:
+                with st.expander("Inspect searched paths"):
+                    st.code("\n".join(selected_diagnostic.searched_paths), language=None)
+            st.caption("Retrieval counts")
+            st.text(
+                "Inspectable lines: "
+                f"{selected_diagnostic.inspectable_line_count} · "
+                "Term-overlap lines: "
+                f"{selected_diagnostic.term_overlap_line_count} · "
+                "Below-threshold lines: "
+                f"{selected_diagnostic.below_threshold_line_count} · "
+                "Accepted candidates: "
+                f"{selected_diagnostic.accepted_candidate_count}"
+            )
+            st.caption(
+                "Search diagnostics explain retrieval; they are not evidence that the criterion "
+                "is satisfied or missing from the repository."
+            )
+        if selected_finding.missing_evidence:
+            st.markdown("**Missing evidence**")
+            for missing in selected_finding.missing_evidence:
+                st.text(missing)
+        st.markdown("**Recommended next action**")
+        st.code(selected_finding.recommended_action, language=None)
+        st.markdown("### Candidate evidence")
+        evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
+        if not selected_finding.evidence_ids:
+            st.caption("No candidate evidence is linked to this provisional finding.")
+        selected_items = [
+            evidence_by_id[evidence_id] for evidence_id in selected_finding.evidence_ids
+        ]
+        for group_number, group in enumerate(group_candidate_evidence(selected_items), start=1):
+            group_label = (
+                f"Evidence group {group_number} · {_status_label(group.evidence_type.value)} · "
+                f"{len(group.items)} {'item' if len(group.items) == 1 else 'items'}"
+            )
+            with st.expander(group_label, expanded=False):
+                st.caption("Repository path")
+                st.code(group.file_path, language=None)
+                for item in group.items:
+                    with st.container(border=True):
+                        st.caption("Evidence ID")
+                        st.code(item.evidence_id, language=None)
+                        st.caption(
+                            f"Lines {item.line_start}-{item.line_end} · "
+                            f"Level {item.evidence_level.value}"
+                        )
+                        if item.evidence_type.value == "test":
+                            st.caption(
+                                "Test/eval definition shows intent, not executed verification."
+                            )
+                        st.code(item.excerpt)
+                        if item.context_excerpt:
+                            st.caption("Bounded context")
+                            st.code(item.context_excerpt)
+                        st.markdown(render_artifact_reference_markdown(item.permalink))
+                        st.caption("Matching rationale")
+                        st.text(item.relevance_reason)
+                        st.caption("Matching rule")
+                        st.text(item.matching_rule)
+                        for limitation in item.limitations:
+                            st.caption("Limitation")
+                            st.text(limitation)
+
+    with decision_column:
+        resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
+
+        st.markdown("### Criterion resolution")
+        st.caption("This decision will be recorded for the selected criterion above.")
+        st.caption("It does not record final review acceptance.")
+        decision_reviewer = st.text_input(
+            "Decision reviewer (required)",
+            value="Local reviewer",
+            key="decision_reviewer",
         )
-        st.caption(f"Searched paths: {len(selected_diagnostic.searched_paths)}")
-        if selected_diagnostic.searched_paths:
-            with st.expander("Inspect searched paths"):
-                st.code("\n".join(selected_diagnostic.searched_paths), language=None)
-        st.caption(
-            "Inspectable lines: "
-            f"{selected_diagnostic.inspectable_line_count} · "
-            "Term-overlap lines: "
-            f"{selected_diagnostic.term_overlap_line_count} · "
-            "Below-threshold lines: "
-            f"{selected_diagnostic.below_threshold_line_count} · "
-            "Accepted candidates: "
-            f"{selected_diagnostic.accepted_candidate_count}"
+        decision_reviewer_ready = bool(decision_reviewer.strip())
+        if not decision_reviewer_ready:
+            st.caption("Decision reviewer is required for an attributable audit event.")
+        decision_options = [
+            HumanDecision.ACCEPTED,
+            HumanDecision.CHANGE_REQUIRED,
+            HumanDecision.REJECTED_FINDING,
+            HumanDecision.ACCEPTED_EXCEPTION,
+            HumanDecision.NOT_IN_SCOPE,
+        ]
+        decision = st.selectbox(
+            "Human decision",
+            options=decision_options,
+            index=None,
+            placeholder="Select a decision",
+            format_func=lambda item: _status_label(item.value),
+            key="resolution_decision",
         )
-        st.caption(
-            "Search diagnostics explain retrieval; they are not evidence that the criterion "
-            "is satisfied or missing from the repository."
-        )
-    if selected_finding.missing_evidence:
-        st.markdown("**Missing evidence**")
-        for missing in selected_finding.missing_evidence:
-            st.markdown(f"- {missing}")
-    st.markdown("**Recommended next action**")
-    st.info(selected_finding.recommended_action)
-    st.code(selected_finding.recommended_action, language=None)
-    st.markdown("### Candidate evidence")
-    evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
-    if not selected_finding.evidence_ids:
-        st.caption("No candidate evidence is linked to this provisional finding.")
-    for evidence_id in selected_finding.evidence_ids:
-        item = evidence_by_id[evidence_id]
-        with st.expander(
-            f"{item.file_path}:L{item.line_start} · {item.evidence_type.value} · "
-            f"{item.evidence_level.value}"
+        if decision is None:
+            st.caption("Select a decision to see its deterministic gate impact.")
+        else:
+            st.caption(f"Decision impact: {decision_guidance(decision)}")
+        resolution_note = st.text_area("Reviewer note", key="resolution_note")
+        if resolution_save_notice is not None:
+            st.success(resolution_save_notice)
+        if st.button(
+            "Save resolution",
+            key="save_resolution",
+            disabled=(decision is None or not decision_reviewer_ready),
         ):
-            if item.evidence_type.value == "test":
-                st.caption("Test/eval definition shows intent, not executed verification.")
-            st.code(item.excerpt)
-            if item.context_excerpt:
-                st.markdown("**Bounded context:**")
-                st.code(item.context_excerpt)
-            st.markdown(f"[Open immutable GitHub evidence]({item.permalink})")
-            st.markdown(f"**Matching rationale:** {item.relevance_reason}")
-            st.caption(f"Matching rule: {item.matching_rule}")
-            for limitation in item.limitations:
-                st.caption(f"Limitation: {limitation}")
-
-    runtime_evidence_save_notice = st.session_state.pop(
-        "runtime_evidence_save_notice", None
-    )
-
-    st.markdown("### Record external verification")
-    st.caption("This record will be attached to the selected criterion.")
-    st.text(selected_criterion.text)
-    st.caption(
-        "Record a human-supplied observation only. ScopeProof does not run PR code or "
-        "infer runtime results. Saving records the evidence and the criterion's "
-        "manual-verification decision together."
-    )
-    runtime_artifact = st.text_input(
-        "Artifact or URL (required)", key="runtime_artifact_reference"
-    )
-    runtime_scenario = st.text_area(
-        "Runtime scenario (required)", key="runtime_scenario"
-    )
-    runtime_environment = st.text_input(
-        "Environment (required)", key="runtime_environment"
-    )
-    runtime_result = st.text_input(
-        "Observed result (required)", key="runtime_result"
-    )
-    runtime_reviewer = st.text_input(
-        "Runtime reviewer (required)", key="runtime_reviewer"
-    )
-    runtime_limitations = st.text_area(
-        "Runtime limitations (optional)", key="runtime_limitations"
-    )
-    runtime_level = st.selectbox(
-        "Runtime evidence level",
-        options=[EvidenceLevel.E3, EvidenceLevel.E4],
-        key="runtime_evidence_level",
-    )
-    st.caption(
-        "E3 means manually recorded external runtime verification. "
-        "E4 means explicit human acceptance. Saving resolves this criterion as manually "
-        "verified but does not record final review acceptance. "
-        "Artifact, scenario, environment, observed result, and reviewer are required. "
-        "Limitations are optional."
-    )
-    if runtime_evidence_save_notice is not None:
-        st.success(runtime_evidence_save_notice)
-    required_runtime_fields = (
-        ("Artifact or URL", runtime_artifact),
-        ("Runtime scenario", runtime_scenario),
-        ("Environment", runtime_environment),
-        ("Observed result", runtime_result),
-        ("Runtime reviewer", runtime_reviewer),
-    )
-    missing_runtime_fields = [
-        label for label, value in required_runtime_fields if not value.strip()
-    ]
-    runtime_evidence_ready = not missing_runtime_fields
-    if missing_runtime_fields:
-        st.caption(
-            "Complete required fields to enable Save: "
-            + ", ".join(missing_runtime_fields)
-            + "."
-        )
-    if st.button(
-        "Save external verification",
-        key="save_runtime_evidence",
-        disabled=not runtime_evidence_ready,
-    ):
-        if review_state is None:
-            st.error("Run analysis before recording external verification.")
-        else:
-            try:
-                runtime_evidence = RuntimeEvidence(
-                    criterion_id=selected_id,
-                    artifact_reference=runtime_artifact,
-                    scenario=runtime_scenario,
-                    environment=runtime_environment,
-                    result=runtime_result,
-                    reviewer=runtime_reviewer,
-                    evidence_level=runtime_level,
-                    limitations=[
-                        line.strip() for line in runtime_limitations.splitlines() if line.strip()
-                    ],
-                )
-                verification_event = ResolutionEvent(
-                    criterion_id=selected_id,
-                    decision=HumanDecision.MANUALLY_VERIFIED,
-                    comment=f"Externally observed result: {runtime_result.strip()}",
-                    claimed_evidence_level=runtime_level,
-                    reviewer=runtime_reviewer.strip(),
-                )
-                review_state = append_external_verification(
-                    review_state, runtime_evidence, verification_event
-                )
-                st.session_state["review_state"] = review_state
-                st.session_state["bundle"] = review_state.bundle
-                bundle = review_state.bundle
-                st.session_state["runtime_evidence_form_reset_pending"] = True
-                st.session_state["runtime_evidence_save_notice"] = (
-                    "External verification and reviewer decision recorded together."
-                )
-                st.rerun()
-            except ValueError:
-                st.error(
-                    "External verification could not be saved. Check every required field and "
-                    "select E3 or E4."
-                )
-    selected_runtime = [
-        item for item in bundle.runtime_evidence if item.criterion_id == selected_id
-    ]
-    for item in selected_runtime:
-        artifact_reference = render_artifact_reference_markdown(item.artifact_reference)
-        recorded_at = item.model_dump(mode="json")["timestamp"]
-        with st.container(border=True):
-            st.markdown(f"{artifact_reference} — {item.scenario}")
-            st.markdown(f"**Environment:** {item.environment}")
-            st.markdown(f"**Observed result:** {item.result}")
-            st.markdown(f"**Evidence level:** {item.evidence_level.value}")
-            st.markdown(f"**Reviewer:** {item.reviewer}")
-            st.markdown(f"**Recorded at (UTC):** {recorded_at}")
-            st.markdown("**Limitations**")
-            if item.limitations:
-                for limitation in item.limitations:
-                    st.markdown(f"- {limitation}")
+            if review_state is None:
+                st.error("Run analysis before recording a human resolution.")
             else:
-                st.caption("No limitations recorded.")
+                assert decision is not None
+                try:
+                    event = ResolutionEvent(
+                        criterion_id=selected_id,
+                        decision=decision,
+                        comment=resolution_note,
+                        reviewer=decision_reviewer.strip(),
+                    )
+                    review_state = append_resolution(review_state, event)
+                except ValueError:
+                    st.error(
+                        "Criterion resolution could not be recorded. The review remains "
+                        "unchanged. Verify the active review state and try again."
+                    )
+                else:
+                    st.session_state["review_state"] = review_state
+                    st.session_state["bundle"] = review_state.bundle
+                    bundle = review_state.bundle
+                    st.session_state["resolution_form_reset_pending"] = True
+                    st.session_state["resolution_save_notice"] = (
+                        "Human resolution appended to the local review history."
+                    )
+                    st.rerun()
 
-    resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
+        runtime_evidence_save_notice = st.session_state.pop("runtime_evidence_save_notice", None)
+        if runtime_evidence_save_notice is not None:
+            st.success(runtime_evidence_save_notice)
 
-    decision_reviewer = st.text_input(
-        "Decision reviewer (required)",
-        value="Local reviewer",
-        key="decision_reviewer",
-    )
-    decision_reviewer_ready = bool(decision_reviewer.strip())
-    if not decision_reviewer_ready:
-        st.caption("Decision reviewer is required for an attributable audit event.")
-
-    st.markdown("### Criterion resolution")
-    st.caption("This decision will be recorded for the selected criterion.")
-    st.text(selected_criterion.text)
-    st.caption("It does not record final review acceptance.")
-    decision_options = [
-        HumanDecision.ACCEPTED,
-        HumanDecision.CHANGE_REQUIRED,
-        HumanDecision.REJECTED_FINDING,
-        HumanDecision.ACCEPTED_EXCEPTION,
-        HumanDecision.NOT_IN_SCOPE,
-    ]
-    decision = st.selectbox(
-        "Human decision",
-        options=decision_options,
-        index=None,
-        placeholder="Select a decision",
-        format_func=lambda item: _status_label(item.value),
-        key="resolution_decision",
-    )
-    if decision is None:
-        st.caption("Select a decision to see its deterministic gate impact.")
-    else:
-        st.caption(f"Decision impact: {decision_guidance(decision)}")
-    resolution_note = st.text_area("Reviewer note", key="resolution_note")
-    if resolution_save_notice is not None:
-        st.success(resolution_save_notice)
-    if st.button(
-        "Save resolution",
-        key="save_resolution",
-        disabled=(
-            decision is None
-            or not decision_reviewer_ready
-        ),
-    ):
-        if review_state is None:
-            st.error("Run analysis before recording a human resolution.")
-        else:
-            assert decision is not None
-            try:
-                event = ResolutionEvent(
-                    criterion_id=selected_id,
-                    decision=decision,
-                    comment=resolution_note,
-                    reviewer=decision_reviewer.strip(),
+        with st.expander(
+            "Record optional external verification (E3/E4)",
+            expanded=False,
+        ):
+            st.caption(
+                "Record a human-supplied observation only. ScopeProof does not run PR code or "
+                "infer runtime results. Saving records runtime evidence and its "
+                "manual-verification decision atomically."
+            )
+            st.caption("This record will be attached to the selected criterion.")
+            runtime_artifact = st.text_input(
+                "Artifact or URL (required)", key="runtime_artifact_reference"
+            )
+            runtime_scenario = st.text_area("Runtime scenario (required)", key="runtime_scenario")
+            runtime_environment = st.text_input("Environment (required)", key="runtime_environment")
+            runtime_result = st.text_input("Observed result (required)", key="runtime_result")
+            runtime_reviewer = st.text_input("Runtime reviewer (required)", key="runtime_reviewer")
+            runtime_limitations = st.text_area(
+                "Runtime limitations (optional)", key="runtime_limitations"
+            )
+            runtime_level = st.selectbox(
+                "Runtime evidence level",
+                options=[EvidenceLevel.E3, EvidenceLevel.E4],
+                key="runtime_evidence_level",
+            )
+            st.caption(
+                "E3 means manually recorded external runtime verification. "
+                "E4 means explicit human acceptance. Saving resolves this criterion as manually "
+                "verified but does not record final review acceptance. "
+                "Artifact, scenario, environment, observed result, and reviewer are required. "
+                "Limitations are optional."
+            )
+            required_runtime_fields = (
+                ("Artifact or URL", runtime_artifact),
+                ("Runtime scenario", runtime_scenario),
+                ("Environment", runtime_environment),
+                ("Observed result", runtime_result),
+                ("Runtime reviewer", runtime_reviewer),
+            )
+            missing_runtime_fields = [
+                label for label, value in required_runtime_fields if not value.strip()
+            ]
+            runtime_evidence_ready = not missing_runtime_fields
+            if missing_runtime_fields:
+                st.caption(
+                    "Complete required fields to enable Save: "
+                    + ", ".join(missing_runtime_fields)
+                    + "."
                 )
-                review_state = append_resolution(review_state, event)
-            except ValueError:
-                st.error(
-                    "Criterion resolution could not be recorded. The review remains unchanged. "
-                    "Verify the active review state and try again."
-                )
-            else:
-                st.session_state["review_state"] = review_state
-                st.session_state["bundle"] = review_state.bundle
-                bundle = review_state.bundle
-                st.session_state["resolution_form_reset_pending"] = True
-                st.session_state["resolution_save_notice"] = (
-                    "Human resolution appended to the local review history."
-                )
-                st.rerun()
+            if st.button(
+                "Save external verification",
+                key="save_runtime_evidence",
+                disabled=not runtime_evidence_ready,
+            ):
+                if review_state is None:
+                    st.error("Run analysis before recording external verification.")
+                else:
+                    try:
+                        runtime_evidence = RuntimeEvidence(
+                            criterion_id=selected_id,
+                            artifact_reference=runtime_artifact,
+                            scenario=runtime_scenario,
+                            environment=runtime_environment,
+                            result=runtime_result,
+                            reviewer=runtime_reviewer,
+                            evidence_level=runtime_level,
+                            limitations=[
+                                line.strip()
+                                for line in runtime_limitations.splitlines()
+                                if line.strip()
+                            ],
+                        )
+                        verification_event = ResolutionEvent(
+                            criterion_id=selected_id,
+                            decision=HumanDecision.MANUALLY_VERIFIED,
+                            comment=f"Externally observed result: {runtime_result.strip()}",
+                            claimed_evidence_level=runtime_level,
+                            reviewer=runtime_reviewer.strip(),
+                        )
+                        review_state = append_external_verification(
+                            review_state, runtime_evidence, verification_event
+                        )
+                        st.session_state["review_state"] = review_state
+                        st.session_state["bundle"] = review_state.bundle
+                        bundle = review_state.bundle
+                        st.session_state["runtime_evidence_form_reset_pending"] = True
+                        st.session_state["runtime_evidence_save_notice"] = (
+                            "External verification and reviewer decision recorded together."
+                        )
+                        st.rerun()
+                    except ValueError:
+                        st.error(
+                            "External verification could not be saved. Check every required "
+                            "field and select E3 or E4."
+                        )
+        selected_runtime = [
+            item for item in bundle.runtime_evidence if item.criterion_id == selected_id
+        ]
+        with st.expander(
+            f"Recorded runtime evidence ({len(selected_runtime)})",
+            expanded=False,
+        ):
+            if not selected_runtime:
+                st.caption("No runtime evidence has been recorded for this criterion.")
+            for item in selected_runtime:
+                recorded_at = item.model_dump(mode="json")["timestamp"]
+                with st.container(border=True):
+                    st.caption("Artifact reference")
+                    st.markdown(render_artifact_reference_markdown(item.artifact_reference))
+                    st.caption("Runtime scenario")
+                    st.text(item.scenario)
+                    st.caption("Environment")
+                    st.text(item.environment)
+                    st.caption("Observed result")
+                    st.text(item.result)
+                    st.caption("Evidence level")
+                    st.text(item.evidence_level.value)
+                    st.caption("Reviewer")
+                    st.text(item.reviewer)
+                    st.caption("Recorded at (UTC)")
+                    st.text(recorded_at)
+                    st.caption("Limitations")
+                    if item.limitations:
+                        for limitation in item.limitations:
+                            st.text(limitation)
+                    else:
+                        st.caption("No limitations recorded.")
 
-    final_acceptance_save_notice = st.session_state.pop(
-        "final_acceptance_save_notice", None
-    )
+    final_acceptance_save_notice = st.session_state.pop("final_acceptance_save_notice", None)
     final_acceptance_recorded = bool(
         review_state is not None and review_state.review.final_acceptance
     )
@@ -1797,24 +1820,29 @@ else:
                     else "Not recorded"
                 )
                 status = (
-                    f"**Current · revision {event.criteria_revision_number}**"
+                    f"Current · revision {event.criteria_revision_number}"
                     if event_status is ResolutionEventStatus.CURRENT
                     else (
-                        f"{status_labels[event_status]} · revision "
-                        f"{event.criteria_revision_number}"
+                        f"{status_labels[event_status]} · revision {event.criteria_revision_number}"
                     )
-                )
-                st.markdown(
-                    f"- {status} — {target}: {outcome} — "
-                    f"{event.comment or 'No note provided'}"
                 )
                 recorded_at = event.model_dump(mode="json")["timestamp"]
-                metadata = f"Reviewer: {event.reviewer} · Recorded at (UTC): {recorded_at}"
-                if event.claimed_evidence_level is not None:
-                    metadata += (
-                        f" · Claimed evidence level: {event.claimed_evidence_level.value}"
-                    )
-                st.caption(metadata)
+                with st.container(border=True):
+                    st.caption("Event status")
+                    st.text(status)
+                    st.caption("Target")
+                    st.code(target, language=None)
+                    st.caption("Outcome")
+                    st.text(outcome)
+                    st.caption("Reviewer comment")
+                    st.text(event.comment or "No note provided")
+                    st.caption("Reviewer")
+                    st.text(event.reviewer)
+                    st.caption("Recorded at (UTC)")
+                    st.text(recorded_at)
+                    if event.claimed_evidence_level is not None:
+                        st.caption("Claimed evidence level")
+                        st.text(event.claimed_evidence_level.value)
         else:
             st.caption("No human decisions have been recorded yet.")
 

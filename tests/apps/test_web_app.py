@@ -38,3 +38,10 @@ def test_criterion_text_is_rendered_inertly_outside_markdown_headings() -> None:
         for interpolation in unsafe_selected_criterion_interpolations
         if interpolation in app_source
     ] == []
+
+
+def test_candidate_evidence_links_use_the_safe_reference_renderer() -> None:
+    app_source = Path("apps/web/app.py").read_text(encoding="utf-8")
+
+    assert 'f"[Open immutable GitHub evidence]({item.permalink})"' not in app_source
+    assert "render_artifact_reference_markdown(item.permalink)" in app_source
