@@ -94,3 +94,51 @@ Keyboard rows report only the exact exercised interaction. They do not establish
 ## Conclusion
 
 The constructed demo completed the requested pointer flow at 1280×720 and the bounded responsive checks at 390×844. The observed flow preserved explicit confirmation, deterministic evidence boundaries, a fail-closed action-required summary, exports before local storage, and automatic durable local persistence. Keyboard and zoom limitations remain explicitly `Not confirmed`. This record is engineering evidence only and provides zero Stage 1 credit.
+
+## Release-quality local verification — 2026-08-01
+
+### Evidence target and boundary
+
+- Verification target SHA: `444ea0ea4bd331d2636be9b59ff4cf752e1f0295`.
+- This SHA is the local branch head exercised before this verification record was appended. It is not the SHA of the later evidence commit that contains this section.
+- This is local engineering evidence for the branch. It does not make the branch public `main`, publish version 0.2.3, establish customer or production evidence, prove runtime correctness, or advance Stage 1.
+
+### Locked environment and source gates
+
+| Command | Current-run result |
+| --- | --- |
+| `uv sync --extra dev --extra research --locked` | Passed: resolved 60 packages and checked 55 packages. |
+| `uv lock --check` | Passed: resolved 60 packages. The `uv.lock` SHA-256 remained `7d86997ce50b722d07c53ccb113402555bc093021df7179132666a6efff17520`, with no lockfile diff. |
+| `uv run ruff check .` | Passed: `All checks passed!` |
+| `uv run pytest -q` | Passed: 1,663 tests passed and 1 intentional live test was skipped in 107.58 seconds. |
+| `uv run scopeproof benchmark` | Passed: 12 cases and 13 criteria executed; 0 mismatches, 0 status mismatches, 0 must-have False Ready outcomes, 0 false blockers, and 0 unexecuted declared categories. |
+| `uv run scopeproof comparison-benchmark` | Passed: 2 cases executed; 0 mismatches. Aggregate classifications were 3 added, 1 modified, 1 relocated, 3 removed, and 1 unchanged. The result retained `does_not_advance_stage_1: true`. |
+| Combined `pytest` coverage command for `scopeproof_core` and `apps` | Passed: 1,663 tests passed and 1 intentional live test was skipped in 275.02 seconds. Across 8,364 statements, 403 were missed; exact combined coverage was 95.18%, meeting the 95% threshold. |
+
+### Built-package and installed-runtime checks
+
+- A fresh build in `/tmp/scopeproof-workbench-ux-dist-COUQIV` produced `scopeproof-0.2.3-py3-none-any.whl` and `scopeproof-0.2.3.tar.gz`.
+- The shell did not initially expose a bare `python` command. An incomplete first build directory, `/tmp/scopeproof-workbench-ux-dist-1MSryK`, was not used for installation or runtime evidence. The complete build was rerun in the fresh directory above after placing the locked Python 3.12.0 interpreter on `PATH`; the requested `python -m venv` command then succeeded.
+- The wheel installed successfully into a new virtual environment outside the checkout.
+- The installed `scopeproof benchmark` repeated 12 cases and 13 criteria with 0 mismatches, 0 must-have False Ready outcomes, 0 false blockers, and 0 unexecuted declared categories.
+- The installed `scopeproof comparison-benchmark` repeated 2 cases with 0 mismatches and aggregate classifications of 3 added, 1 modified, 1 relocated, 3 removed, and 1 unchanged; `does_not_advance_stage_1` remained true.
+- The installed `scopeproof-web` process launched from `/tmp` with isolated home `/tmp/scopeproof-workbench-ux-home-CbGUO9` on `127.0.0.1:8513`. `GET /_stcore/health` returned the exact body `ok`.
+- The exact installed server session was interrupted. The health endpoint then became unreachable, no listener remained on port 8513, and no matching installed server process remained.
+- The Task 8 browser-evidence server was also cleaned up: the exact server was interrupted, its health endpoint became unreachable afterward, and no matching process remained.
+
+### Distribution inventories and temporary-artifact cleanup
+
+| Artifact | Inventory | Forbidden-path scan | SHA-256 |
+| --- | ---: | ---: | --- |
+| `scopeproof-0.2.3-py3-none-any.whl` | 99 entries | 0 | `39553b2088f07149b1681423262c917b5204a54a32dde47f32eefdbe67daec61` |
+| `scopeproof-0.2.3.tar.gz` | 530 entries | 0 | `2294786fa911b12c61821b658110f3c9f037fe7009ebada15680bb2c52a9f37c` |
+
+The inventory scan covered `.scopeproof`, coverage outputs, virtual environments, `.git` data, local tool/worktree data, bytecode, common credential filenames, local-review artifacts, and generated cache/build directories. Neither archive contained a matching path. The complete build directory, incomplete first-attempt directory, and isolated runtime home were removed after inventory evidence was captured; no distribution, virtual environment, server state, or local-review artifact was left in the checkout.
+
+### Repository hygiene qualification
+
+- `git diff --check origin/main...HEAD` passed with no output. Before commit, `git status --short --branch` showed only this verification document modified on a branch 15 commits ahead of `origin/main`.
+- The literal required tracked scan, `git ls-files | rg '(^|/)(\.coverage|\.scopeproof|\.venv|__pycache__)(/|$)|\.pyc$'`, exited 0 and returned `.scopeproof/requirements-confirmation.json` and `.scopeproof/requirements.txt`. The expected-empty assertion therefore did **not** pass.
+- This is an inherited baseline false-positive, not new generated branch content: both paths already exist on `origin/main`, there is no branch diff under `.scopeproof`, and their history predates this branch. `docs/github-action.md` requires the two checked-in Action inputs, while `.github/workflows/scopeproof.yml` validates and consumes them.
+- Supplemental branch-diff scan `git diff --name-only origin/main | rg '(^|/)(\.coverage|\.scopeproof|\.venv|__pycache__)(/|$)|\.pyc$'` exited 1 with no matches, proving this branch introduces no path covered by the forbidden-generated-path pattern.
+- The narrow `git ls-files .scopeproof` inventory contained exactly the two intentional requirements inputs above. A targeted scan found no tracked review, alpha-case, rehearsal, research, or local-review JSON data under `.scopeproof`.
