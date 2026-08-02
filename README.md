@@ -77,23 +77,27 @@ The release gate uses explicit precedence:
 
 The earlier post-merge v0.2.3 audit found two core integrity defects in the
 intended flow. [PR #177](https://github.com/YuzeJ21/Scope-Proof/pull/177)
-repaired those findings, and [PR #179](https://github.com/YuzeJ21/Scope-Proof/pull/179)
-then merged the latest completed workbench UX change to public `main` at
-`6e3dec784f7cad9931999d4c5eac1cfe2a9006de`.
+repaired those findings, [PR #179](https://github.com/YuzeJ21/Scope-Proof/pull/179)
+merged the completed workbench UX change, and
+[PR #180](https://github.com/YuzeJ21/Scope-Proof/pull/180) merged the exact-head
+runtime-evidence hardening as product commit
+`2a320df966eff30c05a2b1dce607a247201fa165`.
 
-The **v0.2.3 exact-head runtime-evidence candidate** verified at
-`95b2dc44132edad796f0316d846cd35e536443f6` closes a further integrity gap on an
-unmerged branch. Each effective E3/E4 decision now carries a runtime evidence
-ID and must resolve exactly one runtime record for the same repository, pull
+The merged **v0.2.3 exact-head runtime-evidence hardening** binds each effective
+E3/E4 decision to exactly one runtime record for the same repository, pull
 request, reviewed head, criterion, reviewer, and evidence level. Version 1 and
 2 local records migrate to version 3 without inventing links: legacy-unlinked
 manual decisions remain visible but become `Needs Review` until verification is
-re-recorded at the active head. The candidate also exposes immutable provenance
-in the workbench and every export, shows skipped-check limits outside collapsed
+re-recorded at the active head. It also exposes immutable provenance in the
+workbench and every export, shows skipped-check limits outside collapsed
 details, and provides a safe draft-clear recovery for revised bundle-less
-reviews. It is not merged, tagged, or released and creates zero Stage 1 credit.
-The [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
-records the candidate-only engineering evidence and remaining gaps.
+reviews. Independently verified PR head
+`ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f` has the same product tree,
+`add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8`, as the merge commit. Stage 0's
+engineering foundation is restored; this work is not tagged or released and
+creates zero Stage 1 credit. The
+[exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
+records the product-tree engineering evidence and remaining gaps.
 
 GitHub exposes visible check runs but does not reliably expose every repository's required-check
 policy to anonymous clients. ScopeProof therefore labels this value **Observed CI state** and counts
@@ -106,11 +110,10 @@ Python 3.11 or newer is required.
 Install the verified v0.2.1 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
-The v0.2.3 source line through PRs #174, #177, and #179 is on public `main`,
-but the exact-head runtime-evidence hardening above remains an unmerged branch
-candidate. No v0.2.3 tag or GitHub Release exists; the verified public install
-path below therefore remains v0.2.1 until merge, exact-main verification, and a
-separate owner publication decision.
+The v0.2.3 source line through PRs #174, #177, #179, and #180 is merged. No
+v0.2.3 tag or GitHub Release exists; the verified public install path below
+therefore remains v0.2.1. Publication still requires fresh assets and checksums
+for the authorized release tree plus a separate owner decision.
 
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)

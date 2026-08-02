@@ -558,16 +558,49 @@ class _CommitIdentity(_StrictVerificationModel):
     tree: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
-class _PublicMainIdentity(_CommitIdentity):
-    last_completed_pr: Literal[179]
-
-
-class _CandidateDisposition(_CommitIdentity):
+class _MergedProductDisposition(_CommitIdentity):
     version: Literal["0.2.3"]
-    disposition: Literal["ready_for_draft_review"]
-    merged: Literal[False]
+    pull_request: Literal[180]
+    merged: Literal[True]
     tagged: Literal[False]
     released: Literal[False]
+    stage_0: Literal["engineering_foundation_restored"]
+
+
+class _IndependentlyVerifiedHead(_CommitIdentity):
+    pull_request: Literal[180]
+    same_tree_as_merged_product: Literal[True]
+
+
+class _WorkflowRun(_StrictVerificationModel):
+    run_id: int = Field(gt=0)
+    workflow_id: int = Field(gt=0)
+    workflow: str = Field(min_length=1)
+    workflow_file: str = Field(min_length=1)
+    run_number: int = Field(gt=0)
+    attempt: Literal[1]
+    check_suite_id: int = Field(gt=0)
+    url: str = Field(pattern=r"^https://github\.com/YuzeJ21/Scope-Proof/actions/runs/\d+$")
+    status: Literal["completed"]
+    conclusion: Literal["success"]
+    event: Literal["push", "dynamic"]
+    head_branch: Literal["main"]
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class _MergedMainRuns(_StrictVerificationModel):
+    verified_at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+    attributed_to: _CommitIdentity
+    ci: _WorkflowRun
+    codeql: _WorkflowRun
+    pages: _WorkflowRun
+
+
+class _DocumentationAlignmentBoundary(_StrictVerificationModel):
+    classification: Literal["docs_only_post_merge_alignment"]
+    changes_later_repository_tree: Literal[True]
+    covered_by_product_tree_package_hashes: Literal[False]
+    required_verification: Literal["affected_checks_and_pull_request_ci"]
 
 
 class _EngineeringBoundary(_StrictVerificationModel):
@@ -579,14 +612,13 @@ class _EngineeringBoundary(_StrictVerificationModel):
 
 class _PublicInstall(_StrictVerificationModel):
     version: Literal["0.2.1"]
+    latest_release: Literal["0.2.1"]
 
 
 class _RuntimeEvidenceContract(_StrictVerificationModel):
     identity_field: Literal["runtime_evidence_id"]
     legacy_unlinked_gate: Literal["needs_review"]
-    reconfirmation_reason: Literal[
-        "runtime_verification_reconfirmation_required"
-    ]
+    reconfirmation_reason: Literal["runtime_verification_reconfirmation_required"]
     record_version: Literal[3]
 
 
@@ -599,6 +631,7 @@ class _StageOneCounts(_StrictVerificationModel):
 
 
 class _ProductStageBoundary(_StrictVerificationModel):
+    stage_0: Literal["engineering_foundation_restored"]
     stage_1: _StageOneCounts
     gated_stages: tuple[Literal[2], Literal[3], Literal[4]]
 
@@ -608,12 +641,11 @@ class _SourceSuiteEvidence(_StrictVerificationModel):
     sync_checked_packages: Literal[55]
     lock_resolved_packages: Literal[60]
     ruff_passed: Literal[True]
-    tests_passed: Literal[1747]
+    tests_passed: Literal[1751]
     tests_skipped: Literal[1]
-    test_seconds: Literal[122.18]
-    coverage_statements: Literal[8561]
-    coverage_missed: Literal[411]
-    coverage_percent: Literal[95.20]
+    coverage_statements: Literal[8588]
+    coverage_missed: Literal[416]
+    coverage_percent: Literal[95.16]
     coverage_threshold_percent: Literal[95.0]
 
 
@@ -686,19 +718,21 @@ class _MeasuredEvidence(_StrictVerificationModel):
 
 
 class _HistoricalEvidenceBoundary(_StrictVerificationModel):
-    r002_rerun_for_candidate: Literal[False]
-    browser_walkthrough_for_candidate: Literal[False]
+    r002_rerun_for_verified_head: Literal[False]
+    browser_walkthrough_for_verified_head: Literal[False]
     historical_browser_is_current: Literal[False]
     historical_package_is_current: Literal[False]
     historical_r002_is_current: Literal[False]
-    exact_public_main_package_runtime_evidence: Literal[False]
+    merged_product_tree_package_runtime_evidence: Literal[True]
 
 
 class _ExactHeadVerificationManifest(_StrictVerificationModel):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     boundary: _EngineeringBoundary
-    public_main: _PublicMainIdentity
-    verified_candidate: _CandidateDisposition
+    merged_product: _MergedProductDisposition
+    independently_verified_head: _IndependentlyVerifiedHead
+    merged_main_runs: _MergedMainRuns
+    documentation_alignment: _DocumentationAlignmentBoundary
     public_install: _PublicInstall
     runtime_evidence: _RuntimeEvidenceContract
     product_stages: _ProductStageBoundary
@@ -708,9 +742,7 @@ class _ExactHeadVerificationManifest(_StrictVerificationModel):
 
 def _load_exact_head_verification_manifest() -> _ExactHeadVerificationManifest:
     path = Path("docs/audits/exact-head-runtime-evidence/verification.json")
-    return _ExactHeadVerificationManifest.model_validate_json(
-        path.read_text(encoding="utf-8")
-    )
+    return _ExactHeadVerificationManifest.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def test_exact_head_verification_manifest_preserves_public_install_boundary() -> None:
@@ -718,30 +750,116 @@ def test_exact_head_verification_manifest_preserves_public_install_boundary() ->
     readme = Path("README.md").read_text(encoding="utf-8")
 
     assert manifest.public_install.version == "0.2.1"
-    assert manifest.verified_candidate.version == "0.2.3"
-    assert manifest.verified_candidate.merged is False
-    assert manifest.verified_candidate.tagged is False
-    assert manifest.verified_candidate.released is False
+    assert manifest.public_install.latest_release == "0.2.1"
+    assert manifest.merged_product.version == "0.2.3"
+    assert manifest.merged_product.merged is True
+    assert manifest.merged_product.tagged is False
+    assert manifest.merged_product.released is False
     assert "releases/download/v0.2.1/" in readme
     assert "releases/download/v0.2.3/" not in readme
 
 
-def test_exact_head_verification_manifest_separates_candidate_from_public_main() -> None:
+def test_exact_head_verification_manifest_binds_verified_and_merged_product_tree() -> None:
     manifest = _load_exact_head_verification_manifest()
 
-    assert manifest.public_main.sha == "6e3dec784f7cad9931999d4c5eac1cfe2a9006de"
-    assert manifest.public_main.tree == "cf34a4004861a294d25005f7f598068b740bbde9"
-    assert manifest.verified_candidate.sha == "95b2dc44132edad796f0316d846cd35e536443f6"
-    assert manifest.verified_candidate.tree == "0514c42d59aa69dee65be536a9fa449eff6a6530"
+    assert manifest.merged_product.sha == "2a320df966eff30c05a2b1dce607a247201fa165"
+    assert manifest.merged_product.tree == "add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8"
+    assert manifest.merged_product.pull_request == 180
+    assert manifest.independently_verified_head.sha == "ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f"
+    assert manifest.independently_verified_head.tree == "add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8"
+    assert manifest.independently_verified_head.same_tree_as_merged_product is True
     assert manifest.measurements.attributed_to == _CommitIdentity(
-        sha=manifest.verified_candidate.sha,
-        tree=manifest.verified_candidate.tree,
+        sha=manifest.independently_verified_head.sha,
+        tree=manifest.independently_verified_head.tree,
     )
-    assert manifest.measurements.attributed_to != _CommitIdentity(
-        sha=manifest.public_main.sha,
-        tree=manifest.public_main.tree,
+    assert manifest.measurements.attributed_to.tree == manifest.merged_product.tree
+    assert manifest.historical_evidence.merged_product_tree_package_runtime_evidence is True
+
+
+def test_exact_head_verification_manifest_records_merged_main_workflows() -> None:
+    manifest = _load_exact_head_verification_manifest()
+    runs = manifest.merged_main_runs
+
+    assert runs.attributed_to == _CommitIdentity(
+        sha="2a320df966eff30c05a2b1dce607a247201fa165",
+        tree="add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8",
     )
-    assert manifest.historical_evidence.exact_public_main_package_runtime_evidence is False
+    assert runs.verified_at == "2026-08-02T05:47:39Z"
+    assert {
+        key: (
+            run.run_id,
+            run.workflow_id,
+            run.workflow,
+            run.workflow_file,
+            run.run_number,
+            run.attempt,
+            run.check_suite_id,
+            run.url,
+            run.status,
+            run.conclusion,
+            run.event,
+            run.head_sha,
+        )
+        for key, run in {
+            "ci": runs.ci,
+            "codeql": runs.codeql,
+            "pages": runs.pages,
+        }.items()
+    } == {
+        "ci": (
+            30734386610,
+            311501286,
+            "CI",
+            ".github/workflows/ci.yml",
+            548,
+            1,
+            83342869656,
+            "https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386610",
+            "completed",
+            "success",
+            "push",
+            "2a320df966eff30c05a2b1dce607a247201fa165",
+        ),
+        "codeql": (
+            30734386396,
+            311532827,
+            "CodeQL",
+            "dynamic/github-code-scanning/codeql",
+            358,
+            1,
+            83342869149,
+            "https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386396",
+            "completed",
+            "success",
+            "dynamic",
+            "2a320df966eff30c05a2b1dce607a247201fa165",
+        ),
+        "pages": (
+            30734386626,
+            314177066,
+            "Pages",
+            ".github/workflows/pages.yml",
+            30,
+            1,
+            83342869686,
+            "https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386626",
+            "completed",
+            "success",
+            "push",
+            "2a320df966eff30c05a2b1dce607a247201fa165",
+        ),
+    }
+
+
+def test_exact_head_verification_manifest_excludes_docs_alignment_from_product_hashes() -> None:
+    manifest = _load_exact_head_verification_manifest()
+
+    assert manifest.documentation_alignment.model_dump() == {
+        "classification": "docs_only_post_merge_alignment",
+        "changes_later_repository_tree": True,
+        "covered_by_product_tree_package_hashes": False,
+        "required_verification": "affected_checks_and_pull_request_ci",
+    }
 
 
 def test_exact_head_verification_manifest_records_integrity_and_stage_boundaries() -> None:
@@ -754,6 +872,7 @@ def test_exact_head_verification_manifest_records_integrity_and_stage_boundaries
         == "runtime_verification_reconfirmation_required"
     )
     assert manifest.runtime_evidence.record_version == 3
+    assert manifest.product_stages.stage_0 == "engineering_foundation_restored"
     assert manifest.product_stages.stage_1.model_dump() == {
         "qualifying_reviews": 0,
         "independent_practitioners": 0,
@@ -768,8 +887,8 @@ def test_exact_head_verification_manifest_records_measured_evidence() -> None:
     manifest = _load_exact_head_verification_manifest()
     measurements = manifest.measurements
 
-    assert measurements.source.tests_passed == 1747
-    assert measurements.source.coverage_percent == 95.20
+    assert measurements.source.tests_passed == 1751
+    assert measurements.source.coverage_percent == 95.16
     assert measurements.benchmarks.criterion.cases == 12
     assert measurements.benchmarks.criterion.criteria == 13
     assert measurements.benchmarks.comparison.changes == _ComparisonChangeCounts(
@@ -781,16 +900,16 @@ def test_exact_head_verification_manifest_records_measured_evidence() -> None:
     )
     assert measurements.package.wheel.model_dump() == {
         "filename": "scopeproof-0.2.3-py3-none-any.whl",
-        "size_bytes": 247571,
+        "size_bytes": 248171,
         "entries": 99,
-        "sha256": "5b1422fe1117abcb63d69e725d9ac2ecad012d4faa11a23c5a2bc62d75a7ae64",
+        "sha256": "70bdca1a0d609c81ac8cd2274dc4915612067cfdb1c2205276faafd7c6358ac8",
         "forbidden_inventory_matches": 0,
     }
     assert measurements.package.source_distribution.model_dump() == {
         "filename": "scopeproof-0.2.3.tar.gz",
-        "size_bytes": 5805868,
-        "entries": 532,
-        "sha256": "ff7a733c2c801be5a26963756bf3c7d4cc85a096869d1eaa20f1c16a5b127b2c",
+        "size_bytes": 5818424,
+        "entries": 534,
+        "sha256": "7fff8ba0b6b6c85ae0f22fe487762de8a525d04145c50eab46792233b798573e",
         "forbidden_inventory_matches": 0,
     }
     assert measurements.install_health.health_body == "ok"
@@ -800,8 +919,8 @@ def test_exact_head_verification_manifest_records_measured_evidence() -> None:
     assert measurements.install_health.distribution_removed is True
     assert measurements.install_health.virtual_environment_removed is True
     assert measurements.install_health.isolated_home_removed is True
-    assert manifest.historical_evidence.browser_walkthrough_for_candidate is False
-    assert manifest.historical_evidence.r002_rerun_for_candidate is False
+    assert manifest.historical_evidence.browser_walkthrough_for_verified_head is False
+    assert manifest.historical_evidence.r002_rerun_for_verified_head is False
 
 
 def test_current_intake_policy_keeps_linkedin_material_archived_and_owner_gated() -> None:

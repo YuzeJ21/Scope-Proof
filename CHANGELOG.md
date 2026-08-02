@@ -9,7 +9,7 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Candidate version: 0.2.3 (public `main` through PR #179; exact-head runtime-evidence hardening verified on an unmerged branch; not published).
+Candidate version: 0.2.3 (source merged through PR #180; untagged, unreleased, and not published).
 
 ### Integrity repairs
 
@@ -44,12 +44,13 @@ Candidate version: 0.2.3 (public `main` through PR #179; exact-head runtime-evid
   GitHub Actions bot, moved Pages write/OIDC permissions to the deployment
   job, and made the repository Action use the checked-in locked environment.
 
-The PR #177 repairs remain historical public-main evidence. The newer
-exact-head runtime-evidence repair is verified at
-`95b2dc44132edad796f0316d846cd35e536443f6` on an unmerged branch based on public
-`main` `6e3dec784f7cad9931999d4c5eac1cfe2a9006de`. It does not publish v0.2.3,
-establish customer validation, or determine whether the published v0.2.1
-package is affected.
+The PR #177 repairs remain historical public-main evidence. PR #180 merged the
+newer exact-head runtime-evidence repair as product commit
+`2a320df966eff30c05a2b1dce607a247201fa165`. Independently verified PR head
+`ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f` has the same tree,
+`add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8`. This merge restores the Stage 0
+engineering foundation; it does not publish v0.2.3, establish customer
+validation, or determine whether the published v0.2.1 package is affected.
 
 ### Changed
 
