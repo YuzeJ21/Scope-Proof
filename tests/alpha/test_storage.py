@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,19 @@ from pydantic import ValidationError
 from scopeproof_core.alpha.models import ParticipantRole
 from scopeproof_core.alpha.service import initialize_alpha_case
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore, UnsafeAlphaCaseStore
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+from scopeproof_core.schemas.models import Criterion
+
+
+def criteria_source_provenance(*, source_revision: str = "issue-6@abc123"):
+    return build_criteria_source_provenance(
+        source_uri="https://github.com/acme/repo/issues/6",
+        source_revision=source_revision,
+        source_text="Export CSV\n",
+        criteria=[Criterion(criterion_id="AC-01", text="Export CSV")],
+        confirmed_by="Repository owner",
+        confirmed_at=datetime(2026, 8, 2, 12, 0, tzinfo=UTC),
+    )
 
 
 def alpha_case():
@@ -17,6 +31,7 @@ def alpha_case():
         source_owner_confirmed=True,
         no_confidential_information=True,
         confirmed_criteria=["Export CSV"],
+        criteria_source_provenance=criteria_source_provenance(),
     )
 
 
@@ -52,6 +67,42 @@ def test_alpha_case_update_requires_existing_same_case(tmp_path: Path) -> None:
     replacement = replacement.model_copy(update={"case_id": record.case_id})
     assert store.update(replacement) == tmp_path / f"{record.case_id}.json"
     assert store.load(record.case_id) == replacement
+
+
+def test_alpha_case_update_rejects_criteria_source_provenance_drift(
+    tmp_path: Path,
+) -> None:
+    record = alpha_case()
+    store = JsonAlphaCaseStore(tmp_path)
+    store.save(record)
+    replacement = record.model_copy(
+        update={
+            "criteria_source_provenance": criteria_source_provenance(
+                source_revision="issue-6@changed"
+            )
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="alpha-case update must preserve criteria source provenance",
+    ):
+        store.update(replacement)
+
+
+def test_alpha_store_reads_legacy_record_without_inventing_provenance(
+    tmp_path: Path,
+) -> None:
+    record = alpha_case()
+    store = JsonAlphaCaseStore(tmp_path)
+    path = store.save(record)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("criteria_source_provenance")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(record.case_id)
+
+    assert loaded.criteria_source_provenance is None
 
 
 @pytest.mark.parametrize("case_id", ["../escape", "alpha-not-a-uuid", "/tmp/case"])

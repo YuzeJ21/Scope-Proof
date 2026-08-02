@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.gates import validation as gate_validation
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import (
@@ -88,7 +89,7 @@ def example_bundle() -> ReviewBundle:
         blocking_criteria=["AC-01"],
         reason_codes=["blocking_criteria"],
     )
-    return ReviewBundle(
+    bundle = ReviewBundle(
         review=review,
         source_text="Failed export shows an error",
         criteria=[criterion],
@@ -127,6 +128,28 @@ def example_bundle() -> ReviewBundle:
         resolutions=[resolution],
         gate=gate,
     )
+    bundle.review.criteria_source_provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements?next=%3Cscript%3E",
+        source_revision="issue-6@revision-42",
+        source_text=bundle.source_text,
+        criteria=bundle.criteria,
+        confirmed_by="Product owner",
+        confirmed_at=datetime(2026, 7, 11, 11, 55, tzinfo=UTC),
+    )
+    return ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+
+
+def rebind_criteria_source_provenance(bundle: ReviewBundle) -> None:
+    provenance = bundle.review.criteria_source_provenance
+    assert provenance is not None
+    bundle.review.criteria_source_provenance = build_criteria_source_provenance(
+        source_uri=provenance.source_uri,
+        source_revision=provenance.source_revision,
+        source_text=bundle.source_text,
+        criteria=bundle.criteria,
+        confirmed_by=provenance.confirmed_by,
+        confirmed_at=provenance.confirmed_at,
+    )
 
 
 def example_state():
@@ -153,6 +176,111 @@ def example_state():
             timestamp=resolution.timestamp,
         ),
     )
+
+
+def test_exports_include_one_inert_criteria_source_snapshot() -> None:
+    bundle = example_bundle()
+
+    json_report = json.loads(export_json(bundle))
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert json_report["review"]["criteria_source_provenance"] == {
+        "confirmed_at": "2026-07-11T11:55:00Z",
+        "confirmed_by": "Product owner",
+        "normalized_criteria_sha256": (
+            "ff334af327af005cd3fd82da8279ea6b5453358ff1dba3df0c4a7da968445fac"
+        ),
+        "source_revision": "issue-6@revision-42",
+        "source_text_sha256": ("b730e7b20d415f6d64948e1dd59807d4d20fd82615f2b9efc3a71798b926d57b"),
+        "source_uri": "https://example.test/requirements?next=%3Cscript%3E",
+    }
+    assert markdown.count("## Criteria Source") == 1
+    assert (
+        "| Source reference | <code>https://example.test/requirements?next=%3Cscript%3E</code> |"
+        in markdown
+    )
+    assert "[https://example.test/requirements" not in markdown
+    assert "| Revision | <code>issue-6@revision-42</code> |" in markdown
+    assert "| Confirmed by | <code>Product owner</code> |" in markdown
+    assert "| Confirmed at (UTC) | <code>2026-07-11T11:55:00Z</code> |" in markdown
+    assert csv_row["criteria_source_uri"] == ("https://example.test/requirements?next=%3Cscript%3E")
+    assert csv_row["criteria_source_revision"] == "issue-6@revision-42"
+    assert csv_row["criteria_source_text_sha256"] == (
+        "b730e7b20d415f6d64948e1dd59807d4d20fd82615f2b9efc3a71798b926d57b"
+    )
+    assert csv_row["criteria_normalized_criteria_sha256"] == (
+        "ff334af327af005cd3fd82da8279ea6b5453358ff1dba3df0c4a7da968445fac"
+    )
+    assert csv_row["criteria_confirmed_by"] == "Product owner"
+    assert csv_row["criteria_confirmed_at"] == "2026-07-11T11:55:00Z"
+    assert html_report.count("<h2>Criteria Source</h2>") == 1
+    assert '<a href="https://example.test/requirements' not in html_report
+    assert "<code>https://example.test/requirements?next=%3Cscript%3E</code>" in html_report
+
+
+@pytest.mark.parametrize("exporter", [export_json, export_markdown, export_csv, export_html])
+def test_exports_reject_current_review_without_criteria_source_provenance(
+    exporter,
+) -> None:
+    bundle = example_bundle()
+    bundle.review.criteria_source_provenance = None
+
+    with pytest.raises(ValueError, match=r"^criteria source provenance is required for export$"):
+        exporter(bundle)
+
+
+def test_exports_render_missing_optional_source_revision_as_not_supplied() -> None:
+    bundle = example_bundle()
+    assert bundle.review.criteria_source_provenance is not None
+    bundle.review.criteria_source_provenance = bundle.review.criteria_source_provenance.model_copy(
+        update={"source_revision": None}
+    )
+
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert "| Revision | Not supplied |" in markdown
+    assert csv_row["criteria_source_revision"] == ""
+    assert "<td>Revision</td><td>Not supplied</td>" in html_report
+
+
+@pytest.mark.parametrize("exporter", [export_json, export_markdown, export_csv, export_html])
+def test_exports_reject_source_text_changed_after_confirmation(exporter) -> None:
+    bundle = example_bundle()
+    bundle.source_text = "Changed after confirmation"
+
+    with pytest.raises(
+        ValueError, match="criteria source provenance does not match source text"
+    ):
+        exporter(bundle)
+
+
+def test_criteria_source_metadata_is_inert_in_human_and_spreadsheet_exports() -> None:
+    bundle = example_bundle()
+    assert bundle.review.criteria_source_provenance is not None
+    hostile_revision = "</td><script>alert(1)</script>"
+    hostile_confirmer = '=HYPERLINK("https://example.invalid","owner")'
+    bundle.review.criteria_source_provenance = (
+        bundle.review.criteria_source_provenance.model_copy(
+            update={
+                "source_revision": hostile_revision,
+                "confirmed_by": hostile_confirmer,
+            }
+        )
+    )
+
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert hostile_revision not in markdown
+    assert hostile_revision not in html_report
+    assert "&lt;/td&gt;&lt;script&gt;alert(1)&lt;/script&gt;" in markdown
+    assert "&lt;/td&gt;&lt;script&gt;alert(1)&lt;/script&gt;" in html_report
+    assert csv_row["criteria_confirmed_by"].startswith("'=")
 
 
 def linked_runtime_bundle() -> ReviewBundle:
@@ -193,14 +321,10 @@ def linked_runtime_bundle() -> ReviewBundle:
 def test_exporters_revalidate_active_review_state_identity(exporter) -> None:
     state = example_state()
     divergent = state.model_copy(
-        update={
-            "review": state.review.model_copy(update={"head_sha": "different-head"})
-        }
+        update={"review": state.review.model_copy(update={"head_sha": "different-head"})}
     )
 
-    with pytest.raises(
-        ValueError, match="active bundle review must match lifecycle review"
-    ):
+    with pytest.raises(ValueError, match="active bundle review must match lifecycle review"):
         exporter(divergent)
 
 
@@ -224,9 +348,7 @@ def test_exporters_reject_forged_runtime_identity(exporter) -> None:
     bundle = linked_runtime_bundle()
     bundle.runtime_evidence[0].head_sha = "foreign-head"
 
-    with pytest.raises(
-        ValueError, match="runtime evidence identity must match the owning review"
-    ):
+    with pytest.raises(ValueError, match="runtime evidence identity must match the owning review"):
         exporter(bundle)
 
 
@@ -284,9 +406,7 @@ def test_human_readable_exports_use_reviewer_owned_coverage_language() -> None:
 def test_human_readable_exports_show_bounded_context_without_changing_line_link() -> None:
     bundle = example_bundle()
     bundle.evidence[0].context_excerpt = (
-        "def prepare_rows():\n"
-        "def export_csv(rows):\n"
-        "    return filtered_rows"
+        "def prepare_rows():\ndef export_csv(rows):\n    return filtered_rows"
     )
 
     markdown = export_markdown(bundle)
@@ -420,7 +540,7 @@ def test_exports_surface_collection_diagnostics_as_inert_separate_data() -> None
     assert "**CI collection diagnostics:**" in markdown
     assert "\\!\\[remote\\]" in markdown
     assert "![remote]" not in markdown
-    assert "<ul aria-label=\"CI collection diagnostics\">" in html_report
+    assert '<ul aria-label="CI collection diagnostics">' in html_report
     assert "&quot;https://example.invalid&quot;" in html_report
     assert json.loads(csv_row["ci_collection_notes"]) == hostile_notes
     assert not csv_row["ci_collection_notes"].startswith(("=", "+", "-", "@"))
@@ -445,10 +565,7 @@ def test_json_and_human_exports_project_runtime_identity_and_link_state() -> Non
     html_report = export_html(bundle)
 
     assert json_report["runtime_evidence"][0] == runtime_item.model_dump(mode="json")
-    assert (
-        json_report["resolutions"][0]["runtime_evidence_id"]
-        == runtime_item.runtime_evidence_id
-    )
+    assert json_report["resolutions"][0]["runtime_evidence_id"] == runtime_item.runtime_evidence_id
     assert "Runtime evidence ID: <code>runtime-evidence-7</code>" in markdown
     assert "Repository / PR: <code>acme/widget</code> / #7" in markdown
     assert "Bound head: <code>head123</code>" in markdown
@@ -486,9 +603,7 @@ def test_human_and_csv_exports_label_legacy_unlinked_manual_resolution() -> None
 
 def test_csv_runtime_identity_arrays_preserve_positional_order_and_formula_safety() -> None:
     bundle = linked_runtime_bundle()
-    first = bundle.runtime_evidence[0].model_copy(
-        update={"runtime_evidence_id": "=runtime-one"}
-    )
+    first = bundle.runtime_evidence[0].model_copy(update={"runtime_evidence_id": "=runtime-one"})
     second = bundle.runtime_evidence[0].model_copy(
         update={
             "runtime_evidence_id": "+runtime-two",
@@ -527,12 +642,12 @@ def test_exports_preserve_ingestion_limitations_and_escape_html() -> None:
     bundle.review.ingestion_state = IngestionState.PARTIAL
     bundle.review.ingestion_warnings = [
         "![remote image](https://example.invalid/pixel.png)",
-        "=HYPERLINK(\"https://example.invalid\",\"warning\")",
+        '=HYPERLINK("https://example.invalid","warning")',
     ]
     bundle.review.skipped_files = [
         "src/one.py",
         "src/<unsafe>|two.py",
-        "=HYPERLINK(\"https://example.invalid\",\"path\")",
+        '=HYPERLINK("https://example.invalid","path")',
         "src/literal | delimiter.py",
     ]
 
@@ -573,6 +688,7 @@ def test_markdown_keeps_all_untrusted_review_text_inert() -> None:
     bundle.runtime_evidence[0].result = active_markdown
     bundle.runtime_evidence[0].reviewer = active_markdown
     bundle.runtime_evidence[0].limitations = [active_markdown]
+    rebind_criteria_source_provenance(bundle)
 
     report = export_markdown(bundle)
 
@@ -604,6 +720,7 @@ def test_markdown_neutralizes_links_html_formatting_and_autolinks() -> None:
         "[link](https://example.invalid/link) <img src=x> **bold** _emphasis_ "
         "`code` ~~strike~~ https://example.invalid/plain"
     )
+    rebind_criteria_source_provenance(bundle)
 
     report = export_markdown(bundle)
 
@@ -631,6 +748,7 @@ def test_csv_neutralizes_formula_cells_and_serializes_lists_reversibly() -> None
     bundle.resolutions[0].comment = "+1+1"
     bundle.runtime_evidence[0].artifact_reference = "=1+1"
     bundle.runtime_evidence[0].result = "@1+1"
+    rebind_criteria_source_provenance(bundle)
 
     row = next(csv.DictReader(io.StringIO(export_csv(bundle), newline="")))
 
@@ -653,6 +771,7 @@ def test_csv_neutralizes_formula_cells_and_serializes_lists_reversibly() -> None
 def test_exports_preserve_confirmed_requirement_source() -> None:
     bundle = example_bundle()
     bundle.source_text = "Confirmed requirement source:\nFailed export shows an error"
+    rebind_criteria_source_provenance(bundle)
     json_report = export_json(bundle)
     markdown_report = export_markdown(bundle)
     csv_report = export_csv(bundle)
@@ -715,7 +834,7 @@ def test_runtime_http_artifact_reference_remains_clickable() -> None:
 
 def test_bypassed_unsafe_candidate_permalink_is_rendered_as_inert_text() -> None:
     bundle = example_bundle()
-    unsafe = 'javascript:alert(1)\"><img src=x>'
+    unsafe = 'javascript:alert(1)"><img src=x>'
     bundle.evidence[0].permalink = unsafe
 
     markdown = export_markdown(bundle)
@@ -786,9 +905,8 @@ def test_human_readable_exports_complete_the_evidence_matrix_contract() -> None:
     html_report = export_html(bundle)
 
     assert "| Reviewer decision | Confidence | Count | Concern |" in markdown
-    assert (
-        "| Change required | medium | 1 | Only the export path was found. |"
-        in markdown.replace("\\", "")
+    assert "| Change required | medium | 1 | Only the export path was found. |" in markdown.replace(
+        "\\", ""
     )
     assert "<th>Reviewer decision</th><th>Confidence</th><th>Count</th>" in html_report
     assert "<th>Concern</th>" in html_report
@@ -861,6 +979,7 @@ def test_html_escapes_review_identity_values() -> None:
 def test_html_escapes_confirmed_requirement_source_text() -> None:
     bundle = example_bundle()
     bundle.source_text = "User requires <safe & auditable> output"
+    rebind_criteria_source_provenance(bundle)
 
     report = export_html(bundle)
 

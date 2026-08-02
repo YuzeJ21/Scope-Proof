@@ -9,11 +9,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
-from scopeproof_core.schemas.models import LocalReviewId
+from scopeproof_core.schemas.models import CriteriaSourceProvenance, LocalReviewId
 
-PUBLIC_PR_PATTERN = (
-    r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*$"
-)
+PUBLIC_PR_PATTERN = r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*$"
 
 
 class ParticipantRole(StrEnum):
@@ -82,15 +80,14 @@ class AlphaCaseRecord(BaseModel):
     source_owner_confirmed: Literal[True]
     no_confidential_information: Literal[True]
     confirmed_criteria: list[str] = Field(min_length=1)
+    criteria_source_provenance: CriteriaSourceProvenance | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     review_id: LocalReviewId | None = None
     reviewed_head_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     outcome: AlphaOutcome | None = None
     friction_stage: AlphaFrictionStage | None = None
     outcome_notes: str | None = Field(default=None, max_length=1000)
-    publication_consent: AlphaPublicationConsent = Field(
-        default_factory=AlphaPublicationConsent
-    )
+    publication_consent: AlphaPublicationConsent = Field(default_factory=AlphaPublicationConsent)
     completed_at: datetime | None = None
 
     @field_validator("requirements_source_url")
@@ -122,6 +119,11 @@ class AlphaCaseRecord(BaseModel):
 
     @model_validator(mode="after")
     def validate_outcome_transition(self) -> AlphaCaseRecord:
+        if (
+            self.criteria_source_provenance is not None
+            and self.criteria_source_provenance.source_uri != str(self.requirements_source_url)
+        ):
+            raise ValueError("criteria source provenance must match requirements source URL")
         completion_values = (
             self.review_id,
             self.reviewed_head_sha,
@@ -139,10 +141,7 @@ class AlphaCaseRecord(BaseModel):
                 raise ValueError("completed alpha outcomes require a completion timestamp")
         if self.outcome is AlphaOutcome.CREATED_FRICTION and self.friction_stage is None:
             raise ValueError("created_friction requires a friction stage")
-        if (
-            self.friction_stage is not None
-            and self.outcome is not AlphaOutcome.CREATED_FRICTION
-        ):
+        if self.friction_stage is not None and self.outcome is not AlphaOutcome.CREATED_FRICTION:
             raise ValueError("friction stage is only valid for created_friction")
         return self
 

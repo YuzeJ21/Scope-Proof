@@ -11,6 +11,22 @@ from scopeproof_core.alpha.models import (
     AlphaQualification,
     ParticipantRole,
 )
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+from scopeproof_core.schemas.models import Criterion
+
+
+def criteria_source_provenance(*, source_uri: str = "https://github.com/acme/repo/issues/6"):
+    return build_criteria_source_provenance(
+        source_uri=source_uri,
+        source_revision="issue-6@abc123",
+        source_text="Export CSV\nShow an error state\n",
+        criteria=[
+            Criterion(criterion_id="AC-01", text="Export CSV"),
+            Criterion(criterion_id="AC-02", text="Show an error state"),
+        ],
+        confirmed_by="Repository owner",
+        confirmed_at=datetime(2026, 8, 2, 12, 0, tzinfo=UTC),
+    )
 
 
 def valid_record_data() -> dict[str, object]:
@@ -21,6 +37,7 @@ def valid_record_data() -> dict[str, object]:
         "source_owner_confirmed": True,
         "no_confidential_information": True,
         "confirmed_criteria": ["Export CSV", "Show an error state"],
+        "criteria_source_provenance": criteria_source_provenance(),
     }
 
 
@@ -46,9 +63,7 @@ def test_alpha_qualification_accepts_only_confirmed_public_safe_inputs() -> None
         ("no_confidential_information", False),
     ],
 )
-def test_alpha_qualification_rejects_unqualified_inputs(
-    field: str, value: object
-) -> None:
+def test_alpha_qualification_rejects_unqualified_inputs(field: str, value: object) -> None:
     data: dict[str, object] = {
         "public_pr_url": "https://github.com/acme/repo/pull/7",
         "requirements_source_url": "https://github.com/acme/repo/issues/6",
@@ -69,6 +84,7 @@ def test_alpha_record_has_privacy_safe_defaults() -> None:
     assert record.publication_consent == AlphaPublicationConsent()
     assert record.outcome is None
     assert record.completed_at is None
+    assert record.criteria_source_provenance == criteria_source_provenance()
     schema_fields = {field.lower() for field in AlphaCaseRecord.model_fields}
     for prohibited in ("name", "email", "profile", "dm"):
         assert all(prohibited not in field for field in schema_fields)
@@ -85,9 +101,7 @@ def test_alpha_record_has_privacy_safe_defaults() -> None:
         ("confirmed_criteria", ["Export CSV", " Export CSV "]),
     ],
 )
-def test_alpha_record_rejects_unqualified_or_unsafe_inputs(
-    field: str, value: object
-) -> None:
+def test_alpha_record_rejects_unqualified_or_unsafe_inputs(field: str, value: object) -> None:
     data = valid_record_data()
     data[field] = value
 
@@ -140,3 +154,25 @@ def test_incomplete_record_forbids_completion_fields() -> None:
             reviewed_head_sha="a" * 40,
             completed_at=datetime.now(UTC),
         )
+
+
+def test_legacy_alpha_record_without_provenance_remains_readable() -> None:
+    payload = valid_record_data()
+    payload.pop("criteria_source_provenance")
+
+    record = AlphaCaseRecord.model_validate(payload)
+
+    assert record.criteria_source_provenance is None
+
+
+def test_alpha_record_rejects_provenance_for_a_different_requirements_source() -> None:
+    payload = valid_record_data()
+    payload["criteria_source_provenance"] = criteria_source_provenance(
+        source_uri="https://github.com/acme/repo/issues/9"
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="criteria source provenance must match requirements source URL",
+    ):
+        AlphaCaseRecord.model_validate(payload)

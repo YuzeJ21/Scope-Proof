@@ -74,6 +74,8 @@ class JsonAlphaCaseStore:
         existing = self.load(validated.case_id)
         if existing.case_id != validated.case_id:
             raise ValueError("alpha-case update must preserve case ID")
+        if existing.criteria_source_provenance != validated.criteria_source_provenance:
+            raise ValueError("alpha-case update must preserve criteria source provenance")
         return self._write(target, validated)
 
     def load(self, case_id: str) -> AlphaCaseRecord:

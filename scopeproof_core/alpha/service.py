@@ -13,6 +13,12 @@ from scopeproof_core.alpha.models import (
     ParticipantRole,
 )
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
+from scopeproof_core.schemas.models import CriteriaSourceProvenance
+
+_NEW_CASE_PROVENANCE_REQUIRED = "criteria source provenance is required for a new alpha case"
+_LEGACY_RECONFIRMATION_REQUIRED = (
+    "legacy alpha case must reconfirm criteria source provenance before recording an outcome"
+)
 
 
 def _require_genuine_alpha_case_record(record: object) -> AlphaCaseRecord:
@@ -30,8 +36,11 @@ def initialize_alpha_case(
     source_owner_confirmed: bool,
     no_confidential_information: bool,
     confirmed_criteria: list[str],
+    criteria_source_provenance: CriteriaSourceProvenance | None = None,
 ) -> AlphaCaseRecord:
     """Create a qualified local case without claiming an outcome."""
+    if criteria_source_provenance is None:
+        raise ValueError(_NEW_CASE_PROVENANCE_REQUIRED)
     return AlphaCaseRecord(
         public_pr_url=public_pr_url,
         requirements_source_url=requirements_source_url,
@@ -39,6 +48,7 @@ def initialize_alpha_case(
         source_owner_confirmed=source_owner_confirmed,
         no_confidential_information=no_confidential_information,
         confirmed_criteria=confirmed_criteria,
+        criteria_source_provenance=criteria_source_provenance,
     )
 
 
@@ -51,6 +61,7 @@ def ensure_alpha_case(
     source_owner_confirmed: bool,
     no_confidential_information: bool,
     confirmed_criteria: list[str],
+    criteria_source_provenance: CriteriaSourceProvenance | None = None,
     case_id: str | None = None,
 ) -> AlphaCaseRecord:
     """Create one validated case or return the matching case already named by the caller."""
@@ -62,6 +73,7 @@ def ensure_alpha_case(
         source_owner_confirmed=source_owner_confirmed,
         no_confidential_information=no_confidential_information,
         confirmed_criteria=confirmed_criteria,
+        criteria_source_provenance=criteria_source_provenance,
     )
     if case_id is None:
         store.save(candidate)
@@ -75,11 +87,9 @@ def ensure_alpha_case(
         "source_owner_confirmed",
         "no_confidential_information",
         "confirmed_criteria",
+        "criteria_source_provenance",
     )
-    if any(
-        getattr(existing, field) != getattr(candidate, field)
-        for field in comparable_fields
-    ):
+    if any(getattr(existing, field) != getattr(candidate, field) for field in comparable_fields):
         raise ValueError("existing alpha case does not match the supplied qualification")
     return existing
 
@@ -97,6 +107,8 @@ def record_alpha_outcome(
 ) -> AlphaCaseRecord:
     """Return a validated completed copy while preserving qualification inputs."""
     record = _require_genuine_alpha_case_record(record)
+    if record.criteria_source_provenance is None:
+        raise ValueError(_LEGACY_RECONFIRMATION_REQUIRED)
     payload = record.model_dump(mode="python")
     payload.update(
         {
