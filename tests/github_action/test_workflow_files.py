@@ -72,7 +72,7 @@ def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "3f8dd07293b4040d89592c3899178b9719b82cf5"
+    reviewed_revision = "d553791cba83d9f756b2adce22bd814872b73ea2"
 
     assert "pip install scopeproof" not in example
     assert (
@@ -109,13 +109,28 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
         capture_output=True,
         text=True,
     ).stdout
+    models_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:scopeproof_core/schemas/models.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    alpha_service_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:scopeproof_core/alpha/service.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
     assert re.search(
         r'review\.add_argument\(\s*"--confirmation",\s*required=True', cli_at_pin
     )
     assert "validate_requirements_confirmation" in cli_at_pin
+    assert "prepare-requirements-confirmation" in cli_at_pin
     assert "CriteriaSourceProvenance.model_validate_json" in confirmation_at_pin
     assert "validate_criteria_source_confirmation" in confirmation_at_pin
+    assert "class ReviewInputOrigin" in models_at_pin
+    assert "LIVE_PUBLIC_GITHUB" in alpha_service_at_pin
 
 
 def test_ci_checkouts_include_history_for_source_pin_contract() -> None:

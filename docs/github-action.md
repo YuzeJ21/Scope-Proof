@@ -55,11 +55,12 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`3f8dd07293b4040d89592c3899178b9719b82cf5`, the immutable source-candidate commit
+`d553791cba83d9f756b2adce22bd814872b73ea2`, the immutable source-candidate commit
 containing the exact-head integrity rules and typed criteria-source confirmation
-used by this workflow. It remains a source-candidate installation; it is not a published v0.2.3 release. Review and
-update that pin deliberately when adopting a newer public release; do not
-replace it with an unpinned package or branch reference.
+used by this workflow, including malformed-input fail-closed gates and live-source-bound alpha
+records. It remains a source-candidate installation; it is not a published v0.2.3 release. Review
+and update that pin deliberately when adopting a newer public release; do not replace it with an
+unpinned package or branch reference.
 
 This trigger is intentionally privileged only for its narrowly scoped comment
 permission. Do not add a pull-request-head checkout, `git fetch`, `gh pr

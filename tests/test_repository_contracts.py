@@ -1118,7 +1118,7 @@ def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> 
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    expected_pin = "3f8dd07293b4040d89592c3899178b9719b82cf5"
+    expected_pin = "d553791cba83d9f756b2adce22bd814872b73ea2"
 
     install = re.search(
         r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
