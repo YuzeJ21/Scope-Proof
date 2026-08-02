@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "boundary": {
+    "classification": "engineering_only",
+    "proves_correctness": false,
+    "target_repository_code_executed": false,
+    "advances_stage_1": false
+  },
+  "public_main": {
+    "sha": "6e3dec784f7cad9931999d4c5eac1cfe2a9006de",
+    "tree": "cf34a4004861a294d25005f7f598068b740bbde9",
+    "last_completed_pr": 179
+  },
+  "verified_candidate": {
+    "sha": "95b2dc44132edad796f0316d846cd35e536443f6",
+    "tree": "0514c42d59aa69dee65be536a9fa449eff6a6530",
+    "version": "0.2.3",
+    "disposition": "ready_for_draft_review",
+    "merged": false,
+    "tagged": false,
+    "released": false
+  },
+  "public_install": {
+    "version": "0.2.1"
+  },
+  "runtime_evidence": {
+    "identity_field": "runtime_evidence_id",
+    "legacy_unlinked_gate": "needs_review",
+    "reconfirmation_reason": "runtime_verification_reconfirmation_required",
+    "record_version": 3
+  },
+  "product_stages": {
+    "stage_1": {
+      "qualifying_reviews": 0,
+      "independent_practitioners": 0,
+      "repositories": 0,
+      "observed_under_ten_minute_completions": 0,
+      "reuse_intent_signals": 0
+    },
+    "gated_stages": [2, 3, 4]
+  },
+  "measurements": {
+    "attributed_to": {
+      "sha": "95b2dc44132edad796f0316d846cd35e536443f6",
+      "tree": "0514c42d59aa69dee65be536a9fa449eff6a6530"
+    },
+    "source": {
+      "sync_resolved_packages": 60,
+      "sync_checked_packages": 55,
+      "lock_resolved_packages": 60,
+      "ruff_passed": true,
+      "tests_passed": 1747,
+      "tests_skipped": 1,
+      "test_seconds": 122.18,
+      "coverage_statements": 8561,
+      "coverage_missed": 411,
+      "coverage_percent": 95.20,
+      "coverage_threshold_percent": 95.0
+    },
+    "benchmarks": {
+      "criterion": {
+        "cases": 12,
+        "criteria": 13,
+        "mismatches": 0,
+        "status_mismatches": 0,
+        "must_have_false_ready": 0,
+        "false_blockers": 0,
+        "unexecuted_declared_categories": 0
+      },
+      "comparison": {
+        "cases": 2,
+        "mismatches": 0,
+        "changes": {
+          "added": 3,
+          "modified": 1,
+          "relocated": 1,
+          "removed": 3,
+          "unchanged": 1
+        },
+        "advances_stage_1": false
+      }
+    },
+    "package": {
+      "wheel": {
+        "filename": "scopeproof-0.2.3-py3-none-any.whl",
+        "size_bytes": 247571,
+        "entries": 99,
+        "sha256": "5b1422fe1117abcb63d69e725d9ac2ecad012d4faa11a23c5a2bc62d75a7ae64",
+        "forbidden_inventory_matches": 0
+      },
+      "source_distribution": {
+        "filename": "scopeproof-0.2.3.tar.gz",
+        "size_bytes": 5805868,
+        "entries": 532,
+        "sha256": "ff7a733c2c801be5a26963756bf3c7d4cc85a096869d1eaa20f1c16a5b127b2c",
+        "forbidden_inventory_matches": 0
+      }
+    },
+    "install_health": {
+      "python_version": "3.12.0",
+      "installed_packages": 48,
+      "pip_check_passed": true,
+      "scopeproof_version": "0.2.3",
+      "scopeproof_web_version": "0.2.3",
+      "installed_benchmark_mismatches": 0,
+      "installed_comparison_mismatches": 0,
+      "health_body": "ok",
+      "post_stop_health_exit": 7,
+      "listener_remained": false,
+      "process_remained": false,
+      "distribution_removed": true,
+      "virtual_environment_removed": true,
+      "isolated_home_removed": true
+    }
+  },
+  "historical_evidence": {
+    "r002_rerun_for_candidate": false,
+    "browser_walkthrough_for_candidate": false,
+    "historical_browser_is_current": false,
+    "historical_package_is_current": false,
+    "historical_r002_is_current": false,
+    "exact_public_main_package_runtime_evidence": false
+  }
+}

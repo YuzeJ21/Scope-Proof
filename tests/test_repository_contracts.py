@@ -4,9 +4,11 @@ from hashlib import sha256
 from html.parser import HTMLParser
 from pathlib import Path
 from struct import unpack
+from typing import Literal
 from urllib.parse import urlsplit
 
 from PIL import Image
+from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.evals.r002_models import (
     R002_SOURCE,
@@ -547,144 +549,259 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert '__version__ = "0.2.3"' in version_source
 
 
-def test_unreleased_candidate_identity_preserves_public_install_boundary() -> None:
-    readme = Path("README.md").read_text(encoding="utf-8")
-    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    candidate_notes = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(encoding="utf-8")
-    readme_copy = " ".join(readme.split())
+class _StrictVerificationModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    assert "v0.2.3 exact-head runtime-evidence candidate" in readme
-    assert "PR #179" in readme
-    assert "6e3dec784f7cad9931999d4c5eac1cfe2a9006de" in readme
-    assert "95b2dc44132edad796f0316d846cd35e536443f6" in readme
-    assert "not merged, tagged, or released" in readme_copy
-    assert (
-        "Candidate version: 0.2.3 (public `main` through PR #179; exact-head "
-        "runtime-evidence hardening verified on an unmerged branch; not published)"
-    ) in changelog
-    assert (
-        "Status: Unreleased exact-head runtime-evidence hardening candidate; "
-        "not merged, tagged, or released"
-    ) in candidate_notes
-    assert "Public-main base: `6e3dec784f7cad9931999d4c5eac1cfe2a9006de`" in candidate_notes
-    assert (
-        "Verified implementation: `95b2dc44132edad796f0316d846cd35e536443f6`"
-        in candidate_notes
+
+class _CommitIdentity(_StrictVerificationModel):
+    sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    tree: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class _PublicMainIdentity(_CommitIdentity):
+    last_completed_pr: Literal[179]
+
+
+class _CandidateDisposition(_CommitIdentity):
+    version: Literal["0.2.3"]
+    disposition: Literal["ready_for_draft_review"]
+    merged: Literal[False]
+    tagged: Literal[False]
+    released: Literal[False]
+
+
+class _EngineeringBoundary(_StrictVerificationModel):
+    classification: Literal["engineering_only"]
+    proves_correctness: Literal[False]
+    target_repository_code_executed: Literal[False]
+    advances_stage_1: Literal[False]
+
+
+class _PublicInstall(_StrictVerificationModel):
+    version: Literal["0.2.1"]
+
+
+class _RuntimeEvidenceContract(_StrictVerificationModel):
+    identity_field: Literal["runtime_evidence_id"]
+    legacy_unlinked_gate: Literal["needs_review"]
+    reconfirmation_reason: Literal[
+        "runtime_verification_reconfirmation_required"
+    ]
+    record_version: Literal[3]
+
+
+class _StageOneCounts(_StrictVerificationModel):
+    qualifying_reviews: Literal[0]
+    independent_practitioners: Literal[0]
+    repositories: Literal[0]
+    observed_under_ten_minute_completions: Literal[0]
+    reuse_intent_signals: Literal[0]
+
+
+class _ProductStageBoundary(_StrictVerificationModel):
+    stage_1: _StageOneCounts
+    gated_stages: tuple[Literal[2], Literal[3], Literal[4]]
+
+
+class _SourceSuiteEvidence(_StrictVerificationModel):
+    sync_resolved_packages: Literal[60]
+    sync_checked_packages: Literal[55]
+    lock_resolved_packages: Literal[60]
+    ruff_passed: Literal[True]
+    tests_passed: Literal[1747]
+    tests_skipped: Literal[1]
+    test_seconds: Literal[122.18]
+    coverage_statements: Literal[8561]
+    coverage_missed: Literal[411]
+    coverage_percent: Literal[95.20]
+    coverage_threshold_percent: Literal[95.0]
+
+
+class _CriterionBenchmarkEvidence(_StrictVerificationModel):
+    cases: Literal[12]
+    criteria: Literal[13]
+    mismatches: Literal[0]
+    status_mismatches: Literal[0]
+    must_have_false_ready: Literal[0]
+    false_blockers: Literal[0]
+    unexecuted_declared_categories: Literal[0]
+
+
+class _ComparisonChangeCounts(_StrictVerificationModel):
+    added: Literal[3]
+    modified: Literal[1]
+    relocated: Literal[1]
+    removed: Literal[3]
+    unchanged: Literal[1]
+
+
+class _ComparisonBenchmarkEvidence(_StrictVerificationModel):
+    cases: Literal[2]
+    mismatches: Literal[0]
+    changes: _ComparisonChangeCounts
+    advances_stage_1: Literal[False]
+
+
+class _BenchmarkEvidence(_StrictVerificationModel):
+    criterion: _CriterionBenchmarkEvidence
+    comparison: _ComparisonBenchmarkEvidence
+
+
+class _ArtifactEvidence(_StrictVerificationModel):
+    filename: str
+    size_bytes: int = Field(gt=0)
+    entries: int = Field(gt=0)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    forbidden_inventory_matches: Literal[0]
+
+
+class _PackageEvidence(_StrictVerificationModel):
+    wheel: _ArtifactEvidence
+    source_distribution: _ArtifactEvidence
+
+
+class _InstallHealthEvidence(_StrictVerificationModel):
+    python_version: Literal["3.12.0"]
+    installed_packages: Literal[48]
+    pip_check_passed: Literal[True]
+    scopeproof_version: Literal["0.2.3"]
+    scopeproof_web_version: Literal["0.2.3"]
+    installed_benchmark_mismatches: Literal[0]
+    installed_comparison_mismatches: Literal[0]
+    health_body: Literal["ok"]
+    post_stop_health_exit: Literal[7]
+    listener_remained: Literal[False]
+    process_remained: Literal[False]
+    distribution_removed: Literal[True]
+    virtual_environment_removed: Literal[True]
+    isolated_home_removed: Literal[True]
+
+
+class _MeasuredEvidence(_StrictVerificationModel):
+    attributed_to: _CommitIdentity
+    source: _SourceSuiteEvidence
+    benchmarks: _BenchmarkEvidence
+    package: _PackageEvidence
+    install_health: _InstallHealthEvidence
+
+
+class _HistoricalEvidenceBoundary(_StrictVerificationModel):
+    r002_rerun_for_candidate: Literal[False]
+    browser_walkthrough_for_candidate: Literal[False]
+    historical_browser_is_current: Literal[False]
+    historical_package_is_current: Literal[False]
+    historical_r002_is_current: Literal[False]
+    exact_public_main_package_runtime_evidence: Literal[False]
+
+
+class _ExactHeadVerificationManifest(_StrictVerificationModel):
+    schema_version: Literal[1]
+    boundary: _EngineeringBoundary
+    public_main: _PublicMainIdentity
+    verified_candidate: _CandidateDisposition
+    public_install: _PublicInstall
+    runtime_evidence: _RuntimeEvidenceContract
+    product_stages: _ProductStageBoundary
+    measurements: _MeasuredEvidence
+    historical_evidence: _HistoricalEvidenceBoundary
+
+
+def _load_exact_head_verification_manifest() -> _ExactHeadVerificationManifest:
+    path = Path("docs/audits/exact-head-runtime-evidence/verification.json")
+    return _ExactHeadVerificationManifest.model_validate_json(
+        path.read_text(encoding="utf-8")
     )
+
+
+def test_exact_head_verification_manifest_preserves_public_install_boundary() -> None:
+    manifest = _load_exact_head_verification_manifest()
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert manifest.public_install.version == "0.2.1"
+    assert manifest.verified_candidate.version == "0.2.3"
+    assert manifest.verified_candidate.merged is False
+    assert manifest.verified_candidate.tagged is False
+    assert manifest.verified_candidate.released is False
     assert "releases/download/v0.2.1/" in readme
     assert "releases/download/v0.2.3/" not in readme
-    assert "does not advance Stage 1" in candidate_notes
-    assert "A branch verification does not publish v0.2.3" in candidate_notes
-    assert "No push, pull request" not in candidate_notes
 
 
-def test_v023_status_docs_distinguish_public_main_from_verified_candidate() -> None:
-    readme = Path("README.md").read_text(encoding="utf-8")
-    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
-    status_audit = Path(
-        "docs/releases/v0.2.3-status-and-next-stages.md"
-    ).read_text(encoding="utf-8")
-    readiness_audit = Path(
-        "docs/releases/v0.2.3-post-merge-release-readiness.md"
-    ).read_text(encoding="utf-8")
-    platform_matrix = Path(
-        "docs/releases/v0.2.3-platform-package-matrix.md"
-    ).read_text(encoding="utf-8")
-    review_map = Path("docs/releases/v0.2.3-pr-review-map.md").read_text(encoding="utf-8")
-    candidate_notes = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(
-        encoding="utf-8"
+def test_exact_head_verification_manifest_separates_candidate_from_public_main() -> None:
+    manifest = _load_exact_head_verification_manifest()
+
+    assert manifest.public_main.sha == "6e3dec784f7cad9931999d4c5eac1cfe2a9006de"
+    assert manifest.public_main.tree == "cf34a4004861a294d25005f7f598068b740bbde9"
+    assert manifest.verified_candidate.sha == "95b2dc44132edad796f0316d846cd35e536443f6"
+    assert manifest.verified_candidate.tree == "0514c42d59aa69dee65be536a9fa449eff6a6530"
+    assert manifest.measurements.attributed_to == _CommitIdentity(
+        sha=manifest.verified_candidate.sha,
+        tree=manifest.verified_candidate.tree,
     )
-    verification_audit = Path(
-        "docs/audits/exact-head-runtime-evidence/verification.md"
-    ).read_text(encoding="utf-8")
-    readme_normalized = " ".join(readme.split())
-    changelog_normalized = " ".join(changelog.split())
-    current_main = "6e3dec784f7cad9931999d4c5eac1cfe2a9006de"
-    current_main_tree = "cf34a4004861a294d25005f7f598068b740bbde9"
-    candidate = "95b2dc44132edad796f0316d846cd35e536443f6"
-    candidate_tree = "0514c42d59aa69dee65be536a9fa449eff6a6530"
-
-    assert "Stage 0 candidate verified; public `main` pending merge" in roadmap
-    assert "Stage 0 candidate verified; public `main` pending merge" in status_audit
-    assert "Stage 1 waiting; Stages 2\u20134 gated" in roadmap
-    assert "Stage 1 waiting, Stages 2\u20134 gated" in status_audit
-    assert "Exact-head runtime-evidence identity" in status_audit
-    assert "Exact-head candidate retrieval" in status_audit
-    assert "runtime evidence ID" in readme_normalized
-    assert "### Integrity repairs" in changelog
-    assert "`runtime_evidence_id`" in changelog_normalized
-    assert "`runtime_verification_reconfirmation_required`" in changelog_normalized
-    assert "Encoded bounded candidate paths" in changelog_normalized
-    assert "record version 3" in changelog_normalized
-    assert "Current disposition: `READY FOR DRAFT REVIEW`" in verification_audit
-    for document in (
-        roadmap,
-        status_audit,
-        readiness_audit,
-        platform_matrix,
-        review_map,
-        candidate_notes,
-        verification_audit,
-    ):
-        assert current_main in document
-        assert candidate in document
-    for document in (readiness_audit, platform_matrix, verification_audit):
-        assert current_main_tree in document
-        assert candidate_tree in document
-    for document in (readme, changelog, roadmap, status_audit, readiness_audit, review_map):
-        assert "PR #179" in document
-    assert "not merged, tagged, or released" in verification_audit
-    assert "Stage 0 integrity repairs merged via PR #177" in readiness_audit
-    assert "Stage 0 integrity repairs merged via PR #177" in platform_matrix
-    assert "Stage 0 integrity repairs merged via PR #177" in review_map
-
-
-def test_v023_release_alignment_preserves_history_and_records_candidate_evidence() -> None:
-    readiness = Path(
-        "docs/releases/v0.2.3-post-merge-release-readiness.md"
-    ).read_text(encoding="utf-8")
-    matrix = Path("docs/releases/v0.2.3-platform-package-matrix.md").read_text(
-        encoding="utf-8"
+    assert manifest.measurements.attributed_to != _CommitIdentity(
+        sha=manifest.public_main.sha,
+        tree=manifest.public_main.tree,
     )
-    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
-        encoding="utf-8"
-    )
-    verification = Path(
-        "docs/audits/exact-head-runtime-evidence/verification.md"
-    ).read_text(encoding="utf-8")
+    assert manifest.historical_evidence.exact_public_main_package_runtime_evidence is False
 
-    # Historical 2026-07-31 release-alignment evidence remains bound to its
-    # recorded source trees; it is not current-candidate evidence.
-    assert "Decision: `READY FOR RELEASE DECISION`" in readiness
-    assert "1,633 tests passed and one intentional skip" in readiness
-    assert "95.10%" in readiness
-    assert "20/20 R-002 cases" in readiness
-    assert "0 unexpected Ready outcomes" in readiness
-    assert "b9be88867c4880058d822fd7af17c736077210151fecd8b4e191d1af1bdd12c4" in matrix
-    assert "98 wheel entries and 520 source-distribution entries" in matrix
-    assert "47 compatible packages" in matrix
-    assert "pointer-operated installed-workbench flow passed" in matrix
-    assert "keyboard-only completion remains unverified" in matrix
-    assert "actual 200% browser zoom remains unverified" in matrix
-    # Exact-candidate evidence is recorded separately and attributed only to
-    # the clean implementation commit, never to the later evidence commit.
-    assert "1747 passed and 1 skipped" in verification
-    assert "95.20%" in verification
-    assert "99 wheel entries" in verification
-    assert "532 source-distribution entries" in verification
-    assert "48 installed packages" in verification
-    assert "5b1422fe1117abcb63d69e725d9ac2ecad012d4faa11a23c5a2bc62d75a7ae64" in verification
-    assert "ff7a733c2c801be5a26963756bf3c7d4cc85a096869d1eaa20f1c16a5b127b2c" in verification
-    assert "`ok`" in verification
-    assert "final complete PR head" in verification
-    assert "## Prioritized post-release decision candidates" in status
-    assert "Exact-SHA GitHub Check lifecycle" in status
-    assert "Criteria-source snapshot and staleness detection" in status
-    assert "CLI lifecycle parity" in status
-    assert "Non-executing evidence adapters" in status
-    assert "Authenticated reviewer identity" in status
-    assert "Real-browser regression coverage" in status
+
+def test_exact_head_verification_manifest_records_integrity_and_stage_boundaries() -> None:
+    manifest = _load_exact_head_verification_manifest()
+
+    assert manifest.boundary.classification == "engineering_only"
+    assert manifest.runtime_evidence.identity_field == "runtime_evidence_id"
+    assert (
+        manifest.runtime_evidence.reconfirmation_reason
+        == "runtime_verification_reconfirmation_required"
+    )
+    assert manifest.runtime_evidence.record_version == 3
+    assert manifest.product_stages.stage_1.model_dump() == {
+        "qualifying_reviews": 0,
+        "independent_practitioners": 0,
+        "repositories": 0,
+        "observed_under_ten_minute_completions": 0,
+        "reuse_intent_signals": 0,
+    }
+    assert manifest.product_stages.gated_stages == (2, 3, 4)
+
+
+def test_exact_head_verification_manifest_records_measured_evidence() -> None:
+    manifest = _load_exact_head_verification_manifest()
+    measurements = manifest.measurements
+
+    assert measurements.source.tests_passed == 1747
+    assert measurements.source.coverage_percent == 95.20
+    assert measurements.benchmarks.criterion.cases == 12
+    assert measurements.benchmarks.criterion.criteria == 13
+    assert measurements.benchmarks.comparison.changes == _ComparisonChangeCounts(
+        added=3,
+        modified=1,
+        relocated=1,
+        removed=3,
+        unchanged=1,
+    )
+    assert measurements.package.wheel.model_dump() == {
+        "filename": "scopeproof-0.2.3-py3-none-any.whl",
+        "size_bytes": 247571,
+        "entries": 99,
+        "sha256": "5b1422fe1117abcb63d69e725d9ac2ecad012d4faa11a23c5a2bc62d75a7ae64",
+        "forbidden_inventory_matches": 0,
+    }
+    assert measurements.package.source_distribution.model_dump() == {
+        "filename": "scopeproof-0.2.3.tar.gz",
+        "size_bytes": 5805868,
+        "entries": 532,
+        "sha256": "ff7a733c2c801be5a26963756bf3c7d4cc85a096869d1eaa20f1c16a5b127b2c",
+        "forbidden_inventory_matches": 0,
+    }
+    assert measurements.install_health.health_body == "ok"
+    assert measurements.install_health.post_stop_health_exit == 7
+    assert measurements.install_health.listener_remained is False
+    assert measurements.install_health.process_remained is False
+    assert measurements.install_health.distribution_removed is True
+    assert measurements.install_health.virtual_environment_removed is True
+    assert measurements.install_health.isolated_home_removed is True
+    assert manifest.historical_evidence.browser_walkthrough_for_candidate is False
+    assert manifest.historical_evidence.r002_rerun_for_candidate is False
 
 
 def test_current_intake_policy_keeps_linkedin_material_archived_and_owner_gated() -> None:

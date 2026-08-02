@@ -1,5 +1,9 @@
 # Exact-head runtime-evidence candidate verification
 
+Machine-readable evidence manifest:
+[`verification.json`](verification.json). The manifest is the structured
+repository-contract input; this document remains the human-readable audit.
+
 ## Evidence identity and boundary
 
 - Date: 2026-08-01 (America/Toronto)
