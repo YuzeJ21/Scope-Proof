@@ -445,6 +445,10 @@ def test_json_and_human_exports_project_runtime_identity_and_link_state() -> Non
     html_report = export_html(bundle)
 
     assert json_report["runtime_evidence"][0] == runtime_item.model_dump(mode="json")
+    assert (
+        json_report["resolutions"][0]["runtime_evidence_id"]
+        == runtime_item.runtime_evidence_id
+    )
     assert "Runtime evidence ID: <code>runtime-evidence-7</code>" in markdown
     assert "Repository / PR: <code>acme/widget</code> / #7" in markdown
     assert "Bound head: <code>head123</code>" in markdown
