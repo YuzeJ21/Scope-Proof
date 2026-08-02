@@ -74,6 +74,27 @@ class JsonAlphaCaseStore:
         existing = self.load(validated.case_id)
         if existing.case_id != validated.case_id:
             raise ValueError("alpha-case update must preserve case ID")
+        if existing.criteria_source_provenance != validated.criteria_source_provenance:
+            raise ValueError("alpha-case update must preserve criteria source provenance")
+        immutable_fields = (
+            "public_pr_url",
+            "requirements_source_url",
+            "participant_role",
+            "source_owner_confirmed",
+            "no_confidential_information",
+            "confirmed_criteria",
+            "confirmed_criterion_snapshot",
+            "created_at",
+        )
+        if any(
+            getattr(existing, field) != getattr(validated, field)
+            for field in immutable_fields
+        ):
+            raise ValueError("alpha-case update must preserve qualification evidence")
+        if existing.outcome is not None:
+            raise ValueError("alpha-case outcome is immutable once recorded")
+        if validated.outcome is None:
+            raise ValueError("alpha-case update must record one outcome")
         return self._write(target, validated)
 
     def load(self, case_id: str) -> AlphaCaseRecord:

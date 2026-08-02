@@ -28,6 +28,7 @@ from scopeproof_core.reviews.comparison import (
     ReviewComparison,
 )
 from scopeproof_core.schemas.models import (
+    CriteriaSourceProvenance,
     CriterionRetrievalDiagnostic,
     EvidenceItem,
     HumanDecision,
@@ -45,6 +46,7 @@ _RETRIEVAL_BOUNDARY = (
 )
 _RETRIEVAL_FALLBACK = "Retrieval diagnostics were not recorded for this review."
 _LEGACY_RUNTIME_LINK = "Legacy unlinked; re-record at the active head"
+_EXPORT_PROVENANCE_REQUIRED = "criteria source provenance is required for export"
 
 
 def _escape_markdown_text(value: str) -> str:
@@ -74,8 +76,14 @@ def _csv_text(value: str) -> str:
 def _validated_exportable(value: ExportableReview) -> ExportableReview:
     """Revalidate mutable model input before rendering an export artifact."""
     if isinstance(value, ReviewState):
-        return validated_review_state(value)
-    return validated_review_bundle(value)
+        validated = ReviewState.model_validate(value.model_dump(mode="python"))
+        if validated.review.criteria_source_provenance is None:
+            raise ValueError(_EXPORT_PROVENANCE_REQUIRED)
+        return validated_review_state(validated)
+    validated = ReviewBundle.model_validate(value.model_dump(mode="python"))
+    if validated.review.criteria_source_provenance is None:
+        raise ValueError(_EXPORT_PROVENANCE_REQUIRED)
+    return validated_review_bundle(validated)
 
 
 def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewState | None]:
@@ -85,6 +93,18 @@ def _bundle_and_state(value: ExportableReview) -> tuple[ReviewBundle, ReviewStat
             raise ValueError("A confirmed analysis is required before exporting a review state")
         return value.bundle, value
     return value, None
+
+
+def _criteria_source_provenance(bundle: ReviewBundle) -> CriteriaSourceProvenance:
+    """Return the provenance already required at the shared export boundary."""
+    provenance = bundle.review.criteria_source_provenance
+    if provenance is None:  # Defensive: callers should enter through _validated_exportable.
+        raise ValueError(_EXPORT_PROVENANCE_REQUIRED)
+    return provenance
+
+
+def _provenance_timestamp(provenance: CriteriaSourceProvenance) -> str:
+    return provenance.model_dump(mode="json")["confirmed_at"]
 
 
 def _retrieval_outcome_label(diagnostic: CriterionRetrievalDiagnostic) -> str:
@@ -97,23 +117,18 @@ def _retrieval_diagnostic_markdown(
     if diagnostic is None:
         return ["", "**How ScopeProof searched:**", _RETRIEVAL_FALLBACK]
     searched_paths = (
-        ", ".join(_render_markdown_code(path) for path in diagnostic.searched_paths)
-        or "None"
+        ", ".join(_render_markdown_code(path) for path in diagnostic.searched_paths) or "None"
     )
     return [
         "",
         "**How ScopeProof searched:**",
         f"- Outcome: {_retrieval_outcome_label(diagnostic)}",
         "- Searched terms: "
-        + (
-            ", ".join(_render_markdown_code(term) for term in diagnostic.searched_terms)
-            or "None"
-        ),
+        + (", ".join(_render_markdown_code(term) for term in diagnostic.searched_terms) or "None"),
         "- Exact identifiers: "
         + (
             ", ".join(
-                _render_markdown_code(identifier)
-                for identifier in diagnostic.exact_identifiers
+                _render_markdown_code(identifier) for identifier in diagnostic.exact_identifiers
             )
             or "None"
         ),
@@ -121,8 +136,7 @@ def _retrieval_diagnostic_markdown(
         "- Searched evidence types: "
         + (
             ", ".join(
-                _escape_markdown_text(item.value)
-                for item in diagnostic.searched_evidence_types
+                _escape_markdown_text(item.value) for item in diagnostic.searched_evidence_types
             )
             or "None"
         ),
@@ -142,9 +156,7 @@ def _retrieval_diagnostic_html(
     criterion_id: str,
     diagnostic: CriterionRetrievalDiagnostic | None,
 ) -> str:
-    heading = (
-        f"<h3>{html.escape(criterion_id)} — How ScopeProof searched</h3>"
-    )
+    heading = f"<h3>{html.escape(criterion_id)} — How ScopeProof searched</h3>"
     if diagnostic is None:
         return heading + f"<p>{html.escape(_RETRIEVAL_FALLBACK)}</p>"
     searched_paths = (
@@ -157,16 +169,12 @@ def _retrieval_diagnostic_html(
     )
     exact_identifiers = (
         ", ".join(
-            f"<code>{html.escape(identifier)}</code>"
-            for identifier in diagnostic.exact_identifiers
+            f"<code>{html.escape(identifier)}</code>" for identifier in diagnostic.exact_identifiers
         )
         or "None"
     )
     evidence_types = (
-        ", ".join(
-            html.escape(item.value) for item in diagnostic.searched_evidence_types
-        )
-        or "None"
+        ", ".join(html.escape(item.value) for item in diagnostic.searched_evidence_types) or "None"
     )
     return "".join(
         [
@@ -210,17 +218,13 @@ def export_comparison_json(comparison: ReviewComparison) -> str:
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
-def _comparison_reference_markdown(
-    label: str, reference: EvidenceReference
-) -> list[str]:
+def _comparison_reference_markdown(label: str, reference: EvidenceReference) -> list[str]:
     location = f"{_escape_markdown_text(reference.file_path)}:L{reference.line_start}"
     if is_linkable_artifact_reference(reference.permalink):
         destination = html.escape(reference.permalink, quote=True)
         rendered_location = f"[{location}](<{destination}>)"
     else:
-        rendered_location = (
-            f"{location} — permalink: {_escape_markdown_text(reference.permalink)}"
-        )
+        rendered_location = f"{location} — permalink: {_escape_markdown_text(reference.permalink)}"
     return [
         f"- **{label}:** {rendered_location}",
         f"  - Evidence ID: {_render_markdown_code(reference.evidence_id)}",
@@ -272,9 +276,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
         if change.current is not None:
             lines.extend(_comparison_reference_markdown("Current candidate", change.current))
         if change.kind.value != "unchanged":
-            lines.append(
-                "- Review the current evidence before recording a new decision."
-            )
+            lines.append("- Review the current evidence before recording a new decision.")
         lines.append("")
 
     if comparison.changed_finding_statuses:
@@ -331,6 +333,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
 def export_markdown(bundle: ExportableReview) -> str:
     """Return a PR-comment-friendly report with evidence and limitations."""
     bundle, state = _bundle_and_state(bundle)
+    provenance = _criteria_source_provenance(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     linked_runtime_ids = {
@@ -341,13 +344,10 @@ def export_markdown(bundle: ExportableReview) -> str:
     }
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
     diagnostic_by_id = {
-        diagnostic.criterion_id: diagnostic
-        for diagnostic in bundle.retrieval_diagnostics
+        diagnostic.criterion_id: diagnostic for diagnostic in bundle.retrieval_diagnostics
     }
     review_status = review_status_label(bundle.gate.verdict)
-    coverage_by_id = {
-        row.criterion_id: row for row in criterion_coverage_rows(bundle)
-    }
+    coverage_by_id = {row.criterion_id: row for row in criterion_coverage_rows(bundle)}
     review_created_at = bundle.review.model_dump(mode="json")["created_at"]
     lines = [
         "# ScopeProof Acceptance Review",
@@ -363,8 +363,7 @@ def export_markdown(bundle: ExportableReview) -> str:
         f"**Ruleset:** {_render_markdown_code(bundle.review.ruleset_version)}",
         f"**Ingestion state:** {_render_markdown_code(bundle.review.ingestion_state.value)}",
         f"**Observed CI:** {bundle.review.ci_observation.state.value}",
-        "**Observed CI reason:** "
-        f"{_escape_markdown_text(bundle.review.ci_observation.reason)}",
+        f"**Observed CI reason:** {_escape_markdown_text(bundle.review.ci_observation.reason)}",
         "**Observed CI check runs:** "
         f"{bundle.review.ci_observation.total_check_runs} total; "
         f"{bundle.review.ci_observation.successful_check_runs} successful; "
@@ -403,6 +402,24 @@ def export_markdown(bundle: ExportableReview) -> str:
             "> ScopeProof surfaces auditable candidate evidence. "
             "It does not replace QA or prove correctness."
         ),
+        "",
+        "## Criteria Source",
+        "",
+        "| Field | Confirmed snapshot |",
+        "|---|---|",
+        f"| Source reference | {_render_markdown_code(provenance.source_uri)} |",
+        "| Revision | "
+        + (
+            _render_markdown_code(provenance.source_revision)
+            if provenance.source_revision is not None
+            else "Not supplied"
+        )
+        + " |",
+        f"| Source-text SHA-256 | {_render_markdown_code(provenance.source_text_sha256)} |",
+        "| Normalized-criteria SHA-256 | "
+        f"{_render_markdown_code(provenance.normalized_criteria_sha256)} |",
+        f"| Confirmed by | {_render_markdown_code(provenance.confirmed_by)} |",
+        f"| Confirmed at (UTC) | {_render_markdown_code(_provenance_timestamp(provenance))} |",
         "",
         *(
             [
@@ -444,10 +461,7 @@ def export_markdown(bundle: ExportableReview) -> str:
         ),
         "## Confirmed Requirements Source",
         "",
-        *[
-            f"> {_escape_markdown_text(line)}"
-            for line in (bundle.source_text.splitlines() or [""])
-        ],
+        *[f"> {_escape_markdown_text(line)}" for line in (bundle.source_text.splitlines() or [""])],
         "",
         "## Evidence Matrix",
         "",
@@ -460,9 +474,7 @@ def export_markdown(bundle: ExportableReview) -> str:
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         row = coverage_by_id[criterion.criterion_id]
-        criterion_label = _escape_markdown_text(
-            f"{criterion.criterion_id}: {criterion.text}"
-        )
+        criterion_label = _escape_markdown_text(f"{criterion.criterion_id}: {criterion.text}")
         concern = _escape_markdown_text(finding.reason)
         lines.append(
             f"| {criterion_label} | "
@@ -480,16 +492,11 @@ def export_markdown(bundle: ExportableReview) -> str:
             [
                 f"### {_escape_markdown_text(f'{criterion.criterion_id} — {criterion.text}')}",
                 "",
-                "**Evidence status:** "
-                f"{evidence_status_text(coverage.evidence_status)}",
+                f"**Evidence status:** {evidence_status_text(coverage.evidence_status)}",
                 f"**Reason:** {_escape_markdown_text(finding.reason)}",
             ]
         )
-        lines.extend(
-            _retrieval_diagnostic_markdown(
-                diagnostic_by_id.get(criterion.criterion_id)
-            )
-        )
+        lines.extend(_retrieval_diagnostic_markdown(diagnostic_by_id.get(criterion.criterion_id)))
         if finding.missing_evidence:
             lines.extend(
                 [
@@ -514,15 +521,12 @@ def export_markdown(bundle: ExportableReview) -> str:
                         f"{_escape_markdown_text(candidate.permalink)}"
                     )
                 lines.append(
-                    f"- {candidate_reference} — "
-                    f"{_escape_markdown_text(candidate.relevance_reason)}"
+                    f"- {candidate_reference} — {_escape_markdown_text(candidate.relevance_reason)}"
                 )
                 lines.append(f"  - Type and level: {_candidate_evidence_label(candidate)}")
                 lines.append(f"  - Excerpt: {_render_markdown_code(candidate.excerpt)}")
                 if candidate.context_excerpt:
-                    lines.append(
-                        f"  - Context: {_render_markdown_code(candidate.context_excerpt)}"
-                    )
+                    lines.append(f"  - Context: {_render_markdown_code(candidate.context_excerpt)}")
                 for limitation in candidate.limitations:
                     lines.append(f"  - Limitation: {_escape_markdown_text(limitation)}")
         resolution = resolution_by_id.get(criterion.criterion_id)
@@ -576,8 +580,7 @@ def export_markdown(bundle: ExportableReview) -> str:
                 ]
             else:
                 identity_lines = [
-                    "  - Runtime evidence ID: "
-                    f"{_render_markdown_code(item.runtime_evidence_id)}",
+                    f"  - Runtime evidence ID: {_render_markdown_code(item.runtime_evidence_id)}",
                     "  - Repository / PR: "
                     f"{_render_markdown_code(item.repository or '')} / #{item.pr_number}",
                     f"  - Bound head: {_render_markdown_code(item.head_sha or '')}",
@@ -628,9 +631,7 @@ def export_markdown(bundle: ExportableReview) -> str:
         for event in state.resolution_events:
             target = event.criterion_id or "Final acceptance"
             outcome = (
-                event.decision.value
-                if event.decision
-                else str(event.final_acceptance).lower()
+                event.decision.value if event.decision else str(event.final_acceptance).lower()
             )
             history = f"{target}: {outcome} — {event.comment or 'No note provided'}"
             lines.append(f"- {_escape_markdown_text(history)}")
@@ -651,11 +652,7 @@ def _render_candidate_reference_html(item: EvidenceItem) -> str:
         reference = f'<a href="{html.escape(item.permalink, quote=True)}">{label}</a>'
     else:
         reference = f"{label}<br><code>{html.escape(item.permalink)}</code>"
-    context = (
-        f"<br><pre>{html.escape(item.context_excerpt)}</pre>"
-        if item.context_excerpt
-        else ""
-    )
+    context = f"<br><pre>{html.escape(item.context_excerpt)}</pre>" if item.context_excerpt else ""
     return (
         f"{reference}<br>{html.escape(_candidate_evidence_label(item))}"
         f"<br><code>{html.escape(item.excerpt)}</code>{context}"
@@ -673,11 +670,11 @@ def _candidate_evidence_label(item: EvidenceItem) -> str:
 def export_csv(bundle: ExportableReview) -> str:
     """Return one flat audit row per criterion."""
     bundle, state = _bundle_and_state(bundle)
+    provenance = _criteria_source_provenance(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     diagnostic_by_id = {
-        diagnostic.criterion_id: diagnostic
-        for diagnostic in bundle.retrieval_diagnostics
+        diagnostic.criterion_id: diagnostic for diagnostic in bundle.retrieval_diagnostics
     }
     evidence_by_criterion: dict[str, list[EvidenceItem]] = defaultdict(list)
     for item in bundle.evidence:
@@ -715,6 +712,12 @@ def export_csv(bundle: ExportableReview) -> str:
         "runtime_verification_state",
         "reviewer_decision_state",
         "criteria_revision",
+        "criteria_source_uri",
+        "criteria_source_revision",
+        "criteria_source_text_sha256",
+        "criteria_normalized_criteria_sha256",
+        "criteria_confirmed_by",
+        "criteria_confirmed_at",
         "requirements_source_text",
         "verdict",
         "review_status",
@@ -748,9 +751,7 @@ def export_csv(bundle: ExportableReview) -> str:
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
     writer.writeheader()
-    coverage_by_id = {
-        row.criterion_id: row for row in criterion_coverage_rows(bundle)
-    }
+    coverage_by_id = {row.criterion_id: row for row in criterion_coverage_rows(bundle)}
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
@@ -812,6 +813,16 @@ def export_csv(bundle: ExportableReview) -> str:
                 "runtime_verification_state": bundle.runtime_verification_state.value,
                 "reviewer_decision_state": bundle.reviewer_decision_state.value,
                 "criteria_revision": state.criteria_revision.number if state else 1,
+                "criteria_source_uri": _csv_text(provenance.source_uri),
+                "criteria_source_revision": (
+                    _csv_text(provenance.source_revision)
+                    if provenance.source_revision is not None
+                    else ""
+                ),
+                "criteria_source_text_sha256": provenance.source_text_sha256,
+                "criteria_normalized_criteria_sha256": (provenance.normalized_criteria_sha256),
+                "criteria_confirmed_by": _csv_text(provenance.confirmed_by),
+                "criteria_confirmed_at": _provenance_timestamp(provenance),
                 "requirements_source_text": _csv_text(bundle.source_text),
                 "verdict": bundle.gate.verdict.value,
                 "review_status": review_status_label(bundle.gate.verdict),
@@ -839,26 +850,19 @@ def export_csv(bundle: ExportableReview) -> str:
                 "evidence_count": len(finding.evidence_ids),
                 "concern": _csv_text(finding.reason),
                 "evidence_links": json.dumps(
-                    [
-                        item.permalink
-                        for item in evidence_by_criterion[criterion.criterion_id]
-                    ],
+                    [item.permalink for item in evidence_by_criterion[criterion.criterion_id]],
                     ensure_ascii=False,
                 ),
                 "retrieval_diagnostic": json.dumps(
                     (
-                        diagnostic_by_id[criterion.criterion_id].model_dump(
-                            mode="json"
-                        )
+                        diagnostic_by_id[criterion.criterion_id].model_dump(mode="json")
                         if criterion.criterion_id in diagnostic_by_id
                         else None
                     ),
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
-                "missing_evidence": json.dumps(
-                    finding.missing_evidence, ensure_ascii=False
-                ),
+                "missing_evidence": json.dumps(finding.missing_evidence, ensure_ascii=False),
                 "human_decision": resolution.decision.value if resolution else "",
                 "reviewer_decision": coverage.reviewer_decision,
                 "reviewer_comment": _csv_text(resolution.comment) if resolution else "",
@@ -885,8 +889,7 @@ def export_csv(bundle: ExportableReview) -> str:
                 "manual_runtime_evidence_id": _csv_text(
                     resolution.runtime_evidence_id or _LEGACY_RUNTIME_LINK
                 )
-                if resolution is not None
-                and resolution.decision is HumanDecision.MANUALLY_VERIFIED
+                if resolution is not None and resolution.decision is HumanDecision.MANUALLY_VERIFIED
                 else "",
             }
         )
@@ -896,24 +899,25 @@ def export_csv(bundle: ExportableReview) -> str:
 def export_html(value: ExportableReview) -> str:
     """Render a self-contained local acceptance report without executable content."""
     bundle, state = _bundle_and_state(value)
+    provenance = _criteria_source_provenance(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
     diagnostic_by_id = {
-        diagnostic.criterion_id: diagnostic
-        for diagnostic in bundle.retrieval_diagnostics
+        diagnostic.criterion_id: diagnostic for diagnostic in bundle.retrieval_diagnostics
     }
-    coverage_by_id = {
-        row.criterion_id: row for row in criterion_coverage_rows(bundle)
-    }
+    coverage_by_id = {row.criterion_id: row for row in criterion_coverage_rows(bundle)}
     rows = []
     diagnostic_sections = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         coverage = coverage_by_id[criterion.criterion_id]
-        evidence = "<br>".join(
-            _render_candidate_reference_html(evidence_by_id[item_id])
-            for item_id in finding.evidence_ids
-        ) or "No candidate evidence"
+        evidence = (
+            "<br>".join(
+                _render_candidate_reference_html(evidence_by_id[item_id])
+                for item_id in finding.evidence_ids
+            )
+            or "No candidate evidence"
+        )
         rows.append(
             "<tr>"
             f"<td>{html.escape(criterion.criterion_id)}</td>"
@@ -1011,8 +1015,28 @@ def export_html(value: ExportableReview) -> str:
             f"Ruleset <code>{html.escape(bundle.review.ruleset_version)}</code> · "
             f"Ingestion <code>{html.escape(bundle.review.ingestion_state.value)}</code> · "
             f"Criteria revision {revision}</p>",
-            "<p class=\"note\">ScopeProof surfaces auditable candidate evidence. "
+            '<p class="note">ScopeProof surfaces auditable candidate evidence. '
             "It does not replace QA or prove correctness.</p>",
+            "<h2>Criteria Source</h2>",
+            '<table aria-label="Criteria Source"><tbody>',
+            "<tr><td>Source reference</td><td><code>"
+            f"{html.escape(provenance.source_uri)}</code></td></tr>",
+            "<tr><td>Revision</td><td>"
+            + (
+                f"<code>{html.escape(provenance.source_revision)}</code>"
+                if provenance.source_revision is not None
+                else "Not supplied"
+            )
+            + "</td></tr>",
+            "<tr><td>Source-text SHA-256</td><td><code>"
+            f"{html.escape(provenance.source_text_sha256)}</code></td></tr>",
+            "<tr><td>Normalized-criteria SHA-256</td><td><code>"
+            f"{html.escape(provenance.normalized_criteria_sha256)}</code></td></tr>",
+            "<tr><td>Confirmed by</td><td><code>"
+            f"{html.escape(provenance.confirmed_by)}</code></td></tr>",
+            "<tr><td>Confirmed at (UTC)</td><td><code>"
+            f"{html.escape(_provenance_timestamp(provenance))}</code></td></tr>",
+            "</tbody></table>",
             "<h2>Observed CI</h2>",
             "<p>Observed CI: <code>"
             f"{html.escape(bundle.review.ci_observation.state.value)}</code><br>"

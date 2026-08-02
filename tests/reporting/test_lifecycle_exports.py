@@ -1,10 +1,12 @@
 import csv
 import io
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import (
@@ -43,6 +45,18 @@ def state_with_history():
     )
 
 
+def confirm_pending_revision(state):
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_revision=f"requirements-v{state.criteria_revision.number}",
+        source_text=state.criteria_revision.source_text,
+        criteria=state.criteria_revision.criteria,
+        confirmed_by="Fixture owner",
+        confirmed_at=state.criteria_revision.created_at + timedelta(seconds=1),
+    )
+    return confirm_criteria(state, provenance)
+
+
 def attached_review_state():
     state = new_review_state(build_demo_review())
     updated_criteria = [
@@ -51,7 +65,7 @@ def attached_review_state():
     updated_criteria[0] = updated_criteria[0].model_copy(
         update={"text": "Updated AC-01 requirement"}
     )
-    revised = confirm_criteria(
+    revised = confirm_pending_revision(
         revise_criteria(
             state,
             updated_criteria,
@@ -76,6 +90,7 @@ def analysis_for(state):
             "skipped_files": state.review.skipped_files,
             "tool_version": state.review.tool_version,
             "ruleset_version": state.review.ruleset_version,
+            "criteria_source_provenance": state.review.criteria_source_provenance,
         }
     )
     incoming.source_text = state.criteria_revision.source_text
@@ -87,14 +102,14 @@ def analysis_for(state):
 
 def state_with_skipped_analysis_revision():
     revision_one = new_review_state(build_demo_review())
-    revision_two = confirm_criteria(
+    revision_two = confirm_pending_revision(
         revise_criteria(
             revision_one,
             revision_one.criteria_revision.criteria,
             "Confirmed revision two without analysis",
         )
     )
-    revision_three = confirm_criteria(
+    revision_three = confirm_pending_revision(
         revise_criteria(
             revision_two,
             revision_two.criteria_revision.criteria,
@@ -105,7 +120,7 @@ def state_with_skipped_analysis_revision():
         revision_three,
         analysis_for(revision_three),
     )
-    revision_four = confirm_criteria(
+    revision_four = confirm_pending_revision(
         revise_criteria(
             analyzed_revision_three,
             analyzed_revision_three.criteria_revision.criteria,

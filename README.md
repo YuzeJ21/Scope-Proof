@@ -158,19 +158,37 @@ reviewer-confirmed criteria against a real public PR.
 
 ### Public PR CLI workflow
 
-After installation, the CLI provides the same read-only public-PR ingestion and deterministic
-core without starting Streamlit. First create `requirements.txt` with one atomic criterion per
-line. Every line must contain reviewer-confirmed criteria; running the command is an explicit
-confirmation that this normalized set is ready for analysis.
+The commands below describe the current `0.2.3` source candidate, not the still-public `v0.2.1`
+release artifact. From a current source checkout, the CLI provides the same read-only public-PR
+ingestion and deterministic core without starting Streamlit. First create `requirements.txt` with
+one atomic criterion per line. A human requirements owner or authorized role must inspect and
+approve the exact file before creating the confirmation record. `--confirmed-by` is that human's
+explicit attestation; ScopeProof does not verify their identity, authority, or the criteria's
+correctness. Every retained line is therefore reviewer-confirmed criteria, not criteria inferred
+or approved by ScopeProof.
 
 ```bash
-scopeproof review --pr https://github.com/OWNER/REPOSITORY/pull/123 \
+uv run scopeproof prepare-requirements-confirmation \
   --requirements requirements.txt \
+  --source-uri https://github.com/OWNER/REPOSITORY/blob/FULL_SHA/path/to/requirements.txt \
+  --source-revision FULL_SHA \
+  --confirmed-by "Requirements owner or authorized role" \
+  --output requirements-confirmation.json
+
+uv run scopeproof validate-requirements-confirmation \
+  --requirements requirements.txt \
+  --confirmation requirements-confirmation.json
+
+uv run scopeproof review --pr https://github.com/OWNER/REPOSITORY/pull/123 \
+  --requirements requirements.txt \
+  --confirmation requirements-confirmation.json \
   --storage-dir .scopeproof/reviews \
   --report scopeproof-review.md
 ```
 
-The optional report path may end in `.md`, `.json`, `.csv`, or `.html`. ScopeProof validates the
+The preparation command performs no network request, computes both hashes from the exact UTF-8
+bytes and ordered normalized criteria, and refuses to overwrite an existing confirmation file.
+The optional report path may end in `.md`, `.json`, `.csv`, or `.html`; ScopeProof validates the
 selected export and refuses to overwrite an existing file.
 
 The command prints JSON containing the local `review_id`, record path, head SHA, and provisional

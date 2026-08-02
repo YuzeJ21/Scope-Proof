@@ -71,6 +71,8 @@ def remove_criterion(criteria: list[Criterion], criterion_id: str) -> list[Crite
     updated = [item for item in criteria if item.criterion_id != criterion_id]
     if len(updated) == len(criteria):
         raise ValueError(f"Unknown criterion {criterion_id}")
+    if not updated:
+        raise ValueError("at least one criterion is required")
     return updated
 
 

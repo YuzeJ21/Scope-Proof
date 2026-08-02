@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
@@ -21,6 +22,11 @@ from scopeproof_core.alpha.service import ensure_alpha_case, record_alpha_outcom
 from scopeproof_core.alpha.storage import (
     JsonAlphaCaseStore,
     default_alpha_case_directory,
+)
+from scopeproof_core.criteria.confirmation import (
+    build_criteria_source_provenance,
+    canonical_criteria_sha256,
+    source_text_sha256,
 )
 from scopeproof_core.criteria.service import (
     add_criterion,
@@ -61,6 +67,7 @@ from scopeproof_core.reviews.lifecycle import (
     revise_criteria,
 )
 from scopeproof_core.schemas.models import (
+    CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     RULESET_VERSION,
     CheckState,
     Criterion,
@@ -72,6 +79,7 @@ from scopeproof_core.schemas.models import (
     ResolutionEvent,
     Review,
     ReviewBundle,
+    ReviewInputOrigin,
     ReviewState,
     RuntimeEvidence,
 )
@@ -106,6 +114,67 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+st.markdown(
+    """
+    <style>
+    :root {
+        --scopeproof-background: #0d0f12;
+        --scopeproof-surface: #171a1f;
+        --scopeproof-text: #f7f7f2;
+        --scopeproof-lime: #d8ff63;
+        --scopeproof-cyan: #8cecff;
+        --scopeproof-warning: #ffad66;
+    }
+    [data-testid="stAppViewContainer"] {
+        background: var(--scopeproof-background);
+        color: var(--scopeproof-text);
+    }
+    [data-testid="stMainBlockContainer"] {
+        max-width: 76rem;
+        padding-block: 2rem 4rem;
+    }
+    [data-testid="stMainBlockContainer"] > div {
+        gap: 1.25rem;
+    }
+    h1, h2, h3 {
+        color: var(--scopeproof-text);
+        letter-spacing: -0.02em;
+    }
+    h1 {
+        border-bottom: 1px solid color-mix(in srgb, var(--scopeproof-cyan) 35%, transparent);
+        padding-bottom: 0.35rem;
+    }
+    a {
+        color: var(--scopeproof-cyan);
+    }
+    button {
+        border-radius: 0.6rem;
+    }
+    [data-testid="stButton"] > button[kind="primary"] {
+        background: var(--scopeproof-lime);
+        border-color: var(--scopeproof-lime);
+        color: #0d0f12;
+    }
+    [data-testid="stExpander"] details,
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: var(--scopeproof-surface);
+        border-color: color-mix(in srgb, var(--scopeproof-cyan) 28%, transparent);
+        border-radius: 0.75rem;
+    }
+    [data-testid="stAlert"] {
+        border-left: 3px solid var(--scopeproof-warning);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            animation: none !important;
+            scroll-behavior: auto !important;
+            transition: none !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 _STATE_DEFAULTS = {
     "snapshot": None,
@@ -134,10 +203,40 @@ _STATE_DEFAULTS = {
     "alpha_outcome_notice": None,
     "candidate_files": [],
     "comparison_base_bundle": None,
+    "criteria_source_provenance": None,
+    "criteria_source_mode": "standard",
+    "criteria_source_draft": None,
+    "criteria_source_widget_sync_pending": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
         st.session_state[state_key] = default
+
+_criteria_source_widget_sync = st.session_state["criteria_source_widget_sync_pending"]
+if _criteria_source_widget_sync is not None:
+    for _widget_key, _widget_value in _criteria_source_widget_sync.items():
+        st.session_state[_widget_key] = _widget_value
+    st.session_state["criteria_source_widget_sync_pending"] = None
+
+_active_source_provenance = st.session_state["criteria_source_provenance"]
+_criteria_source_draft = st.session_state["criteria_source_draft"]
+if _criteria_source_draft is not None:
+    for _draft_key, _draft_value in _criteria_source_draft.items():
+        if _draft_key not in st.session_state:
+            st.session_state[_draft_key] = _draft_value
+elif _active_source_provenance is not None:
+    if "criteria_source_reference" not in st.session_state:
+        st.session_state["criteria_source_reference"] = (
+            _active_source_provenance.source_uri
+        )
+    if "criteria_source_revision" not in st.session_state:
+        st.session_state["criteria_source_revision"] = (
+            _active_source_provenance.source_revision or ""
+        )
+    if "criteria_source_confirmer" not in st.session_state:
+        st.session_state["criteria_source_confirmer"] = (
+            _active_source_provenance.confirmed_by
+        )
 
 
 def _reset_analysis() -> None:
@@ -150,7 +249,33 @@ def _reset_analysis() -> None:
     st.session_state["failed_review_save_fingerprint"] = None
     st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
+    st.session_state["criteria_source_provenance"] = None
+    st.session_state["criteria_source_widget_sync_pending"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
+
+
+def _remember_criteria_source_draft() -> None:
+    """Preserve raw source fields across reruns that occur before their widgets render."""
+
+    if st.session_state.get("alpha_feedback_mode", False):
+        source_reference = str(
+            st.session_state.get("requirements_source_url", "")
+        )
+    elif st.session_state.get("criteria_source_mode") == "demo":
+        source_reference = CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
+    else:
+        source_reference = str(
+            st.session_state.get("criteria_source_reference", "")
+        )
+    st.session_state["criteria_source_draft"] = {
+        "criteria_source_reference": source_reference,
+        "criteria_source_revision": str(
+            st.session_state.get("criteria_source_revision", "")
+        ),
+        "criteria_source_confirmer": str(
+            st.session_state.get("criteria_source_confirmer", "")
+        ),
+    }
 
 
 def _apply_criteria_update(
@@ -349,6 +474,28 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["candidate_files"] = []
     st.session_state["comparison_base_bundle"] = None
     st.session_state["alpha_case_id"] = None
+    provenance = state.review.criteria_source_provenance
+    st.session_state["criteria_source_provenance"] = provenance
+    st.session_state["criteria_source_mode"] = (
+        "demo"
+        if provenance is not None
+        and provenance.source_uri == CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
+        else "standard"
+    )
+    st.session_state["criteria_source_reference"] = (
+        provenance.source_uri if provenance is not None else ""
+    )
+    st.session_state["criteria_source_revision"] = (
+        provenance.source_revision or "" if provenance is not None else ""
+    )
+    st.session_state["criteria_source_confirmer"] = (
+        provenance.confirmed_by if provenance is not None else ""
+    )
+    st.session_state["criteria_source_draft"] = {
+        "criteria_source_reference": st.session_state["criteria_source_reference"],
+        "criteria_source_revision": st.session_state["criteria_source_revision"],
+        "criteria_source_confirmer": st.session_state["criteria_source_confirmer"],
+    }
     st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
@@ -363,9 +510,15 @@ def _analyze() -> ReviewBundle:
         check_state=snapshot.check_state,
         ci_observation=snapshot.ci_observation,
         criteria_confirmed=st.session_state["criteria_confirmed"],
+        criteria_source_provenance=st.session_state["criteria_source_provenance"],
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
+        input_origin=(
+            ReviewInputOrigin.CONSTRUCTED_DEMO
+            if st.session_state["criteria_source_mode"] == "demo"
+            else ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+        ),
     )
     retrieval_result = retrieve_evidence_with_diagnostics(
         snapshot, criteria, unchanged_files=st.session_state["candidate_files"]
@@ -452,6 +605,37 @@ def _clear_criteria_authoring_drafts(keys: tuple[str, ...]) -> None:
 def _requirements_draft_pending() -> bool:
     return st.session_state.get("requirements_input", "") != st.session_state.get(
         "source_text", ""
+    )
+
+
+def _criteria_source_draft_pending(criteria: list[Criterion]) -> bool:
+    """Return whether typed source identity differs from the confirmed snapshot."""
+
+    provenance = st.session_state.get("criteria_source_provenance")
+    if provenance is None:
+        return False
+    if st.session_state.get("alpha_feedback_mode", False):
+        source_reference = str(
+            st.session_state.get("requirements_source_url", "")
+        ).strip()
+    elif st.session_state.get("criteria_source_mode") == "demo":
+        source_reference = CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
+    else:
+        source_reference = str(
+            st.session_state.get("criteria_source_reference", "")
+        ).strip()
+    source_revision = (
+        str(st.session_state.get("criteria_source_revision", "")).strip() or None
+    )
+    confirmer = str(st.session_state.get("criteria_source_confirmer", "")).strip()
+    return bool(
+        source_reference != provenance.source_uri
+        or source_revision != provenance.source_revision
+        or confirmer != provenance.confirmed_by
+        or source_text_sha256(st.session_state.get("source_text", ""))
+        != provenance.source_text_sha256
+        or canonical_criteria_sha256(criteria)
+        != provenance.normalized_criteria_sha256
     )
 
 
@@ -645,11 +829,20 @@ has_pending_criteria_draft = _criteria_draft_pending(st.session_state["criteria"
 has_pending_criteria_authoring_draft = _criteria_authoring_draft_pending()
 has_pending_requirements_draft = _requirements_draft_pending()
 has_pending_criterion_detail_draft = _criterion_detail_draft_pending()
+has_pending_criteria_source = _criteria_source_draft_pending(
+    st.session_state["criteria"]
+)
+has_missing_active_provenance = bool(
+    current_review_state is not None
+    and current_review_state.review.criteria_source_provenance is None
+)
 has_pending_review_input = (
     has_pending_criteria_draft
     or has_pending_criteria_authoring_draft
     or has_pending_requirements_draft
     or has_pending_criterion_detail_draft
+    or has_pending_criteria_source
+    or has_missing_active_provenance
 )
 pending_storage_messages: list[str] = []
 if has_pending_criteria_draft:
@@ -672,6 +865,16 @@ if has_pending_criterion_detail_draft:
         "Pending criterion-detail inputs are not saved or exported. Submit or clear "
         "them before relying on this review ID."
     )
+if has_pending_criteria_source:
+    pending_storage_messages.append(
+        "Pending criteria source changes are not saved or exported. Reconfirm the source "
+        "snapshot before relying on this review ID."
+    )
+if has_missing_active_provenance:
+    pending_storage_messages.append(
+        "This legacy review has no criteria source provenance. Reconfirm the source "
+        "snapshot before saving, exporting, or recording final acceptance."
+    )
 autosaved = _autosave_review_if_eligible(
     state=current_review_state,
     store=review_store,
@@ -684,7 +887,9 @@ if autosaved and current_review_state is not None:
     )
 
 st.title("ScopeProof")
-st.subheader("See which acceptance criteria have credible PR evidence—and which still need review.")
+st.markdown(
+    "**See which acceptance criteria have credible PR evidence—and which still need review.**"
+)
 st.markdown(
     "> ScopeProof surfaces auditable candidate evidence. "
     "It does not replace QA or prove correctness."
@@ -773,6 +978,17 @@ with st.expander("Try ScopeProof", expanded=False):
         ]
         st.session_state["candidate_files"] = []
         st.session_state["comparison_base_bundle"] = None
+        st.session_state["criteria_source_mode"] = "demo"
+        st.session_state["criteria_source_reference"] = (
+            CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
+        )
+        st.session_state["criteria_source_revision"] = ""
+        st.session_state["criteria_source_confirmer"] = ""
+        st.session_state["criteria_source_draft"] = {
+            "criteria_source_reference": CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
+            "criteria_source_revision": "",
+            "criteria_source_confirmer": "",
+        }
         _reset_analysis()
         st.rerun()
 
@@ -875,6 +1091,15 @@ if fetch_action_placeholder.button(
         st.session_state["snapshot"] = snapshot
         st.session_state["candidate_files"] = candidate_files
         st.session_state["alpha_case_id"] = None
+        st.session_state["criteria_source_mode"] = "standard"
+        st.session_state["criteria_source_reference"] = ""
+        st.session_state["criteria_source_revision"] = ""
+        st.session_state["criteria_source_confirmer"] = ""
+        st.session_state["criteria_source_draft"] = {
+            "criteria_source_reference": "",
+            "criteria_source_revision": "",
+            "criteria_source_confirmer": "",
+        }
         _reset_analysis()
         st.session_state["source_load_notice"] = (
             "Public PR loaded. Add and confirm criteria before analysis."
@@ -1064,6 +1289,42 @@ else:
         "E3 = manually recorded runtime verification. Static PR analysis can produce "
         "only E1 or E2."
     )
+    with st.container(border=True):
+        st.markdown("**Criteria source**")
+        if alpha_feedback_mode:
+            criteria_source_reference = requirements_source_url.strip()
+            st.caption("Public requirements source")
+            if criteria_source_reference:
+                st.code(criteria_source_reference, language=None)
+            else:
+                st.caption("Enter the public requirements URL in the alpha session above.")
+        else:
+            criteria_source_reference = st.text_input(
+                "Source reference",
+                key="criteria_source_reference",
+                disabled=st.session_state["criteria_source_mode"] == "demo",
+                on_change=_remember_criteria_source_draft,
+                help=(
+                    "Use the public HTTPS requirements location. The bundled demo uses its "
+                    "explicit constructed-source reference."
+                ),
+            ).strip()
+        criteria_source_revision = st.text_input(
+            "Source revision (optional)",
+            key="criteria_source_revision",
+            on_change=_remember_criteria_source_draft,
+            help="Issue edit, document revision, or other immutable source version if known.",
+        ).strip()
+        criteria_source_confirmer = st.text_input(
+            "Confirmed by",
+            key="criteria_source_confirmer",
+            on_change=_remember_criteria_source_draft,
+            help="Name or role of the human who checked this normalized criterion set.",
+        ).strip()
+        st.caption(
+            "Confirmation binds the exact source text and ordered normalized criteria to "
+            "this source snapshot."
+        )
     criteria_summary_placeholder = st.empty()
     criteria_validation_placeholder = st.container()
     confirm_action_placeholder = st.empty()
@@ -1227,8 +1488,17 @@ else:
     confirm_clicked = confirm_action_placeholder.button(
         "Confirm criteria",
         key="confirm_criteria",
-        disabled=bool(blank_criterion_ids)
-        or (st.session_state["criteria_confirmed"] and not criteria_edits_pending),
+        disabled=(
+            bool(blank_criterion_ids)
+            or not criteria_source_reference
+            or not criteria_source_confirmer
+            or (
+                st.session_state["criteria_confirmed"]
+                and not criteria_edits_pending
+                and not has_pending_criteria_source
+                and not has_missing_active_provenance
+            )
+        ),
         use_container_width=True,
     )
     criteria_draft_discard_notice = st.session_state.pop(
@@ -1249,11 +1519,29 @@ else:
         state: ReviewState | None = st.session_state["review_state"]
         alpha_case = None
         try:
-            if state is not None:
+            if state is not None and (
+                state.bundle is not None
+                or state.criteria_revision.criteria != edited_criteria
+                or state.criteria_revision.source_text
+                != st.session_state["source_text"]
+                or (
+                    state.review.criteria_source_provenance is not None
+                    and has_pending_criteria_source
+                )
+            ):
                 state = revise_criteria(
                     state, edited_criteria, st.session_state["source_text"]
                 )
-                state = confirm_criteria(state)
+            provenance = build_criteria_source_provenance(
+                source_uri=criteria_source_reference,
+                source_revision=criteria_source_revision or None,
+                source_text=st.session_state["source_text"],
+                criteria=edited_criteria,
+                confirmed_by=criteria_source_confirmer,
+                confirmed_at=datetime.now(UTC),
+            )
+            if state is not None:
+                state = confirm_criteria(state, provenance)
             if alpha_feedback_mode:
                 if alpha_qualification is None:
                     raise ValueError("alpha qualification is incomplete")
@@ -1271,7 +1559,9 @@ else:
                 alpha_store = JsonAlphaCaseStore(default_alpha_case_directory())
                 alpha_case = ensure_alpha_case(
                     store=alpha_store,
-                    case_id=st.session_state["alpha_case_id"],
+                    # A repeated confirmation represents changed authoritative input.
+                    # Preserve the prior immutable alpha case and create a new snapshot.
+                    case_id=None,
                     public_pr_url=alpha_qualification.public_pr_url,
                     requirements_source_url=str(
                         alpha_qualification.requirements_source_url
@@ -1280,6 +1570,8 @@ else:
                     source_owner_confirmed=True,
                     no_confidential_information=True,
                     confirmed_criteria=[item.text for item in edited_criteria],
+                    confirmed_criterion_snapshot=edited_criteria,
+                    criteria_source_provenance=provenance,
                 )
         except ValueError:
             st.error(
@@ -1296,6 +1588,22 @@ else:
                 st.session_state["review_state"] = state
             st.session_state["criteria"] = edited_criteria
             st.session_state["criteria_confirmed"] = True
+            st.session_state["criteria_source_provenance"] = provenance
+            st.session_state["criteria_source_draft"] = {
+                "criteria_source_reference": provenance.source_uri,
+                "criteria_source_revision": provenance.source_revision or "",
+                "criteria_source_confirmer": provenance.confirmed_by,
+            }
+            st.session_state["criteria_source_widget_sync_pending"] = {
+                "criteria_source_reference": provenance.source_uri,
+                "criteria_source_revision": provenance.source_revision or "",
+                "criteria_source_confirmer": provenance.confirmed_by,
+                **(
+                    {"requirements_source_url": provenance.source_uri}
+                    if alpha_feedback_mode
+                    else {}
+                ),
+            }
             st.session_state["bundle"] = None if state is None else state.bundle
             criteria_edits_pending = False
             st.rerun()
@@ -1304,7 +1612,17 @@ alpha_case_notice = st.session_state.pop("alpha_case_notice", None)
 if alpha_case_notice is not None:
     st.success(alpha_case_notice)
 
-if criteria_edits_pending:
+if has_missing_active_provenance:
+    st.warning(
+        "This legacy review has no criteria source provenance. Enter the source reference "
+        "and confirmer, then reconfirm before analysis, export, or final acceptance."
+    )
+elif has_pending_criteria_source:
+    st.warning(
+        "Criteria source changes are pending confirmation. The saved review still uses the "
+        "last confirmed source snapshot. Reconfirm before analysis, export, or acceptance."
+    )
+elif criteria_edits_pending:
     st.warning(
         "Criteria edits are pending confirmation. Visible evidence and verdict still use "
         "the last confirmed criteria. Confirm the updated set before rerunning analysis."
@@ -1314,11 +1632,29 @@ elif st.session_state["criteria_confirmed"]:
 else:
     st.caption("Analysis remains locked until the criterion set is explicitly confirmed.")
 
+active_criteria_source = st.session_state.get("criteria_source_provenance")
+if active_criteria_source is not None:
+    with st.expander("Confirmed criteria source", expanded=False):
+        st.caption("Source reference")
+        st.code(active_criteria_source.source_uri, language=None)
+        st.caption("Source revision")
+        st.text(active_criteria_source.source_revision or "Not supplied")
+        st.caption("Exact source text SHA-256")
+        st.code(active_criteria_source.source_text_sha256, language=None)
+        st.caption("Ordered normalized criteria SHA-256")
+        st.code(active_criteria_source.normalized_criteria_sha256, language=None)
+        st.caption("Confirmed by")
+        st.text(active_criteria_source.confirmed_by)
+        st.caption("Confirmed at (UTC)")
+        st.text(active_criteria_source.model_dump(mode="json")["confirmed_at"])
+
 analysis_disabled = not (
     st.session_state["snapshot"] is not None
     and st.session_state["criteria_confirmed"]
     and bool(st.session_state["criteria"])
     and not criteria_edits_pending
+    and not has_pending_criteria_source
+    and not has_missing_active_provenance
     and (
         st.session_state["review_state"] is None
         or st.session_state["review_state"].bundle is None
@@ -1496,28 +1832,29 @@ else:
         f"None {evidence_strength_counts[EvidenceStatus.NO_CANDIDATE]} · "
         f"Incomplete {evidence_strength_counts[EvidenceStatus.ANALYSIS_INCOMPLETE]}"
     )
-    status_filter = st.multiselect(
-        "Filter evidence status",
-        options=list(EvidenceStatus),
-        format_func=evidence_status_text,
-        key="status_filter",
-    )
-    priority_filter = st.multiselect(
-        "Filter priority",
-        options=list(Priority),
-        format_func=lambda item: _status_label(item.value),
-        key="priority_filter",
-    )
-    blocking_only = st.checkbox(
-        "Show blocking criteria only",
-        key="blocking_only",
-    )
-    evidence_level_filter = st.multiselect(
-        "Filter evidence level",
-        options=list(EvidenceLevel),
-        format_func=lambda item: item.value,
-        key="evidence_level_filter",
-    )
+    with st.expander("Filter evidence matrix (optional)", expanded=False):
+        status_filter = st.multiselect(
+            "Filter evidence status",
+            options=list(EvidenceStatus),
+            format_func=evidence_status_text,
+            key="status_filter",
+        )
+        priority_filter = st.multiselect(
+            "Filter priority",
+            options=list(Priority),
+            format_func=lambda item: _status_label(item.value),
+            key="priority_filter",
+        )
+        blocking_only = st.checkbox(
+            "Show blocking criteria only",
+            key="blocking_only",
+        )
+        evidence_level_filter = st.multiselect(
+            "Filter evidence level",
+            options=list(EvidenceLevel),
+            format_func=lambda item: item.value,
+            key="evidence_level_filter",
+        )
     blocking_criteria = set(bundle.gate.blocking_criteria)
     matrix = []
     for criterion in bundle.criteria:
@@ -2130,7 +2467,7 @@ else:
 
     st.header("5 · Summary & Export")
     review_status = review_status_label(bundle.gate.verdict)
-    st.markdown(f"## Review status: **{review_status}**")
+    st.markdown(f"**Review status: {review_status}**")
     if bundle.gate.reason_codes:
         labels = [_status_label(code) for code in bundle.gate.reason_codes]
         st.write("Gate reasons: " + " · ".join(labels))
@@ -2149,9 +2486,15 @@ else:
             "authoritative review."
         )
     export_source = review_state if review_state is not None else bundle
-    markdown_report = export_markdown(export_source)
-    json_report = export_json(export_source)
-    csv_report = export_csv(export_source)
+    export_has_provenance = bundle.review.criteria_source_provenance is not None
+    if export_has_provenance:
+        markdown_report = export_markdown(export_source)
+        json_report = export_json(export_source)
+        csv_report = export_csv(export_source)
+    else:
+        markdown_report = ""
+        json_report = ""
+        csv_report = ""
     markdown_column, json_column, csv_column = st.columns(3)
     with markdown_column:
         st.download_button(
@@ -2159,7 +2502,7 @@ else:
             markdown_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.md",
             mime="text/markdown",
-            disabled=has_pending_review_input,
+            disabled=has_pending_review_input or not export_has_provenance,
             key="download_markdown",
         )
     with json_column:
@@ -2168,7 +2511,7 @@ else:
             json_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.json",
             mime="application/json",
-            disabled=has_pending_review_input,
+            disabled=has_pending_review_input or not export_has_provenance,
             key="download_json",
         )
     with csv_column:
@@ -2177,7 +2520,7 @@ else:
             csv_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.csv",
             mime="text/csv",
-            disabled=has_pending_review_input,
+            disabled=has_pending_review_input or not export_has_provenance,
             key="download_csv",
         )
     if review_save_notice is not None:
@@ -2261,8 +2604,7 @@ else:
                         try:
                             completed_alpha_record = record_alpha_outcome(
                                 alpha_record,
-                                review_id=review_state.review.review_id,
-                                reviewed_head_sha=review_state.review.head_sha,
+                                review_state=review_state,
                                 outcome=alpha_outcome,
                                 friction_stage=friction_stage,
                                 outcome_notes=outcome_notes.strip() or None,
@@ -2293,7 +2635,10 @@ st.caption(
 has_source = st.session_state["snapshot"] is not None
 has_criteria = bool(st.session_state["criteria"])
 criteria_are_confirmed = (
-    st.session_state["criteria_confirmed"] and not criteria_edits_pending
+    st.session_state["criteria_confirmed"]
+    and not criteria_edits_pending
+    and not has_pending_criteria_source
+    and not has_missing_active_provenance
 )
 has_analysis = bundle is not None
 sidebar_ruleset_version = (
@@ -2301,7 +2646,7 @@ sidebar_ruleset_version = (
 )
 
 with st.sidebar:
-    st.header("Review status")
+    st.markdown("**Review status**")
     if has_source:
         _render_sidebar_step("Complete — Source loaded", "#1-start-review")
     elif has_analysis:

@@ -26,6 +26,14 @@ def test_remove_criterion_preserves_other_stable_identifiers() -> None:
     assert [item.criterion_id for item in remove_criterion(criteria(), "AC-01")] == ["AC-03"]
 
 
+def test_remove_criterion_rejects_removing_the_only_remaining_criterion() -> None:
+    with pytest.raises(ValueError, match="at least one criterion"):
+        remove_criterion(
+            [Criterion(criterion_id="AC-01", text="Export CSV")],
+            "AC-01",
+        )
+
+
 def test_split_replaces_one_criterion_with_two_new_stable_items() -> None:
     updated = split_criterion(
         [Criterion(criterion_id="AC-01", text="Export CSV and record analytics")],

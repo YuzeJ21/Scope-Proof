@@ -1,4 +1,5 @@
 import json
+import re
 import tomllib
 from hashlib import sha256
 from html.parser import HTMLParser
@@ -11,11 +12,12 @@ from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.evals.r002_models import (
+    R002_PUBLISHED_PRE_PROVENANCE_RESULT_SHA256,
     R002_SOURCE,
-    R002BenchmarkResult,
     canonical_sha256,
     load_confirmed_criteria,
     load_confirmed_labels,
+    load_r002_benchmark_result,
     load_source_manifest,
 )
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
@@ -83,7 +85,9 @@ def test_r002_tracked_outputs_exclude_scopeproof_authored_redaction_sentinels() 
 def test_r002_engineering_result_is_linked_without_advancing_product_stages() -> None:
     result_path = Path("docs/research/r002-swebench-verified/result.json")
     summary_path = Path("docs/research/r002-swebench-verified/summary.md")
-    result = R002BenchmarkResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    raw_result = result_path.read_bytes()
+    assert sha256(raw_result).hexdigest() == R002_PUBLISHED_PRE_PROVENANCE_RESULT_SHA256
+    result = load_r002_benchmark_result(result_path)
     summary = summary_path.read_text(encoding="utf-8")
     public_link = "docs/research/r002-swebench-verified/summary.md"
     development_link = "research/r002-swebench-verified/summary.md"
@@ -361,6 +365,7 @@ def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None
     for command in (
         "uv run scopeproof owner-rehearsal init",
         "uv run scopeproof owner-rehearsal show",
+        "uv run scopeproof prepare-requirements-confirmation",
         "uv run scopeproof review --fixture evals/fixtures/csv_export_pr.json",
         "uv run scopeproof export",
         "uv run scopeproof comparison-benchmark",
@@ -537,6 +542,51 @@ def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
     core_cli = Path("scopeproof_core/cli.py").read_text(encoding="utf-8")
     assert "streamlit" not in core_cli
     assert "apps.web" not in core_cli
+
+
+def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy() -> None:
+    config = tomllib.loads(Path(".streamlit/config.toml").read_text(encoding="utf-8"))
+    app = Path("apps/web/app.py").read_text(encoding="utf-8")
+    site = Path("site/index.html").read_text(encoding="utf-8")
+    css = Path("site/styles.css").read_text(encoding="utf-8")
+    parser = _PublicSiteParser()
+    parser.feed(site)
+
+    assert config["theme"] == {
+        "base": "dark",
+        "primaryColor": "#d8ff63",
+        "backgroundColor": "#0d0f12",
+        "secondaryBackgroundColor": "#171a1f",
+        "textColor": "#f7f7f2",
+    }
+    assert "):focus-visible" in app
+    assert "[data-testid=\"stAppViewContainer\"]" in app
+    assert "@media (prefers-reduced-motion: reduce)" in app
+    assert "alpha-actions-primary" in site
+    assert "alpha-actions-secondary" in site
+    assert "alpha-actions-resources" in site
+    assert ".alpha-actions-resources" in css
+    for action_class in (
+        "alpha-actions-primary",
+        "alpha-actions-secondary",
+        "alpha-actions-resources",
+    ):
+        assert f".{action_class} {{ order:" not in css
+    alpha_urls = {
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml",
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md",
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/public-pr-qualification-checklist.md",
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/commercialization/design-partner-sprint.md",
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml",
+    }
+    assert alpha_urls.issubset(parser.links)
+    assert "Submit a public alpha case" in site
+    assert "Open the ten-minute quickstart" in site
+    assert "Post-review: share a completed review outcome" in site
+    assert (
+        "Submit no private code, credentials, customer data, private links, or confidential "
+        "information."
+    ) in site
 
 
 def test_hatch_and_reviews_share_one_version_source() -> None:
@@ -972,9 +1022,29 @@ def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
 
     assert "scopeproof review --pr" in readme
     assert "--requirements requirements.txt" in readme
+    assert "prepare-requirements-confirmation" in readme
+    assert "--confirmation requirements-confirmation.json" in readme
+    assert "does not verify their identity, authority" in readme
     assert "scopeproof export" in readme
     assert "reviewer-confirmed criteria" in readme
     assert "not required or persisted" in readme
+
+
+def test_active_confirmation_and_alpha_cli_docs_are_runnable() -> None:
+    dogfood = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
+    rehearsal = Path("docs/alpha/owner-rehearsal.md").read_text(encoding="utf-8")
+    action = Path("docs/github-action.md").read_text(encoding="utf-8")
+    outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+
+    for document in (dogfood, rehearsal, action):
+        assert "prepare-requirements-confirmation" in document
+        assert "--confirmed-by" in document
+    for document in (dogfood, rehearsal):
+        assert "--confirmation" in document
+    assert "--review-storage-dir .scopeproof/reviews" in outcome
+    assert "--head-sha" not in outcome
+    assert "live public GitHub ingestion" in outcome
+    assert "Fixture, demo, research, and legacy" in outcome
 
 
 def test_readme_documents_one_command_report_without_removing_repeat_export() -> None:
@@ -1042,6 +1112,25 @@ def test_launch_matrix_keeps_action_as_an_advanced_preview() -> None:
     assert "Trusted-base planning" in matrix
     assert "default first-use path" in matrix
     assert "successful hosted Action run" not in matrix
+
+
+def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> None:
+    example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+    guide = Path("docs/github-action.md").read_text(encoding="utf-8")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    expected_pin = "d553791cba83d9f756b2adce22bd814872b73ea2"
+
+    install = re.search(
+        r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
+        example,
+    )
+
+    assert install is not None
+    assert install.group(1) == expected_pin
+    assert f"`{install.group(1)}`" in guide
+    assert f"`{install.group(1)}`" in changelog
+    assert "source-candidate installation" in guide
+    assert "not a published v0.2.3 release" in guide
 
 
 def test_public_docs_do_not_require_or_offer_external_fork_validation() -> None:
@@ -1433,6 +1522,27 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         assert alpha_visual.size == (1200, 1200)
 
 
+def test_public_site_desktop_hero_keeps_actions_and_safety_boundary_above_the_fold() -> None:
+    html = Path("site/index.html").read_text(encoding="utf-8")
+    css = Path("site/styles.css").read_text(encoding="utf-8")
+    desktop_css = css.split("@media (max-width: 900px)", maxsplit=1)[0]
+    mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
+
+    hero = html.split('<section class="hero"', maxsplit=1)[1].split("</section>", maxsplit=1)[0]
+    assert (
+        '<link rel="icon" href="assets/scopeproof-linkedin-alpha.png" type="image/png">'
+        in html
+    )
+    assert hero.index('<div class="actions">') < hero.index('<p class="boundary">')
+    assert "min-height: calc(100vh - 5.2rem)" in desktop_css
+    assert "padding: 2rem 0" in desktop_css
+    assert "clamp(3rem, 5.625vw, 4.5rem)" in desktop_css
+
+    # Preserve the separately verified narrow layout while compacting desktop only.
+    assert ".hero { min-height: auto; padding: 3.5rem 0; }" in mobile_css
+    assert "clamp(2.35rem, 12vw, 3.5rem)" in mobile_css
+
+
 def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
     guide_path = Path("docs/commercialization/design-partner-sprint.md")
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
@@ -1560,6 +1670,10 @@ def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() 
 
     mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
     assert '<a href="#alpha">Public alpha</a>' in site
+    assert ".site-header {" in mobile_css
+    assert "align-items: stretch" in mobile_css
+    assert "flex-direction: column" in mobile_css
+    assert ".brand { white-space: nowrap;" in mobile_css
     assert "nav { display: flex;" in mobile_css
     for path in active_docs:
         content = path.read_text(encoding="utf-8")

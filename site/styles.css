@@ -40,10 +40,10 @@ a:focus-visible, button:focus-visible, video:focus-visible { outline: 3px solid 
 nav { display: flex; gap: clamp(0.8rem, 3vw, 2rem); }
 nav a { color: var(--muted); text-decoration: none; font-size: 0.94rem; }
 
-.hero { min-height: 42rem; display: grid; grid-template-columns: 1.15fr 0.85fr; align-items: center; gap: clamp(2rem, 7vw, 6rem); padding: 5rem 0; }
+.hero { min-height: calc(100vh - 5.2rem); display: grid; grid-template-columns: 1.15fr 0.85fr; align-items: center; gap: clamp(2rem, 7vw, 6rem); padding: 2rem 0; }
 .eyebrow { margin: 0 0 0.8rem; color: var(--lime); font-size: 0.76rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
 h1, h2, h3 { margin-top: 0; line-height: 1.05; letter-spacing: -0.045em; }
-h1 { margin-bottom: 1.5rem; font-size: clamp(3.3rem, 8vw, 6.7rem); max-width: 10ch; }
+h1 { margin-bottom: 1.5rem; font-size: clamp(3rem, 5.625vw, 4.5rem); max-width: 10ch; }
 h2 { margin-bottom: 1.1rem; font-size: clamp(2.1rem, 4.5vw, 4rem); }
 h3 { margin-bottom: 0.7rem; font-size: 1.35rem; }
 .lede { max-width: 62ch; color: #d8d8d0; font-size: clamp(1.05rem, 1.5vw, 1.3rem); }
@@ -67,6 +67,9 @@ h3 { margin-bottom: 0.7rem; font-size: 1.35rem; }
 .alpha-section { display: grid; grid-template-columns: 1.25fr 0.75fr; gap: clamp(2rem, 8vw, 7rem); }
 .alpha-section > div > p:not(.eyebrow) { max-width: 64ch; color: var(--muted); }
 .alpha-actions { display: grid; align-content: start; gap: 0.9rem; padding: 1.5rem; background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; }
+.alpha-actions-resources { display: flex; flex-wrap: wrap; gap: 0.35rem 0.55rem; align-items: baseline; color: var(--muted); font-size: 0.88rem; }
+.alpha-actions-resources a { color: var(--cyan); }
+.alpha-actions-resources span { color: var(--muted); }
 .alpha-actions p { margin: 0.5rem 0 0; font-size: 0.88rem; }
 footer { display: flex; justify-content: space-between; gap: 2rem; padding: 2rem 0 4rem; border-top: 1px solid var(--line); color: var(--muted); }
 footer div { display: flex; flex-wrap: wrap; gap: 1.5rem; }
@@ -80,8 +83,9 @@ footer div { display: flex; flex-wrap: wrap; gap: 1.5rem; }
 }
 
 @media (max-width: 600px) {
-  .site-header { align-items: flex-start; padding: 1rem 0; }
-  nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.55rem 0.8rem; }
+  .site-header { align-items: stretch; flex-direction: column; gap: 0.75rem; padding: 1rem 0; }
+  .brand { white-space: nowrap; align-self: flex-start; }
+  nav { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 0.55rem 0.8rem; }
   nav a { font-size: 0.78rem; }
   h1 { font-size: clamp(2.35rem, 12vw, 3.5rem); overflow-wrap: anywhere; }
   h2, h3, p, a { overflow-wrap: anywhere; }

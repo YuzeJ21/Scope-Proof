@@ -78,6 +78,7 @@ from scopeproof_core.schemas.models import (
     ResearchContext,
     Review,
     ReviewBundle,
+    ReviewInputOrigin,
 )
 from scopeproof_core.verification.service import build_findings
 
@@ -607,6 +608,7 @@ def build_r002_review(
         ci_observation=observation,
         criteria_confirmed=True,
         ingestion_state=IngestionState.COMPLETE,
+        input_origin=ReviewInputOrigin.LOCAL_FIXTURE,
         final_acceptance=False,
     )
     criteria = [item.model_copy(deep=True) for item in criterion_case.criteria]

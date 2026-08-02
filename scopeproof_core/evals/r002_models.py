@@ -163,6 +163,9 @@ R002_RESULT_LIMITATIONS = (
     "Candidate evidence does not prove correctness or criterion satisfaction.",
     "R-002 is engineering evidence only and contributes zero Stage 1 validation credit.",
 )
+R002_PUBLISHED_PRE_PROVENANCE_RESULT_SHA256 = (
+    "2fc7115a6ffee3143d0f1d93dca1d51359f40857ec89f1c180d04d7f1e2d359f"
+)
 R002_ANNOTATION_UNIVERSE_MAX_BYTES = 256 * 1024 * 1024
 R002_ANNOTATION_REVIEW_MAX_BYTES = 512 * 1024 * 1024
 R002_REDACTION_RAW_VALUE_MAX_BYTES = 1024 * 1024 * 1024
@@ -1449,7 +1452,7 @@ class R002CaseResult(R002StrictModel):
     retrieved_candidates: tuple[R002RetrievedCandidate, ...] = Field(max_length=250000)
     missing_explanations: tuple[R002MissingExplanation, ...] = Field(max_length=64)
     gate_verdict: GateVerdict
-    gate_reason_codes: tuple[str, ...] = Field(max_length=3)
+    gate_reason_codes: tuple[str, ...] = Field(max_length=4)
     blocking_criteria: tuple[str, ...] = Field(max_length=16)
     conditional_criteria: tuple[str, ...] = Field(max_length=16)
     unresolved_criteria: tuple[str, ...] = Field(max_length=16)
@@ -1511,6 +1514,7 @@ class R002CaseResult(R002StrictModel):
                     for code, criteria in (
                         ("conditional_criteria", self.conditional_criteria),
                         ("unresolved_criteria", self.unresolved_criteria),
+                        ("criteria_source_provenance_missing", ("criteria",)),
                         ("checks_not_passing", ("ci",)),
                     )
                     if criteria
@@ -1771,6 +1775,32 @@ def canonical_json_bytes(value: BaseModel | dict[str, object]) -> bytes:
 
 def canonical_sha256(value: BaseModel | dict[str, object]) -> str:
     return sha256(canonical_json_bytes(value)).hexdigest()
+
+
+def load_r002_benchmark_result(path: Path) -> R002BenchmarkResult:
+    """Load a current result or conservatively migrate the exact frozen legacy result."""
+
+    raw = path.read_bytes()
+    try:
+        return R002BenchmarkResult.model_validate_json(raw)
+    except ValidationError:
+        if sha256(raw).hexdigest() != R002_PUBLISHED_PRE_PROVENANCE_RESULT_SHA256:
+            raise
+
+    payload = json.loads(raw)
+    for case in payload["case_results"]:
+        if case["gate_verdict"] != "needs_review":
+            continue
+        reasons = case["gate_reason_codes"]
+        if reasons == ["checks_not_passing", "unresolved_criteria"]:
+            case["gate_reason_codes"] = [
+                "checks_not_passing",
+                "criteria_source_provenance_missing",
+                "unresolved_criteria",
+            ]
+    return R002BenchmarkResult.model_validate_json(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    )
 
 
 def case_projection_sha256(cases: Sequence[R002CaseManifest]) -> str:

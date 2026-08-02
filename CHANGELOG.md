@@ -9,7 +9,34 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Candidate version: 0.2.3 (source merged through PR #180; untagged, unreleased, and not published).
+Candidate version: 0.2.3 (verified product baseline merged through PR #180,
+repository alignment merged through PR #181, and current convergence work
+remains untagged, unreleased, and not published).
+
+### Product convergence source work
+
+- Bound every new criteria confirmation to an immutable source URI, optional
+  source revision, exact requirements-text digest, ordered normalized-criteria
+  digest, confirmer, and timestamp. Missing or changed provenance fails closed
+  to `Needs Review` rather than inheriting prior certainty.
+- Advanced local review storage to version 4. Version 1–3 records remain
+  readable without invented criteria-source provenance and require explicit
+  reconfirmation before analysis, export, or final acceptance can become
+  eligible again.
+- Carried the typed criteria-source snapshot through the workbench, CLI,
+  trusted-base Action preview, alpha evidence record, JSON persistence, and
+  JSON, Markdown, CSV, and HTML exports.
+- Simplified the workbench and public-alpha page hierarchy, moved optional
+  evidence-matrix filters into progressive disclosure, and aligned supported
+  Streamlit and public-site visual tokens without hiding safety copy or
+  changing deterministic gate behavior.
+- Updated the copyable Action source-candidate pin to the final immutable
+  v0.2.3 integrity commit `d553791cba83d9f756b2adce22bd814872b73ea2`. This is not a release install and does
+  not repin the public v0.2.1 package guidance.
+
+These changes are engineering source work only. They create zero Stage 1
+credit and do not establish customer, market, accessibility, platform,
+security, or target-repository runtime validation.
 
 ### Integrity repairs
 
@@ -51,6 +78,11 @@ newer exact-head runtime-evidence repair as product commit
 `add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8`. This merge restores the Stage 0
 engineering foundation; it does not publish v0.2.3, establish customer
 validation, or determine whether the published v0.2.1 package is affected.
+
+PR #181 merged documentation-only post-merge alignment as
+`eaa66c5979e2a71769d58f0699537da474094d06`; CI, CodeQL, and Pages succeeded.
+This is repository-tree CI only and does not establish release assets,
+checksums, a tag, a GitHub Release, or Stage 1 evidence.
 
 ### Changed
 

@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install ScopeProof
-        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@3d88808f12f46b68059b9e89c40c7ccd595d9032"
+        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@d553791cba83d9f756b2adce22bd814872b73ea2"
       - name: Review public PR evidence (informational)
         continue-on-error: true
         env:
@@ -41,6 +41,7 @@ jobs:
             echo "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" >> "$GITHUB_ENV"
             scopeproof review --pr "$PR_URL" \
               --requirements .scopeproof/requirements.txt \
+              --confirmation .scopeproof/requirements-confirmation.json \
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
             python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
             review_id=$(python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')

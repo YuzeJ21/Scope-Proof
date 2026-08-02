@@ -1,6 +1,10 @@
 from scopeproof_core.demo import build_demo_review, load_demo_snapshot
 from scopeproof_core.evals.runner import run_bundled_benchmark
-from scopeproof_core.schemas.models import FindingStatus, GateVerdict
+from scopeproof_core.schemas.models import (
+    CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
+    FindingStatus,
+    GateVerdict,
+)
 
 
 def test_demo_fixture_is_disclosed_as_deliberately_constructed() -> None:
@@ -18,6 +22,16 @@ def test_demo_is_deliberately_blocked_for_missing_must_haves() -> None:
         "AC-04": FindingStatus.MISSING,
     }
     assert bundle.gate.verdict is GateVerdict.BLOCKED
+
+
+def test_demo_uses_named_constructed_criteria_source_provenance() -> None:
+    bundle = build_demo_review()
+
+    assert bundle.review.criteria_source_provenance is not None
+    assert (
+        bundle.review.criteria_source_provenance.source_uri
+        == CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
+    )
 
 
 def test_demo_records_one_retrieval_diagnostic_per_criterion() -> None:

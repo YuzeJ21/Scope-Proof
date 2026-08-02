@@ -1,5 +1,8 @@
 import re
+import subprocess
 from pathlib import Path
+
+from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
 
 
 def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> None:
@@ -27,6 +30,25 @@ def test_repository_action_workflow_uses_the_locked_environment() -> None:
     assert "run: pip install ." not in workflow
 
 
+def test_trusted_base_workflows_pass_validated_confirmation_into_review() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+        review_command = workflow.split("scopeproof review --pr", maxsplit=1)[1].split(
+            "> \"$RUNNER_TEMP/scopeproof-result.json\"", maxsplit=1
+        )[0]
+        assert "--requirements .scopeproof/requirements.txt" in review_command
+        assert (
+            "--confirmation .scopeproof/requirements-confirmation.json"
+            in review_command
+        )
+        assert workflow.index("validate-requirements-confirmation") < workflow.index(
+            "scopeproof review --pr"
+        )
+
+
 def test_example_requires_checked_in_confirmed_requirements_file() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
 
@@ -34,10 +56,23 @@ def test_example_requires_checked_in_confirmed_requirements_file() -> None:
     assert "SCOPEPROOF_REQUIRED_CHECK" in example
 
 
+def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
+    confirmation = validate_requirements_confirmation(
+        Path(".scopeproof/requirements.txt"),
+        Path(".scopeproof/requirements-confirmation.json"),
+    )
+
+    assert confirmation.source_uri == (
+        "https://github.com/YuzeJ21/Scope-Proof/blob/"
+        "a2fdecbd5918535f4db35bfdf7da64156f393b67/.scopeproof/requirements.txt"
+    )
+    assert confirmation.source_revision == "a2fdecbd5918535f4db35bfdf7da64156f393b67"
+
+
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "3d88808f12f46b68059b9e89c40c7ccd595d9032"
+    reviewed_revision = "d553791cba83d9f756b2adce22bd814872b73ea2"
 
     assert "pip install scopeproof" not in example
     assert (
@@ -45,6 +80,63 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
         f"{reviewed_revision}"
     ) in example
     assert reviewed_revision in guide
+
+
+def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
+    example = Path("examples/github-actions/scopeproof.yml").read_text(
+        encoding="utf-8"
+    )
+    install = re.search(
+        r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
+        example,
+    )
+    assert install is not None
+    pinned_revision = install.group(1)
+
+    cli_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:scopeproof_core/cli.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    confirmation_at_pin = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{pinned_revision}:scopeproof_core/criteria/confirmation.py",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    models_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:scopeproof_core/schemas/models.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    alpha_service_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:scopeproof_core/alpha/service.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+    assert re.search(
+        r'review\.add_argument\(\s*"--confirmation",\s*required=True', cli_at_pin
+    )
+    assert "validate_requirements_confirmation" in cli_at_pin
+    assert "prepare-requirements-confirmation" in cli_at_pin
+    assert "CriteriaSourceProvenance.model_validate_json" in confirmation_at_pin
+    assert "validate_criteria_source_confirmation" in confirmation_at_pin
+    assert "class ReviewInputOrigin" in models_at_pin
+    assert "LIVE_PUBLIC_GITHUB" in alpha_service_at_pin
+
+
+def test_ci_checkouts_include_history_for_source_pin_contract() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert workflow.count("fetch-depth: 0") == 3
 
 
 def test_single_account_alpha_policy_explicitly_skips_external_fork_testing() -> None:

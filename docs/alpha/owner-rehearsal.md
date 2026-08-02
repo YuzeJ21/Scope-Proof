@@ -40,8 +40,16 @@ This reloads the saved local record. Confirm its fixed `owner_rehearsal` classif
 ineligibility fields; it does not convert the record into an alpha case or outcome.
 
 ```bash
+uv run scopeproof prepare-requirements-confirmation \
+  --requirements evals/rehearsals/owner_rehearsal_criteria.txt \
+  --source-uri https://github.com/scopeproof/demo-stock-research/issues/17 \
+  --source-revision constructed-owner-rehearsal-v1 \
+  --confirmed-by "Owner of the deliberately constructed rehearsal" \
+  --output "$run_dir/requirements-confirmation.json"
+
 uv run scopeproof review --fixture evals/fixtures/csv_export_pr.json \
   --requirements evals/rehearsals/owner_rehearsal_criteria.txt \
+  --confirmation "$run_dir/requirements-confirmation.json" \
   --storage-dir "$run_dir/reviews" \
   --report "$run_dir/review.json"
 ```
@@ -49,7 +57,8 @@ uv run scopeproof review --fixture evals/fixtures/csv_export_pr.json \
 This runs local deterministic coverage against the deliberately constructed fixture, saves a
 review, and writes a JSON report. It proves neither runtime behavior nor correctness; inspect the
 missing-evidence explanations and keep the conservative gate result when must-have evidence is
-missing. Copy the printed review ID into `review_id`.
+missing. The confirmation command records only the named owner's local rehearsal attestation; it
+does not create external evidence. Copy the printed review ID into `review_id`.
 
 ```bash
 review_id='<printed-review-id>'

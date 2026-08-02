@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from enum import StrEnum
 
 from scopeproof_core.gates.evaluator import evaluate_gate
@@ -14,6 +13,7 @@ from scopeproof_core.resolution_events import current_resolutions, final_accepta
 from scopeproof_core.schemas.models import (
     CheckState,
     CriteriaRevision,
+    CriteriaSourceProvenance,
     Criterion,
     EvidenceLevel,
     HumanDecision,
@@ -41,20 +41,28 @@ def _validated_state(state: ReviewState) -> ReviewState:
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
     """Initialize lifecycle state from a revalidated analysis bundle."""
     bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+    if not bundle.criteria:
+        raise ValueError("initial analysis requires at least one criterion")
     if bundle.resolutions:
         raise ValueError("initial analysis bundle must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("initial analysis bundle must not contain final acceptance")
     bundle = validated_review_bundle(bundle)
+    if bundle.review.criteria_source_provenance is None:
+        raise ValueError(
+            "initial analysis bundle requires criteria source provenance"
+        )
     active_bundle = bundle.model_copy(
         update={"criteria_revision_number": 1}, deep=True
     )
+    source_provenance = bundle.review.criteria_source_provenance.model_copy(deep=True)
     revision = CriteriaRevision(
         number=1,
         criteria=[criterion.model_copy(deep=True) for criterion in bundle.criteria],
         source_text=bundle.source_text,
         confirmed=bundle.review.criteria_confirmed,
-        confirmed_at=datetime.now(UTC) if bundle.review.criteria_confirmed else None,
+        confirmed_at=source_provenance.confirmed_at,
+        source_provenance=source_provenance,
     )
     return ReviewState(
         review=bundle.review.model_copy(deep=True),
@@ -68,6 +76,8 @@ def revise_criteria(
 ) -> ReviewState:
     """Create an unconfirmed revision and preserve the superseded analysis."""
     state = _validated_state(state)
+    if not criteria:
+        raise ValueError("criteria revision requires at least one criterion")
     history = [*state.analysis_history]
     if state.bundle is not None:
         history.append(state.bundle)
@@ -80,7 +90,11 @@ def revise_criteria(
         source_text=source_text,
     )
     review = state.review.model_copy(
-        update={"criteria_confirmed": False, "final_acceptance": False}
+        update={
+            "criteria_confirmed": False,
+            "criteria_source_provenance": None,
+            "final_acceptance": False,
+        }
     )
     return state.model_copy(
         update={
@@ -92,34 +106,72 @@ def revise_criteria(
     )
 
 
-def confirm_criteria(state: ReviewState) -> ReviewState:
-    """Mark the active revision confirmed without manufacturing an analysis."""
+def confirm_criteria(
+    state: ReviewState,
+    provenance: CriteriaSourceProvenance,
+) -> ReviewState:
+    """Confirm the active revision against one validated source snapshot."""
     state = _validated_state(state)
+    if not state.criteria_revision.criteria:
+        raise ValueError("criteria confirmation requires at least one criterion")
     if state.bundle is not None:
         raise ValueError(
             "criteria confirmation requires a pending revision without an active bundle"
         )
-    now = datetime.now(UTC)
-    revision = state.criteria_revision.model_copy(update={"confirmed": True, "confirmed_at": now})
-    review = state.review.model_copy(update={"criteria_confirmed": True, "final_acceptance": False})
-    return state.model_copy(update={"criteria_revision": revision, "review": review})
+    provenance = CriteriaSourceProvenance.model_validate(
+        provenance.model_dump(mode="python")
+    )
+    if provenance.confirmed_at < state.criteria_revision.created_at:
+        raise ValueError("criteria source confirmation predates the active revision")
+    revision = CriteriaRevision.model_validate(
+        {
+            **state.criteria_revision.model_dump(mode="python"),
+            "confirmed": True,
+            "confirmed_at": provenance.confirmed_at,
+            "source_provenance": provenance,
+        }
+    )
+    review = state.review.model_copy(
+        update={
+            "criteria_confirmed": True,
+            "criteria_source_provenance": provenance.model_copy(deep=True),
+            "final_acceptance": False,
+        }
+    )
+    return validated_review_state(
+        state.model_copy(update={"criteria_revision": revision, "review": review})
+    )
 
 
 def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
     """Attach validated static analysis to a confirmed pending revision."""
     state = _validated_state(state)
-    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+    if not state.criteria_revision.criteria:
+        raise ValueError("analysis attachment requires at least one criterion")
     if state.bundle is not None:
         raise ValueError(
             "analysis attachment requires a pending revision without an active bundle"
         )
     if not state.criteria_revision.confirmed:
         raise ValueError("analysis attachment requires a confirmed criteria revision")
+    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+    if not bundle.criteria:
+        raise ValueError("analysis attachment requires at least one criterion")
     if bundle.resolutions:
         raise ValueError("attached analysis must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("attached analysis must not contain final acceptance")
     bundle = validated_review_bundle(bundle)
+    if (
+        state.criteria_revision.source_provenance is None
+        or bundle.review.criteria_source_provenance
+        != state.criteria_revision.source_provenance
+        or state.review.criteria_source_provenance
+        != state.criteria_revision.source_provenance
+    ):
+        raise ValueError(
+            "attached analysis criteria source provenance must match the active revision"
+        )
     if bundle.criteria != state.criteria_revision.criteria:
         raise ValueError("attached analysis criteria must match the active revision")
     if bundle.source_text != state.criteria_revision.source_text:
@@ -343,8 +395,20 @@ def append_external_verification(
 def can_record_final_acceptance(state: ReviewState) -> bool:
     """Return whether the active revision has every deterministic prerequisite."""
 
+    if not state.criteria_revision.criteria or (
+        state.bundle is not None and not state.bundle.criteria
+    ):
+        return False
     state = _validated_state(state)
     if state.bundle is None or state.review.final_acceptance:
+        return False
+    if (
+        state.review.criteria_source_provenance is None
+        or state.criteria_revision.source_provenance
+        != state.review.criteria_source_provenance
+        or state.bundle.review.criteria_source_provenance
+        != state.review.criteria_source_provenance
+    ):
         return False
     if not state.review.criteria_confirmed:
         return False

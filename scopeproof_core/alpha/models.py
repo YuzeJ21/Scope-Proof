@@ -9,11 +9,15 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
-from scopeproof_core.schemas.models import LocalReviewId
-
-PUBLIC_PR_PATTERN = (
-    r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*$"
+from scopeproof_core.schemas.models import (
+    CriteriaSourceProvenance,
+    Criterion,
+    LocalReviewId,
+    normalize_public_https_source_uri,
+    normalized_criteria_sha256,
 )
+
+PUBLIC_PR_PATTERN = r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*$"
 
 
 class ParticipantRole(StrEnum):
@@ -53,8 +57,7 @@ class AlphaQualification(BaseModel):
     @field_validator("requirements_source_url")
     @classmethod
     def require_https_source(cls, value: HttpUrl) -> HttpUrl:
-        if value.scheme != "https":
-            raise ValueError("requirements source must use HTTPS")
+        normalize_public_https_source_uri(str(value))
         return value
 
 
@@ -82,15 +85,18 @@ class AlphaCaseRecord(BaseModel):
     source_owner_confirmed: Literal[True]
     no_confidential_information: Literal[True]
     confirmed_criteria: list[str] = Field(min_length=1)
+    confirmed_criterion_snapshot: list[Criterion] | None = Field(
+        default=None,
+        min_length=1,
+    )
+    criteria_source_provenance: CriteriaSourceProvenance | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     review_id: LocalReviewId | None = None
     reviewed_head_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     outcome: AlphaOutcome | None = None
     friction_stage: AlphaFrictionStage | None = None
     outcome_notes: str | None = Field(default=None, max_length=1000)
-    publication_consent: AlphaPublicationConsent = Field(
-        default_factory=AlphaPublicationConsent
-    )
+    publication_consent: AlphaPublicationConsent = Field(default_factory=AlphaPublicationConsent)
     completed_at: datetime | None = None
 
     @field_validator("requirements_source_url")
@@ -122,6 +128,31 @@ class AlphaCaseRecord(BaseModel):
 
     @model_validator(mode="after")
     def validate_outcome_transition(self) -> AlphaCaseRecord:
+        if (
+            self.criteria_source_provenance is not None
+            and self.criteria_source_provenance.source_uri != str(self.requirements_source_url)
+        ):
+            raise ValueError("criteria source provenance must match requirements source URL")
+        if self.confirmed_criterion_snapshot is not None:
+            snapshot_ids = [
+                criterion.criterion_id for criterion in self.confirmed_criterion_snapshot
+            ]
+            if len(snapshot_ids) != len(set(snapshot_ids)):
+                raise ValueError("confirmed criterion snapshot IDs must be unique")
+            if [
+                criterion.text for criterion in self.confirmed_criterion_snapshot
+            ] != self.confirmed_criteria:
+                raise ValueError(
+                    "confirmed criterion snapshot text must match confirmed criteria"
+                )
+            if (
+                self.criteria_source_provenance is not None
+                and normalized_criteria_sha256(self.confirmed_criterion_snapshot)
+                != self.criteria_source_provenance.normalized_criteria_sha256
+            ):
+                raise ValueError(
+                    "confirmed criterion snapshot must match criteria source provenance"
+                )
         completion_values = (
             self.review_id,
             self.reviewed_head_sha,
@@ -139,10 +170,7 @@ class AlphaCaseRecord(BaseModel):
                 raise ValueError("completed alpha outcomes require a completion timestamp")
         if self.outcome is AlphaOutcome.CREATED_FRICTION and self.friction_stage is None:
             raise ValueError("created_friction requires a friction stage")
-        if (
-            self.friction_stage is not None
-            and self.outcome is not AlphaOutcome.CREATED_FRICTION
-        ):
+        if self.friction_stage is not None and self.outcome is not AlphaOutcome.CREATED_FRICTION:
             raise ValueError("friction stage is only valid for created_friction")
         return self
 
@@ -160,3 +188,9 @@ class AlphaCasePublicSummary(BaseModel):
     outcome: AlphaOutcome
     friction_stage: AlphaFrictionStage | None = None
     completed_at: datetime
+
+    @field_validator("requirements_source_url")
+    @classmethod
+    def require_public_https_source(cls, value: HttpUrl) -> HttpUrl:
+        normalize_public_https_source_uri(str(value))
+        return value

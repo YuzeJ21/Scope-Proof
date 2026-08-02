@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from copy import deepcopy
+from datetime import timedelta
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
@@ -10,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 import scopeproof_core.storage.json_store as json_store_module
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import export_html, export_markdown
@@ -18,6 +20,7 @@ from scopeproof_core.reviews.lifecycle import (
     append_resolution,
     append_runtime_evidence,
     attach_analysis,
+    can_record_final_acceptance,
     confirm_criteria,
     new_review_state,
     revise_criteria,
@@ -47,6 +50,18 @@ def review_state(review_id: str = "review-1"):
     return new_review_state(bundle)
 
 
+def confirm_pending_revision(state):
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_revision=f"requirements-v{state.criteria_revision.number}",
+        source_text=state.criteria_revision.source_text,
+        criteria=state.criteria_revision.criteria,
+        confirmed_by="Fixture owner",
+        confirmed_at=state.criteria_revision.created_at + timedelta(seconds=1),
+    )
+    return confirm_criteria(state, provenance)
+
+
 def attached_review_state():
     state = new_review_state(build_demo_review())
     updated_criteria = [
@@ -55,7 +70,7 @@ def attached_review_state():
     updated_criteria[0] = updated_criteria[0].model_copy(
         update={"text": "Updated AC-01 requirement"}
     )
-    revised = confirm_criteria(
+    revised = confirm_pending_revision(
         revise_criteria(
             state,
             updated_criteria,
@@ -76,6 +91,7 @@ def attached_review_state():
             "skipped_files": revised.review.skipped_files,
             "tool_version": revised.review.tool_version,
             "ruleset_version": revised.review.ruleset_version,
+            "criteria_source_provenance": revised.review.criteria_source_provenance,
         }
     )
     incoming.source_text = revised.criteria_revision.source_text
@@ -151,7 +167,7 @@ def state_with_runtime_history():
     updated_criteria[0] = updated_criteria[0].model_copy(
         update={"text": "Updated AC-01 requirement"}
     )
-    revised = confirm_criteria(
+    revised = confirm_pending_revision(
         revise_criteria(state, updated_criteria, "Updated requirements")
     )
     incoming = build_demo_review()
@@ -211,6 +227,24 @@ def downgrade_runtime_provenance(
             event.pop("runtime_evidence_id", None)
     if record_version == 1:
         downgrade_to_version_one(payload)
+    return payload
+
+
+def remove_criteria_source_provenance(
+    payload: dict,
+    record_version: int,
+) -> dict:
+    payload["record_version"] = record_version
+    state_payload = payload["state"]
+    state_payload["review"].pop("criteria_source_provenance", None)
+    state_payload["criteria_revision"].pop("source_provenance", None)
+    bundles = [
+        state_payload["bundle"],
+        *state_payload["analysis_history"],
+    ]
+    for bundle in bundles:
+        if bundle is not None:
+            bundle["review"].pop("criteria_source_provenance", None)
     return payload
 
 
@@ -283,7 +317,7 @@ def test_attached_analysis_round_trip_preserves_reanalysis_lineage(
     assert historical.criteria != loaded.bundle.criteria
 
 
-def test_new_save_writes_version_three_with_exact_analysis_lineage(
+def test_new_save_writes_version_four_with_exact_analysis_lineage_and_provenance(
     tmp_path: Path,
 ) -> None:
     store = JsonReviewStore(tmp_path)
@@ -292,12 +326,187 @@ def test_new_save_writes_version_three_with_exact_analysis_lineage(
     path = store.save(state)
     payload = json.loads(path.read_text(encoding="utf-8"))
 
-    assert payload["record_version"] == 3
+    assert payload["record_version"] == 4
     assert payload["state"]["bundle"]["criteria_revision_number"] == 2
     assert [
         bundle["criteria_revision_number"]
         for bundle in payload["state"]["analysis_history"]
     ] == [1]
+    expected = state.review.criteria_source_provenance
+    assert expected is not None
+    assert payload["state"]["review"]["criteria_source_provenance"] == (
+        expected.model_dump(mode="json")
+    )
+    assert payload["state"]["criteria_revision"]["source_provenance"] == (
+        expected.model_dump(mode="json")
+    )
+    assert payload["state"]["bundle"]["review"][
+        "criteria_source_provenance"
+    ] == expected.model_dump(mode="json")
+
+
+@pytest.mark.parametrize("record_version", [1, 2, 3])
+def test_legacy_criteria_provenance_migration_preserves_facts_and_fails_closed(
+    record_version: int,
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = append_resolution(
+        state_with_runtime_history(),
+        ResolutionEvent(
+            event_id="active-final-not-accepted",
+            final_acceptance=False,
+            comment="Active revision still needs owner acceptance",
+            reviewer="Active reviewer",
+        ),
+    )
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if record_version in {1, 2}:
+        downgrade_runtime_provenance(payload, record_version)
+    remove_criteria_source_provenance(payload, record_version)
+    for bundle in [
+        payload["state"]["bundle"],
+        *payload["state"]["analysis_history"],
+    ]:
+        bundle["gate"]["verdict"] = GateVerdict.READY.value
+    original = deepcopy(payload)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    first = store.load(state.review.review_id)
+    second = store.load(state.review.review_id)
+
+    assert first.model_dump(mode="json") == second.model_dump(mode="json")
+    assert first.review.criteria_source_provenance is None
+    assert first.criteria_revision.source_provenance is None
+    assert first.bundle is not None
+    loaded_bundles = [first.bundle, *first.analysis_history]
+    original_bundles = [
+        original["state"]["bundle"],
+        *original["state"]["analysis_history"],
+    ]
+    for loaded_bundle, original_bundle in zip(
+        loaded_bundles,
+        original_bundles,
+        strict=True,
+    ):
+        assert loaded_bundle.review.criteria_source_provenance is None
+        assert loaded_bundle.source_text == original_bundle["source_text"]
+        assert loaded_bundle.model_dump(mode="json")["criteria"] == original_bundle[
+            "criteria"
+        ]
+        assert loaded_bundle.model_dump(mode="json")["evidence"] == original_bundle[
+            "evidence"
+        ]
+        assert [
+            (item.artifact_reference, item.scenario, item.result, item.reviewer)
+            for item in loaded_bundle.runtime_evidence
+        ] == [
+            (
+                item["artifact_reference"],
+                item["scenario"],
+                item["result"],
+                item["reviewer"],
+            )
+            for item in original_bundle["runtime_evidence"]
+        ]
+        assert loaded_bundle.gate == evaluate_gate(
+            loaded_bundle.review,
+            loaded_bundle.criteria,
+            loaded_bundle.findings,
+            loaded_bundle.resolutions,
+        )
+        if loaded_bundle.gate.verdict is not GateVerdict.BLOCKED:
+            assert loaded_bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+            assert (
+                "criteria_source_provenance_missing"
+                in loaded_bundle.gate.reason_codes
+            )
+
+
+    loaded_event_facts = [
+        (
+            event.event_id,
+            event.decision.value if event.decision is not None else None,
+            event.final_acceptance,
+            event.comment,
+            event.reviewer,
+        )
+        for event in first.resolution_events
+    ]
+    original_event_facts = [
+        (
+            event["event_id"],
+            event["decision"],
+            event["final_acceptance"],
+            event["comment"],
+            event["reviewer"],
+        )
+        for event in original["state"]["resolution_events"]
+    ]
+    assert loaded_event_facts == original_event_facts
+    assert first.review.final_acceptance is False
+    assert first.analysis_history[0].review.final_acceptance is True
+    assert any(event.final_acceptance is True for event in first.resolution_events)
+    assert any(event.final_acceptance is False for event in first.resolution_events)
+
+    resaved_path = store.save(first)
+    resaved = json.loads(resaved_path.read_text(encoding="utf-8"))
+    assert resaved["record_version"] == 4
+    assert resaved["state"]["review"]["criteria_source_provenance"] is None
+    assert resaved["state"]["criteria_revision"]["source_provenance"] is None
+    assert resaved["state"]["bundle"]["review"][
+        "criteria_source_provenance"
+    ] is None
+    assert store.load(state.review.review_id) == first
+
+
+@pytest.mark.parametrize("record_version", [1, 2, 3])
+def test_legacy_empty_criteria_records_remain_readable_and_fail_closed(
+    record_version: int,
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    remove_criteria_source_provenance(payload, record_version)
+    if record_version == 1:
+        downgrade_to_version_one(payload)
+    state_payload = payload["state"]
+    state_payload["criteria_revision"]["criteria"] = []
+    state_payload["resolution_events"] = []
+    active_bundle = state_payload["bundle"]
+    active_bundle["criteria"] = []
+    active_bundle["evidence"] = []
+    active_bundle["retrieval_diagnostics"] = []
+    active_bundle["findings"] = []
+    active_bundle["runtime_evidence"] = []
+    active_bundle["resolutions"] = []
+    active_bundle["gate"] = {
+        "verdict": "ready",
+        "blocking_criteria": [],
+        "conditional_criteria": [],
+        "unresolved_criteria": [],
+        "resolved_exceptions": [],
+        "reason_codes": [],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(state.review.review_id)
+
+    assert loaded.criteria_revision.criteria == []
+    assert loaded.bundle is not None
+    assert loaded.bundle.criteria == []
+    assert loaded.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert "criteria_missing" in loaded.bundle.gate.reason_codes
+    assert can_record_final_acceptance(loaded) is False
+
+    store.save(loaded)
+    reloaded = store.load(state.review.review_id)
+    assert reloaded.bundle is not None
+    assert reloaded.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert reloaded.criteria_revision.criteria == []
 
 
 def test_version_one_record_migrates_active_revision_and_unknown_history(
@@ -338,7 +547,7 @@ def test_saving_migrated_version_one_state_preserves_unknown_history(
     migrated_path = store.save(migrated)
     migrated_payload = json.loads(migrated_path.read_text(encoding="utf-8"))
 
-    assert migrated_payload["record_version"] == 3
+    assert migrated_payload["record_version"] == 4
     assert migrated_payload["state"]["bundle"]["criteria_revision_number"] == 2
     assert [
         bundle["criteria_revision_number"]
@@ -497,7 +706,7 @@ def test_version_one_unknown_history_preserves_legacy_verification_audit(
 
     resaved_path = store.save(first)
     resaved = json.loads(resaved_path.read_text(encoding="utf-8"))
-    assert resaved["record_version"] == 3
+    assert resaved["record_version"] == 4
     assert resaved["state"]["analysis_history"][0][
         "criteria_revision_number"
     ] == "unknown"
@@ -660,7 +869,7 @@ def test_version_two_runtime_migration_does_not_mutate_parsed_source(
     assert legacy_payload == original_payload
 
 
-def test_resaving_migrated_runtime_record_writes_version_three_without_history_loss(
+def test_resaving_migrated_runtime_record_writes_version_four_without_history_loss(
     tmp_path: Path,
 ) -> None:
     store = JsonReviewStore(tmp_path)
@@ -672,7 +881,7 @@ def test_resaving_migrated_runtime_record_writes_version_three_without_history_l
     migrated_path = store.save(migrated)
     resaved = json.loads(migrated_path.read_text(encoding="utf-8"))
 
-    assert resaved["record_version"] == 3
+    assert resaved["record_version"] == 4
     assert [
         event["comment"] for event in resaved["state"]["resolution_events"]
     ] == old_notes
@@ -756,7 +965,7 @@ def test_malformed_version_one_nested_content_is_rejected_by_pydantic(
         store.load("review-1")
 
 
-def test_version_one_migration_rejects_non_deterministic_gate(
+def test_version_one_migration_recomputes_non_deterministic_gate(
     tmp_path: Path,
 ) -> None:
     store = JsonReviewStore(tmp_path)
@@ -767,10 +976,15 @@ def test_version_one_migration_rejects_non_deterministic_gate(
     payload["state"]["bundle"]["gate"]["verdict"] = GateVerdict.READY.value
     path.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(
-        ValueError, match="analysis bundle gate must match deterministic evaluation"
-    ):
-        store.load("review-1")
+    loaded = store.load("review-1")
+
+    assert loaded.bundle is not None
+    assert loaded.bundle.gate == evaluate_gate(
+        loaded.bundle.review,
+        loaded.bundle.criteria,
+        loaded.bundle.findings,
+        loaded.bundle.resolutions,
+    )
 
 
 def test_historical_review_state_loads_without_ingestion_limitation_fields(
@@ -1295,9 +1509,11 @@ def test_head_change_is_reported_without_mutating_old_evidence(tmp_path: Path) -
         pytest.param(1.0, id="float-one"),
         pytest.param(2.0, id="float-two"),
         pytest.param(3.0, id="float-three"),
+        pytest.param(4.0, id="float-four"),
         pytest.param("1", id="string-one"),
         pytest.param("2", id="string-two"),
         pytest.param("3", id="string-three"),
+        pytest.param("4", id="string-four"),
         pytest.param(None, id="null"),
         pytest.param(_MISSING_RECORD_VERSION, id="missing"),
     ],

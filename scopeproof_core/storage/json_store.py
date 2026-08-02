@@ -17,8 +17,8 @@ from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewBundle, ReviewState
 
-RECORD_VERSION = 3
-_SUPPORTED_RECORD_VERSIONS = (1, 2, 3)
+RECORD_VERSION = 4
+_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _LEGACY_CI_CATEGORIES = {
     "successful_legacy_statuses",
@@ -200,7 +200,7 @@ class JsonReviewStore:
         )
 
     @classmethod
-    def _recompute_ci_migrated_gates(cls, state: ReviewState) -> ReviewState:
+    def _recompute_all_gates(cls, state: ReviewState) -> ReviewState:
         bundle = (
             cls._with_recomputed_gate(state.bundle)
             if state.bundle is not None
@@ -316,24 +316,6 @@ class JsonReviewStore:
             ):
                 event.pop("runtime_evidence_id", None)
 
-    @classmethod
-    def _recompute_runtime_migrated_gates(
-        cls,
-        state: ReviewState,
-        *,
-        active_migrated: bool,
-        migrated_history: set[int],
-    ) -> ReviewState:
-        bundle = state.bundle
-        if active_migrated and bundle is not None:
-            bundle = cls._with_recomputed_gate(bundle)
-
-        history = [
-            cls._with_recomputed_gate(item) if index in migrated_history else item
-            for index, item in enumerate(state.analysis_history)
-        ]
-        return state.model_copy(update={"bundle": bundle, "analysis_history": history})
-
     def load(self, review_id: str) -> ReviewState:
         """Load a known record format and validate all nested models."""
         payload = json.loads(self._existing_record_path(review_id).read_text(encoding="utf-8"))
@@ -360,24 +342,13 @@ class JsonReviewStore:
                 for historical_bundle in analysis_history:
                     if isinstance(historical_bundle, dict):
                         historical_bundle["criteria_revision_number"] = "unknown"
-        active_legacy_gate_affected = False
-        legacy_gate_affected_history: set[int] = set()
         if record_version in {1, 2}:
-            (
-                active_legacy_gate_affected,
-                legacy_gate_affected_history,
-            ) = self._migrate_runtime_evidence(state_payload)
+            self._migrate_runtime_evidence(state_payload)
             self._unlink_legacy_manual_runtime_evidence(state_payload)
         migrate_ci_gates = self._state_payload_needs_ci_gate_migration(state_payload)
         state = ReviewState.model_validate(state_payload)
-        if migrate_ci_gates:
-            state = self._recompute_ci_migrated_gates(state)
-        elif active_legacy_gate_affected or legacy_gate_affected_history:
-            state = self._recompute_runtime_migrated_gates(
-                state,
-                active_migrated=active_legacy_gate_affected,
-                migrated_history=legacy_gate_affected_history,
-            )
+        if record_version < RECORD_VERSION or migrate_ci_gates:
+            state = self._recompute_all_gates(state)
         return validated_review_state(state)
 
     @staticmethod

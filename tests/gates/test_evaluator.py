@@ -1,9 +1,12 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.schemas.models import (
     CheckState,
     CIObservation,
+    CriteriaSourceProvenance,
     Criterion,
     Finding,
     FindingStatus,
@@ -13,6 +16,7 @@ from scopeproof_core.schemas.models import (
     IngestionState,
     Priority,
     Review,
+    normalized_criteria_sha256,
 )
 
 
@@ -31,7 +35,24 @@ def ci_observation_for(check_state: CheckState) -> CIObservation:
             total_check_runs=1,
             failing_check_runs=1,
         )
+    if check_state is CheckState.PENDING:
+        return CIObservation(
+            state=CheckState.PENDING,
+            reason="Fixture",
+            total_check_runs=1,
+            pending_check_runs=1,
+        )
     return CIObservation(reason="Fixture")
+
+
+def valid_provenance(criteria: list[Criterion]) -> CriteriaSourceProvenance:
+    return CriteriaSourceProvenance(
+        source_uri="https://example.test/requirements",
+        source_text_sha256="a" * 64,
+        normalized_criteria_sha256=normalized_criteria_sha256(criteria),
+        confirmed_by="Fixture owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
 
 
 def gate_case(
@@ -40,6 +61,7 @@ def gate_case(
     priority: Priority,
     status: FindingStatus,
 ) -> tuple[Review, Criterion, Finding]:
+    criterion = Criterion(criterion_id="AC-01", text="Export CSV", priority=priority)
     review = Review(
         repository="acme/widget",
         pr_number=7,
@@ -48,9 +70,9 @@ def gate_case(
         check_state=check_state,
         ci_observation=ci_observation_for(check_state),
         criteria_confirmed=confirmed,
+        criteria_source_provenance=valid_provenance([criterion]) if confirmed else None,
         final_acceptance=True,
     )
-    criterion = Criterion(criterion_id="AC-01", text="Export CSV", priority=priority)
     finding = Finding(
         criterion_id="AC-01",
         status=status,
@@ -132,6 +154,49 @@ def test_ready_after_explicit_acceptance() -> None:
     )
     decision = evaluate_gate(review, [criterion], [finding], [resolution])
     assert decision.verdict is GateVerdict.READY
+
+
+def test_empty_criteria_can_never_be_ready() -> None:
+    review, _, _ = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+
+    decision = evaluate_gate(review, [], [], [])
+
+    assert decision.verdict is GateVerdict.NEEDS_REVIEW
+    assert decision.reason_codes == ["criteria_missing"]
+
+
+def test_missing_criteria_source_provenance_fails_closed_before_ready() -> None:
+    review, criterion, finding = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    review.criteria_source_provenance = None
+    resolution = HumanResolution(
+        criterion_id="AC-01", decision=HumanDecision.ACCEPTED, comment="Reviewed"
+    )
+
+    decision = evaluate_gate(review, [criterion], [finding], [resolution])
+
+    assert decision.verdict is GateVerdict.NEEDS_REVIEW
+    assert decision.reason_codes == ["criteria_source_provenance_missing"]
+
+
+def test_provenance_missing_reason_follows_confirmation_before_ingestion_reasons() -> None:
+    review, criterion, finding = gate_case(
+        False, CheckState.PENDING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    review.ingestion_state = IngestionState.PARTIAL
+
+    decision = evaluate_gate(review, [criterion], [finding], [])
+
+    assert decision.reason_codes == [
+        "unresolved_criteria",
+        "criteria_not_confirmed",
+        "criteria_source_provenance_missing",
+        "partial_ingestion",
+        "checks_not_passing",
+    ]
 
 
 def test_partial_ingestion_forces_needs_review() -> None:
@@ -220,3 +285,132 @@ def test_linked_manual_verification_retains_ready_gate_meaning() -> None:
     assert decision.verdict is GateVerdict.READY
     assert decision.unresolved_criteria == []
     assert "runtime_verification_reconfirmation_required" not in decision.reason_codes
+
+
+@pytest.mark.parametrize(
+    ("criteria", "findings", "resolutions", "reason"),
+    [
+        (
+            [
+                Criterion(criterion_id="AC-01", text="Export CSV"),
+                Criterion(criterion_id="AC-01", text="Export safely"),
+            ],
+            [],
+            [],
+            "duplicate_criterion_ids",
+        ),
+        (
+            [Criterion(criterion_id="AC-01", text="Export CSV")],
+            [
+                Finding(
+                    criterion_id="AC-01",
+                    status=FindingStatus.EVIDENCE_FOUND,
+                    reason="First",
+                    recommended_action="Review",
+                ),
+                Finding(
+                    criterion_id="AC-01",
+                    status=FindingStatus.MISSING,
+                    reason="Second",
+                    missing_evidence=["Test"],
+                    recommended_action="Review",
+                ),
+            ],
+            [],
+            "duplicate_finding_ids",
+        ),
+        (
+            [Criterion(criterion_id="AC-01", text="Export CSV")],
+            [
+                Finding(
+                    criterion_id="AC-01",
+                    status=FindingStatus.EVIDENCE_FOUND,
+                    reason="Covered",
+                    recommended_action="Review",
+                )
+            ],
+            [
+                HumanResolution(
+                    criterion_id="AC-01", decision=HumanDecision.CHANGE_REQUIRED
+                ),
+                HumanResolution(
+                    criterion_id="AC-01", decision=HumanDecision.ACCEPTED
+                ),
+            ],
+            "duplicate_resolution_ids",
+        ),
+        (
+            [Criterion(criterion_id="AC-01", text="Export CSV")],
+            [],
+            [],
+            "finding_coverage_mismatch",
+        ),
+        (
+            [Criterion(criterion_id="AC-01", text="Export CSV")],
+            [
+                Finding(
+                    criterion_id="AC-01",
+                    status=FindingStatus.EVIDENCE_FOUND,
+                    reason="Covered",
+                    recommended_action="Review",
+                )
+            ],
+            [
+                HumanResolution(
+                    criterion_id="AC-99", decision=HumanDecision.CHANGE_REQUIRED
+                )
+            ],
+            "resolution_references_unknown_criteria",
+        ),
+    ],
+)
+def test_malformed_public_gate_inputs_fail_closed(
+    criteria: list[Criterion],
+    findings: list[Finding],
+    resolutions: list[HumanResolution],
+    reason: str,
+) -> None:
+    review, _, _ = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    if len({criterion.criterion_id for criterion in criteria}) == len(criteria):
+        review.criteria_source_provenance = valid_provenance(criteria)
+
+    decision = evaluate_gate(review, criteria, findings, resolutions)
+
+    assert decision.verdict is GateVerdict.NEEDS_REVIEW
+    assert decision.reason_codes[0] == "gate_input_invalid"
+    assert reason in decision.reason_codes
+
+
+def test_duplicate_resolution_order_cannot_change_fail_closed_gate() -> None:
+    review, criterion, finding = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    resolutions = [
+        HumanResolution(criterion_id="AC-01", decision=HumanDecision.CHANGE_REQUIRED),
+        HumanResolution(criterion_id="AC-01", decision=HumanDecision.ACCEPTED),
+    ]
+
+    first = evaluate_gate(review, [criterion], [finding], resolutions)
+    second = evaluate_gate(review, [criterion], [finding], list(reversed(resolutions)))
+
+    assert first == second
+    assert first.verdict is GateVerdict.NEEDS_REVIEW
+
+
+def test_mismatched_criteria_provenance_fails_closed() -> None:
+    review, criterion, finding = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    review.criteria_source_provenance = review.criteria_source_provenance.model_copy(
+        update={"normalized_criteria_sha256": "f" * 64}
+    )
+
+    decision = evaluate_gate(review, [criterion], [finding], [])
+
+    assert decision.verdict is GateVerdict.NEEDS_REVIEW
+    assert decision.reason_codes == [
+        "gate_input_invalid",
+        "criteria_provenance_mismatch",
+    ]

@@ -1,5 +1,8 @@
 {
-  "requirements_sha256": "f7314191acbae91972e85a75b4f1237b8ef7c91de1e9a75871386e2efd630ae6",
+  "source_uri": "https://github.com/YuzeJ21/Scope-Proof/blob/a2fdecbd5918535f4db35bfdf7da64156f393b67/.scopeproof/requirements.txt",
+  "source_revision": "a2fdecbd5918535f4db35bfdf7da64156f393b67",
+  "source_text_sha256": "f7314191acbae91972e85a75b4f1237b8ef7c91de1e9a75871386e2efd630ae6",
+  "normalized_criteria_sha256": "716a651581a12acf78fe7fa45c53b37dfc57ca33c1641480b2ebbdac2107d64f",
   "confirmed_by": "YuzeJ21 repository owner",
   "confirmed_at": "2026-07-12T00:00:00Z"
 }

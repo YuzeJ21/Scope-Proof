@@ -1,11 +1,14 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.schemas.models import (
     CheckState,
     CIObservation,
+    CriteriaRevision,
+    CriteriaSourceProvenance,
     Criterion,
     EvidenceItem,
     EvidenceLevel,
@@ -617,3 +620,201 @@ def test_criterion_normalizes_nonblank_text_before_validation() -> None:
     criterion = Criterion(criterion_id="AC-01", text="  Export CSV  ")
 
     assert criterion.text == "Export CSV"
+
+
+def test_criteria_source_provenance_accepts_only_normalized_https_or_demo_sources() -> None:
+    provenance = CriteriaSourceProvenance(
+        source_uri=" scopeproof://constructed-demo/acceptance-criteria ",
+        source_revision="  requirements-v2  ",
+        source_text_sha256="a" * 64,
+        normalized_criteria_sha256="b" * 64,
+        confirmed_by="  Demo owner  ",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+
+    assert provenance.source_uri == "scopeproof://constructed-demo/acceptance-criteria"
+    assert provenance.source_revision == "requirements-v2"
+    assert provenance.confirmed_by == "Demo owner"
+    with pytest.raises(ValidationError):
+        provenance.confirmed_by = "Another owner"
+    with pytest.raises(ValidationError):
+        CriteriaSourceProvenance.model_validate(
+            {**provenance.model_dump(mode="python"), "unexpected": True}
+        )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value", "message"),
+    [
+        ("source_uri", "http://example.test/requirements", "HTTPS URL"),
+        ("source_uri", "scopeproof://constructed-demo/other", "HTTPS URL"),
+        ("source_text_sha256", "A" * 64, "lowercase SHA-256"),
+        ("normalized_criteria_sha256", "not-a-digest", "lowercase SHA-256"),
+        ("confirmed_by", "   ", "non-whitespace"),
+        ("source_revision", "   ", "non-whitespace"),
+        ("confirmed_at", datetime(2026, 8, 2), "timezone-aware"),
+    ],
+)
+def test_criteria_source_provenance_rejects_invalid_values(
+    field_name: str, value: object, message: str
+) -> None:
+    payload = {
+        "source_uri": "https://example.test/requirements",
+        "source_text_sha256": "a" * 64,
+        "normalized_criteria_sha256": "b" * 64,
+        "confirmed_by": "Demo owner",
+        "confirmed_at": datetime(2026, 8, 2, tzinfo=UTC),
+    }
+    payload[field_name] = value
+
+    with pytest.raises(ValidationError, match=message):
+        CriteriaSourceProvenance.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "source_uri",
+    [
+        "https://exa mple.test/requirements",
+        "https://example.test:bad/requirements",
+        "https://[2001:db8::1/requirements",
+    ],
+)
+def test_criteria_source_provenance_rejects_malformed_https_with_stable_error(
+    source_uri: str,
+) -> None:
+    payload = {
+        "source_uri": source_uri,
+        "source_text_sha256": "a" * 64,
+        "normalized_criteria_sha256": "b" * 64,
+        "confirmed_by": "Demo owner",
+        "confirmed_at": datetime(2026, 8, 2, tzinfo=UTC),
+    }
+
+    with pytest.raises(ValidationError) as exc_info:
+        CriteriaSourceProvenance.model_validate(payload)
+
+    assert (
+        "source URI must be an HTTPS URL or "
+        "scopeproof://constructed-demo/acceptance-criteria"
+    ) in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "source_uri",
+    [
+        "https://user@example.com/requirements",
+        "https://user:secret@example.com/requirements",
+        "https://localhost/requirements",
+        "https://foo.localhost/requirements",
+        "https://service.local/requirements",
+        "https://127.0.0.1/requirements",
+        "https://10.0.0.1/requirements",
+        "https://[::1]/requirements",
+        "https://example.com/requirements?token=secret",
+        "https://example.com/requirements#token=secret",
+    ],
+)
+def test_criteria_source_provenance_rejects_credentials_and_non_public_hosts(
+    source_uri: str,
+) -> None:
+    payload = {
+        "source_uri": source_uri,
+        "source_text_sha256": "a" * 64,
+        "normalized_criteria_sha256": "b" * 64,
+        "confirmed_by": "Demo owner",
+        "confirmed_at": datetime(2026, 8, 2, tzinfo=UTC),
+    }
+
+    with pytest.raises(ValidationError, match="HTTPS URL"):
+        CriteriaSourceProvenance.model_validate(payload)
+
+
+def test_criteria_source_provenance_normalizes_aware_confirmation_to_utc() -> None:
+    provenance = CriteriaSourceProvenance(
+        source_uri="https://example.test/requirements",
+        source_text_sha256="a" * 64,
+        normalized_criteria_sha256="b" * 64,
+        confirmed_by="Demo owner",
+        confirmed_at=datetime(2026, 8, 2, 8, tzinfo=timezone(-timedelta(hours=4))),
+    )
+
+    assert provenance.confirmed_at == datetime(2026, 8, 2, 12, tzinfo=UTC)
+    assert provenance.confirmed_at.tzinfo is UTC
+
+
+def test_confirmed_revision_rejects_provenance_for_different_source_or_criteria() -> None:
+    criteria = [Criterion(criterion_id="AC-01", text="Export CSV")]
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text="Export CSV.",
+        criteria=criteria,
+        confirmed_by="Demo owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+
+    with pytest.raises(ValidationError, match="source text"):
+        CriteriaRevision(
+            number=1,
+            criteria=criteria,
+            source_text="Changed requirements.",
+            confirmed=True,
+            confirmed_at=provenance.confirmed_at,
+            source_provenance=provenance,
+        )
+    with pytest.raises(ValidationError, match="criteria"):
+        CriteriaRevision(
+            number=1,
+            criteria=[Criterion(criterion_id="AC-01", text="Changed export")],
+            source_text="Export CSV.",
+            confirmed=True,
+            confirmed_at=provenance.confirmed_at,
+            source_provenance=provenance,
+        )
+
+
+@pytest.mark.parametrize(
+    ("confirmed", "confirmed_at", "message"),
+    [
+        (False, None, "requires confirmed criteria"),
+        (
+            True,
+            datetime(2026, 8, 3, tzinfo=UTC),
+            "timestamp must match source provenance",
+        ),
+    ],
+)
+def test_criteria_revision_rejects_contradictory_confirmation_facts(
+    confirmed: bool,
+    confirmed_at: datetime | None,
+    message: str,
+) -> None:
+    criteria = [Criterion(criterion_id="AC-01", text="Export CSV")]
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text="Export CSV.",
+        criteria=criteria,
+        confirmed_by="Demo owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+
+    with pytest.raises(ValidationError, match=message):
+        CriteriaRevision(
+            number=1,
+            criteria=criteria,
+            source_text="Export CSV.",
+            confirmed=confirmed,
+            confirmed_at=confirmed_at,
+            source_provenance=provenance,
+        )
+
+
+def test_criteria_revision_preserves_an_empty_legacy_set_for_fail_closed_loading() -> None:
+    revision = CriteriaRevision(
+        number=1,
+        criteria=[],
+        source_text="Requirements exist.",
+    )
+
+    assert revision.criteria == []
+    assert revision.confirmed is False
+    assert revision.source_provenance is None
