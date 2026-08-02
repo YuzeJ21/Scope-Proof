@@ -7,6 +7,7 @@ import json
 import warnings
 from copy import deepcopy
 from hashlib import sha256
+from pathlib import Path
 from typing import get_origin
 
 import pytest
@@ -933,6 +934,39 @@ def test_case_result_accepts_evaluate_gate_compatible_blocked_and_needs_review_s
     assert (
         R002CaseResult.model_validate_json(json.dumps(review)).gate_verdict.value == "needs_review"
     )
+
+
+def test_published_pre_provenance_result_loads_conservatively_without_rewriting_bytes():
+    result_path = Path("docs/research/r002-swebench-verified/result.json")
+    before = result_path.read_bytes()
+
+    with pytest.raises(ValidationError, match="R-002 gate reason codes"):
+        r002_models.R002BenchmarkResult.model_validate_json(before)
+    result = r002_models.load_r002_benchmark_result(result_path)
+
+    needs_review = [
+        case for case in result.case_results if case.gate_verdict.value == "needs_review"
+    ]
+    assert len(needs_review) == 2
+    assert all(
+        "criteria_source_provenance_missing" in case.gate_reason_codes
+        for case in needs_review
+    )
+    assert result_path.read_bytes() == before
+
+
+def test_pre_provenance_gate_shape_is_not_migrated_outside_exact_published_result(tmp_path):
+    result_path = Path("docs/research/r002-swebench-verified/result.json")
+    payload = json.loads(result_path.read_text(encoding="utf-8"))
+    payload["scopeproof_commit"] = "0" * 40
+    changed_path = tmp_path / "changed-result.json"
+    changed_path.write_text(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="R-002 gate reason codes"):
+        r002_models.load_r002_benchmark_result(changed_path)
 
 
 def test_expected_missing_is_per_evidence_type_and_ordered():

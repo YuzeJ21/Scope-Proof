@@ -13,10 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.evals.r002_models import (
     R002_SOURCE,
-    R002BenchmarkResult,
     canonical_sha256,
     load_confirmed_criteria,
     load_confirmed_labels,
+    load_r002_benchmark_result,
     load_source_manifest,
 )
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
@@ -84,7 +84,7 @@ def test_r002_tracked_outputs_exclude_scopeproof_authored_redaction_sentinels() 
 def test_r002_engineering_result_is_linked_without_advancing_product_stages() -> None:
     result_path = Path("docs/research/r002-swebench-verified/result.json")
     summary_path = Path("docs/research/r002-swebench-verified/summary.md")
-    result = R002BenchmarkResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    result = load_r002_benchmark_result(result_path)
     summary = summary_path.read_text(encoding="utf-8")
     public_link = "docs/research/r002-swebench-verified/summary.md"
     development_link = "research/r002-swebench-verified/summary.md"
