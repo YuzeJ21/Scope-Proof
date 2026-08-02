@@ -1,6 +1,6 @@
 # ScopeProof v0.2.3 Product Convergence Design
 
-Date: 2026-08-02  
+Date: 2026-08-02
 Status: approved for implementation by the owner request to follow the latest roadmap,
 fix the known product issues, clean the product pages, and merge the resulting version to
 `main`.
