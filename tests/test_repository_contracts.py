@@ -547,31 +547,38 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert '__version__ = "0.2.3"' in version_source
 
 
-def test_merged_candidate_identity_preserves_public_install_boundary() -> None:
+def test_unreleased_candidate_identity_preserves_public_install_boundary() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     candidate_notes = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(encoding="utf-8")
     readme_copy = " ".join(readme.split())
 
-    assert "v0.2.3 source candidate" in readme
-    assert "merged PR #174" in readme
-    assert "PR #177" in readme
-    assert "merged to `main`, but it is not tagged or released" in readme_copy
+    assert "v0.2.3 exact-head runtime-evidence candidate" in readme
+    assert "PR #179" in readme
+    assert "6e3dec784f7cad9931999d4c5eac1cfe2a9006de" in readme
+    assert "95b2dc44132edad796f0316d846cd35e536443f6" in readme
+    assert "not merged, tagged, or released" in readme_copy
     assert (
-        "Candidate version: 0.2.3 (candidate merged via PR #174; "
-        "Stage 0 integrity repairs merged via PR #177; not published)"
+        "Candidate version: 0.2.3 (public `main` through PR #179; exact-head "
+        "runtime-evidence hardening verified on an unmerged branch; not published)"
     ) in changelog
-    assert "Status: Merged to `main` via PR #174; not tagged or released" in candidate_notes
-    assert "Stage 0 integrity repairs merged via PR #177" in candidate_notes
-    assert "3d88808f12f46b68059b9e89c40c7ccd595d9032" in candidate_notes
+    assert (
+        "Status: Unreleased exact-head runtime-evidence hardening candidate; "
+        "not merged, tagged, or released"
+    ) in candidate_notes
+    assert "Public-main base: `6e3dec784f7cad9931999d4c5eac1cfe2a9006de`" in candidate_notes
+    assert (
+        "Verified implementation: `95b2dc44132edad796f0316d846cd35e536443f6`"
+        in candidate_notes
+    )
     assert "releases/download/v0.2.1/" in readme
     assert "releases/download/v0.2.3/" not in readme
     assert "does not advance Stage 1" in candidate_notes
-    assert "A source merge does not publish v0.2.3" in candidate_notes
+    assert "A branch verification does not publish v0.2.3" in candidate_notes
     assert "No push, pull request" not in candidate_notes
 
 
-def test_v023_status_docs_record_repaired_post_merge_integrity_findings() -> None:
+def test_v023_status_docs_distinguish_public_main_from_verified_candidate() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
@@ -585,39 +592,55 @@ def test_v023_status_docs_record_repaired_post_merge_integrity_findings() -> Non
         "docs/releases/v0.2.3-platform-package-matrix.md"
     ).read_text(encoding="utf-8")
     review_map = Path("docs/releases/v0.2.3-pr-review-map.md").read_text(encoding="utf-8")
+    candidate_notes = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(
+        encoding="utf-8"
+    )
+    verification_audit = Path(
+        "docs/audits/exact-head-runtime-evidence/verification.md"
+    ).read_text(encoding="utf-8")
     readme_normalized = " ".join(readme.split())
     changelog_normalized = " ".join(changelog.split())
-    status_audit_normalized = " ".join(status_audit.split())
-    current_main = "3d88808f12f46b68059b9e89c40c7ccd595d9032"
+    current_main = "6e3dec784f7cad9931999d4c5eac1cfe2a9006de"
+    current_main_tree = "cf34a4004861a294d25005f7f598068b740bbde9"
+    candidate = "95b2dc44132edad796f0316d846cd35e536443f6"
+    candidate_tree = "0514c42d59aa69dee65be536a9fa449eff6a6530"
 
-    assert (
-        "Current engineering track | v0.2.3 Evidence Quality; "
-        "Stage 0 integrity repairs verified"
-    ) in roadmap
-    assert "Stage 0 integrity repairs verified" in roadmap
-    assert "verification in progress" not in roadmap
-    assert "Stage 0 complete on public `main`" in status_audit
-    assert "ready for a separate release decision" in status_audit_normalized
-    assert "Final-acceptance and runtime-verification bypass" in status_audit
+    assert "Stage 0 candidate verified; public `main` pending merge" in roadmap
+    assert "Stage 0 candidate verified; public `main` pending merge" in status_audit
+    assert "Stage 1 waiting; Stages 2\u20134 gated" in roadmap
+    assert "Stage 1 waiting, Stages 2\u20134 gated" in status_audit
+    assert "Exact-head runtime-evidence identity" in status_audit
     assert "Exact-head candidate retrieval" in status_audit
-    assert "public `main` now rejects ineligible final acceptance" in readme_normalized
+    assert "runtime evidence ID" in readme_normalized
     assert "### Integrity repairs" in changelog
-    assert "Restricted `MANUALLY_VERIFIED` decisions" in changelog_normalized
+    assert "`runtime_evidence_id`" in changelog_normalized
+    assert "`runtime_verification_reconfirmation_required`" in changelog_normalized
     assert "Encoded bounded candidate paths" in changelog_normalized
-    assert "Finish the current v0.2.3 internal-candidate verification" not in status_audit
-    assert "Complete and record current-head v0.2.3 verification" not in status_audit
-    assert "Stage 0 integrity repairs merged via PR #177" in roadmap
-    assert "Repository state: PR #177 merged the Stage 0 integrity repairs" in status_audit
-    assert "Python 3.11 CI passed at the exact merged PR head" in status_audit
-    assert "create a tag and GitHub Release" in status_audit
-    for document in (roadmap, status_audit, readiness_audit, platform_matrix, review_map):
+    assert "record version 3" in changelog_normalized
+    assert "Current disposition: `READY FOR DRAFT REVIEW`" in verification_audit
+    for document in (
+        roadmap,
+        status_audit,
+        readiness_audit,
+        platform_matrix,
+        review_map,
+        candidate_notes,
+        verification_audit,
+    ):
         assert current_main in document
+        assert candidate in document
+    for document in (readiness_audit, platform_matrix, verification_audit):
+        assert current_main_tree in document
+        assert candidate_tree in document
+    for document in (readme, changelog, roadmap, status_audit, readiness_audit, review_map):
+        assert "PR #179" in document
+    assert "not merged, tagged, or released" in verification_audit
     assert "Stage 0 integrity repairs merged via PR #177" in readiness_audit
     assert "Stage 0 integrity repairs merged via PR #177" in platform_matrix
     assert "Stage 0 integrity repairs merged via PR #177" in review_map
 
 
-def test_v023_release_alignment_records_current_engineering_evidence_and_boundaries() -> None:
+def test_v023_release_alignment_preserves_history_and_records_candidate_evidence() -> None:
     readiness = Path(
         "docs/releases/v0.2.3-post-merge-release-readiness.md"
     ).read_text(encoding="utf-8")
@@ -627,7 +650,12 @@ def test_v023_release_alignment_records_current_engineering_evidence_and_boundar
     status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
         encoding="utf-8"
     )
+    verification = Path(
+        "docs/audits/exact-head-runtime-evidence/verification.md"
+    ).read_text(encoding="utf-8")
 
+    # Historical 2026-07-31 release-alignment evidence remains bound to its
+    # recorded source trees; it is not current-candidate evidence.
     assert "Decision: `READY FOR RELEASE DECISION`" in readiness
     assert "1,633 tests passed and one intentional skip" in readiness
     assert "95.10%" in readiness
@@ -639,12 +667,23 @@ def test_v023_release_alignment_records_current_engineering_evidence_and_boundar
     assert "pointer-operated installed-workbench flow passed" in matrix
     assert "keyboard-only completion remains unverified" in matrix
     assert "actual 200% browser zoom remains unverified" in matrix
+    # Exact-candidate evidence is recorded separately and attributed only to
+    # the clean implementation commit, never to the later evidence commit.
+    assert "1747 passed and 1 skipped" in verification
+    assert "95.20%" in verification
+    assert "99 wheel entries" in verification
+    assert "532 source-distribution entries" in verification
+    assert "48 installed packages" in verification
+    assert "5b1422fe1117abcb63d69e725d9ac2ecad012d4faa11a23c5a2bc62d75a7ae64" in verification
+    assert "ff7a733c2c801be5a26963756bf3c7d4cc85a096869d1eaa20f1c16a5b127b2c" in verification
+    assert "`ok`" in verification
+    assert "final complete PR head" in verification
     assert "## Prioritized post-release decision candidates" in status
     assert "Exact-SHA GitHub Check lifecycle" in status
     assert "Criteria-source snapshot and staleness detection" in status
     assert "CLI lifecycle parity" in status
     assert "Non-executing evidence adapters" in status
-    assert "Reviewer identity and scoped verification records" in status
+    assert "Authenticated reviewer identity" in status
     assert "Real-browser regression coverage" in status
 
 

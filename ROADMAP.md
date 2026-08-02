@@ -13,18 +13,19 @@ automated activity. The current external state is
 | Area | Current state |
 |---|---|
 | Published install | v0.2.1 |
-| Active source candidate | v0.2.3 candidate merged via PR #174; Stage 0 integrity repairs merged via PR #177; not released |
-| Public `main` | Current verified head `3d88808f12f46b68059b9e89c40c7ccd595d9032`; contains the v0.2.3 candidate, post-merge alignment, and integrity repairs from PRs #174, #176, and #177 |
-| Current engineering track | v0.2.3 Evidence Quality; Stage 0 integrity repairs verified on public `main` |
-| Product validation | Stage 0 complete on public `main`; Stage 1 waiting; Stages 2–4 gated |
+| Active source candidate | v0.2.3 exact-head runtime-evidence hardening verified at `95b2dc44132edad796f0316d846cd35e536443f6`; not merged or released |
+| Public `main` | Current head `6e3dec784f7cad9931999d4c5eac1cfe2a9006de`; PR #179 is the last completed UX merge before this branch |
+| Current engineering track | Stage 0 candidate verified; public `main` pending merge |
+| Product validation | Stage 0 candidate verified; public `main` pending merge. Stage 1 waiting; Stages 2–4 gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
 milestones can proceed while Stage 1 waits, but they do not advance product-validation stages.
 
 ## Stage 0 — Reviewer-first product reset
 
-Status: complete on public `main`; publication remains a separate owner
-decision.
+Status: prior PR #177 repairs remain historical engineering evidence. The
+exact-head runtime-evidence repair is verified on the candidate branch; public
+`main` remains pending merge and exact-resulting-main verification.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
@@ -36,6 +37,12 @@ decision.
   criterion.
 - [x] Encode unchanged-candidate paths, transmit the exact head SHA separately,
   and reject malformed or unanchored candidate responses.
+- [x] Bind every effective E3/E4 manual decision to one immutable runtime
+  evidence ID and matching repository, PR, head, criterion, reviewer, and level.
+- [x] Migrate version 1/2 records to version 3 without inventing manual links;
+  legacy-unlinked decisions remain auditable and require reconfirmation.
+- [x] Project runtime identity through the workbench and JSON, Markdown, CSV,
+  and HTML exports while retaining Pydantic validation.
 - [x] Optional alpha feedback stays separate, local, consent-controlled, and off by default.
 - [x] Re-review comparison preserves both bundles and reports head, evidence, decision, and status
   changes.
@@ -61,9 +68,10 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 
 ## Current engineering track — v0.2.3 Evidence Quality
 
-Status: internal candidate merged to `main` via PR #174; not tagged or
-released. The post-merge Stage 0 integrity findings are repaired, merged via
-PR #177, and verified on public `main`. This work does not advance Stage 1.
+Status: the earlier candidate and PR #177 repairs remain merged history. PR #179
+is the last completed public-main UX merge. The exact-head runtime-evidence
+hardening is verified at `95b2dc44132edad796f0316d846cd35e536443f6` but is not
+merged, tagged, or released. This work does not advance Stage 1.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
@@ -80,6 +88,16 @@ PR #177, and verified on public `main`. This work does not advance Stage 1.
   events in the core lifecycle, with regression coverage.
 - [x] Preserve exact-head candidate retrieval across URL metacharacters and
   Unicode paths, with request-level regression coverage.
+- [x] Require immutable runtime identity for new E3/E4 records and fail closed
+  on duplicate, missing, foreign-repository, wrong-PR, wrong-head, or mismatched
+  resolution links.
+- [x] Keep legacy runtime history visible while deterministically requiring
+  active-head reconfirmation instead of guessing an association.
+- [x] Show complete passing CI observations with skipped checks as an explicit
+  visible limitation without changing their deterministic check state.
+- [x] Restore autosave recovery for bundle-less revised reviews with stale
+  criterion-detail drafts, without mutating review state or enabling exports
+  before reanalysis.
 - [ ] Freeze a new holdout before using it to evaluate a retrieval algorithm change. R-003 design
   is complete, but cohort generation awaits a separate explicit owner approval.
 - [x] Complete fresh packaging, clean-install, and a bounded accessibility and platform audit in
@@ -94,14 +112,16 @@ Current product, gap, and next-stage details are maintained in the
 [v0.2.3 status audit](docs/releases/v0.2.3-status-and-next-stages.md). Current official-source
 competitive research is maintained separately in the
 [current official-source market comparison](docs/commercialization/market-comparison-2026-07-26.md).
-The exact current-main package, security, and environment evidence is recorded
+Historical current-main package, security, and environment evidence is recorded
 in the [post-merge release-readiness audit](docs/releases/v0.2.3-post-merge-release-readiness.md).
+The new branch-only evidence is recorded in the
+[exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md).
 
 ## Stage 1 — Genuine public alpha
 
-Status: `waiting_for_inbound_public_alpha_submission`; the repaired source is
-merged and engineering-ready for a separate release decision, but no genuine
-qualifying submission exists.
+Status: `waiting_for_inbound_public_alpha_submission`; Stage 1 remains zero.
+The candidate is ready for draft review only, and no genuine qualifying
+submission exists.
 
 Current measured state:
 

@@ -75,16 +75,25 @@ The release gate uses explicit precedence:
 4. **Review complete** only after complete ingestion, passing observed CI, current decisions for
    every criterion, and final human acceptance.
 
-The post-merge v0.2.3 audit found two core integrity defects in the intended
-flow. [PR #177](https://github.com/YuzeJ21/Scope-Proof/pull/177) merged the
-Stage 0 integrity repairs, so public `main` now rejects ineligible final
-acceptance, requires paired runtime evidence for manual verification at
-lifecycle, validation, persistence, comparison, presentation, and export
-boundaries, and transmits encoded candidate paths with the exact head SHA as a
-separate GitHub query parameter. Request-level and adversarial regressions
-cover the prior bypasses. v0.2.3 remains unpublished; tagging and publishing a
-GitHub Release require a separate owner decision. The audit did not determine
-whether the published v0.2.1 package is affected.
+The earlier post-merge v0.2.3 audit found two core integrity defects in the
+intended flow. [PR #177](https://github.com/YuzeJ21/Scope-Proof/pull/177)
+repaired those findings, and [PR #179](https://github.com/YuzeJ21/Scope-Proof/pull/179)
+then merged the latest completed workbench UX change to public `main` at
+`6e3dec784f7cad9931999d4c5eac1cfe2a9006de`.
+
+The **v0.2.3 exact-head runtime-evidence candidate** verified at
+`95b2dc44132edad796f0316d846cd35e536443f6` closes a further integrity gap on an
+unmerged branch. Each effective E3/E4 decision now carries a runtime evidence
+ID and must resolve exactly one runtime record for the same repository, pull
+request, reviewed head, criterion, reviewer, and evidence level. Version 1 and
+2 local records migrate to version 3 without inventing links: legacy-unlinked
+manual decisions remain visible but become `Needs Review` until verification is
+re-recorded at the active head. The candidate also exposes immutable provenance
+in the workbench and every export, shows skipped-check limits outside collapsed
+details, and provides a safe draft-clear recovery for revised bundle-less
+reviews. It is not merged, tagged, or released and creates zero Stage 1 credit.
+The [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
+records the candidate-only engineering evidence and remaining gaps.
 
 GitHub exposes visible check runs but does not reliably expose every repository's required-check
 policy to anonymous clients. ScopeProof therefore labels this value **Observed CI state** and counts
@@ -97,13 +106,11 @@ Python 3.11 or newer is required.
 Install the verified v0.2.1 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
-The **v0.2.3 source candidate** from
-[merged PR #174](https://github.com/YuzeJ21/Scope-Proof/pull/174), including
-the Stage 0 integrity repairs merged by
-[PR #177](https://github.com/YuzeJ21/Scope-Proof/pull/177), is now on `main`.
-The source is merged to `main`, but it is not tagged or released; the verified
-public install path below therefore remains v0.2.1 until a separate
-publication decision.
+The v0.2.3 source line through PRs #174, #177, and #179 is on public `main`,
+but the exact-head runtime-evidence hardening above remains an unmerged branch
+candidate. No v0.2.3 tag or GitHub Release exists; the verified public install
+path below therefore remains v0.2.1 until merge, exact-main verification, and a
+separate owner publication decision.
 
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
