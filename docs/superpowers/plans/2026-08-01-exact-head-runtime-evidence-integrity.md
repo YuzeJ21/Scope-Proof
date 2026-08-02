@@ -394,10 +394,25 @@ git commit -m "fix: clarify skipped CI and draft recovery"
 - Test: `tests/test_repository_contracts.py`
 
 **Interfaces:**
-- Consumes: final implementation tree and its exact SHA.
+- Consumes: the clean post-Task 4 implementation tree and its exact SHA.
 - Produces: honest unreleased v0.2.3 engineering record and GitHub-ready branch.
 
-- [ ] **Step 1: Add or update repository-contract assertions before documentation edits**
+The implementation-verification target is the clean post-Task 4 commit. The later
+documentation commit may record that target and its artifact hashes, but must
+not claim that a document containing those values was part of the hashed
+artifact or the same verified commit. The final PR head is verified separately
+by repository-contract checks and required GitHub CI; do not create a
+self-referential SHA or package-hash claim.
+
+- [ ] **Step 1: Capture and verify the clean implementation target**
+
+Record the clean post-Task 4 commit and tree as
+`VERIFIED_IMPLEMENTATION_SHA` and `VERIFIED_IMPLEMENTATION_TREE_SHA`. Require a
+clean worktree, then run the full source, deterministic, package, installed-CLI,
+and workbench-health verification from that exact commit. Store raw output in
+the ignored SDD workspace until the tracked audit is written.
+
+- [ ] **Step 2: Add or update repository-contract assertions before documentation edits**
 
 Where machine-enforced wording or version inventory already has a repository
 contract, update its literal expectation first and observe the focused test
@@ -407,7 +422,7 @@ fail. Do not add tests that merely grep arbitrary human prose.
 uv run python -m pytest -q tests/test_repository_contracts.py
 ```
 
-- [ ] **Step 2: Align current-state documentation without rewriting history**
+- [ ] **Step 3: Align current-state documentation without rewriting history**
 
 Record PR #179 at merge `6e3dec784f7cad9931999d4c5eac1cfe2a9006de`
 as the last completed UX merge before this branch. Describe this branch as an
@@ -417,7 +432,7 @@ v0.2.1 as the public install and keep Stage 1 at zero qualifying external use.
 Do not change the intentionally reviewed GitHub Action pin in
 `docs/github-action.md`.
 
-- [ ] **Step 3: Run full source and deterministic verification**
+- [ ] **Step 4: Record exact source and deterministic verification**
 
 ```bash
 uv sync --extra dev --extra research --locked
@@ -431,10 +446,12 @@ uv run scopeproof comparison-benchmark
 git diff --check
 ```
 
-Record exact counts, coverage, benchmark results, HEAD, and evidence boundaries
-in the new verification audit.
+Record exact counts, coverage, benchmark results, the reviewed implementation
+SHA/tree, and evidence boundaries in the new verification audit. These commands
+must already have run on the clean implementation target in Step 1; rerun any
+check whose inputs were changed while aligning documentation.
 
-- [ ] **Step 4: Build and verify clean installed artifacts**
+- [ ] **Step 5: Record clean installed-artifact verification**
 
 Build wheel and source distribution into a new temporary directory. Create a
 new temporary virtual environment outside the checkout, install the wheel, and
@@ -449,9 +466,11 @@ scopeproof comparison-benchmark
 
 Run installed workbench health and package-inventory checks using the existing
 repository scripts or documented commands. Record SHA-256 hashes as pre-release
-engineering artifacts only, then remove temporary directories.
+engineering artifacts for `VERIFIED_IMPLEMENTATION_SHA` only, explicitly state
+that the later evidence commit changes the source distribution, then remove
+temporary directories.
 
-- [ ] **Step 5: Commit the alignment and verification record**
+- [ ] **Step 6: Commit the alignment and verification record**
 
 ```bash
 git add README.md ROADMAP.md CHANGELOG.md \
@@ -465,7 +484,13 @@ git add README.md ROADMAP.md CHANGELOG.md \
 git commit -m "docs: align v0.2.3 integrity candidate"
 ```
 
-- [ ] **Step 6: Perform final branch review and publish a draft PR**
+After committing, run the repository-contract suite, Ruff, `git diff --check`,
+and the forbidden branch-diff inventory on the exact evidence-commit head. The
+required GitHub checks will verify the complete pushed PR head. Keep the local
+full-suite and package results attributed only to the clean implementation
+target unless they are rerun on a later exact commit.
+
+- [ ] **Step 7: Perform final branch review and publish a draft PR**
 
 Run a broad final review over `origin/main...HEAD`, resolve every Critical or
 Important finding through one reviewed fix wave, repeat the full verification
@@ -473,7 +498,7 @@ affected by fixes, push `codex/exact-head-runtime-evidence`, and create a draft
 PR targeting `main`. The PR body must state that all evidence is engineering
 evidence, Stage 1 remains unchanged, and publication is not included.
 
-- [ ] **Step 7: Hand off the verified draft and stop at the publication boundary**
+- [ ] **Step 8: Hand off the verified draft and stop at the publication boundary**
 
 Confirm no merge, `v0.2.3` tag, or GitHub Release was performed by the
 implementation worker. Report the exact draft-PR head SHA, checks, package
