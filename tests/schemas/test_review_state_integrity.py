@@ -249,6 +249,26 @@ def test_review_state_accepts_bundleless_pending_revision() -> None:
     )
 
 
+def test_review_state_rejects_bundleless_divergent_active_provenance() -> None:
+    state = new_review_state(build_demo_review())
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        state.criteria_revision.source_text,
+    )
+    revised.review = revised.review.model_copy(
+        update={
+            "criteria_source_provenance": state.review.criteria_source_provenance
+        }
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="active criteria source provenance must match lifecycle review and active revision",
+    ):
+        ReviewState.model_validate(revised.model_dump(mode="python"))
+
+
 def test_review_state_accepts_matching_legacy_active_provenance_absence() -> None:
     payload = new_review_state(build_demo_review()).model_dump(mode="python")
     payload["review"]["criteria_source_provenance"] = None

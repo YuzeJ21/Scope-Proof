@@ -1393,10 +1393,13 @@ class ReviewState(BaseModel):
             )
         if self.review.criteria_confirmed != self.criteria_revision.confirmed:
             raise ValueError("criteria confirmation must match the active revision")
-        if self.bundle is not None and not (
+        if (
             self.review.criteria_source_provenance
-            == self.criteria_revision.source_provenance
-            == self.bundle.review.criteria_source_provenance
+            != self.criteria_revision.source_provenance
+        ) or (
+            self.bundle is not None
+            and self.bundle.review.criteria_source_provenance
+            != self.review.criteria_source_provenance
         ):
             raise ValueError(
                 "active criteria source provenance must match lifecycle review and active revision"
