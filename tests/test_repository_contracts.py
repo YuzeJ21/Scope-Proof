@@ -539,6 +539,46 @@ def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
     assert "apps.web" not in core_cli
 
 
+def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy() -> None:
+    config = tomllib.loads(Path(".streamlit/config.toml").read_text(encoding="utf-8"))
+    app = Path("apps/web/app.py").read_text(encoding="utf-8")
+    site = Path("site/index.html").read_text(encoding="utf-8")
+    css = Path("site/styles.css").read_text(encoding="utf-8")
+    parser = _PublicSiteParser()
+    parser.feed(site)
+
+    assert config["theme"] == {
+        "base": "dark",
+        "primaryColor": "#d8ff63",
+        "backgroundColor": "#0d0f12",
+        "secondaryBackgroundColor": "#171a1f",
+        "textColor": "#f7f7f2",
+        "linkColor": "#8cecff",
+    }
+    assert "):focus-visible" in app
+    assert "[data-testid=\"stAppViewContainer\"]" in app
+    assert "@media (prefers-reduced-motion: reduce)" in app
+    assert "alpha-actions-primary" in site
+    assert "alpha-actions-secondary" in site
+    assert "alpha-actions-resources" in site
+    assert ".alpha-actions-resources" in css
+    alpha_urls = {
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml",
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md",
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/public-pr-qualification-checklist.md",
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/commercialization/design-partner-sprint.md",
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml",
+    }
+    assert alpha_urls.issubset(parser.links)
+    assert "Submit a public alpha case" in site
+    assert "Open the ten-minute quickstart" in site
+    assert "Post-review: share a completed review outcome" in site
+    assert (
+        "Submit no private code, credentials, customer data, private links, or confidential "
+        "information."
+    ) in site
+
+
 def test_hatch_and_reviews_share_one_version_source() -> None:
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     version_source = Path("scopeproof_core/version.py").read_text(encoding="utf-8")

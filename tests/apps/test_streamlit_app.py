@@ -2966,20 +2966,37 @@ def test_criteria_can_be_added_and_removed_before_reconfirmation() -> None:
     assert len(app.session_state["criteria"]) == 4
 
 
-def test_evidence_matrix_exposes_status_and_priority_filters() -> None:
-    app = load_demo(new_app())
-    app = app.button(key="confirm_criteria").click().run()
-    app = app.button(key="run_analysis").click().run()
-
-    assert app.multiselect(key="status_filter").value == []
-    assert app.multiselect(key="priority_filter").value == []
-
-
-def test_evidence_matrix_exposes_blocker_and_evidence_level_filters() -> None:
+def test_evidence_matrix_filters_are_collapsed_without_changing_widget_contracts() -> None:
     app = analyzed_demo(new_app())
+    filters = next(
+        item for item in app.expander if item.label == "Filter evidence matrix (optional)"
+    )
 
+    assert filters.proto.expanded is False
+    assert _main_widget_keys(filters) == [
+        "status_filter",
+        "priority_filter",
+        "blocking_only",
+        "evidence_level_filter",
+    ]
+    status_filter = app.multiselect(key="status_filter")
+    priority_filter = app.multiselect(key="priority_filter")
+    evidence_level_filter = app.multiselect(key="evidence_level_filter")
+
+    assert status_filter.value == []
+    assert status_filter.options == [
+        "Strong candidate",
+        "Weak candidate",
+        "No candidate",
+        "Analysis incomplete",
+        "Reviewer verified",
+        "Rejected",
+    ]
+    assert priority_filter.value == []
+    assert priority_filter.options == ["Must Have", "Should Have"]
     assert app.checkbox(key="blocking_only").value is False
-    assert app.multiselect(key="evidence_level_filter").value == []
+    assert evidence_level_filter.value == []
+    assert evidence_level_filter.options == ["E0", "E1", "E2", "E3", "E4"]
 
 
 def test_evidence_matrix_combines_blocker_and_evidence_level_filters() -> None:

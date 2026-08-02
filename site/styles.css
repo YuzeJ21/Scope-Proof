@@ -67,6 +67,11 @@ h3 { margin-bottom: 0.7rem; font-size: 1.35rem; }
 .alpha-section { display: grid; grid-template-columns: 1.25fr 0.75fr; gap: clamp(2rem, 8vw, 7rem); }
 .alpha-section > div > p:not(.eyebrow) { max-width: 64ch; color: var(--muted); }
 .alpha-actions { display: grid; align-content: start; gap: 0.9rem; padding: 1.5rem; background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; }
+.alpha-actions-primary { order: 1; }
+.alpha-actions-secondary { order: 2; }
+.alpha-actions-resources { order: 3; display: flex; flex-wrap: wrap; gap: 0.35rem 0.55rem; align-items: baseline; color: var(--muted); font-size: 0.88rem; }
+.alpha-actions-resources a { color: var(--cyan); }
+.alpha-actions-resources span { color: var(--muted); }
 .alpha-actions p { margin: 0.5rem 0 0; font-size: 0.88rem; }
 footer { display: flex; justify-content: space-between; gap: 2rem; padding: 2rem 0 4rem; border-top: 1px solid var(--line); color: var(--muted); }
 footer div { display: flex; flex-wrap: wrap; gap: 1.5rem; }

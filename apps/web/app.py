@@ -106,6 +106,64 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+st.markdown(
+    """
+    <style>
+    :root {
+        --scopeproof-background: #0d0f12;
+        --scopeproof-surface: #171a1f;
+        --scopeproof-text: #f7f7f2;
+        --scopeproof-lime: #d8ff63;
+        --scopeproof-cyan: #8cecff;
+        --scopeproof-warning: #ffad66;
+    }
+    [data-testid="stAppViewContainer"] {
+        background: var(--scopeproof-background);
+        color: var(--scopeproof-text);
+    }
+    [data-testid="stMainBlockContainer"] {
+        max-width: 76rem;
+        padding-block: 2rem 4rem;
+    }
+    [data-testid="stMainBlockContainer"] > div {
+        gap: 1.25rem;
+    }
+    h1, h2, h3 {
+        color: var(--scopeproof-text);
+        letter-spacing: -0.02em;
+    }
+    h1 {
+        border-bottom: 1px solid color-mix(in srgb, var(--scopeproof-cyan) 35%, transparent);
+        padding-bottom: 0.35rem;
+    }
+    button {
+        border-radius: 0.6rem;
+    }
+    [data-testid="stButton"] > button[kind="primary"] {
+        background: var(--scopeproof-lime);
+        border-color: var(--scopeproof-lime);
+        color: #0d0f12;
+    }
+    [data-testid="stExpander"] details,
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: var(--scopeproof-surface);
+        border-color: color-mix(in srgb, var(--scopeproof-cyan) 28%, transparent);
+        border-radius: 0.75rem;
+    }
+    [data-testid="stAlert"] {
+        border-left: 3px solid var(--scopeproof-warning);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            animation: none !important;
+            scroll-behavior: auto !important;
+            transition: none !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 _STATE_DEFAULTS = {
     "snapshot": None,
@@ -1496,28 +1554,29 @@ else:
         f"None {evidence_strength_counts[EvidenceStatus.NO_CANDIDATE]} · "
         f"Incomplete {evidence_strength_counts[EvidenceStatus.ANALYSIS_INCOMPLETE]}"
     )
-    status_filter = st.multiselect(
-        "Filter evidence status",
-        options=list(EvidenceStatus),
-        format_func=evidence_status_text,
-        key="status_filter",
-    )
-    priority_filter = st.multiselect(
-        "Filter priority",
-        options=list(Priority),
-        format_func=lambda item: _status_label(item.value),
-        key="priority_filter",
-    )
-    blocking_only = st.checkbox(
-        "Show blocking criteria only",
-        key="blocking_only",
-    )
-    evidence_level_filter = st.multiselect(
-        "Filter evidence level",
-        options=list(EvidenceLevel),
-        format_func=lambda item: item.value,
-        key="evidence_level_filter",
-    )
+    with st.expander("Filter evidence matrix (optional)", expanded=False):
+        status_filter = st.multiselect(
+            "Filter evidence status",
+            options=list(EvidenceStatus),
+            format_func=evidence_status_text,
+            key="status_filter",
+        )
+        priority_filter = st.multiselect(
+            "Filter priority",
+            options=list(Priority),
+            format_func=lambda item: _status_label(item.value),
+            key="priority_filter",
+        )
+        blocking_only = st.checkbox(
+            "Show blocking criteria only",
+            key="blocking_only",
+        )
+        evidence_level_filter = st.multiselect(
+            "Filter evidence level",
+            options=list(EvidenceLevel),
+            format_func=lambda item: item.value,
+            key="evidence_level_filter",
+        )
     blocking_criteria = set(bundle.gate.blocking_criteria)
     matrix = []
     for criterion in bundle.criteria:
