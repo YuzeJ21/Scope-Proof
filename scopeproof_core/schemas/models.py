@@ -8,13 +8,13 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
 from typing import Annotated, Literal
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    HttpUrl,
     StrictInt,
     computed_field,
     field_validator,
@@ -75,6 +75,10 @@ _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
     "scopeproof://constructed-demo/acceptance-criteria"
 )
+_CRITERIA_SOURCE_URI_ERROR = (
+    "source URI must be an HTTPS URL or "
+    "scopeproof://constructed-demo/acceptance-criteria"
+)
 
 
 class CriteriaSourceProvenance(BaseModel):
@@ -93,15 +97,15 @@ class CriteriaSourceProvenance(BaseModel):
     @classmethod
     def validate_source_uri(cls, value: str) -> str:
         normalized = value.strip()
-        parsed = urlsplit(normalized)
         if normalized == CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI:
             return normalized
-        if parsed.scheme != "https" or not parsed.netloc:
-            raise ValueError(
-                "source URI must be an HTTPS URL or "
-                "scopeproof://constructed-demo/acceptance-criteria"
-            )
-        return normalized
+        try:
+            parsed = HttpUrl(normalized)
+        except ValueError:
+            raise ValueError(_CRITERIA_SOURCE_URI_ERROR) from None
+        if parsed.scheme != "https":
+            raise ValueError(_CRITERIA_SOURCE_URI_ERROR)
+        return str(parsed)
 
     @field_validator("source_text_sha256", "normalized_criteria_sha256")
     @classmethod

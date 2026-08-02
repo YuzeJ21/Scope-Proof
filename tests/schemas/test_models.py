@@ -671,6 +671,34 @@ def test_criteria_source_provenance_rejects_invalid_values(
         CriteriaSourceProvenance.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    "source_uri",
+    [
+        "https://exa mple.test/requirements",
+        "https://example.test:bad/requirements",
+        "https://[2001:db8::1/requirements",
+    ],
+)
+def test_criteria_source_provenance_rejects_malformed_https_with_stable_error(
+    source_uri: str,
+) -> None:
+    payload = {
+        "source_uri": source_uri,
+        "source_text_sha256": "a" * 64,
+        "normalized_criteria_sha256": "b" * 64,
+        "confirmed_by": "Demo owner",
+        "confirmed_at": datetime(2026, 8, 2, tzinfo=UTC),
+    }
+
+    with pytest.raises(ValidationError) as exc_info:
+        CriteriaSourceProvenance.model_validate(payload)
+
+    assert (
+        "source URI must be an HTTPS URL or "
+        "scopeproof://constructed-demo/acceptance-criteria"
+    ) in str(exc_info.value)
+
+
 def test_criteria_source_provenance_normalizes_aware_confirmation_to_utc() -> None:
     provenance = CriteriaSourceProvenance(
         source_uri="https://example.test/requirements",
