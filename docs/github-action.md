@@ -15,9 +15,10 @@ It is deliberately a **safe preview**, not an enforcement integration:
   checks out or executes the pull request head.
 - It needs a checked-in `.scopeproof/requirements.txt` plus
   `.scopeproof/requirements-confirmation.json`. The confirmation records the
-  exact SHA-256 of the requirements bytes, who confirmed them, and when. If
-  either file is missing or the hash differs, the step summary says **Needs
-  Review** and cannot say Ready or publish a comment.
+  source URI and optional revision, exact SHA-256 of the requirements text,
+  SHA-256 of the ordered normalized criteria, who confirmed them, and when. If
+  either file is missing or either digest differs, the step summary says
+  **Needs Review** and cannot say Ready or publish a comment.
 - It uses the event's head-repository fork flag to create a non-mutating plan.
   Fork PRs receive no write plan.
 - For a labeled, non-fork PR with checked-in confirmed requirements, it may
@@ -54,11 +55,11 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`3d88808f12f46b68059b9e89c40c7ccd595d9032`, the public-main merge containing
-the v0.2.3 Stage 0 integrity repairs; it remains source-candidate installation,
-not a published v0.2.3 release. Review and update that pin deliberately when
-adopting a newer public release; do not replace it with an unpinned package or
-branch reference.
+`2a320df966eff30c05a2b1dce607a247201fa165`, the public-main product commit
+containing the exact-head runtime-evidence hardening. It remains
+source-candidate installation, not a published v0.2.3 release. Review and
+update that pin deliberately when adopting a newer public release; do not
+replace it with an unpinned package or branch reference.
 
 This trigger is intentionally privileged only for its narrowly scoped comment
 permission. Do not add a pull-request-head checkout, `git fetch`, `gh pr
@@ -82,8 +83,12 @@ the proposed comment action. It contains no token and does not mutate GitHub.
 
 ## Requirements confirmation record
 
-Generate the digest locally, then have the requirements owner fill in their
-identity and timestamp before committing the record:
+Record the public source reference and revision, compute the exact requirements
+text digest and the ordered normalized-criteria digest, then have the
+requirements owner fill in their identity and timestamp before committing the
+record. ScopeProof validates both digests before it fetches PR evidence.
+
+The exact source-text digest can be checked locally with:
 
 ```bash
 # macOS
@@ -95,7 +100,10 @@ sha256sum .scopeproof/requirements.txt
 
 ```json
 {
-  "requirements_sha256": "<sha256 output>",
+  "source_uri": "https://github.com/OWNER/REPOSITORY/blob/FULL_SHA/.scopeproof/requirements.txt",
+  "source_revision": "<full source revision>",
+  "source_text_sha256": "<sha256 of exact UTF-8 requirements text>",
+  "normalized_criteria_sha256": "<sha256 of ordered normalized criteria>",
   "confirmed_by": "Requirements owner or role",
   "confirmed_at": "2026-07-12T00:00:00Z"
 }

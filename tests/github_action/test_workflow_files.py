@@ -71,7 +71,7 @@ def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "3d88808f12f46b68059b9e89c40c7ccd595d9032"
+    reviewed_revision = "2a320df966eff30c05a2b1dce607a247201fa165"
 
     assert "pip install scopeproof" not in example
     assert (

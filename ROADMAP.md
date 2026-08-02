@@ -13,9 +13,10 @@ automated activity. The current external state is
 | Area | Current state |
 |---|---|
 | Published install | v0.2.1 |
-| Merged product source | v0.2.3 exact-head runtime-evidence hardening merged through PR #180 as `2a320df966eff30c05a2b1dce607a247201fa165`; untagged and unreleased |
+| Verified product baseline | v0.2.3 exact-head runtime-evidence hardening merged through PR #180 as `2a320df966eff30c05a2b1dce607a247201fa165`; untagged and unreleased |
 | Product tree verification | Independent PR head `ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f` and the merge commit share tree `add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8` |
-| Current engineering track | Stage 0 engineering foundation restored on the merged product tree |
+| Repository alignment | PR #181 merged documentation-only post-merge alignment as `eaa66c5979e2a71769d58f0699537da474094d06`; repository-tree CI, CodeQL, and Pages succeeded |
+| Current engineering track | Unreleased v0.2.3 product convergence: simpler surfaces and criteria-source snapshot provenance; exact final-tree verification and publication remain separate |
 | Product validation | Stage 1 waiting at zero; Stages 2–4 gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
@@ -26,7 +27,10 @@ milestones can proceed while Stage 1 waits, but they do not advance product-vali
 Status: prior PR #177 repairs remain historical engineering evidence. PR #180
 merged the exact-head runtime-evidence repair, and the merged product tree has
 independent local verification plus successful merged-main CI, CodeQL, and
-Pages runs.
+Pages runs. PR #181 merged documentation-only post-merge alignment as
+`eaa66c5979e2a71769d58f0699537da474094d06`; CI, CodeQL, and Pages succeeded.
+This is repository-tree CI only and does not establish release assets,
+checksums, a tag, a GitHub Release, or Stage 1 evidence.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
@@ -42,8 +46,17 @@ Pages runs.
   evidence ID and matching repository, PR, head, criterion, reviewer, and level.
 - [x] Migrate version 1/2 records to version 3 without inventing manual links;
   legacy-unlinked decisions remain auditable and require reconfirmation.
+- [x] Bind each new criteria confirmation to an immutable source URI, optional
+  revision, exact source-text digest, ordered normalized-criteria digest,
+  confirmer, and timestamp. Version 1–3 records migrate to version 4 without
+  invented provenance and remain fail-closed until reconfirmed.
 - [x] Project runtime identity through the workbench and JSON, Markdown, CSV,
   and HTML exports while retaining Pydantic validation.
+- [x] Project criteria-source provenance through the CLI, advanced Action,
+  workbench, alpha record, local persistence, and all validated exports.
+- [x] Simplify the workbench and public-alpha surfaces with supported theme
+  settings and progressive disclosure while preserving safety copy, focus
+  treatment, and deterministic gate behavior.
 - [x] Optional alpha feedback stays separate, local, consent-controlled, and off by default.
 - [x] Re-review comparison preserves both bundles and reports head, evidence, decision, and status
   changes.
@@ -70,10 +83,11 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 ## Current engineering track — v0.2.3 Evidence Quality
 
 Status: the earlier candidate and PR #177 repairs remain merged history. PR #179
-merged the workbench UX change, and PR #180 merged the exact-head
-runtime-evidence hardening as
-`2a320df966eff30c05a2b1dce607a247201fa165`. The source is not tagged or
-released. This work does not advance Stage 1.
+merged the workbench UX change, PR #180 merged the exact-head runtime-evidence
+hardening as `2a320df966eff30c05a2b1dce607a247201fa165`, and PR #181 completed
+documentation-only post-merge alignment. The active unreleased source work
+adds criteria-source provenance and a cleaner product hierarchy. The source is
+not tagged or released. This work earns zero Stage 1 credit.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
@@ -100,6 +114,12 @@ released. This work does not advance Stage 1.
 - [x] Restore autosave recovery for bundle-less revised reviews with stale
   criterion-detail drafts, without mutating review state or enabling exports
   before reanalysis.
+- [x] Require an exact, typed criteria-source snapshot before new analysis,
+  automated review, export, alpha outcome, or final acceptance can proceed.
+- [x] Preserve legacy version 1–3 records without fabricating provenance and
+  require explicit source reconfirmation before they can regain eligibility.
+- [x] Reduce first-use and public-alpha page density without hiding evidence,
+  limitations, labels, controls, or the reviewer confirmation step.
 - [ ] Freeze a new holdout before using it to evaluate a retrieval algorithm change. R-003 design
   is complete, but cohort generation awaits a separate explicit owner approval.
 - [x] Complete fresh packaging, clean-install, and a bounded accessibility and platform audit in

@@ -1,4 +1,5 @@
 import json
+import re
 import tomllib
 from hashlib import sha256
 from html.parser import HTMLParser
@@ -1088,6 +1089,23 @@ def test_launch_matrix_keeps_action_as_an_advanced_preview() -> None:
     assert "Trusted-base planning" in matrix
     assert "default first-use path" in matrix
     assert "successful hosted Action run" not in matrix
+
+
+def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> None:
+    example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+    guide = Path("docs/github-action.md").read_text(encoding="utf-8")
+    expected_pin = "2a320df966eff30c05a2b1dce607a247201fa165"
+
+    install = re.search(
+        r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
+        example,
+    )
+
+    assert install is not None
+    assert install.group(1) == expected_pin
+    assert f"`{install.group(1)}`" in guide
+    assert "source-candidate installation" in guide
+    assert "not a published v0.2.3 release" in guide
 
 
 def test_public_docs_do_not_require_or_offer_external_fork_validation() -> None:
