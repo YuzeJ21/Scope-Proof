@@ -1666,6 +1666,10 @@ def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() 
 
     mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
     assert '<a href="#alpha">Public alpha</a>' in site
+    assert ".site-header {" in mobile_css
+    assert "align-items: stretch" in mobile_css
+    assert "flex-direction: column" in mobile_css
+    assert ".brand { white-space: nowrap;" in mobile_css
     assert "nav { display: flex;" in mobile_css
     for path in active_docs:
         content = path.read_text(encoding="utf-8")

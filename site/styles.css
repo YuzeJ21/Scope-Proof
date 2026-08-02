@@ -83,8 +83,9 @@ footer div { display: flex; flex-wrap: wrap; gap: 1.5rem; }
 }
 
 @media (max-width: 600px) {
-  .site-header { align-items: flex-start; padding: 1rem 0; }
-  nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.55rem 0.8rem; }
+  .site-header { align-items: stretch; flex-direction: column; gap: 0.75rem; padding: 1rem 0; }
+  .brand { white-space: nowrap; align-self: flex-start; }
+  nav { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 0.55rem 0.8rem; }
   nav a { font-size: 0.78rem; }
   h1 { font-size: clamp(2.35rem, 12vw, 3.5rem); overflow-wrap: anywhere; }
   h2, h3, p, a { overflow-wrap: anywhere; }
