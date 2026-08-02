@@ -241,6 +241,26 @@ def test_review_state_accepts_bundleless_pending_revision() -> None:
 
     assert reopened.bundle is None
     assert reopened.analysis_history == [state.bundle]
+    assert reopened.review.criteria_source_provenance is None
+    assert reopened.criteria_revision.source_provenance is None
+    assert (
+        reopened.analysis_history[0].review.criteria_source_provenance
+        == state.review.criteria_source_provenance
+    )
+
+
+def test_review_state_accepts_matching_legacy_active_provenance_absence() -> None:
+    payload = new_review_state(build_demo_review()).model_dump(mode="python")
+    payload["review"]["criteria_source_provenance"] = None
+    payload["criteria_revision"]["source_provenance"] = None
+    payload["bundle"]["review"]["criteria_source_provenance"] = None
+
+    reopened = ReviewState.model_validate(payload)
+
+    assert reopened.review.criteria_source_provenance is None
+    assert reopened.criteria_revision.source_provenance is None
+    assert reopened.bundle is not None
+    assert reopened.bundle.review.criteria_source_provenance is None
 
 
 @pytest.mark.parametrize("historical_revision", [2, 3])

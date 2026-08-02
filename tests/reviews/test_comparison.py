@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews.comparison import (
     EvidenceChange,
@@ -172,16 +173,24 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
             evidence_ids=[item.evidence_id for item in evidence],
         )
     ]
+    criteria = [Criterion(criterion_id="AC-01", text="Export CSV")]
+    review.criteria_source_provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text="Export CSV",
+        criteria=criteria,
+        confirmed_by="Fixture owner",
+        confirmed_at=review.created_at,
+    )
     gate = evaluate_gate(
         review,
-        [Criterion(criterion_id="AC-01", text="Export CSV")],
+        criteria,
         findings,
         resolutions,
     )
     return ReviewBundle(
         review=review,
         source_text="Export CSV",
-        criteria=[Criterion(criterion_id="AC-01", text="Export CSV")],
+        criteria=criteria,
         evidence=evidence,
         findings=findings,
         resolutions=resolutions,

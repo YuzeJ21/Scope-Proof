@@ -21,6 +21,7 @@ from scopeproof_core.reviews.lifecycle import (
 from scopeproof_core.schemas.models import (
     CheckState,
     CIObservation,
+    CriteriaSourceProvenance,
     Criterion,
     EvidenceLevel,
     Finding,
@@ -77,6 +78,30 @@ def initial_state():
     return new_review_state(bundle)
 
 
+def provenance_for_revision(
+    state,
+    *,
+    source_text: str | None = None,
+    criteria: list[Criterion] | None = None,
+    confirmed_at: datetime | None = None,
+) -> CriteriaSourceProvenance:
+    return build_criteria_source_provenance(
+        source_uri=(
+            f"https://example.test/requirements/{state.criteria_revision.number}"
+        ),
+        source_revision=f"requirements-v{state.criteria_revision.number}",
+        source_text=source_text or state.criteria_revision.source_text,
+        criteria=criteria or state.criteria_revision.criteria,
+        confirmed_by="Fixture owner",
+        confirmed_at=confirmed_at
+        or datetime(2026, 8, 2, state.criteria_revision.number, tzinfo=UTC),
+    )
+
+
+def confirm_pending_revision(state):
+    return confirm_criteria(state, provenance_for_revision(state))
+
+
 def test_new_review_state_copies_bundle_criteria_source_provenance() -> None:
     criterion = Criterion(criterion_id="AC-01", text="Export CSV")
     provenance = build_criteria_source_provenance(
@@ -125,6 +150,26 @@ def test_new_review_state_copies_bundle_criteria_source_provenance() -> None:
     assert state.criteria_revision.confirmed_at == provenance.confirmed_at
 
 
+def test_new_review_state_rejects_bundle_without_criteria_source_provenance() -> None:
+    bundle = initial_state().bundle
+    assert bundle is not None
+    bundle.review = bundle.review.model_copy(
+        update={"criteria_source_provenance": None}
+    )
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="initial analysis bundle requires criteria source provenance",
+    ):
+        new_review_state(bundle)
+
+
 def analysis_bundle_for(
     state,
     *,
@@ -136,12 +181,27 @@ def analysis_bundle_for(
     analysis_criteria = criteria or [
         criterion.model_copy(deep=True) for criterion in state.criteria_revision.criteria
     ]
+    analysis_source_text = source_text or state.criteria_revision.source_text
     analysis_review = review or state.review.model_copy(
         update={
             "review_id": "generated-review",
             "created_at": state.review.created_at + timedelta(seconds=1),
         }
     )
+    if analysis_review.criteria_source_provenance is not None:
+        current = analysis_review.criteria_source_provenance
+        expected_provenance = build_criteria_source_provenance(
+            source_uri=current.source_uri,
+            source_revision=current.source_revision,
+            source_text=analysis_source_text,
+            criteria=analysis_criteria,
+            confirmed_by=current.confirmed_by,
+            confirmed_at=current.confirmed_at,
+        )
+        if current != expected_provenance:
+            analysis_review = analysis_review.model_copy(
+                update={"criteria_source_provenance": expected_provenance}
+            )
     findings = [
         Finding(
             criterion_id=criterion.criterion_id,
@@ -155,7 +215,7 @@ def analysis_bundle_for(
     analysis_resolutions = resolutions or []
     return ReviewBundle(
         review=analysis_review,
-        source_text=source_text or state.criteria_revision.source_text,
+        source_text=analysis_source_text,
         criteria=analysis_criteria,
         evidence=[],
         findings=findings,
@@ -217,7 +277,7 @@ def test_attach_analysis_preserves_reanalysis_lineage() -> None:
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Export filtered CSV",
     )
-    confirmed = confirm_criteria(revised)
+    confirmed = confirm_pending_revision(revised)
     bundle = analysis_bundle_for(confirmed)
     bundle.criteria_revision_number = 99
 
@@ -235,6 +295,11 @@ def test_attach_analysis_preserves_reanalysis_lineage() -> None:
     assert attached.bundle.criteria_revision_number == 2
     assert attached.bundle.resolutions == []
     assert attached.review.final_acceptance is False
+    assert (
+        attached.bundle.review.criteria_source_provenance
+        == attached.criteria_revision.source_provenance
+        == attached.review.criteria_source_provenance
+    )
 
     bundle.review.review_id = "caller-mutation"
     bundle.criteria[0].text = "Caller mutation"
@@ -249,14 +314,14 @@ def test_attach_analysis_preserves_reanalysis_lineage() -> None:
 
 def test_skipped_analysis_history_records_exact_criteria_revisions() -> None:
     revision_one = initial_state()
-    revision_two = confirm_criteria(
+    revision_two = confirm_pending_revision(
         revise_criteria(
             revision_one,
             [Criterion(criterion_id="AC-01", text="Export CSV with headers")],
             "Export CSV with headers",
         )
     )
-    revision_three = confirm_criteria(
+    revision_three = confirm_pending_revision(
         revise_criteria(
             revision_two,
             [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
@@ -310,11 +375,12 @@ def test_attach_analysis_rejects_mismatched_criteria() -> None:
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Export filtered CSV",
     )
-    confirmed = confirm_criteria(revised)
+    confirmed = confirm_pending_revision(revised)
     mismatched = [Criterion(criterion_id="AC-01", text="Export JSON")]
 
     with pytest.raises(
-        ValueError, match="attached analysis criteria must match the active revision"
+        ValueError,
+        match="attached analysis criteria source provenance must match the active revision",
     ):
         attach_analysis(
             confirmed,
@@ -328,10 +394,11 @@ def test_attach_analysis_rejects_mismatched_source_text() -> None:
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Export filtered CSV",
     )
-    confirmed = confirm_criteria(revised)
+    confirmed = confirm_pending_revision(revised)
 
     with pytest.raises(
-        ValueError, match="attached analysis source must match the active revision"
+        ValueError,
+        match="attached analysis criteria source provenance must match the active revision",
     ):
         attach_analysis(
             confirmed,
@@ -339,13 +406,13 @@ def test_attach_analysis_rejects_mismatched_source_text() -> None:
         )
 
 
-def test_attach_analysis_rejects_mismatched_review_provenance() -> None:
+def test_attach_analysis_rejects_mismatched_review_identity() -> None:
     revised = revise_criteria(
         initial_state(),
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Export filtered CSV",
     )
-    confirmed = confirm_criteria(revised)
+    confirmed = confirm_pending_revision(revised)
     mismatched_review = confirmed.review.model_copy(
         update={"review_id": "generated-review", "head_sha": "different-head"}
     )
@@ -359,13 +426,42 @@ def test_attach_analysis_rejects_mismatched_review_provenance() -> None:
         )
 
 
+def test_attach_analysis_rejects_mismatched_criteria_source_provenance() -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_pending_revision(revised)
+    mismatched_provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/different-requirements",
+        source_text=confirmed.criteria_revision.source_text,
+        criteria=confirmed.criteria_revision.criteria,
+        confirmed_by="Different owner",
+        confirmed_at=datetime(2026, 8, 2, 15, tzinfo=UTC),
+    )
+    mismatched_review = confirmed.review.model_copy(
+        update={
+            "review_id": "generated-review",
+            "criteria_source_provenance": mismatched_provenance,
+        }
+    )
+    incoming = analysis_bundle_for(confirmed, review=mismatched_review)
+
+    with pytest.raises(
+        ValueError,
+        match="attached analysis criteria source provenance must match the active revision",
+    ):
+        attach_analysis(confirmed, incoming)
+
+
 def test_attach_analysis_rejects_preloaded_human_resolutions() -> None:
     revised = revise_criteria(
         initial_state(),
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Export filtered CSV",
     )
-    confirmed = confirm_criteria(revised)
+    confirmed = confirm_pending_revision(revised)
     resolutions = [
         HumanResolution(
             criterion_id="AC-01",
@@ -389,7 +485,7 @@ def test_attach_analysis_rejects_preloaded_final_acceptance() -> None:
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Export filtered CSV",
     )
-    confirmed = confirm_criteria(revised)
+    confirmed = confirm_pending_revision(revised)
     accepted_review = confirmed.review.model_copy(
         update={"review_id": "generated-review", "final_acceptance": True}
     )
@@ -409,7 +505,7 @@ def test_attach_analysis_revalidates_a_mutated_bundle() -> None:
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Export filtered CSV",
     )
-    confirmed = confirm_criteria(revised)
+    confirmed = confirm_pending_revision(revised)
     bundle = analysis_bundle_for(confirmed)
     bundle.criteria[0].text = ""
 
@@ -513,8 +609,14 @@ def test_editing_confirmed_criteria_creates_revision_and_invalidates_analysis() 
     assert revised.criteria_revision.number == 2
     assert revised.criteria_revision.criteria[0].text == "Export filtered CSV"
     assert revised.review.criteria_confirmed is False
+    assert revised.review.criteria_source_provenance is None
+    assert revised.criteria_revision.source_provenance is None
+    assert revised.criteria_revision.confirmed_at is None
     assert revised.bundle is None
     assert len(revised.analysis_history) == 1
+    assert revised.analysis_history[0].review.criteria_source_provenance == (
+        state.review.criteria_source_provenance
+    )
 
 
 @pytest.mark.parametrize("source_text", ["", "   ", "\t", "\n\r"])
@@ -561,17 +663,54 @@ def test_confirmation_keeps_revision_and_unblocks_future_analysis() -> None:
         initial_state(), [Criterion(criterion_id="AC-01", text="Export filtered CSV")], "Updated"
     )
 
-    confirmed = confirm_criteria(revised)
+    provenance = provenance_for_revision(
+        revised,
+        confirmed_at=datetime(2026, 8, 2, 14, 30, tzinfo=UTC),
+    )
+
+    confirmed = confirm_criteria(revised, provenance)
 
     assert confirmed.criteria_revision.number == 2
     assert confirmed.review.criteria_confirmed is True
     assert confirmed.bundle is None
     assert confirmed.criteria_revision.confirmed is True
-    assert confirmed.criteria_revision.confirmed_at is not None
+    assert confirmed.review.criteria_source_provenance == provenance
+    assert confirmed.criteria_revision.source_provenance == provenance
+    assert confirmed.criteria_revision.confirmed_at == provenance.confirmed_at
 
     reopened = type(confirmed).model_validate(confirmed.model_dump(mode="python"))
 
     assert reopened == confirmed
+
+
+@pytest.mark.parametrize(
+    ("digest_field", "message"),
+    [
+        ("source_text_sha256", "criteria source provenance does not match source text"),
+        (
+            "normalized_criteria_sha256",
+            "criteria source provenance does not match criteria",
+        ),
+    ],
+)
+def test_confirmation_rejects_tampered_snapshot_before_mutation(
+    digest_field: str,
+    message: str,
+) -> None:
+    revised = revise_criteria(
+        initial_state(),
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Updated",
+    )
+    provenance = provenance_for_revision(revised).model_copy(
+        update={digest_field: "0" * 64}
+    )
+    original = revised.model_dump(mode="python")
+
+    with pytest.raises(ValueError, match=message):
+        confirm_criteria(revised, provenance)
+
+    assert revised.model_dump(mode="python") == original
 
 
 def test_confirmation_rejects_an_active_analysis_bundle() -> None:
@@ -579,7 +718,8 @@ def test_confirmation_rejects_an_active_analysis_bundle() -> None:
         ValueError,
         match="criteria confirmation requires a pending revision without an active bundle",
     ):
-        confirm_criteria(initial_state())
+        state = initial_state()
+        confirm_criteria(state, provenance_for_revision(state))
 
 
 @pytest.mark.parametrize(
@@ -610,7 +750,7 @@ def test_lifecycle_operations_revalidate_active_review_identity(operation: str) 
                 divergent.criteria_revision.source_text,
             )
         elif operation == "confirm_criteria":
-            confirm_criteria(divergent)
+            confirm_criteria(divergent, provenance_for_revision(divergent))
         elif operation == "attach_analysis":
             assert state.bundle is not None
             attach_analysis(divergent, state.bundle)
@@ -668,7 +808,7 @@ def test_resolution_event_requires_an_active_analysis_bundle() -> None:
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Updated requirements",
     )
-    confirmed = confirm_criteria(pending)
+    confirmed = confirm_pending_revision(pending)
 
     with pytest.raises(
         ValueError, match="Run a confirmed analysis before recording a resolution"
@@ -1136,6 +1276,31 @@ def test_final_acceptance_requires_complete_passing_resolved_review() -> None:
     assert can_record_final_acceptance(resolved) is True
 
 
+def test_final_acceptance_is_unavailable_without_criteria_source_provenance() -> None:
+    resolved = append_resolution(
+        initial_state(),
+        ResolutionEvent(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Reviewed candidate evidence",
+        ),
+    )
+    payload = resolved.model_dump(mode="python")
+    payload["review"]["criteria_source_provenance"] = None
+    payload["criteria_revision"]["source_provenance"] = None
+    payload["bundle"]["review"]["criteria_source_provenance"] = None
+    bundle = ReviewBundle.model_validate(payload["bundle"])
+    payload["bundle"]["gate"] = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    ).model_dump(mode="python")
+    legacy_state = type(resolved).model_validate(payload)
+
+    assert can_record_final_acceptance(legacy_state) is False
+
+
 def test_final_acceptance_ignores_superseded_and_prior_revision_decisions() -> None:
     state = append_resolution(
         initial_state(),
@@ -1150,7 +1315,7 @@ def test_final_acceptance_ignores_superseded_and_prior_revision_decisions() -> N
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Export filtered CSV",
     )
-    confirmed = confirm_criteria(pending)
+    confirmed = confirm_pending_revision(pending)
     reanalyzed = attach_analysis(confirmed, analysis_bundle_for(confirmed))
 
     assert can_record_final_acceptance(reanalyzed) is False
@@ -1178,7 +1343,7 @@ def test_runtime_evidence_requires_an_active_analysis_bundle() -> None:
         [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
         "Updated requirements",
     )
-    confirmed = confirm_criteria(pending)
+    confirmed = confirm_pending_revision(pending)
 
     with pytest.raises(
         ValueError, match="Run a confirmed analysis before recording runtime evidence"
