@@ -155,6 +155,37 @@ def example_state():
     )
 
 
+def linked_runtime_bundle() -> ReviewBundle:
+    bundle = example_bundle()
+    runtime_item = bundle.runtime_evidence[0].model_copy(
+        update={
+            "runtime_evidence_id": "runtime-evidence-7",
+            "repository": bundle.review.repository,
+            "pr_number": bundle.review.pr_number,
+            "head_sha": bundle.review.head_sha,
+        }
+    )
+    bundle.runtime_evidence = [runtime_item]
+    bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Observed the controlled export scenario",
+            claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id=runtime_item.runtime_evidence_id,
+            reviewer=runtime_item.reviewer,
+            timestamp=datetime(2026, 7, 11, 12, 11, tzinfo=UTC),
+        )
+    ]
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+    return ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+
+
 @pytest.mark.parametrize(
     "exporter",
     [export_json, export_markdown, export_csv, export_html],
@@ -182,6 +213,32 @@ def test_exporters_revalidate_direct_review_bundle(exporter) -> None:
     bundle.review = bundle.review.model_copy(update={"base_sha": " "})
 
     with pytest.raises(ValueError, match="review identity must contain non-whitespace text"):
+        exporter(bundle)
+
+
+@pytest.mark.parametrize(
+    "exporter",
+    [export_json, export_markdown, export_csv, export_html],
+)
+def test_exporters_reject_forged_runtime_identity(exporter) -> None:
+    bundle = linked_runtime_bundle()
+    bundle.runtime_evidence[0].head_sha = "foreign-head"
+
+    with pytest.raises(
+        ValueError, match="runtime evidence identity must match the owning review"
+    ):
+        exporter(bundle)
+
+
+@pytest.mark.parametrize(
+    "exporter",
+    [export_json, export_markdown, export_csv, export_html],
+)
+def test_exporters_reject_forged_manual_runtime_link(exporter) -> None:
+    bundle = linked_runtime_bundle()
+    bundle.resolutions[0].runtime_evidence_id = "forged-runtime-link"
+
+    with pytest.raises(ValueError, match="resolution runtime evidence ID must resolve"):
         exporter(bundle)
 
 
@@ -377,6 +434,75 @@ def test_export_json_and_csv_derive_recorded_runtime_state_from_manual_evidence(
 
     assert json_report["runtime_verification_state"] == "recorded"
     assert csv_row["runtime_verification_state"] == "recorded"
+
+
+def test_json_and_human_exports_project_runtime_identity_and_link_state() -> None:
+    bundle = linked_runtime_bundle()
+    runtime_item = bundle.runtime_evidence[0]
+
+    json_report = json.loads(export_json(bundle))
+    markdown = export_markdown(bundle)
+    html_report = export_html(bundle)
+
+    assert json_report["runtime_evidence"][0] == runtime_item.model_dump(mode="json")
+    assert "Runtime evidence ID: <code>runtime-evidence-7</code>" in markdown
+    assert "Repository / PR: <code>acme/widget</code> / #7" in markdown
+    assert "Bound head: <code>head123</code>" in markdown
+    assert "Manual resolution link: <code>runtime-evidence-7</code>" in markdown
+    assert "Runtime evidence ID:</strong> <code>runtime-evidence-7</code>" in html_report
+    assert "Repository / PR:</strong> <code>acme/widget</code> / #7" in html_report
+    assert "Bound head:</strong> <code>head123</code>" in html_report
+    assert "Manual resolution link:</strong> <code>runtime-evidence-7</code>" in html_report
+
+
+def test_human_and_csv_exports_label_legacy_unlinked_manual_resolution() -> None:
+    bundle = example_bundle()
+    bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Legacy runtime observation",
+            claimed_evidence_level=EvidenceLevel.E3,
+            reviewer="QA reviewer",
+        )
+    ]
+    bundle.gate = evaluate_gate(
+        bundle.review,
+        bundle.criteria,
+        bundle.findings,
+        bundle.resolutions,
+    )
+    warning = "Legacy unlinked; re-record at the active head"
+
+    assert warning in export_markdown(bundle)
+    assert warning in export_html(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    assert csv_row["manual_runtime_evidence_id"] == warning
+
+
+def test_csv_runtime_identity_arrays_preserve_positional_order_and_formula_safety() -> None:
+    bundle = linked_runtime_bundle()
+    first = bundle.runtime_evidence[0].model_copy(
+        update={"runtime_evidence_id": "=runtime-one"}
+    )
+    second = bundle.runtime_evidence[0].model_copy(
+        update={
+            "runtime_evidence_id": "+runtime-two",
+            "artifact_reference": "artifact-two",
+            "result": "second result",
+        }
+    )
+    bundle.runtime_evidence = [first, second]
+    bundle.resolutions[0].runtime_evidence_id = second.runtime_evidence_id
+    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+
+    row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+
+    assert json.loads(row["runtime_evidence_ids"]) == ["=runtime-one", "+runtime-two"]
+    assert json.loads(row["runtime_repositories"]) == ["acme/widget", "acme/widget"]
+    assert json.loads(row["runtime_pr_numbers"]) == [7, 7]
+    assert json.loads(row["runtime_head_shas"]) == ["head123", "head123"]
+    assert row["manual_runtime_evidence_id"] == "'+runtime-two"
 
 
 def test_exports_preserve_tool_and_ruleset_provenance() -> None:

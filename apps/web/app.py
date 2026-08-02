@@ -6,6 +6,7 @@ from collections.abc import Callable
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
+from uuid import uuid4
 
 import streamlit as st
 
@@ -1795,6 +1796,9 @@ else:
                 "manual-verification decision atomically."
             )
             st.caption("This record will be attached to the selected criterion.")
+            st.caption(
+                "Runtime evidence identity is bound automatically to the active review."
+            )
             runtime_artifact = st.text_input(
                 "Artifact or URL (required)", key="runtime_artifact_reference"
             )
@@ -1844,7 +1848,12 @@ else:
                     st.error("Run analysis before recording external verification.")
                 else:
                     try:
+                        runtime_evidence_id = str(uuid4())
                         runtime_evidence = RuntimeEvidence(
+                            runtime_evidence_id=runtime_evidence_id,
+                            repository=review_state.review.repository,
+                            pr_number=review_state.review.pr_number,
+                            head_sha=review_state.review.head_sha,
                             criterion_id=selected_id,
                             artifact_reference=runtime_artifact,
                             scenario=runtime_scenario,
@@ -1863,6 +1872,7 @@ else:
                             decision=HumanDecision.MANUALLY_VERIFIED,
                             comment=f"Externally observed result: {runtime_result.strip()}",
                             claimed_evidence_level=runtime_level,
+                            runtime_evidence_id=runtime_evidence_id,
                             reviewer=normalized_runtime_reviewer,
                         )
                         review_state = append_external_verification(
@@ -1893,6 +1903,15 @@ else:
             for item in selected_runtime:
                 recorded_at = item.model_dump(mode="json")["timestamp"]
                 with st.container(border=True):
+                    if item.runtime_evidence_id is None:
+                        st.warning("Legacy unlinked; re-record at the active head")
+                    else:
+                        st.caption("Runtime evidence ID")
+                        st.code(item.runtime_evidence_id, language=None)
+                        st.caption("Bound repository and pull request")
+                        st.text(f"{item.repository} · PR #{item.pr_number}")
+                        st.caption("Bound head")
+                        st.code(item.head_sha, language=None)
                     st.caption("Artifact reference")
                     st.markdown(render_artifact_reference_markdown(item.artifact_reference))
                     st.caption("Runtime scenario")
@@ -2025,6 +2044,12 @@ else:
                     if event.claimed_evidence_level is not None:
                         st.caption("Claimed evidence level")
                         st.text(event.claimed_evidence_level.value)
+                    if event.decision is HumanDecision.MANUALLY_VERIFIED:
+                        st.caption("Runtime evidence link")
+                        if event.runtime_evidence_id is None:
+                            st.warning("Legacy unlinked; re-record at the active head")
+                        else:
+                            st.code(event.runtime_evidence_id, language=None)
         else:
             st.caption("No human decisions have been recorded yet.")
 

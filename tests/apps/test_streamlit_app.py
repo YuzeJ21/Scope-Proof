@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
+from uuid import UUID
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -12,6 +13,7 @@ from scopeproof_core.alpha.storage import (
     default_alpha_case_directory,
 )
 from scopeproof_core.demo import load_demo_snapshot
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
@@ -3203,6 +3205,10 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
     review_state = append_external_verification(
         review_state,
         RuntimeEvidence(
+            runtime_evidence_id="runtime-audit-event",
+            repository=review_state.review.repository,
+            pr_number=review_state.review.pr_number,
+            head_sha=review_state.review.head_sha,
             criterion_id="AC-01",
             artifact_reference="https://example.test/run/manual-audit-event",
             scenario="Controlled verification scenario",
@@ -3219,6 +3225,7 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
             comment="Controlled verification note",
             reviewer="Controlled reviewer",
             claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id="runtime-audit-event",
             timestamp=recorded_at,
             criteria_revision_number=1,
         ),
@@ -3231,6 +3238,7 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
     assert "Controlled reviewer" in text_values
     assert "2026-07-14T19:45:00Z" in text_values
     assert "E3" in text_values
+    assert [item.value for item in app.code].count("runtime-audit-event") == 2
 
 
 def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> None:
@@ -3554,8 +3562,98 @@ def test_external_verification_normalizes_reviewer_for_atomic_records() -> None:
     ]
     assert len(review_state.bundle.runtime_evidence) == 1
     assert len(manual_events) == 1
-    assert review_state.bundle.runtime_evidence[0].reviewer == "QA"
+    runtime_item = review_state.bundle.runtime_evidence[0]
+    assert runtime_item.reviewer == "QA"
     assert manual_events[0].reviewer == "QA"
+    assert UUID(runtime_item.runtime_evidence_id).version == 4
+    assert (
+        runtime_item.repository,
+        runtime_item.pr_number,
+        runtime_item.head_sha,
+    ) == (
+        review_state.review.repository,
+        review_state.review.pr_number,
+        review_state.review.head_sha,
+    )
+    assert manual_events[0].runtime_evidence_id == runtime_item.runtime_evidence_id
+    identity_widget_keys = {
+        "runtime_evidence_id",
+        "runtime_repository",
+        "runtime_pr_number",
+        "runtime_head_sha",
+    }
+    assert identity_widget_keys.isdisjoint(
+        {item.key for item in [*app.text_input, *app.number_input]}
+    )
+
+
+def test_runtime_evidence_record_renders_bound_identity_as_non_editable_text() -> None:
+    app = analyzed_demo(new_app())
+    review = app.session_state["review_state"].review.model_copy(deep=True)
+    app = app.text_input(key="runtime_artifact_reference").set_value("artifact-identity").run()
+    app = app.text_area(key="runtime_scenario").set_value("Identity scenario").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("observed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    runtime_item = app.session_state["review_state"].bundle.runtime_evidence[0]
+    assert runtime_item.runtime_evidence_id in [item.value for item in app.code]
+    assert f"{review.repository} · PR #{review.pr_number}" in [
+        item.value for item in app.text
+    ]
+    assert review.head_sha in [item.value for item in app.code]
+    assert "Runtime evidence identity is bound automatically to the active review." in [
+        item.value for item in app.caption
+    ]
+
+
+def test_runtime_evidence_legacy_unlinked_warning_disables_final_acceptance() -> None:
+    app = analyzed_demo(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    runtime_item = RuntimeEvidence(
+        runtime_evidence_id="migrated-runtime-id",
+        repository=review_state.review.repository,
+        pr_number=review_state.review.pr_number,
+        head_sha=review_state.review.head_sha,
+        criterion_id="AC-01",
+        artifact_reference="artifact-migrated",
+        scenario="Migrated legacy scenario",
+        environment="staging",
+        result="observed",
+        reviewer="Legacy QA",
+        evidence_level=EvidenceLevel.E3,
+    )
+    review_state = append_external_verification(
+        review_state,
+        runtime_item,
+        ResolutionEvent(
+            event_id="migrated-manual-event",
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Migrated manual verification",
+            claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id=runtime_item.runtime_evidence_id,
+            reviewer=runtime_item.reviewer,
+        ),
+    )
+    review_state.resolution_events[-1].runtime_evidence_id = None
+    review_state.bundle.resolutions[0].runtime_evidence_id = None
+    review_state.bundle.gate = evaluate_gate(
+        review_state.bundle.review,
+        review_state.bundle.criteria,
+        review_state.bundle.findings,
+        review_state.bundle.resolutions,
+    )
+    app.session_state["review_state"] = review_state
+    app.session_state["bundle"] = review_state.bundle
+
+    app = app.run()
+
+    warning = "Legacy unlinked; re-record at the active head"
+    assert warning in [item.value for item in app.warning]
+    assert app.button(key="record_final_acceptance").disabled is True
 
 
 def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
