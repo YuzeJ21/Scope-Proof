@@ -147,7 +147,7 @@ def test_validated_review_bundle_rejects_final_acceptance_without_resolutions() 
         validated_review_bundle(bundle)
 
 
-def test_validated_review_bundle_rejects_unpaired_manual_verification() -> None:
+def test_validated_review_bundle_accepts_legacy_unlinked_manual_as_unresolved() -> None:
     bundle = build_demo_review()
     bundle.resolutions = [
         HumanResolution(
@@ -165,16 +165,24 @@ def test_validated_review_bundle_rejects_unpaired_manual_verification() -> None:
         bundle.resolutions,
     )
 
-    with pytest.raises(
-        ValueError, match="manually verified resolutions require matching runtime evidence"
-    ):
-        validated_review_bundle(bundle)
+    validated = validated_review_bundle(bundle)
+
+    assert validated.gate.verdict is not GateVerdict.READY
+    assert "AC-01" in validated.gate.unresolved_criteria
+    assert (
+        "runtime_verification_reconfirmation_required"
+        in validated.gate.reason_codes
+    )
 
 
 def test_validated_review_bundle_accepts_paired_manual_verification() -> None:
     bundle = build_demo_review()
     bundle.runtime_evidence = [
         RuntimeEvidence(
+            runtime_evidence_id="runtime-001",
+            repository=bundle.review.repository,
+            pr_number=bundle.review.pr_number,
+            head_sha=bundle.review.head_sha,
             criterion_id="AC-01",
             artifact_reference="https://example.test/run/1",
             scenario="Export CSV",
@@ -191,6 +199,7 @@ def test_validated_review_bundle_accepts_paired_manual_verification() -> None:
             claimed_evidence_level=EvidenceLevel.E3,
             reviewer="QA",
             comment="Observed the scenario",
+            runtime_evidence_id="runtime-001",
         )
     ]
     bundle.gate = evaluate_gate(
@@ -203,7 +212,7 @@ def test_validated_review_bundle_accepts_paired_manual_verification() -> None:
     assert validated_review_bundle(bundle) == bundle
 
 
-def test_validated_review_state_rejects_unpaired_manual_verification_event() -> None:
+def test_validated_review_state_accepts_legacy_unlinked_manual_event_as_unresolved() -> None:
     state = new_review_state(build_demo_review())
     assert state.bundle is not None
     event = ResolutionEvent(
@@ -233,10 +242,11 @@ def test_validated_review_state_rejects_unpaired_manual_verification_event() -> 
         state.bundle.resolutions,
     )
 
-    with pytest.raises(
-        ValueError, match=r"manual.*verifi.*matching runtime evidence"
-    ):
-        validated_review_state(state)
+    validated = validated_review_state(state)
+
+    assert validated.bundle is not None
+    assert validated.bundle.gate.verdict is not GateVerdict.READY
+    assert "AC-01" in validated.bundle.gate.unresolved_criteria
 
 
 def test_validated_review_state_rejects_final_acceptance_recorded_too_early() -> None:
@@ -282,7 +292,7 @@ def test_validated_review_state_rejects_final_acceptance_recorded_too_early() ->
         validated_review_state(state)
 
 
-def test_validated_review_state_rejects_superseded_unpaired_manual_event() -> None:
+def test_validated_review_state_preserves_superseded_legacy_unlinked_manual_event() -> None:
     state = new_review_state(build_demo_review())
     assert state.bundle is not None
     manual_event = ResolutionEvent(
@@ -315,8 +325,153 @@ def test_validated_review_state_rejects_superseded_unpaired_manual_event() -> No
         state.bundle.resolutions,
     )
 
+    validated = validated_review_state(state)
+
+    assert [event.event_id for event in validated.resolution_events] == [
+        "unpaired-manual",
+        "superseding-acceptance",
+    ]
+
+
+def test_validated_review_state_preserves_legacy_positive_acceptance_as_non_ready_history() -> (
+    None
+):
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    manual_event = ResolutionEvent(
+        event_id="legacy-manual",
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        claimed_evidence_level=EvidenceLevel.E3,
+        reviewer="QA",
+        comment="Historical runtime observation",
+        criteria_revision_number=1,
+    )
+    final_event = ResolutionEvent(
+        event_id="legacy-final",
+        final_acceptance=True,
+        criteria_revision_number=1,
+    )
+    accepted_events = [
+        ResolutionEvent(
+            event_id=f"accepted-{criterion.criterion_id}",
+            criterion_id=criterion.criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            criteria_revision_number=1,
+        )
+        for criterion in state.bundle.criteria
+        if criterion.criterion_id != "AC-01"
+    ]
+    state.resolution_events = [manual_event, *accepted_events, final_event]
+    state.review.final_acceptance = True
+    state.bundle.review.final_acceptance = True
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            claimed_evidence_level=EvidenceLevel.E3,
+            reviewer="QA",
+            comment="Historical runtime observation",
+            timestamp=manual_event.timestamp,
+        ),
+        *[
+            HumanResolution(
+                criterion_id=event.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                timestamp=event.timestamp,
+            )
+            for event in accepted_events
+            if event.criterion_id is not None
+        ],
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+
+    validated = validated_review_state(state)
+
+    assert validated.review.final_acceptance is True
+    assert validated.bundle is not None
+    assert validated.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert (
+        "runtime_verification_reconfirmation_required"
+        in validated.bundle.gate.reason_codes
+    )
+
+
+def test_validated_review_state_rejects_manual_replacement_before_legacy_revocation() -> (
+    None
+):
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    manual_event = ResolutionEvent(
+        event_id="legacy-manual",
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        claimed_evidence_level=EvidenceLevel.E3,
+        reviewer="QA",
+        comment="Historical runtime observation",
+        criteria_revision_number=1,
+    )
+    other_acceptances = [
+        ResolutionEvent(
+            event_id=f"accepted-{criterion.criterion_id}",
+            criterion_id=criterion.criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            criteria_revision_number=1,
+        )
+        for criterion in state.bundle.criteria
+        if criterion.criterion_id != "AC-01"
+    ]
+    final_event = ResolutionEvent(
+        event_id="legacy-final",
+        final_acceptance=True,
+        criteria_revision_number=1,
+    )
+    replacement = ResolutionEvent(
+        event_id="replacement-without-revocation",
+        criterion_id="AC-01",
+        decision=HumanDecision.ACCEPTED,
+        criteria_revision_number=1,
+    )
+    state.resolution_events = [
+        manual_event,
+        *other_acceptances,
+        final_event,
+        replacement,
+    ]
+    state.review.final_acceptance = True
+    state.bundle.review.final_acceptance = True
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            timestamp=replacement.timestamp,
+        ),
+        *[
+            HumanResolution(
+                criterion_id=event.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                timestamp=event.timestamp,
+            )
+            for event in other_acceptances
+            if event.criterion_id is not None
+        ],
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+    assert state.bundle.gate.verdict is GateVerdict.READY
+
     with pytest.raises(
-        ValueError, match="manual verification events require matching runtime evidence"
+        ValueError,
+        match="final acceptance must be revoked before replacing manual verification",
     ):
         validated_review_state(state)
 

@@ -195,6 +195,21 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
         raise ValueError(
             "manual verification must be recorded with append_external_verification"
         )
+    if event.criterion_id is not None and state.review.final_acceptance:
+        active_resolutions = {
+            resolution.criterion_id: resolution
+            for resolution in current_resolutions(
+                state.resolution_events, state.criteria_revision.number
+            )
+        }
+        current_resolution = active_resolutions.get(event.criterion_id)
+        if (
+            current_resolution is not None
+            and current_resolution.decision is HumanDecision.MANUALLY_VERIFIED
+        ):
+            raise ValueError(
+                "final acceptance must be revoked before replacing manual verification"
+            )
     if event.final_acceptance is True and not can_record_final_acceptance(state):
         raise ValueError("final acceptance prerequisites are not satisfied")
     if event.criterion_id is not None and event.criterion_id not in {
@@ -221,9 +236,26 @@ def append_runtime_evidence(state: ReviewState, evidence: RuntimeEvidence) -> Re
         raise ValueError("Run a confirmed analysis before recording runtime evidence")
     if evidence.criterion_id not in {criterion.criterion_id for criterion in state.bundle.criteria}:
         raise ValueError("runtime evidence must reference a criterion in the active review")
+    if evidence.runtime_evidence_id is None:
+        raise ValueError("runtime evidence must include the active review identity")
+    if (
+        evidence.repository,
+        evidence.pr_number,
+        evidence.head_sha,
+    ) != (
+        state.review.repository,
+        state.review.pr_number,
+        state.review.head_sha,
+    ):
+        raise ValueError("runtime evidence must match the active review identity")
+    if any(
+        existing.runtime_evidence_id == evidence.runtime_evidence_id
+        for existing in state.bundle.runtime_evidence
+    ):
+        raise ValueError("runtime evidence ID must be unique")
     bundle = state.bundle.model_copy(deep=True)
-    bundle.runtime_evidence.append(evidence)
-    return state.model_copy(update={"bundle": bundle})
+    bundle.runtime_evidence.append(evidence.model_copy(deep=True))
+    return validated_review_state(state.model_copy(update={"bundle": bundle}))
 
 
 def append_external_verification(
@@ -238,8 +270,24 @@ def append_external_verification(
     event = ResolutionEvent.model_validate(event.model_dump())
     if state.bundle is None:
         raise ValueError("Run a confirmed analysis before recording external verification")
+    if evidence.runtime_evidence_id is None:
+        raise ValueError("runtime evidence must include the active review identity")
+    if (
+        evidence.repository,
+        evidence.pr_number,
+        evidence.head_sha,
+    ) != (
+        state.review.repository,
+        state.review.pr_number,
+        state.review.head_sha,
+    ):
+        raise ValueError("runtime evidence must match the active review identity")
     if event.decision is not HumanDecision.MANUALLY_VERIFIED:
         raise ValueError("external verification requires a manually verified decision")
+    if event.runtime_evidence_id != evidence.runtime_evidence_id:
+        raise ValueError(
+            "external verification inputs must use the same runtime evidence ID"
+        )
     if evidence.criterion_id != event.criterion_id:
         raise ValueError("external verification inputs must reference the same active criterion")
     if evidence.criterion_id not in {
@@ -252,8 +300,28 @@ def append_external_verification(
         raise ValueError("external verification inputs must use the same evidence level")
     if evidence.evidence_level not in {EvidenceLevel.E3, EvidenceLevel.E4}:
         raise ValueError("external verification requires E3 or E4 evidence")
+    if any(
+        existing.runtime_evidence_id == evidence.runtime_evidence_id
+        for existing in state.bundle.runtime_evidence
+    ):
+        raise ValueError("runtime evidence ID must be unique")
     if any(existing.event_id == event.event_id for existing in state.resolution_events):
         raise ValueError("resolution event ID must be unique")
+    active_resolutions = {
+        resolution.criterion_id: resolution
+        for resolution in current_resolutions(
+            state.resolution_events, state.criteria_revision.number
+        )
+    }
+    current_resolution = active_resolutions.get(evidence.criterion_id)
+    if (
+        state.review.final_acceptance
+        and current_resolution is not None
+        and current_resolution.decision is HumanDecision.MANUALLY_VERIFIED
+    ):
+        raise ValueError(
+            "final acceptance must be revoked before replacing manual verification"
+        )
 
     bound_event = ResolutionEvent.model_validate(
         {
@@ -302,5 +370,10 @@ def can_record_final_acceptance(state: ReviewState) -> bool:
     return all(
         criterion.criterion_id in active_resolutions
         and active_resolutions[criterion.criterion_id].decision in accepted_decisions
+        and (
+            active_resolutions[criterion.criterion_id].decision
+            is not HumanDecision.MANUALLY_VERIFIED
+            or active_resolutions[criterion.criterion_id].runtime_evidence_id is not None
+        )
         for criterion in state.bundle.criteria
     )

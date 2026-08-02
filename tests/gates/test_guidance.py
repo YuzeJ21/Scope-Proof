@@ -88,6 +88,11 @@ def test_decision_guidance_maps_every_human_decision(
             "Record final acceptance only after a reviewer has reviewed every criterion and its "
             "evidence.",
         ),
+        (
+            "runtime_verification_reconfirmation_required",
+            "Record new E3/E4 runtime verification at the active head for legacy-unlinked manual "
+            "criteria before acceptance.",
+        ),
     ],
 )
 def test_gate_guidance_maps_every_known_reason(reason_code: str, expected_text: str) -> None:

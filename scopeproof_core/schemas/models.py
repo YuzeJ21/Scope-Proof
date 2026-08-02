@@ -819,6 +819,10 @@ class RuntimeEvidence(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    runtime_evidence_id: str | None = None
+    repository: str | None = Field(default=None, pattern=GITHUB_REPOSITORY_PATTERN)
+    pr_number: int | None = Field(default=None, gt=0)
+    head_sha: str | None = None
     criterion_id: str
     artifact_reference: str = Field(min_length=1)
     scenario: str = Field(min_length=1)
@@ -848,6 +852,28 @@ class RuntimeEvidence(BaseModel):
         if any(not limitation.strip() for limitation in value):
             raise ValueError("limitations must contain non-whitespace text")
         return value
+
+    @field_validator("runtime_evidence_id", "head_sha")
+    @classmethod
+    def require_non_blank_runtime_identity(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must contain non-whitespace text")
+        return value
+
+    @model_validator(mode="after")
+    def validate_runtime_identity_scope(self) -> RuntimeEvidence:
+        identity = (
+            self.runtime_evidence_id,
+            self.repository,
+            self.pr_number,
+            self.head_sha,
+        )
+        populated_fields = sum(value is not None for value in identity)
+        if populated_fields not in {0, len(identity)}:
+            raise ValueError(
+                "runtime identity fields must all be present or all be absent"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_manual_level(self) -> RuntimeEvidence:
@@ -888,11 +914,19 @@ class HumanResolution(BaseModel):
     comment: str = ""
     evidence_url: str | None = None
     claimed_evidence_level: EvidenceLevel | None = None
+    runtime_evidence_id: str | None = None
     reviewer: str = "Local reviewer"
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @model_validator(mode="after")
     def manual_verification_needs_level(self) -> HumanResolution:
+        if (
+            self.runtime_evidence_id is not None
+            and self.decision is not HumanDecision.MANUALLY_VERIFIED
+        ):
+            raise ValueError(
+                "runtime evidence ID is reserved for manually verified decisions"
+            )
         if self.decision is HumanDecision.MANUALLY_VERIFIED and self.claimed_evidence_level is None:
             raise ValueError("manually verified decisions require a claimed evidence level")
         if self.decision is HumanDecision.MANUALLY_VERIFIED and not self.comment.strip():
@@ -910,6 +944,7 @@ class ResolutionEvent(BaseModel):
     comment: str = ""
     evidence_url: str | None = None
     claimed_evidence_level: EvidenceLevel | None = None
+    runtime_evidence_id: str | None = None
     reviewer: str = "Local reviewer"
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     criteria_revision_number: int = Field(default=0, ge=0)
@@ -934,6 +969,13 @@ class ResolutionEvent(BaseModel):
         is_final_event = self.criterion_id is None and self.final_acceptance is not None
         if is_criterion_event == is_final_event:
             raise ValueError("event must be either a criterion decision or a final acceptance")
+        if (
+            self.runtime_evidence_id is not None
+            and self.decision is not HumanDecision.MANUALLY_VERIFIED
+        ):
+            raise ValueError(
+                "runtime evidence ID is reserved for manually verified decisions"
+            )
         has_wrong_claimed_level = (
             self.claimed_evidence_level is not None
             and self.decision is not HumanDecision.MANUALLY_VERIFIED
@@ -1132,12 +1174,58 @@ class ReviewBundle(BaseModel):
 
         if any(item.criterion_id not in known_criteria for item in self.runtime_evidence):
             raise ValueError("runtime evidence criterion IDs must reference known criteria")
+        runtime_ids = [
+            item.runtime_evidence_id
+            for item in self.runtime_evidence
+            if item.runtime_evidence_id is not None
+        ]
+        if len(runtime_ids) != len(set(runtime_ids)):
+            raise ValueError("runtime evidence IDs must be unique")
+        for item in self.runtime_evidence:
+            if item.runtime_evidence_id is None:
+                continue
+            if (
+                item.repository,
+                item.pr_number,
+                item.head_sha,
+            ) != (
+                self.review.repository,
+                self.review.pr_number,
+                self.review.head_sha,
+            ):
+                raise ValueError(
+                    "runtime evidence identity must match the owning review"
+                )
+        runtime_by_id = {
+            item.runtime_evidence_id: item
+            for item in self.runtime_evidence
+            if item.runtime_evidence_id is not None
+        }
 
         resolution_ids = [resolution.criterion_id for resolution in self.resolutions]
         if len(resolution_ids) != len(set(resolution_ids)):
             raise ValueError("resolution criterion IDs must be unique")
         if any(criterion_id not in known_criteria for criterion_id in resolution_ids):
             raise ValueError("resolution criterion IDs must reference known criteria")
+        for resolution in self.resolutions:
+            if resolution.runtime_evidence_id is None:
+                continue
+            runtime_item = runtime_by_id.get(resolution.runtime_evidence_id)
+            if runtime_item is None:
+                raise ValueError("resolution runtime evidence ID must resolve")
+            if (
+                resolution.criterion_id,
+                resolution.reviewer,
+                resolution.claimed_evidence_level,
+            ) != (
+                runtime_item.criterion_id,
+                runtime_item.reviewer,
+                runtime_item.evidence_level,
+            ):
+                raise ValueError(
+                    "linked resolution must match runtime evidence criterion, "
+                    "reviewer, and level"
+                )
 
         for field_name in (
             "blocking_criteria",

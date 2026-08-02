@@ -110,6 +110,28 @@ def bundle_payload() -> dict[str, object]:
     return valid_bundle().model_dump(mode="python")
 
 
+def scoped_manual_bundle_payload() -> dict[str, object]:
+    payload = bundle_payload()
+    payload["runtime_evidence"][0].update(
+        {
+            "runtime_evidence_id": "runtime-001",
+            "repository": "acme/widget",
+            "pr_number": 7,
+            "head_sha": "head123",
+        }
+    )
+    payload["resolutions"][0].update(
+        {
+            "decision": HumanDecision.MANUALLY_VERIFIED,
+            "comment": "Observed at the reviewed head",
+            "claimed_evidence_level": EvidenceLevel.E3,
+            "reviewer": "QA reviewer",
+            "runtime_evidence_id": "runtime-001",
+        }
+    )
+    return payload
+
+
 def valid_retrieval_diagnostic_payload() -> dict[str, object]:
     return {
         "criterion_id": "AC-01",
@@ -375,6 +397,88 @@ def test_review_bundle_integrity_rejects_runtime_evidence_for_unknown_criterion(
 
     with pytest.raises(
         ValidationError, match="runtime evidence criterion IDs must reference known criteria"
+    ):
+        ReviewBundle.model_validate(payload)
+
+
+def test_review_bundle_integrity_rejects_duplicate_runtime_evidence_ids() -> None:
+    payload = scoped_manual_bundle_payload()
+    payload["runtime_evidence"].append(payload["runtime_evidence"][0].copy())
+
+    with pytest.raises(ValidationError, match="runtime evidence IDs must be unique"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_review_bundle_integrity_rejects_partial_runtime_identity() -> None:
+    payload = scoped_manual_bundle_payload()
+    payload["runtime_evidence"][0].pop("head_sha")
+
+    with pytest.raises(ValidationError, match="all be present or all be absent"):
+        ReviewBundle.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "foreign_value"),
+    [
+        ("repository", "other/widget"),
+        ("pr_number", 8),
+        ("head_sha", "different-head"),
+    ],
+)
+def test_review_bundle_integrity_rejects_foreign_runtime_identity(
+    field_name: str, foreign_value: object
+) -> None:
+    payload = scoped_manual_bundle_payload()
+    payload["runtime_evidence"][0][field_name] = foreign_value
+
+    with pytest.raises(
+        ValidationError, match="runtime evidence identity must match the owning review"
+    ):
+        ReviewBundle.model_validate(payload)
+
+
+def test_review_bundle_integrity_rejects_missing_linked_runtime_id() -> None:
+    payload = scoped_manual_bundle_payload()
+    payload["resolutions"][0]["runtime_evidence_id"] = "runtime-missing"
+
+    with pytest.raises(
+        ValidationError, match="resolution runtime evidence ID must resolve"
+    ):
+        ReviewBundle.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("resolution_update", "bundle_update"),
+    [
+        ({"criterion_id": "AC-02"}, "criterion"),
+        ({"reviewer": "Different reviewer"}, None),
+        ({"claimed_evidence_level": EvidenceLevel.E4}, None),
+    ],
+)
+def test_review_bundle_integrity_rejects_linked_runtime_metadata_mismatch(
+    resolution_update: dict[str, object], bundle_update: str | None
+) -> None:
+    payload = scoped_manual_bundle_payload()
+    if bundle_update == "criterion":
+        payload["criteria"].append(
+            Criterion(criterion_id="AC-02", text="Export succeeds").model_dump(
+                mode="python"
+            )
+        )
+        payload["findings"].append(
+            Finding(
+                criterion_id="AC-02",
+                status=FindingStatus.MISSING,
+                reason="No candidate found.",
+                missing_evidence=["Implementation evidence"],
+                recommended_action="Add implementation evidence.",
+            ).model_dump(mode="python")
+        )
+    payload["resolutions"][0].update(resolution_update)
+
+    with pytest.raises(
+        ValidationError,
+        match="linked resolution must match runtime evidence criterion, reviewer, and level",
     ):
         ReviewBundle.model_validate(payload)
 

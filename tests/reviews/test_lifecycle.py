@@ -113,6 +113,38 @@ def analysis_bundle_for(
     )
 
 
+def scoped_runtime_evidence(**updates) -> RuntimeEvidence:
+    payload = {
+        "runtime_evidence_id": "runtime-001",
+        "repository": "acme/widget",
+        "pr_number": 1,
+        "head_sha": "head",
+        "criterion_id": "AC-01",
+        "artifact_reference": "https://example.test/run/1",
+        "scenario": "Export CSV",
+        "environment": "staging",
+        "result": "passed",
+        "reviewer": "QA",
+        "evidence_level": EvidenceLevel.E3,
+    }
+    payload.update(updates)
+    return RuntimeEvidence.model_validate(payload)
+
+
+def linked_manual_event(**updates) -> ResolutionEvent:
+    payload = {
+        "event_id": "external-1",
+        "criterion_id": "AC-01",
+        "decision": HumanDecision.MANUALLY_VERIFIED,
+        "comment": "QA observed the export in staging.",
+        "reviewer": "QA",
+        "claimed_evidence_level": EvidenceLevel.E3,
+        "runtime_evidence_id": "runtime-001",
+    }
+    payload.update(updates)
+    return ResolutionEvent.model_validate(payload)
+
+
 def test_attach_analysis_preserves_reanalysis_lineage() -> None:
     state = append_resolution(
         initial_state(),
@@ -621,6 +653,20 @@ def test_resolution_event_rejects_unpaired_manual_verification() -> None:
         )
 
 
+def test_current_resolutions_preserves_runtime_evidence_link() -> None:
+    event = ResolutionEvent(
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        comment="Observed",
+        reviewer="QA",
+        claimed_evidence_level=EvidenceLevel.E3,
+        runtime_evidence_id="runtime-001",
+        criteria_revision_number=1,
+    )
+
+    assert current_resolutions([event], 1)[0].runtime_evidence_id == "runtime-001"
+
+
 def test_resolution_event_must_reference_an_active_criterion() -> None:
     with pytest.raises(
         ValueError, match="resolution event must reference a criterion in the active review"
@@ -798,15 +844,7 @@ def test_runtime_evidence_is_append_only_and_does_not_change_gate() -> None:
     state = initial_state()
     updated = append_runtime_evidence(
         state,
-        RuntimeEvidence(
-            criterion_id="AC-01",
-            artifact_reference="https://example.test/run/1",
-            scenario="Export CSV",
-            environment="staging",
-            result="passed",
-            reviewer="QA",
-            evidence_level=EvidenceLevel.E3,
-        ),
+        scoped_runtime_evidence(),
     )
 
     assert state.bundle is not None and state.bundle.runtime_evidence == []
@@ -815,25 +853,52 @@ def test_runtime_evidence_is_append_only_and_does_not_change_gate() -> None:
     assert updated.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
 
 
+@pytest.mark.parametrize(
+    ("evidence", "message"),
+    [
+        (
+            scoped_runtime_evidence(repository="other/widget"),
+            "runtime evidence must match the active review identity",
+        ),
+        (
+            scoped_runtime_evidence(pr_number=2),
+            "runtime evidence must match the active review identity",
+        ),
+        (
+            scoped_runtime_evidence(head_sha="different-head"),
+            "runtime evidence must match the active review identity",
+        ),
+        (
+            RuntimeEvidence(
+                criterion_id="AC-01",
+                artifact_reference="https://example.test/run/1",
+                scenario="Export CSV",
+                environment="staging",
+                result="passed",
+                reviewer="QA",
+                evidence_level=EvidenceLevel.E3,
+            ),
+            "runtime evidence must include the active review identity",
+        ),
+    ],
+)
+def test_append_runtime_evidence_rejects_invalid_identity_atomically(
+    evidence: RuntimeEvidence,
+    message: str,
+) -> None:
+    state = initial_state()
+    original = state.model_dump(mode="python")
+
+    with pytest.raises(ValueError, match=message):
+        append_runtime_evidence(state, evidence)
+
+    assert state.model_dump(mode="python") == original
+
+
 def test_external_verification_atomically_appends_evidence_and_resolution() -> None:
     state = initial_state()
-    evidence = RuntimeEvidence(
-        criterion_id="AC-01",
-        artifact_reference="https://example.test/run/1",
-        scenario="Export CSV",
-        environment="staging",
-        result="passed",
-        reviewer="QA",
-        evidence_level=EvidenceLevel.E3,
-    )
-    event = ResolutionEvent(
-        event_id="external-1",
-        criterion_id="AC-01",
-        decision=HumanDecision.MANUALLY_VERIFIED,
-        comment="QA observed the export in staging.",
-        reviewer="QA",
-        claimed_evidence_level=EvidenceLevel.E3,
-    )
+    evidence = scoped_runtime_evidence()
+    event = linked_manual_event()
 
     updated = append_external_verification(state, evidence, event)
 
@@ -842,7 +907,138 @@ def test_external_verification_atomically_appends_evidence_and_resolution() -> N
     assert updated.bundle is not None
     assert updated.bundle.runtime_evidence == [evidence]
     assert updated.resolution_events[-1].event_id == "external-1"
+    assert updated.resolution_events[-1].runtime_evidence_id == "runtime-001"
     assert updated.bundle.resolutions[0].decision is HumanDecision.MANUALLY_VERIFIED
+    assert updated.bundle.resolutions[0].runtime_evidence_id == "runtime-001"
+
+
+@pytest.mark.parametrize(
+    ("evidence", "event", "message"),
+    [
+        (
+            scoped_runtime_evidence(repository="other/widget"),
+            linked_manual_event(),
+            "runtime evidence must match the active review identity",
+        ),
+        (
+            scoped_runtime_evidence(pr_number=2),
+            linked_manual_event(),
+            "runtime evidence must match the active review identity",
+        ),
+        (
+            scoped_runtime_evidence(head_sha="different-head"),
+            linked_manual_event(),
+            "runtime evidence must match the active review identity",
+        ),
+        (
+            RuntimeEvidence(
+                criterion_id="AC-01",
+                artifact_reference="https://example.test/run/1",
+                scenario="Export CSV",
+                environment="staging",
+                result="passed",
+                reviewer="QA",
+                evidence_level=EvidenceLevel.E3,
+            ),
+            linked_manual_event(),
+            "runtime evidence must include the active review identity",
+        ),
+        (
+            scoped_runtime_evidence(),
+            linked_manual_event(runtime_evidence_id="runtime-002"),
+            "external verification inputs must use the same runtime evidence ID",
+        ),
+    ],
+)
+def test_external_verification_rejects_invalid_runtime_identity_atomically(
+    evidence: RuntimeEvidence,
+    event: ResolutionEvent,
+    message: str,
+) -> None:
+    state = initial_state()
+    original = state.model_dump(mode="python")
+
+    with pytest.raises(ValueError, match=message):
+        append_external_verification(state, evidence, event)
+
+    assert state.model_dump(mode="python") == original
+
+
+@pytest.mark.parametrize("operation", ["runtime", "external_verification"])
+def test_runtime_operations_reject_duplicate_runtime_id_atomically(
+    operation: str,
+) -> None:
+    state = append_runtime_evidence(initial_state(), scoped_runtime_evidence())
+    original = state.model_dump(mode="python")
+    duplicate = scoped_runtime_evidence(
+        artifact_reference="https://example.test/run/duplicate"
+    )
+
+    with pytest.raises(ValueError, match="runtime evidence ID must be unique"):
+        if operation == "runtime":
+            append_runtime_evidence(state, duplicate)
+        else:
+            append_external_verification(state, duplicate, linked_manual_event())
+
+    assert state.model_dump(mode="python") == original
+
+
+def test_external_verification_requires_final_acceptance_revocation_before_replacement() -> (
+    None
+):
+    verified = append_external_verification(
+        initial_state(), scoped_runtime_evidence(), linked_manual_event()
+    )
+    accepted = append_resolution(
+        verified,
+        ResolutionEvent(event_id="final-accepted", final_acceptance=True),
+    )
+    original = accepted.model_dump(mode="python")
+
+    with pytest.raises(
+        ValueError,
+        match="final acceptance must be revoked before replacing manual verification",
+    ):
+        append_external_verification(
+            accepted,
+            scoped_runtime_evidence(
+                runtime_evidence_id="runtime-002",
+                artifact_reference="https://example.test/run/2",
+            ),
+            linked_manual_event(
+                event_id="external-2", runtime_evidence_id="runtime-002"
+            ),
+        )
+
+    assert accepted.model_dump(mode="python") == original
+
+
+def test_runtime_manual_verification_requires_revocation_before_decision_replacement() -> (
+    None
+):
+    verified = append_external_verification(
+        initial_state(), scoped_runtime_evidence(), linked_manual_event()
+    )
+    accepted = append_resolution(
+        verified,
+        ResolutionEvent(event_id="final-accepted", final_acceptance=True),
+    )
+    original = accepted.model_dump(mode="python")
+
+    with pytest.raises(
+        ValueError,
+        match="final acceptance must be revoked before replacing manual verification",
+    ):
+        append_resolution(
+            accepted,
+            ResolutionEvent(
+                event_id="replace-manual",
+                criterion_id="AC-01",
+                decision=HumanDecision.ACCEPTED,
+            ),
+        )
+
+    assert accepted.model_dump(mode="python") == original
 
 
 @pytest.mark.parametrize(
@@ -861,22 +1057,8 @@ def test_external_verification_atomically_appends_evidence_and_resolution() -> N
 def test_external_verification_rejects_mismatched_atomic_inputs(
     evidence_update, event_update, message
 ) -> None:
-    evidence = RuntimeEvidence(
-        criterion_id="AC-01",
-        artifact_reference="https://example.test/run/1",
-        scenario="Export CSV",
-        environment="staging",
-        result="passed",
-        reviewer="QA",
-        evidence_level=EvidenceLevel.E3,
-    ).model_copy(update=evidence_update)
-    event = ResolutionEvent(
-        criterion_id="AC-01",
-        decision=HumanDecision.MANUALLY_VERIFIED,
-        comment="QA observed the export in staging.",
-        reviewer="QA",
-        claimed_evidence_level=EvidenceLevel.E3,
-    ).model_copy(update=event_update)
+    evidence = scoped_runtime_evidence().model_copy(update=evidence_update)
+    event = linked_manual_event().model_copy(update=event_update)
 
     with pytest.raises(ValueError, match=message):
         append_external_verification(initial_state(), evidence, event)
@@ -978,16 +1160,7 @@ def test_runtime_evidence_must_reference_an_active_criterion() -> None:
 
 
 def test_appended_runtime_evidence_does_not_alias_the_supplied_object() -> None:
-    evidence = RuntimeEvidence(
-        criterion_id="AC-01",
-        artifact_reference="https://example.test/run/1",
-        scenario="Export CSV",
-        environment="staging",
-        result="passed",
-        reviewer="QA",
-        evidence_level=EvidenceLevel.E3,
-        limitations=["Browser only"],
-    )
+    evidence = scoped_runtime_evidence(limitations=["Browser only"])
 
     updated = append_runtime_evidence(initial_state(), evidence)
     evidence.result = ""

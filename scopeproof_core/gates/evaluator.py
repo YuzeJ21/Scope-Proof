@@ -37,6 +37,7 @@ def evaluate_gate(
     unresolved: set[str] = set()
     exceptions: set[str] = set()
     reason_codes: list[str] = []
+    runtime_reconfirmation_required = False
     ingestion_limitations_present = bool(review.ingestion_warnings or review.skipped_files)
 
     if review.check_state is CheckState.FAILING:
@@ -56,6 +57,13 @@ def evaluate_gate(
             continue
         if decision is HumanDecision.NOT_IN_SCOPE:
             exceptions.add(criterion.criterion_id)
+            continue
+        if (
+            decision is HumanDecision.MANUALLY_VERIFIED
+            and resolution.runtime_evidence_id is None
+        ):
+            unresolved.add(criterion.criterion_id)
+            runtime_reconfirmation_required = True
             continue
         if decision in {HumanDecision.ACCEPTED, HumanDecision.MANUALLY_VERIFIED}:
             continue
@@ -78,6 +86,8 @@ def evaluate_gate(
         reason_codes.append("conditional_criteria")
     if unresolved:
         reason_codes.append("unresolved_criteria")
+    if runtime_reconfirmation_required:
+        reason_codes.append("runtime_verification_reconfirmation_required")
 
     if review.check_state is CheckState.FAILING or blocking:
         verdict = GateVerdict.BLOCKED

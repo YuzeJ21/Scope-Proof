@@ -32,20 +32,36 @@ def _require_deterministic_gate(bundle: ReviewBundle, location: str) -> None:
 def _require_manual_verification_evidence(
     bundle: ReviewBundle, location: str
 ) -> None:
-    runtime_keys = {
-        (item.criterion_id, item.reviewer, item.evidence_level)
+    runtime_by_id = {
+        item.runtime_evidence_id: item
         for item in bundle.runtime_evidence
+        if item.runtime_evidence_id is not None
     }
     unpaired = [
         resolution.criterion_id
         for resolution in bundle.resolutions
         if resolution.decision is HumanDecision.MANUALLY_VERIFIED
+        and resolution.runtime_evidence_id is not None
         and (
-            resolution.criterion_id,
-            resolution.reviewer,
-            resolution.claimed_evidence_level,
+            (runtime_item := runtime_by_id.get(resolution.runtime_evidence_id))
+            is None
+            or (
+                runtime_item.repository,
+                runtime_item.pr_number,
+                runtime_item.head_sha,
+                runtime_item.criterion_id,
+                runtime_item.reviewer,
+                runtime_item.evidence_level,
+            )
+            != (
+                bundle.review.repository,
+                bundle.review.pr_number,
+                bundle.review.head_sha,
+                resolution.criterion_id,
+                resolution.reviewer,
+                resolution.claimed_evidence_level,
+            )
         )
-        not in runtime_keys
     ]
     if unpaired:
         raise ValueError(
@@ -115,21 +131,47 @@ def _require_event_history_integrity(state: ReviewState) -> None:
             raise ValueError(
                 "resolution event history requires its matching analysis bundle"
             )
-        runtime_keys = {
-            (item.criterion_id, item.reviewer, item.evidence_level)
+        runtime_by_id = {
+            item.runtime_evidence_id: item
             for item in bundle.runtime_evidence
+            if item.runtime_evidence_id is not None
         }
         decisions: dict[str, HumanDecision] = {}
+        final_acceptance_recorded = False
         for event in events:
             if event.criterion_id is not None and event.decision is not None:
-                if event.decision is HumanDecision.MANUALLY_VERIFIED and (
-                    event.criterion_id,
-                    event.reviewer,
-                    event.claimed_evidence_level,
-                ) not in runtime_keys:
+                if (
+                    final_acceptance_recorded
+                    and decisions.get(event.criterion_id)
+                    is HumanDecision.MANUALLY_VERIFIED
+                ):
                     raise ValueError(
-                        "manual verification events require matching runtime evidence"
+                        "final acceptance must be revoked before replacing manual "
+                        "verification"
                     )
+                if (
+                    event.decision is HumanDecision.MANUALLY_VERIFIED
+                    and event.runtime_evidence_id is not None
+                ):
+                    runtime_item = runtime_by_id.get(event.runtime_evidence_id)
+                    if runtime_item is None or (
+                        runtime_item.repository,
+                        runtime_item.pr_number,
+                        runtime_item.head_sha,
+                        runtime_item.criterion_id,
+                        runtime_item.reviewer,
+                        runtime_item.evidence_level,
+                    ) != (
+                        bundle.review.repository,
+                        bundle.review.pr_number,
+                        bundle.review.head_sha,
+                        event.criterion_id,
+                        event.reviewer,
+                        event.claimed_evidence_level,
+                    ):
+                        raise ValueError(
+                            "manual verification events require matching runtime evidence"
+                        )
                 decisions[event.criterion_id] = event.decision
                 continue
             if event.final_acceptance is True and (
@@ -143,6 +185,7 @@ def _require_event_history_integrity(state: ReviewState) -> None:
                 raise ValueError(
                     "positive final acceptance event was recorded before prerequisites"
                 )
+            final_acceptance_recorded = event.final_acceptance is True
 
 
 def validated_review_bundle(bundle: ReviewBundle) -> ReviewBundle:

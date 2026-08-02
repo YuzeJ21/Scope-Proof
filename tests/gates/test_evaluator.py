@@ -178,3 +178,45 @@ def test_accepted_exception_is_conditional() -> None:
     decision = evaluate_gate(review, [criterion], [finding], [resolution])
     assert decision.verdict is GateVerdict.CONDITIONAL
     assert decision.resolved_exceptions == ["AC-01"]
+
+
+def test_legacy_unlinked_manual_verification_requires_reconfirmation() -> None:
+    review, criterion, finding = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    resolution = HumanResolution(
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        comment="Historical runtime observation",
+        reviewer="QA",
+        claimed_evidence_level="E3",
+    )
+
+    decision = evaluate_gate(review, [criterion], [finding], [resolution])
+
+    assert decision.verdict is GateVerdict.NEEDS_REVIEW
+    assert decision.unresolved_criteria == ["AC-01"]
+    assert decision.reason_codes == [
+        "unresolved_criteria",
+        "runtime_verification_reconfirmation_required",
+    ]
+
+
+def test_linked_manual_verification_retains_ready_gate_meaning() -> None:
+    review, criterion, finding = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    resolution = HumanResolution(
+        criterion_id="AC-01",
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        comment="Observed at the active head",
+        reviewer="QA",
+        claimed_evidence_level="E3",
+        runtime_evidence_id="runtime-001",
+    )
+
+    decision = evaluate_gate(review, [criterion], [finding], [resolution])
+
+    assert decision.verdict is GateVerdict.READY
+    assert decision.unresolved_criteria == []
+    assert "runtime_verification_reconfirmation_required" not in decision.reason_codes
