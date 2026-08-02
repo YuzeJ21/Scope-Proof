@@ -41,6 +41,8 @@ def _validated_state(state: ReviewState) -> ReviewState:
 def new_review_state(bundle: ReviewBundle) -> ReviewState:
     """Initialize lifecycle state from a revalidated analysis bundle."""
     bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+    if not bundle.criteria:
+        raise ValueError("initial analysis requires at least one criterion")
     if bundle.resolutions:
         raise ValueError("initial analysis bundle must not contain human resolutions")
     if bundle.review.final_acceptance:
@@ -74,6 +76,8 @@ def revise_criteria(
 ) -> ReviewState:
     """Create an unconfirmed revision and preserve the superseded analysis."""
     state = _validated_state(state)
+    if not criteria:
+        raise ValueError("criteria revision requires at least one criterion")
     history = [*state.analysis_history]
     if state.bundle is not None:
         history.append(state.bundle)
@@ -108,6 +112,8 @@ def confirm_criteria(
 ) -> ReviewState:
     """Confirm the active revision against one validated source snapshot."""
     state = _validated_state(state)
+    if not state.criteria_revision.criteria:
+        raise ValueError("criteria confirmation requires at least one criterion")
     if state.bundle is not None:
         raise ValueError(
             "criteria confirmation requires a pending revision without an active bundle"
@@ -115,6 +121,8 @@ def confirm_criteria(
     provenance = CriteriaSourceProvenance.model_validate(
         provenance.model_dump(mode="python")
     )
+    if provenance.confirmed_at < state.criteria_revision.created_at:
+        raise ValueError("criteria source confirmation predates the active revision")
     revision = CriteriaRevision.model_validate(
         {
             **state.criteria_revision.model_dump(mode="python"),
@@ -138,6 +146,8 @@ def confirm_criteria(
 def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
     """Attach validated static analysis to a confirmed pending revision."""
     state = _validated_state(state)
+    if not state.criteria_revision.criteria:
+        raise ValueError("analysis attachment requires at least one criterion")
     if state.bundle is not None:
         raise ValueError(
             "analysis attachment requires a pending revision without an active bundle"
@@ -145,6 +155,8 @@ def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
     if not state.criteria_revision.confirmed:
         raise ValueError("analysis attachment requires a confirmed criteria revision")
     bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+    if not bundle.criteria:
+        raise ValueError("analysis attachment requires at least one criterion")
     if bundle.resolutions:
         raise ValueError("attached analysis must not contain human resolutions")
     if bundle.review.final_acceptance:

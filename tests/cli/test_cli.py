@@ -7,7 +7,7 @@ import pytest
 
 from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
-from scopeproof_core.cli import main
+from scopeproof_core.cli import _build_bundle, main
 from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.demo import build_demo_review
@@ -18,10 +18,13 @@ from scopeproof_core.reviews.lifecycle import (
     new_review_state,
 )
 from scopeproof_core.schemas.models import (
+    CriteriaSourceProvenance,
     Criterion,
     EvidenceLevel,
     HumanDecision,
+    PullRequestSnapshot,
     ResolutionEvent,
+    ReviewInputOrigin,
     RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
@@ -1001,7 +1004,103 @@ def test_requirements_confirmation_command_rejects_blank_confirmer(
     assert captured.out == ""
 
 
-def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str]:
+def test_prepare_requirements_confirmation_hashes_exact_bytes(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    raw = b"Export CSV\r\nShow an error state\r\n"
+    requirements.write_bytes(raw)
+    output = tmp_path / "confirmation.json"
+
+    assert main(
+        [
+            "prepare-requirements-confirmation",
+            "--requirements",
+            str(requirements),
+            "--source-uri",
+            "https://github.com/acme/repo/issues/6",
+            "--source-revision",
+            "issue-6@abc123",
+            "--confirmed-by",
+            "Repository owner",
+            "--output",
+            str(output),
+        ]
+    ) == 0
+
+    printed = json.loads(capsys.readouterr().out)
+    stored = json.loads(output.read_text(encoding="utf-8"))
+    assert printed["confirmation"] == str(output)
+    assert printed["source_text_sha256"] == sha256(raw).hexdigest()
+    assert stored["source_text_sha256"] == sha256(raw).hexdigest()
+    assert stored["confirmed_by"] == "Repository owner"
+    assert main(
+        [
+            "validate-requirements-confirmation",
+            "--requirements",
+            str(requirements),
+            "--confirmation",
+            str(output),
+        ]
+    ) == 0
+
+
+def test_prepare_requirements_confirmation_refuses_overwrite(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    output = tmp_path / "confirmation.json"
+    output.write_text("preserve me\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "prepare-requirements-confirmation",
+                "--requirements",
+                str(requirements),
+                "--source-uri",
+                "https://github.com/acme/repo/issues/6",
+                "--confirmed-by",
+                "Repository owner",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert output.read_text(encoding="utf-8") == "preserve me\n"
+    assert capsys.readouterr().out == ""
+
+
+def test_prepare_requirements_confirmation_rejects_secret_bearing_uri(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "prepare-requirements-confirmation",
+                "--requirements",
+                str(requirements),
+                "--source-uri",
+                "https://example.com/requirements?token=secret",
+                "--confirmed-by",
+                "Repository owner",
+                "--output",
+                str(tmp_path / "confirmation.json"),
+            ]
+        )
+
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert "secret" not in captured.err
+    assert captured.out == ""
+
+
+def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str, Path, str]:
     requirements = tmp_path / "alpha-requirements.txt"
     requirements.write_text("Export CSV\nShow an error state\n", encoding="utf-8")
     confirmation = write_requirements_confirmation(
@@ -1029,11 +1128,37 @@ def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str]:
         ]
     ) == 0
     case_id = json.loads(capsys.readouterr().out)["case_id"]
-    return store, case_id
+    criteria = [
+        Criterion(criterion_id=draft.criterion_id, text=draft.text)
+        for draft in parse_criteria(requirements.read_text(encoding="utf-8"))
+    ]
+    provenance = CriteriaSourceProvenance.model_validate_json(
+        confirmation.read_text(encoding="utf-8")
+    )
+    snapshot = PullRequestSnapshot(
+        repository="acme/repo",
+        pr_number=7,
+        title="Export CSV",
+        html_url="https://github.com/acme/repo/pull/7",
+        base_sha="b" * 40,
+        head_sha="a" * 40,
+    )
+    review_state = new_review_state(
+        _build_bundle(
+            snapshot,
+            criteria,
+            requirements.read_text(encoding="utf-8"),
+            provenance,
+            input_origin=ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+        )
+    )
+    review_store = tmp_path / "reviews"
+    JsonReviewStore(review_store).save(review_state)
+    return store, case_id, review_store, review_state.review.review_id
 
 
 def test_alpha_init_creates_validated_local_record(tmp_path: Path, capsys) -> None:
-    store_dir, case_id = _initialize_alpha_case(tmp_path, capsys)
+    store_dir, case_id, _, _ = _initialize_alpha_case(tmp_path, capsys)
 
     record = JsonAlphaCaseStore(store_dir).load(case_id)
 
@@ -1235,7 +1360,9 @@ def test_alpha_init_requires_source_owner_confirmation(tmp_path: Path, capsys) -
 def test_alpha_outcome_and_consent_gated_public_summary(
     tmp_path: Path, capsys
 ) -> None:
-    store_dir, case_id = _initialize_alpha_case(tmp_path, capsys)
+    store_dir, case_id, review_store, review_id = _initialize_alpha_case(
+        tmp_path, capsys
+    )
     notes = tmp_path / "outcome.txt"
     notes.write_text("The report showed only information already known.\n", encoding="utf-8")
 
@@ -1245,9 +1372,9 @@ def test_alpha_outcome_and_consent_gated_public_summary(
             "outcome",
             case_id,
             "--review-id",
-            "review-7",
-            "--head-sha",
-            "a" * 40,
+            review_id,
+            "--review-storage-dir",
+            str(review_store),
             "--result",
             "showed_only_known_information",
             "--notes-file",
@@ -1278,16 +1405,18 @@ def test_alpha_outcome_and_consent_gated_public_summary(
 def test_alpha_public_summary_refuses_without_report_consent(
     tmp_path: Path, capsys
 ) -> None:
-    store_dir, case_id = _initialize_alpha_case(tmp_path, capsys)
+    store_dir, case_id, review_store, review_id = _initialize_alpha_case(
+        tmp_path, capsys
+    )
     assert main(
         [
             "alpha",
             "outcome",
             case_id,
             "--review-id",
-            "review-7",
-            "--head-sha",
-            "a" * 40,
+            review_id,
+            "--review-storage-dir",
+            str(review_store),
             "--result",
             "found_useful_gap",
             "--storage-dir",
@@ -1313,7 +1442,9 @@ def test_alpha_public_summary_refuses_without_report_consent(
 
 
 def test_alpha_friction_requires_stage(tmp_path: Path, capsys) -> None:
-    store_dir, case_id = _initialize_alpha_case(tmp_path, capsys)
+    store_dir, case_id, review_store, review_id = _initialize_alpha_case(
+        tmp_path, capsys
+    )
 
     with pytest.raises(SystemExit) as error:
         main(
@@ -1322,9 +1453,9 @@ def test_alpha_friction_requires_stage(tmp_path: Path, capsys) -> None:
                 "outcome",
                 case_id,
                 "--review-id",
-                "review-7",
-                "--head-sha",
-                "a" * 40,
+                review_id,
+                "--review-storage-dir",
+                str(review_store),
                 "--result",
                 "created_friction",
                 "--storage-dir",

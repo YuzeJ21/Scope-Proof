@@ -79,6 +79,7 @@ from scopeproof_core.schemas.models import (
     ResolutionEvent,
     Review,
     ReviewBundle,
+    ReviewInputOrigin,
     ReviewState,
     RuntimeEvidence,
 )
@@ -142,6 +143,9 @@ st.markdown(
     h1 {
         border-bottom: 1px solid color-mix(in srgb, var(--scopeproof-cyan) 35%, transparent);
         padding-bottom: 0.35rem;
+    }
+    a {
+        color: var(--scopeproof-cyan);
     }
     button {
         border-radius: 0.6rem;
@@ -510,6 +514,11 @@ def _analyze() -> ReviewBundle:
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
+        input_origin=(
+            ReviewInputOrigin.CONSTRUCTED_DEMO
+            if st.session_state["criteria_source_mode"] == "demo"
+            else ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+        ),
     )
     retrieval_result = retrieve_evidence_with_diagnostics(
         snapshot, criteria, unchanged_files=st.session_state["candidate_files"]
@@ -1510,6 +1519,19 @@ else:
         state: ReviewState | None = st.session_state["review_state"]
         alpha_case = None
         try:
+            if state is not None and (
+                state.bundle is not None
+                or state.criteria_revision.criteria != edited_criteria
+                or state.criteria_revision.source_text
+                != st.session_state["source_text"]
+                or (
+                    state.review.criteria_source_provenance is not None
+                    and has_pending_criteria_source
+                )
+            ):
+                state = revise_criteria(
+                    state, edited_criteria, st.session_state["source_text"]
+                )
             provenance = build_criteria_source_provenance(
                 source_uri=criteria_source_reference,
                 source_revision=criteria_source_revision or None,
@@ -1519,16 +1541,6 @@ else:
                 confirmed_at=datetime.now(UTC),
             )
             if state is not None:
-                if (
-                    state.bundle is not None
-                    or state.criteria_revision.criteria != edited_criteria
-                    or state.criteria_revision.source_text
-                    != st.session_state["source_text"]
-                    or state.review.criteria_source_provenance != provenance
-                ):
-                    state = revise_criteria(
-                        state, edited_criteria, st.session_state["source_text"]
-                    )
                 state = confirm_criteria(state, provenance)
             if alpha_feedback_mode:
                 if alpha_qualification is None:
@@ -1558,6 +1570,7 @@ else:
                     source_owner_confirmed=True,
                     no_confidential_information=True,
                     confirmed_criteria=[item.text for item in edited_criteria],
+                    confirmed_criterion_snapshot=edited_criteria,
                     criteria_source_provenance=provenance,
                 )
         except ValueError:
@@ -2591,8 +2604,7 @@ else:
                         try:
                             completed_alpha_record = record_alpha_outcome(
                                 alpha_record,
-                                review_id=review_state.review.review_id,
-                                reviewed_head_sha=review_state.review.head_sha,
+                                review_state=review_state,
                                 outcome=alpha_outcome,
                                 friction_stage=friction_stage,
                                 outcome_notes=outcome_notes.strip() or None,

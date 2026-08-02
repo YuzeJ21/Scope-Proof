@@ -18,6 +18,7 @@ from scopeproof_core.schemas.models import (
     PullRequestSnapshot,
     Review,
     ReviewBundle,
+    ReviewInputOrigin,
 )
 from scopeproof_core.verification.service import build_findings
 
@@ -59,6 +60,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
+        input_origin=ReviewInputOrigin.CONSTRUCTED_DEMO,
         final_acceptance=labels.get("final_acceptance", False),
     )
     retrieval_result = retrieve_evidence_with_diagnostics(snapshot, criteria)

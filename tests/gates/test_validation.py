@@ -41,7 +41,10 @@ def bind_active_state_provenance(state) -> None:
         update={"criteria_source_provenance": provenance}
     )
     state.criteria_revision = state.criteria_revision.model_copy(
-        update={"source_provenance": provenance}
+        update={
+            "source_provenance": provenance,
+            "confirmed_at": provenance.confirmed_at,
+        }
     )
     state.bundle.review = state.bundle.review.model_copy(
         update={"criteria_source_provenance": provenance}

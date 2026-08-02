@@ -2060,6 +2060,9 @@ def test_pending_criterion_text_edit_requires_reconfirmation_before_analysis() -
 
     assert app.session_state["criteria"][0].text == "Changed visible criterion"
     assert app.session_state["criteria_confirmed"] is True
+    confirmed_revision = app.session_state["review_state"].criteria_revision
+    assert confirmed_revision.confirmed_at is not None
+    assert confirmed_revision.confirmed_at >= confirmed_revision.created_at
     assert app.session_state["review_state"].bundle is None
     assert app.session_state["bundle"] is None
     assert app.button(key="run_analysis").disabled is False

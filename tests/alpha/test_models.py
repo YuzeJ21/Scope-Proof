@@ -30,6 +30,10 @@ def criteria_source_provenance(*, source_uri: str = "https://github.com/acme/rep
 
 
 def valid_record_data() -> dict[str, object]:
+    criteria = [
+        Criterion(criterion_id="AC-01", text="Export CSV"),
+        Criterion(criterion_id="AC-02", text="Show an error state"),
+    ]
     return {
         "public_pr_url": "https://github.com/acme/repo/pull/7",
         "requirements_source_url": "https://github.com/acme/repo/issues/6",
@@ -37,6 +41,7 @@ def valid_record_data() -> dict[str, object]:
         "source_owner_confirmed": True,
         "no_confidential_information": True,
         "confirmed_criteria": ["Export CSV", "Show an error state"],
+        "confirmed_criterion_snapshot": criteria,
         "criteria_source_provenance": criteria_source_provenance(),
     }
 
@@ -59,6 +64,9 @@ def test_alpha_qualification_accepts_only_confirmed_public_safe_inputs() -> None
     [
         ("public_pr_url", "https://github.com/acme/repo/issues/7"),
         ("requirements_source_url", "http://example.com/requirements"),
+        ("requirements_source_url", "https://user:secret@example.com/requirements"),
+        ("requirements_source_url", "https://example.com/requirements?token=secret"),
+        ("requirements_source_url", "https://127.0.0.1/requirements"),
         ("source_owner_confirmed", False),
         ("no_confidential_information", False),
     ],
@@ -85,6 +93,9 @@ def test_alpha_record_has_privacy_safe_defaults() -> None:
     assert record.outcome is None
     assert record.completed_at is None
     assert record.criteria_source_provenance == criteria_source_provenance()
+    assert [item.text for item in record.confirmed_criterion_snapshot or []] == (
+        record.confirmed_criteria
+    )
     schema_fields = {field.lower() for field in AlphaCaseRecord.model_fields}
     for prohibited in ("name", "email", "profile", "dm"):
         assert all(prohibited not in field for field in schema_fields)
@@ -112,6 +123,17 @@ def test_alpha_record_rejects_unqualified_or_unsafe_inputs(field: str, value: ob
 def test_alpha_record_forbids_extra_participant_data() -> None:
     with pytest.raises(ValidationError, match="extra"):
         AlphaCaseRecord(**valid_record_data(), participant_email="person@example.com")
+
+
+def test_alpha_record_rejects_snapshot_text_drift() -> None:
+    data = valid_record_data()
+    data["confirmed_criteria"] = ["Delete production data"]
+
+    with pytest.raises(
+        ValidationError,
+        match="confirmed criterion snapshot text must match confirmed criteria",
+    ):
+        AlphaCaseRecord(**data)
 
 
 def test_completed_alpha_record_requires_review_linkage() -> None:

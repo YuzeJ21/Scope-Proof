@@ -129,8 +129,8 @@ def example_bundle() -> ReviewBundle:
         gate=gate,
     )
     bundle.review.criteria_source_provenance = build_criteria_source_provenance(
-        source_uri="https://example.test/requirements?next=%3Cscript%3E",
-        source_revision="issue-6@revision-42",
+        source_uri="https://example.test/requirements",
+        source_revision="issue-6@revision-42<script>",
         source_text=bundle.source_text,
         criteria=bundle.criteria,
         confirmed_by="Product owner",
@@ -192,21 +192,21 @@ def test_exports_include_one_inert_criteria_source_snapshot() -> None:
         "normalized_criteria_sha256": (
             "ff334af327af005cd3fd82da8279ea6b5453358ff1dba3df0c4a7da968445fac"
         ),
-        "source_revision": "issue-6@revision-42",
+        "source_revision": "issue-6@revision-42<script>",
         "source_text_sha256": ("b730e7b20d415f6d64948e1dd59807d4d20fd82615f2b9efc3a71798b926d57b"),
-        "source_uri": "https://example.test/requirements?next=%3Cscript%3E",
+        "source_uri": "https://example.test/requirements",
     }
     assert markdown.count("## Criteria Source") == 1
     assert (
-        "| Source reference | <code>https://example.test/requirements?next=%3Cscript%3E</code> |"
+        "| Source reference | <code>https://example.test/requirements</code> |"
         in markdown
     )
     assert "[https://example.test/requirements" not in markdown
-    assert "| Revision | <code>issue-6@revision-42</code> |" in markdown
+    assert "| Revision | <code>issue-6@revision-42&lt;script&gt;</code> |" in markdown
     assert "| Confirmed by | <code>Product owner</code> |" in markdown
     assert "| Confirmed at (UTC) | <code>2026-07-11T11:55:00Z</code> |" in markdown
-    assert csv_row["criteria_source_uri"] == ("https://example.test/requirements?next=%3Cscript%3E")
-    assert csv_row["criteria_source_revision"] == "issue-6@revision-42"
+    assert csv_row["criteria_source_uri"] == "https://example.test/requirements"
+    assert csv_row["criteria_source_revision"] == "issue-6@revision-42<script>"
     assert csv_row["criteria_source_text_sha256"] == (
         "b730e7b20d415f6d64948e1dd59807d4d20fd82615f2b9efc3a71798b926d57b"
     )
@@ -217,7 +217,8 @@ def test_exports_include_one_inert_criteria_source_snapshot() -> None:
     assert csv_row["criteria_confirmed_at"] == "2026-07-11T11:55:00Z"
     assert html_report.count("<h2>Criteria Source</h2>") == 1
     assert '<a href="https://example.test/requirements' not in html_report
-    assert "<code>https://example.test/requirements?next=%3Cscript%3E</code>" in html_report
+    assert "<code>https://example.test/requirements</code>" in html_report
+    assert "issue-6@revision-42&lt;script&gt;" in html_report
 
 
 @pytest.mark.parametrize("exporter", [export_json, export_markdown, export_csv, export_html])

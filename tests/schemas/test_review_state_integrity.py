@@ -71,7 +71,7 @@ def test_standalone_review_bundle_accepts_strict_positive_integer_revision() -> 
     assert bundle.criteria_revision_number == 1
 
 
-def test_review_bundle_rejects_an_empty_criterion_set() -> None:
+def test_review_bundle_preserves_an_empty_legacy_set_with_a_fail_closed_gate() -> None:
     payload = build_demo_review().model_dump(mode="python")
     payload["review"]["criteria_source_provenance"] = None
     payload["criteria"] = []
@@ -80,16 +80,19 @@ def test_review_bundle_rejects_an_empty_criterion_set() -> None:
     payload["findings"] = []
     payload["resolutions"] = []
     payload["gate"] = {
-        "verdict": "ready",
+        "verdict": "needs_review",
         "blocking_criteria": [],
         "conditional_criteria": [],
         "unresolved_criteria": [],
         "resolved_exceptions": [],
-        "reason_codes": [],
+        "reason_codes": ["criteria_missing", "criteria_source_provenance_missing"],
     }
 
-    with pytest.raises(ValidationError):
-        ReviewBundle.model_validate(payload)
+    bundle = ReviewBundle.model_validate(payload)
+
+    assert bundle.criteria == []
+    assert bundle.gate.verdict.value == "needs_review"
+    assert "criteria_missing" in bundle.gate.reason_codes
 
 
 @pytest.mark.parametrize("revision_number", COERCIVE_REVISION_VALUES)
@@ -147,7 +150,7 @@ def test_review_state_rejects_active_bundle_with_unconfirmed_revision() -> None:
     payload["bundle"]["review"]["criteria_confirmed"] = False
 
     with pytest.raises(
-        ValidationError, match="active bundle requires a confirmed criteria revision"
+        ValidationError, match="criteria source provenance requires confirmed criteria"
     ):
         ReviewState.model_validate(payload)
 

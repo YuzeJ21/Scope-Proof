@@ -73,6 +73,15 @@ class CriterionSource(StringEnum):
     IMPLICIT_RULE_PACK = "implicit_rule_pack"
 
 
+class ReviewInputOrigin(StringEnum):
+    """How the review snapshot entered ScopeProof; legacy records remain unknown."""
+
+    LIVE_PUBLIC_GITHUB = "live_public_github"
+    LOCAL_FIXTURE = "local_fixture"
+    CONSTRUCTED_DEMO = "constructed_demo"
+    LEGACY_UNKNOWN = "legacy_unknown"
+
+
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
     "scopeproof://constructed-demo/acceptance-criteria"
@@ -81,6 +90,40 @@ _CRITERIA_SOURCE_URI_ERROR = (
     "source URI must be an HTTPS URL or "
     "scopeproof://constructed-demo/acceptance-criteria"
 )
+
+
+def normalize_public_https_source_uri(value: str) -> str:
+    """Normalize one public HTTPS source URI and reject secret-bearing/local forms."""
+
+    normalized = value.strip()
+    try:
+        parsed = HttpUrl(normalized)
+    except ValueError:
+        raise ValueError(_CRITERIA_SOURCE_URI_ERROR) from None
+    split = urlsplit(str(parsed))
+    hostname = split.hostname
+    normalized_hostname = hostname.rstrip(".").lower() if hostname else None
+    unsafe = (
+        parsed.scheme != "https"
+        or split.username is not None
+        or split.password is not None
+        or normalized_hostname is None
+        or normalized_hostname == "localhost"
+        or normalized_hostname.endswith(".localhost")
+        or normalized_hostname.endswith(".local")
+        or bool(split.query)
+        or bool(split.fragment)
+    )
+    if normalized_hostname is not None:
+        try:
+            address = ipaddress.ip_address(normalized_hostname)
+        except ValueError:
+            pass
+        else:
+            unsafe = unsafe or not address.is_global or address.is_multicast
+    if unsafe:
+        raise ValueError(_CRITERIA_SOURCE_URI_ERROR)
+    return str(parsed)
 
 
 class CriteriaSourceProvenance(BaseModel):
@@ -101,32 +144,7 @@ class CriteriaSourceProvenance(BaseModel):
         normalized = value.strip()
         if normalized == CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI:
             return normalized
-        try:
-            parsed = HttpUrl(normalized)
-        except ValueError:
-            raise ValueError(_CRITERIA_SOURCE_URI_ERROR) from None
-        split = urlsplit(str(parsed))
-        hostname = split.hostname
-        normalized_hostname = hostname.rstrip(".").lower() if hostname else None
-        unsafe = (
-            parsed.scheme != "https"
-            or split.username is not None
-            or split.password is not None
-            or normalized_hostname is None
-            or normalized_hostname == "localhost"
-            or normalized_hostname.endswith(".localhost")
-            or normalized_hostname.endswith(".local")
-        )
-        if normalized_hostname is not None:
-            try:
-                address = ipaddress.ip_address(normalized_hostname)
-            except ValueError:
-                pass
-            else:
-                unsafe = unsafe or not address.is_global or address.is_multicast
-        if unsafe:
-            raise ValueError(_CRITERIA_SOURCE_URI_ERROR)
-        return str(parsed)
+        return normalize_public_https_source_uri(normalized)
 
     @field_validator("source_text_sha256", "normalized_criteria_sha256")
     @classmethod
@@ -768,6 +786,7 @@ class Review(BaseModel):
     ingestion_state: IngestionState = IngestionState.COMPLETE
     ingestion_warnings: list[str] = Field(default_factory=list)
     skipped_files: list[str] = Field(default_factory=list)
+    input_origin: ReviewInputOrigin = ReviewInputOrigin.LEGACY_UNKNOWN
     final_acceptance: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tool_version: str = Field(default_factory=lambda: __version__)
@@ -1111,7 +1130,7 @@ class CriteriaRevision(BaseModel):
     """A user-owned criterion set that must be confirmed before analysis."""
 
     number: int = Field(gt=0)
-    criteria: list[Criterion] = Field(min_length=1)
+    criteria: list[Criterion]
     source_text: str
     confirmed: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -1129,6 +1148,12 @@ class CriteriaRevision(BaseModel):
     def validate_source_provenance(self) -> CriteriaRevision:
         if self.source_provenance is None:
             return self
+        if not self.confirmed:
+            raise ValueError("criteria source provenance requires confirmed criteria")
+        if self.confirmed_at != self.source_provenance.confirmed_at:
+            raise ValueError(
+                "criteria confirmation timestamp must match source provenance"
+            )
         if self.source_provenance.source_text_sha256 != source_text_sha256(
             self.source_text
         ):
@@ -1193,7 +1218,7 @@ class ReviewBundle(BaseModel):
         "unknown"
     ] = "unknown"
     source_text: str
-    criteria: list[Criterion] = Field(min_length=1)
+    criteria: list[Criterion]
     evidence: list[EvidenceItem]
     retrieval_diagnostics: list[CriterionRetrievalDiagnostic] = Field(
         default_factory=list

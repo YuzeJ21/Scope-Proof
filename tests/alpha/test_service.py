@@ -17,8 +17,14 @@ from scopeproof_core.alpha.service import (
     record_alpha_outcome,
 )
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
+from scopeproof_core.cli import _build_bundle
 from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
-from scopeproof_core.schemas.models import Criterion
+from scopeproof_core.reviews.lifecycle import new_review_state
+from scopeproof_core.schemas.models import (
+    Criterion,
+    PullRequestSnapshot,
+    ReviewInputOrigin,
+)
 
 
 def criteria_source_provenance(*, source_uri: str = "https://github.com/acme/repo/issues/6"):
@@ -32,6 +38,10 @@ def criteria_source_provenance(*, source_uri: str = "https://github.com/acme/rep
     )
 
 
+def confirmed_criterion_snapshot() -> list[Criterion]:
+    return [Criterion(criterion_id="AC-01", text="Export CSV")]
+
+
 def initialized_case():
     return initialize_alpha_case(
         public_pr_url="https://github.com/acme/repo/pull/7",
@@ -40,7 +50,37 @@ def initialized_case():
         source_owner_confirmed=True,
         no_confidential_information=True,
         confirmed_criteria=["Export CSV"],
+        confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
         criteria_source_provenance=criteria_source_provenance(),
+    )
+
+
+def matching_review_state(
+    *,
+    repository: str = "acme/repo",
+    pr_number: int = 7,
+    input_origin: ReviewInputOrigin = ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+    research_case_id: str | None = None,
+):
+    criteria = confirmed_criterion_snapshot()
+    provenance = criteria_source_provenance()
+    snapshot = PullRequestSnapshot(
+        repository=repository,
+        pr_number=pr_number,
+        title="Export CSV",
+        html_url=f"https://github.com/{repository}/pull/{pr_number}",
+        base_sha="b" * 40,
+        head_sha="a" * 40,
+    )
+    return new_review_state(
+        _build_bundle(
+            snapshot,
+            criteria,
+            "Export CSV\n",
+            provenance,
+            research_case_id,
+            input_origin,
+        )
     )
 
 
@@ -62,6 +102,7 @@ def test_ensure_alpha_case_creates_once_and_returns_matching_existing(tmp_path) 
         "source_owner_confirmed": True,
         "no_confidential_information": True,
         "confirmed_criteria": ["Export CSV"],
+        "confirmed_criterion_snapshot": confirmed_criterion_snapshot(),
         "criteria_source_provenance": criteria_source_provenance(),
     }
 
@@ -82,6 +123,7 @@ def test_ensure_alpha_case_rejects_reusing_id_for_different_case(tmp_path) -> No
         source_owner_confirmed=True,
         no_confidential_information=True,
         confirmed_criteria=["Export CSV"],
+        confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
         criteria_source_provenance=criteria_source_provenance(),
     )
 
@@ -95,6 +137,7 @@ def test_ensure_alpha_case_rejects_reusing_id_for_different_case(tmp_path) -> No
             source_owner_confirmed=True,
             no_confidential_information=True,
             confirmed_criteria=["Export CSV"],
+            confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
             criteria_source_provenance=criteria_source_provenance(),
         )
 
@@ -114,6 +157,7 @@ def test_initialize_alpha_case_requires_explicit_safe_confirmations(
             source_owner_confirmed=source_owner_confirmed,
             no_confidential_information=no_confidential_information,
             confirmed_criteria=["Export CSV"],
+            confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
             criteria_source_provenance=criteria_source_provenance(),
         )
 
@@ -123,8 +167,7 @@ def test_record_alpha_outcome_returns_completed_validated_copy() -> None:
 
     completed = record_alpha_outcome(
         original,
-        review_id="review-7",
-        reviewed_head_sha="a" * 40,
+        review_state=matching_review_state(),
         outcome=AlphaOutcome.CREATED_FRICTION,
         friction_stage=AlphaFrictionStage.EVIDENCE,
         outcome_notes="The evidence explanation required a second read.",
@@ -152,7 +195,43 @@ def test_initialize_alpha_case_requires_criteria_source_provenance() -> None:
             source_owner_confirmed=True,
             no_confidential_information=True,
             confirmed_criteria=["Export CSV"],
+            confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
             criteria_source_provenance=None,
+        )
+
+
+def test_initialize_alpha_case_rejects_criteria_provenance_mismatch() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="confirmed criterion snapshot must match criteria source provenance",
+    ):
+        initialize_alpha_case(
+            public_pr_url="https://github.com/acme/repo/pull/7",
+            requirements_source_url="https://github.com/acme/repo/issues/6",
+            participant_role=ParticipantRole.QA,
+            source_owner_confirmed=True,
+            no_confidential_information=True,
+            confirmed_criteria=["Delete production data"],
+            confirmed_criterion_snapshot=[
+                Criterion(criterion_id="AC-01", text="Delete production data")
+            ],
+            criteria_source_provenance=criteria_source_provenance(),
+        )
+
+
+def test_record_alpha_outcome_is_append_once() -> None:
+    completed = record_alpha_outcome(
+        initialized_case(),
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+    )
+
+    with pytest.raises(ValueError, match="alpha outcome may be recorded only once"):
+        record_alpha_outcome(
+            completed,
+            review_state=matching_review_state(),
+            outcome=AlphaOutcome.CREATED_FRICTION,
+            friction_stage=AlphaFrictionStage.OUTCOME,
         )
 
 
@@ -170,8 +249,50 @@ def test_record_alpha_outcome_rejects_legacy_case_until_source_is_reconfirmed() 
     ):
         record_alpha_outcome(
             legacy,
-            review_id="review-7",
-            reviewed_head_sha="a" * 40,
+            review_state=matching_review_state(),
+            outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+        )
+
+
+def test_record_alpha_outcome_rejects_unrelated_review() -> None:
+    with pytest.raises(
+        ValueError,
+        match="alpha outcome review must match the qualified public PR",
+    ):
+        record_alpha_outcome(
+            initialized_case(),
+            review_state=matching_review_state(repository="acme/other", pr_number=9),
+            outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+        )
+
+
+@pytest.mark.parametrize(
+    ("input_origin", "research_case_id", "message"),
+    [
+        (
+            ReviewInputOrigin.LOCAL_FIXTURE,
+            None,
+            "alpha outcome requires live public GitHub ingestion",
+        ),
+        (
+            ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+            "R-003",
+            "engineering research reviews cannot record alpha outcomes",
+        ),
+    ],
+)
+def test_record_alpha_outcome_rejects_engineering_only_review_sources(
+    input_origin: ReviewInputOrigin,
+    research_case_id: str | None,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        record_alpha_outcome(
+            initialized_case(),
+            review_state=matching_review_state(
+                input_origin=input_origin,
+                research_case_id=research_case_id,
+            ),
             outcome=AlphaOutcome.FOUND_USEFUL_GAP,
         )
 
@@ -179,8 +300,7 @@ def test_record_alpha_outcome_rejects_legacy_case_until_source_is_reconfirmed() 
 def test_public_summary_requires_report_consent() -> None:
     completed = record_alpha_outcome(
         initialized_case(),
-        review_id="review-7",
-        reviewed_head_sha="a" * 40,
+        review_state=matching_review_state(),
         outcome=AlphaOutcome.FOUND_USEFUL_GAP,
         outcome_notes="A missing error state was useful.",
     )
@@ -196,8 +316,7 @@ def test_public_summary_requires_report_consent() -> None:
 def test_public_summary_omits_local_notes_and_consent_fields() -> None:
     completed = record_alpha_outcome(
         initialized_case(),
-        review_id="review-7",
-        reviewed_head_sha="a" * 40,
+        review_state=matching_review_state(),
         outcome=AlphaOutcome.SHOWED_ONLY_KNOWN_INFORMATION,
         outcome_notes="This note remains local.",
         report_consent=True,
@@ -210,6 +329,42 @@ def test_public_summary_omits_local_notes_and_consent_fields() -> None:
     assert "outcome_notes" not in payload
     assert "publication_consent" not in payload
     assert "criteria_source_provenance" not in payload
+
+
+def test_public_summary_refuses_legacy_secret_bearing_source_url() -> None:
+    completed = record_alpha_outcome(
+        initialized_case(),
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+        report_consent=True,
+    )
+    payload = completed.model_dump(mode="python")
+    payload.update(
+        {
+            "requirements_source_url": "https://user:secret@example.com/requirements",
+            "criteria_source_provenance": None,
+            "confirmed_criterion_snapshot": None,
+        }
+    )
+    legacy = AlphaCaseRecord.model_validate(payload)
+
+    with pytest.raises(ValueError) as error:
+        public_alpha_summary(legacy)
+
+    assert "secret" not in str(error.value)
+
+
+def test_public_summary_revalidates_mutated_alpha_record() -> None:
+    completed = record_alpha_outcome(
+        initialized_case(),
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+        report_consent=True,
+    )
+    completed.source_owner_confirmed = False  # type: ignore[assignment]
+
+    with pytest.raises(ValidationError):
+        public_alpha_summary(completed)
 
 
 def initialized_rehearsal():
@@ -229,8 +384,7 @@ def test_record_alpha_outcome_rejects_owner_rehearsal_record() -> None:
     with pytest.raises(ValueError, match="genuine alpha-case record is required"):
         record_alpha_outcome(  # type: ignore[arg-type]
             rehearsal,
-            review_id="review-7",
-            reviewed_head_sha="a" * 40,
+            review_state=matching_review_state(),
             outcome=AlphaOutcome.FOUND_USEFUL_GAP,
         )
 

@@ -12,6 +12,7 @@ from scopeproof_core.schemas.models import (
     IngestionState,
     Priority,
     Review,
+    normalized_criteria_sha256,
 )
 
 _RESOLVED_DECISIONS = {
@@ -22,6 +23,45 @@ _RESOLVED_DECISIONS = {
 }
 
 
+def _invalid_gate_input(
+    review: Review,
+    criteria: list[Criterion],
+    findings: list[Finding],
+    resolutions: list[HumanResolution],
+) -> GateDecision | None:
+    """Return one deterministic fail-closed decision for malformed raw inputs."""
+
+    criterion_ids = [criterion.criterion_id for criterion in criteria]
+    finding_ids = [finding.criterion_id for finding in findings]
+    resolution_ids = [resolution.criterion_id for resolution in resolutions]
+    known_criteria = set(criterion_ids)
+    reasons: list[str] = []
+    if len(criterion_ids) != len(known_criteria):
+        reasons.append("duplicate_criterion_ids")
+    if len(finding_ids) != len(set(finding_ids)):
+        reasons.append("duplicate_finding_ids")
+    if len(resolution_ids) != len(set(resolution_ids)):
+        reasons.append("duplicate_resolution_ids")
+    if set(finding_ids) != known_criteria:
+        reasons.append("finding_coverage_mismatch")
+    if any(criterion_id not in known_criteria for criterion_id in resolution_ids):
+        reasons.append("resolution_references_unknown_criteria")
+    if (
+        criteria
+        and review.criteria_source_provenance is not None
+        and review.criteria_source_provenance.normalized_criteria_sha256
+        != normalized_criteria_sha256(criteria)
+    ):
+        reasons.append("criteria_provenance_mismatch")
+    if not reasons:
+        return None
+    return GateDecision(
+        verdict=GateVerdict.NEEDS_REVIEW,
+        unresolved_criteria=sorted(known_criteria),
+        reason_codes=["gate_input_invalid", *reasons],
+    )
+
+
 def evaluate_gate(
     review: Review,
     criteria: list[Criterion],
@@ -29,6 +69,9 @@ def evaluate_gate(
     resolutions: list[HumanResolution],
 ) -> GateDecision:
     """Return the highest-severity verdict supported by explicit reason codes."""
+    invalid_input = _invalid_gate_input(review, criteria, findings, resolutions)
+    if invalid_input is not None:
+        return invalid_input
     finding_by_id = {finding.criterion_id: finding for finding in findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in resolutions}
 

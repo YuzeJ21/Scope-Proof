@@ -1,7 +1,7 @@
 import csv
 import io
 import json
-from datetime import UTC, datetime
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -52,7 +52,7 @@ def confirm_pending_revision(state):
         source_text=state.criteria_revision.source_text,
         criteria=state.criteria_revision.criteria,
         confirmed_by="Fixture owner",
-        confirmed_at=datetime(2026, 8, 2, state.criteria_revision.number, tzinfo=UTC),
+        confirmed_at=state.criteria_revision.created_at + timedelta(seconds=1),
     )
     return confirm_criteria(state, provenance)
 

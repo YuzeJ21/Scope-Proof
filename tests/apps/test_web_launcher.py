@@ -56,7 +56,7 @@ def test_packaged_web_launcher_uses_current_interpreter_without_shell(monkeypatc
     )
     assert len(calls) == 1
     command, check = calls[0]
-    assert command[:13] == [
+    assert command[:12] == [
         sys.executable,
         "-m",
         "streamlit",
@@ -69,9 +69,8 @@ def test_packaged_web_launcher_uses_current_interpreter_without_shell(monkeypatc
         "--theme.backgroundColor=#0d0f12",
         "--theme.secondaryBackgroundColor=#171a1f",
         "--theme.textColor=#f7f7f2",
-        "--theme.linkColor=#8cecff",
     ]
-    assert Path(command[13]).resolve() == Path("apps/web/app.py").resolve()
+    assert Path(command[12]).resolve() == Path("apps/web/app.py").resolve()
     assert check is False
 
 

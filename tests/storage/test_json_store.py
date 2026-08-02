@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import timedelta
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
@@ -20,6 +20,7 @@ from scopeproof_core.reviews.lifecycle import (
     append_resolution,
     append_runtime_evidence,
     attach_analysis,
+    can_record_final_acceptance,
     confirm_criteria,
     new_review_state,
     revise_criteria,
@@ -56,7 +57,7 @@ def confirm_pending_revision(state):
         source_text=state.criteria_revision.source_text,
         criteria=state.criteria_revision.criteria,
         confirmed_by="Fixture owner",
-        confirmed_at=datetime(2026, 8, 2, state.criteria_revision.number, tzinfo=UTC),
+        confirmed_at=state.criteria_revision.created_at + timedelta(seconds=1),
     )
     return confirm_criteria(state, provenance)
 
@@ -422,6 +423,7 @@ def test_legacy_criteria_provenance_migration_preserves_facts_and_fails_closed(
                 in loaded_bundle.gate.reason_codes
             )
 
+
     loaded_event_facts = [
         (
             event.event_id,
@@ -457,6 +459,54 @@ def test_legacy_criteria_provenance_migration_preserves_facts_and_fails_closed(
         "criteria_source_provenance"
     ] is None
     assert store.load(state.review.review_id) == first
+
+
+@pytest.mark.parametrize("record_version", [1, 2, 3])
+def test_legacy_empty_criteria_records_remain_readable_and_fail_closed(
+    record_version: int,
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    remove_criteria_source_provenance(payload, record_version)
+    if record_version == 1:
+        downgrade_to_version_one(payload)
+    state_payload = payload["state"]
+    state_payload["criteria_revision"]["criteria"] = []
+    state_payload["resolution_events"] = []
+    active_bundle = state_payload["bundle"]
+    active_bundle["criteria"] = []
+    active_bundle["evidence"] = []
+    active_bundle["retrieval_diagnostics"] = []
+    active_bundle["findings"] = []
+    active_bundle["runtime_evidence"] = []
+    active_bundle["resolutions"] = []
+    active_bundle["gate"] = {
+        "verdict": "ready",
+        "blocking_criteria": [],
+        "conditional_criteria": [],
+        "unresolved_criteria": [],
+        "resolved_exceptions": [],
+        "reason_codes": [],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(state.review.review_id)
+
+    assert loaded.criteria_revision.criteria == []
+    assert loaded.bundle is not None
+    assert loaded.bundle.criteria == []
+    assert loaded.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert "criteria_missing" in loaded.bundle.gate.reason_codes
+    assert can_record_final_acceptance(loaded) is False
+
+    store.save(loaded)
+    reloaded = store.load(state.review.review_id)
+    assert reloaded.bundle is not None
+    assert reloaded.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert reloaded.criteria_revision.criteria == []
 
 
 def test_version_one_record_migrates_active_revision_and_unknown_history(

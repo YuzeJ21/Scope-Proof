@@ -710,6 +710,8 @@ def test_criteria_source_provenance_rejects_malformed_https_with_stable_error(
         "https://127.0.0.1/requirements",
         "https://10.0.0.1/requirements",
         "https://[::1]/requirements",
+        "https://example.com/requirements?token=secret",
+        "https://example.com/requirements#token=secret",
     ],
 )
 def test_criteria_source_provenance_rejects_credentials_and_non_public_hosts(
@@ -756,6 +758,7 @@ def test_confirmed_revision_rejects_provenance_for_different_source_or_criteria(
             criteria=criteria,
             source_text="Changed requirements.",
             confirmed=True,
+            confirmed_at=provenance.confirmed_at,
             source_provenance=provenance,
         )
     with pytest.raises(ValidationError, match="criteria"):
@@ -764,14 +767,54 @@ def test_confirmed_revision_rejects_provenance_for_different_source_or_criteria(
             criteria=[Criterion(criterion_id="AC-01", text="Changed export")],
             source_text="Export CSV.",
             confirmed=True,
+            confirmed_at=provenance.confirmed_at,
             source_provenance=provenance,
         )
 
 
-def test_criteria_revision_rejects_an_empty_criterion_set() -> None:
-    with pytest.raises(ValidationError):
+@pytest.mark.parametrize(
+    ("confirmed", "confirmed_at", "message"),
+    [
+        (False, None, "requires confirmed criteria"),
+        (
+            True,
+            datetime(2026, 8, 3, tzinfo=UTC),
+            "timestamp must match source provenance",
+        ),
+    ],
+)
+def test_criteria_revision_rejects_contradictory_confirmation_facts(
+    confirmed: bool,
+    confirmed_at: datetime | None,
+    message: str,
+) -> None:
+    criteria = [Criterion(criterion_id="AC-01", text="Export CSV")]
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text="Export CSV.",
+        criteria=criteria,
+        confirmed_by="Demo owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+
+    with pytest.raises(ValidationError, match=message):
         CriteriaRevision(
             number=1,
-            criteria=[],
-            source_text="Requirements exist.",
+            criteria=criteria,
+            source_text="Export CSV.",
+            confirmed=confirmed,
+            confirmed_at=confirmed_at,
+            source_provenance=provenance,
         )
+
+
+def test_criteria_revision_preserves_an_empty_legacy_set_for_fail_closed_loading() -> None:
+    revision = CriteriaRevision(
+        number=1,
+        criteria=[],
+        source_text="Requirements exist.",
+    )
+
+    assert revision.criteria == []
+    assert revision.confirmed is False
+    assert revision.source_provenance is None

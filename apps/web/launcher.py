@@ -57,7 +57,6 @@ def main(argv: list[str] | None = None) -> int:
                     "--theme.backgroundColor=#0d0f12",
                     "--theme.secondaryBackgroundColor=#171a1f",
                     "--theme.textColor=#f7f7f2",
-                    "--theme.linkColor=#8cecff",
                     str(app_path),
                 ],
                 check=False,

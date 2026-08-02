@@ -96,7 +96,7 @@ def provenance_for_revision(
         criteria=criteria or state.criteria_revision.criteria,
         confirmed_by="Fixture owner",
         confirmed_at=confirmed_at
-        or datetime(2026, 8, 2, state.criteria_revision.number, tzinfo=UTC),
+        or state.criteria_revision.created_at + timedelta(seconds=1),
     )
 
 
@@ -150,6 +150,40 @@ def test_new_review_state_copies_bundle_criteria_source_provenance() -> None:
 
     assert state.criteria_revision.source_provenance == provenance
     assert state.criteria_revision.confirmed_at == provenance.confirmed_at
+
+
+def test_new_review_state_rejects_an_empty_criterion_bundle() -> None:
+    state = initial_state()
+    assert state.bundle is not None
+    source_text = state.bundle.source_text
+    empty_provenance = CriteriaSourceProvenance(
+        source_uri="https://example.test/requirements",
+        source_text_sha256=source_text_sha256(source_text),
+        normalized_criteria_sha256=normalized_criteria_sha256([]),
+        confirmed_by="Fixture owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    empty_review = state.bundle.review.model_copy(
+        update={"criteria_source_provenance": empty_provenance}
+    )
+    empty_bundle = state.bundle.model_copy(
+        update={
+            "review": empty_review,
+            "criteria": [],
+            "evidence": [],
+            "retrieval_diagnostics": [],
+            "findings": [],
+            "gate": evaluate_gate(empty_review, [], [], []),
+        }
+    )
+
+    with pytest.raises(ValueError, match="at least one criterion"):
+        new_review_state(empty_bundle)
+
+
+def test_revise_criteria_rejects_an_empty_new_revision() -> None:
+    with pytest.raises(ValueError, match="at least one criterion"):
+        revise_criteria(initial_state(), [], "Requirements remain available")
 
 
 def test_new_review_state_rejects_bundle_without_criteria_source_provenance() -> None:
@@ -667,7 +701,7 @@ def test_confirmation_keeps_revision_and_unblocks_future_analysis() -> None:
 
     provenance = provenance_for_revision(
         revised,
-        confirmed_at=datetime(2026, 8, 2, 14, 30, tzinfo=UTC),
+        confirmed_at=revised.criteria_revision.created_at + timedelta(seconds=1),
     )
 
     confirmed = confirm_criteria(revised, provenance)
@@ -683,6 +717,26 @@ def test_confirmation_keeps_revision_and_unblocks_future_analysis() -> None:
     reopened = type(confirmed).model_validate(confirmed.model_dump(mode="python"))
 
     assert reopened == confirmed
+
+
+def test_confirmation_rejects_provenance_from_before_active_revision() -> None:
+    state = initial_state()
+    stale_provenance = state.review.criteria_source_provenance
+    assert stale_provenance is not None
+    revised = revise_criteria(
+        state,
+        state.criteria_revision.criteria,
+        state.criteria_revision.source_text,
+    )
+    original = revised.model_dump(mode="python")
+
+    with pytest.raises(
+        ValueError,
+        match="criteria source confirmation predates the active revision",
+    ):
+        confirm_criteria(revised, stale_provenance)
+
+    assert revised.model_dump(mode="python") == original
 
 
 @pytest.mark.parametrize(

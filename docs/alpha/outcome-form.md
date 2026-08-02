@@ -11,11 +11,16 @@ Example:
 ```bash
 scopeproof alpha outcome CASE_ID \
   --review-id REVIEW_ID \
-  --head-sha HEAD_SHA \
+  --review-storage-dir .scopeproof/reviews \
   --result created_friction \
   --friction-stage evidence \
   --notes-file outcome-notes.txt
 ```
+
+ScopeProof loads and revalidates that saved review, then derives its exact head SHA. The outcome
+is rejected unless the review came from live public GitHub ingestion and matches the qualified
+public PR, ordered criteria snapshot, and source provenance. Fixture, demo, research, and legacy
+unknown review origins cannot complete genuine alpha evidence.
 
 Report consent and quotation consent are independent. Both default to no. Add `--report-consent` only to allow the reduced public summary; add `--quote-consent` only to permit a quotation. The public summary excludes local notes and permission fields.
 

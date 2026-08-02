@@ -365,6 +365,7 @@ def test_owner_rehearsal_runbook_is_checked_and_stays_engineering_only() -> None
     for command in (
         "uv run scopeproof owner-rehearsal init",
         "uv run scopeproof owner-rehearsal show",
+        "uv run scopeproof prepare-requirements-confirmation",
         "uv run scopeproof review --fixture evals/fixtures/csv_export_pr.json",
         "uv run scopeproof export",
         "uv run scopeproof comparison-benchmark",
@@ -557,7 +558,6 @@ def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy()
         "backgroundColor": "#0d0f12",
         "secondaryBackgroundColor": "#171a1f",
         "textColor": "#f7f7f2",
-        "linkColor": "#8cecff",
     }
     assert "):focus-visible" in app
     assert "[data-testid=\"stAppViewContainer\"]" in app
@@ -1022,9 +1022,29 @@ def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
 
     assert "scopeproof review --pr" in readme
     assert "--requirements requirements.txt" in readme
+    assert "prepare-requirements-confirmation" in readme
+    assert "--confirmation requirements-confirmation.json" in readme
+    assert "does not verify their identity, authority" in readme
     assert "scopeproof export" in readme
     assert "reviewer-confirmed criteria" in readme
     assert "not required or persisted" in readme
+
+
+def test_active_confirmation_and_alpha_cli_docs_are_runnable() -> None:
+    dogfood = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
+    rehearsal = Path("docs/alpha/owner-rehearsal.md").read_text(encoding="utf-8")
+    action = Path("docs/github-action.md").read_text(encoding="utf-8")
+    outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+
+    for document in (dogfood, rehearsal, action):
+        assert "prepare-requirements-confirmation" in document
+        assert "--confirmed-by" in document
+    for document in (dogfood, rehearsal):
+        assert "--confirmation" in document
+    assert "--review-storage-dir .scopeproof/reviews" in outcome
+    assert "--head-sha" not in outcome
+    assert "live public GitHub ingestion" in outcome
+    assert "Fixture, demo, research, and legacy" in outcome
 
 
 def test_readme_documents_one_command_report_without_removing_repeat_export() -> None:

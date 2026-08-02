@@ -22,6 +22,7 @@ Before running a confirmed dogfood review, create a local directory containing:
 dogfood/<review-name>/
 ├── review-metadata.json
 ├── requirements.txt
+├── requirements-confirmation.json
 ├── decision-log.md
 └── exports/
 ```
@@ -44,17 +45,36 @@ Never invent this metadata. If the requirements are only inferred from the PR ti
 ## Procedure
 
 1. Save one atomic user-confirmed criterion per line in `requirements.txt`.
-2. Record the public PR URL and initial head SHA in `review-metadata.json`.
-3. Run:
+2. Have the requirements owner inspect the exact file. Create and validate a no-network,
+   hash-bound confirmation. `--confirmed-by` is a human attestation, not identity or correctness
+   verification:
 
    ```bash
-   scopeproof review --pr PR_URL --requirements requirements.txt --storage-dir .scopeproof/reviews
+   scopeproof prepare-requirements-confirmation \
+     --requirements requirements.txt \
+     --source-uri REQUIREMENTS_SOURCE_URL \
+     --source-revision REQUIREMENTS_SOURCE_REVISION \
+     --confirmed-by "Requirements owner or authorized role" \
+     --output requirements-confirmation.json
+   scopeproof validate-requirements-confirmation \
+     --requirements requirements.txt \
+     --confirmation requirements-confirmation.json
    ```
 
-4. Export Markdown and HTML reports using the printed review ID.
-5. In `decision-log.md`, record every accepted, rejected, ambiguous, and accepted-exception finding with the reviewer’s reason.
-6. If the PR head SHA changes, preserve the old export and run a new review; do not overwrite old evidence.
-7. Convert a confirmed case into a benchmark fixture only when its source is public or safely anonymized, its expected result is human-labeled, and its evidence links are reproducible.
+3. Record the public PR URL and initial head SHA in `review-metadata.json`.
+4. Run:
+
+   ```bash
+   scopeproof review --pr PR_URL \
+     --requirements requirements.txt \
+     --confirmation requirements-confirmation.json \
+     --storage-dir .scopeproof/reviews
+   ```
+
+5. Export Markdown and HTML reports using the printed review ID.
+6. In `decision-log.md`, record every accepted, rejected, ambiguous, and accepted-exception finding with the reviewer’s reason.
+7. If the PR head SHA changes, preserve the old export and run a new review; do not overwrite old evidence.
+8. Convert a confirmed case into a benchmark fixture only when its source is public or safely anonymized, its expected result is human-labeled, and its evidence links are reproducible.
 
 ## Evidence that is safe to publish
 
