@@ -337,6 +337,45 @@ def test_limiting_ci_warning_is_visible_outside_collapsed_details(
     assert "Check-run collection was incomplete." in details_text
 
 
+def test_complete_passing_ci_with_skipped_check_warns_without_changing_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    snapshot = load_demo_snapshot().model_copy(
+        update={
+            "ci_observation": CIObservation(
+                state=CheckState.PASSING,
+                reason="One successful check and one skipped check were observed.",
+                total_check_runs=2,
+                successful_check_runs=1,
+                skipped_check_runs=1,
+                skipped_check_names=["integration"],
+                collection_complete=True,
+            ),
+            "check_state": CheckState.PASSING,
+        }
+    )
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=snapshot):
+        app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    review_state = app.session_state["review_state"]
+    details = next(
+        item for item in app.expander if item.label == "CI details and evidence boundary"
+    )
+    visible_warning = (
+        "Observed CI includes skipped checks. Skipped checks were not executed; review its "
+        "deterministic reason and CI details before relying on the gate."
+    )
+
+    assert review_state.review.check_state is CheckState.PASSING
+    assert review_state.review.ci_observation.state is CheckState.PASSING
+    assert visible_warning in [item.value for item in app.warning]
+    assert "integration" not in "\n".join(item.value for item in app.warning)
+    assert "integration" in [item.value for item in details.text]
+
+
 def test_active_and_reopened_research_review_show_evidence_boundaries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2242,6 +2281,69 @@ def test_confirmed_criteria_edit_with_no_bundle_autosaves_authoritative_review(
     assert "Criteria edits are pending confirmation." not in "\n".join(
         item.value for item in app.warning
     )
+
+
+def test_bundleless_revision_can_clear_criterion_draft_and_resume_autosave(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "pending-runtime-artifact"
+    ).run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+    app.session_state["manual_evidence_level"] = EvidenceLevel.E4
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Confirmed revised export requirement with pending detail"
+    ).run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
+    assert authoritative_state.bundle is None
+    clear_actions = [
+        button
+        for button in app.button
+        if button.key == "clear_criterion_detail_drafts"
+    ]
+    warning = (
+        "Pending criterion inputs are not part of the review, local save, or exports. "
+        "Clear them to continue with this revised review."
+    )
+    assert app.session_state["manual_evidence_level"] is EvidenceLevel.E4
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) != authoritative_state
+    assert not app.download_button
+    assert warning in [item.value for item in app.warning]
+    assert len(clear_actions) == 1
+    assert clear_actions[0].disabled is False
+
+    app = app.button(key="clear_criterion_detail_drafts").click().run()
+
+    assert app.session_state["review_state"] == authoritative_state
+    assert app.session_state["runtime_artifact_reference"] == ""
+    assert app.session_state["runtime_evidence_level"] is EvidenceLevel.E3
+    assert app.session_state["resolution_decision"] is None
+    assert app.session_state["resolution_note"] == ""
+    assert "manual_evidence_level" not in app.session_state
+    assert "Pending criterion inputs cleared without changing the review." in [
+        item.value for item in app.success
+    ]
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) == authoritative_state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(authoritative_state)
+    )
+    assert not app.download_button
+
+    app = app.button(key="run_analysis").click().run()
+
+    assert app.session_state["review_state"].bundle is not None
+    assert all(not button.disabled for button in app.download_button)
 
 
 def test_reopened_bundleless_failed_autosave_exposes_expanded_retry_and_persists(

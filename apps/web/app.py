@@ -549,11 +549,21 @@ def _render_ci_observation_summary(bundle: ReviewBundle) -> None:
             "Runtime verification: "
             f"{bundle.runtime_verification_state.value.replace('_', ' ').capitalize()}"
         )
-        if observation.state is not CheckState.PASSING or not observation.collection_complete:
-            st.warning(
-                "Observed CI has a limiting state. Review its deterministic reason before "
-                "relying on the gate."
-            )
+        if (
+            observation.state is not CheckState.PASSING
+            or not observation.collection_complete
+            or observation.skipped_check_runs > 0
+        ):
+            if observation.state is not CheckState.PASSING or not observation.collection_complete:
+                st.warning(
+                    "Observed CI has a limiting state. Review its deterministic reason before "
+                    "relying on the gate."
+                )
+            if observation.skipped_check_runs > 0:
+                st.warning(
+                    "Observed CI includes skipped checks. Skipped checks were not executed; "
+                    "review its deterministic reason and CI details before relying on the gate."
+                )
 
     with st.expander("CI details and evidence boundary", expanded=False):
         if observation.skipped_check_names:
@@ -1353,6 +1363,25 @@ if bundle is None:
     if review_save_notice is not None:
         st.success(review_save_notice)
     if review_state is not None:
+        criterion_detail_draft_clear_notice = st.session_state.pop(
+            "criterion_detail_draft_clear_notice", None
+        )
+        if criterion_detail_draft_clear_notice is not None:
+            st.success(criterion_detail_draft_clear_notice)
+        if has_pending_criterion_detail_draft:
+            st.warning(
+                "Pending criterion inputs are not part of the review, local save, or exports. "
+                "Clear them to continue with this revised review."
+            )
+            if st.button(
+                "Clear pending criterion inputs",
+                key="clear_criterion_detail_drafts",
+            ):
+                _clear_criterion_detail_drafts()
+                st.session_state["criterion_detail_draft_clear_notice"] = (
+                    "Pending criterion inputs cleared without changing the review."
+                )
+                st.rerun()
         _render_local_review_storage(
             review_state,
             store=review_store,
