@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,6 +28,7 @@ from scopeproof_core.schemas.models import (
     Priority,
     ResearchContext,
     ResolutionEvent,
+    ReviewState,
     RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import (
@@ -76,8 +78,31 @@ def resolve_all_criteria(app: AppTest) -> AppTest:
 def saved_demo_review(app: AppTest) -> tuple[AppTest, str]:
     app = analyzed_demo(app)
     review_id = app.session_state["review_state"].review.review_id
-    app = app.button(key="save_review").click().run()
     return app, review_id
+
+
+def _assert_pending_draft_preserves_authoritative_review(
+    app: AppTest,
+    *,
+    review_id: str,
+    authoritative_state: ReviewState,
+) -> None:
+    download_keys = [button.key for button in app.download_button]
+
+    assert app.session_state["review_state"] == authoritative_state
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) == authoritative_state
+    assert download_keys == [
+        "download_markdown",
+        "download_json",
+        "download_csv",
+    ]
+    assert all(app.download_button(key=key).disabled for key in download_keys)
+
+
+def _review_fingerprint_for_test(state: ReviewState) -> str:
+    return sha256(state.model_dump_json().encode("utf-8")).hexdigest()
 
 
 def select_saved_review(app: AppTest, review_id: str) -> AppTest:
@@ -93,7 +118,7 @@ def evidence_matrix_criterion_ids(app: AppTest) -> list[str]:
     ]
 
 
-def _main_widget_keys(app: AppTest) -> list[str]:
+def _main_widget_keys(app: object) -> list[str]:
     keys: list[str] = []
 
     def collect(node: object) -> None:
@@ -104,8 +129,56 @@ def _main_widget_keys(app: AppTest) -> list[str]:
         for child in children.values():
             collect(child)
 
-    collect(app.main)
+    collect(getattr(app, "main", app))
     return keys
+
+
+def qualified_alpha_analyzed_app(app: AppTest) -> AppTest:
+    app = app.checkbox(key="alpha_feedback_mode").check().run()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/repo/pull/7"
+    ).run()
+    app = app.text_input(key="requirements_source_url").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.checkbox(key="source_owner_confirmed").check().run()
+    app = app.checkbox(key="no_confidential_information").check().run()
+    snapshot = load_demo_snapshot().model_copy(
+        update={"repository": "acme/repo", "pr_number": 7, "head_sha": "a" * 40}
+    )
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+    app = app.text_area(key="requirements_input").set_value("Export CSV").run()
+    app = app.button(key="prepare_criteria").click().run()
+    app = app.button(key="confirm_criteria").click().run()
+    return app.button(key="run_analysis").click().run()
+
+
+def test_summary_places_exports_before_local_storage() -> None:
+    app = analyzed_demo(new_app())
+    keys = _main_widget_keys(app)
+
+    assert keys.index("download_markdown") < keys.index("save_review")
+    assert keys.index("download_json") < keys.index("save_review")
+    assert keys.index("download_csv") < keys.index("save_review")
+
+
+def test_alpha_outcome_is_ready_after_authoritative_review_autosaves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = qualified_alpha_analyzed_app(new_app())
+    app = app.selectbox(key="alpha_outcome").set_value(
+        AlphaOutcome.FOUND_USEFUL_GAP
+    ).run()
+
+    assert app.button(key="record_alpha_outcome").disabled is False
+    assert _main_widget_keys(app).index("download_csv") < _main_widget_keys(app).index(
+        "record_alpha_outcome"
+    )
 
 
 def test_analysis_is_disabled_before_criteria_confirmation() -> None:
@@ -142,34 +215,10 @@ def test_alpha_mode_creates_case_after_confirming_criteria(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app = new_app()
-    app = app.checkbox(key="alpha_feedback_mode").check().run()
-    app = app.text_input(key="pr_url").set_value(
-        "https://github.com/acme/repo/pull/7"
-    ).run()
-    app = app.text_input(key="requirements_source_url").set_value(
-        "https://github.com/acme/repo/issues/6"
-    ).run()
-    app = app.checkbox(key="source_owner_confirmed").check().run()
-    app = app.checkbox(key="no_confidential_information").check().run()
-    snapshot = load_demo_snapshot().model_copy(
-        update={"repository": "acme/repo", "pr_number": 7, "head_sha": "a" * 40}
-    )
-    with patch(
-        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
-        return_value=snapshot,
-    ):
-        app = app.button(key="fetch_pr").click().run()
-    app = app.text_area(key="requirements_input").set_value("Export CSV").run()
-    app = app.button(key="prepare_criteria").click().run()
-
-    app = app.button(key="confirm_criteria").click().run()
+    app = qualified_alpha_analyzed_app(new_app())
 
     assert app.session_state["alpha_case_id"].startswith("alpha-")
-
-    app = app.button(key="run_analysis").click().run()
     assert app.button(key="record_alpha_outcome").disabled is True
-    app = app.button(key="save_review").click().run()
     app = app.selectbox(key="alpha_outcome").set_value(
         AlphaOutcome.FOUND_USEFUL_GAP
     ).run()
@@ -205,14 +254,48 @@ def test_primary_workbench_uses_acceptance_coverage_language() -> None:
     assert "Prove the PR matches the product intent" not in visible_text
 
 
-def test_loaded_source_labels_check_aggregation_as_observed_ci_state() -> None:
+def test_loaded_source_identity_does_not_repeat_ci_diagnostics() -> None:
     app = load_demo(new_app())
 
-    caption_text = "\n".join(item.value for item in app.caption)
-    assert "Observed CI state: Passing" in caption_text
+    captions = "\n".join(item.value for item in app.caption)
+
+    assert "Loaded source" in "\n".join(item.value for item in app.markdown)
+    assert "head-demo-002" in [item.value for item in app.code]
+    assert "Observed CI state:" not in captions
+    assert "Observed CI reason:" not in captions
 
 
-def test_loaded_source_explains_ci_observation_and_skipped_checks(
+def test_loaded_source_identity_renders_repository_as_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repository = "![untrusted repository](https://example.invalid/repository.png)"
+    snapshot = load_demo_snapshot().model_copy(update={"repository": repository})
+
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=snapshot):
+        app = load_demo(new_app())
+
+    assert repository not in "\n".join(item.value for item in app.markdown)
+    assert f"{repository} · PR #{snapshot.pr_number}" in [item.value for item in app.text]
+
+
+def test_evidence_matrix_ci_summary_is_compact_complete_and_deterministic() -> None:
+    app = analyzed_demo(new_app())
+    details = next(
+        item for item in app.expander if item.label == "CI details and evidence boundary"
+    )
+    visible = "\n".join(item.value for item in [*app.caption, *app.text, *app.warning])
+
+    assert details.proto.expanded is False
+    assert "Observed CI: Passing" in visible
+    assert "Collection: Complete" in visible
+    assert "1 total · 1 successful · 0 pending · 0 failing" in visible
+    assert "0 neutral · 0 skipped · 0 concrete legacy statuses" in visible
+    assert "Runtime verification: Not recorded" in visible
+    assert app.session_state["review_state"].review.ci_observation.reason in visible
+
+
+def test_limiting_ci_warning_is_visible_outside_collapsed_details(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -224,27 +307,32 @@ def test_loaded_source_explains_ci_observation_and_skipped_checks(
                 total_check_runs=1,
                 skipped_check_runs=1,
                 skipped_check_names=["integration"],
+                collection_complete=False,
+                collection_notes=["Check-run collection was incomplete."],
             ),
             "check_state": CheckState.UNAVAILABLE,
         }
     )
-    app = new_app()
-    app = app.text_input(key="pr_url").set_value(
-        "https://github.com/acme/repo/pull/7"
-    ).run()
-    with patch(
-        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
-        return_value=snapshot,
-    ):
-        app = app.button(key="fetch_pr").click().run()
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=snapshot):
+        app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
 
-    caption_text = "\n".join(item.value for item in app.caption)
-    assert (
-        "Observed CI reason: Observed 1 skipped check run; it does not prove passing."
-        in caption_text
+    details = next(
+        item for item in app.expander if item.label == "CI details and evidence boundary"
     )
-    assert "Skipped CI checks (unexecuted):" in caption_text
-    assert "integration" in [item.value for item in app.text]
+    visible = "\n".join(item.value for item in [*app.caption, *app.warning])
+    details_text = "\n".join(item.value for item in details.text)
+
+    assert details.proto.expanded is False
+    assert (
+        "Observed CI has a limiting state. Review its deterministic reason before relying on "
+        "the gate."
+    ) in "\n".join(item.value for item in app.warning)
+    assert "integration" not in visible
+    assert "Check-run collection was incomplete." not in visible
+    assert "integration" in details_text
+    assert "Check-run collection was incomplete." in details_text
 
 
 def test_active_and_reopened_research_review_show_evidence_boundaries(
@@ -290,7 +378,7 @@ def test_active_and_reopened_research_review_show_evidence_boundaries(
     )
     assert "Public engineering research" in active_text
     assert "Stage 1 credit: 0" in active_text
-    assert "Observed CI reason:" in active_text
+    assert "Deterministic reason" in active_text
     assert "Static candidates and observed CI do not establish runtime verification." in active_text
     assert "Runtime verification: Not recorded" in active_text
     assert unsafe_skipped_check not in active_text
@@ -308,7 +396,7 @@ def test_active_and_reopened_research_review_show_evidence_boundaries(
     )
     assert "Public engineering research" in reopened_text
     assert "Stage 1 credit: 0" in reopened_text
-    assert "Observed CI reason:" in reopened_text
+    assert "Deterministic reason" in reopened_text
     assert "Runtime verification: Not recorded" in reopened_text
     assert unsafe_skipped_check not in reopened_text
     assert unsafe_boundary_note not in reopened_text
@@ -356,7 +444,7 @@ def test_active_and_reopened_review_show_recorded_runtime_verification(
 def test_criterion_detail_shows_bounded_candidate_context() -> None:
     app = analyzed_demo(new_app())
 
-    assert "**Bounded context:**" in [item.value for item in app.markdown]
+    assert "Bounded context" in [item.value for item in app.caption]
     assert any(
         "export_research_list_csv" in item.value and "filtered_rows" in item.value
         for item in app.code
@@ -417,7 +505,6 @@ def test_reopened_partial_review_keeps_ingestion_recovery_details(
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
     review_id = app.session_state["review_state"].review.review_id
-    app = app.button(key="save_review").click().run()
 
     fresh = select_saved_review(new_app(), review_id)
     fresh = fresh.button(key="reopen_review").click().run()
@@ -429,31 +516,36 @@ def test_reopened_partial_review_keeps_ingestion_recovery_details(
     assert "src/reopen-skipped.py" in code_text
 
 
-def test_reopen_review_is_a_collapsed_secondary_path_before_start_review(
+def test_public_pr_entry_precedes_optional_start_review_controls(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     app = new_app()
-
-    assert [item.label for item in app.expander] == [
-        "Reopen saved review",
-        "Advanced source options",
-    ]
-    assert app.text_input(key="reopen_review_id").value == ""
-    assert app.button(key="reopen_review").disabled is True
-    assert "No saved local reviews found." in [item.value for item in app.caption]
-    assert "### Reopen saved review" not in [item.value for item in app.markdown]
-
-
-def test_first_use_demo_precedes_public_pr_inputs() -> None:
-    app = new_app()
     keys = _main_widget_keys(app)
 
-    assert keys.count("load_demo") == 1
-    assert keys.index("alpha_feedback_mode") < keys.index("load_demo")
-    assert keys.index("load_demo") < keys.index("pr_url")
-    assert keys.index("candidate_paths") < keys.index("fetch_pr")
+    assert keys.count("pr_url") == 1
+    assert keys.count("fetch_pr") == 1
+    assert keys.index("pr_url") < keys.index("fetch_pr")
+    assert keys.index("fetch_pr") < keys.index("load_demo")
+    assert keys.index("fetch_pr") < keys.index("alpha_feedback_mode")
+    assert keys.index("fetch_pr") < keys.index("github_token")
+    assert keys.index("fetch_pr") < keys.index("candidate_paths")
+    assert keys.index("fetch_pr") < keys.index("reopen_review_id")
     assert keys.index("fetch_pr") < keys.index("requirements_input")
+
+
+def test_start_review_secondary_paths_are_collapsed_after_public_pr_entry() -> None:
+    app = new_app()
+
+    assert [item.label for item in app.expander[:4]] == [
+        "Try ScopeProof",
+        "Alpha feedback session (optional)",
+        "Advanced source options",
+        "Resume a saved review",
+    ]
+    assert all(item.proto.expanded is False for item in app.expander[:4])
+    assert app.button(key="load_demo").label == "Load deliberately constructed demo"
+    assert app.button(key="reopen_review").disabled is True
 
 
 def test_saved_review_is_discoverable_and_selectable_in_a_fresh_session(
@@ -479,6 +571,74 @@ def test_saved_review_is_discoverable_and_selectable_in_a_fresh_session(
     assert "Review reopened from local storage" in "\n".join(
         message.value for message in fresh.success
     )
+
+
+def test_authoritative_review_autosaves_without_manual_action(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    app = analyzed_demo(new_app())
+    state = app.session_state["review_state"]
+    stored = JsonReviewStore(default_local_review_directory()).load(
+        state.review.review_id
+    )
+
+    assert stored == state
+    assert app.session_state["saved_review_fingerprint"] is not None
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+    assert app.button(key="save_review").disabled is True
+    assert "Review saved automatically" in "\n".join(
+        item.value for item in app.success
+    )
+
+
+def test_unchanged_authoritative_review_does_not_autosave_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_demo(new_app())
+
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        app = app.run()
+
+    save.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("widget_collection", "key", "value"),
+    [
+        ("text_input", "criterion_text_AC-01", "Pending revised requirement"),
+        ("text_input", "new_criterion_text", "Pending additional criterion"),
+        ("text_area", "requirements_input", "Pending source requirement"),
+        (
+            "text_input",
+            "runtime_artifact_reference",
+            "pending-runtime-artifact",
+        ),
+    ],
+)
+def test_pending_draft_categories_block_autosave(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    widget_collection: str,
+    key: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    store = JsonReviewStore(default_local_review_directory())
+    persisted_before = store.load(review_id)
+    app.session_state["saved_review_fingerprint"] = None
+
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        widget = getattr(app, widget_collection)(key=key)
+        app = widget.set_value(value).run()
+
+    save.assert_not_called()
+    assert store.load(review_id) == persisted_before
+    assert all(button.disabled for button in app.download_button)
 
 
 def test_delete_saved_review_requires_selection_and_confirmation_and_deletes_only_one(
@@ -519,6 +679,7 @@ def test_delete_selected_saved_review_preserves_other_open_review(
     app = app.button(key="reopen_review").click().run()
     open_state = app.session_state["review_state"]
     saved_fingerprint = app.session_state["saved_review_fingerprint"]
+    deleted_fingerprint = app.session_state["deleted_review_save_fingerprint"]
 
     app = select_saved_review(app, second_review_id)
     app = app.checkbox(key="delete_saved_review_confirmed").check().run()
@@ -526,6 +687,10 @@ def test_delete_selected_saved_review_preserves_other_open_review(
 
     assert app.session_state["review_state"] == open_state
     assert app.session_state["saved_review_fingerprint"] == saved_fingerprint
+    assert (
+        app.session_state["deleted_review_save_fingerprint"]
+        == deleted_fingerprint
+    )
     assert app.selectbox(key="saved_reopen_review_id").options == [first_review_id]
     assert second_review_id not in app.selectbox(key="saved_reopen_review_id").options
 
@@ -561,9 +726,92 @@ def test_delete_saved_open_review_preserves_exact_state_as_unsaved_work(
 
     assert app.session_state["review_state"] == open_state
     assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(open_state)
+    )
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
     assert (
         "Saved review deleted. The open review remains available as unsaved work."
         in [message.value for message in app.success]
+    )
+
+    app = app.run()
+
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(open_state)
+    )
+
+
+def test_save_now_recreates_deleted_open_review_and_clears_suppression(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+    app = app.button(key="reopen_review").click().run()
+    open_state = app.session_state["review_state"]
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    app = app.button(key="delete_saved_review").click().run()
+    app = app.run()
+
+    assert app.button(key="save_review").label == "Save now"
+    assert app.button(key="save_review").disabled is False
+    app = app.button(key="save_review").click().run()
+
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == open_state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(open_state)
+    )
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+
+
+def test_new_resolution_after_delete_changes_fingerprint_and_autosaves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+    app = app.button(key="reopen_review").click().run()
+    deleted_state = app.session_state["review_state"]
+    deleted_fingerprint = _review_fingerprint_for_test(deleted_state)
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    app = app.button(key="delete_saved_review").click().run()
+
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+    app = app.button(key="save_resolution").click().run()
+    app = app.run()
+
+    revised_state = app.session_state["review_state"]
+    revised_fingerprint = _review_fingerprint_for_test(revised_state)
+    assert revised_fingerprint != deleted_fingerprint
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == revised_state
+    assert app.session_state["saved_review_fingerprint"] == revised_fingerprint
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+
+
+def test_reopening_unchanged_review_does_not_rewrite_local_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        app = app.button(key="reopen_review").click().run()
+
+    save.assert_not_called()
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(app.session_state["review_state"])
     )
 
 
@@ -592,6 +840,38 @@ def test_delete_saved_review_race_uses_fixed_recovery_without_raw_details(
     assert str(tmp_path) not in rendered_recovery
 
 
+def test_open_review_delete_race_records_suppression_and_exposes_save_now(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    state = app.session_state["review_state"]
+    fingerprint = _review_fingerprint_for_test(state)
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    JsonReviewStore(default_local_review_directory()).delete(review_id)
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.list_review_ids",
+        return_value=[review_id],
+    ):
+        app = app.button(key="delete_saved_review").click().run()
+
+    assert app.session_state["review_state"] == state
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] == fingerprint
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
+
+    app = app.run()
+
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
+    assert app.button(key="save_review").label == "Save now"
+    assert app.button(key="save_review").disabled is False
+
+
 def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -612,7 +892,10 @@ def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     assert not [item for item in app.selectbox if item.key == "saved_reopen_review_id"]
     assert app.button(key="reopen_review").disabled is True
 
-    app = analyzed_demo(app)
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        app = analyzed_demo(app)
+
+    save.assert_not_called()
     review_state = app.session_state["review_state"].model_copy(deep=True)
     recovery = (
         "Local saving is unavailable. The current review remains open as unsaved work, "
@@ -669,7 +952,10 @@ def test_regular_file_review_store_has_safe_recovery_and_disables_storage_action
     assert not [item for item in app.selectbox if item.key == "saved_reopen_review_id"]
     assert app.button(key="reopen_review").disabled is True
 
-    app = analyzed_demo(app)
+    with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
+        app = analyzed_demo(app)
+
+    save.assert_not_called()
     assert app.button(key="save_review").disabled is True
     assert store_root.read_text(encoding="utf-8") == "not a directory"
 
@@ -827,9 +1113,9 @@ def test_loaded_public_pr_shows_validated_source_identity_before_criteria_confir
         }
     )
     app = new_app()
-    app = app.text_input(key="pr_url").set_value(
-        "https://github.com/operator/entered/pull/42"
-    ).run()
+    app = (
+        app.text_input(key="pr_url").set_value("https://github.com/operator/entered/pull/42").run()
+    )
 
     with patch(
         "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
@@ -837,24 +1123,26 @@ def test_loaded_public_pr_shows_validated_source_identity_before_criteria_confir
     ):
         app = app.button(key="fetch_pr").click().run()
 
-    markdown_text = "\n".join(item.value for item in app.markdown)
+    text_values = [item.value for item in app.text]
     code_text = "\n".join(item.value for item in app.code)
     caption_text = "\n".join(item.value for item in app.caption)
-    assert "acme/widget · PR #7" in markdown_text
+    assert "acme/widget · PR #7" in text_values
     assert head_sha in code_text
     assert "2 changed files fetched" in caption_text
     assert "Complete ingestion" in caption_text
     assert app.button(key="run_analysis").disabled is True
 
-    app = app.text_area(key="requirements_input").set_value(
-        "The loaded source identity remains visible while criteria are edited."
-    ).run()
+    app = (
+        app.text_area(key="requirements_input")
+        .set_value("The loaded source identity remains visible while criteria are edited.")
+        .run()
+    )
 
-    markdown_text = "\n".join(item.value for item in app.markdown)
+    text_values = [item.value for item in app.text]
     code_text = "\n".join(item.value for item in app.code)
     caption_text = "\n".join(item.value for item in app.caption)
-    assert "acme/widget · PR #7" in markdown_text
-    assert "operator/entered · PR #42" not in markdown_text
+    assert "acme/widget · PR #7" in text_values
+    assert "operator/entered · PR #42" not in text_values
     assert head_sha in code_text
     assert "2 changed files fetched" in caption_text
     assert "Complete ingestion" in caption_text
@@ -1110,7 +1398,6 @@ def test_criteria_edit_failure_preserves_review_and_retry_without_raw_details(
     input_value: str | None,
 ) -> None:
     app = analyzed_demo(new_app())
-    app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
     if input_key is not None and input_value is not None:
         widget = (
             app.text_area(key=input_key)
@@ -1153,7 +1440,7 @@ def test_criteria_edit_failure_preserves_review_and_retry_without_raw_details(
     assert app.session_state["bundle"] == bundle
     assert app.session_state["criteria"] == criteria
     assert app.session_state["criteria_confirmed"] is True
-    assert app.session_state["replace_unsaved_review_confirmed"] is True
+    assert app.session_state["replace_unsaved_review_confirmed"] is False
     if input_key is not None and input_value is not None:
         widget = (
             app.text_area(key=input_key)
@@ -1239,6 +1526,73 @@ def test_sidebar_uses_active_review_ruleset_provenance(
     )
 
 
+def test_criteria_summary_and_confirmation_precede_long_editor_list() -> None:
+    app = load_demo(new_app())
+    keys = _main_widget_keys(app)
+    visible = "\n".join(item.value for item in [*app.caption, *app.markdown])
+
+    assert keys.count("confirm_criteria") == 1
+    assert keys.index("confirm_criteria") < keys.index("criterion_text_AC-01")
+    assert keys.index("confirm_criteria") < keys.index("new_criterion_text")
+    assert "Criteria: 4" in visible
+    assert "Confirmation: Required" in visible
+    assert "Pending edits: None" in visible
+
+
+def test_criterion_editors_are_collapsed_and_keep_requirement_text_inert() -> None:
+    app = load_demo(new_app())
+    criterion_expanders = [item for item in app.expander if item.label.startswith("AC-")]
+
+    assert [item.label for item in criterion_expanders] == [
+        "AC-01 · Must Have · E1",
+        "AC-02 · Must Have · E1",
+        "AC-03 · Must Have · E1",
+        "AC-04 · Should Have · E1",
+    ]
+    assert all(item.proto.expanded is False for item in criterion_expanders)
+    for criterion, expander in zip(app.session_state["criteria"], criterion_expanders, strict=True):
+        assert criterion.text in [item.value for item in expander.text]
+        assert criterion.text not in expander.label
+
+
+def test_add_and_split_controls_are_one_collapsed_secondary_group() -> None:
+    app = load_demo(new_app())
+    editor = next(item for item in app.expander if item.label == "Add or split criteria")
+    child_keys = _main_widget_keys(editor)
+
+    assert editor.proto.expanded is False
+    assert child_keys == [
+        "new_criterion_text",
+        "add_criterion_ui",
+        "split_criterion_id",
+        "split_criterion_text",
+        "split_criterion_ui",
+    ]
+
+
+def test_markdown_shaped_confirmed_requirement_remains_inert() -> None:
+    unsafe_text = "![criterion](https://example.invalid/criterion.png)"
+    app = load_demo(new_app())
+    app = app.text_input(key="criterion_text_AC-01").set_value(unsafe_text).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert unsafe_text in [item.value for item in app.text]
+    assert all(unsafe_text not in item.label for item in app.expander)
+    assert all(unsafe_text not in item.value for item in app.markdown)
+
+
+def test_markdown_shaped_selected_requirement_remains_inert_in_detail_contexts() -> None:
+    unsafe_text = "![criterion](https://example.invalid/criterion.png)"
+    app = load_demo(new_app())
+    app = app.text_input(key="criterion_text_AC-01").set_value(unsafe_text).run()
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    assert unsafe_text in [item.value for item in app.text]
+    assert all(unsafe_text not in item.value for item in app.caption)
+    assert all(unsafe_text not in item.value for item in app.markdown)
+
+
 @pytest.mark.parametrize("text", ["", "   ", "\t\n"])
 def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: str) -> None:
     app = analyzed_demo(new_app())
@@ -1252,6 +1606,10 @@ def test_blank_criterion_edit_stays_recoverable_and_cannot_be_confirmed(text: st
     assert app.button(key="run_analysis").disabled is True
     assert "AC-01: Criterion text cannot be blank." in [
         item.value for item in app.warning
+    ]
+    criterion_editor = next(item for item in app.expander if item.label.startswith("AC-01"))
+    assert "Criterion text cannot be blank." in [
+        item.value for item in criterion_editor.warning
     ]
 
 
@@ -1336,7 +1694,9 @@ def test_demo_summary_explains_non_prescriptive_next_actions() -> None:
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
 
-    visible_text = "\n".join(markdown.value for markdown in app.markdown)
+    visible_text = "\n".join(
+        item.value for item in [*app.markdown, *app.text]
+    )
     assert "What to do next" in visible_text
     assert "unresolved criteria: AC-01" in visible_text
 
@@ -1344,7 +1704,7 @@ def test_demo_summary_explains_non_prescriptive_next_actions() -> None:
 def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> None:
     app = analyzed_demo(new_app())
     visible_text = "\n".join(
-        item.value for item in [*app.markdown, *app.caption, *app.info]
+        item.value for item in [*app.markdown, *app.caption, *app.info, *app.text]
     )
 
     assert "Candidate strength:" in visible_text
@@ -1439,7 +1799,7 @@ def test_optional_token_uses_password_input() -> None:
     assert token.proto.type == token.proto.PASSWORD
 
 
-def test_demo_can_save_and_reopen_durable_review_state(
+def test_demo_can_autosave_and_reopen_durable_review_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1448,8 +1808,9 @@ def test_demo_can_save_and_reopen_durable_review_state(
     app = app.button(key="run_analysis").click().run()
     review_id = app.session_state["review_state"].review.review_id
 
-    app = app.button(key="save_review").click().run()
-    assert "Review saved locally" in "\n".join(message.value for message in app.success)
+    assert "Review saved automatically" in "\n".join(
+        message.value for message in app.success
+    )
     app = select_saved_review(app, review_id)
     app = app.button(key="reopen_review").click().run()
 
@@ -1458,7 +1819,7 @@ def test_demo_can_save_and_reopen_durable_review_state(
     assert "Review reopened from local storage" in success_text
 
 
-def test_current_review_id_is_copyable_and_used_in_save_confirmation(
+def test_current_review_id_is_copyable_and_used_in_autosave_confirmation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1468,23 +1829,19 @@ def test_current_review_id_is_copyable_and_used_in_save_confirmation(
     assert review_id in [item.value for item in app.code]
     caption_text = "\n".join(item.value for item in app.caption)
     assert "Current review ID" in caption_text
-    assert "save this review before using the ID in a future session" in caption_text
-    assert "Unsaved changes — save locally before relying on this review ID." in caption_text
-    assert app.button(key="save_review").disabled is False
-
-    app = app.button(key="save_review").click().run()
-    assert f"Review saved locally. ID: {review_id}." in [item.value for item in app.success]
-    caption_text = "\n".join(item.value for item in app.caption)
-    assert "Saved locally — current review matches the last local save." in caption_text
+    assert "Saved locally — current review matches local storage." in caption_text
     assert app.button(key="save_review").disabled is True
+    assert f"Review saved automatically. ID: {review_id}." in [
+        item.value for item in app.success
+    ]
 
 
 def test_pending_criterion_draft_is_not_claimed_saved_or_exportable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app, review_id = saved_demo_review(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
 
     app = app.text_input(key="runtime_artifact_reference").set_value(
         "pending-runtime-artifact"
@@ -1495,7 +1852,7 @@ def test_pending_criterion_draft_is_not_claimed_saved_or_exportable(
 
     captions = "\n".join(item.value for item in app.caption)
     warnings = "\n".join(item.value for item in app.warning)
-    assert "Saved locally — current review matches the last local save." not in captions
+    assert "Saved locally — current review matches local storage." not in captions
     assert (
         "Pending criterion-detail inputs are not saved or exported. Submit or clear "
         "them before relying on this review ID."
@@ -1505,11 +1862,14 @@ def test_pending_criterion_draft_is_not_claimed_saved_or_exportable(
         "Submit them through the matching form or clear them before continuing."
     ) in warnings
     assert app.button(key="save_review").disabled is True
-    assert all(button.disabled for button in app.download_button)
     assert app.button(key="load_demo").disabled is True
     assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
     assert app.button(key="clear_criterion_detail_drafts").disabled is False
-    assert app.session_state["review_state"] == review_state
+    _assert_pending_draft_preserves_authoritative_review(
+        app,
+        review_id=review_id,
+        authoritative_state=authoritative_state,
+    )
 
 
 def test_clear_pending_criterion_draft_restores_saved_exportable_state(
@@ -1534,7 +1894,7 @@ def test_clear_pending_criterion_draft_restores_saved_exportable_state(
         item.value for item in app.success
     ]
     captions = "\n".join(item.value for item in app.caption)
-    assert "Saved locally — current review matches the last local save." in captions
+    assert "Saved locally — current review matches local storage." in captions
     assert "Pending criterion-detail inputs are not saved or exported." not in captions
     assert app.button(key="save_review").disabled is True
     assert all(not button.disabled for button in app.download_button)
@@ -1545,7 +1905,7 @@ def test_submitted_runtime_draft_restores_authoritative_save_and_export(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
+    app, review_id = saved_demo_review(new_app())
     app = app.text_input(key="runtime_artifact_reference").set_value(
         "https://example.test/run/authoritative"
     ).run()
@@ -1564,17 +1924,20 @@ def test_submitted_runtime_draft_restores_authoritative_save_and_export(
     assert app.text_input(key="runtime_artifact_reference").value == ""
     captions = "\n".join(item.value for item in app.caption)
     assert "Pending criterion-detail inputs are not saved or exported." not in captions
-    assert "Unsaved changes — save locally before relying on this review ID." in captions
-    assert app.button(key="save_review").disabled is False
+    assert "Saved locally — current review matches local storage." in captions
+    assert app.button(key="save_review").disabled is True
     assert all(not button.disabled for button in app.download_button)
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == (
+        app.session_state["review_state"]
+    )
 
 
 def test_pending_criteria_edit_is_not_claimed_saved_or_exportable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app, review_id = saved_demo_review(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
 
     app = app.text_input(key="criterion_text_AC-01").set_value(
         "Pending revised export requirement"
@@ -1588,18 +1951,21 @@ def test_pending_criteria_edit_is_not_claimed_saved_or_exportable(
 
     captions = "\n".join(item.value for item in app.caption)
     sidebar = "\n".join(item.value for item in app.sidebar.markdown)
-    assert "Saved locally — current review matches the last local save." not in captions
+    assert "Saved locally — current review matches local storage." not in captions
     assert (
         "Pending criteria edits are not saved or exported. Confirm or discard them "
         "before relying on this review ID."
     ) in captions
     assert app.button(key="save_review").disabled is True
-    assert all(button.disabled for button in app.download_button)
     assert app.button(key="load_demo").disabled is True
     assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
     assert app.button(key="discard_criteria_draft").disabled is False
     assert "Pending — Resolve inputs before export" in sidebar
-    assert app.session_state["review_state"] == review_state
+    _assert_pending_draft_preserves_authoritative_review(
+        app,
+        review_id=review_id,
+        authoritative_state=authoritative_state,
+    )
 
 
 def test_discard_unconfirmed_criteria_edits_restores_saved_exportable_state(
@@ -1633,7 +1999,7 @@ def test_discard_unconfirmed_criteria_edits_restores_saved_exportable_state(
     ]
     captions = "\n".join(item.value for item in app.caption)
     sidebar = "\n".join(item.value for item in app.sidebar.markdown)
-    assert "Saved locally — current review matches the last local save." in captions
+    assert "Saved locally — current review matches local storage." in captions
     assert "Pending criteria edits are not saved or exported." not in captions
     assert app.button(key="save_review").disabled is True
     assert all(not button.disabled for button in app.download_button)
@@ -1667,27 +2033,30 @@ def test_pending_criteria_authoring_draft_is_not_claimed_saved_or_exportable(
     submit_key: str,
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app, review_id = saved_demo_review(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
 
     widget = getattr(app, input_kind)(key=input_key)
     app = widget.set_value(input_value).run()
 
     captions = "\n".join(item.value for item in app.caption)
     sidebar = "\n".join(item.value for item in app.sidebar.markdown)
-    assert "Saved locally — current review matches the last local save." not in captions
+    assert "Saved locally — current review matches local storage." not in captions
     assert (
         "Pending add or split criterion inputs are not saved or exported. Submit or "
         "clear them before relying on this review ID."
     ) in captions
     assert app.button(key="save_review").disabled is True
-    assert all(button.disabled for button in app.download_button)
     assert app.button(key="load_demo").disabled is True
     assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
     assert app.button(key="clear_criteria_authoring_drafts").disabled is False
     assert app.button(key=submit_key).disabled is False
     assert "Pending — Resolve inputs before export" in sidebar
-    assert app.session_state["review_state"] == review_state
+    _assert_pending_draft_preserves_authoritative_review(
+        app,
+        review_id=review_id,
+        authoritative_state=authoritative_state,
+    )
 
 
 def test_clear_criteria_authoring_drafts_restores_saved_exportable_state(
@@ -1713,7 +2082,7 @@ def test_clear_criteria_authoring_drafts_restores_saved_exportable_state(
     ]
     captions = "\n".join(item.value for item in app.caption)
     sidebar = "\n".join(item.value for item in app.sidebar.markdown)
-    assert "Saved locally — current review matches the last local save." in captions
+    assert "Saved locally — current review matches local storage." in captions
     assert "Pending add or split criterion inputs are not saved or exported." not in captions
     assert app.button(key="save_review").disabled is True
     assert all(not button.disabled for button in app.download_button)
@@ -1757,8 +2126,8 @@ def test_pending_requirements_draft_is_not_claimed_saved_or_exportable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
+    app, review_id = saved_demo_review(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
     requirements_draft = (
         f"{app.session_state['source_text']}\nDraft requirement not yet prepared"
     )
@@ -1767,19 +2136,22 @@ def test_pending_requirements_draft_is_not_claimed_saved_or_exportable(
 
     captions = "\n".join(item.value for item in app.caption)
     sidebar = "\n".join(item.value for item in app.sidebar.markdown)
-    assert "Saved locally — current review matches the last local save." not in captions
+    assert "Saved locally — current review matches local storage." not in captions
     assert (
         "Pending requirements changes are not saved or exported. Prepare or discard "
         "them before relying on this review ID."
     ) in captions
     assert app.button(key="save_review").disabled is True
-    assert all(button.disabled for button in app.download_button)
     assert app.button(key="load_demo").disabled is True
     assert app.checkbox(key="replace_unsaved_review_confirmed").value is False
     assert app.button(key="discard_requirements_draft").disabled is False
     assert app.button(key="prepare_criteria").disabled is False
     assert "Pending — Resolve inputs before export" in sidebar
-    assert app.session_state["review_state"] == review_state
+    _assert_pending_draft_preserves_authoritative_review(
+        app,
+        review_id=review_id,
+        authoritative_state=authoritative_state,
+    )
 
     app = app.text_input(key="new_criterion_text").set_value(
         "Unrelated criterion edit"
@@ -1808,7 +2180,7 @@ def test_discard_requirements_draft_restores_authoritative_saved_state(
     ]
     captions = "\n".join(item.value for item in app.caption)
     sidebar = "\n".join(item.value for item in app.sidebar.markdown)
-    assert "Saved locally — current review matches the last local save." in captions
+    assert "Saved locally — current review matches local storage." in captions
     assert "Pending requirements changes are not saved or exported." not in captions
     assert app.button(key="save_review").disabled is True
     assert all(not button.disabled for button in app.download_button)
@@ -1839,11 +2211,11 @@ def test_prepare_criteria_consumes_pending_requirements_draft(
     ]
 
 
-def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
+def test_confirmed_criteria_edit_with_no_bundle_autosaves_authoritative_review(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
+    app, review_id = saved_demo_review(new_app())
     app = app.text_input(key="criterion_text_AC-01").set_value(
         "Confirmed revised export requirement"
     ).run()
@@ -1856,6 +2228,12 @@ def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
         "Confirmed revised export requirement"
     )
     assert review_state.bundle is None
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) == review_state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(review_state)
+    )
     assert app.session_state["criteria_confirmed"] is True
     assert app.button(key="confirm_criteria").disabled is True
     assert app.button(key="run_analysis").disabled is False
@@ -1864,66 +2242,147 @@ def test_confirmed_criteria_edit_becomes_authoritative_unsaved_review(
     )
 
 
+def test_reopened_bundleless_failed_autosave_exposes_expanded_retry_and_persists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+    app = select_saved_review(new_app(), review_id)
+    app = app.button(key="reopen_review").click().run()
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Confirmed bundleless requirement after save failure"
+    ).run()
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.save",
+        side_effect=OSError("disk full at /private/secret/path"),
+    ) as save:
+        app = app.button(key="confirm_criteria").click().run()
+        assert save.call_count == 1
+        app = app.run()
+        assert save.call_count == 1
+
+    state = app.session_state["review_state"]
+    assert state.bundle is None
+    assert app.session_state["failed_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    local_storage = next(
+        item for item in app.expander if item.label == "Local review storage"
+    )
+    assert local_storage.proto.expanded is True
+    assert app.button(key="save_review").label == "Retry local save"
+    assert app.button(key="save_review").disabled is False
+
+    app = app.button(key="save_review").click().run()
+
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.session_state["failed_review_save_fingerprint"] is None
+
+
+def test_bundleless_deleted_review_exposes_save_now_and_recreates_on_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Confirmed bundleless requirement before deletion"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+    state = app.session_state["review_state"]
+    assert state.bundle is None
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+
+    app = app.button(key="delete_saved_review").click().run()
+    app = app.run()
+
+    with pytest.raises(FileNotFoundError):
+        JsonReviewStore(default_local_review_directory()).load(review_id)
+    assert app.session_state["deleted_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.button(key="save_review").label == "Save now"
+    assert app.button(key="save_review").disabled is False
+
+    app = app.button(key="save_review").click().run()
+
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+
+
 @pytest.mark.parametrize(
     "save_error",
-    [
-        OSError("disk full at /private/secret/path"),
-        ValueError("invalid record at /private/secret/path"),
-    ],
+    [OSError("disk full at /private/secret/path"), ValueError("invalid state")],
 )
-def test_local_save_failure_preserves_retryable_unsaved_review_without_raw_details(
+def test_autosave_failure_attempts_once_and_preserves_explicit_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     save_error: OSError | ValueError,
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app = analyzed_demo(new_app())
-    review_state = app.session_state["review_state"].model_copy(deep=True)
-
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
     with patch(
         "scopeproof_core.storage.json_store.JsonReviewStore.save",
         side_effect=save_error,
-    ):
-        app = app.button(key="save_review").click().run()
+    ) as save:
+        app = app.button(key="run_analysis").click().run()
+        assert save.call_count == 1
+        app = app.run()
+        assert save.call_count == 1
 
-    recovery = (
-        "The review could not be saved locally. The current review remains open as "
-        "unsaved work. Verify the local review directory and review integrity, then try "
-        "again."
-    )
-    assert recovery in [message.value for message in app.error]
-    assert not app.exception
-    rendered_recovery = "\n".join(
-        message.value
-        for message in [
-            *app.error,
-            *app.warning,
-            *app.info,
-            *app.success,
-            *app.caption,
-            *app.markdown,
-            *app.code,
-        ]
-    )
-    assert str(save_error) not in rendered_recovery
-    assert "/private/secret/path" not in rendered_recovery
-    assert app.session_state["review_state"] == review_state
+    state = app.session_state["review_state"]
     assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["failed_review_save_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.button(key="save_review").label == "Retry local save"
     assert app.button(key="save_review").disabled is False
-    assert (
-        "Unsaved changes — save locally before relying on this review ID."
-        in [message.value for message in app.caption]
-    )
-    assert "Review saved locally" not in "\n".join(
-        message.value for message in app.success
+    assert all(not button.disabled for button in app.download_button)
+    assert "/private/secret/path" not in "\n".join(
+        item.value for item in [*app.error, *app.warning, *app.caption]
     )
 
 
-def test_post_save_resolution_marks_review_unsaved_again(
+def test_explicit_retry_after_autosave_failure_persists_and_clears_markers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    app, _ = saved_demo_review(new_app())
+    app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.save",
+        side_effect=OSError("disk full"),
+    ):
+        app = app.button(key="run_analysis").click().run()
+
+    state = app.session_state["review_state"]
+    app = app.button(key="save_review").click().run()
+
+    assert JsonReviewStore(default_local_review_directory()).load(
+        state.review.review_id
+    ) == state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(state)
+    )
+    assert app.session_state["failed_review_save_fingerprint"] is None
+    assert app.session_state["deleted_review_save_fingerprint"] is None
+
+
+def test_post_save_resolution_changes_fingerprint_and_autosaves_review_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    previous_state = app.session_state["review_state"]
+    previous_fingerprint = _review_fingerprint_for_test(previous_state)
     assert app.button(key="save_review").disabled is True
 
     app = app.selectbox(key="resolution_decision").set_value(
@@ -1931,9 +2390,13 @@ def test_post_save_resolution_marks_review_unsaved_again(
     ).run()
     app = app.button(key="save_resolution").click().run()
 
+    persisted_state = JsonReviewStore(default_local_review_directory()).load(review_id)
+    current_state = app.session_state["review_state"]
     caption_text = "\n".join(item.value for item in app.caption)
-    assert "Unsaved changes — save locally before relying on this review ID." in caption_text
-    assert app.button(key="save_review").disabled is False
+    assert "Saved locally — current review matches local storage." in caption_text
+    assert _review_fingerprint_for_test(current_state) != previous_fingerprint
+    assert persisted_state == current_state
+    assert app.button(key="save_review").disabled is True
 
 
 def test_unsaved_review_requires_explicit_approval_before_replacement(
@@ -1958,8 +2421,8 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
     assert app.button(key="load_demo").disabled is True
     assert app.button(key="fetch_pr").disabled is True
     assert app.button(key="prepare_criteria").disabled is True
-    assert app.button(key="add_criterion_ui").disabled is True
-    assert app.button(key="split_criterion_ui").disabled is True
+    assert app.button(key="add_criterion_ui").disabled is False
+    assert app.button(key="split_criterion_ui").disabled is False
     assert all(
         button.disabled
         for button in app.button
@@ -1983,6 +2446,9 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
 
 def test_replacing_unsaved_review_consumes_replacement_approval() -> None:
     app = analyzed_demo(new_app())
+    app = app.text_input(key="new_criterion_text").set_value(
+        "Pending criterion before replacement"
+    ).run()
     app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
     app = app.button(key="load_demo").click().run()
 
@@ -2022,7 +2488,7 @@ def test_saved_review_can_be_reopened_from_a_fresh_session(
     assert len(fresh.download_button) == 3
     assert review_id in [item.value for item in fresh.code]
     caption_text = "\n".join(item.value for item in fresh.caption)
-    assert "Saved locally — current review matches the last local save." in caption_text
+    assert "Saved locally — current review matches local storage." in caption_text
     assert fresh.button(key="save_review").disabled is True
 
 
@@ -2230,11 +2696,41 @@ def test_final_acceptance_requires_resolutions_and_then_completes_gate() -> None
     assert "Final acceptance appended to the local review history." in [
         item.value for item in app.success
     ]
-    history = [item.value for item in app.markdown if "Final acceptance:" in item.value]
-    assert history == [
-        "- **Current · revision 1** — Final acceptance: Recorded — "
-        "Reviewer recorded final acceptance"
-    ]
+    assert "Current · revision 1" in [item.value for item in app.text]
+    assert "Final acceptance" in [item.value for item in app.code]
+    assert "Recorded" in [item.value for item in app.text]
+    assert "Reviewer recorded final acceptance" in [item.value for item in app.text]
+
+
+def test_pending_contradictory_resolution_blocks_final_acceptance_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
+    review_id = authoritative_state.review.review_id
+    assert app.button(key="record_final_acceptance").disabled is False
+
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.CHANGE_REQUIRED
+    ).run()
+
+    assert app.button(key="record_final_acceptance").disabled is True
+    app = app.button(key="record_final_acceptance").click().run()
+    assert app.session_state["review_state"] == authoritative_state
+    assert not any(
+        event.final_acceptance
+        for event in app.session_state["review_state"].resolution_events
+    )
+
+    app = app.button(key="clear_criterion_detail_drafts").click().run()
+
+    assert app.session_state["review_state"] == authoritative_state
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) == authoritative_state
+    assert app.selectbox(key="resolution_decision").value is None
+    assert app.button(key="record_final_acceptance").disabled is False
 
 
 def test_final_acceptance_failure_preserves_retryable_state_without_raw_details() -> None:
@@ -2270,7 +2766,9 @@ def test_final_acceptance_failure_preserves_retryable_state_without_raw_details(
     assert "/private/secret/final.json" not in rendered
     assert app.session_state["review_state"] == review_state
     assert app.session_state["bundle"] == review_state.bundle
-    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(review_state)
+    )
     assert len(app.session_state["review_state"].resolution_events) == len(
         review_state.bundle.criteria
     )
@@ -2434,17 +2932,70 @@ def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summar
     app = analyzed_demo(new_app())
     markdown_text = [item.value for item in app.markdown]
     visible_markdown = "\n".join(markdown_text)
+    text_values = [item.value for item in app.text]
 
+    assert "E1" in text_values
+    assert "E2" in text_values
+    assert "High" in text_values
+    assert "4" in text_values
+    assert "Unresolved" in text_values
     assert (
-        "**Required evidence:** E1 · **Observed evidence:** E2 · "
-        "**Confidence:** High · **Candidates:** 4 · **Human resolution:** Unresolved"
-    ) in markdown_text
-    assert "Strong candidate evidence was found; a reviewer must still judge sufficiency." in (
-        item.value for item in app.markdown
+        "Strong candidate evidence was found; a reviewer must still judge sufficiency."
+        in text_values
     )
     assert "**AC-01 — Evidence Found** · User can export the research list as CSV" not in (
         visible_markdown
     )
+
+
+def test_ordinary_resolution_precedes_optional_external_verification() -> None:
+    app = analyzed_demo(new_app())
+    keys = _main_widget_keys(app)
+    optional = next(
+        item
+        for item in app.expander
+        if item.label == "Record optional external verification (E3/E4)"
+    )
+
+    assert keys.index("decision_reviewer") < keys.index("resolution_decision")
+    assert keys.index("save_resolution") < keys.index("runtime_artifact_reference")
+    assert keys.index("runtime_artifact_reference") < keys.index("save_runtime_evidence")
+    assert optional.proto.expanded is False
+
+
+def test_candidate_evidence_groups_by_path_and_type_without_losing_items() -> None:
+    app = analyzed_demo(new_app())
+    groups = [item for item in app.expander if item.label.startswith("Evidence group ")]
+
+    assert [item.label for item in groups] == [
+        "Evidence group 1 · Implementation · 2 items",
+        "Evidence group 2 · Test · 2 items",
+    ]
+    assert [groups[0].code[0].value, groups[1].code[0].value] == [
+        "src/export.py",
+        "tests/test_export.py",
+    ]
+    rendered_ids = [
+        value
+        for group in groups
+        for value in [item.value for item in group.code]
+        if value.startswith("EV-")
+    ]
+    assert rendered_ids == [
+        "EV-AC-01-01",
+        "EV-AC-01-04",
+        "EV-AC-01-02",
+        "EV-AC-01-03",
+    ]
+
+
+def test_selected_requirement_and_candidate_values_are_not_raw_markdown() -> None:
+    app = analyzed_demo(new_app())
+    selected_text = app.session_state["criteria"][0].text
+    markdown_values = [item.value for item in app.markdown]
+
+    assert selected_text in [item.value for item in app.text]
+    assert all(selected_text not in value for value in markdown_values)
 
 
 def test_evidence_matrix_shows_current_human_resolution() -> None:
@@ -2507,7 +3058,9 @@ def test_criterion_resolution_failure_preserves_retryable_state_without_raw_deta
     assert "/private/secret/resolution.json" not in rendered
     assert app.session_state["review_state"] == review_state
     assert app.session_state["bundle"] == review_state.bundle
-    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(review_state)
+    )
     assert app.session_state["review_state"].resolution_events == []
     assert app.selectbox(key="resolution_decision").value is HumanDecision.ACCEPTED
     assert app.text_area(key="resolution_note").value == "Controlled reviewer note"
@@ -2527,27 +3080,14 @@ def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
     app = analyzed_demo(new_app())
     caption_text = "\n".join(caption.value for caption in app.caption)
 
-    resolution_context = next(
-        markdown.value
-        for markdown in app.markdown
-        if markdown.value.startswith("### Criterion resolution")
-    )
-    assert (
-        "This decision will be recorded for AC-01 — User can export the research list as CSV. "
-        "It does not record final review acceptance."
-    ) in resolution_context
+    assert "### Criterion resolution" in [item.value for item in app.markdown]
+    assert "This decision will be recorded for the selected criterion above." in caption_text
+    assert "It does not record final review acceptance." in caption_text
+    assert "User can export the research list as CSV" in [item.value for item in app.text]
     assert "Select a decision to see its deterministic gate impact." in caption_text
 
     app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
-    resolution_context = next(
-        markdown.value
-        for markdown in app.markdown
-        if markdown.value.startswith("### Criterion resolution")
-    )
-    assert (
-        "This decision will be recorded for AC-03 — Failed export shows an error message. "
-        "It does not record final review acceptance."
-    ) in resolution_context
+    assert "Failed export shows an error message" in [item.value for item in app.text]
 
 
 def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> None:
@@ -2558,16 +3098,20 @@ def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> N
 
     markdown_text = "\n".join(item.value for item in app.markdown)
     caption_text = "\n".join(item.value for item in app.caption)
-    info_text = "\n".join(item.value for item in app.info)
+    code_text = "\n".join(item.value for item in app.code)
+    text_values = [item.value for item in app.text]
 
     assert "Recommended next action" in markdown_text
-    assert finding.recommended_action in info_text
+    assert finding.recommended_action in code_text
     assert "Candidate evidence" in markdown_text
-    assert f"**Matching rationale:** {evidence.relevance_reason}" in markdown_text
-    assert f"Matching rule: {evidence.matching_rule}" in caption_text
-    assert f"Limitation: {evidence.limitations[0]}" in caption_text
+    assert "Matching rationale" in caption_text
+    assert evidence.relevance_reason in text_values
+    assert "Matching rule" in caption_text
+    assert evidence.matching_rule in text_values
+    assert "Limitation" in caption_text
+    assert evidence.limitations[0] in text_values
     assert evidence.excerpt in [item.value for item in app.code]
-    assert "Open immutable GitHub evidence" in markdown_text
+    assert f"](<{evidence.permalink}>)" in markdown_text
 
 
 def test_missing_criterion_detail_shows_action_and_no_candidate_state() -> None:
@@ -2577,11 +3121,11 @@ def test_missing_criterion_detail_shows_action_and_no_candidate_state() -> None:
     finding = next(item for item in bundle.findings if item.criterion_id == "AC-03")
 
     markdown_text = "\n".join(item.value for item in app.markdown)
-    info_text = "\n".join(item.value for item in app.info)
+    code_text = "\n".join(item.value for item in app.code)
     caption_text = "\n".join(item.value for item in app.caption)
 
     assert "Recommended next action" in markdown_text
-    assert finding.recommended_action in info_text
+    assert finding.recommended_action in code_text
     assert "Candidate evidence" in markdown_text
     assert "No candidate evidence is linked to this provisional finding." in caption_text
 
@@ -2592,11 +3136,13 @@ def test_criterion_detail_explains_retrieval_without_presenting_it_as_evidence()
 
     markdown_text = "\n".join(item.value for item in app.markdown)
     caption_text = "\n".join(item.value for item in app.caption)
+    text_values = [item.value for item in app.text]
 
     assert "How ScopeProof searched" in markdown_text
-    assert "Search outcome: Below Relevance Threshold" in caption_text
-    assert "Searched terms:" in caption_text
-    assert "Searched paths:" in caption_text
+    assert "Search outcome" in caption_text
+    assert "Below Relevance Threshold" in text_values
+    assert "Searched terms" in caption_text
+    assert "Searched paths" in caption_text
     assert (
         "Search diagnostics explain retrieval; they are not evidence that the criterion "
         "is satisfied or missing from the repository."
@@ -2633,17 +3179,17 @@ def test_human_decision_and_final_acceptance_append_history() -> None:
 
 def test_resolution_history_distinguishes_current_and_superseded_decisions() -> None:
     app = analyzed_demo(new_app())
-    app = app.selectbox(key="resolution_decision").set_value(
-        HumanDecision.REJECTED_FINDING
-    ).run()
+    app = app.selectbox(key="resolution_decision").set_value(HumanDecision.REJECTED_FINDING).run()
     app = app.button(key="save_resolution").click().run()
     app = app.selectbox(key="resolution_decision").set_value(HumanDecision.ACCEPTED).run()
     app = app.button(key="save_resolution").click().run()
 
-    markdown_text = "\n".join(item.value for item in app.markdown)
+    text_values = [item.value for item in app.text]
     caption_text = "\n".join(item.value for item in app.caption)
-    assert "Superseded · revision 1 — AC-01: Rejected Finding" in markdown_text
-    assert "Current · revision 1** — AC-01: Accepted" in markdown_text
+    assert "Superseded · revision 1" in text_values
+    assert "Current · revision 1" in text_values
+    assert "Rejected Finding" in text_values
+    assert "Accepted" in text_values
     assert (
         "Current events are the latest recorded inputs for the active revision. Superseded and "
         "prior-revision events remain audit history and do not independently control the gate."
@@ -2681,10 +3227,10 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
     app.session_state["bundle"] = review_state.bundle
     app = app.run()
 
-    assert (
-        "Reviewer: Controlled reviewer · Recorded at (UTC): 2026-07-14T19:45:00Z · "
-        "Claimed evidence level: E3"
-    ) in [item.value for item in app.caption]
+    text_values = [item.value for item in app.text]
+    assert "Controlled reviewer" in text_values
+    assert "2026-07-14T19:45:00Z" in text_values
+    assert "E3" in text_values
 
 
 def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> None:
@@ -2707,11 +3253,10 @@ def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> Non
     app = app.run()
 
     captions = [item.value for item in app.caption]
-    assert (
-        "Reviewer: Controlled reviewer · Recorded at (UTC): 2026-07-14T19:50:00Z"
-        in captions
-    )
-    assert not any("Claimed evidence level" in item for item in captions)
+    text_values = [item.value for item in app.text]
+    assert "Controlled reviewer" in text_values
+    assert "2026-07-14T19:50:00Z" in text_values
+    assert "Claimed evidence level" not in captions
 
 
 def test_runtime_evidence_guidance_lists_only_missing_required_fields() -> None:
@@ -2861,7 +3406,9 @@ def test_runtime_evidence_validation_failure_is_safe_and_retryable() -> None:
     assert raw_error not in rendered
     assert "/private/secret/runtime.json" not in rendered
     assert app.session_state["review_state"] == review_state
-    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(review_state)
+    )
     assert app.session_state["review_state"].bundle.runtime_evidence == []
     assert app.text_input(key="runtime_artifact_reference").value == values[
         "runtime_artifact_reference"
@@ -2882,10 +3429,11 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
         for caption in app.caption
         if caption.value.startswith("This record will be attached to")
     )
-    assert (
-        "This record will be attached to AC-01 — User can export the research list as CSV."
-    ) in target_context
-    assert "Record a human-supplied observation only." in target_context
+    assert target_context == "This record will be attached to the selected criterion."
+    assert "User can export the research list as CSV" in [item.value for item in app.text]
+    assert "Record a human-supplied observation only." in "\n".join(
+        item.value for item in app.caption
+    )
 
     level_context = next(
         caption.value
@@ -2910,11 +3458,8 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
         if caption.value.startswith("This record will be attached to")
     ]
     assert len(target_captions) == 1
-    assert (
-        "This record will be attached to AC-03 — Failed export shows an error message."
-        in target_captions[0]
-    )
-    assert "Record a human-supplied observation only." in target_captions[0]
+    assert target_captions[0] == "This record will be attached to the selected criterion."
+    assert "Failed export shows an error message" in [item.value for item in app.text]
 
 
 def test_criterion_change_clears_pending_target_specific_drafts() -> None:
@@ -2989,6 +3534,30 @@ def test_manual_runtime_evidence_can_be_recorded_without_changing_static_finding
     assert bundle.runtime_evidence[0].artifact_reference.endswith("/1")
 
 
+def test_external_verification_normalizes_reviewer_for_atomic_records() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/run/normalized-reviewer"
+    ).run()
+    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("passed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("  QA  ").run()
+
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    review_state = app.session_state["review_state"]
+    manual_events = [
+        event
+        for event in review_state.resolution_events
+        if event.decision is HumanDecision.MANUALLY_VERIFIED
+    ]
+    assert len(review_state.bundle.runtime_evidence) == 1
+    assert len(manual_events) == 1
+    assert review_state.bundle.runtime_evidence[0].reviewer == "QA"
+    assert manual_events[0].reviewer == "QA"
+
+
 def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
     app = analyzed_demo(new_app())
     app = app.text_input(key="runtime_artifact_reference").set_value("artifact-42").run()
@@ -2999,78 +3568,60 @@ def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
     app = app.button(key="save_runtime_evidence").click().run()
 
     runtime_rows = [
-        item.value.replace("\\", "")
-        for item in app.markdown
-        if "artifact\\-42" in item.value
+        item.value.replace("\\", "") for item in app.markdown if "artifact\\-42" in item.value
     ]
-    assert runtime_rows == ["artifact-42 — Fixture scenario"]
+    assert runtime_rows == ["artifact-42"]
+    assert "Fixture scenario" in [item.value for item in app.text]
 
 
 def test_runtime_record_shows_reviewer_and_limitations() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
-        "artifact-complete-record"
-    ).run()
-    app = app.text_area(key="runtime_scenario").set_value(
-        "Controlled export scenario"
-    ).run()
-    app = app.text_input(key="runtime_environment").set_value(
-        "Controlled environment"
-    ).run()
-    app = app.text_input(key="runtime_result").set_value(
-        "Controlled observed result"
-    ).run()
-    app = app.text_input(key="runtime_reviewer").set_value(
-        "Controlled reviewer"
-    ).run()
-    app = app.text_area(key="runtime_limitations").set_value(
-        "Browser-only observation\nMobile behavior not observed"
-    ).run()
+    app = (
+        app.text_input(key="runtime_artifact_reference").set_value("artifact-complete-record").run()
+    )
+    app = app.text_area(key="runtime_scenario").set_value("Controlled export scenario").run()
+    app = app.text_input(key="runtime_environment").set_value("Controlled environment").run()
+    app = app.text_input(key="runtime_result").set_value("Controlled observed result").run()
+    app = app.text_input(key="runtime_reviewer").set_value("Controlled reviewer").run()
+    app = (
+        app.text_area(key="runtime_limitations")
+        .set_value("Browser-only observation\nMobile behavior not observed")
+        .run()
+    )
 
     app = app.button(key="save_runtime_evidence").click().run()
 
-    rendered = [item.value.replace("\\", "") for item in app.markdown]
-    assert "artifact-complete-record — Controlled export scenario" in rendered
-    assert "**Environment:** Controlled environment" in rendered
-    assert "**Observed result:** Controlled observed result" in rendered
-    assert "**Evidence level:** E3" in rendered
-    assert "**Reviewer:** Controlled reviewer" in rendered
-    assert "**Limitations**" in rendered
-    assert "- Browser-only observation" in rendered
-    assert "- Mobile behavior not observed" in rendered
+    rendered_markdown = [item.value.replace("\\", "") for item in app.markdown]
+    rendered_text = [item.value for item in app.text]
+    captions = [item.value for item in app.caption]
+    assert "artifact-complete-record" in rendered_markdown
+    assert "Controlled export scenario" in rendered_text
+    assert "Controlled environment" in rendered_text
+    assert "Controlled observed result" in rendered_text
+    assert "E3" in rendered_text
+    assert "Controlled reviewer" in rendered_text
+    assert "Limitations" in captions
+    assert "Browser-only observation" in rendered_text
+    assert "Mobile behavior not observed" in rendered_text
     assert "No limitations recorded." not in [item.value for item in app.caption]
 
 
 def test_runtime_record_shows_persisted_utc_timestamp() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
-        "artifact-timestamped"
-    ).run()
-    app = app.text_area(key="runtime_scenario").set_value(
-        "Controlled timestamp scenario"
-    ).run()
-    app = app.text_input(key="runtime_environment").set_value(
-        "Controlled environment"
-    ).run()
-    app = app.text_input(key="runtime_result").set_value(
-        "Controlled observed result"
-    ).run()
-    app = app.text_input(key="runtime_reviewer").set_value(
-        "Controlled reviewer"
-    ).run()
+    app = app.text_input(key="runtime_artifact_reference").set_value("artifact-timestamped").run()
+    app = app.text_area(key="runtime_scenario").set_value("Controlled timestamp scenario").run()
+    app = app.text_input(key="runtime_environment").set_value("Controlled environment").run()
+    app = app.text_input(key="runtime_result").set_value("Controlled observed result").run()
+    app = app.text_input(key="runtime_reviewer").set_value("Controlled reviewer").run()
     app = app.button(key="save_runtime_evidence").click().run()
 
     review_state = app.session_state["review_state"].model_copy(deep=True)
-    review_state.bundle.runtime_evidence[0].timestamp = datetime(
-        2026, 7, 14, 12, 10, tzinfo=UTC
-    )
+    review_state.bundle.runtime_evidence[0].timestamp = datetime(2026, 7, 14, 12, 10, tzinfo=UTC)
     app.session_state["review_state"] = review_state
     app.session_state["bundle"] = review_state.bundle
     app = app.run()
 
-    assert "**Recorded at (UTC):** 2026-07-14T12:10:00Z" in [
-        item.value for item in app.markdown
-    ]
+    assert "2026-07-14T12:10:00Z" in [item.value for item in app.text]
 
 
 def test_runtime_record_shows_explicit_empty_limitations_state() -> None:
