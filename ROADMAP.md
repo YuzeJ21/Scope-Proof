@@ -13,10 +13,10 @@ automated activity. The current external state is
 | Area | Current state |
 |---|---|
 | Published install | v0.2.1 |
-| Verified product baseline | v0.2.3 exact-head runtime-evidence hardening merged through PR #180 as `2a320df966eff30c05a2b1dce607a247201fa165`; untagged and unreleased |
-| Product tree verification | Independent PR head `ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f` and the merge commit share tree `add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8` |
-| Repository alignment | PR #181 merged documentation-only post-merge alignment as `eaa66c5979e2a71769d58f0699537da474094d06`; repository-tree CI, CodeQL, and Pages succeeded |
-| Current engineering track | Unreleased v0.2.3 product convergence: simpler surfaces and criteria-source snapshot provenance; exact final-tree verification and publication remain separate |
+| Verified product baseline | v0.2.3 product-convergence candidate through `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; untagged and unreleased |
+| Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
+| Pre-convergence main baseline | PR #181 merged documentation-only post-merge alignment as `eaa66c5979e2a71769d58f0699537da474094d06`; repository-tree CI, CodeQL, and Pages succeeded |
+| Integration authority | Protected-PR `verify` and CodeQL plus resulting-main CI and Pages. GitHub history is authoritative for the final merge SHA; publication remains a separate decision. |
 | Product validation | Stage 1 waiting at zero; Stages 2–4 gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
@@ -25,12 +25,12 @@ milestones can proceed while Stage 1 waits, but they do not advance product-vali
 ## Stage 0 — Reviewer-first product reset
 
 Status: prior PR #177 repairs remain historical engineering evidence. PR #180
-merged the exact-head runtime-evidence repair, and the merged product tree has
-independent local verification plus successful merged-main CI, CodeQL, and
-Pages runs. PR #181 merged documentation-only post-merge alignment as
-`eaa66c5979e2a71769d58f0699537da474094d06`; CI, CodeQL, and Pages succeeded.
-This is repository-tree CI only and does not establish release assets,
-checksums, a tag, a GitHub Release, or Stage 1 evidence.
+merged the exact-head runtime-evidence repair, and PR #181 aligned the
+documentation. The later product-convergence candidate has independent local
+core, package, browser, and static-site evidence. GitHub's protected PR and
+resulting-main workflow records determine its integration status. None of this
+establishes release assets, checksums, a tag, a GitHub Release, or Stage 1
+evidence.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
@@ -54,9 +54,21 @@ checksums, a tag, a GitHub Release, or Stage 1 evidence.
   and HTML exports while retaining Pydantic validation.
 - [x] Project criteria-source provenance through the CLI, advanced Action,
   workbench, alpha record, local persistence, and all validated exports.
+- [x] Reject malformed or cross-object gate input deterministically before it
+  can be evaluated, including duplicate identifiers, coverage mismatches,
+  foreign resolution identifiers, and provenance-digest contradictions.
+- [x] Bind qualifying alpha outcomes to a fully revalidated saved review,
+  genuine public-GitHub origin, exact PR head, criteria snapshot, and immutable
+  one-time outcome; fixture, demo, research, and legacy-unknown origins remain
+  ineligible.
+- [x] Provide an offline confirmation-preparation command that calculates
+  exact requirement hashes, refuses overwrite, and never needs a paid API.
 - [x] Simplify the workbench and public-alpha surfaces with supported theme
   settings and progressive disclosure while preserving safety copy, focus
   treatment, and deterministic gate behavior.
+- [x] Clean the public product page for desktop and narrow screens, including a
+  readable mobile header and a valid local favicon without changing the
+  evidence boundary.
 - [x] Optional alpha feedback stays separate, local, consent-controlled, and off by default.
 - [x] Re-review comparison preserves both bundles and reports head, evidence, decision, and status
   changes.
@@ -83,11 +95,12 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 ## Current engineering track — v0.2.3 Evidence Quality
 
 Status: the earlier candidate and PR #177 repairs remain merged history. PR #179
-merged the workbench UX change, PR #180 merged the exact-head runtime-evidence
-hardening as `2a320df966eff30c05a2b1dce607a247201fa165`, and PR #181 completed
-documentation-only post-merge alignment. The active unreleased source work
-adds criteria-source provenance and a cleaner product hierarchy. The source is
-not tagged or released. This work earns zero Stage 1 credit.
+merged the first workbench UX change, PR #180 merged exact-head runtime-evidence
+hardening, and PR #181 aligned post-merge documentation. The later verified
+product-convergence candidate adds criteria-source provenance, stricter trusted
+boundaries, genuine-origin alpha qualification, and cleaner product surfaces.
+GitHub history determines whether its protected integration has completed. The
+source is not tagged or released. This work earns zero Stage 1 credit.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
@@ -138,6 +151,9 @@ Historical current-main package, security, and environment evidence is recorded
 in the [post-merge release-readiness audit](docs/releases/v0.2.3-post-merge-release-readiness.md).
 The merged product-tree evidence is recorded in the
 [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md).
+The later convergence candidate and its deliberately separated exact-target
+evidence are recorded in the
+[product-convergence verification audit](docs/audits/v0.2.3-product-convergence/verification.md).
 
 ## Stage 1 — Genuine public alpha
 
