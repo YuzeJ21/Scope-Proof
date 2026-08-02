@@ -116,6 +116,10 @@ def _review_allows_final_acceptance(bundle: ReviewBundle) -> bool:
 
 
 def _require_event_history_integrity(state: ReviewState) -> None:
+    has_unknown_history = any(
+        bundle.criteria_revision_number == "unknown"
+        for bundle in state.analysis_history
+    )
     bundles_by_revision = {
         bundle.criteria_revision_number: bundle
         for bundle in [*state.analysis_history, *([state.bundle] if state.bundle else [])]
@@ -128,6 +132,11 @@ def _require_event_history_integrity(state: ReviewState) -> None:
     for revision_number, events in events_by_revision.items():
         bundle = bundles_by_revision.get(revision_number)
         if bundle is None:
+            if (
+                has_unknown_history
+                and revision_number < state.criteria_revision.number
+            ):
+                continue
             raise ValueError(
                 "resolution event history requires its matching analysis bundle"
             )

@@ -446,6 +446,66 @@ def test_version_one_runtime_migration_runs_after_lineage_migration(
     assert loaded.analysis_history[0].runtime_evidence[0].runtime_evidence_id is not None
 
 
+def test_version_one_unknown_history_preserves_legacy_verification_audit(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    _, payload = write_legacy_runtime_record(store, record_version=1)
+    review_id = payload["state"]["review"]["review_id"]
+    original_history = deepcopy(payload["state"]["analysis_history"][0])
+    original_events = deepcopy(payload["state"]["resolution_events"])
+
+    first = store.load(review_id)
+    second = store.load(review_id)
+
+    assert first.model_dump_json() == second.model_dump_json()
+    assert len(first.analysis_history) == 1
+    historical = first.analysis_history[0]
+    assert historical.criteria_revision_number == "unknown"
+    assert len(historical.runtime_evidence) == len(
+        original_history["runtime_evidence"]
+    )
+    assert historical.runtime_evidence[0].artifact_reference == (
+        original_history["runtime_evidence"][0]["artifact_reference"]
+    )
+    assert historical.runtime_evidence[0].reviewer == (
+        original_history["runtime_evidence"][0]["reviewer"]
+    )
+    manual_resolution = next(
+        resolution
+        for resolution in historical.resolutions
+        if resolution.decision is HumanDecision.MANUALLY_VERIFIED
+    )
+    manual_event = next(
+        event
+        for event in first.resolution_events
+        if event.decision is HumanDecision.MANUALLY_VERIFIED
+    )
+    assert manual_resolution.runtime_evidence_id is None
+    assert manual_event.runtime_evidence_id is None
+    assert historical.review.final_acceptance is True
+    assert first.resolution_events[-1].final_acceptance is True
+    assert first.resolution_events[-1].comment == "Historical final acceptance note"
+    assert [event.comment for event in first.resolution_events] == [
+        event["comment"] for event in original_events
+    ]
+    assert historical.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert (
+        "runtime_verification_reconfirmation_required"
+        in historical.gate.reason_codes
+    )
+
+    resaved_path = store.save(first)
+    resaved = json.loads(resaved_path.read_text(encoding="utf-8"))
+    assert resaved["record_version"] == 3
+    assert resaved["state"]["analysis_history"][0][
+        "criteria_revision_number"
+    ] == "unknown"
+    assert [
+        event["comment"] for event in resaved["state"]["resolution_events"]
+    ] == [event["comment"] for event in original_events]
+
+
 def test_version_two_runtime_migration_preserves_legacy_links_as_unlinked_and_fails_closed(
     tmp_path: Path,
 ) -> None:
@@ -467,6 +527,25 @@ def test_version_two_runtime_migration_preserves_legacy_links_as_unlinked_and_fa
     assert (
         "runtime_verification_reconfirmation_required"
         in loaded.analysis_history[0].gate.reason_codes
+    )
+
+
+def test_legacy_manual_history_without_runtime_items_recomputes_gate(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path, payload = write_legacy_runtime_record(store)
+    payload["state"]["analysis_history"][0]["runtime_evidence"] = []
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(payload["state"]["review"]["review_id"])
+
+    historical = loaded.analysis_history[0]
+    assert historical.runtime_evidence == []
+    assert historical.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert (
+        "runtime_verification_reconfirmation_required"
+        in historical.gate.reason_codes
     )
 
 

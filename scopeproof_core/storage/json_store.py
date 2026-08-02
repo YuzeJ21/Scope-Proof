@@ -244,6 +244,17 @@ class JsonReviewStore:
             migrated = True
         return migrated
 
+    @staticmethod
+    def _bundle_has_legacy_manual_resolution(bundle_payload: object) -> bool:
+        if not isinstance(bundle_payload, dict):
+            return False
+        resolutions = bundle_payload.get("resolutions")
+        return isinstance(resolutions, list) and any(
+            isinstance(resolution, dict)
+            and resolution.get("decision") == "manually_verified"
+            for resolution in resolutions
+        )
+
     @classmethod
     def _migrate_runtime_evidence(
         cls, state_payload: object
@@ -251,23 +262,28 @@ class JsonReviewStore:
         if not isinstance(state_payload, dict):
             return False, set()
         active_bundle = state_payload.get("bundle")
-        active_migrated = False
+        active_gate_affected = False
         if isinstance(active_bundle, dict):
-            active_migrated = cls._migrate_runtime_bundle(
-                active_bundle,
-                f"active:{active_bundle.get('criteria_revision_number')}",
+            active_gate_affected = (
+                cls._migrate_runtime_bundle(
+                    active_bundle,
+                    f"active:{active_bundle.get('criteria_revision_number')}",
+                )
+                or cls._bundle_has_legacy_manual_resolution(active_bundle)
             )
 
-        migrated_history: set[int] = set()
+        gate_affected_history: set[int] = set()
         history = state_payload.get("analysis_history")
         if isinstance(history, list):
             for history_index, historical_bundle in enumerate(history):
-                if cls._migrate_runtime_bundle(
-                    historical_bundle,
-                    f"history:{history_index}",
+                runtime_migrated = cls._migrate_runtime_bundle(
+                    historical_bundle, f"history:{history_index}"
+                )
+                if runtime_migrated or cls._bundle_has_legacy_manual_resolution(
+                    historical_bundle
                 ):
-                    migrated_history.add(history_index)
-        return active_migrated, migrated_history
+                    gate_affected_history.add(history_index)
+        return active_gate_affected, gate_affected_history
 
     @staticmethod
     def _unlink_legacy_manual_runtime_evidence(state_payload: object) -> None:
@@ -344,23 +360,23 @@ class JsonReviewStore:
                 for historical_bundle in analysis_history:
                     if isinstance(historical_bundle, dict):
                         historical_bundle["criteria_revision_number"] = "unknown"
-        active_runtime_migrated = False
-        migrated_runtime_history: set[int] = set()
+        active_legacy_gate_affected = False
+        legacy_gate_affected_history: set[int] = set()
         if record_version in {1, 2}:
             (
-                active_runtime_migrated,
-                migrated_runtime_history,
+                active_legacy_gate_affected,
+                legacy_gate_affected_history,
             ) = self._migrate_runtime_evidence(state_payload)
             self._unlink_legacy_manual_runtime_evidence(state_payload)
         migrate_ci_gates = self._state_payload_needs_ci_gate_migration(state_payload)
         state = ReviewState.model_validate(state_payload)
         if migrate_ci_gates:
             state = self._recompute_ci_migrated_gates(state)
-        elif active_runtime_migrated or migrated_runtime_history:
+        elif active_legacy_gate_affected or legacy_gate_affected_history:
             state = self._recompute_runtime_migrated_gates(
                 state,
-                active_migrated=active_runtime_migrated,
-                migrated_history=migrated_runtime_history,
+                active_migrated=active_legacy_gate_affected,
+                migrated_history=legacy_gate_affected_history,
             )
         return validated_review_state(state)
 

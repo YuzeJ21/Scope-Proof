@@ -1969,6 +1969,12 @@ else:
     final_acceptance_eligible = bool(
         review_state is not None and can_record_final_acceptance(review_state)
     )
+    runtime_reconfirmation_required = bool(
+        review_state is not None
+        and review_state.bundle is not None
+        and "runtime_verification_reconfirmation_required"
+        in review_state.bundle.gate.reason_codes
+    )
 
     st.markdown("### Final review acceptance")
     st.caption(
@@ -1976,6 +1982,11 @@ else:
         "or override the deterministic gate. Review every criterion and its evidence before "
         "recording final acceptance."
     )
+    if final_acceptance_recorded and runtime_reconfirmation_required:
+        st.warning(
+            "Revoke final acceptance before recording new E3/E4 verification at the active "
+            "head."
+        )
     if not final_acceptance_recorded and not final_acceptance_eligible:
         st.caption("Resolve every active criterion before recording final acceptance.")
     if st.button(
@@ -2016,6 +2027,41 @@ else:
                 bundle = review_state.bundle
                 st.session_state["final_acceptance_save_notice"] = (
                     "Final acceptance appended to the local review history."
+                )
+                st.rerun()
+    if final_acceptance_recorded and st.button(
+        "Revoke final acceptance",
+        key="revoke_final_acceptance",
+        disabled=(not decision_reviewer_ready or has_pending_review_input),
+    ):
+        if has_pending_review_input:
+            st.error(
+                "Final acceptance cannot be revoked while review inputs are pending. "
+                "Submit or clear them before trying again."
+            )
+        elif review_state is None:
+            st.error("Run analysis before revoking final acceptance.")
+        else:
+            try:
+                review_state = append_resolution(
+                    review_state,
+                    ResolutionEvent(
+                        final_acceptance=False,
+                        comment="Reviewer revoked final acceptance",
+                        reviewer=decision_reviewer.strip(),
+                    ),
+                )
+            except ValueError:
+                st.error(
+                    "Final acceptance could not be revoked. The review remains unchanged. "
+                    "Verify the active review state and try again."
+                )
+            else:
+                st.session_state["review_state"] = review_state
+                st.session_state["bundle"] = review_state.bundle
+                bundle = review_state.bundle
+                st.session_state["final_acceptance_save_notice"] = (
+                    "Final acceptance revocation appended to the local review history."
                 )
                 st.rerun()
     if final_acceptance_save_notice is not None:

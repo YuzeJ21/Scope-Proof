@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -3756,6 +3757,178 @@ def test_runtime_evidence_legacy_unlinked_warning_disables_final_acceptance() ->
     warning = "Legacy unlinked; re-record at the active head"
     assert warning in [item.value for item in app.warning]
     assert app.button(key="record_final_acceptance").disabled is True
+
+
+def test_reopened_legacy_verification_can_revoke_reverify_and_reaccept(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_demo(new_app())
+    state = app.session_state["review_state"].model_copy(deep=True)
+    assert state.bundle is not None
+    legacy_runtime = RuntimeEvidence(
+        runtime_evidence_id="legacy-runtime",
+        repository=state.review.repository,
+        pr_number=state.review.pr_number,
+        head_sha=state.review.head_sha,
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/runs/legacy",
+        scenario="Legacy export scenario",
+        environment="legacy staging",
+        result="passed",
+        reviewer="Legacy reviewer",
+        evidence_level=EvidenceLevel.E3,
+        limitations=["Legacy observation retained for audit"],
+    )
+    state = append_external_verification(
+        state,
+        legacy_runtime,
+        ResolutionEvent(
+            event_id="legacy-manual-event",
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Legacy manual verification note",
+            claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id=legacy_runtime.runtime_evidence_id,
+            reviewer=legacy_runtime.reviewer,
+        ),
+    )
+    for criterion in state.bundle.criteria:
+        if criterion.criterion_id == "AC-01":
+            continue
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                event_id=f"legacy-accepted-{criterion.criterion_id}",
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment=f"Legacy acceptance for {criterion.criterion_id}",
+                reviewer="Legacy reviewer",
+            ),
+        )
+    state = append_resolution(
+        state,
+        ResolutionEvent(
+            event_id="legacy-final-acceptance",
+            final_acceptance=True,
+            comment="Legacy final acceptance note",
+            reviewer="Legacy reviewer",
+        ),
+    )
+    review_id = state.review.review_id
+    store = JsonReviewStore(default_local_review_directory())
+    record_path = store.save(state)
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    payload["record_version"] = 2
+    for runtime_item in payload["state"]["bundle"]["runtime_evidence"]:
+        for field_name in (
+            "runtime_evidence_id",
+            "repository",
+            "pr_number",
+            "head_sha",
+        ):
+            runtime_item.pop(field_name)
+    for resolution in payload["state"]["bundle"]["resolutions"]:
+        resolution.pop("runtime_evidence_id", None)
+    for event in payload["state"]["resolution_events"]:
+        event.pop("runtime_evidence_id", None)
+    record_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    reopened = select_saved_review(new_app(), review_id)
+    reopened = reopened.button(key="reopen_review").click().run()
+
+    warning = "Legacy unlinked; re-record at the active head"
+    assert warning in [item.value for item in reopened.warning]
+    assert (
+        "Revoke final acceptance before recording new E3/E4 verification at the active head."
+        in [item.value for item in reopened.warning]
+    )
+    assert reopened.button(key="record_final_acceptance").disabled is True
+    reopened = reopened.text_input(key="decision_reviewer").set_value("   ").run()
+    assert reopened.button(key="revoke_final_acceptance").disabled is True
+    reopened = reopened.text_input(key="decision_reviewer").set_value(
+        "  Recovery reviewer  "
+    ).run()
+    assert reopened.button(key="revoke_final_acceptance").disabled is False
+    reopened = reopened.text_input(key="runtime_artifact_reference").set_value(
+        "pending-artifact"
+    ).run()
+    assert reopened.button(key="revoke_final_acceptance").disabled is True
+    reopened = reopened.button(key="clear_criterion_detail_drafts").click().run()
+    reopened = reopened.text_input(key="decision_reviewer").set_value(
+        "  Recovery reviewer  "
+    ).run()
+    assert reopened.button(key="revoke_final_acceptance").disabled is False
+
+    event_count_before_recovery = len(
+        reopened.session_state["review_state"].resolution_events
+    )
+    reopened = reopened.button(key="revoke_final_acceptance").click().run()
+    revoked = reopened.session_state["review_state"]
+    assert revoked.review.final_acceptance is False
+    assert revoked.resolution_events[-1].final_acceptance is False
+    assert revoked.resolution_events[-1].reviewer == "Recovery reviewer"
+    assert len(revoked.resolution_events) == event_count_before_recovery + 1
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == revoked
+
+    reopened = select_saved_review(new_app(), review_id)
+    reopened = reopened.button(key="reopen_review").click().run()
+    assert reopened.session_state["review_state"] == revoked
+    reopened = reopened.text_input(key="decision_reviewer").set_value(
+        "  Recovery reviewer  "
+    ).run()
+    reopened = reopened.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/runs/recovery"
+    ).run()
+    reopened = reopened.text_area(key="runtime_scenario").set_value(
+        "Reverify export at the current head"
+    ).run()
+    reopened = reopened.text_input(key="runtime_environment").set_value(
+        "current staging"
+    ).run()
+    reopened = reopened.text_input(key="runtime_result").set_value("passed").run()
+    reopened = reopened.text_input(key="runtime_reviewer").set_value(
+        "  Recovery reviewer  "
+    ).run()
+    reopened = reopened.button(key="save_runtime_evidence").click().run()
+
+    reverified = reopened.session_state["review_state"]
+    new_runtime = reverified.bundle.runtime_evidence[-1]
+    assert new_runtime.head_sha == reverified.review.head_sha
+    assert new_runtime.runtime_evidence_id is not None
+    assert reverified.resolution_events[-1].decision is HumanDecision.MANUALLY_VERIFIED
+    assert (
+        reverified.resolution_events[-1].runtime_evidence_id
+        == new_runtime.runtime_evidence_id
+    )
+    assert reopened.button(key="record_final_acceptance").disabled is False
+
+    reopened = reopened.button(key="record_final_acceptance").click().run()
+    recovered = reopened.session_state["review_state"]
+    assert recovered.review.final_acceptance is True
+    assert recovered.bundle.gate.verdict is GateVerdict.READY
+    assert [
+        (event.final_acceptance, event.decision)
+        for event in recovered.resolution_events[-3:]
+    ] == [
+        (False, None),
+        (None, HumanDecision.MANUALLY_VERIFIED),
+        (True, None),
+    ]
+    assert [
+        event.reviewer for event in recovered.resolution_events[-3:]
+    ] == ["Recovery reviewer"] * 3
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == recovered
+
+    final_reopen = select_saved_review(new_app(), review_id)
+    final_reopen = final_reopen.button(key="reopen_review").click().run()
+    assert final_reopen.session_state["review_state"] == recovered
+    download_keys = [button.key for button in final_reopen.download_button]
+    assert download_keys == ["download_markdown", "download_json", "download_csv"]
+    assert all(
+        not final_reopen.download_button(key=key).disabled for key in download_keys
+    )
 
 
 def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
