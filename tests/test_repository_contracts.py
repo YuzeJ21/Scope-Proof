@@ -1529,6 +1529,10 @@ def test_public_site_desktop_hero_keeps_actions_and_safety_boundary_above_the_fo
     mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
 
     hero = html.split('<section class="hero"', maxsplit=1)[1].split("</section>", maxsplit=1)[0]
+    assert (
+        '<link rel="icon" href="assets/scopeproof-linkedin-alpha.png" type="image/png">'
+        in html
+    )
     assert hero.index('<div class="actions">') < hero.index('<p class="boundary">')
     assert "min-height: calc(100vh - 5.2rem)" in desktop_css
     assert "padding: 2rem 0" in desktop_css
