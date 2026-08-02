@@ -55,9 +55,9 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`2a320df966eff30c05a2b1dce607a247201fa165`, the public-main product commit
-containing the exact-head runtime-evidence hardening. It remains
-source-candidate installation, not a published v0.2.3 release. Review and
+`3f8dd07293b4040d89592c3899178b9719b82cf5`, the immutable source-candidate commit
+containing the exact-head integrity rules and typed criteria-source confirmation
+used by this workflow. It remains a source-candidate installation; it is not a published v0.2.3 release. Review and
 update that pin deliberately when adopting a newer public release; do not
 replace it with an unpinned package or branch reference.
 

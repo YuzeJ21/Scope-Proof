@@ -1,4 +1,5 @@
 import re
+import subprocess
 from pathlib import Path
 
 from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
@@ -71,7 +72,7 @@ def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "2a320df966eff30c05a2b1dce607a247201fa165"
+    reviewed_revision = "3f8dd07293b4040d89592c3899178b9719b82cf5"
 
     assert "pip install scopeproof" not in example
     assert (
@@ -79,6 +80,48 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
         f"{reviewed_revision}"
     ) in example
     assert reviewed_revision in guide
+
+
+def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
+    example = Path("examples/github-actions/scopeproof.yml").read_text(
+        encoding="utf-8"
+    )
+    install = re.search(
+        r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
+        example,
+    )
+    assert install is not None
+    pinned_revision = install.group(1)
+
+    cli_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:scopeproof_core/cli.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    confirmation_at_pin = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{pinned_revision}:scopeproof_core/criteria/confirmation.py",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+    assert re.search(
+        r'review\.add_argument\(\s*"--confirmation",\s*required=True', cli_at_pin
+    )
+    assert "validate_requirements_confirmation" in cli_at_pin
+    assert "CriteriaSourceProvenance.model_validate_json" in confirmation_at_pin
+    assert "validate_criteria_source_confirmation" in confirmation_at_pin
+
+
+def test_ci_checkouts_include_history_for_source_pin_contract() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert workflow.count("fetch-depth: 0") == 3
 
 
 def test_single_account_alpha_policy_explicitly_skips_external_fork_testing() -> None:

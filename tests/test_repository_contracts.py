@@ -1094,7 +1094,7 @@ def test_launch_matrix_keeps_action_as_an_advanced_preview() -> None:
 def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    expected_pin = "2a320df966eff30c05a2b1dce607a247201fa165"
+    expected_pin = "3f8dd07293b4040d89592c3899178b9719b82cf5"
 
     install = re.search(
         r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
