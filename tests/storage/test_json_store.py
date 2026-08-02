@@ -184,7 +184,12 @@ def state_with_runtime_history():
     return append_runtime_evidence(attached, active_evidence)
 
 
-def downgrade_runtime_provenance(payload: dict, record_version: int = 2) -> dict:
+def downgrade_runtime_provenance(
+    payload: dict,
+    record_version: int = 2,
+    *,
+    remove_manual_links: bool = True,
+) -> dict:
     payload["record_version"] = record_version
     bundles = [payload["state"]["bundle"], *payload["state"]["analysis_history"]]
     for bundle in bundles:
@@ -198,10 +203,12 @@ def downgrade_runtime_provenance(payload: dict, record_version: int = 2) -> dict
                 "head_sha",
             ):
                 runtime_item.pop(field_name, None)
-        for resolution in bundle["resolutions"]:
-            resolution.pop("runtime_evidence_id", None)
-    for event in payload["state"]["resolution_events"]:
-        event.pop("runtime_evidence_id", None)
+        if remove_manual_links:
+            for resolution in bundle["resolutions"]:
+                resolution.pop("runtime_evidence_id", None)
+    if remove_manual_links:
+        for event in payload["state"]["resolution_events"]:
+            event.pop("runtime_evidence_id", None)
     if record_version == 1:
         downgrade_to_version_one(payload)
     return payload
@@ -219,6 +226,20 @@ def write_legacy_runtime_record(
     historical["review"]["head_sha"] = "historical-head"
     historical["runtime_evidence"][0]["head_sha"] = "historical-head"
     downgrade_runtime_provenance(payload, record_version)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path, payload
+
+
+def write_version_two_runtime_record_retaining_links(
+    store: JsonReviewStore,
+) -> tuple[Path, dict]:
+    state = state_with_runtime_history()
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    historical = payload["state"]["analysis_history"][0]
+    historical["review"]["head_sha"] = "historical-head"
+    historical["runtime_evidence"][0]["head_sha"] = "historical-head"
+    downgrade_runtime_provenance(payload, remove_manual_links=False)
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path, payload
 
@@ -446,6 +467,100 @@ def test_version_two_runtime_migration_preserves_legacy_links_as_unlinked_and_fa
     assert (
         "runtime_verification_reconfirmation_required"
         in loaded.analysis_history[0].gate.reason_codes
+    )
+
+
+def test_version_two_migration_unlinks_preexisting_task_one_manual_ids(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    _, payload = write_version_two_runtime_record_retaining_links(store)
+    old_events = deepcopy(payload["state"]["resolution_events"])
+
+    loaded = store.load(payload["state"]["review"]["review_id"])
+
+    historical = loaded.analysis_history[0]
+    manual_resolution = next(
+        resolution
+        for resolution in historical.resolutions
+        if resolution.decision is HumanDecision.MANUALLY_VERIFIED
+    )
+    manual_event = next(
+        event
+        for event in loaded.resolution_events
+        if event.decision is HumanDecision.MANUALLY_VERIFIED
+    )
+    assert manual_resolution.runtime_evidence_id is None
+    assert manual_event.runtime_evidence_id is None
+    loaded_events = [event.model_dump(mode="json") for event in loaded.resolution_events]
+    for event in [*old_events, *loaded_events]:
+        event.pop("runtime_evidence_id", None)
+    assert loaded_events == old_events
+    assert historical.review.final_acceptance is True
+    assert loaded.resolution_events[-1].comment == "Historical final acceptance note"
+    assert loaded.resolution_events[-1].final_acceptance is True
+    assert historical.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert (
+        "runtime_verification_reconfirmation_required"
+        in historical.gate.reason_codes
+    )
+
+
+def test_version_two_migration_unlinks_predictable_migrated_manual_ids(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path, payload = write_version_two_runtime_record_retaining_links(store)
+    historical_payload = payload["state"]["analysis_history"][0]
+    canonical_original_payload = json.dumps(
+        historical_payload["runtime_evidence"][0],
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    review_id = historical_payload["review"]["review_id"]
+    predictable_migrated_id = str(
+        uuid5(
+            NAMESPACE_URL,
+            f"scopeproof-runtime-evidence:{review_id}:history:0:"
+            f"0:{canonical_original_payload}",
+        )
+    )
+    historical_payload["resolutions"][0]["runtime_evidence_id"] = (
+        predictable_migrated_id
+    )
+    for event in payload["state"]["resolution_events"]:
+        if event["decision"] == HumanDecision.MANUALLY_VERIFIED.value:
+            event["runtime_evidence_id"] = predictable_migrated_id
+    old_events = deepcopy(payload["state"]["resolution_events"])
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(review_id)
+
+    historical = loaded.analysis_history[0]
+    manual_resolution = next(
+        resolution
+        for resolution in historical.resolutions
+        if resolution.decision is HumanDecision.MANUALLY_VERIFIED
+    )
+    manual_event = next(
+        event
+        for event in loaded.resolution_events
+        if event.decision is HumanDecision.MANUALLY_VERIFIED
+    )
+    assert manual_resolution.runtime_evidence_id is None
+    assert manual_event.runtime_evidence_id is None
+    loaded_events = [event.model_dump(mode="json") for event in loaded.resolution_events]
+    for event in [*old_events, *loaded_events]:
+        event.pop("runtime_evidence_id", None)
+    assert loaded_events == old_events
+    assert historical.review.final_acceptance is True
+    assert loaded.resolution_events[-1].comment == "Historical final acceptance note"
+    assert loaded.resolution_events[-1].final_acceptance is True
+    assert historical.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert (
+        "runtime_verification_reconfirmation_required"
+        in historical.gate.reason_codes
     )
 
 

@@ -269,6 +269,37 @@ class JsonReviewStore:
                     migrated_history.add(history_index)
         return active_migrated, migrated_history
 
+    @staticmethod
+    def _unlink_legacy_manual_runtime_evidence(state_payload: object) -> None:
+        if not isinstance(state_payload, dict):
+            return
+        bundles = [state_payload.get("bundle")]
+        history = state_payload.get("analysis_history")
+        if isinstance(history, list):
+            bundles.extend(history)
+        for bundle in bundles:
+            if not isinstance(bundle, dict):
+                continue
+            resolutions = bundle.get("resolutions")
+            if not isinstance(resolutions, list):
+                continue
+            for resolution in resolutions:
+                if (
+                    isinstance(resolution, dict)
+                    and resolution.get("decision") == "manually_verified"
+                ):
+                    resolution.pop("runtime_evidence_id", None)
+
+        resolution_events = state_payload.get("resolution_events")
+        if not isinstance(resolution_events, list):
+            return
+        for event in resolution_events:
+            if (
+                isinstance(event, dict)
+                and event.get("decision") == "manually_verified"
+            ):
+                event.pop("runtime_evidence_id", None)
+
     @classmethod
     def _recompute_runtime_migrated_gates(
         cls,
@@ -320,6 +351,7 @@ class JsonReviewStore:
                 active_runtime_migrated,
                 migrated_runtime_history,
             ) = self._migrate_runtime_evidence(state_payload)
+            self._unlink_legacy_manual_runtime_evidence(state_payload)
         migrate_ci_gates = self._state_payload_needs_ci_gate_migration(state_payload)
         state = ReviewState.model_validate(state_payload)
         if migrate_ci_gates:
