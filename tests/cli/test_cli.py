@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -249,6 +250,51 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     diagnostic = state.bundle.retrieval_diagnostics[0]
     assert diagnostic.criterion_id == "AC-01"
     assert diagnostic.accepted_candidate_count == len(state.bundle.evidence)
+
+
+def test_fixture_review_preserves_exact_crlf_requirements_digest(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    raw = b"Export CSV\r\n"
+    requirements.write_bytes(raw)
+    source_text = raw.decode("utf-8")
+    criteria = [
+        Criterion(criterion_id=draft.criterion_id, text=draft.text)
+        for draft in parse_criteria(source_text)
+    ]
+    confirmation = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text=source_text,
+        criteria=criteria,
+        confirmed_by="Demo owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    confirmation_path = tmp_path / "confirmation.json"
+    confirmation_path.write_text(confirmation.model_dump_json(), encoding="utf-8")
+
+    assert main(
+        [
+            "review",
+            "--fixture",
+            "evals/fixtures/complete_implementation_pr.json",
+            "--requirements",
+            str(requirements),
+            "--confirmation",
+            str(confirmation_path),
+            "--storage-dir",
+            str(tmp_path / "reviews"),
+        ]
+    ) == 0
+
+    capsys.readouterr()
+    record = next((tmp_path / "reviews").glob("*.json"))
+    state = JsonReviewStore(tmp_path / "reviews").load(record.stem)
+    assert state.criteria_revision.source_text == source_text
+    assert state.review.criteria_source_provenance is not None
+    assert state.review.criteria_source_provenance.source_text_sha256 == (
+        sha256(raw).hexdigest()
+    )
 
 
 def test_fixture_review_metadata_reports_validated_ci_observation(tmp_path: Path, capsys) -> None:

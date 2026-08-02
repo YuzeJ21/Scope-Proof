@@ -282,6 +282,33 @@ def test_confirmation_persists_exact_source_snapshot_with_utc_time() -> None:
     assert provenance.confirmed_at.tzinfo is UTC
 
 
+def test_confirmation_writes_normalized_source_uri_back_to_the_active_widget() -> None:
+    app = new_app().button(key="load_demo").click().run()
+    app.session_state["criteria_source_mode"] = "standard"
+    app = app.run()
+    app = app.text_input(key="criteria_source_reference").set_value(
+        "https://EXAMPLE.com:443/requirements"
+    ).run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Product owner"
+    ).run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert not app.exception
+    assert app.session_state["criteria_source_provenance"].source_uri == (
+        "https://example.com/requirements"
+    )
+    assert app.text_input(key="criteria_source_reference").value == (
+        "https://example.com/requirements"
+    )
+    assert app.button(key="run_analysis").disabled is False
+    assert not any(
+        item.value.startswith("Criteria source changes are pending confirmation.")
+        for item in app.warning
+    )
+
+
 def test_source_revision_change_is_pending_and_reconfirmation_appends_revision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

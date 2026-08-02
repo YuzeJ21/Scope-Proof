@@ -39,6 +39,42 @@ def test_confirmation_record_must_match_the_exact_requirements_file(tmp_path: Pa
     assert confirmation.source_revision == "revision-42"
 
 
+def test_confirmation_hashes_exact_crlf_utf8_bytes_without_newline_translation(
+    tmp_path: Path,
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    raw = b"First requirement.\r\nSecond requirement.\r\n"
+    requirements.write_bytes(raw)
+    source_text = raw.decode("utf-8")
+    payload = confirmation_payload(source_text)
+    payload["normalized_criteria_sha256"] = canonical_criteria_sha256(
+        [
+            Criterion(criterion_id="AC-01", text="First requirement."),
+            Criterion(criterion_id="AC-02", text="Second requirement."),
+        ]
+    )
+    record = tmp_path / "confirmation.json"
+    record.write_text(
+        json.dumps(payload),
+        encoding="utf-8",
+    )
+
+    confirmation = validate_requirements_confirmation(requirements, record)
+
+    assert confirmation.source_text_sha256 == hashlib.sha256(raw).hexdigest()
+
+
+def test_confirmation_rejects_an_empty_normalized_criterion_set() -> None:
+    with pytest.raises(ValueError, match="at least one criterion"):
+        build_criteria_source_provenance(
+            source_uri="https://example.test/requirements",
+            source_text="Requirements exist but no criterion was selected.",
+            criteria=[],
+            confirmed_by="Product owner",
+            confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+        )
+
+
 def test_confirmation_record_rejects_changed_requirements(tmp_path: Path) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Original requirement.\n", encoding="utf-8")

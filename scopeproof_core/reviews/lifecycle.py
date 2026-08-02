@@ -383,6 +383,10 @@ def append_external_verification(
 def can_record_final_acceptance(state: ReviewState) -> bool:
     """Return whether the active revision has every deterministic prerequisite."""
 
+    if not state.criteria_revision.criteria or (
+        state.bundle is not None and not state.bundle.criteria
+    ):
+        return False
     state = _validated_state(state)
     if state.bundle is None or state.review.final_acceptance:
         return False

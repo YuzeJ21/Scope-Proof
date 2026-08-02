@@ -19,6 +19,7 @@ __all__ = [
     "CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI",
     "build_criteria_source_provenance",
     "canonical_criteria_sha256",
+    "read_exact_utf8_text",
     "source_text_sha256",
     "validate_criteria_source_confirmation",
     "validate_requirements_confirmation",
@@ -29,6 +30,12 @@ def canonical_criteria_sha256(criteria: Sequence[Criterion]) -> str:
     """Hash the ordered, JSON-compatible criterion payload without mutating it."""
 
     return normalized_criteria_sha256(criteria)
+
+
+def read_exact_utf8_text(path: Path) -> str:
+    """Decode exact UTF-8 bytes without universal-newline translation."""
+
+    return path.read_bytes().decode("utf-8")
 
 
 def build_criteria_source_provenance(
@@ -42,6 +49,8 @@ def build_criteria_source_provenance(
 ) -> CriteriaSourceProvenance:
     """Create an immutable confirmation record for an observed source snapshot."""
 
+    if not criteria:
+        raise ValueError("criteria source confirmation requires at least one criterion")
     return CriteriaSourceProvenance(
         source_uri=source_uri,
         source_revision=source_revision,
@@ -58,7 +67,7 @@ def validate_requirements_confirmation(
 ) -> CriteriaSourceProvenance:
     """Load a typed snapshot and bind it to exact text plus ordered criteria."""
 
-    source_text = requirements_path.read_text(encoding="utf-8")
+    source_text = read_exact_utf8_text(requirements_path)
     criteria = [
         Criterion(criterion_id=draft.criterion_id, text=draft.text)
         for draft in parse_criteria(source_text)

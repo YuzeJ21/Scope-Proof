@@ -40,6 +40,8 @@ def evaluate_gate(
     runtime_reconfirmation_required = False
     ingestion_limitations_present = bool(review.ingestion_warnings or review.skipped_files)
 
+    if not criteria:
+        reason_codes.append("criteria_missing")
     if review.check_state is CheckState.FAILING:
         reason_codes.append("required_checks_failing")
 
@@ -106,7 +108,8 @@ def evaluate_gate(
             reason_codes.append("ingestion_limitations_present")
 
         needs_review = bool(
-            unresolved
+            not criteria
+            or unresolved
             or not review.criteria_confirmed
             or review.criteria_source_provenance is None
             or review.ingestion_state is not IngestionState.COMPLETE

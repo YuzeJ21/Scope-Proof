@@ -699,6 +699,34 @@ def test_criteria_source_provenance_rejects_malformed_https_with_stable_error(
     ) in str(exc_info.value)
 
 
+@pytest.mark.parametrize(
+    "source_uri",
+    [
+        "https://user@example.com/requirements",
+        "https://user:secret@example.com/requirements",
+        "https://localhost/requirements",
+        "https://foo.localhost/requirements",
+        "https://service.local/requirements",
+        "https://127.0.0.1/requirements",
+        "https://10.0.0.1/requirements",
+        "https://[::1]/requirements",
+    ],
+)
+def test_criteria_source_provenance_rejects_credentials_and_non_public_hosts(
+    source_uri: str,
+) -> None:
+    payload = {
+        "source_uri": source_uri,
+        "source_text_sha256": "a" * 64,
+        "normalized_criteria_sha256": "b" * 64,
+        "confirmed_by": "Demo owner",
+        "confirmed_at": datetime(2026, 8, 2, tzinfo=UTC),
+    }
+
+    with pytest.raises(ValidationError, match="HTTPS URL"):
+        CriteriaSourceProvenance.model_validate(payload)
+
+
 def test_criteria_source_provenance_normalizes_aware_confirmation_to_utc() -> None:
     provenance = CriteriaSourceProvenance(
         source_uri="https://example.test/requirements",
@@ -737,4 +765,13 @@ def test_confirmed_revision_rejects_provenance_for_different_source_or_criteria(
             source_text="Export CSV.",
             confirmed=True,
             source_provenance=provenance,
+        )
+
+
+def test_criteria_revision_rejects_an_empty_criterion_set() -> None:
+    with pytest.raises(ValidationError):
+        CriteriaRevision(
+            number=1,
+            criteria=[],
+            source_text="Requirements exist.",
         )

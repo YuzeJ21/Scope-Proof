@@ -33,6 +33,8 @@ from scopeproof_core.schemas.models import (
     Review,
     ReviewBundle,
     RuntimeEvidence,
+    normalized_criteria_sha256,
+    source_text_sha256,
 )
 
 
@@ -1274,6 +1276,45 @@ def test_final_acceptance_requires_complete_passing_resolved_review() -> None:
     )
 
     assert can_record_final_acceptance(resolved) is True
+
+
+def test_final_acceptance_is_unavailable_for_an_unvalidated_empty_criterion_state() -> None:
+    state = initial_state()
+    source_text = state.criteria_revision.source_text
+    empty_provenance = CriteriaSourceProvenance(
+        source_uri="https://example.test/requirements",
+        source_text_sha256=source_text_sha256(source_text),
+        normalized_criteria_sha256=normalized_criteria_sha256([]),
+        confirmed_by="Fixture owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    empty_review = state.review.model_copy(
+        update={"criteria_source_provenance": empty_provenance}
+    )
+    assert state.bundle is not None
+    empty_bundle = state.bundle.model_copy(
+        update={
+            "review": empty_review,
+            "criteria": [],
+            "evidence": [],
+            "retrieval_diagnostics": [],
+            "findings": [],
+            "resolutions": [],
+            "gate": evaluate_gate(empty_review, [], [], []),
+        }
+    )
+    empty_revision = state.criteria_revision.model_copy(
+        update={"criteria": [], "source_provenance": empty_provenance}
+    )
+    empty_state = state.model_copy(
+        update={
+            "review": empty_review,
+            "criteria_revision": empty_revision,
+            "bundle": empty_bundle,
+        }
+    )
+
+    assert can_record_final_acceptance(empty_state) is False
 
 
 def test_final_acceptance_is_unavailable_without_criteria_source_provenance() -> None:

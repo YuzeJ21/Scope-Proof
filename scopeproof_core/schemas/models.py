@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from pydantic import (
@@ -103,7 +105,26 @@ class CriteriaSourceProvenance(BaseModel):
             parsed = HttpUrl(normalized)
         except ValueError:
             raise ValueError(_CRITERIA_SOURCE_URI_ERROR) from None
-        if parsed.scheme != "https":
+        split = urlsplit(str(parsed))
+        hostname = split.hostname
+        normalized_hostname = hostname.rstrip(".").lower() if hostname else None
+        unsafe = (
+            parsed.scheme != "https"
+            or split.username is not None
+            or split.password is not None
+            or normalized_hostname is None
+            or normalized_hostname == "localhost"
+            or normalized_hostname.endswith(".localhost")
+            or normalized_hostname.endswith(".local")
+        )
+        if normalized_hostname is not None:
+            try:
+                address = ipaddress.ip_address(normalized_hostname)
+            except ValueError:
+                pass
+            else:
+                unsafe = unsafe or not address.is_global or address.is_multicast
+        if unsafe:
             raise ValueError(_CRITERIA_SOURCE_URI_ERROR)
         return str(parsed)
 
@@ -1090,7 +1111,7 @@ class CriteriaRevision(BaseModel):
     """A user-owned criterion set that must be confirmed before analysis."""
 
     number: int = Field(gt=0)
-    criteria: list[Criterion]
+    criteria: list[Criterion] = Field(min_length=1)
     source_text: str
     confirmed: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -1172,7 +1193,7 @@ class ReviewBundle(BaseModel):
         "unknown"
     ] = "unknown"
     source_text: str
-    criteria: list[Criterion]
+    criteria: list[Criterion] = Field(min_length=1)
     evidence: list[EvidenceItem]
     retrieval_diagnostics: list[CriterionRetrievalDiagnostic] = Field(
         default_factory=list

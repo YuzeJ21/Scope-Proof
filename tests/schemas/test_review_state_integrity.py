@@ -71,6 +71,27 @@ def test_standalone_review_bundle_accepts_strict_positive_integer_revision() -> 
     assert bundle.criteria_revision_number == 1
 
 
+def test_review_bundle_rejects_an_empty_criterion_set() -> None:
+    payload = build_demo_review().model_dump(mode="python")
+    payload["review"]["criteria_source_provenance"] = None
+    payload["criteria"] = []
+    payload["evidence"] = []
+    payload["retrieval_diagnostics"] = []
+    payload["findings"] = []
+    payload["resolutions"] = []
+    payload["gate"] = {
+        "verdict": "ready",
+        "blocking_criteria": [],
+        "conditional_criteria": [],
+        "unresolved_criteria": [],
+        "resolved_exceptions": [],
+        "reason_codes": [],
+    }
+
+    with pytest.raises(ValidationError):
+        ReviewBundle.model_validate(payload)
+
+
 @pytest.mark.parametrize("revision_number", COERCIVE_REVISION_VALUES)
 def test_review_bundle_rejects_coercive_criteria_revision_values(
     revision_number: object,

@@ -155,6 +155,17 @@ def test_ready_after_explicit_acceptance() -> None:
     assert decision.verdict is GateVerdict.READY
 
 
+def test_empty_criteria_can_never_be_ready() -> None:
+    review, _, _ = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+
+    decision = evaluate_gate(review, [], [], [])
+
+    assert decision.verdict is GateVerdict.NEEDS_REVIEW
+    assert decision.reason_codes == ["criteria_missing"]
+
+
 def test_missing_criteria_source_provenance_fails_closed_before_ready() -> None:
     review, criterion, finding = gate_case(
         True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND

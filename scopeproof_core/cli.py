@@ -16,6 +16,7 @@ from scopeproof_core.alpha.service import (
 )
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.criteria.confirmation import (
+    read_exact_utf8_text,
     validate_criteria_source_confirmation,
     validate_requirements_confirmation,
 )
@@ -134,7 +135,7 @@ def _build_bundle(
 def _review(args: argparse.Namespace) -> int:
     report_target = _report_target(args.report)
     requirements_path = Path(args.requirements)
-    source_text = requirements_path.read_text(encoding="utf-8")
+    source_text = read_exact_utf8_text(requirements_path)
     criteria = _criteria_from_text(source_text)
     provenance = validate_criteria_source_confirmation(
         Path(args.confirmation),
@@ -269,7 +270,7 @@ def _validate_requirements_confirmation(args: argparse.Namespace) -> int:
 def _alpha_init(args: argparse.Namespace) -> int:
     """Create a local, validated record for one genuine public-alpha case."""
     requirements_path = Path(args.requirements)
-    source_text = requirements_path.read_text(encoding="utf-8")
+    source_text = read_exact_utf8_text(requirements_path)
     criteria = _criteria_from_text(source_text)
     provenance = validate_criteria_source_confirmation(
         Path(args.confirmation),

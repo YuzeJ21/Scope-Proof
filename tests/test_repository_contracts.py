@@ -12,6 +12,7 @@ from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.evals.r002_models import (
+    R002_PUBLISHED_PRE_PROVENANCE_RESULT_SHA256,
     R002_SOURCE,
     canonical_sha256,
     load_confirmed_criteria,
@@ -84,6 +85,8 @@ def test_r002_tracked_outputs_exclude_scopeproof_authored_redaction_sentinels() 
 def test_r002_engineering_result_is_linked_without_advancing_product_stages() -> None:
     result_path = Path("docs/research/r002-swebench-verified/result.json")
     summary_path = Path("docs/research/r002-swebench-verified/summary.md")
+    raw_result = result_path.read_bytes()
+    assert sha256(raw_result).hexdigest() == R002_PUBLISHED_PRE_PROVENANCE_RESULT_SHA256
     result = load_r002_benchmark_result(result_path)
     summary = summary_path.read_text(encoding="utf-8")
     public_link = "docs/research/r002-swebench-verified/summary.md"

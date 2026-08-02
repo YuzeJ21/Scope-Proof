@@ -202,10 +202,17 @@ _STATE_DEFAULTS = {
     "criteria_source_provenance": None,
     "criteria_source_mode": "standard",
     "criteria_source_draft": None,
+    "criteria_source_widget_sync_pending": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
         st.session_state[state_key] = default
+
+_criteria_source_widget_sync = st.session_state["criteria_source_widget_sync_pending"]
+if _criteria_source_widget_sync is not None:
+    for _widget_key, _widget_value in _criteria_source_widget_sync.items():
+        st.session_state[_widget_key] = _widget_value
+    st.session_state["criteria_source_widget_sync_pending"] = None
 
 _active_source_provenance = st.session_state["criteria_source_provenance"]
 _criteria_source_draft = st.session_state["criteria_source_draft"]
@@ -239,6 +246,7 @@ def _reset_analysis() -> None:
     st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["criteria_source_provenance"] = None
+    st.session_state["criteria_source_widget_sync_pending"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
@@ -1572,6 +1580,16 @@ else:
                 "criteria_source_reference": provenance.source_uri,
                 "criteria_source_revision": provenance.source_revision or "",
                 "criteria_source_confirmer": provenance.confirmed_by,
+            }
+            st.session_state["criteria_source_widget_sync_pending"] = {
+                "criteria_source_reference": provenance.source_uri,
+                "criteria_source_revision": provenance.source_revision or "",
+                "criteria_source_confirmer": provenance.confirmed_by,
+                **(
+                    {"requirements_source_url": provenance.source_uri}
+                    if alpha_feedback_mode
+                    else {}
+                ),
             }
             st.session_state["bundle"] = None if state is None else state.bundle
             criteria_edits_pending = False
