@@ -927,6 +927,7 @@ def test_case_result_accepts_evaluate_gate_compatible_blocked_and_needs_review_s
     review["gate_reason_codes"] = [
         "checks_not_passing",
         "conditional_criteria",
+        "criteria_source_provenance_missing",
         "unresolved_criteria",
     ]
     assert (
@@ -1386,6 +1387,7 @@ def test_case_result_requires_sorted_reasons_bounded_disjoint_criteria_and_close
     review["gate_reason_codes"] = [
         "checks_not_passing",
         "conditional_criteria",
+        "criteria_source_provenance_missing",
         "unresolved_criteria",
     ]
     review["retrieved_candidates"][0]["hunk_id"] = "patch:a.py:H1"  # type: ignore[index]

@@ -1449,7 +1449,7 @@ class R002CaseResult(R002StrictModel):
     retrieved_candidates: tuple[R002RetrievedCandidate, ...] = Field(max_length=250000)
     missing_explanations: tuple[R002MissingExplanation, ...] = Field(max_length=64)
     gate_verdict: GateVerdict
-    gate_reason_codes: tuple[str, ...] = Field(max_length=3)
+    gate_reason_codes: tuple[str, ...] = Field(max_length=4)
     blocking_criteria: tuple[str, ...] = Field(max_length=16)
     conditional_criteria: tuple[str, ...] = Field(max_length=16)
     unresolved_criteria: tuple[str, ...] = Field(max_length=16)
@@ -1511,6 +1511,7 @@ class R002CaseResult(R002StrictModel):
                     for code, criteria in (
                         ("conditional_criteria", self.conditional_criteria),
                         ("unresolved_criteria", self.unresolved_criteria),
+                        ("criteria_source_provenance_missing", ("criteria",)),
                         ("checks_not_passing", ("ci",)),
                     )
                     if criteria
