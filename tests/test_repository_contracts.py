@@ -1497,6 +1497,23 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         assert alpha_visual.size == (1200, 1200)
 
 
+def test_public_site_desktop_hero_keeps_actions_and_safety_boundary_above_the_fold() -> None:
+    html = Path("site/index.html").read_text(encoding="utf-8")
+    css = Path("site/styles.css").read_text(encoding="utf-8")
+    desktop_css = css.split("@media (max-width: 900px)", maxsplit=1)[0]
+    mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
+
+    hero = html.split('<section class="hero"', maxsplit=1)[1].split("</section>", maxsplit=1)[0]
+    assert hero.index('<div class="actions">') < hero.index('<p class="boundary">')
+    assert "min-height: calc(100vh - 5.2rem)" in desktop_css
+    assert "padding: 2rem 0" in desktop_css
+    assert "clamp(3rem, 5.625vw, 4.5rem)" in desktop_css
+
+    # Preserve the separately verified narrow layout while compacting desktop only.
+    assert ".hero { min-height: auto; padding: 3.5rem 0; }" in mobile_css
+    assert "clamp(2.35rem, 12vw, 3.5rem)" in mobile_css
+
+
 def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
     guide_path = Path("docs/commercialization/design-partner-sprint.md")
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
