@@ -9,10 +9,25 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Candidate version: 0.2.3 (candidate merged via PR #174; Stage 0 integrity repairs merged via PR #177; not published).
+Candidate version: 0.2.3 (public `main` through PR #179; exact-head runtime-evidence hardening verified on an unmerged branch; not published).
 
 ### Integrity repairs
 
+- Added immutable `runtime_evidence_id`, repository, pull-request, and reviewed
+  head provenance to every new E3/E4 runtime record and linked manual decision.
+  Trusted boundaries require the link to resolve exactly one matching record.
+- Advanced local storage to record version 3. Version 1/2 runtime records gain
+  deterministic identities, but legacy manual decisions remain unlinked rather
+  than receiving an invented association. Their gate becomes `Needs Review`
+  with `runtime_verification_reconfirmation_required` until active-head
+  verification is recorded again.
+- Projected validated runtime identity and legacy-unlinked recovery through the
+  workbench and JSON, Markdown, CSV, and HTML exports, retaining formula and
+  safe-rendering protections.
+- Added a visible skipped-check warning for complete passing observations
+  without changing deterministic CI state, plus a bundle-less draft-clear path
+  that preserves authoritative review state, resumes autosave, and keeps
+  exports unavailable until reanalysis.
 - Rejected ineligible positive final-acceptance events at the core lifecycle
   boundary and independently validate final-acceptance prerequisites before
   persistence, comparison, presentation, or export.
@@ -29,9 +44,12 @@ Candidate version: 0.2.3 (candidate merged via PR #174; Stage 0 integrity repair
   GitHub Actions bot, moved Pages write/OIDC permissions to the deployment
   job, and made the repository Action use the checked-in locked environment.
 
-These repairs restore the Stage 0 engineering gate on public `main`. They do
-not publish v0.2.3, establish customer validation, or determine whether the
-published v0.2.1 package is affected.
+The PR #177 repairs remain historical public-main evidence. The newer
+exact-head runtime-evidence repair is verified at
+`95b2dc44132edad796f0316d846cd35e536443f6` on an unmerged branch based on public
+`main` `6e3dec784f7cad9931999d4c5eac1cfe2a9006de`. It does not publish v0.2.3,
+establish customer validation, or determine whether the published v0.2.1
+package is affected.
 
 ### Changed
 

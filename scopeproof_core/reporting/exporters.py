@@ -30,6 +30,7 @@ from scopeproof_core.reviews.comparison import (
 from scopeproof_core.schemas.models import (
     CriterionRetrievalDiagnostic,
     EvidenceItem,
+    HumanDecision,
     ReviewBundle,
     ReviewState,
 )
@@ -43,6 +44,7 @@ _RETRIEVAL_BOUNDARY = (
     "is satisfied or missing from the repository."
 )
 _RETRIEVAL_FALLBACK = "Retrieval diagnostics were not recorded for this review."
+_LEGACY_RUNTIME_LINK = "Legacy unlinked; re-record at the active head"
 
 
 def _escape_markdown_text(value: str) -> str:
@@ -331,6 +333,12 @@ def export_markdown(bundle: ExportableReview) -> str:
     bundle, state = _bundle_and_state(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     resolution_by_id = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
+    linked_runtime_ids = {
+        resolution.runtime_evidence_id
+        for resolution in bundle.resolutions
+        if resolution.decision is HumanDecision.MANUALLY_VERIFIED
+        and resolution.runtime_evidence_id is not None
+    }
     evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
     diagnostic_by_id = {
         diagnostic.criterion_id: diagnostic
@@ -527,6 +535,15 @@ def export_markdown(bundle: ExportableReview) -> str:
                     f"{_escape_markdown_text(resolution.comment or 'No note provided')}",
                 ]
             )
+            if resolution.decision is HumanDecision.MANUALLY_VERIFIED:
+                lines.append(
+                    "**Manual resolution link:** "
+                    + (
+                        _render_markdown_code(resolution.runtime_evidence_id)
+                        if resolution.runtime_evidence_id is not None
+                        else _LEGACY_RUNTIME_LINK
+                    )
+                )
         lines.extend(
             [
                 "",
@@ -552,10 +569,30 @@ def export_markdown(bundle: ExportableReview) -> str:
     if bundle.runtime_evidence:
         lines.extend(["## Manual Runtime Evidence", ""])
         for item in bundle.runtime_evidence:
+            if item.runtime_evidence_id is None:
+                identity_lines = [
+                    f"  - Runtime identity: {_LEGACY_RUNTIME_LINK}",
+                    f"  - Manual resolution link: {_LEGACY_RUNTIME_LINK}",
+                ]
+            else:
+                identity_lines = [
+                    "  - Runtime evidence ID: "
+                    f"{_render_markdown_code(item.runtime_evidence_id)}",
+                    "  - Repository / PR: "
+                    f"{_render_markdown_code(item.repository or '')} / #{item.pr_number}",
+                    f"  - Bound head: {_render_markdown_code(item.head_sha or '')}",
+                    "  - Manual resolution link: "
+                    + (
+                        _render_markdown_code(item.runtime_evidence_id)
+                        if item.runtime_evidence_id in linked_runtime_ids
+                        else "Not linked to a current manual resolution"
+                    ),
+                ]
             lines.extend(
                 [
                     f"- **{_escape_markdown_text(item.criterion_id)}** — "
                     f"{render_artifact_reference_markdown(item.artifact_reference)}",
+                    *identity_lines,
                     f"  - Scenario: {_escape_markdown_text(item.scenario)}",
                     f"  - Environment: {_escape_markdown_text(item.environment)}; "
                     f"result: {_escape_markdown_text(item.result)}; "
@@ -702,6 +739,11 @@ def export_csv(bundle: ExportableReview) -> str:
         "recommended_action",
         "runtime_artifacts",
         "runtime_result",
+        "runtime_evidence_ids",
+        "runtime_repositories",
+        "runtime_pr_numbers",
+        "runtime_head_shas",
+        "manual_runtime_evidence_id",
     ]
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
@@ -827,6 +869,25 @@ def export_csv(bundle: ExportableReview) -> str:
                 "runtime_result": json.dumps(
                     [item.result for item in runtime_items], ensure_ascii=False
                 ),
+                "runtime_evidence_ids": json.dumps(
+                    [item.runtime_evidence_id for item in runtime_items],
+                    ensure_ascii=False,
+                ),
+                "runtime_repositories": json.dumps(
+                    [item.repository for item in runtime_items], ensure_ascii=False
+                ),
+                "runtime_pr_numbers": json.dumps(
+                    [item.pr_number for item in runtime_items], ensure_ascii=False
+                ),
+                "runtime_head_shas": json.dumps(
+                    [item.head_sha for item in runtime_items], ensure_ascii=False
+                ),
+                "manual_runtime_evidence_id": _csv_text(
+                    resolution.runtime_evidence_id or _LEGACY_RUNTIME_LINK
+                )
+                if resolution is not None
+                and resolution.decision is HumanDecision.MANUALLY_VERIFIED
+                else "",
             }
         )
     return output.getvalue()
@@ -878,6 +939,56 @@ def export_html(value: ExportableReview) -> str:
     review_status = html.escape(review_status_label(bundle.gate.verdict))
     review_created_at = bundle.review.model_dump(mode="json")["created_at"]
     guidance = gate_guidance(bundle.gate)
+    linked_runtime_ids = {
+        resolution.runtime_evidence_id
+        for resolution in bundle.resolutions
+        if resolution.decision is HumanDecision.MANUALLY_VERIFIED
+        and resolution.runtime_evidence_id is not None
+    }
+    manual_resolution_links = [
+        "<li>"
+        f"{html.escape(resolution.criterion_id)} — "
+        "<strong>Manual resolution link:</strong> "
+        + (
+            f"<code>{html.escape(resolution.runtime_evidence_id)}</code>"
+            if resolution.runtime_evidence_id is not None
+            else html.escape(_LEGACY_RUNTIME_LINK)
+        )
+        + "</li>"
+        for resolution in bundle.resolutions
+        if resolution.decision is HumanDecision.MANUALLY_VERIFIED
+    ]
+    runtime_evidence_items = []
+    for item in bundle.runtime_evidence:
+        if item.runtime_evidence_id is None:
+            identity = (
+                f"<br><strong>Runtime identity:</strong> {html.escape(_LEGACY_RUNTIME_LINK)}"
+                f"<br><strong>Manual resolution link:</strong> "
+                f"{html.escape(_LEGACY_RUNTIME_LINK)}"
+            )
+        else:
+            resolution_link = (
+                f"<code>{html.escape(item.runtime_evidence_id)}</code>"
+                if item.runtime_evidence_id in linked_runtime_ids
+                else "Not linked to a current manual resolution"
+            )
+            identity = (
+                "<br><strong>Runtime evidence ID:</strong> "
+                f"<code>{html.escape(item.runtime_evidence_id)}</code>"
+                "<br><strong>Repository / PR:</strong> "
+                f"<code>{html.escape(item.repository or '')}</code> / #{item.pr_number}"
+                "<br><strong>Bound head:</strong> "
+                f"<code>{html.escape(item.head_sha or '')}</code>"
+                f"<br><strong>Manual resolution link:</strong> {resolution_link}"
+            )
+        runtime_evidence_items.append(
+            "<li>"
+            f"{html.escape(item.criterion_id)}: "
+            f"{_render_artifact_reference_html(item.artifact_reference)} — "
+            f"{html.escape(item.scenario)}; {html.escape(item.environment)}; "
+            f"{html.escape(item.result)}; {html.escape(item.reviewer)}; "
+            f"{html.escape(item.evidence_level.value)}{identity}</li>"
+        )
     return "\n".join(
         [
             "<!doctype html>",
@@ -996,16 +1107,17 @@ def export_html(value: ExportableReview) -> str:
             ),
             *(
                 [
+                    "<h2>Manual Resolution Links</h2><ul>",
+                    *manual_resolution_links,
+                    "</ul>",
+                ]
+                if manual_resolution_links
+                else []
+            ),
+            *(
+                [
                     "<h2>Manual Runtime Evidence</h2><ul>",
-                    *[
-                        "<li>"
-                        f"{html.escape(item.criterion_id)}: "
-                        f"{_render_artifact_reference_html(item.artifact_reference)} — "
-                        f"{html.escape(item.scenario)}; {html.escape(item.environment)}; "
-                        f"{html.escape(item.result)}; {html.escape(item.reviewer)}; "
-                        f"{html.escape(item.evidence_level.value)}</li>"
-                        for item in bundle.runtime_evidence
-                    ],
+                    *runtime_evidence_items,
                     "</ul>",
                 ]
                 if bundle.runtime_evidence

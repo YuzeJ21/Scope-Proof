@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 from pathlib import Path
 
@@ -5,7 +7,12 @@ import pytest
 
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
-from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
+from scopeproof_core.reporting.exporters import (
+    export_csv,
+    export_html,
+    export_json,
+    export_markdown,
+)
 from scopeproof_core.reviews.lifecycle import (
     append_resolution,
     attach_analysis,
@@ -238,10 +245,7 @@ def test_lifecycle_exports_reject_forged_ready_without_resolution_events(exporte
         exporter(state)
 
 
-@pytest.mark.parametrize("exporter", [export_json, export_markdown])
-def test_lifecycle_exports_reject_manual_verification_without_runtime_evidence(
-    exporter,
-) -> None:
+def test_lifecycle_exports_preserve_legacy_manual_verification_as_unlinked() -> None:
     state = new_review_state(build_demo_review())
     assert state.bundle is not None
     event = ResolutionEvent(
@@ -253,8 +257,8 @@ def test_lifecycle_exports_reject_manual_verification_without_runtime_evidence(
         comment="Observed the scenario",
         criteria_revision_number=1,
     )
-    state.resolution_events = [event]
-    state.bundle.resolutions = [
+    events = [event]
+    resolutions = [
         HumanResolution(
             criterion_id="AC-01",
             decision=HumanDecision.MANUALLY_VERIFIED,
@@ -264,6 +268,29 @@ def test_lifecycle_exports_reject_manual_verification_without_runtime_evidence(
             timestamp=event.timestamp,
         )
     ]
+    for criterion in state.bundle.criteria:
+        if criterion.criterion_id == "AC-01":
+            continue
+        accepted_event = ResolutionEvent(
+            event_id=f"accepted-{criterion.criterion_id}",
+            criterion_id=criterion.criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            reviewer="QA",
+            comment="Reviewed candidate evidence",
+            criteria_revision_number=1,
+        )
+        events.append(accepted_event)
+        resolutions.append(
+            HumanResolution(
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                reviewer=accepted_event.reviewer,
+                comment=accepted_event.comment,
+                timestamp=accepted_event.timestamp,
+            )
+        )
+    state.resolution_events = events
+    state.bundle.resolutions = resolutions
     state.bundle.gate = evaluate_gate(
         state.bundle.review,
         state.bundle.criteria,
@@ -271,10 +298,18 @@ def test_lifecycle_exports_reject_manual_verification_without_runtime_evidence(
         state.bundle.resolutions,
     )
 
-    with pytest.raises(
-        ValueError, match=r"manual.*verifi.*matching runtime evidence"
-    ):
-        exporter(state)
+    json_payload = json.loads(export_json(state))
+    markdown = export_markdown(state)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(state))))
+    html_report = export_html(state)
+    warning = "Legacy unlinked; re-record at the active head"
+
+    assert json_payload["bundle"]["resolutions"][0]["runtime_evidence_id"] is None
+    assert json_payload["resolution_events"][0]["runtime_evidence_id"] is None
+    assert json_payload["bundle"]["gate"]["verdict"] == "needs_review"
+    assert warning in markdown
+    assert warning in html_report
+    assert csv_row["manual_runtime_evidence_id"] == warning
 
 
 def test_lifecycle_json_rejects_foreign_historical_review_lineage() -> None:

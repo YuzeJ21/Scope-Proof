@@ -6,6 +6,7 @@ from collections.abc import Callable
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
+from uuid import uuid4
 
 import streamlit as st
 
@@ -548,11 +549,21 @@ def _render_ci_observation_summary(bundle: ReviewBundle) -> None:
             "Runtime verification: "
             f"{bundle.runtime_verification_state.value.replace('_', ' ').capitalize()}"
         )
-        if observation.state is not CheckState.PASSING or not observation.collection_complete:
-            st.warning(
-                "Observed CI has a limiting state. Review its deterministic reason before "
-                "relying on the gate."
-            )
+        if (
+            observation.state is not CheckState.PASSING
+            or not observation.collection_complete
+            or observation.skipped_check_runs > 0
+        ):
+            if observation.state is not CheckState.PASSING or not observation.collection_complete:
+                st.warning(
+                    "Observed CI has a limiting state. Review its deterministic reason before "
+                    "relying on the gate."
+                )
+            if observation.skipped_check_runs > 0:
+                st.warning(
+                    "Observed CI includes skipped checks. Skipped checks were not executed; "
+                    "review its deterministic reason and CI details before relying on the gate."
+                )
 
     with st.expander("CI details and evidence boundary", expanded=False):
         if observation.skipped_check_names:
@@ -1352,6 +1363,25 @@ if bundle is None:
     if review_save_notice is not None:
         st.success(review_save_notice)
     if review_state is not None:
+        criterion_detail_draft_clear_notice = st.session_state.pop(
+            "criterion_detail_draft_clear_notice", None
+        )
+        if criterion_detail_draft_clear_notice is not None:
+            st.success(criterion_detail_draft_clear_notice)
+        if has_pending_criterion_detail_draft:
+            st.warning(
+                "Pending criterion inputs are not part of the review, local save, or exports. "
+                "Clear them to continue with this revised review."
+            )
+            if st.button(
+                "Clear pending criterion inputs",
+                key="clear_criterion_detail_drafts",
+            ):
+                _clear_criterion_detail_drafts()
+                st.session_state["criterion_detail_draft_clear_notice"] = (
+                    "Pending criterion inputs cleared without changing the review."
+                )
+                st.rerun()
         _render_local_review_storage(
             review_state,
             store=review_store,
@@ -1795,6 +1825,9 @@ else:
                 "manual-verification decision atomically."
             )
             st.caption("This record will be attached to the selected criterion.")
+            st.caption(
+                "Runtime evidence identity is bound automatically to the active review."
+            )
             runtime_artifact = st.text_input(
                 "Artifact or URL (required)", key="runtime_artifact_reference"
             )
@@ -1844,7 +1877,12 @@ else:
                     st.error("Run analysis before recording external verification.")
                 else:
                     try:
+                        runtime_evidence_id = str(uuid4())
                         runtime_evidence = RuntimeEvidence(
+                            runtime_evidence_id=runtime_evidence_id,
+                            repository=review_state.review.repository,
+                            pr_number=review_state.review.pr_number,
+                            head_sha=review_state.review.head_sha,
                             criterion_id=selected_id,
                             artifact_reference=runtime_artifact,
                             scenario=runtime_scenario,
@@ -1863,6 +1901,7 @@ else:
                             decision=HumanDecision.MANUALLY_VERIFIED,
                             comment=f"Externally observed result: {runtime_result.strip()}",
                             claimed_evidence_level=runtime_level,
+                            runtime_evidence_id=runtime_evidence_id,
                             reviewer=normalized_runtime_reviewer,
                         )
                         review_state = append_external_verification(
@@ -1893,6 +1932,15 @@ else:
             for item in selected_runtime:
                 recorded_at = item.model_dump(mode="json")["timestamp"]
                 with st.container(border=True):
+                    if item.runtime_evidence_id is None:
+                        st.warning("Legacy unlinked; re-record at the active head")
+                    else:
+                        st.caption("Runtime evidence ID")
+                        st.code(item.runtime_evidence_id, language=None)
+                        st.caption("Bound repository and pull request")
+                        st.text(f"{item.repository} · PR #{item.pr_number}")
+                        st.caption("Bound head")
+                        st.code(item.head_sha, language=None)
                     st.caption("Artifact reference")
                     st.markdown(render_artifact_reference_markdown(item.artifact_reference))
                     st.caption("Runtime scenario")
@@ -1921,6 +1969,12 @@ else:
     final_acceptance_eligible = bool(
         review_state is not None and can_record_final_acceptance(review_state)
     )
+    runtime_reconfirmation_required = bool(
+        review_state is not None
+        and review_state.bundle is not None
+        and "runtime_verification_reconfirmation_required"
+        in review_state.bundle.gate.reason_codes
+    )
 
     st.markdown("### Final review acceptance")
     st.caption(
@@ -1928,6 +1982,11 @@ else:
         "or override the deterministic gate. Review every criterion and its evidence before "
         "recording final acceptance."
     )
+    if final_acceptance_recorded and runtime_reconfirmation_required:
+        st.warning(
+            "Revoke final acceptance before recording new E3/E4 verification at the active "
+            "head."
+        )
     if not final_acceptance_recorded and not final_acceptance_eligible:
         st.caption("Resolve every active criterion before recording final acceptance.")
     if st.button(
@@ -1968,6 +2027,41 @@ else:
                 bundle = review_state.bundle
                 st.session_state["final_acceptance_save_notice"] = (
                     "Final acceptance appended to the local review history."
+                )
+                st.rerun()
+    if final_acceptance_recorded and st.button(
+        "Revoke final acceptance",
+        key="revoke_final_acceptance",
+        disabled=(not decision_reviewer_ready or has_pending_review_input),
+    ):
+        if has_pending_review_input:
+            st.error(
+                "Final acceptance cannot be revoked while review inputs are pending. "
+                "Submit or clear them before trying again."
+            )
+        elif review_state is None:
+            st.error("Run analysis before revoking final acceptance.")
+        else:
+            try:
+                review_state = append_resolution(
+                    review_state,
+                    ResolutionEvent(
+                        final_acceptance=False,
+                        comment="Reviewer revoked final acceptance",
+                        reviewer=decision_reviewer.strip(),
+                    ),
+                )
+            except ValueError:
+                st.error(
+                    "Final acceptance could not be revoked. The review remains unchanged. "
+                    "Verify the active review state and try again."
+                )
+            else:
+                st.session_state["review_state"] = review_state
+                st.session_state["bundle"] = review_state.bundle
+                bundle = review_state.bundle
+                st.session_state["final_acceptance_save_notice"] = (
+                    "Final acceptance revocation appended to the local review history."
                 )
                 st.rerun()
     if final_acceptance_save_notice is not None:
@@ -2025,6 +2119,12 @@ else:
                     if event.claimed_evidence_level is not None:
                         st.caption("Claimed evidence level")
                         st.text(event.claimed_evidence_level.value)
+                    if event.decision is HumanDecision.MANUALLY_VERIFIED:
+                        st.caption("Runtime evidence link")
+                        if event.runtime_evidence_id is None:
+                            st.warning("Legacy unlinked; re-record at the active head")
+                        else:
+                            st.code(event.runtime_evidence_id, language=None)
         else:
             st.caption("No human decisions have been recorded yet.")
 

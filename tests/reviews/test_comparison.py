@@ -97,7 +97,7 @@ def bundle_with(*items: EvidenceItem, head_sha: str) -> ReviewBundle:
     )
 
 
-def test_comparison_rejects_unpaired_manual_verification() -> None:
+def test_comparison_preserves_legacy_unlinked_manual_verification_as_needs_review() -> None:
     previous = bundle_with(head_sha="old")
     current = bundle_with(head_sha="new")
     current.resolutions = [
@@ -116,10 +116,13 @@ def test_comparison_rejects_unpaired_manual_verification() -> None:
         current.resolutions,
     )
 
-    with pytest.raises(
-        ValueError, match="manually verified resolutions require matching runtime evidence"
-    ):
-        compare_reviews(previous, current)
+    comparison = compare_reviews(previous, current)
+
+    assert current.runtime_evidence == []
+    assert current.resolutions[0].runtime_evidence_id is None
+    assert current.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert "runtime_verification_reconfirmation_required" in current.gate.reason_codes
+    assert comparison.current_gate is GateVerdict.NEEDS_REVIEW
 
 
 def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> ReviewBundle:

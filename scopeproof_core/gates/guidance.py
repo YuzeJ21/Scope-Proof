@@ -90,6 +90,11 @@ def gate_guidance(gate: GateDecision) -> list[str]:
                 "Record final acceptance only after a reviewer has reviewed every criterion and "
                 "its evidence."
             )
+        elif code == "runtime_verification_reconfirmation_required":
+            message = (
+                "Record new E3/E4 runtime verification at the active head for legacy-unlinked "
+                "manual criteria before acceptance."
+            )
         else:
             message = f"Review gate reason `{code}` before acceptance."
         messages.append(message)

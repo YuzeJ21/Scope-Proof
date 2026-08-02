@@ -11,13 +11,14 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewBundle, ReviewState
 
-RECORD_VERSION = 2
-_SUPPORTED_RECORD_VERSIONS = (1, RECORD_VERSION)
+RECORD_VERSION = 3
+_SUPPORTED_RECORD_VERSIONS = (1, 2, 3)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _LEGACY_CI_CATEGORIES = {
     "successful_legacy_statuses",
@@ -186,23 +187,151 @@ class JsonReviewStore:
         return any(cls._review_payload_needs_ci_gate_migration(item) for item in review_payloads)
 
     @staticmethod
-    def _recompute_ci_migrated_gates(state: ReviewState) -> ReviewState:
-        def with_recomputed_gate(bundle: ReviewBundle) -> ReviewBundle:
-            return bundle.model_copy(
-                update={
-                    "gate": evaluate_gate(
-                        bundle.review,
-                        bundle.criteria,
-                        bundle.findings,
-                        bundle.resolutions,
-                    )
+    def _with_recomputed_gate(bundle: ReviewBundle) -> ReviewBundle:
+        return bundle.model_copy(
+            update={
+                "gate": evaluate_gate(
+                    bundle.review,
+                    bundle.criteria,
+                    bundle.findings,
+                    bundle.resolutions,
+                )
+            }
+        )
+
+    @classmethod
+    def _recompute_ci_migrated_gates(cls, state: ReviewState) -> ReviewState:
+        bundle = (
+            cls._with_recomputed_gate(state.bundle)
+            if state.bundle is not None
+            else None
+        )
+        history = [cls._with_recomputed_gate(item) for item in state.analysis_history]
+        return state.model_copy(update={"bundle": bundle, "analysis_history": history})
+
+    @staticmethod
+    def _migrate_runtime_bundle(bundle_payload: object, bundle_key: str) -> bool:
+        if not isinstance(bundle_payload, dict):
+            return False
+        runtime_evidence = bundle_payload.get("runtime_evidence")
+        review_payload = bundle_payload.get("review")
+        if not isinstance(runtime_evidence, list) or not isinstance(review_payload, dict):
+            return False
+
+        migrated = False
+        for item_index, runtime_item in enumerate(runtime_evidence):
+            if not isinstance(runtime_item, dict):
+                continue
+            canonical_original_payload = json.dumps(
+                runtime_item,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+            review_id = review_payload.get("review_id")
+            seed = (
+                f"scopeproof-runtime-evidence:{review_id}:{bundle_key}:"
+                f"{item_index}:{canonical_original_payload}"
+            )
+            runtime_item.update(
+                {
+                    "runtime_evidence_id": str(uuid5(NAMESPACE_URL, seed)),
+                    "repository": review_payload.get("repository"),
+                    "pr_number": review_payload.get("pr_number"),
+                    "head_sha": review_payload.get("head_sha"),
                 }
             )
+            migrated = True
+        return migrated
 
-        bundle = (
-            with_recomputed_gate(state.bundle) if state.bundle is not None else None
+    @staticmethod
+    def _bundle_has_legacy_manual_resolution(bundle_payload: object) -> bool:
+        if not isinstance(bundle_payload, dict):
+            return False
+        resolutions = bundle_payload.get("resolutions")
+        return isinstance(resolutions, list) and any(
+            isinstance(resolution, dict)
+            and resolution.get("decision") == "manually_verified"
+            for resolution in resolutions
         )
-        history = [with_recomputed_gate(item) for item in state.analysis_history]
+
+    @classmethod
+    def _migrate_runtime_evidence(
+        cls, state_payload: object
+    ) -> tuple[bool, set[int]]:
+        if not isinstance(state_payload, dict):
+            return False, set()
+        active_bundle = state_payload.get("bundle")
+        active_gate_affected = False
+        if isinstance(active_bundle, dict):
+            active_gate_affected = (
+                cls._migrate_runtime_bundle(
+                    active_bundle,
+                    f"active:{active_bundle.get('criteria_revision_number')}",
+                )
+                or cls._bundle_has_legacy_manual_resolution(active_bundle)
+            )
+
+        gate_affected_history: set[int] = set()
+        history = state_payload.get("analysis_history")
+        if isinstance(history, list):
+            for history_index, historical_bundle in enumerate(history):
+                runtime_migrated = cls._migrate_runtime_bundle(
+                    historical_bundle, f"history:{history_index}"
+                )
+                if runtime_migrated or cls._bundle_has_legacy_manual_resolution(
+                    historical_bundle
+                ):
+                    gate_affected_history.add(history_index)
+        return active_gate_affected, gate_affected_history
+
+    @staticmethod
+    def _unlink_legacy_manual_runtime_evidence(state_payload: object) -> None:
+        if not isinstance(state_payload, dict):
+            return
+        bundles = [state_payload.get("bundle")]
+        history = state_payload.get("analysis_history")
+        if isinstance(history, list):
+            bundles.extend(history)
+        for bundle in bundles:
+            if not isinstance(bundle, dict):
+                continue
+            resolutions = bundle.get("resolutions")
+            if not isinstance(resolutions, list):
+                continue
+            for resolution in resolutions:
+                if (
+                    isinstance(resolution, dict)
+                    and resolution.get("decision") == "manually_verified"
+                ):
+                    resolution.pop("runtime_evidence_id", None)
+
+        resolution_events = state_payload.get("resolution_events")
+        if not isinstance(resolution_events, list):
+            return
+        for event in resolution_events:
+            if (
+                isinstance(event, dict)
+                and event.get("decision") == "manually_verified"
+            ):
+                event.pop("runtime_evidence_id", None)
+
+    @classmethod
+    def _recompute_runtime_migrated_gates(
+        cls,
+        state: ReviewState,
+        *,
+        active_migrated: bool,
+        migrated_history: set[int],
+    ) -> ReviewState:
+        bundle = state.bundle
+        if active_migrated and bundle is not None:
+            bundle = cls._with_recomputed_gate(bundle)
+
+        history = [
+            cls._with_recomputed_gate(item) if index in migrated_history else item
+            for index, item in enumerate(state.analysis_history)
+        ]
         return state.model_copy(update={"bundle": bundle, "analysis_history": history})
 
     def load(self, review_id: str) -> ReviewState:
@@ -231,10 +360,24 @@ class JsonReviewStore:
                 for historical_bundle in analysis_history:
                     if isinstance(historical_bundle, dict):
                         historical_bundle["criteria_revision_number"] = "unknown"
+        active_legacy_gate_affected = False
+        legacy_gate_affected_history: set[int] = set()
+        if record_version in {1, 2}:
+            (
+                active_legacy_gate_affected,
+                legacy_gate_affected_history,
+            ) = self._migrate_runtime_evidence(state_payload)
+            self._unlink_legacy_manual_runtime_evidence(state_payload)
         migrate_ci_gates = self._state_payload_needs_ci_gate_migration(state_payload)
         state = ReviewState.model_validate(state_payload)
         if migrate_ci_gates:
             state = self._recompute_ci_migrated_gates(state)
+        elif active_legacy_gate_affected or legacy_gate_affected_history:
+            state = self._recompute_runtime_migrated_gates(
+                state,
+                active_migrated=active_legacy_gate_affected,
+                migrated_history=legacy_gate_affected_history,
+            )
         return validated_review_state(state)
 
     @staticmethod

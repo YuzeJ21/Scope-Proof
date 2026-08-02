@@ -1,7 +1,9 @@
+import json
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
+from uuid import UUID
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -12,6 +14,7 @@ from scopeproof_core.alpha.storage import (
     default_alpha_case_directory,
 )
 from scopeproof_core.demo import load_demo_snapshot
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
@@ -333,6 +336,45 @@ def test_limiting_ci_warning_is_visible_outside_collapsed_details(
     assert "Check-run collection was incomplete." not in visible
     assert "integration" in details_text
     assert "Check-run collection was incomplete." in details_text
+
+
+def test_complete_passing_ci_with_skipped_check_warns_without_changing_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    snapshot = load_demo_snapshot().model_copy(
+        update={
+            "ci_observation": CIObservation(
+                state=CheckState.PASSING,
+                reason="One successful check and one skipped check were observed.",
+                total_check_runs=2,
+                successful_check_runs=1,
+                skipped_check_runs=1,
+                skipped_check_names=["integration"],
+                collection_complete=True,
+            ),
+            "check_state": CheckState.PASSING,
+        }
+    )
+    with patch("scopeproof_core.demo.load_demo_snapshot", return_value=snapshot):
+        app = load_demo(new_app())
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+
+    review_state = app.session_state["review_state"]
+    details = next(
+        item for item in app.expander if item.label == "CI details and evidence boundary"
+    )
+    visible_warning = (
+        "Observed CI includes skipped checks. Skipped checks were not executed; review its "
+        "deterministic reason and CI details before relying on the gate."
+    )
+
+    assert review_state.review.check_state is CheckState.PASSING
+    assert review_state.review.ci_observation.state is CheckState.PASSING
+    assert visible_warning in [item.value for item in app.warning]
+    assert "integration" not in "\n".join(item.value for item in app.warning)
+    assert "integration" in [item.value for item in details.text]
 
 
 def test_active_and_reopened_research_review_show_evidence_boundaries(
@@ -2242,6 +2284,69 @@ def test_confirmed_criteria_edit_with_no_bundle_autosaves_authoritative_review(
     )
 
 
+def test_bundleless_revision_can_clear_criterion_draft_and_resume_autosave(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "pending-runtime-artifact"
+    ).run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+    app.session_state["manual_evidence_level"] = EvidenceLevel.E4
+    app = app.text_input(key="criterion_text_AC-01").set_value(
+        "Confirmed revised export requirement with pending detail"
+    ).run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
+    assert authoritative_state.bundle is None
+    clear_actions = [
+        button
+        for button in app.button
+        if button.key == "clear_criterion_detail_drafts"
+    ]
+    warning = (
+        "Pending criterion inputs are not part of the review, local save, or exports. "
+        "Clear them to continue with this revised review."
+    )
+    assert app.session_state["manual_evidence_level"] is EvidenceLevel.E4
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) != authoritative_state
+    assert not app.download_button
+    assert warning in [item.value for item in app.warning]
+    assert len(clear_actions) == 1
+    assert clear_actions[0].disabled is False
+
+    app = app.button(key="clear_criterion_detail_drafts").click().run()
+
+    assert app.session_state["review_state"] == authoritative_state
+    assert app.session_state["runtime_artifact_reference"] == ""
+    assert app.session_state["runtime_evidence_level"] is EvidenceLevel.E3
+    assert app.session_state["resolution_decision"] is None
+    assert app.session_state["resolution_note"] == ""
+    assert "manual_evidence_level" not in app.session_state
+    assert "Pending criterion inputs cleared without changing the review." in [
+        item.value for item in app.success
+    ]
+    assert JsonReviewStore(default_local_review_directory()).load(
+        review_id
+    ) == authoritative_state
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(authoritative_state)
+    )
+    assert not app.download_button
+
+    app = app.button(key="run_analysis").click().run()
+
+    assert app.session_state["review_state"].bundle is not None
+    assert all(not button.disabled for button in app.download_button)
+
+
 def test_reopened_bundleless_failed_autosave_exposes_expanded_retry_and_persists(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3203,6 +3308,10 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
     review_state = append_external_verification(
         review_state,
         RuntimeEvidence(
+            runtime_evidence_id="runtime-audit-event",
+            repository=review_state.review.repository,
+            pr_number=review_state.review.pr_number,
+            head_sha=review_state.review.head_sha,
             criterion_id="AC-01",
             artifact_reference="https://example.test/run/manual-audit-event",
             scenario="Controlled verification scenario",
@@ -3219,6 +3328,7 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
             comment="Controlled verification note",
             reviewer="Controlled reviewer",
             claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id="runtime-audit-event",
             timestamp=recorded_at,
             criteria_revision_number=1,
         ),
@@ -3231,6 +3341,7 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
     assert "Controlled reviewer" in text_values
     assert "2026-07-14T19:45:00Z" in text_values
     assert "E3" in text_values
+    assert [item.value for item in app.code].count("runtime-audit-event") == 2
 
 
 def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> None:
@@ -3554,8 +3665,270 @@ def test_external_verification_normalizes_reviewer_for_atomic_records() -> None:
     ]
     assert len(review_state.bundle.runtime_evidence) == 1
     assert len(manual_events) == 1
-    assert review_state.bundle.runtime_evidence[0].reviewer == "QA"
+    runtime_item = review_state.bundle.runtime_evidence[0]
+    assert runtime_item.reviewer == "QA"
     assert manual_events[0].reviewer == "QA"
+    assert UUID(runtime_item.runtime_evidence_id).version == 4
+    assert (
+        runtime_item.repository,
+        runtime_item.pr_number,
+        runtime_item.head_sha,
+    ) == (
+        review_state.review.repository,
+        review_state.review.pr_number,
+        review_state.review.head_sha,
+    )
+    assert manual_events[0].runtime_evidence_id == runtime_item.runtime_evidence_id
+    identity_widget_keys = {
+        "runtime_evidence_id",
+        "runtime_repository",
+        "runtime_pr_number",
+        "runtime_head_sha",
+    }
+    assert identity_widget_keys.isdisjoint(
+        {item.key for item in [*app.text_input, *app.number_input]}
+    )
+
+
+def test_runtime_evidence_record_renders_bound_identity_as_non_editable_text() -> None:
+    app = analyzed_demo(new_app())
+    review = app.session_state["review_state"].review.model_copy(deep=True)
+    app = app.text_input(key="runtime_artifact_reference").set_value("artifact-identity").run()
+    app = app.text_area(key="runtime_scenario").set_value("Identity scenario").run()
+    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_input(key="runtime_result").set_value("observed").run()
+    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    runtime_item = app.session_state["review_state"].bundle.runtime_evidence[0]
+    assert runtime_item.runtime_evidence_id in [item.value for item in app.code]
+    assert f"{review.repository} · PR #{review.pr_number}" in [
+        item.value for item in app.text
+    ]
+    assert review.head_sha in [item.value for item in app.code]
+    assert "Runtime evidence identity is bound automatically to the active review." in [
+        item.value for item in app.caption
+    ]
+
+
+def test_runtime_evidence_legacy_unlinked_warning_disables_final_acceptance() -> None:
+    app = analyzed_demo(new_app())
+    review_state = app.session_state["review_state"].model_copy(deep=True)
+    runtime_item = RuntimeEvidence(
+        runtime_evidence_id="migrated-runtime-id",
+        repository=review_state.review.repository,
+        pr_number=review_state.review.pr_number,
+        head_sha=review_state.review.head_sha,
+        criterion_id="AC-01",
+        artifact_reference="artifact-migrated",
+        scenario="Migrated legacy scenario",
+        environment="staging",
+        result="observed",
+        reviewer="Legacy QA",
+        evidence_level=EvidenceLevel.E3,
+    )
+    review_state = append_external_verification(
+        review_state,
+        runtime_item,
+        ResolutionEvent(
+            event_id="migrated-manual-event",
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Migrated manual verification",
+            claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id=runtime_item.runtime_evidence_id,
+            reviewer=runtime_item.reviewer,
+        ),
+    )
+    review_state.resolution_events[-1].runtime_evidence_id = None
+    review_state.bundle.resolutions[0].runtime_evidence_id = None
+    review_state.bundle.gate = evaluate_gate(
+        review_state.bundle.review,
+        review_state.bundle.criteria,
+        review_state.bundle.findings,
+        review_state.bundle.resolutions,
+    )
+    app.session_state["review_state"] = review_state
+    app.session_state["bundle"] = review_state.bundle
+
+    app = app.run()
+
+    warning = "Legacy unlinked; re-record at the active head"
+    assert warning in [item.value for item in app.warning]
+    assert app.button(key="record_final_acceptance").disabled is True
+
+
+def test_reopened_legacy_verification_can_revoke_reverify_and_reaccept(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_demo(new_app())
+    state = app.session_state["review_state"].model_copy(deep=True)
+    assert state.bundle is not None
+    legacy_runtime = RuntimeEvidence(
+        runtime_evidence_id="legacy-runtime",
+        repository=state.review.repository,
+        pr_number=state.review.pr_number,
+        head_sha=state.review.head_sha,
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/runs/legacy",
+        scenario="Legacy export scenario",
+        environment="legacy staging",
+        result="passed",
+        reviewer="Legacy reviewer",
+        evidence_level=EvidenceLevel.E3,
+        limitations=["Legacy observation retained for audit"],
+    )
+    state = append_external_verification(
+        state,
+        legacy_runtime,
+        ResolutionEvent(
+            event_id="legacy-manual-event",
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Legacy manual verification note",
+            claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id=legacy_runtime.runtime_evidence_id,
+            reviewer=legacy_runtime.reviewer,
+        ),
+    )
+    for criterion in state.bundle.criteria:
+        if criterion.criterion_id == "AC-01":
+            continue
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                event_id=f"legacy-accepted-{criterion.criterion_id}",
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment=f"Legacy acceptance for {criterion.criterion_id}",
+                reviewer="Legacy reviewer",
+            ),
+        )
+    state = append_resolution(
+        state,
+        ResolutionEvent(
+            event_id="legacy-final-acceptance",
+            final_acceptance=True,
+            comment="Legacy final acceptance note",
+            reviewer="Legacy reviewer",
+        ),
+    )
+    review_id = state.review.review_id
+    store = JsonReviewStore(default_local_review_directory())
+    record_path = store.save(state)
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    payload["record_version"] = 2
+    for runtime_item in payload["state"]["bundle"]["runtime_evidence"]:
+        for field_name in (
+            "runtime_evidence_id",
+            "repository",
+            "pr_number",
+            "head_sha",
+        ):
+            runtime_item.pop(field_name)
+    for resolution in payload["state"]["bundle"]["resolutions"]:
+        resolution.pop("runtime_evidence_id", None)
+    for event in payload["state"]["resolution_events"]:
+        event.pop("runtime_evidence_id", None)
+    record_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    reopened = select_saved_review(new_app(), review_id)
+    reopened = reopened.button(key="reopen_review").click().run()
+
+    warning = "Legacy unlinked; re-record at the active head"
+    assert warning in [item.value for item in reopened.warning]
+    assert (
+        "Revoke final acceptance before recording new E3/E4 verification at the active head."
+        in [item.value for item in reopened.warning]
+    )
+    assert reopened.button(key="record_final_acceptance").disabled is True
+    reopened = reopened.text_input(key="decision_reviewer").set_value("   ").run()
+    assert reopened.button(key="revoke_final_acceptance").disabled is True
+    reopened = reopened.text_input(key="decision_reviewer").set_value(
+        "  Recovery reviewer  "
+    ).run()
+    assert reopened.button(key="revoke_final_acceptance").disabled is False
+    reopened = reopened.text_input(key="runtime_artifact_reference").set_value(
+        "pending-artifact"
+    ).run()
+    assert reopened.button(key="revoke_final_acceptance").disabled is True
+    reopened = reopened.button(key="clear_criterion_detail_drafts").click().run()
+    reopened = reopened.text_input(key="decision_reviewer").set_value(
+        "  Recovery reviewer  "
+    ).run()
+    assert reopened.button(key="revoke_final_acceptance").disabled is False
+
+    event_count_before_recovery = len(
+        reopened.session_state["review_state"].resolution_events
+    )
+    reopened = reopened.button(key="revoke_final_acceptance").click().run()
+    revoked = reopened.session_state["review_state"]
+    assert revoked.review.final_acceptance is False
+    assert revoked.resolution_events[-1].final_acceptance is False
+    assert revoked.resolution_events[-1].reviewer == "Recovery reviewer"
+    assert len(revoked.resolution_events) == event_count_before_recovery + 1
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == revoked
+
+    reopened = select_saved_review(new_app(), review_id)
+    reopened = reopened.button(key="reopen_review").click().run()
+    assert reopened.session_state["review_state"] == revoked
+    reopened = reopened.text_input(key="decision_reviewer").set_value(
+        "  Recovery reviewer  "
+    ).run()
+    reopened = reopened.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/runs/recovery"
+    ).run()
+    reopened = reopened.text_area(key="runtime_scenario").set_value(
+        "Reverify export at the current head"
+    ).run()
+    reopened = reopened.text_input(key="runtime_environment").set_value(
+        "current staging"
+    ).run()
+    reopened = reopened.text_input(key="runtime_result").set_value("passed").run()
+    reopened = reopened.text_input(key="runtime_reviewer").set_value(
+        "  Recovery reviewer  "
+    ).run()
+    reopened = reopened.button(key="save_runtime_evidence").click().run()
+
+    reverified = reopened.session_state["review_state"]
+    new_runtime = reverified.bundle.runtime_evidence[-1]
+    assert new_runtime.head_sha == reverified.review.head_sha
+    assert new_runtime.runtime_evidence_id is not None
+    assert reverified.resolution_events[-1].decision is HumanDecision.MANUALLY_VERIFIED
+    assert (
+        reverified.resolution_events[-1].runtime_evidence_id
+        == new_runtime.runtime_evidence_id
+    )
+    assert reopened.button(key="record_final_acceptance").disabled is False
+
+    reopened = reopened.button(key="record_final_acceptance").click().run()
+    recovered = reopened.session_state["review_state"]
+    assert recovered.review.final_acceptance is True
+    assert recovered.bundle.gate.verdict is GateVerdict.READY
+    assert [
+        (event.final_acceptance, event.decision)
+        for event in recovered.resolution_events[-3:]
+    ] == [
+        (False, None),
+        (None, HumanDecision.MANUALLY_VERIFIED),
+        (True, None),
+    ]
+    assert [
+        event.reviewer for event in recovered.resolution_events[-3:]
+    ] == ["Recovery reviewer"] * 3
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == recovered
+
+    final_reopen = select_saved_review(new_app(), review_id)
+    final_reopen = final_reopen.button(key="reopen_review").click().run()
+    assert final_reopen.session_state["review_state"] == recovered
+    download_keys = [button.key for button in final_reopen.download_button]
+    assert download_keys == ["download_markdown", "download_json", "download_csv"]
+    assert all(
+        not final_reopen.download_button(key=key).disabled for key in download_keys
+    )
 
 
 def test_runtime_artifact_identifier_renders_as_plain_text() -> None:

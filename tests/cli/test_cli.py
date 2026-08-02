@@ -7,7 +7,19 @@ import pytest
 from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import main
+from scopeproof_core.demo import build_demo_review
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
+from scopeproof_core.reviews.lifecycle import (
+    append_external_verification,
+    append_resolution,
+    new_review_state,
+)
+from scopeproof_core.schemas.models import (
+    EvidenceLevel,
+    HumanDecision,
+    ResolutionEvent,
+    RuntimeEvidence,
+)
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.version import __version__
 
@@ -451,6 +463,110 @@ def test_export_command_supports_self_contained_html(tmp_path: Path, capsys) -> 
 
     assert main(["export", review_id, "--storage-dir", str(storage), "--format", "html"]) == 0
     assert "<!doctype html>" in capsys.readouterr().out.lower()
+
+
+def test_export_command_migrates_raw_v2_runtime_verification_fail_closed(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    store = JsonReviewStore(storage)
+    state = new_review_state(build_demo_review())
+    runtime_item = RuntimeEvidence(
+        runtime_evidence_id="pre-migration-runtime",
+        repository=state.review.repository,
+        pr_number=state.review.pr_number,
+        head_sha=state.review.head_sha,
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/runtime/v2",
+        scenario="Exercise the export scenario",
+        environment="staging",
+        result="observed passing",
+        reviewer="Migration QA",
+        evidence_level=EvidenceLevel.E3,
+    )
+    state = append_external_verification(
+        state,
+        runtime_item,
+        ResolutionEvent(
+            event_id="pre-migration-manual-event",
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Observed the export scenario",
+            claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id=runtime_item.runtime_evidence_id,
+            reviewer=runtime_item.reviewer,
+        ),
+    )
+    for criterion in state.bundle.criteria:
+        if criterion.criterion_id == "AC-01":
+            continue
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                event_id=f"accepted-{criterion.criterion_id}",
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment="Reviewed the candidate evidence",
+            ),
+        )
+    state = append_resolution(
+        state,
+        ResolutionEvent(
+            event_id="pre-migration-final-acceptance",
+            final_acceptance=True,
+            comment="Accepted before provenance migration",
+        ),
+    )
+    path = store.save(state)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["record_version"] = 2
+    for item in record["state"]["bundle"]["runtime_evidence"]:
+        for field_name in (
+            "runtime_evidence_id",
+            "repository",
+            "pr_number",
+            "head_sha",
+        ):
+            item.pop(field_name)
+    for resolution in record["state"]["bundle"]["resolutions"]:
+        resolution.pop("runtime_evidence_id", None)
+    for event in record["state"]["resolution_events"]:
+        event.pop("runtime_evidence_id", None)
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+    assert main(
+        ["export", state.review.review_id, "--storage-dir", str(storage), "--format", "json"]
+    ) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    migrated_bundle = payload["bundle"]
+    migrated_runtime = migrated_bundle["runtime_evidence"][0]
+    assert migrated_bundle["gate"]["verdict"] == "needs_review"
+    assert "runtime_verification_reconfirmation_required" in migrated_bundle["gate"][
+        "reason_codes"
+    ]
+    assert migrated_runtime["runtime_evidence_id"]
+    assert (
+        migrated_runtime["repository"],
+        migrated_runtime["pr_number"],
+        migrated_runtime["head_sha"],
+    ) == (
+        migrated_bundle["review"]["repository"],
+        migrated_bundle["review"]["pr_number"],
+        migrated_bundle["review"]["head_sha"],
+    )
+    manual_resolution = next(
+        item
+        for item in migrated_bundle["resolutions"]
+        if item["decision"] == "manually_verified"
+    )
+    manual_event = next(
+        item
+        for item in payload["resolution_events"]
+        if item["decision"] == "manually_verified"
+    )
+    assert manual_resolution["runtime_evidence_id"] is None
+    assert manual_event["runtime_evidence_id"] is None
 
 
 def test_list_command_reports_empty_absent_local_store(tmp_path: Path, capsys) -> None:

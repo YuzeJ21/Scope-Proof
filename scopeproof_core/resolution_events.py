@@ -22,6 +22,7 @@ def current_resolutions(
             comment=event.comment,
             evidence_url=event.evidence_url,
             claimed_evidence_level=event.claimed_evidence_level,
+            runtime_evidence_id=event.runtime_evidence_id,
             reviewer=event.reviewer,
             timestamp=event.timestamp,
         )
