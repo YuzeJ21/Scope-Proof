@@ -1,4 +1,4 @@
-# Exact-head runtime-evidence candidate verification
+# Exact-head merged-product runtime-evidence verification
 
 Machine-readable evidence manifest:
 [`verification.json`](verification.json). The manifest is the structured
@@ -6,23 +6,25 @@ repository-contract input; this document remains the human-readable audit.
 
 ## Evidence identity and boundary
 
-- Date: 2026-08-01 (America/Toronto)
-- Current public `main`: `6e3dec784f7cad9931999d4c5eac1cfe2a9006de`
-- Current public-main tree: `cf34a4004861a294d25005f7f598068b740bbde9`
-- Last completed public-main UX merge: PR #179
-- Verified implementation: `95b2dc44132edad796f0316d846cd35e536443f6`
-- Verified implementation tree: `0514c42d59aa69dee65be536a9fa449eff6a6530`
-- Current disposition: `READY FOR DRAFT REVIEW`
-- Publication state: candidate not merged, tagged, or released; v0.2.1 remains
-  the only published install.
+- Date: 2026-08-02 (America/Toronto)
+- Merged product commit: `2a320df966eff30c05a2b1dce607a247201fa165`
+- Merged pull request: PR #180
+- Merged product tree: `add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8`
+- Independently verified PR head: `ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f`
+- Verified PR-head tree: `add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8`
+- Current disposition: `STAGE 0 ENGINEERING FOUNDATION RESTORED`
+- Publication state: source merged but not tagged or released; v0.2.1 remains
+  the only published install and v0.2.3 remains unreleased.
 
 All full-suite, coverage, benchmark, build, installed-command, and workbench
-health results in this record belong only to the clean verified implementation
-commit above. This evidence document was written afterward. Its evidence commit
-therefore changes the source distribution and is not part of the recorded
-artifact hashes. Repository contracts, Ruff, diff checks, and repository
-hygiene are rerun on the evidence commit; required GitHub CI must verify the
-final complete PR head. No self-referential SHA or package-hash claim is made.
+health results in this record belong only to independently verified head
+`ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f` and product tree
+`add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8`. PR #180 merged that exact tree.
+This post-merge documentation alignment was written afterward and therefore
+changes the repository tree and source distribution. Its affected checks run
+on the alignment tree, and pull-request CI must cover the final alignment; the
+product-tree package hashes do not cover these documentation changes. No
+self-referential final alignment SHA or package-hash claim is made.
 
 This is owner-operated engineering evidence. It does not prove correctness,
 target-repository runtime behavior, participant usability, customer demand,
@@ -61,18 +63,33 @@ and uv 0.11.29.
 | `uv sync --extra dev --extra research --locked` | Resolved 60 packages and checked 55 packages. |
 | `uv lock --check` | Passed; resolved 60 packages. |
 | `uv run ruff check .` | Passed: `All checks passed!` |
-| `uv run python -m pytest -q` | 1747 passed and 1 skipped in 122.18 seconds. |
-| Combined coverage with `--cov-fail-under=95` | 1747 passed and 1 skipped; 8,561 statements, 411 missed, exact total 95.20%; threshold passed. |
+| `uv run python -m pytest -q` | 1751 passed and 1 skipped. |
+| Combined coverage with `--cov-fail-under=95` | 1751 passed and 1 skipped; 8,588 statements, 416 missed, exact total 95.16%; threshold passed. |
 | `uv run scopeproof benchmark` | 12 cases and 13 criteria executed; zero mismatches, status mismatches, must-have False Ready outcomes, false blockers, or unexecuted declared categories. |
 | `uv run scopeproof comparison-benchmark` | Two cases; zero mismatches; aggregate 3 Added, 1 Modified, 1 Relocated, 3 Removed, and 1 Unchanged; `does_not_advance_stage_1` remained true. |
-| `uv run python -m pytest -q tests/test_repository_contracts.py` | 67 passed before tracked documentation edits. |
+| `uv run python -m pytest -q tests/test_repository_contracts.py` | 68 passed on merged product commit `2a320df966eff30c05a2b1dce607a247201fa165` before the docs-only alignment. |
 | `git diff --check` | Passed with no output. |
 | Branch forbidden-generated-path scan | Exited 1 with no matches. The tracked aggregate scan still found only the two intentional inherited `.scopeproof` Action inputs. |
 
 The frozen R-002 corpus was not rerun in this Task 5 wave. Its historical
 20-case results, tracked hashes, and zero-Stage-1 boundary remain preserved in
-the platform/package matrix and research record; none is presented as new
-candidate evidence.
+the platform/package matrix and research record; none is presented as new PR
+#180 product-tree evidence.
+
+## Merged-main workflow verification
+
+GitHub's final run state was independently rechecked at `2026-08-02T05:47:39Z`.
+All three runs are bound to exact merge SHA
+`2a320df966eff30c05a2b1dce607a247201fa165`:
+
+| Workflow | Run | Event | Final state |
+| --- | --- | --- | --- |
+| CI | [30734386610](https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386610) | `push` on `main` | `completed` / `success`; locked-environment, Python 3.11 compatibility, and verify succeeded |
+| CodeQL | [30734386396](https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386396) | GitHub `dynamic` run on `main` | `completed` / `success`; actions and Python analysis succeeded |
+| Pages | [30734386626](https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386626) | `push` on `main` | `completed` / `success`; build and deploy succeeded |
+
+These runs verify the merged product snapshot. They do not publish v0.2.3 and
+do not cover this later documentation-alignment tree.
 
 ## Built package and installed runtime
 
@@ -81,8 +98,8 @@ The evidence commit and this document were absent from those bytes.
 
 | Artifact | Size | Inventory | SHA-256 |
 | --- | ---: | ---: | --- |
-| `scopeproof-0.2.3-py3-none-any.whl` | 247,571 bytes | 99 wheel entries | `5b1422fe1117abcb63d69e725d9ac2ecad012d4faa11a23c5a2bc62d75a7ae64` |
-| `scopeproof-0.2.3.tar.gz` | 5,805,868 bytes | 532 source-distribution entries | `ff7a733c2c801be5a26963756bf3c7d4cc85a096869d1eaa20f1c16a5b127b2c` |
+| `scopeproof-0.2.3-py3-none-any.whl` | 248,171 bytes | 99 wheel entries | `70bdca1a0d609c81ac8cd2274dc4915612067cfdb1c2205276faafd7c6358ac8` |
+| `scopeproof-0.2.3.tar.gz` | 5,818,424 bytes | 534 source-distribution entries | `7fff8ba0b6b6c85ae0f22fe487762de8a525d04145c50eab46792233b798573e` |
 
 Both inventories had zero forbidden-path matches for review storage, coverage,
 virtual environments, Git or local SDD data, caches, bytecode, build outputs,
@@ -110,14 +127,14 @@ used as green evidence.
 
 ## Platform and accessibility gaps
 
-No browser walkthrough was performed on this exact candidate. The prior PR #179
-pointer walkthrough, 1280×720 and 390×844 observations, screenshots, and partial
-keyboard attempts remain historical evidence for their named source targets.
-They are not promoted to current-candidate evidence.
+No browser walkthrough was performed on the verified PR #180 product tree. The
+prior PR #179 pointer walkthrough, 1280×720 and 390×844 observations,
+screenshots, and partial keyboard attempts remain historical evidence for their
+named source targets. They are not promoted to PR #180 evidence.
 
-The following remain unverified for this candidate:
+The following remain unverified for the merged product tree:
 
-- Python 3.11 at the exact branch head until required GitHub CI runs;
+- a local Python 3.11 desktop run (merged-main CI did exercise Python 3.11);
 - Python 3.13;
 - Windows and Linux desktop workflows;
 - a complete keyboard-only review;
@@ -131,18 +148,18 @@ target-runtime result.
 
 ## Stage and publication boundary
 
-- Stage 0 is repaired and locally verified on the candidate. Public `main`
-  remains pending candidate merge and exact-resulting-main verification.
+- Stage 0's engineering foundation is restored on merged product commit
+  `2a320df966eff30c05a2b1dce607a247201fa165` and independently verified tree
+  `add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8`.
 - Stage 1 remains `waiting_for_inbound_public_alpha_submission`: 0/5 qualifying
   reviews, 0/3 independent practitioners, 0/3 repositories, 0/3 independently
   observed under-ten-minute completions, and 0/2 reuse-intent signals.
 - Stages 2–4 remain gated by their genuine-use and owner-decision conditions.
 - Benchmarks, tests, package installation, health, prior browser rehearsals,
   owner operation, and this audit all contribute zero Stage 1 credit.
-- No push, pull request creation, merge, tag, GitHub Release, asset upload, PyPI
+- PR #180 is merged. No v0.2.3 tag, GitHub Release, asset upload, PyPI
   publication, outreach, account, billing resource, or target-repository code
-  execution is authorized or performed by this Task 5 implementation.
-- After the evidence commit, local affected-input checks run on that exact
-  commit. Required GitHub CI must verify the final complete PR head. Merge and
-  exact-main verification remain controller actions; v0.2.3 publication remains
-  a distinct owner decision requiring fresh final-main assets and checksums.
+  execution is created by this docs-only alignment.
+- Local affected-input checks cover the later alignment tree, and pull-request
+  CI must cover its final form. v0.2.3 publication remains a distinct owner
+  decision requiring fresh release-tree assets and checksums.

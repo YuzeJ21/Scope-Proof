@@ -1,27 +1,88 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "boundary": {
     "classification": "engineering_only",
     "proves_correctness": false,
     "target_repository_code_executed": false,
     "advances_stage_1": false
   },
-  "public_main": {
-    "sha": "6e3dec784f7cad9931999d4c5eac1cfe2a9006de",
-    "tree": "cf34a4004861a294d25005f7f598068b740bbde9",
-    "last_completed_pr": 179
-  },
-  "verified_candidate": {
-    "sha": "95b2dc44132edad796f0316d846cd35e536443f6",
-    "tree": "0514c42d59aa69dee65be536a9fa449eff6a6530",
+  "merged_product": {
+    "sha": "2a320df966eff30c05a2b1dce607a247201fa165",
+    "tree": "add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8",
     "version": "0.2.3",
-    "disposition": "ready_for_draft_review",
-    "merged": false,
+    "pull_request": 180,
+    "merged": true,
     "tagged": false,
-    "released": false
+    "released": false,
+    "stage_0": "engineering_foundation_restored"
+  },
+  "independently_verified_head": {
+    "sha": "ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f",
+    "tree": "add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8",
+    "pull_request": 180,
+    "same_tree_as_merged_product": true
+  },
+  "merged_main_runs": {
+    "verified_at": "2026-08-02T05:47:39Z",
+    "attributed_to": {
+      "sha": "2a320df966eff30c05a2b1dce607a247201fa165",
+      "tree": "add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8"
+    },
+    "ci": {
+      "run_id": 30734386610,
+      "workflow_id": 311501286,
+      "workflow": "CI",
+      "workflow_file": ".github/workflows/ci.yml",
+      "run_number": 548,
+      "attempt": 1,
+      "check_suite_id": 83342869656,
+      "url": "https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386610",
+      "status": "completed",
+      "conclusion": "success",
+      "event": "push",
+      "head_branch": "main",
+      "head_sha": "2a320df966eff30c05a2b1dce607a247201fa165"
+    },
+    "codeql": {
+      "run_id": 30734386396,
+      "workflow_id": 311532827,
+      "workflow": "CodeQL",
+      "workflow_file": "dynamic/github-code-scanning/codeql",
+      "run_number": 358,
+      "attempt": 1,
+      "check_suite_id": 83342869149,
+      "url": "https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386396",
+      "status": "completed",
+      "conclusion": "success",
+      "event": "dynamic",
+      "head_branch": "main",
+      "head_sha": "2a320df966eff30c05a2b1dce607a247201fa165"
+    },
+    "pages": {
+      "run_id": 30734386626,
+      "workflow_id": 314177066,
+      "workflow": "Pages",
+      "workflow_file": ".github/workflows/pages.yml",
+      "run_number": 30,
+      "attempt": 1,
+      "check_suite_id": 83342869686,
+      "url": "https://github.com/YuzeJ21/Scope-Proof/actions/runs/30734386626",
+      "status": "completed",
+      "conclusion": "success",
+      "event": "push",
+      "head_branch": "main",
+      "head_sha": "2a320df966eff30c05a2b1dce607a247201fa165"
+    }
+  },
+  "documentation_alignment": {
+    "classification": "docs_only_post_merge_alignment",
+    "changes_later_repository_tree": true,
+    "covered_by_product_tree_package_hashes": false,
+    "required_verification": "affected_checks_and_pull_request_ci"
   },
   "public_install": {
-    "version": "0.2.1"
+    "version": "0.2.1",
+    "latest_release": "0.2.1"
   },
   "runtime_evidence": {
     "identity_field": "runtime_evidence_id",
@@ -30,6 +91,7 @@
     "record_version": 3
   },
   "product_stages": {
+    "stage_0": "engineering_foundation_restored",
     "stage_1": {
       "qualifying_reviews": 0,
       "independent_practitioners": 0,
@@ -41,20 +103,19 @@
   },
   "measurements": {
     "attributed_to": {
-      "sha": "95b2dc44132edad796f0316d846cd35e536443f6",
-      "tree": "0514c42d59aa69dee65be536a9fa449eff6a6530"
+      "sha": "ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f",
+      "tree": "add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8"
     },
     "source": {
       "sync_resolved_packages": 60,
       "sync_checked_packages": 55,
       "lock_resolved_packages": 60,
       "ruff_passed": true,
-      "tests_passed": 1747,
+      "tests_passed": 1751,
       "tests_skipped": 1,
-      "test_seconds": 122.18,
-      "coverage_statements": 8561,
-      "coverage_missed": 411,
-      "coverage_percent": 95.20,
+      "coverage_statements": 8588,
+      "coverage_missed": 416,
+      "coverage_percent": 95.16,
       "coverage_threshold_percent": 95.0
     },
     "benchmarks": {
@@ -83,16 +144,16 @@
     "package": {
       "wheel": {
         "filename": "scopeproof-0.2.3-py3-none-any.whl",
-        "size_bytes": 247571,
+        "size_bytes": 248171,
         "entries": 99,
-        "sha256": "5b1422fe1117abcb63d69e725d9ac2ecad012d4faa11a23c5a2bc62d75a7ae64",
+        "sha256": "70bdca1a0d609c81ac8cd2274dc4915612067cfdb1c2205276faafd7c6358ac8",
         "forbidden_inventory_matches": 0
       },
       "source_distribution": {
         "filename": "scopeproof-0.2.3.tar.gz",
-        "size_bytes": 5805868,
-        "entries": 532,
-        "sha256": "ff7a733c2c801be5a26963756bf3c7d4cc85a096869d1eaa20f1c16a5b127b2c",
+        "size_bytes": 5818424,
+        "entries": 534,
+        "sha256": "7fff8ba0b6b6c85ae0f22fe487762de8a525d04145c50eab46792233b798573e",
         "forbidden_inventory_matches": 0
       }
     },
@@ -114,11 +175,11 @@
     }
   },
   "historical_evidence": {
-    "r002_rerun_for_candidate": false,
-    "browser_walkthrough_for_candidate": false,
+    "r002_rerun_for_verified_head": false,
+    "browser_walkthrough_for_verified_head": false,
     "historical_browser_is_current": false,
     "historical_package_is_current": false,
     "historical_r002_is_current": false,
-    "exact_public_main_package_runtime_evidence": false
+    "merged_product_tree_package_runtime_evidence": true
   }
 }

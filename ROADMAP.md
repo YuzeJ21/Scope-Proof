@@ -13,19 +13,20 @@ automated activity. The current external state is
 | Area | Current state |
 |---|---|
 | Published install | v0.2.1 |
-| Active source candidate | v0.2.3 exact-head runtime-evidence hardening verified at `95b2dc44132edad796f0316d846cd35e536443f6`; not merged or released |
-| Public `main` | Current head `6e3dec784f7cad9931999d4c5eac1cfe2a9006de`; PR #179 is the last completed UX merge before this branch |
-| Current engineering track | Stage 0 candidate verified; public `main` pending merge |
-| Product validation | Stage 0 candidate verified; public `main` pending merge. Stage 1 waiting; Stages 2–4 gated |
+| Merged product source | v0.2.3 exact-head runtime-evidence hardening merged through PR #180 as `2a320df966eff30c05a2b1dce607a247201fa165`; untagged and unreleased |
+| Product tree verification | Independent PR head `ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f` and the merge commit share tree `add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8` |
+| Current engineering track | Stage 0 engineering foundation restored on the merged product tree |
+| Product validation | Stage 1 waiting at zero; Stages 2–4 gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
 milestones can proceed while Stage 1 waits, but they do not advance product-validation stages.
 
 ## Stage 0 — Reviewer-first product reset
 
-Status: prior PR #177 repairs remain historical engineering evidence. The
-exact-head runtime-evidence repair is verified on the candidate branch; public
-`main` remains pending merge and exact-resulting-main verification.
+Status: prior PR #177 repairs remain historical engineering evidence. PR #180
+merged the exact-head runtime-evidence repair, and the merged product tree has
+independent local verification plus successful merged-main CI, CodeQL, and
+Pages runs.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
@@ -69,9 +70,10 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 ## Current engineering track — v0.2.3 Evidence Quality
 
 Status: the earlier candidate and PR #177 repairs remain merged history. PR #179
-is the last completed public-main UX merge. The exact-head runtime-evidence
-hardening is verified at `95b2dc44132edad796f0316d846cd35e536443f6` but is not
-merged, tagged, or released. This work does not advance Stage 1.
+merged the workbench UX change, and PR #180 merged the exact-head
+runtime-evidence hardening as
+`2a320df966eff30c05a2b1dce607a247201fa165`. The source is not tagged or
+released. This work does not advance Stage 1.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering
@@ -114,13 +116,13 @@ competitive research is maintained separately in the
 [current official-source market comparison](docs/commercialization/market-comparison-2026-07-26.md).
 Historical current-main package, security, and environment evidence is recorded
 in the [post-merge release-readiness audit](docs/releases/v0.2.3-post-merge-release-readiness.md).
-The new branch-only evidence is recorded in the
+The merged product-tree evidence is recorded in the
 [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md).
 
 ## Stage 1 — Genuine public alpha
 
 Status: `waiting_for_inbound_public_alpha_submission`; Stage 1 remains zero.
-The candidate is ready for draft review only, and no genuine qualifying
+The Stage 0 engineering foundation is restored, but no genuine qualifying
 submission exists.
 
 Current measured state:
