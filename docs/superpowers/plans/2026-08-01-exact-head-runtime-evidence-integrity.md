@@ -32,18 +32,22 @@
 - Modify: `scopeproof_core/gates/evaluator.py`
 - Modify: `scopeproof_core/gates/guidance.py`
 - Modify: `scopeproof_core/gates/validation.py`
+- Modify: `scopeproof_core/reviews/lifecycle.py`
 - Test: `tests/schemas/test_runtime_evidence.py`
 - Test: `tests/schemas/test_manual_verification.py`
 - Test: `tests/schemas/test_review_bundle_integrity.py`
 - Test: `tests/gates/test_evaluator.py`
 - Test: `tests/gates/test_guidance.py`
 - Test: `tests/gates/test_validation.py`
+- Test: `tests/reviews/test_lifecycle.py`
 
 **Interfaces:**
 - Produces: optional legacy-aware fields `RuntimeEvidence.runtime_evidence_id`, `repository`, `pr_number`, and `head_sha`.
 - Produces: optional `HumanResolution.runtime_evidence_id` and `ResolutionEvent.runtime_evidence_id`.
 - Produces: gate reason code `runtime_verification_reconfirmation_required`.
 - Produces: `current_resolutions()` projection that preserves the link ID.
+- Produces: public lifecycle operations that accept only exact-review, ID-linked
+  runtime evidence and reject before mutation.
 
 - [ ] **Step 1: Write failing schema tests for all-or-none runtime provenance**
 
@@ -106,7 +110,7 @@ Expected: failures because link fields are absent.
 
 - [ ] **Step 4: Implement resolution-link fields and projection**
 
-Add `runtime_evidence_id: str | None = None` to both resolution models. Extend their model validators so a non-manual or final-acceptance record rejects a non-null runtime ID. Preserve legacy manual records with `None`; lifecycle code in Task 2 will reject new unlinked writes. Copy the field in `current_resolutions()`.
+Add `runtime_evidence_id: str | None = None` to both resolution models. Extend their model validators so a non-manual or final-acceptance record rejects a non-null runtime ID. Preserve legacy manual records with `None`; the public lifecycle enforcement in Step 6 will reject new unlinked writes. Copy the field in `current_resolutions()`.
 
 - [ ] **Step 5: Write failing bundle-integrity and gate tests**
 
@@ -119,6 +123,22 @@ uv run python -m pytest -q tests/schemas/test_review_bundle_integrity.py tests/g
 ```
 
 Expected: failures because bundle identity and legacy gate behavior are not enforced.
+
+Also extend the atomic lifecycle happy path to use `runtime-001`, the active
+repository, PR, and head. Add table-driven rejection cases for wrong repository,
+PR, head, missing identity, mismatched link ID, duplicate runtime ID, and attempted
+replacement while final acceptance remains recorded. Assert the original state is
+unchanged after every rejection.
+
+Run:
+
+```bash
+uv run python -m pytest -q tests/reviews/test_lifecycle.py \
+  -k 'runtime or external_verification'
+```
+
+Expected: new rejection tests fail because public lifecycle operations do not yet
+enforce the full identity atomically.
 
 - [ ] **Step 6: Implement cross-reference validation and legacy-unlinked gate behavior**
 
@@ -138,6 +158,13 @@ if (
 
 Append `runtime_verification_reconfirmation_required` deterministically and add guidance telling the reviewer to record new E3/E4 verification at the active head. Update final-acceptance validation so an old positive event may remain audit history only when the resulting deterministic gate is not `Ready` because of an unlinked manual decision.
 
+Make `append_runtime_evidence()` and `append_external_verification()` require all
+four runtime fields to equal the validated active review. Require
+`event.runtime_evidence_id == evidence.runtime_evidence_id`, reject duplicates,
+and require final acceptance to be explicitly revoked before replacing a manual
+verification. Keep validation before mutation and append deep copies only after
+every check passes.
+
 - [ ] **Step 7: Run the focused contract suite and commit**
 
 ```bash
@@ -153,7 +180,8 @@ uv run ruff check scopeproof_core tests/schemas tests/gates tests/reviews
 git diff --check
 git add scopeproof_core/schemas/models.py scopeproof_core/resolution_events.py \
   scopeproof_core/gates/evaluator.py scopeproof_core/gates/guidance.py \
-  scopeproof_core/gates/validation.py tests/schemas/test_runtime_evidence.py \
+  scopeproof_core/gates/validation.py scopeproof_core/reviews/lifecycle.py \
+  tests/schemas/test_runtime_evidence.py \
   tests/schemas/test_manual_verification.py \
   tests/schemas/test_review_bundle_integrity.py tests/gates/test_evaluator.py \
   tests/gates/test_guidance.py tests/gates/test_validation.py \
@@ -161,36 +189,18 @@ git add scopeproof_core/schemas/models.py scopeproof_core/resolution_events.py \
 git commit -m "fix: bind manual verification to runtime evidence"
 ```
 
-### Task 2: Lifecycle enforcement and version-three persistence migration
+### Task 2: Version-three persistence migration
 
 **Files:**
-- Modify: `scopeproof_core/reviews/lifecycle.py`
 - Modify: `scopeproof_core/storage/json_store.py`
-- Test: `tests/reviews/test_lifecycle.py`
 - Test: `tests/storage/test_json_store.py`
 - Test: `tests/schemas/test_review_state_integrity.py`
 
 **Interfaces:**
-- Consumes: Task 1 provenance and link fields.
-- Produces: atomic exact-review verification and version 1/2 to version 3 migration.
+- Consumes: Task 1 provenance, link fields, gate behavior, and lifecycle enforcement.
+- Produces: version 1/2 to version 3 migration without inventing manual links.
 
-- [ ] **Step 1: Write failing lifecycle identity tests**
-
-Extend the atomic happy path to use `runtime-001`, the active repository, PR, and head and assert the event and evidence retain the same ID. Add table-driven cases for wrong repository, PR, head, missing identity, mismatched link ID, duplicate runtime ID, and attempted replacement while final acceptance remains recorded. Assert the original state is unchanged after every rejection.
-
-Run:
-
-```bash
-uv run python -m pytest -q tests/reviews/test_lifecycle.py -k 'runtime or external_verification'
-```
-
-Expected: new rejection tests fail.
-
-- [ ] **Step 2: Enforce active-review identity atomically**
-
-Make `append_runtime_evidence()` and `append_external_verification()` require all four runtime fields to equal the validated active review. Require `event.runtime_evidence_id == evidence.runtime_evidence_id`, reject duplicates, and require final acceptance to be explicitly revoked before replacing a manual verification. Keep validation before mutation and append deep copies only after every check passes.
-
-- [ ] **Step 3: Write failing persistence-migration tests**
+- [ ] **Step 1: Write failing persistence-migration tests**
 
 Change the new-save assertion to record version 3. Create version 2 fixtures by removing the four runtime fields and all manual link IDs from a valid saved payload. Prove:
 
@@ -220,20 +230,19 @@ uv run python -m pytest -q tests/storage/test_json_store.py
 
 Expected: failures because record version 3 and migration do not exist.
 
-- [ ] **Step 4: Implement deterministic migration and gate recomputation**
+- [ ] **Step 2: Implement deterministic migration and gate recomputation**
 
 Set `RECORD_VERSION = 3` and `_SUPPORTED_RECORD_VERSIONS = (1, 2, 3)`. After the existing version-one lineage migration, deep-copy and migrate each active and historical bundle. Use canonical JSON with sorted keys, compact separators, and `ensure_ascii=False`; use active revision or stable history position as `bundle_key`. Copy identity from that bundle's `review`. Do not add IDs to legacy resolutions/events. Recompute every affected bundle gate before `validated_review_state()`.
 
-- [ ] **Step 5: Run migration and lifecycle suites and commit**
+- [ ] **Step 3: Run migration suites and commit**
 
 ```bash
-uv run python -m pytest -q tests/reviews/test_lifecycle.py \
-  tests/storage/test_json_store.py tests/schemas/test_review_state_integrity.py
-uv run ruff check scopeproof_core/reviews scopeproof_core/storage tests/reviews \
-  tests/storage tests/schemas/test_review_state_integrity.py
+uv run python -m pytest -q tests/storage/test_json_store.py \
+  tests/schemas/test_review_state_integrity.py
+uv run ruff check scopeproof_core/storage tests/storage \
+  tests/schemas/test_review_state_integrity.py
 git diff --check
-git add scopeproof_core/reviews/lifecycle.py scopeproof_core/storage/json_store.py \
-  tests/reviews/test_lifecycle.py tests/storage/test_json_store.py \
+git add scopeproof_core/storage/json_store.py tests/storage/test_json_store.py \
   tests/schemas/test_review_state_integrity.py
 git commit -m "fix: migrate runtime verification provenance safely"
 ```
@@ -464,17 +473,11 @@ affected by fixes, push `codex/exact-head-runtime-evidence`, and create a draft
 PR targeting `main`. The PR body must state that all evidence is engineering
 evidence, Stage 1 remains unchanged, and publication is not included.
 
-- [ ] **Step 7: Merge only after exact-head required checks pass**
+- [ ] **Step 7: Hand off the verified draft and stop at the publication boundary**
 
-Confirm the PR head has not moved, required `verify` and `CodeQL` pass, the PR
-is mergeable, and no unresolved review finding remains. Then mark Ready and
-merge with the repository's merge-commit convention. Fetch the resulting
-`origin/main`, verify its exact SHA and required main checks, and update only
-the final current-main fields in a separate alignment commit/PR if the merge
-SHA cannot be known before merge.
-
-- [ ] **Step 8: Stop at the publication decision**
-
-Confirm no `v0.2.3` tag or GitHub Release was created. Report the exact final
-main SHA, checks, package hashes, remaining environment gaps, Stage 1 waiting
-condition, and the explicit owner decision still required before publication.
+Confirm no merge, `v0.2.3` tag, or GitHub Release was performed by the
+implementation worker. Report the exact draft-PR head SHA, checks, package
+hashes, remaining environment gaps, Stage 1 waiting condition, and the
+controller actions required for ready/merge/post-merge alignment. Merge and
+post-merge verification belong to the separately authorized controller run;
+tagging and release publication remain a distinct owner decision.
