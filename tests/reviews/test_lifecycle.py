@@ -1,8 +1,9 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
 
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews import attach_analysis
 from scopeproof_core.reviews.lifecycle import (
@@ -51,6 +52,13 @@ def initial_state():
         criteria_confirmed=True,
     )
     criterion = Criterion(criterion_id="AC-01", text="Export CSV")
+    review.criteria_source_provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text="Export CSV",
+        criteria=[criterion],
+        confirmed_by="Fixture owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
     finding = Finding(
         criterion_id="AC-01",
         status=FindingStatus.EVIDENCE_FOUND,
@@ -67,6 +75,54 @@ def initial_state():
         gate=evaluate_gate(review, [criterion], [finding], []),
     )
     return new_review_state(bundle)
+
+
+def test_new_review_state_copies_bundle_criteria_source_provenance() -> None:
+    criterion = Criterion(criterion_id="AC-01", text="Export CSV")
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_revision="requirements-v1",
+        source_text="Export CSV",
+        criteria=[criterion],
+        confirmed_by="Product owner",
+        confirmed_at=datetime(2026, 8, 2, 12, tzinfo=UTC),
+    )
+    review = Review(
+        review_id="review-provenance",
+        repository="acme/widget",
+        pr_number=1,
+        base_sha="base",
+        head_sha="head",
+        check_state=CheckState.PASSING,
+        ci_observation=CIObservation(
+            state=CheckState.PASSING,
+            reason="Fixture",
+            total_check_runs=1,
+            successful_check_runs=1,
+        ),
+        criteria_confirmed=True,
+        criteria_source_provenance=provenance,
+    )
+    finding = Finding(
+        criterion_id="AC-01",
+        status=FindingStatus.EVIDENCE_FOUND,
+        evidence_level=EvidenceLevel.E1,
+        reason="Candidate found",
+        recommended_action="Review evidence",
+    )
+    bundle = ReviewBundle(
+        review=review,
+        source_text="Export CSV",
+        criteria=[criterion],
+        evidence=[],
+        findings=[finding],
+        gate=evaluate_gate(review, [criterion], [finding], []),
+    )
+
+    state = new_review_state(bundle)
+
+    assert state.criteria_revision.source_provenance == provenance
+    assert state.criteria_revision.confirmed_at == provenance.confirmed_at
 
 
 def analysis_bundle_for(

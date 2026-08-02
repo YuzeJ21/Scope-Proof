@@ -1,5 +1,6 @@
 import pytest
 
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import (
@@ -17,6 +18,36 @@ from scopeproof_core.schemas.models import (
 )
 
 
+def bind_bundle_provenance(bundle) -> None:
+    bundle.review.criteria_source_provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text=bundle.source_text,
+        criteria=bundle.criteria,
+        confirmed_by="Demo owner",
+        confirmed_at=bundle.review.created_at,
+    )
+
+
+def bind_active_state_provenance(state) -> None:
+    assert state.bundle is not None
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text=state.criteria_revision.source_text,
+        criteria=state.criteria_revision.criteria,
+        confirmed_by="Demo owner",
+        confirmed_at=state.review.created_at,
+    )
+    state.review = state.review.model_copy(
+        update={"criteria_source_provenance": provenance}
+    )
+    state.criteria_revision = state.criteria_revision.model_copy(
+        update={"source_provenance": provenance}
+    )
+    state.bundle.review = state.bundle.review.model_copy(
+        update={"criteria_source_provenance": provenance}
+    )
+
+
 def test_validated_review_bundle_rejects_a_non_deterministic_gate() -> None:
     bundle = build_demo_review()
     bundle.gate = bundle.gate.model_copy(update={"verdict": GateVerdict.READY})
@@ -24,6 +55,20 @@ def test_validated_review_bundle_rejects_a_non_deterministic_gate() -> None:
     with pytest.raises(
         ValueError, match="analysis bundle gate must match deterministic evaluation"
     ):
+        validated_review_bundle(bundle)
+
+
+def test_validated_review_bundle_rejects_typed_provenance_contradiction_before_gate() -> None:
+    bundle = build_demo_review()
+    bundle.review.criteria_source_provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text="Different requirements source",
+        criteria=bundle.criteria,
+        confirmed_by="Demo owner",
+        confirmed_at=bundle.review.created_at,
+    )
+
+    with pytest.raises(ValueError, match="criteria source provenance does not match source text"):
         validated_review_bundle(bundle)
 
 
@@ -55,6 +100,7 @@ def test_validated_review_state_rejects_forged_ready_historical_projection_witho
         "Updated requirements",
     )
     historical = revised.analysis_history[0]
+    bind_bundle_provenance(historical)
     historical.review.final_acceptance = True
     historical.resolutions = [
         HumanResolution(
@@ -252,6 +298,7 @@ def test_validated_review_state_accepts_legacy_unlinked_manual_event_as_unresolv
 def test_validated_review_state_rejects_final_acceptance_recorded_too_early() -> None:
     state = new_review_state(build_demo_review())
     assert state.bundle is not None
+    bind_active_state_provenance(state)
     final_event = ResolutionEvent(
         event_id="premature-final",
         final_acceptance=True,
@@ -407,6 +454,7 @@ def test_validated_review_state_rejects_manual_replacement_before_legacy_revocat
 ):
     state = new_review_state(build_demo_review())
     assert state.bundle is not None
+    bind_active_state_provenance(state)
     manual_event = ResolutionEvent(
         event_id="legacy-manual",
         criterion_id="AC-01",

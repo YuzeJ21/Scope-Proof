@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
+from scopeproof_core.criteria.confirmation import (
+    CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
+    build_criteria_source_provenance,
+)
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.schemas.models import (
@@ -33,6 +38,15 @@ def load_demo_labels() -> dict:
 def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
     """Run the product analysis path against one fixture and its human labels."""
     criteria = [Criterion.model_validate(item) for item in labels["criteria"]]
+    source_text = labels["source_text"]
+    provenance = build_criteria_source_provenance(
+        source_uri=CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
+        source_revision=labels.get("fixture"),
+        source_text=source_text,
+        criteria=criteria,
+        confirmed_by="ScopeProof constructed demo",
+        confirmed_at=datetime(2026, 7, 12, tzinfo=UTC),
+    )
     review = Review(
         repository=snapshot.repository,
         pr_number=snapshot.pr_number,
@@ -41,6 +55,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
         check_state=snapshot.check_state,
         ci_observation=snapshot.ci_observation,
         criteria_confirmed=labels.get("criteria_confirmed", True),
+        criteria_source_provenance=provenance,
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
@@ -55,7 +70,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
     gate = evaluate_gate(review, criteria, findings, resolutions)
     return ReviewBundle(
         review=review,
-        source_text=labels["source_text"],
+        source_text=source_text,
         criteria=criteria,
         evidence=evidence,
         retrieval_diagnostics=retrieval_result.diagnostics,

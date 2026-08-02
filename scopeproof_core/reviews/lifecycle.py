@@ -49,12 +49,24 @@ def new_review_state(bundle: ReviewBundle) -> ReviewState:
     active_bundle = bundle.model_copy(
         update={"criteria_revision_number": 1}, deep=True
     )
+    source_provenance = (
+        bundle.review.criteria_source_provenance.model_copy(deep=True)
+        if bundle.review.criteria_source_provenance is not None
+        else None
+    )
     revision = CriteriaRevision(
         number=1,
         criteria=[criterion.model_copy(deep=True) for criterion in bundle.criteria],
         source_text=bundle.source_text,
         confirmed=bundle.review.criteria_confirmed,
-        confirmed_at=datetime.now(UTC) if bundle.review.criteria_confirmed else None,
+        confirmed_at=(
+            source_provenance.confirmed_at
+            if source_provenance is not None
+            else datetime.now(UTC)
+            if bundle.review.criteria_confirmed
+            else None
+        ),
+        source_provenance=source_provenance,
     )
     return ReviewState(
         review=bundle.review.model_copy(deep=True),

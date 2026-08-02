@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.reviews.lifecycle import new_review_state, revise_criteria
 from scopeproof_core.schemas.models import CheckState, CIObservation, ReviewBundle, ReviewState
@@ -135,6 +136,9 @@ def test_review_state_rejects_active_bundle_with_divergent_revision_criteria() -
     payload["criteria_revision"]["criteria"][0]["text"] = (
         "Different but valid acceptance criterion"
     )
+    payload["review"]["criteria_source_provenance"] = None
+    payload["criteria_revision"]["source_provenance"] = None
+    payload["bundle"]["review"]["criteria_source_provenance"] = None
 
     with pytest.raises(
         ValidationError, match="active bundle criteria must match the active revision"
@@ -147,6 +151,9 @@ def test_review_state_rejects_active_bundle_with_divergent_revision_source() -> 
     payload["criteria_revision"]["source_text"] = (
         "Different but valid requirements source"
     )
+    payload["review"]["criteria_source_provenance"] = None
+    payload["criteria_revision"]["source_provenance"] = None
+    payload["bundle"]["review"]["criteria_source_provenance"] = None
 
     with pytest.raises(
         ValidationError, match="active bundle source must match the active revision"
@@ -162,6 +169,9 @@ def test_new_review_state_does_not_alias_active_revision_criteria() -> None:
     state.criteria_revision.criteria[0].text = (
         "Different unanalyzed acceptance criterion"
     )
+    state.review.criteria_source_provenance = None
+    state.criteria_revision.source_provenance = None
+    state.bundle.review.criteria_source_provenance = None
 
     assert state.bundle.criteria[0].text == original_bundle_text
     with pytest.raises(
@@ -193,6 +203,30 @@ def test_review_state_rejects_divergent_revision_confirmation() -> None:
         ValidationError, match="criteria confirmation must match the active revision"
     ):
         ReviewState.model_validate(payload)
+
+
+def test_review_state_rejects_divergent_active_criteria_source_provenance() -> None:
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text=state.criteria_revision.source_text,
+        criteria=state.criteria_revision.criteria,
+        confirmed_by="Demo owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    state.review = state.review.model_copy(
+        update={"criteria_source_provenance": provenance}
+    )
+    state.bundle.review = state.bundle.review.model_copy(
+        update={"criteria_source_provenance": provenance}
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="active criteria source provenance must match lifecycle review and active revision",
+    ):
+        ReviewState.model_validate(state.model_dump(mode="python"))
 
 
 def test_review_state_accepts_bundleless_pending_revision() -> None:

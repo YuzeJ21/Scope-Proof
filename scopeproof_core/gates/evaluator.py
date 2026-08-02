@@ -94,6 +94,8 @@ def evaluate_gate(
     else:
         if not review.criteria_confirmed:
             reason_codes.append("criteria_not_confirmed")
+        if review.criteria_source_provenance is None:
+            reason_codes.append("criteria_source_provenance_missing")
         if review.ingestion_state is IngestionState.PARTIAL:
             reason_codes.append("partial_ingestion")
         elif review.ingestion_state is IngestionState.FAILED:
@@ -106,6 +108,7 @@ def evaluate_gate(
         needs_review = bool(
             unresolved
             or not review.criteria_confirmed
+            or review.criteria_source_provenance is None
             or review.ingestion_state is not IngestionState.COMPLETE
             or ingestion_limitations_present
             or review.check_state in {CheckState.PENDING, CheckState.UNAVAILABLE}

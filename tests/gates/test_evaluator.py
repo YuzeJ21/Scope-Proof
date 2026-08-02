@@ -1,9 +1,12 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.schemas.models import (
     CheckState,
     CIObservation,
+    CriteriaSourceProvenance,
     Criterion,
     Finding,
     FindingStatus,
@@ -31,7 +34,24 @@ def ci_observation_for(check_state: CheckState) -> CIObservation:
             total_check_runs=1,
             failing_check_runs=1,
         )
+    if check_state is CheckState.PENDING:
+        return CIObservation(
+            state=CheckState.PENDING,
+            reason="Fixture",
+            total_check_runs=1,
+            pending_check_runs=1,
+        )
     return CIObservation(reason="Fixture")
+
+
+def valid_provenance() -> CriteriaSourceProvenance:
+    return CriteriaSourceProvenance(
+        source_uri="https://example.test/requirements",
+        source_text_sha256="a" * 64,
+        normalized_criteria_sha256="b" * 64,
+        confirmed_by="Fixture owner",
+        confirmed_at=datetime(2026, 8, 2, tzinfo=UTC),
+    )
 
 
 def gate_case(
@@ -48,6 +68,7 @@ def gate_case(
         check_state=check_state,
         ci_observation=ci_observation_for(check_state),
         criteria_confirmed=confirmed,
+        criteria_source_provenance=valid_provenance() if confirmed else None,
         final_acceptance=True,
     )
     criterion = Criterion(criterion_id="AC-01", text="Export CSV", priority=priority)
@@ -132,6 +153,38 @@ def test_ready_after_explicit_acceptance() -> None:
     )
     decision = evaluate_gate(review, [criterion], [finding], [resolution])
     assert decision.verdict is GateVerdict.READY
+
+
+def test_missing_criteria_source_provenance_fails_closed_before_ready() -> None:
+    review, criterion, finding = gate_case(
+        True, CheckState.PASSING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    review.criteria_source_provenance = None
+    resolution = HumanResolution(
+        criterion_id="AC-01", decision=HumanDecision.ACCEPTED, comment="Reviewed"
+    )
+
+    decision = evaluate_gate(review, [criterion], [finding], [resolution])
+
+    assert decision.verdict is GateVerdict.NEEDS_REVIEW
+    assert decision.reason_codes == ["criteria_source_provenance_missing"]
+
+
+def test_provenance_missing_reason_follows_confirmation_before_ingestion_reasons() -> None:
+    review, criterion, finding = gate_case(
+        False, CheckState.PENDING, Priority.MUST_HAVE, FindingStatus.EVIDENCE_FOUND
+    )
+    review.ingestion_state = IngestionState.PARTIAL
+
+    decision = evaluate_gate(review, [criterion], [finding], [])
+
+    assert decision.reason_codes == [
+        "unresolved_criteria",
+        "criteria_not_confirmed",
+        "criteria_source_provenance_missing",
+        "partial_ingestion",
+        "checks_not_passing",
+    ]
 
 
 def test_partial_ingestion_forces_needs_review() -> None:

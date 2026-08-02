@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from pydantic import (
@@ -66,6 +69,71 @@ class CriterionSource(StringEnum):
 
     USER_CONFIRMED = "user_confirmed"
     IMPLICIT_RULE_PACK = "implicit_rule_pack"
+
+
+_SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
+    "scopeproof://constructed-demo/acceptance-criteria"
+)
+
+
+class CriteriaSourceProvenance(BaseModel):
+    """An immutable confirmation bound to one criteria-source snapshot."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_uri: str = Field(max_length=2048)
+    source_revision: str | None = Field(default=None, max_length=512)
+    source_text_sha256: str
+    normalized_criteria_sha256: str
+    confirmed_by: str = Field(max_length=256)
+    confirmed_at: datetime
+
+    @field_validator("source_uri")
+    @classmethod
+    def validate_source_uri(cls, value: str) -> str:
+        normalized = value.strip()
+        parsed = urlsplit(normalized)
+        if normalized == CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI:
+            return normalized
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError(
+                "source URI must be an HTTPS URL or "
+                "scopeproof://constructed-demo/acceptance-criteria"
+            )
+        return normalized
+
+    @field_validator("source_text_sha256", "normalized_criteria_sha256")
+    @classmethod
+    def validate_sha256_digest(cls, value: str) -> str:
+        if not _SHA256_PATTERN.fullmatch(value):
+            raise ValueError("must be a lowercase SHA-256 digest")
+        return value
+
+    @field_validator("source_revision")
+    @classmethod
+    def normalize_source_revision(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("source_revision must contain non-whitespace text")
+        return normalized
+
+    @field_validator("confirmed_by")
+    @classmethod
+    def normalize_confirmer(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("confirmed_by must contain non-whitespace text")
+        return normalized
+
+    @field_validator("confirmed_at")
+    @classmethod
+    def normalize_utc_confirmation(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("confirmed_at must be timezone-aware")
+        return value.astimezone(UTC)
 
 
 class EvidenceType(StringEnum):
@@ -537,6 +605,30 @@ class Criterion(BaseModel):
         return normalized
 
 
+def source_text_sha256(source_text: str) -> str:
+    """Return the SHA-256 digest of source text encoded as exact UTF-8 bytes."""
+
+    import hashlib
+
+    return hashlib.sha256(source_text.encode("utf-8")).hexdigest()
+
+
+def normalized_criteria_sha256(criteria: Sequence[Criterion]) -> str:
+    """Hash ordered JSON-compatible criterion payloads without mutating them."""
+
+    import hashlib
+    import json
+
+    payload = [criterion.model_dump(mode="json") for criterion in criteria]
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 class CriterionDraft(BaseModel):
     criterion_id: str
     text: str
@@ -647,6 +739,7 @@ class Review(BaseModel):
         )
     )
     criteria_confirmed: bool = False
+    criteria_source_provenance: CriteriaSourceProvenance | None = None
     ingestion_state: IngestionState = IngestionState.COMPLETE
     ingestion_warnings: list[str] = Field(default_factory=list)
     skipped_files: list[str] = Field(default_factory=list)
@@ -998,6 +1091,7 @@ class CriteriaRevision(BaseModel):
     confirmed: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     confirmed_at: datetime | None = None
+    source_provenance: CriteriaSourceProvenance | None = None
 
     @field_validator("source_text")
     @classmethod
@@ -1005,6 +1099,20 @@ class CriteriaRevision(BaseModel):
         if not value.strip():
             raise ValueError("requirements source must contain non-whitespace text")
         return value
+
+    @model_validator(mode="after")
+    def validate_source_provenance(self) -> CriteriaRevision:
+        if self.source_provenance is None:
+            return self
+        if self.source_provenance.source_text_sha256 != source_text_sha256(
+            self.source_text
+        ):
+            raise ValueError("criteria source provenance does not match source text")
+        if self.source_provenance.normalized_criteria_sha256 != normalized_criteria_sha256(
+            self.criteria
+        ):
+            raise ValueError("criteria source provenance does not match criteria")
+        return self
 
 
 class GateDecision(BaseModel):
@@ -1126,6 +1234,12 @@ class ReviewBundle(BaseModel):
         criterion_ids = [criterion.criterion_id for criterion in self.criteria]
         if len(criterion_ids) != len(set(criterion_ids)):
             raise ValueError("criterion IDs must be unique")
+        if self.review.criteria_source_provenance is not None:
+            provenance = self.review.criteria_source_provenance
+            if provenance.source_text_sha256 != source_text_sha256(self.source_text):
+                raise ValueError("criteria source provenance does not match source text")
+            if provenance.normalized_criteria_sha256 != normalized_criteria_sha256(self.criteria):
+                raise ValueError("criteria source provenance does not match criteria")
         known_criteria = set(criterion_ids)
 
         evidence_ids = [item.evidence_id for item in self.evidence]
@@ -1275,6 +1389,14 @@ class ReviewState(BaseModel):
             )
         if self.review.criteria_confirmed != self.criteria_revision.confirmed:
             raise ValueError("criteria confirmation must match the active revision")
+        if self.bundle is not None and not (
+            self.review.criteria_source_provenance
+            == self.criteria_revision.source_provenance
+            == self.bundle.review.criteria_source_provenance
+        ):
+            raise ValueError(
+                "active criteria source provenance must match lifecycle review and active revision"
+            )
         if self.bundle is not None and not self.criteria_revision.confirmed:
             raise ValueError("active bundle requires a confirmed criteria revision")
         if (
