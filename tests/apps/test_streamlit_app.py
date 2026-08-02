@@ -337,6 +337,29 @@ def test_pending_source_draft_survives_an_early_delete_rerun(
     )
 
 
+def test_second_provenance_only_reconfirmation_revises_bundleless_state() -> None:
+    app = analyzed_demo(new_app())
+    app = app.text_input(key="criteria_source_revision").set_value(
+        "demo-fixture@second"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+    first_reconfirmation = app.session_state["review_state"]
+    assert first_reconfirmation.criteria_revision.number == 2
+    assert first_reconfirmation.bundle is None
+
+    app = app.run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Second reviewer"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    second_reconfirmation = app.session_state["review_state"]
+    assert second_reconfirmation.criteria_revision.number == 3
+    assert second_reconfirmation.review.criteria_source_provenance.confirmed_by == (
+        "Second reviewer"
+    )
+
+
 @pytest.mark.parametrize(
     ("key", "value"),
     [

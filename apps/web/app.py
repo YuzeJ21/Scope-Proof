@@ -1516,6 +1516,7 @@ else:
                     or state.criteria_revision.criteria != edited_criteria
                     or state.criteria_revision.source_text
                     != st.session_state["source_text"]
+                    or state.review.criteria_source_provenance != provenance
                 ):
                     state = revise_criteria(
                         state, edited_criteria, st.session_state["source_text"]
