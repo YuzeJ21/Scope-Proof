@@ -562,6 +562,12 @@ def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy()
     assert "alpha-actions-secondary" in site
     assert "alpha-actions-resources" in site
     assert ".alpha-actions-resources" in css
+    for action_class in (
+        "alpha-actions-primary",
+        "alpha-actions-secondary",
+        "alpha-actions-resources",
+    ):
+        assert f".{action_class} {{ order:" not in css
     alpha_urls = {
         "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml",
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md",
