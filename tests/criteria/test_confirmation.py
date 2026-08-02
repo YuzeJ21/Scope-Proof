@@ -15,8 +15,12 @@ from scopeproof_core.schemas.models import Criterion
 
 
 def confirmation_payload(requirements: str) -> dict:
+    criteria = [Criterion(criterion_id="AC-01", text=requirements.strip())]
     return {
-        "requirements_sha256": hashlib.sha256(requirements.encode()).hexdigest(),
+        "source_uri": "https://example.test/requirements",
+        "source_revision": "revision-42",
+        "source_text_sha256": source_text_sha256(requirements),
+        "normalized_criteria_sha256": canonical_criteria_sha256(criteria),
         "confirmed_by": "Demo owner",
         "confirmed_at": datetime(2026, 7, 12, tzinfo=UTC).isoformat(),
     }
@@ -31,6 +35,8 @@ def test_confirmation_record_must_match_the_exact_requirements_file(tmp_path: Pa
     confirmation = validate_requirements_confirmation(requirements, record)
 
     assert confirmation.confirmed_by == "Demo owner"
+    assert confirmation.source_uri == "https://example.test/requirements"
+    assert confirmation.source_revision == "revision-42"
 
 
 def test_confirmation_record_rejects_changed_requirements(tmp_path: Path) -> None:
@@ -69,7 +75,43 @@ def test_confirmation_record_preserves_valid_confirmer_text(tmp_path: Path) -> N
 
     confirmation = validate_requirements_confirmation(requirements, record)
 
-    assert confirmation.confirmed_by == "  Demo owner  "
+    assert confirmation.confirmed_by == "Demo owner"
+
+
+def test_confirmation_record_rejects_reordered_normalized_criteria(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("First requirement.\nSecond requirement.\n", encoding="utf-8")
+    payload = confirmation_payload(requirements.read_text())
+    payload["normalized_criteria_sha256"] = canonical_criteria_sha256(
+        [
+            Criterion(criterion_id="AC-01", text="Second requirement."),
+            Criterion(criterion_id="AC-02", text="First requirement."),
+        ]
+    )
+    record = tmp_path / "confirmation.json"
+    record.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="normalized criteria"):
+        validate_requirements_confirmation(requirements, record)
+
+
+def test_confirmation_record_rejects_legacy_hash_only_shape(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Document the validation demo.\n", encoding="utf-8")
+    record = tmp_path / "confirmation.json"
+    record.write_text(
+        json.dumps(
+            {
+                "requirements_sha256": source_text_sha256(requirements.read_text()),
+                "confirmed_by": "Demo owner",
+                "confirmed_at": "2026-07-12T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="source_uri"):
+        validate_requirements_confirmation(requirements, record)
 
 
 def test_criteria_source_provenance_hashes_exact_utf8_source_and_canonical_criteria() -> None:

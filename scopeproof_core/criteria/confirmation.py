@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
+from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     CriteriaSourceProvenance,
@@ -19,10 +17,10 @@ from scopeproof_core.schemas.models import (
 
 __all__ = [
     "CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI",
-    "RequirementsConfirmation",
     "build_criteria_source_provenance",
     "canonical_criteria_sha256",
     "source_text_sha256",
+    "validate_criteria_source_confirmation",
     "validate_requirements_confirmation",
 ]
 
@@ -54,32 +52,43 @@ def build_criteria_source_provenance(
     )
 
 
-class RequirementsConfirmation(BaseModel):
-    """A human confirmation bound to the exact bytes of a requirements file."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    requirements_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
-    confirmed_by: str = Field(min_length=1)
-    confirmed_at: datetime
-
-    @field_validator("confirmed_by", mode="before")
-    @classmethod
-    def require_non_blank_confirmer(cls, value: object) -> object:
-        if isinstance(value, str) and not value.strip():
-            raise ValueError("confirmed_by must contain non-whitespace text")
-        return value
-
-
 def validate_requirements_confirmation(
-    requirements_path: Path, confirmation_path: Path
-) -> RequirementsConfirmation:
-    """Load validated confirmation metadata and reject a changed requirements file."""
+    requirements_path: Path,
+    confirmation_path: Path,
+) -> CriteriaSourceProvenance:
+    """Load a typed snapshot and bind it to exact text plus ordered criteria."""
 
-    requirements_digest = hashlib.sha256(requirements_path.read_bytes()).hexdigest()
-    confirmation = RequirementsConfirmation.model_validate_json(
+    source_text = requirements_path.read_text(encoding="utf-8")
+    criteria = [
+        Criterion(criterion_id=draft.criterion_id, text=draft.text)
+        for draft in parse_criteria(source_text)
+    ]
+    return validate_criteria_source_confirmation(
+        confirmation_path,
+        source_text=source_text,
+        criteria=criteria,
+    )
+
+
+def validate_criteria_source_confirmation(
+    confirmation_path: Path,
+    *,
+    source_text: str,
+    criteria: Sequence[Criterion],
+) -> CriteriaSourceProvenance:
+    """Validate one typed artifact against an already parsed source snapshot."""
+
+    confirmation = CriteriaSourceProvenance.model_validate_json(
         confirmation_path.read_text(encoding="utf-8")
     )
-    if confirmation.requirements_sha256 != requirements_digest:
-        raise ValueError("confirmation requirements_sha256 does not match the requirements file")
+    if confirmation.source_text_sha256 != source_text_sha256(source_text):
+        raise ValueError(
+            "confirmation source_text_sha256 does not match the requirements file"
+        )
+    if confirmation.normalized_criteria_sha256 != canonical_criteria_sha256(
+        criteria
+    ):
+        raise ValueError(
+            "confirmation normalized_criteria_sha256 does not match normalized criteria"
+        )
     return confirmation

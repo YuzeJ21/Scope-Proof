@@ -15,7 +15,10 @@ from scopeproof_core.alpha.service import (
     record_alpha_outcome,
 )
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
-from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
+from scopeproof_core.criteria.confirmation import (
+    validate_criteria_source_confirmation,
+    validate_requirements_confirmation,
+)
 from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
 from scopeproof_core.evals.metrics import EvidenceQualityMetrics
@@ -32,6 +35,7 @@ from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import (
     ActionValidationRecord,
+    CriteriaSourceProvenance,
     Criterion,
     PullRequestSnapshot,
     ResearchContext,
@@ -71,7 +75,11 @@ def _report_target(value: str | None):
 
 
 def _criteria_from_file(path: Path) -> list[Criterion]:
-    drafts = parse_criteria(path.read_text(encoding="utf-8"))
+    return _criteria_from_text(path.read_text(encoding="utf-8"))
+
+
+def _criteria_from_text(source_text: str) -> list[Criterion]:
+    drafts = parse_criteria(source_text)
     if not drafts:
         raise ValueError("requirements file must contain at least one non-empty criterion")
     return [Criterion(criterion_id=draft.criterion_id, text=draft.text) for draft in drafts]
@@ -81,6 +89,7 @@ def _build_bundle(
     snapshot: PullRequestSnapshot,
     criteria: list[Criterion],
     source_text: str,
+    criteria_source_provenance: CriteriaSourceProvenance,
     research_case_id: str | None = None,
 ) -> ReviewBundle:
     review = Review(
@@ -91,6 +100,7 @@ def _build_bundle(
         check_state=snapshot.check_state,
         ci_observation=snapshot.ci_observation,
         criteria_confirmed=True,
+        criteria_source_provenance=criteria_source_provenance,
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
@@ -124,7 +134,13 @@ def _build_bundle(
 def _review(args: argparse.Namespace) -> int:
     report_target = _report_target(args.report)
     requirements_path = Path(args.requirements)
-    criteria = _criteria_from_file(requirements_path)
+    source_text = requirements_path.read_text(encoding="utf-8")
+    criteria = _criteria_from_text(source_text)
+    provenance = validate_criteria_source_confirmation(
+        Path(args.confirmation),
+        source_text=source_text,
+        criteria=criteria,
+    )
     if args.fixture:
         fixture_text = Path(args.fixture).read_text(encoding="utf-8")
         snapshot = PullRequestSnapshot.model_validate_json(fixture_text)
@@ -133,7 +149,8 @@ def _review(args: argparse.Namespace) -> int:
     bundle = _build_bundle(
         snapshot,
         criteria,
-        requirements_path.read_text(encoding="utf-8"),
+        source_text,
+        provenance,
         args.research_case_id,
     )
     state = new_review_state(bundle)
@@ -182,6 +199,7 @@ def _review(args: argparse.Namespace) -> int:
         "reviewer_decision_state": bundle.reviewer_decision_state.value,
         "gate_reason_codes": bundle.gate.reason_codes,
         "blocking_criteria": bundle.gate.blocking_criteria,
+        "criteria_source_provenance": provenance.model_dump(mode="json"),
     }
     if bundle.research_context is not None:
         metadata.update(
@@ -251,7 +269,13 @@ def _validate_requirements_confirmation(args: argparse.Namespace) -> int:
 def _alpha_init(args: argparse.Namespace) -> int:
     """Create a local, validated record for one genuine public-alpha case."""
     requirements_path = Path(args.requirements)
-    criteria = _criteria_from_file(requirements_path)
+    source_text = requirements_path.read_text(encoding="utf-8")
+    criteria = _criteria_from_text(source_text)
+    provenance = validate_criteria_source_confirmation(
+        Path(args.confirmation),
+        source_text=source_text,
+        criteria=criteria,
+    )
     record = initialize_alpha_case(
         public_pr_url=args.pr,
         requirements_source_url=args.requirements_source,
@@ -259,6 +283,7 @@ def _alpha_init(args: argparse.Namespace) -> int:
         source_owner_confirmed=args.source_owner_confirmed,
         no_confidential_information=args.confirmed_no_confidential_information,
         confirmed_criteria=[criterion.text for criterion in criteria],
+        criteria_source_provenance=provenance,
     )
     path = JsonAlphaCaseStore(Path(args.storage_dir)).save(record)
     payload = record.model_dump(mode="json")
@@ -336,6 +361,11 @@ def _parser() -> argparse.ArgumentParser:
     review.add_argument(
         "--requirements", required=True, help="One user-confirmed criterion per line"
     )
+    review.add_argument(
+        "--confirmation",
+        required=True,
+        help="Typed criteria-source confirmation JSON for the exact requirements snapshot",
+    )
     review.add_argument("--storage-dir", default=".scopeproof/reviews")
     review.add_argument("--token", help="Optional GitHub token; never persisted or printed")
     review.add_argument(
@@ -398,6 +428,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     alpha_init.add_argument(
         "--requirements", required=True, help="One confirmed criterion per line"
+    )
+    alpha_init.add_argument(
+        "--confirmation",
+        required=True,
+        help="Typed criteria-source confirmation JSON for the exact requirements snapshot",
     )
     alpha_init.add_argument(
         "--source-owner-confirmed",

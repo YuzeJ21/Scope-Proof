@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
+
 
 def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> None:
     workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
@@ -27,11 +29,43 @@ def test_repository_action_workflow_uses_the_locked_environment() -> None:
     assert "run: pip install ." not in workflow
 
 
+def test_trusted_base_workflows_pass_validated_confirmation_into_review() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+        review_command = workflow.split("scopeproof review --pr", maxsplit=1)[1].split(
+            "> \"$RUNNER_TEMP/scopeproof-result.json\"", maxsplit=1
+        )[0]
+        assert "--requirements .scopeproof/requirements.txt" in review_command
+        assert (
+            "--confirmation .scopeproof/requirements-confirmation.json"
+            in review_command
+        )
+        assert workflow.index("validate-requirements-confirmation") < workflow.index(
+            "scopeproof review --pr"
+        )
+
+
 def test_example_requires_checked_in_confirmed_requirements_file() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
 
     assert ".scopeproof/requirements.txt" in example
     assert "SCOPEPROOF_REQUIRED_CHECK" in example
+
+
+def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
+    confirmation = validate_requirements_confirmation(
+        Path(".scopeproof/requirements.txt"),
+        Path(".scopeproof/requirements-confirmation.json"),
+    )
+
+    assert confirmation.source_uri == (
+        "https://github.com/YuzeJ21/Scope-Proof/blob/"
+        "a2fdecbd5918535f4db35bfdf7da64156f393b67/.scopeproof/requirements.txt"
+    )
+    assert confirmation.source_revision == "a2fdecbd5918535f4db35bfdf7da64156f393b67"
 
 
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:

@@ -41,6 +41,7 @@ jobs:
             echo "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" >> "$GITHUB_ENV"
             scopeproof review --pr "$PR_URL" \
               --requirements .scopeproof/requirements.txt \
+              --confirmation .scopeproof/requirements-confirmation.json \
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
             python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
             review_id=$(python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
