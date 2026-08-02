@@ -524,6 +524,50 @@ def test_alpha_mode_creates_case_after_confirming_criteria(
     assert record.publication_consent.quote is False
 
 
+@pytest.mark.parametrize(
+    ("widget_kind", "widget_key", "value"),
+    [
+        ("text_input", "criteria_source_confirmer", "Second source owner"),
+        ("text_input", "criteria_source_revision", "requirements@second"),
+        (
+            "text_input",
+            "requirements_source_url",
+            "https://github.com/acme/repo/issues/8",
+        ),
+        ("text_input", "criterion_text_AC-01", "Export the filtered rows as CSV"),
+    ],
+)
+def test_reconfirmed_alpha_inputs_create_new_case_and_preserve_original(
+    widget_kind: str,
+    widget_key: str,
+    value: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = qualified_alpha_analyzed_app(new_app())
+    store = JsonAlphaCaseStore(default_alpha_case_directory())
+    original_case_id = app.session_state["alpha_case_id"]
+    original_record = store.load(original_case_id)
+
+    widget = getattr(app, widget_kind)(key=widget_key)
+    app = widget.set_value(value).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    revised_case_id = app.session_state["alpha_case_id"]
+    assert not app.exception
+    assert not app.error
+    assert revised_case_id != original_case_id
+    assert store.load(original_case_id) == original_record
+    revised_record = store.load(revised_case_id)
+    assert revised_record.criteria_source_provenance == (
+        app.session_state["criteria_source_provenance"]
+    )
+    assert revised_record.confirmed_criteria == [
+        criterion.text for criterion in app.session_state["criteria"]
+    ]
+
+
 def test_primary_workbench_uses_acceptance_coverage_language() -> None:
     app = analyzed_demo(new_app())
     visible_text = "\n".join(

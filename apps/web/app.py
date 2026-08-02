@@ -1539,7 +1539,9 @@ else:
                 alpha_store = JsonAlphaCaseStore(default_alpha_case_directory())
                 alpha_case = ensure_alpha_case(
                     store=alpha_store,
-                    case_id=st.session_state["alpha_case_id"],
+                    # A repeated confirmation represents changed authoritative input.
+                    # Preserve the prior immutable alpha case and create a new snapshot.
+                    case_id=None,
                     public_pr_url=alpha_qualification.public_pr_url,
                     requirements_source_url=str(
                         alpha_qualification.requirements_source_url
