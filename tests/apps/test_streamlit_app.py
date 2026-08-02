@@ -21,6 +21,7 @@ from scopeproof_core.reviews.lifecycle import (
     append_resolution,
 )
 from scopeproof_core.schemas.models import (
+    CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     RULESET_VERSION,
     CheckState,
     CIObservation,
@@ -47,11 +48,28 @@ def new_app() -> AppTest:
 
 
 def load_demo(app: AppTest) -> AppTest:
-    return app.button(key="load_demo").click().run()
+    app = app.button(key="load_demo").click().run()
+    return app.text_input(key="criteria_source_confirmer").set_value(
+        "Local reviewer"
+    ).run()
 
 
 def analyzed_demo(app: AppTest) -> AppTest:
     app = load_demo(app)
+    app = app.button(key="confirm_criteria").click().run()
+    return app.button(key="run_analysis").click().run()
+
+
+def analyzed_standard_demo(app: AppTest) -> AppTest:
+    app = app.button(key="load_demo").click().run()
+    app.session_state["criteria_source_mode"] = "standard"
+    app = app.run()
+    app = app.text_input(key="criteria_source_reference").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Product owner"
+    ).run()
     app = app.button(key="confirm_criteria").click().run()
     return app.button(key="run_analysis").click().run()
 
@@ -156,6 +174,9 @@ def qualified_alpha_analyzed_app(app: AppTest) -> AppTest:
         app = app.button(key="fetch_pr").click().run()
     app = app.text_area(key="requirements_input").set_value("Export CSV").run()
     app = app.button(key="prepare_criteria").click().run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Alpha source owner"
+    ).run()
     app = app.button(key="confirm_criteria").click().run()
     return app.button(key="run_analysis").click().run()
 
@@ -187,6 +208,249 @@ def test_alpha_outcome_is_ready_after_authoritative_review_autosaves(
 def test_analysis_is_disabled_before_criteria_confirmation() -> None:
     app = new_app()
     assert app.button(key="run_analysis").disabled is True
+
+
+def test_standard_review_requires_source_reference_and_confirmer_before_confirmation() -> None:
+    app = new_app()
+    app = app.text_area(key="requirements_input").set_value(
+        "The result can be exported as CSV."
+    ).run()
+    app = app.button(key="prepare_criteria").click().run()
+
+    assert app.button(key="confirm_criteria").disabled is True
+    app = app.text_input(key="criteria_source_reference").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    assert app.button(key="confirm_criteria").disabled is True
+
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Product owner"
+    ).run()
+    assert app.button(key="confirm_criteria").disabled is False
+
+
+def test_demo_preloads_read_only_source_but_requires_human_confirmer() -> None:
+    app = new_app().button(key="load_demo").click().run()
+
+    source_reference = app.text_input(key="criteria_source_reference")
+    assert source_reference.value == CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
+    assert source_reference.disabled is True
+    assert app.button(key="confirm_criteria").disabled is True
+
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Demo reviewer"
+    ).run()
+    assert app.button(key="confirm_criteria").disabled is False
+
+
+def test_alpha_confirmation_reuses_public_requirements_source_without_duplicate_input() -> None:
+    app = new_app().checkbox(key="alpha_feedback_mode").check().run()
+    source_url = "https://github.com/acme/repo/issues/6"
+    app = app.text_input(key="requirements_source_url").set_value(source_url).run()
+    app = app.text_area(key="requirements_input").set_value(
+        "The result can be exported as CSV."
+    ).run()
+    app = app.button(key="prepare_criteria").click().run()
+
+    assert not [
+        item for item in app.text_input if item.key == "criteria_source_reference"
+    ]
+    assert source_url in [item.value for item in app.code]
+    assert app.button(key="confirm_criteria").disabled is True
+
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Source owner"
+    ).run()
+    assert app.button(key="confirm_criteria").disabled is False
+
+
+def test_confirmation_persists_exact_source_snapshot_with_utc_time() -> None:
+    app = load_demo(new_app())
+    app = app.text_input(key="criteria_source_revision").set_value(
+        "demo-fixture@2026-08-02"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    provenance = app.session_state["criteria_source_provenance"]
+    assert provenance.source_uri == CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
+    assert provenance.source_revision == "demo-fixture@2026-08-02"
+    assert provenance.confirmed_by == "Local reviewer"
+    assert provenance.source_text_sha256 == sha256(
+        app.session_state["source_text"].encode("utf-8")
+    ).hexdigest()
+    assert len(provenance.normalized_criteria_sha256) == 64
+    assert provenance.confirmed_at.tzinfo is UTC
+
+
+def test_source_revision_change_is_pending_and_reconfirmation_appends_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_demo(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
+
+    app = app.text_input(key="criteria_source_revision").set_value(
+        "demo-fixture@second"
+    ).run()
+
+    assert app.session_state["review_state"] == authoritative_state
+    assert app.button(key="confirm_criteria").disabled is False
+    assert app.button(key="save_review").disabled is True
+    assert all(button.disabled for button in app.download_button)
+    assert any(
+        item.value.startswith("Criteria source changes are pending confirmation.")
+        for item in app.warning
+    )
+    assert "Complete — Criteria confirmed" not in "\n".join(
+        item.value for item in app.sidebar.markdown
+    )
+
+    app = app.button(key="confirm_criteria").click().run()
+    revised = app.session_state["review_state"]
+    assert revised.criteria_revision.number == 2
+    assert revised.bundle is None
+    assert revised.review.criteria_source_provenance.source_revision == (
+        "demo-fixture@second"
+    )
+    assert app.button(key="run_analysis").disabled is False
+
+
+def test_pending_source_draft_survives_an_early_delete_rerun(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    pending_revision = "demo-fixture@pending"
+    app = app.text_input(key="criteria_source_revision").set_value(
+        pending_revision
+    ).run()
+    app = select_saved_review(app, review_id)
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+
+    app = app.button(key="delete_saved_review").click().run()
+
+    assert app.text_input(key="criteria_source_revision").value == pending_revision
+    assert app.button(key="confirm_criteria").disabled is False
+    assert any(
+        item.value.startswith("Criteria source changes are pending confirmation.")
+        for item in app.warning
+    )
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("criteria_source_reference", "https://github.com/acme/repo/issues/8"),
+        ("criteria_source_revision", "requirements@second"),
+        ("criteria_source_confirmer", "QA owner"),
+    ],
+)
+def test_each_source_identity_change_blocks_authoritative_actions(
+    key: str,
+    value: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = analyzed_standard_demo(new_app())
+    authoritative_state = app.session_state["review_state"].model_copy(deep=True)
+
+    app = app.text_input(key=key).set_value(value).run()
+
+    assert app.session_state["review_state"] == authoritative_state
+    assert app.button(key="confirm_criteria").disabled is False
+    assert app.button(key="save_review").disabled is True
+    assert app.button(key="record_final_acceptance").disabled is True
+    assert all(button.disabled for button in app.download_button)
+
+
+def test_invalid_source_reference_does_not_mutate_unconfirmed_review() -> None:
+    app = new_app().button(key="load_demo").click().run()
+    app.session_state["criteria_source_mode"] = "standard"
+    app = app.run()
+    original_criteria = list(app.session_state["criteria"])
+    app = app.text_input(key="criteria_source_reference").set_value(
+        "http://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Product owner"
+    ).run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert not app.exception
+    assert app.session_state["criteria"] == original_criteria
+    assert app.session_state["criteria_confirmed"] is False
+    assert app.session_state["review_state"] is None
+    assert app.session_state["criteria_source_provenance"] is None
+    assert any("Criteria could not be confirmed." in item.value for item in app.error)
+
+
+def test_confirmed_source_is_visible_in_one_collapsed_details_panel() -> None:
+    app = analyzed_demo(new_app())
+
+    details = next(
+        item for item in app.expander if item.label == "Confirmed criteria source"
+    )
+    assert details.proto.expanded is False
+    visible = "\n".join(
+        item.value for item in [*details.caption, *details.code, *details.text]
+    )
+    assert CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI in visible
+    assert "Local reviewer" in visible
+    assert app.session_state[
+        "criteria_source_provenance"
+    ].source_text_sha256 in visible
+
+
+def test_legacy_review_without_source_provenance_is_safe_and_fail_closed() -> None:
+    app = analyzed_demo(new_app())
+    legacy = app.session_state["review_state"].model_copy(deep=True)
+    legacy.review = legacy.review.model_copy(
+        update={"criteria_source_provenance": None}
+    )
+    legacy.criteria_revision = legacy.criteria_revision.model_copy(
+        update={"source_provenance": None}
+    )
+    assert legacy.bundle is not None
+    legacy.bundle.review = legacy.bundle.review.model_copy(
+        update={"criteria_source_provenance": None}
+    )
+    app.session_state["review_state"] = legacy
+    app.session_state["bundle"] = legacy.bundle
+    app.session_state["criteria_source_provenance"] = None
+    app.session_state["criteria_source_mode"] = "standard"
+    app.session_state["criteria_source_reference"] = ""
+    app.session_state["criteria_source_revision"] = ""
+    app.session_state["criteria_source_confirmer"] = ""
+
+    app = app.run()
+
+    assert not app.exception
+    assert any(
+        "legacy review has no criteria source provenance" in item.value
+        for item in app.warning
+    )
+    assert "Criteria confirmed by the reviewer." not in [
+        item.value for item in app.success
+    ]
+    assert all(button.disabled for button in app.download_button)
+    assert app.button(key="record_final_acceptance").disabled is True
+
+
+def test_workbench_heading_order_uses_one_h1_and_numbered_h2_sections() -> None:
+    app = analyzed_demo(new_app())
+
+    assert [item.value for item in app.title] == ["ScopeProof"]
+    assert [item.value for item in app.header] == [
+        "1 · Start Review",
+        "2 · Confirm Criteria",
+        "3 · Evidence Matrix",
+        "4 · Criterion Detail",
+        "5 · Summary & Export",
+    ]
+    assert not app.subheader
+    assert not app.sidebar.header
 
 
 def test_product_disclaimer_is_visible() -> None:
@@ -544,6 +808,9 @@ def test_reopened_partial_review_keeps_ingestion_recovery_details(
     app = new_app()
     with patch("scopeproof_core.demo.load_demo_snapshot", return_value=snapshot):
         app = app.button(key="load_demo").click().run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Local reviewer"
+    ).run()
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
     review_id = app.session_state["review_state"].review.review_id
@@ -1497,6 +1764,7 @@ def test_sidebar_step_navigation_links_next_action_and_keeps_locked_steps_plain(
     app = new_app()
 
     assert [item.value for item in app.sidebar.markdown] == [
+        "**Review status**",
         "[Next — Load a public PR or demo](#1-start-review)",
         "Locked — Prepare at least one criterion",
         "Locked — Confirm criteria",
@@ -1509,6 +1777,7 @@ def test_sidebar_step_navigation_tracks_available_workflow_sections() -> None:
     app = load_demo(new_app())
 
     assert [item.value for item in app.sidebar.markdown] == [
+        "**Review status**",
         "[Complete — Source loaded](#1-start-review)",
         "[Complete — Criteria prepared](#2-confirm-criteria)",
         "[Next — Confirm criteria](#2-confirm-criteria)",
@@ -1519,6 +1788,7 @@ def test_sidebar_step_navigation_tracks_available_workflow_sections() -> None:
     app = app.button(key="confirm_criteria").click().run()
 
     assert [item.value for item in app.sidebar.markdown] == [
+        "**Review status**",
         "[Complete — Source loaded](#1-start-review)",
         "[Complete — Criteria prepared](#2-confirm-criteria)",
         "[Complete — Criteria confirmed](#2-confirm-criteria)",
@@ -1529,6 +1799,7 @@ def test_sidebar_step_navigation_tracks_available_workflow_sections() -> None:
     app = app.button(key="run_analysis").click().run()
 
     assert [item.value for item in app.sidebar.markdown] == [
+        "**Review status**",
         "[Complete — Source loaded](#1-start-review)",
         "[Complete — Criteria prepared](#2-confirm-criteria)",
         "[Complete — Criteria confirmed](#2-confirm-criteria)",
@@ -2658,6 +2929,12 @@ def test_reanalysis_shows_previous_and_current_head_sha(
         return_value=changed_snapshot,
     ):
         fresh = fresh.button(key="fetch_pr").click().run()
+    fresh = fresh.text_input(key="criteria_source_reference").set_value(
+        "https://github.com/scopeproof/demo-stock-research/issues/7"
+    ).run()
+    fresh = fresh.text_input(key="criteria_source_confirmer").set_value(
+        "Local reviewer"
+    ).run()
     fresh = fresh.button(key="confirm_criteria").click().run()
     fresh = fresh.button(key="run_analysis").click().run()
 
@@ -2702,6 +2979,12 @@ def test_rereview_comparison_shows_modified_candidate_excerpt(
         return_value=changed_snapshot,
     ):
         fresh = fresh.button(key="fetch_pr").click().run()
+    fresh = fresh.text_input(key="criteria_source_reference").set_value(
+        "https://github.com/scopeproof/demo-stock-research/issues/7"
+    ).run()
+    fresh = fresh.text_input(key="criteria_source_confirmer").set_value(
+        "Local reviewer"
+    ).run()
     fresh = fresh.button(key="confirm_criteria").click().run()
     fresh = fresh.button(key="run_analysis").click().run()
 
