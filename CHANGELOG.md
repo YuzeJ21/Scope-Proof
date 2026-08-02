@@ -30,8 +30,8 @@ remains untagged, unreleased, and not published).
   evidence-matrix filters into progressive disclosure, and aligned supported
   Streamlit and public-site visual tokens without hiding safety copy or
   changing deterministic gate behavior.
-- Updated the copyable Action source-candidate pin to the verified product
-  baseline `2a320df966eff30c05a2b1dce607a247201fa165`. This is not a release
+- Updated the copyable Action source-candidate pin to the compatible immutable
+  Task 4 commit `3f8dd07293b4040d89592c3899178b9719b82cf5`. This is not a release
   install and does not repin the public v0.2.1 package guidance.
 
 These changes are engineering source work only. They create zero Stage 1

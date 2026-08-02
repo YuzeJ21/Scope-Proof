@@ -1094,6 +1094,7 @@ def test_launch_matrix_keeps_action_as_an_advanced_preview() -> None:
 def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     expected_pin = "3f8dd07293b4040d89592c3899178b9719b82cf5"
 
     install = re.search(
@@ -1104,6 +1105,7 @@ def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> 
     assert install is not None
     assert install.group(1) == expected_pin
     assert f"`{install.group(1)}`" in guide
+    assert f"`{install.group(1)}`" in changelog
     assert "source-candidate installation" in guide
     assert "not a published v0.2.3 release" in guide
 
