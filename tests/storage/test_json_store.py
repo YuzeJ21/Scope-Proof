@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 from pydantic import ValidationError
@@ -12,6 +14,9 @@ from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import export_html, export_markdown
 from scopeproof_core.reviews.lifecycle import (
+    append_external_verification,
+    append_resolution,
+    append_runtime_evidence,
     attach_analysis,
     confirm_criteria,
     new_review_state,
@@ -24,6 +29,7 @@ from scopeproof_core.schemas.models import (
     HumanResolution,
     PullRequestSnapshot,
     ResolutionEvent,
+    RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
@@ -88,6 +94,135 @@ def downgrade_to_version_one(payload: dict) -> dict:
     return payload
 
 
+def state_with_runtime_history():
+    state = review_state()
+    assert state.bundle is not None
+    historical_evidence = RuntimeEvidence(
+        runtime_evidence_id="native-historical-runtime",
+        repository=state.review.repository,
+        pr_number=state.review.pr_number,
+        head_sha=state.review.head_sha,
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/runs/historical",
+        scenario="Export the filtered research list",
+        environment="staging",
+        result="passed",
+        reviewer="QA reviewer",
+        evidence_level=EvidenceLevel.E3,
+        limitations=["Observed in a controlled staging environment"],
+    )
+    state = append_external_verification(
+        state,
+        historical_evidence,
+        ResolutionEvent(
+            event_id="historical-manual",
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment="Historical runtime observation",
+            claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id=historical_evidence.runtime_evidence_id,
+            reviewer=historical_evidence.reviewer,
+        ),
+    )
+    for criterion in state.bundle.criteria:
+        if criterion.criterion_id == "AC-01":
+            continue
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                event_id=f"historical-accepted-{criterion.criterion_id}",
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment=f"Accepted {criterion.criterion_id}",
+            ),
+        )
+    state = append_resolution(
+        state,
+        ResolutionEvent(
+            event_id="historical-final-acceptance",
+            final_acceptance=True,
+            comment="Historical final acceptance note",
+        ),
+    )
+
+    updated_criteria = [
+        item.model_copy(deep=True) for item in state.criteria_revision.criteria
+    ]
+    updated_criteria[0] = updated_criteria[0].model_copy(
+        update={"text": "Updated AC-01 requirement"}
+    )
+    revised = confirm_criteria(
+        revise_criteria(state, updated_criteria, "Updated requirements")
+    )
+    incoming = build_demo_review()
+    incoming.review = revised.review.model_copy(deep=True)
+    incoming.source_text = revised.criteria_revision.source_text
+    incoming.criteria = [
+        item.model_copy(deep=True) for item in revised.criteria_revision.criteria
+    ]
+    incoming.gate = evaluate_gate(
+        incoming.review,
+        incoming.criteria,
+        incoming.findings,
+        incoming.resolutions,
+    )
+    attached = attach_analysis(revised, incoming)
+    active_evidence = RuntimeEvidence(
+        runtime_evidence_id="native-active-runtime",
+        repository=attached.review.repository,
+        pr_number=attached.review.pr_number,
+        head_sha=attached.review.head_sha,
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/runs/active",
+        scenario="Export the revised research list",
+        environment="staging",
+        result="passed",
+        reviewer="Second QA reviewer",
+        evidence_level=EvidenceLevel.E4,
+        limitations=["Owner acceptance was recorded outside ScopeProof"],
+    )
+    return append_runtime_evidence(attached, active_evidence)
+
+
+def downgrade_runtime_provenance(payload: dict, record_version: int = 2) -> dict:
+    payload["record_version"] = record_version
+    bundles = [payload["state"]["bundle"], *payload["state"]["analysis_history"]]
+    for bundle in bundles:
+        if bundle is None:
+            continue
+        for runtime_item in bundle["runtime_evidence"]:
+            for field_name in (
+                "runtime_evidence_id",
+                "repository",
+                "pr_number",
+                "head_sha",
+            ):
+                runtime_item.pop(field_name, None)
+        for resolution in bundle["resolutions"]:
+            resolution.pop("runtime_evidence_id", None)
+    for event in payload["state"]["resolution_events"]:
+        event.pop("runtime_evidence_id", None)
+    if record_version == 1:
+        downgrade_to_version_one(payload)
+    return payload
+
+
+def write_legacy_runtime_record(
+    store: JsonReviewStore,
+    *,
+    record_version: int = 2,
+) -> tuple[Path, dict]:
+    state = state_with_runtime_history()
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    historical = payload["state"]["analysis_history"][0]
+    historical["review"]["head_sha"] = "historical-head"
+    historical["runtime_evidence"][0]["head_sha"] = "historical-head"
+    downgrade_runtime_provenance(payload, record_version)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path, payload
+
+
 def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
     state = review_state()
@@ -127,7 +262,7 @@ def test_attached_analysis_round_trip_preserves_reanalysis_lineage(
     assert historical.criteria != loaded.bundle.criteria
 
 
-def test_new_save_writes_version_two_with_exact_analysis_lineage(
+def test_new_save_writes_version_three_with_exact_analysis_lineage(
     tmp_path: Path,
 ) -> None:
     store = JsonReviewStore(tmp_path)
@@ -136,7 +271,7 @@ def test_new_save_writes_version_two_with_exact_analysis_lineage(
     path = store.save(state)
     payload = json.loads(path.read_text(encoding="utf-8"))
 
-    assert payload["record_version"] == 2
+    assert payload["record_version"] == 3
     assert payload["state"]["bundle"]["criteria_revision_number"] == 2
     assert [
         bundle["criteria_revision_number"]
@@ -182,12 +317,190 @@ def test_saving_migrated_version_one_state_preserves_unknown_history(
     migrated_path = store.save(migrated)
     migrated_payload = json.loads(migrated_path.read_text(encoding="utf-8"))
 
-    assert migrated_payload["record_version"] == 2
+    assert migrated_payload["record_version"] == 3
     assert migrated_payload["state"]["bundle"]["criteria_revision_number"] == 2
     assert [
         bundle["criteria_revision_number"]
         for bundle in migrated_payload["state"]["analysis_history"]
     ] == ["unknown"]
+
+
+def test_legacy_runtime_migration_is_deterministic_and_uses_owning_bundle_identity(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    _, payload = write_legacy_runtime_record(store)
+    active_original = deepcopy(payload["state"]["bundle"]["runtime_evidence"][0])
+    historical_original = deepcopy(
+        payload["state"]["analysis_history"][0]["runtime_evidence"][0]
+    )
+    review_id = payload["state"]["review"]["review_id"]
+    active_canonical = json.dumps(
+        active_original,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    historical_canonical = json.dumps(
+        historical_original,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    expected_active_id = str(
+        uuid5(
+            NAMESPACE_URL,
+            f"scopeproof-runtime-evidence:{review_id}:active:2:"
+            f"0:{active_canonical}",
+        )
+    )
+    expected_historical_id = str(
+        uuid5(
+            NAMESPACE_URL,
+            f"scopeproof-runtime-evidence:{review_id}:history:0:"
+            f"0:{historical_canonical}",
+        )
+    )
+
+    first = store.load(review_id)
+    second = store.load(review_id)
+
+    assert first.model_dump_json() == second.model_dump_json()
+    assert first.bundle is not None
+    active_runtime = first.bundle.runtime_evidence[0]
+    historical_bundle = first.analysis_history[0]
+    historical_runtime = historical_bundle.runtime_evidence[0]
+    assert active_runtime.runtime_evidence_id == expected_active_id
+    assert historical_runtime.runtime_evidence_id == expected_historical_id
+    assert expected_active_id != expected_historical_id
+    assert (
+        active_runtime.repository,
+        active_runtime.pr_number,
+        active_runtime.head_sha,
+    ) == (
+        first.bundle.review.repository,
+        first.bundle.review.pr_number,
+        first.bundle.review.head_sha,
+    )
+    assert (
+        historical_runtime.repository,
+        historical_runtime.pr_number,
+        historical_runtime.head_sha,
+    ) == (
+        historical_bundle.review.repository,
+        historical_bundle.review.pr_number,
+        "historical-head",
+    )
+
+
+def test_version_one_runtime_migration_runs_after_lineage_migration(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = attached_review_state()
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    runtime_item = RuntimeEvidence(
+        criterion_id="AC-01",
+        artifact_reference="https://example.test/runs/version-one",
+        scenario="Reopen a version one review",
+        environment="staging",
+        result="passed",
+        reviewer="QA reviewer",
+        evidence_level=EvidenceLevel.E3,
+    ).model_dump(mode="json")
+    payload["state"]["bundle"]["runtime_evidence"] = [deepcopy(runtime_item)]
+    payload["state"]["analysis_history"][0]["runtime_evidence"] = [
+        deepcopy(runtime_item)
+    ]
+    downgrade_to_version_one(payload)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(state.review.review_id)
+
+    assert loaded.bundle is not None
+    assert loaded.bundle.criteria_revision_number == 2
+    assert loaded.bundle.runtime_evidence[0].runtime_evidence_id is not None
+    assert loaded.analysis_history[0].criteria_revision_number == "unknown"
+    assert loaded.analysis_history[0].runtime_evidence[0].runtime_evidence_id is not None
+
+
+def test_version_two_runtime_migration_preserves_legacy_links_as_unlinked_and_fails_closed(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    _, payload = write_legacy_runtime_record(store)
+    old_events = deepcopy(payload["state"]["resolution_events"])
+
+    loaded = store.load(payload["state"]["review"]["review_id"])
+
+    assert loaded.analysis_history[0].resolutions[0].runtime_evidence_id is None
+    assert all(event.runtime_evidence_id is None for event in loaded.resolution_events)
+    loaded_events = [event.model_dump(mode="json") for event in loaded.resolution_events]
+    for event in loaded_events:
+        event.pop("runtime_evidence_id")
+    assert loaded_events == old_events
+    assert loaded.analysis_history[0].review.final_acceptance is True
+    assert loaded.resolution_events[-1].final_acceptance is True
+    assert loaded.analysis_history[0].gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert (
+        "runtime_verification_reconfirmation_required"
+        in loaded.analysis_history[0].gate.reason_codes
+    )
+
+
+def test_version_two_runtime_migration_does_not_mutate_parsed_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    _, legacy_payload = write_legacy_runtime_record(store)
+    original_payload = deepcopy(legacy_payload)
+    monkeypatch.setattr(
+        "scopeproof_core.storage.json_store.json.loads",
+        lambda _: legacy_payload,
+    )
+
+    store.load(legacy_payload["state"]["review"]["review_id"])
+
+    assert legacy_payload == original_payload
+
+
+def test_resaving_migrated_runtime_record_writes_version_three_without_history_loss(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    _, payload = write_legacy_runtime_record(store)
+    old_notes = [event["comment"] for event in payload["state"]["resolution_events"]]
+    old_event_ids = [event["event_id"] for event in payload["state"]["resolution_events"]]
+
+    migrated = store.load(payload["state"]["review"]["review_id"])
+    migrated_path = store.save(migrated)
+    resaved = json.loads(migrated_path.read_text(encoding="utf-8"))
+
+    assert resaved["record_version"] == 3
+    assert [
+        event["comment"] for event in resaved["state"]["resolution_events"]
+    ] == old_notes
+    assert [
+        event["event_id"] for event in resaved["state"]["resolution_events"]
+    ] == old_event_ids
+    assert resaved["state"]["analysis_history"][0]["review"]["final_acceptance"] is True
+
+
+def test_version_three_runtime_ids_are_not_rewritten(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = state_with_runtime_history()
+
+    store.save(state)
+    loaded = store.load(state.review.review_id)
+
+    assert loaded.bundle is not None
+    assert loaded.bundle.runtime_evidence[0].runtime_evidence_id == "native-active-runtime"
+    assert (
+        loaded.analysis_history[0].runtime_evidence[0].runtime_evidence_id
+        == "native-historical-runtime"
+    )
 
 
 def test_bundleless_version_one_record_preserves_unknown_history(
@@ -430,7 +743,7 @@ def test_save_rejects_forged_ready_state_without_resolution_events(tmp_path: Pat
     assert list(tmp_path.iterdir()) == []
 
 
-def test_save_rejects_manual_verification_without_runtime_evidence(
+def test_save_preserves_recoverable_legacy_manual_verification_without_link(
     tmp_path: Path,
 ) -> None:
     store = JsonReviewStore(tmp_path)
@@ -463,12 +776,17 @@ def test_save_rejects_manual_verification_without_runtime_evidence(
         state.bundle.resolutions,
     )
 
-    with pytest.raises(
-        ValueError, match=r"manual.*verifi.*matching runtime evidence"
-    ):
-        store.save(state)
+    path = store.save(state)
+    loaded = store.load("review-1")
 
-    assert list(tmp_path.iterdir()) == []
+    assert path.exists()
+    assert loaded.bundle is not None
+    assert loaded.bundle.resolutions[0].runtime_evidence_id is None
+    assert loaded.bundle.gate.verdict is not GateVerdict.READY
+    assert (
+        "runtime_verification_reconfirmation_required"
+        in loaded.bundle.gate.reason_codes
+    )
 
 
 def test_save_rejects_foreign_historical_review_lineage(tmp_path: Path) -> None:
@@ -782,8 +1100,10 @@ def test_head_change_is_reported_without_mutating_old_evidence(tmp_path: Path) -
         pytest.param(False, id="false"),
         pytest.param(1.0, id="float-one"),
         pytest.param(2.0, id="float-two"),
+        pytest.param(3.0, id="float-three"),
         pytest.param("1", id="string-one"),
         pytest.param("2", id="string-two"),
+        pytest.param("3", id="string-three"),
         pytest.param(None, id="null"),
         pytest.param(_MISSING_RECORD_VERSION, id="missing"),
     ],
