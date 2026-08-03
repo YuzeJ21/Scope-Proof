@@ -3582,6 +3582,39 @@ def test_evidence_matrix_shows_current_human_resolution() -> None:
     assert "Reviewer decision: Accepted" in [item.value for item in app.caption]
 
 
+def test_accepting_below_required_evidence_requires_an_auditable_note() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+
+    assert "Accept despite insufficient candidate evidence" in [
+        item.value for item in app.warning
+    ]
+    assert "Required E1 · observed E0" in [item.value for item in app.caption]
+    assert app.button(key="save_resolution").disabled is True
+
+    app = app.text_area(key="resolution_note").set_value(
+        "Accepted after inspecting external context not represented by candidates."
+    ).run()
+
+    assert app.button(key="save_resolution").disabled is False
+
+
+def test_non_acceptance_below_required_evidence_does_not_require_a_note() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.CHANGE_REQUIRED
+    ).run()
+
+    assert app.button(key="save_resolution").disabled is False
+    assert "Accept despite insufficient candidate evidence" not in [
+        item.value for item in app.warning
+    ]
+
+
 def test_successful_resolution_save_clears_form_and_prevents_accidental_repeat() -> None:
     app = analyzed_demo(new_app())
     app = app.selectbox(key="resolution_decision").set_value(HumanDecision.ACCEPTED).run()

@@ -2176,12 +2176,32 @@ else:
         else:
             st.caption(f"Decision impact: {decision_guidance(decision)}")
         resolution_note = st.text_area("Reviewer note", key="resolution_note")
+        acceptance_below_required = (
+            decision is HumanDecision.ACCEPTED
+            and selected_finding.evidence_level.rank
+            < selected_criterion.required_evidence_level.rank
+        )
+        if acceptance_below_required:
+            st.warning("Accept despite insufficient candidate evidence")
+            st.caption(
+                f"Required {selected_criterion.required_evidence_level.value} · "
+                f"observed {selected_finding.evidence_level.value}"
+            )
+            st.caption(
+                "Add a reviewer note explaining the inspected basis for acceptance. "
+                "The note does not raise the evidence level."
+            )
+        resolution_note_ready = bool(resolution_note.strip()) or not acceptance_below_required
         if resolution_save_notice is not None:
             st.success(resolution_save_notice)
         if st.button(
             "Save resolution",
             key="save_resolution",
-            disabled=(decision is None or not decision_reviewer_ready),
+            disabled=(
+                decision is None
+                or not decision_reviewer_ready
+                or not resolution_note_ready
+            ),
         ):
             if review_state is None:
                 st.error("Run analysis before recording a human resolution.")
