@@ -1232,6 +1232,7 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
         "source candidate",
         "still-public v0.2.1",
         "v0.2.1 release",
+        "no v0.2.3 tag or github release exists",
     ):
         assert stale_predicate not in readme_quickstart.lower()
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
