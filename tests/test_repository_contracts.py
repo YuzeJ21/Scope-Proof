@@ -22,6 +22,16 @@ from scopeproof_core.evals.r002_models import (
 )
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
 
+PUBLIC_RELEASE_VERSION = "0.2.3"
+PUBLIC_RELEASE_TAG = "v0.2.3"
+PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.3-py3-none-any.whl"
+PUBLIC_RELEASE_DOWNLOAD_ROOT = (
+    "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
+)
+PUBLIC_RELEASES_INDEX = "https://github.com/YuzeJ21/Scope-Proof/releases"
+PR183_SOURCE_MERGE_SHA = "cd362a85a558645a0f56d6540f6bf035e5821809"
+PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
+
 
 def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
     root = Path("evals/r002")
@@ -510,10 +520,7 @@ def test_public_product_surfaces_use_reviewer_first_vocabulary() -> None:
 def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert (
-        "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/"
-        "scopeproof-0.2.1-py3-none-any.whl"
-    ) in readme
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
     assert "scopeproof benchmark" in readme
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in readme
     assert "## Contributor setup" in readme
@@ -524,14 +531,19 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
 
 def test_readme_documents_optional_release_checksum_verification() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    wheel_name = "scopeproof-0.2.1-py3-none-any.whl"
 
-    assert f"releases/download/v0.2.1/{wheel_name}" in readme
-    assert "releases/download/v0.2.1/SHA256SUMS.txt" in readme
-    assert f'grep " {wheel_name}$" SHA256SUMS.txt | shasum -a 256 -c -' in readme
-    assert f'grep " {wheel_name}$" SHA256SUMS.txt | sha256sum -c -' in readme
-    assert f"{wheel_name}.sha256" not in readme
-    assert f"python -m pip install ./{wheel_name}" in readme
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/SHA256SUMS.txt" in readme
+    assert (
+        f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | '
+        "shasum -a 256 -c -"
+    ) in readme
+    assert (
+        f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | '
+        "sha256sum -c -"
+    ) in readme
+    assert f"{PUBLIC_RELEASE_WHEEL_FILENAME}.sha256" not in readme
+    assert f"python -m pip install ./{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
     assert "does not provide code-signing or product-correctness assurance" in readme
 
 
@@ -596,7 +608,7 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert '__version__ = "0.2.3"' in version_source
+    assert f'__version__ = "{PUBLIC_RELEASE_VERSION}"' in version_source
 
 
 class _StrictVerificationModel(BaseModel):
@@ -795,9 +807,8 @@ def _load_exact_head_verification_manifest() -> _ExactHeadVerificationManifest:
     return _ExactHeadVerificationManifest.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-def test_exact_head_verification_manifest_preserves_public_install_boundary() -> None:
+def test_exact_head_verification_manifest_preserves_captured_public_install_boundary() -> None:
     manifest = _load_exact_head_verification_manifest()
-    readme = Path("README.md").read_text(encoding="utf-8")
 
     assert manifest.public_install.version == "0.2.1"
     assert manifest.public_install.latest_release == "0.2.1"
@@ -805,8 +816,6 @@ def test_exact_head_verification_manifest_preserves_public_install_boundary() ->
     assert manifest.merged_product.merged is True
     assert manifest.merged_product.tagged is False
     assert manifest.merged_product.released is False
-    assert "releases/download/v0.2.1/" in readme
-    assert "releases/download/v0.2.3/" not in readme
 
 
 def test_exact_head_verification_manifest_binds_verified_and_merged_product_tree() -> None:
@@ -987,15 +996,10 @@ def test_current_intake_policy_keeps_linkedin_material_archived_and_owner_gated(
     assert "archived LinkedIn preparation" in readme
 
 
-def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boundary() -> None:
+def test_release_alignment_preserves_historical_candidate_provenance() -> None:
     candidate_notes = Path("docs/releases/v0.2.2-internal-candidate.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     candidate_provenance = " ".join(candidate_notes.split())
-    unreleased = changelog.split("## Unreleased", maxsplit=1)[1].split("\n## ", maxsplit=1)[0]
-    unreleased_changed = unreleased.split("### Changed", maxsplit=1)[1].split("\n### ", maxsplit=1)[
-        0
-    ]
-    unreleased_changed_normalized = " ".join(unreleased_changed.split())
 
     assert "subsequent local-only changes contained" not in candidate_provenance
     assert "historical isolated artifact snapshot" in candidate_provenance
@@ -1014,7 +1018,7 @@ def test_release_alignment_preserves_candidate_provenance_and_alpha_install_boun
         "#172, pinned to the verified public v0.2.1 wheel. Participant setup and benchmark "
         "success are engineering evidence only; they did not publish v0.2.2 and do not advance "
         "Stage 1."
-    ) in unreleased_changed_normalized
+    ) in " ".join(changelog.split())
 
 
 def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
@@ -1202,6 +1206,91 @@ def test_changelog_discloses_v021_rereview_evidence_boundaries() -> None:
     assert "does not advance Stage 1" in changelog
 
 
+def test_active_public_release_surfaces_align_to_v023_without_rewriting_history() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
+    design_partner = Path("docs/commercialization/design-partner-sprint.md").read_text(
+        encoding="utf-8"
+    )
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status_page = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    candidate = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(encoding="utf-8")
+    site = Path("site/index.html").read_text(encoding="utf-8")
+
+    readme_quickstart = readme.split("## Quickstart", maxsplit=1)[1].split(
+        "## Contributor setup", maxsplit=1
+    )[0]
+    conditional_asset_rule = (
+        "Use the v0.2.3 asset URLs only when the GitHub Releases page shows v0.2.3 with "
+        f"`{PUBLIC_RELEASE_WHEEL_FILENAME}` and `SHA256SUMS.txt`; otherwise, do not use "
+        "an unpublished branch or candidate."
+    )
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme_quickstart
+    assert "releases/download/v0.2.1/" not in readme_quickstart
+    assert conditional_asset_rule in readme_quickstart
+    assert conditional_asset_rule in quickstart
+    assert PUBLIC_RELEASES_INDEX in readme_quickstart
+    assert PUBLIC_RELEASES_INDEX in quickstart
+    for stale_predicate in (
+        "untagged",
+        "unreleased",
+        "not published",
+        "source candidate",
+        "still-public v0.2.1",
+        "v0.2.1 release",
+        "no v0.2.3 tag or github release exists",
+    ):
+        assert stale_predicate not in readme_quickstart.lower()
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
+    assert "releases/download/v0.2.1/" not in quickstart
+    assert f"ScopeProof v{PUBLIC_RELEASE_VERSION} can" in design_partner
+    assert "ScopeProof v0.2.1 can" not in design_partner
+
+    for active_status in (roadmap, status_page):
+        assert f"Public install: v{PUBLIC_RELEASE_VERSION}" in active_status
+        assert "PR #183 integrity/reviewer-loop source merge" in active_status
+        assert f"`{PR183_SOURCE_MERGE_SHA}`" in active_status
+        assert all(run_id in active_status for run_id in PR183_EXACT_MAIN_RUN_IDS)
+        assert "exact-main CI, CodeQL, and Pages all succeeded" in active_status
+        assert "not the final v0.2.3 release merge or tag target" in active_status
+        assert "The GitHub Release record is authoritative for publication availability." in (
+            active_status
+        )
+        assert "Public install: v0.2.3 applies only when" in active_status
+        assert "publication alignment is underway" not in active_status
+        assert "publication alignment is completed" not in active_status
+        assert "Stage 1" in active_status
+        assert "remains at zero" in active_status
+
+    assert "current local ingestion and reviewer-loop evidence" not in roadmap
+    assert "current candidate's missing-patch" not in status_page
+
+    unreleased_index = changelog.index("## Unreleased")
+    release_index = changelog.index("## 0.2.3 — Evidence integrity and reviewer loop")
+    historical_release_index = changelog.index("## 0.2.1 — Re-review evidence integrity")
+    release_notes = changelog[release_index:historical_release_index]
+    assert unreleased_index < release_index < historical_release_index
+    assert "Candidate version:" not in changelog[unreleased_index:release_index]
+    assert "engineering source work only" in release_notes
+    assert "zero Stage 1" in release_notes
+    assert "then-current v0.2.1 release-package guidance" in release_notes
+
+    candidate_banner = candidate.split("## Included", maxsplit=1)[0]
+    assert "Historical pre-publication record" in candidate_banner
+    assert "not the current public-release status" in candidate_banner
+    assert "Public install and latest release: v0.2.1" in candidate
+    assert "70bdca1a0d609c81ac8cd2274dc4915612067cfdb1c2205276faafd7c6358ac8" in candidate
+    assert "7fff8ba0b6b6c85ae0f22fe487762de8a525d04145c50eab46792233b798573e" in candidate
+    assert (
+        f'<a class="button button-primary" href="{PUBLIC_RELEASES_INDEX}">'
+        f"Check for release {PUBLIC_RELEASE_TAG}</a>"
+    ) in site
+    assert f"releases/tag/{PUBLIC_RELEASE_TAG}" not in site
+
+
 def test_public_contribution_templates_preserve_evidence_boundaries() -> None:
     defect = Path(".github/ISSUE_TEMPLATE/defect.yml").read_text(encoding="utf-8")
     feedback = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(encoding="utf-8")
@@ -1366,8 +1455,7 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     protocol = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
 
     assert all(f"Minute {minute}" in quickstart for minute in range(1, 11))
-    assert "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/" in quickstart
-    assert "scopeproof-0.2.1-py3-none-any.whl" in quickstart
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
     assert "scopeproof benchmark" in quickstart
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in quickstart
     assert "setup evidence only" in quickstart
@@ -1480,7 +1568,8 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert "Public PR → Confirm criteria → Review coverage → Record decisions → Export" in html
     assert "Likes, views, stars, impressions, and downloads are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
-    assert "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.1" in html
+    assert PUBLIC_RELEASES_INDEX in html
+    assert f"releases/tag/{PUBLIC_RELEASE_TAG}" not in html
     assert (
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
         in html
