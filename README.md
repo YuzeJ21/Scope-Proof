@@ -111,13 +111,13 @@ only explicit success as passing.
 
 Python 3.11 or newer is required.
 
-Install the public v0.2.3 release wheel in an isolated environment. This path does not require
-cloning the repository.
+The commands below are the v0.2.3 post-publication install path and do not
+require cloning the repository. First check the GitHub Releases page:
+https://github.com/YuzeJ21/Scope-Proof/releases.
 
-The install path below uses the wheel and checksum manifest published with the
-public v0.2.3 release. Release publication and its exact-tree checks are
-engineering evidence only; they do not establish correctness, customer
-validation, or Stage 1 progress.
+Use the v0.2.3 asset URLs only when the GitHub Releases page shows v0.2.3 with `scopeproof-0.2.3-py3-none-any.whl` and `SHA256SUMS.txt`; otherwise, do not use an unpublished branch or candidate.
+Release publication and its exact-tree checks are engineering evidence only;
+they do not establish correctness, customer validation, or Stage 1 progress.
 
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)

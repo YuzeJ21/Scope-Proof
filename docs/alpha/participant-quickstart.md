@@ -14,7 +14,10 @@ use Standard review instead; do not treat a technical smoke or constructed examp
 
 ## Install once
 
-Use the public v0.2.3 release before starting the ten-minute review path:
+The commands below are the v0.2.3 post-publication install path. First check the
+GitHub Releases page: https://github.com/YuzeJ21/Scope-Proof/releases.
+
+Use the v0.2.3 asset URLs only when the GitHub Releases page shows v0.2.3 with `scopeproof-0.2.3-py3-none-any.whl` and `SHA256SUMS.txt`; otherwise, do not use an unpublished branch or candidate.
 
 ```bash
 python3 -m venv .venv

@@ -44,8 +44,9 @@ No changes currently recorded.
   Streamlit and public-site visual tokens without hiding safety copy or
   changing deterministic gate behavior.
 - Updated the copyable Action source-candidate pin to the final immutable
-  v0.2.3 integrity commit `d553791cba83d9f756b2adce22bd814872b73ea2`. This is not a release install and does
-  not repin the public v0.2.1 package guidance.
+  v0.2.3 integrity commit `d553791cba83d9f756b2adce22bd814872b73ea2`. This source-install pin was
+  independent from the then-current v0.2.1 release-package guidance and remains
+  independent from the conditional v0.2.3 release-asset install path.
 
 These changes are engineering source work only. They create zero Stage 1
 credit and do not establish customer, market, accessibility, platform,

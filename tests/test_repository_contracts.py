@@ -28,6 +28,7 @@ PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.3-py3-none-any.whl"
 PUBLIC_RELEASE_DOWNLOAD_ROOT = (
     "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
 )
+PUBLIC_RELEASES_INDEX = "https://github.com/YuzeJ21/Scope-Proof/releases"
 PR183_SOURCE_MERGE_SHA = "cd362a85a558645a0f56d6540f6bf035e5821809"
 PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
 
@@ -1222,9 +1223,17 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     readme_quickstart = readme.split("## Quickstart", maxsplit=1)[1].split(
         "## Contributor setup", maxsplit=1
     )[0]
+    conditional_asset_rule = (
+        "Use the v0.2.3 asset URLs only when the GitHub Releases page shows v0.2.3 with "
+        f"`{PUBLIC_RELEASE_WHEEL_FILENAME}` and `SHA256SUMS.txt`; otherwise, do not use "
+        "an unpublished branch or candidate."
+    )
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme_quickstart
     assert "releases/download/v0.2.1/" not in readme_quickstart
-    assert "public v0.2.3 release" in readme_quickstart.lower()
+    assert conditional_asset_rule in readme_quickstart
+    assert conditional_asset_rule in quickstart
+    assert PUBLIC_RELEASES_INDEX in readme_quickstart
+    assert PUBLIC_RELEASES_INDEX in quickstart
     for stale_predicate in (
         "untagged",
         "unreleased",
@@ -1247,9 +1256,17 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
         assert all(run_id in active_status for run_id in PR183_EXACT_MAIN_RUN_IDS)
         assert "exact-main CI, CodeQL, and Pages all succeeded" in active_status
         assert "not the final v0.2.3 release merge or tag target" in active_status
-        assert "public v0.2.3 publication alignment" in active_status
+        assert "The GitHub Release record is authoritative for publication availability." in (
+            active_status
+        )
+        assert "Public install: v0.2.3 applies only when" in active_status
+        assert "publication alignment is underway" not in active_status
+        assert "publication alignment is completed" not in active_status
         assert "Stage 1" in active_status
         assert "remains at zero" in active_status
+
+    assert "current local ingestion and reviewer-loop evidence" not in roadmap
+    assert "current candidate's missing-patch" not in status_page
 
     unreleased_index = changelog.index("## Unreleased")
     release_index = changelog.index("## 0.2.3 — Evidence integrity and reviewer loop")
@@ -1259,6 +1276,7 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     assert "Candidate version:" not in changelog[unreleased_index:release_index]
     assert "engineering source work only" in release_notes
     assert "zero Stage 1" in release_notes
+    assert "then-current v0.2.1 release-package guidance" in release_notes
 
     candidate_banner = candidate.split("## Included", maxsplit=1)[0]
     assert "Historical pre-publication record" in candidate_banner
@@ -1266,7 +1284,11 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     assert "Public install and latest release: v0.2.1" in candidate
     assert "70bdca1a0d609c81ac8cd2274dc4915612067cfdb1c2205276faafd7c6358ac8" in candidate
     assert "7fff8ba0b6b6c85ae0f22fe487762de8a525d04145c50eab46792233b798573e" in candidate
-    assert f"releases/tag/{PUBLIC_RELEASE_TAG}" in site
+    assert (
+        f'<a class="button button-primary" href="{PUBLIC_RELEASES_INDEX}">'
+        f"Check for release {PUBLIC_RELEASE_TAG}</a>"
+    ) in site
+    assert f"releases/tag/{PUBLIC_RELEASE_TAG}" not in site
 
 
 def test_public_contribution_templates_preserve_evidence_boundaries() -> None:
@@ -1546,7 +1568,8 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert "Public PR → Confirm criteria → Review coverage → Record decisions → Export" in html
     assert "Likes, views, stars, impressions, and downloads are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
-    assert f"https://github.com/YuzeJ21/Scope-Proof/releases/tag/{PUBLIC_RELEASE_TAG}" in html
+    assert PUBLIC_RELEASES_INDEX in html
+    assert f"releases/tag/{PUBLIC_RELEASE_TAG}" not in html
     assert (
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
         in html

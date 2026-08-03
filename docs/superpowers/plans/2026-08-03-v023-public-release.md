@@ -4,7 +4,7 @@
 
 **Goal:** Publish a protected, checksum-verifiable ScopeProof v0.2.3 release from the exact final `main` SHA while keeping engineering evidence separate from product validation.
 
-**Architecture:** Define one active public-release identity in repository contracts, align only current product and install surfaces to that identity, merge through protected GitHub checks, and build every public artifact from the exact resulting merge commit. Historical audits and manifests remain immutable records of their named trees.
+**Architecture:** Define one active public-release identity in repository contracts, align only current product and install surfaces to that identity, and keep one phase-safe reviewed tree by conditioning exact asset instructions on the authoritative GitHub Release record and pointing the public CTA to the always-valid Releases index. Merge through protected GitHub checks and build every public artifact from the exact resulting merge commit. Historical audits and manifests remain immutable records of their named trees.
 
 **Tech Stack:** Python 3.11+, pytest, Ruff, uv, Markdown, static HTML, GitHub protected branches, GitHub Releases.
 
@@ -32,7 +32,7 @@
 - Modify: `tests/test_repository_contracts.py`
 
 - [ ] Add shared constants for public version `0.2.3`, tag `v0.2.3`, wheel filename, and release-download root.
-- [ ] Update active README, participant quickstart, design-partner, roadmap, status-page, changelog, internal-candidate banner, and public-site assertions to require v0.2.3 alignment.
+- [ ] Update active README, participant quickstart, design-partner, roadmap, status-page, changelog, internal-candidate banner, and public-site assertions to require phase-safe v0.2.3 alignment before and after publication.
 - [ ] Restrict stale-version rejection to active sections so dated v0.2.1 audits and archived launch materials remain valid.
 - [ ] Decouple the historical exact-head verification manifest from the live README install path while retaining its captured v0.2.1 assertions.
 - [ ] Require changelog ordering `Unreleased` before `0.2.3` before `0.2.1`, plus explicit evidence and Stage 1 boundaries.
@@ -53,11 +53,11 @@
 - Modify: `site/index.html`
 
 - [ ] Move the current changelog material under `## 0.2.3 — Evidence integrity and reviewer loop` and reset `Unreleased` without erasing historical entries.
-- [ ] Change the active README install and checksum commands to the v0.2.3 wheel and remove obsolete pre-publication wording.
+- [ ] Change the active README install and checksum commands to the v0.2.3 wheel, but require the authoritative GitHub Release record to show the matching wheel and checksum manifest before those URLs are used.
 - [ ] Change the participant quickstart and design-partner current-state version to v0.2.3 while retaining setup-only and zero-validation language.
-- [ ] Update the roadmap and current status page to record PR #183 merged at `cd362a85a558645a0f56d6540f6bf035e5821809`, exact-main checks passed, and public v0.2.3 publication alignment underway/completed as appropriate.
+- [ ] Update the roadmap and current status page to record PR #183 merged at `cd362a85a558645a0f56d6540f6bf035e5821809`, exact-main checks passed, and the GitHub Release record as the phase-neutral authority for publication availability.
 - [ ] Add a prominent historical pre-publication banner to the internal-candidate record; leave its captured hashes and measurements unchanged.
-- [ ] Point the public-site release CTA to v0.2.3.
+- [ ] Point the public-site release CTA to the always-valid Releases index and label it to check for v0.2.3.
 - [ ] Run repository contracts, Ruff, and `git diff --check`; confirm the release contracts pass.
 - [ ] Commit as `release: prepare ScopeProof v0.2.3`.
 
@@ -87,4 +87,4 @@
 - [ ] Rebuild the three release assets from a clean detached worktree at that exact main SHA and repeat clean-install verification.
 - [ ] Create annotated tag `v0.2.3` at that SHA and publish the reviewed GitHub Release with exactly the wheel, source distribution, and checksum manifest.
 - [ ] Redownload all three public assets, verify checksums, clean-install the public wheel, rerun both benchmarks and workbench health, and confirm the release/tag target SHA exactly matches `main`.
-- [ ] Confirm public README/quickstart/site URLs resolve, the latest public release is v0.2.3, and no release note claims correctness, customer validation, or Stage 1 progress.
+- [ ] Confirm the Releases index resolves, its v0.2.3 record exposes the exact README/quickstart assets, the latest public release is v0.2.3, and no release note claims correctness, customer validation, or Stage 1 progress.
