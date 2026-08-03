@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from apps.web.view_models import default_criterion_detail_id
 from scopeproof_core.alpha.models import AlphaOutcome
 from scopeproof_core.alpha.storage import (
     JsonAlphaCaseStore,
@@ -3456,17 +3457,50 @@ def test_evidence_matrix_renders_as_reachable_cards_without_grid_tools() -> None
     assert "Evidence types: None" in matrix_captions
     assert matrix_captions.count("Reviewer decision: Unresolved") == 4
     assert not any("Confidence:" in value for value in matrix_captions)
-    assert not any("Count:" in value for value in matrix_captions)
     assert not any("Concern:" in value for value in matrix_captions)
-    legacy_table_blocks = [
-        markdown.value
-        for markdown in app.markdown
-        if markdown.value.startswith(
-            "| Criterion | Requirement | Priority | Evidence status | Evidence types | "
-            "Reviewer decision |"
+
+
+def test_evidence_matrix_cards_explain_and_open_each_criterion() -> None:
+    app = analyzed_demo(new_app())
+    state = app.session_state["review_state"]
+    assert state.bundle is not None
+
+    rendered_text = [item.value for item in app.text]
+    rendered_code = [item.value for item in app.code]
+    matrix_captions = [item.value for item in app.caption]
+    for finding in state.bundle.findings:
+        assert f"Candidate count: {len(finding.evidence_ids)}" in matrix_captions
+        assert finding.reason in rendered_text
+        assert finding.recommended_action in rendered_code
+        for missing in finding.missing_evidence:
+            assert missing in rendered_text
+        assert app.button(key=f"inspect_matrix_{finding.criterion_id}").label == (
+            "Inspect this criterion"
         )
-    ]
-    assert legacy_table_blocks == []
+
+    app = app.button(key="inspect_matrix_AC-03").click().run()
+
+    assert app.selectbox(key="selected_criterion").value == "AC-03"
+    selected_text = [item.value for item in app.text]
+    assert "Failed export shows an error message" in selected_text
+
+
+def test_invalid_detail_target_defaults_to_first_unresolved_blocker() -> None:
+    assert default_criterion_detail_id(
+        criterion_ids=["AC-01", "AC-02", "AC-03"],
+        unresolved_ids=["AC-02", "AC-03"],
+        blocking_ids={"AC-02", "AC-03"},
+        selected_id="AC-99",
+    ) == "AC-02"
+
+
+def test_empty_detail_target_defaults_to_first_criterion() -> None:
+    assert default_criterion_detail_id(
+        criterion_ids=["AC-01", "AC-02", "AC-03"],
+        unresolved_ids=["AC-02", "AC-03"],
+        blocking_ids={"AC-02", "AC-03"},
+        selected_id=None,
+    ) == "AC-01"
 
 
 def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summary() -> None:

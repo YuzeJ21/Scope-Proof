@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import streamlit as st
 
-from apps.web.view_models import group_candidate_evidence
+from apps.web.view_models import default_criterion_detail_id, group_candidate_evidence
 from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
@@ -1910,6 +1910,10 @@ else:
                 "Evidence status": evidence_status_text(coverage.evidence_status),
                 "Evidence types": ", ".join(coverage.evidence_types) or "None",
                 "Reviewer decision": coverage.reviewer_decision,
+                "Candidate count": len(finding.evidence_ids),
+                "Rationale": finding.reason,
+                "Missing evidence": finding.missing_evidence,
+                "Recommended action": finding.recommended_action,
             }
         )
     if not matrix:
@@ -1928,6 +1932,21 @@ else:
                 st.caption(f"Evidence status: {row['Evidence status']}")
                 st.caption(f"Evidence types: {row['Evidence types']}")
                 st.caption(f"Reviewer decision: {row['Reviewer decision']}")
+                st.caption(f"Candidate count: {row['Candidate count']}")
+                st.caption("Why ScopeProof classified it this way")
+                st.text(row["Rationale"])
+                if row["Missing evidence"]:
+                    st.caption("Missing evidence")
+                    for missing in row["Missing evidence"]:
+                        st.text(missing)
+                st.caption("Recommended next action")
+                st.code(row["Recommended action"], language=None)
+                if st.button(
+                    "Inspect this criterion",
+                    key=f"inspect_matrix_{row['Criterion']}",
+                ):
+                    st.session_state["selected_criterion"] = row["Criterion"]
+                    st.rerun()
 
     unresolved_ids = [
         criterion.criterion_id
@@ -1946,9 +1965,18 @@ else:
             )
 
     st.header("4 · Criterion Detail")
+    criterion_ids = [criterion.criterion_id for criterion in bundle.criteria]
+    selected_criterion = st.session_state.get("selected_criterion")
+    if selected_criterion not in criterion_ids:
+        st.session_state["selected_criterion"] = default_criterion_detail_id(
+            criterion_ids=criterion_ids,
+            unresolved_ids=unresolved_ids,
+            blocking_ids=blocking_criteria,
+            selected_id=selected_criterion,
+        )
     selected_id = st.selectbox(
         "Inspect criterion",
-        options=[criterion.criterion_id for criterion in bundle.criteria],
+        options=criterion_ids,
         key="selected_criterion",
     )
     assert review_state is not None
