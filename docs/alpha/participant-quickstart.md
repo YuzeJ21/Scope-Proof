@@ -14,19 +14,19 @@ use Standard review instead; do not treat a technical smoke or constructed examp
 
 ## Install once
 
-Use the current verified public release before starting the ten-minute review path:
+Use the public v0.2.3 release before starting the ten-minute review path:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install \
-  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/scopeproof-0.2.1-py3-none-any.whl
+  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3/scopeproof-0.2.3-py3-none-any.whl
 scopeproof benchmark
 scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
 Installation and benchmark success are setup evidence only. This setup does not advance Stage 1.
-Do not substitute an unpublished candidate install path for this public-alpha path.
+They do not establish correctness, customer validation, or target-repository runtime verification.
 
 ## Ten-minute path
 

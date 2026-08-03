@@ -9,9 +9,9 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Candidate version: 0.2.3 (verified product baseline merged through PR #180,
-repository alignment merged through PR #181, and current convergence work
-remains untagged, unreleased, and not published).
+No changes currently recorded.
+
+## 0.2.3 — Evidence integrity and reviewer loop
 
 ### Product convergence source work
 

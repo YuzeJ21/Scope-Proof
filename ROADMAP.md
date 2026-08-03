@@ -10,14 +10,16 @@ automated activity. The current external state is
 
 ## Current release and validation state
 
+Public install: v0.2.3
+
 | Area | Current state |
 |---|---|
-| Published install | v0.2.1 |
-| Verified product baseline | Product-convergence work is merged on `main` through `d67fe948`; the later integrity/reviewer-loop candidate remains local, untagged, and unreleased |
+| Published install | v0.2.3 |
+| Verified product baseline | PR #183 integrity/reviewer-loop source merge landed on `main` at `cd362a85a558645a0f56d6540f6bf035e5821809` |
 | Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
-| Current main baseline | PR #182 merged product convergence; local `main` and `origin/main` are aligned at `d67fe948` before the current candidate |
-| Integration authority | Protected-PR `verify` and CodeQL plus resulting-main CI and Pages. GitHub history is authoritative for the final merge SHA; publication remains a separate decision. |
-| Product validation | Stage 1 waiting at zero; Stages 2–4 gated |
+| Current main baseline | PR #183 integrity/reviewer-loop source merge at `cd362a85a558645a0f56d6540f6bf035e5821809`; exact-main CI, CodeQL, and Pages all succeeded |
+| Integration authority | PR #183 exact-main CI run `30847416893`, CodeQL run `30847415556`, and Pages run `30847417705` verify the source merge; it is not the final v0.2.3 release merge or tag target |
+| Product validation | The public v0.2.3 publication alignment is underway; Stage 1 remains at zero and Stages 2–4 remain gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
 milestones can proceed while Stage 1 waits, but they do not advance product-validation stages.
@@ -25,12 +27,12 @@ milestones can proceed while Stage 1 waits, but they do not advance product-vali
 ## Stage 0 — Reviewer-first product reset
 
 Status: prior PR #177 repairs remain historical engineering evidence. PR #180
-merged the exact-head runtime-evidence repair, and PR #181 aligned the
-documentation. The later product-convergence candidate has independent local
-core, package, browser, and static-site evidence. GitHub's protected PR and
-resulting-main workflow records determine its integration status. None of this
-establishes release assets, checksums, a tag, a GitHub Release, or Stage 1
-evidence.
+merged the exact-head runtime-evidence repair, PR #181 aligned the
+documentation, PR #182 merged product convergence, and PR #183 merged the
+integrity/reviewer-loop source work. The PR #183 exact-main runs above verify
+that source merge; they are not the final v0.2.3 release merge or tag target.
+Public v0.2.3 publication alignment remains protected release work, and none of
+this engineering evidence advances Stage 1, which remains at zero.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
@@ -96,11 +98,11 @@ R-002 is engineering evidence only. Stages 2–4 remain gated.
 
 Status: the earlier candidate and PR #177 repairs remain merged history. PR #179
 merged the first workbench UX change, PR #180 merged exact-head runtime-evidence
-hardening, and PR #181 aligned post-merge documentation. The later verified
-product-convergence candidate adds criteria-source provenance, stricter trusted
-boundaries, genuine-origin alpha qualification, and cleaner product surfaces.
-GitHub history determines whether its protected integration has completed. The
-source is not tagged or released. This work earns zero Stage 1 credit.
+hardening, PR #181 aligned post-merge documentation, PR #182 merged product
+convergence, and PR #183 merged the integrity/reviewer-loop source work at
+`cd362a85a558645a0f56d6540f6bf035e5821809`. Public v0.2.3 publication alignment
+is underway through the protected release process. This engineering and release
+work earns zero Stage 1 credit.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering

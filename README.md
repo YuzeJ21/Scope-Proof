@@ -94,8 +94,12 @@ details, and provides a safe draft-clear recovery for revised bundle-less
 reviews. Independently verified PR head
 `ed9f9c0cf6b7cf7cc25403d6138e7a8391f55e0f` has the same product tree,
 `add81a2d0ba7e64f8e4318a1959bbe7e6e4acfc8`, as the merge commit. Stage 0's
-engineering foundation is restored; this work is not tagged or released and
-creates zero Stage 1 credit. The
+engineering foundation is restored. PR #183 merged the later integrity and
+reviewer-loop source work as `cd362a85a558645a0f56d6540f6bf035e5821809`;
+exact-main CI run `30847416893`, CodeQL run `30847415556`, and Pages run
+`30847417705` succeeded. Those runs are engineering evidence for the source
+merge, not the final v0.2.3 release merge or tag target, correctness evidence,
+customer validation, or Stage 1 credit. The
 [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
 records the product-tree engineering evidence and remaining gaps.
 
@@ -107,13 +111,13 @@ only explicit success as passing.
 
 Python 3.11 or newer is required.
 
-Install the verified v0.2.1 release wheel in an isolated environment. This path does not require
+Install the public v0.2.3 release wheel in an isolated environment. This path does not require
 cloning the repository.
 
-The v0.2.3 source line through PRs #174, #177, #179, and #180 is merged. No
-v0.2.3 tag or GitHub Release exists; the verified public install path below
-therefore remains v0.2.1. Publication still requires fresh assets and checksums
-for the authorized release tree plus a separate owner decision.
+The install path below uses the wheel and checksum manifest published with the
+public v0.2.3 release. Release publication and its exact-tree checks are
+engineering evidence only; they do not establish correctness, customer
+validation, or Stage 1 progress.
 
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
@@ -123,7 +127,7 @@ for the implemented feature ledger, current gaps, and evidence-gated Stage 1–4
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install \
-  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/scopeproof-0.2.1-py3-none-any.whl
+  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3/scopeproof-0.2.3-py3-none-any.whl
 scopeproof benchmark
 scopeproof-web --host 127.0.0.1 --port 8501
 ```
@@ -131,8 +135,8 @@ scopeproof-web --host 127.0.0.1 --port 8501
 To verify the release bytes before installation, download the wheel and its checksum:
 
 ```bash
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/scopeproof-0.2.1-py3-none-any.whl
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.1/SHA256SUMS.txt
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3/scopeproof-0.2.3-py3-none-any.whl
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3/SHA256SUMS.txt
 ```
 
 Select the wheel entry from the published manifest, use the command for your platform, then install
@@ -140,12 +144,12 @@ the verified local file:
 
 ```bash
 # macOS
-grep " scopeproof-0.2.1-py3-none-any.whl$" SHA256SUMS.txt | shasum -a 256 -c -
+grep " scopeproof-0.2.3-py3-none-any.whl$" SHA256SUMS.txt | shasum -a 256 -c -
 
 # Linux
-grep " scopeproof-0.2.1-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
+grep " scopeproof-0.2.3-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
 
-python -m pip install ./scopeproof-0.2.1-py3-none-any.whl
+python -m pip install ./scopeproof-0.2.3-py3-none-any.whl
 ```
 
 A matching checksum verifies the downloaded bytes against the digest published with this release.
@@ -158,9 +162,9 @@ reviewer-confirmed criteria against a real public PR.
 
 ### Public PR CLI workflow
 
-The commands below describe the current `0.2.3` source candidate, not the still-public `v0.2.1`
-release artifact. From a current source checkout, the CLI provides the same read-only public-PR
-ingestion and deterministic core without starting Streamlit. First create `requirements.txt` with
+The commands below describe the `0.2.3` source workflow. From a current source checkout, the CLI
+provides the same read-only public-PR ingestion and deterministic core without starting Streamlit.
+First create `requirements.txt` with
 one atomic criterion per line. A human requirements owner or authorized role must inspect and
 approve the exact file before creating the confirmation record. `--confirmed-by` is that human's
 explicit attestation; ScopeProof does not verify their identity, authority, or the criteria's
