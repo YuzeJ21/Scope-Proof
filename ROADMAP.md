@@ -13,9 +13,9 @@ automated activity. The current external state is
 | Area | Current state |
 |---|---|
 | Published install | v0.2.1 |
-| Verified product baseline | v0.2.3 product-convergence candidate through `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; untagged and unreleased |
+| Verified product baseline | Product-convergence work is merged on `main` through `d67fe948`; the later integrity/reviewer-loop candidate remains local, untagged, and unreleased |
 | Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
-| Pre-convergence main baseline | PR #181 merged documentation-only post-merge alignment as `eaa66c5979e2a71769d58f0699537da474094d06`; repository-tree CI, CodeQL, and Pages succeeded |
+| Current main baseline | PR #182 merged product convergence; local `main` and `origin/main` are aligned at `d67fe948` before the current candidate |
 | Integration authority | Protected-PR `verify` and CodeQL plus resulting-main CI and Pages. GitHub history is authoritative for the final merge SHA; publication remains a separate decision. |
 | Product validation | Stage 1 waiting at zero; Stages 2–4 gated |
 
@@ -133,8 +133,16 @@ source is not tagged or released. This work earns zero Stage 1 credit.
   require explicit source reconfirmation before they can regain eligibility.
 - [x] Reduce first-use and public-alpha page density without hiding evidence,
   limitations, labels, controls, or the reviewer confirmation step.
+- [x] Fail closed when GitHub provides no inspectable changed-file patch instead
+  of treating a missing patch as a complete empty file.
+- [x] Restore saved-review source identity for a one-click current-head check,
+  connect matrix cards to criterion detail, and require a note for acceptance
+  below the required candidate-evidence level.
+- [x] Make all five re-review candidate classes inspectable in the workbench and
+  add validated comparison Markdown and JSON downloads.
 - [ ] Freeze a new holdout before using it to evaluate a retrieval algorithm change. R-003 design
-  is complete, but cohort generation awaits a separate explicit owner approval.
+  is complete; cohort generation and later criteria and label confirmations remain distinct
+  evidence-integrity gates.
 - [x] Complete fresh packaging, clean-install, and a bounded accessibility and platform audit in
   the available environment before calling v0.2.3 an internal release candidate; unsupported
   environments and interactions remain explicitly unverified.
@@ -154,6 +162,8 @@ The merged product-tree evidence is recorded in the
 The later convergence candidate and its deliberately separated exact-target
 evidence are recorded in the
 [product-convergence verification audit](docs/audits/v0.2.3-product-convergence/verification.md).
+The current local ingestion and reviewer-loop evidence is recorded in the
+[integrity and reviewer-loop verification audit](docs/audits/v0.2.3-integrity-reviewer-loop/verification.md).
 
 ## Stage 1 — Genuine public alpha
 
