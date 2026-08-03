@@ -498,24 +498,41 @@ class GitHubClient:
             ingestion_state = IngestionState.PARTIAL
 
         total_bytes = 0
+        diff_limit_skipped_count = 0
         files: list[ChangedFile] = []
         for item in raw_files:
-            patch = item.get("patch") or ""
+            filename = item["filename"]
+            raw_patch = item.get("patch")
+            if raw_patch is None or raw_patch == "":
+                if filename not in skipped_files:
+                    skipped_files.append(filename)
+                warning = (
+                    f"Patch unavailable for {filename}; file excluded from analysis."
+                )
+                if warning not in warnings:
+                    warnings.append(warning)
+                ingestion_state = IngestionState.PARTIAL
+                continue
+            if not isinstance(raw_patch, str):
+                raise GitHubIngestionError("GitHub returned malformed patch data.")
+            patch = raw_patch
             patch_bytes = len(patch.encode("utf-8"))
             truncated = patch_bytes > self.max_patch_bytes
             if total_bytes + patch_bytes > self.max_total_diff_bytes:
-                skipped_files.append(item["filename"])
+                if filename not in skipped_files:
+                    skipped_files.append(filename)
+                diff_limit_skipped_count += 1
                 ingestion_state = IngestionState.PARTIAL
                 continue
             if truncated:
                 encoded_patch = patch.encode("utf-8")[: self.max_patch_bytes]
                 patch = encoded_patch.decode("utf-8", errors="ignore")
-                warnings.append(f"Patch truncated for {item['filename']}.")
+                warnings.append(f"Patch truncated for {filename}.")
                 ingestion_state = IngestionState.PARTIAL
             total_bytes += len(patch.encode("utf-8"))
             files.append(
                 ChangedFile(
-                    path=item["filename"],
+                    path=filename,
                     status=item.get("status", "modified"),
                     additions=item.get("additions", 0),
                     deletions=item.get("deletions", 0),
@@ -525,9 +542,11 @@ class GitHubClient:
                     truncated=truncated,
                 )
             )
-        if skipped_files and not any("File limit" in warning for warning in warnings):
-            skipped_count = len(skipped_files)
-            warnings.append(f"Total diff limit reached; skipped {skipped_count} changed files.")
+        if diff_limit_skipped_count:
+            warnings.append(
+                "Total diff limit reached; skipped "
+                f"{diff_limit_skipped_count} changed files."
+            )
 
         commits = [
             CommitInfo(
