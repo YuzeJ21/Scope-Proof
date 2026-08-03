@@ -72,6 +72,7 @@ from scopeproof_core.schemas.models import (
     CheckState,
     Criterion,
     EvidenceLevel,
+    EvidenceSourceScope,
     HumanDecision,
     IngestionState,
     Priority,
@@ -207,6 +208,7 @@ _STATE_DEFAULTS = {
     "criteria_source_mode": "standard",
     "criteria_source_draft": None,
     "criteria_source_widget_sync_pending": None,
+    "source_widget_sync_pending": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -217,6 +219,12 @@ if _criteria_source_widget_sync is not None:
     for _widget_key, _widget_value in _criteria_source_widget_sync.items():
         st.session_state[_widget_key] = _widget_value
     st.session_state["criteria_source_widget_sync_pending"] = None
+
+_source_widget_sync = st.session_state["source_widget_sync_pending"]
+if _source_widget_sync is not None:
+    for _widget_key, _widget_value in _source_widget_sync.items():
+        st.session_state[_widget_key] = _widget_value
+    st.session_state["source_widget_sync_pending"] = None
 
 _active_source_provenance = st.session_state["criteria_source_provenance"]
 _criteria_source_draft = st.session_state["criteria_source_draft"]
@@ -251,6 +259,7 @@ def _reset_analysis() -> None:
     st.session_state["review_save_notice"] = None
     st.session_state["criteria_source_provenance"] = None
     st.session_state["criteria_source_widget_sync_pending"] = None
+    st.session_state["source_widget_sync_pending"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
@@ -472,6 +481,24 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["candidate_files"] = []
+    unchanged_candidate_paths = (
+        sorted(
+            {
+                item.file_path
+                for item in state.bundle.evidence
+                if item.source_scope is EvidenceSourceScope.UNCHANGED_CANDIDATE
+            }
+        )
+        if state.bundle is not None
+        else []
+    )
+    st.session_state["source_widget_sync_pending"] = {
+        "pr_url": (
+            f"https://github.com/{state.review.repository}/pull/"
+            f"{state.review.pr_number}"
+        ),
+        "candidate_paths": "\n".join(unchanged_candidate_paths),
+    }
     st.session_state["comparison_base_bundle"] = None
     st.session_state["alpha_case_id"] = None
     provenance = state.review.criteria_source_provenance
@@ -1071,8 +1098,15 @@ with st.expander("Advanced source options", expanded=False):
         )
     )
     st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
+reopened_review = st.session_state["review_state"]
+fetch_action_label = (
+    "Check current head"
+    if reopened_review is not None
+    and st.session_state["reopened_review_id"] == reopened_review.review.review_id
+    else "Fetch public PR"
+)
 if fetch_action_placeholder.button(
-    "Fetch public PR",
+    fetch_action_label,
     key="fetch_pr",
     disabled=(
         not pr_url_is_valid

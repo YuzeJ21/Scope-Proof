@@ -26,6 +26,7 @@ from scopeproof_core.schemas.models import (
     CheckState,
     CIObservation,
     EvidenceLevel,
+    EvidenceSourceScope,
     GateVerdict,
     HumanDecision,
     IngestionState,
@@ -2963,6 +2964,44 @@ def test_saved_review_can_be_reopened_from_a_fresh_session(
     caption_text = "\n".join(item.value for item in fresh.caption)
     assert "Saved locally — current review matches local storage." in caption_text
     assert fresh.button(key="save_review").disabled is True
+
+
+def test_reopened_review_prepares_one_click_current_head_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    state = saved.session_state["review_state"]
+
+    fresh = select_saved_review(new_app(), review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+
+    assert fresh.text_input(key="pr_url").value == (
+        f"https://github.com/{state.review.repository}/pull/{state.review.pr_number}"
+    )
+    assert fresh.text_area(key="candidate_paths").value == ""
+    assert fresh.button(key="fetch_pr").label == "Check current head"
+
+
+def test_reopened_review_restores_unique_unchanged_candidate_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    state = saved.session_state["review_state"].model_copy(deep=True)
+    assert state.bundle is not None
+    state.bundle.evidence[0].source_scope = EvidenceSourceScope.UNCHANGED_CANDIDATE
+    state.bundle.evidence[0].file_path = "src/unchanged.py"
+    state.bundle.evidence[1].source_scope = EvidenceSourceScope.UNCHANGED_CANDIDATE
+    state.bundle.evidence[1].file_path = "src/unchanged.py"
+    state = ReviewState.model_validate(state.model_dump(mode="python"))
+    JsonReviewStore(default_local_review_directory()).save(state)
+
+    fresh = select_saved_review(new_app(), review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+
+    assert fresh.text_area(key="candidate_paths").value == "src/unchanged.py"
+    assert fresh.button(key="fetch_pr").label == "Check current head"
 
 
 def test_reopening_clears_an_unrelated_loaded_snapshot(
