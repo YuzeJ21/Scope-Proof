@@ -28,6 +28,8 @@ PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.3-py3-none-any.whl"
 PUBLIC_RELEASE_DOWNLOAD_ROOT = (
     "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
 )
+PR183_SOURCE_MERGE_SHA = "cd362a85a558645a0f56d6540f6bf035e5821809"
+PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
 
 
 def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
@@ -1222,7 +1224,16 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     )[0]
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme_quickstart
     assert "releases/download/v0.2.1/" not in readme_quickstart
-    assert "No v0.2.3 tag or GitHub Release exists" not in readme_quickstart
+    assert "public v0.2.3 release" in readme_quickstart.lower()
+    for stale_predicate in (
+        "untagged",
+        "unreleased",
+        "not published",
+        "source candidate",
+        "still-public v0.2.1",
+        "v0.2.1 release",
+    ):
+        assert stale_predicate not in readme_quickstart.lower()
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
     assert "releases/download/v0.2.1/" not in quickstart
     assert f"ScopeProof v{PUBLIC_RELEASE_VERSION} can" in design_partner
@@ -1230,9 +1241,11 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
 
     for active_status in (roadmap, status_page):
         assert f"Public install: v{PUBLIC_RELEASE_VERSION}" in active_status
-        assert "PR #183" in active_status
-        assert "cd362a85a558645a0f56d6540f6bf035e5821809" in active_status
-        assert "exact-main CI, CodeQL, and Pages passed" in active_status
+        assert "PR #183 integrity/reviewer-loop source merge" in active_status
+        assert f"`{PR183_SOURCE_MERGE_SHA}`" in active_status
+        assert all(run_id in active_status for run_id in PR183_EXACT_MAIN_RUN_IDS)
+        assert "exact-main CI, CodeQL, and Pages all succeeded" in active_status
+        assert "not the final v0.2.3 release merge or tag target" in active_status
         assert "public v0.2.3 publication alignment" in active_status
         assert "Stage 1" in active_status
         assert "remains at zero" in active_status
