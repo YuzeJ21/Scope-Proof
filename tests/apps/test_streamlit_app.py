@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from apps.web.view_models import default_criterion_detail_id
 from scopeproof_core.alpha.models import AlphaOutcome
 from scopeproof_core.alpha.storage import (
     JsonAlphaCaseStore,
@@ -26,6 +27,7 @@ from scopeproof_core.schemas.models import (
     CheckState,
     CIObservation,
     EvidenceLevel,
+    EvidenceSourceScope,
     GateVerdict,
     HumanDecision,
     IngestionState,
@@ -188,6 +190,40 @@ def test_summary_places_exports_before_local_storage() -> None:
     assert keys.index("download_markdown") < keys.index("save_review")
     assert keys.index("download_json") < keys.index("save_review")
     assert keys.index("download_csv") < keys.index("save_review")
+
+
+def test_storage_path_is_kept_inside_local_storage_details() -> None:
+    app = analyzed_demo(new_app())
+    local_storage = next(
+        item for item in app.expander if item.label == "Local review storage"
+    )
+
+    assert any(
+        caption.value.startswith("Storage directory:")
+        for caption in local_storage.caption
+    )
+
+
+def test_optional_source_revision_is_collapsed_by_default() -> None:
+    app = load_demo(new_app())
+    revision = next(
+        item for item in app.expander if item.label == "Source revision (optional)"
+    )
+
+    assert revision.proto.expanded is False
+    assert revision.text_input(key="criteria_source_revision")
+
+
+def test_constructed_demo_disclosure_is_not_shown_for_standard_review() -> None:
+    demo = analyzed_demo(new_app())
+    standard = analyzed_standard_demo(new_app())
+    disclosure = (
+        "The bundled CSV export case is a deliberately constructed demo, "
+        "not a real production incident."
+    )
+
+    assert disclosure in [item.value for item in demo.caption]
+    assert disclosure not in [item.value for item in standard.caption]
 
 
 def test_alpha_outcome_is_ready_after_authoritative_review_autosaves(
@@ -2965,6 +3001,44 @@ def test_saved_review_can_be_reopened_from_a_fresh_session(
     assert fresh.button(key="save_review").disabled is True
 
 
+def test_reopened_review_prepares_one_click_current_head_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    state = saved.session_state["review_state"]
+
+    fresh = select_saved_review(new_app(), review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+
+    assert fresh.text_input(key="pr_url").value == (
+        f"https://github.com/{state.review.repository}/pull/{state.review.pr_number}"
+    )
+    assert fresh.text_area(key="candidate_paths").value == ""
+    assert fresh.button(key="fetch_pr").label == "Check current head"
+
+
+def test_reopened_review_restores_unique_unchanged_candidate_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    state = saved.session_state["review_state"].model_copy(deep=True)
+    assert state.bundle is not None
+    state.bundle.evidence[0].source_scope = EvidenceSourceScope.UNCHANGED_CANDIDATE
+    state.bundle.evidence[0].file_path = "src/unchanged.py"
+    state.bundle.evidence[1].source_scope = EvidenceSourceScope.UNCHANGED_CANDIDATE
+    state.bundle.evidence[1].file_path = "src/unchanged.py"
+    state = ReviewState.model_validate(state.model_dump(mode="python"))
+    JsonReviewStore(default_local_review_directory()).save(state)
+
+    fresh = select_saved_review(new_app(), review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+
+    assert fresh.text_area(key="candidate_paths").value == "src/unchanged.py"
+    assert fresh.button(key="fetch_pr").label == "Check current head"
+
+
 def test_reopening_clears_an_unrelated_loaded_snapshot(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3045,6 +3119,44 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     assert "Current candidate" in rendered
     assert "review the current evidence" in rendered.lower()
     assert "does not prove criterion satisfaction" in rendered.lower()
+
+
+def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_exports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    saved, review_id = saved_demo_review(new_app())
+    saved_state = saved.session_state["review_state"]
+    assert saved_state.bundle is not None
+    expected_permalinks = {item.permalink for item in saved_state.bundle.evidence}
+
+    fresh = select_saved_review(new_app(), review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+    fresh = fresh.button(key="load_demo").click().run()
+    fresh = fresh.text_input(key="criteria_source_confirmer").set_value(
+        "Local reviewer"
+    ).run()
+    fresh = fresh.button(key="confirm_criteria").click().run()
+    fresh = fresh.button(key="run_analysis").click().run()
+
+    unchanged = next(
+        item for item in fresh.expander if item.label.startswith("Unchanged candidates (")
+    )
+    assert unchanged.proto.expanded is False
+    unchanged_markdown = [item.value for item in unchanged.markdown]
+    assert "**Previous candidate**" in unchanged_markdown
+    assert "**Current candidate**" in unchanged_markdown
+    for permalink in expected_permalinks:
+        assert any(f"](<{permalink}>)" in item for item in unchanged_markdown)
+    comparison_downloads = {
+        button.key: button for button in fresh.download_button
+        if button.key.startswith("download_comparison_")
+    }
+    assert set(comparison_downloads) == {
+        "download_comparison_markdown",
+        "download_comparison_json",
+    }
+    assert all(not button.disabled for button in comparison_downloads.values())
 
 
 def test_rereview_comparison_shows_modified_candidate_excerpt(
@@ -3417,17 +3529,50 @@ def test_evidence_matrix_renders_as_reachable_cards_without_grid_tools() -> None
     assert "Evidence types: None" in matrix_captions
     assert matrix_captions.count("Reviewer decision: Unresolved") == 4
     assert not any("Confidence:" in value for value in matrix_captions)
-    assert not any("Count:" in value for value in matrix_captions)
     assert not any("Concern:" in value for value in matrix_captions)
-    legacy_table_blocks = [
-        markdown.value
-        for markdown in app.markdown
-        if markdown.value.startswith(
-            "| Criterion | Requirement | Priority | Evidence status | Evidence types | "
-            "Reviewer decision |"
+
+
+def test_evidence_matrix_cards_explain_and_open_each_criterion() -> None:
+    app = analyzed_demo(new_app())
+    state = app.session_state["review_state"]
+    assert state.bundle is not None
+
+    rendered_text = [item.value for item in app.text]
+    rendered_code = [item.value for item in app.code]
+    matrix_captions = [item.value for item in app.caption]
+    for finding in state.bundle.findings:
+        assert f"Candidate count: {len(finding.evidence_ids)}" in matrix_captions
+        assert finding.reason in rendered_text
+        assert finding.recommended_action in rendered_code
+        for missing in finding.missing_evidence:
+            assert missing in rendered_text
+        assert app.button(key=f"inspect_matrix_{finding.criterion_id}").label == (
+            "Inspect this criterion"
         )
-    ]
-    assert legacy_table_blocks == []
+
+    app = app.button(key="inspect_matrix_AC-03").click().run()
+
+    assert app.selectbox(key="selected_criterion").value == "AC-03"
+    selected_text = [item.value for item in app.text]
+    assert "Failed export shows an error message" in selected_text
+
+
+def test_invalid_detail_target_defaults_to_first_unresolved_blocker() -> None:
+    assert default_criterion_detail_id(
+        criterion_ids=["AC-01", "AC-02", "AC-03"],
+        unresolved_ids=["AC-02", "AC-03"],
+        blocking_ids={"AC-02", "AC-03"},
+        selected_id="AC-99",
+    ) == "AC-02"
+
+
+def test_empty_detail_target_defaults_to_first_criterion() -> None:
+    assert default_criterion_detail_id(
+        criterion_ids=["AC-01", "AC-02", "AC-03"],
+        unresolved_ids=["AC-02", "AC-03"],
+        blocking_ids={"AC-02", "AC-03"},
+        selected_id=None,
+    ) == "AC-01"
 
 
 def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summary() -> None:
@@ -3507,6 +3652,39 @@ def test_evidence_matrix_shows_current_human_resolution() -> None:
     app = app.run()
 
     assert "Reviewer decision: Accepted" in [item.value for item in app.caption]
+
+
+def test_accepting_below_required_evidence_requires_an_auditable_note() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+
+    assert "Accept despite insufficient candidate evidence" in [
+        item.value for item in app.warning
+    ]
+    assert "Required E1 · observed E0" in [item.value for item in app.caption]
+    assert app.button(key="save_resolution").disabled is True
+
+    app = app.text_area(key="resolution_note").set_value(
+        "Accepted after inspecting external context not represented by candidates."
+    ).run()
+
+    assert app.button(key="save_resolution").disabled is False
+
+
+def test_non_acceptance_below_required_evidence_does_not_require_a_note() -> None:
+    app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.CHANGE_REQUIRED
+    ).run()
+
+    assert app.button(key="save_resolution").disabled is False
+    assert "Accept despite insufficient candidate evidence" not in [
+        item.value for item in app.warning
+    ]
 
 
 def test_successful_resolution_save_clears_form_and_prevents_accidental_repeat() -> None:

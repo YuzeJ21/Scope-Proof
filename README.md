@@ -257,13 +257,16 @@ The app validates the selected record when it is opened and refuses a configured
 is a symbolic link or another existing non-directory. This app-owned local directory prevents a
 browser input from selecting arbitrary file paths. Records preserve the review SHAs, criteria
 revisions, evidence, findings, resolution history, and gate decision. They never contain the
-optional GitHub token. A reopened review reports a changed head SHA rather than silently reusing
-old evidence. After a new analysis, the workbench compares previous and current heads, candidates,
+optional GitHub token. A reopened review prepares its public PR URL and bounded unchanged-candidate
+paths for a one-click current-head check rather than silently reusing old evidence. After a new
+analysis, the workbench compares previous and current heads, candidates,
 finding states, reviewer decisions, and review status without mutating either bundle. Candidate
 evidence is classified as **Unchanged**, **Relocated**, **Modified**, **Added**, or **Removed**.
 Changed candidates show both the previous and current immutable location and excerpt so the
-reviewer can inspect what moved or changed before recording a new decision. This comparison does
-not prove criterion satisfaction.
+reviewer can inspect what moved or changed before recording a new decision. Exact unchanged
+candidates remain inspectable in a collapsed section, and the validated comparison can be
+downloaded as Markdown or JSON. This comparison does not prove criterion satisfaction or carry a
+prior human decision forward.
 
 From the CLI, run `scopeproof list` to return the safe local review IDs in the default
 `.scopeproof/reviews` directory; add `--storage-dir PATH` only when earlier CLI commands used that
@@ -358,7 +361,9 @@ Markdown / JSON / CSV / HTML
 Every evidence item contains a file, line, immutable head SHA, GitHub permalink, excerpt, matching rule, relevance reason, deterministic score, and limitations. Deleted lines cannot become current implementation evidence. Partial ingestion cannot produce Ready.
 
 GitHub file and commit ingestion follows pagination and has explicit file, patch, and total-diff
-limits. ScopeProof can also inspect a bounded unchanged candidate file when a caller explicitly
+limits. If GitHub does not provide inspectable patch text for a changed path, ScopeProof excludes
+that path, names it as skipped, and marks ingestion partial; it never treats missing diff content
+as a complete empty file. ScopeProof can also inspect a bounded unchanged candidate file when a caller explicitly
 justifies it. This evidence is labeled `unchanged_candidate`, anchored to the head SHA, and never
 means that the repository was scanned broadly.
 

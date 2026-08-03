@@ -25,3 +25,29 @@ def group_candidate_evidence(items: list[EvidenceItem]) -> list[EvidenceGroup]:
         EvidenceGroup(file_path=path, evidence_type=evidence_type, items=tuple(group_items))
         for (path, evidence_type), group_items in grouped.items()
     ]
+
+
+def default_criterion_detail_id(
+    *,
+    criterion_ids: list[str],
+    unresolved_ids: list[str],
+    blocking_ids: set[str],
+    selected_id: str | None,
+) -> str | None:
+    """Return a reachable detail target without rewriting a valid selection."""
+    if selected_id in criterion_ids:
+        return selected_id
+    if selected_id is None:
+        return next(iter(criterion_ids), None)
+    return (
+        next(
+            (
+                criterion_id
+                for criterion_id in unresolved_ids
+                if criterion_id in blocking_ids
+            ),
+            None,
+        )
+        or next(iter(unresolved_ids), None)
+        or next(iter(criterion_ids), None)
+    )

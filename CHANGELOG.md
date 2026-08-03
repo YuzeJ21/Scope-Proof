@@ -15,6 +15,19 @@ remains untagged, unreleased, and not published).
 
 ### Product convergence source work
 
+- Failed closed when GitHub omits, nulls, or empties a changed-file patch: the
+  unavailable path is excluded, named as skipped, and makes ingestion partial
+  instead of appearing as a complete empty diff.
+- Prepared reopened reviews for a one-click current-head check, including their
+  bounded unchanged-candidate paths, without carrying prior decisions forward.
+- Connected every evidence-matrix card to criterion detail and added candidate
+  count, rationale, missing-evidence, and recommended-action context.
+- Required an attributable note when a reviewer accepts below the criterion's
+  required candidate-evidence level; the note never raises that level.
+- Exposed changed candidates first, collapsed exact Unchanged candidates, and
+  added validated Markdown and JSON re-review comparison downloads.
+- Reduced primary-page density by collapsing optional source revision and local
+  storage details and limiting constructed-demo disclosure to the demo context.
 - Bound every new criteria confirmation to an immutable source URI, optional
   source revision, exact requirements-text digest, ordered normalized-criteria
   digest, confirmer, and timestamp. Missing or changed provenance fails closed

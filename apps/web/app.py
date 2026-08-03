@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import streamlit as st
 
-from apps.web.view_models import group_candidate_evidence
+from apps.web.view_models import default_criterion_detail_id, group_candidate_evidence
 from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
@@ -51,7 +51,13 @@ from scopeproof_core.presentation import (
     evidence_status_text,
     review_status_label,
 )
-from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
+from scopeproof_core.reporting.exporters import (
+    export_comparison_json,
+    export_comparison_markdown,
+    export_csv,
+    export_json,
+    export_markdown,
+)
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.comparison import EvidenceReference, compare_reviews
@@ -72,6 +78,7 @@ from scopeproof_core.schemas.models import (
     CheckState,
     Criterion,
     EvidenceLevel,
+    EvidenceSourceScope,
     HumanDecision,
     IngestionState,
     Priority,
@@ -207,6 +214,7 @@ _STATE_DEFAULTS = {
     "criteria_source_mode": "standard",
     "criteria_source_draft": None,
     "criteria_source_widget_sync_pending": None,
+    "source_widget_sync_pending": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -217,6 +225,12 @@ if _criteria_source_widget_sync is not None:
     for _widget_key, _widget_value in _criteria_source_widget_sync.items():
         st.session_state[_widget_key] = _widget_value
     st.session_state["criteria_source_widget_sync_pending"] = None
+
+_source_widget_sync = st.session_state["source_widget_sync_pending"]
+if _source_widget_sync is not None:
+    for _widget_key, _widget_value in _source_widget_sync.items():
+        st.session_state[_widget_key] = _widget_value
+    st.session_state["source_widget_sync_pending"] = None
 
 _active_source_provenance = st.session_state["criteria_source_provenance"]
 _criteria_source_draft = st.session_state["criteria_source_draft"]
@@ -251,6 +265,7 @@ def _reset_analysis() -> None:
     st.session_state["review_save_notice"] = None
     st.session_state["criteria_source_provenance"] = None
     st.session_state["criteria_source_widget_sync_pending"] = None
+    st.session_state["source_widget_sync_pending"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
@@ -379,6 +394,7 @@ def _render_local_review_storage(
         st.session_state["deleted_review_save_fingerprint"] == current_fingerprint
     )
     with st.expander("Local review storage", expanded=save_failed):
+        st.caption(f"Storage directory: `{default_local_review_directory()}`")
         st.caption("Current review ID")
         st.code(state.review.review_id, language=None)
         for message in pending_messages:
@@ -443,7 +459,7 @@ def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
     ):
         notice = JsonReviewStore.detect_head_change(state, snapshot)
         st.session_state["source_reload_notice"] = notice
-        if notice.changed and state.bundle is not None:
+        if state.bundle is not None:
             st.session_state["comparison_base_bundle"] = state.bundle.model_copy(deep=True)
 
 
@@ -472,6 +488,24 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["candidate_files"] = []
+    unchanged_candidate_paths = (
+        sorted(
+            {
+                item.file_path
+                for item in state.bundle.evidence
+                if item.source_scope is EvidenceSourceScope.UNCHANGED_CANDIDATE
+            }
+        )
+        if state.bundle is not None
+        else []
+    )
+    st.session_state["source_widget_sync_pending"] = {
+        "pr_url": (
+            f"https://github.com/{state.review.repository}/pull/"
+            f"{state.review.pr_number}"
+        ),
+        "candidate_paths": "\n".join(unchanged_candidate_paths),
+    }
     st.session_state["comparison_base_bundle"] = None
     st.session_state["alpha_case_id"] = None
     provenance = state.review.criteria_source_provenance
@@ -977,7 +1011,6 @@ with st.expander("Try ScopeProof", expanded=False):
             Criterion.model_validate(item) for item in labels["criteria"]
         ]
         st.session_state["candidate_files"] = []
-        st.session_state["comparison_base_bundle"] = None
         st.session_state["criteria_source_mode"] = "demo"
         st.session_state["criteria_source_reference"] = (
             CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
@@ -1071,8 +1104,15 @@ with st.expander("Advanced source options", expanded=False):
         )
     )
     st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
+reopened_review = st.session_state["review_state"]
+fetch_action_label = (
+    "Check current head"
+    if reopened_review is not None
+    and st.session_state["reopened_review_id"] == reopened_review.review.review_id
+    else "Fetch public PR"
+)
 if fetch_action_placeholder.button(
-    "Fetch public PR",
+    fetch_action_label,
     key="fetch_pr",
     disabled=(
         not pr_url_is_valid
@@ -1268,11 +1308,6 @@ if requirements_are_prepared and not st.session_state["criteria_confirmed"]:
     st.success("Criteria prepared. Review the set before explicitly confirming it.")
     st.markdown("[Continue to 2 · Confirm Criteria](#2-confirm-criteria)")
 
-st.caption(
-    f"Local review storage: `{storage_directory}`. Records stay under your user-owned "
-    "ScopeProof folder; GitHub tokens are never stored."
-)
-
 st.header("2 · Confirm Criteria")
 criteria: list[Criterion] = st.session_state["criteria"]
 edited_criteria = criteria
@@ -1309,12 +1344,16 @@ else:
                     "explicit constructed-source reference."
                 ),
             ).strip()
-        criteria_source_revision = st.text_input(
-            "Source revision (optional)",
-            key="criteria_source_revision",
-            on_change=_remember_criteria_source_draft,
-            help="Issue edit, document revision, or other immutable source version if known.",
-        ).strip()
+        with st.expander("Source revision (optional)", expanded=False):
+            st.caption(
+                "Add an issue edit, document revision, or other immutable source version "
+                "when one is available."
+            )
+            criteria_source_revision = st.text_input(
+                "Revision identifier",
+                key="criteria_source_revision",
+                on_change=_remember_criteria_source_draft,
+            ).strip()
         criteria_source_confirmer = st.text_input(
             "Confirmed by",
             key="criteria_source_confirmer",
@@ -1748,9 +1787,38 @@ else:
             "Candidate comparison does not prove criterion satisfaction. Review the current "
             "evidence before recording a new decision."
         )
-        for evidence_change in comparison.evidence_changes:
-            if evidence_change.kind.value == "unchanged":
-                continue
+        comparison_markdown_column, comparison_json_column = st.columns(2)
+        with comparison_markdown_column:
+            st.download_button(
+                "Download comparison Markdown",
+                export_comparison_markdown(comparison),
+                file_name=(
+                    f"scopeproof-pr-{bundle.review.pr_number}-comparison.md"
+                ),
+                mime="text/markdown",
+                key="download_comparison_markdown",
+            )
+        with comparison_json_column:
+            st.download_button(
+                "Download comparison JSON",
+                export_comparison_json(comparison),
+                file_name=(
+                    f"scopeproof-pr-{bundle.review.pr_number}-comparison.json"
+                ),
+                mime="application/json",
+                key="download_comparison_json",
+            )
+        changed_evidence = [
+            change
+            for change in comparison.evidence_changes
+            if change.kind.value != "unchanged"
+        ]
+        unchanged_evidence = [
+            change
+            for change in comparison.evidence_changes
+            if change.kind.value == "unchanged"
+        ]
+        for evidence_change in changed_evidence:
             with st.container(border=True):
                 st.markdown(
                     f"**{evidence_change.criterion_id} · "
@@ -1761,6 +1829,25 @@ else:
                     "Previous candidate", evidence_change.previous
                 )
                 _render_comparison_reference("Current candidate", evidence_change.current)
+        if unchanged_evidence:
+            with st.expander(
+                f"Unchanged candidates ({len(unchanged_evidence)})",
+                expanded=False,
+            ):
+                st.caption(
+                    "Exact immutable candidate references match across both reviews. "
+                    "This does not carry forward a human decision."
+                )
+                for evidence_change in unchanged_evidence:
+                    with st.container(border=True):
+                        st.markdown(f"**{evidence_change.criterion_id} · Unchanged**")
+                        st.caption(evidence_change.reason)
+                        _render_comparison_reference(
+                            "Previous candidate", evidence_change.previous
+                        )
+                        _render_comparison_reference(
+                            "Current candidate", evidence_change.current
+                        )
         if comparison.changed_finding_statuses:
             st.markdown("**Changed criterion findings**")
             for change in comparison.changed_finding_statuses:
@@ -1876,6 +1963,10 @@ else:
                 "Evidence status": evidence_status_text(coverage.evidence_status),
                 "Evidence types": ", ".join(coverage.evidence_types) or "None",
                 "Reviewer decision": coverage.reviewer_decision,
+                "Candidate count": len(finding.evidence_ids),
+                "Rationale": finding.reason,
+                "Missing evidence": finding.missing_evidence,
+                "Recommended action": finding.recommended_action,
             }
         )
     if not matrix:
@@ -1894,6 +1985,21 @@ else:
                 st.caption(f"Evidence status: {row['Evidence status']}")
                 st.caption(f"Evidence types: {row['Evidence types']}")
                 st.caption(f"Reviewer decision: {row['Reviewer decision']}")
+                st.caption(f"Candidate count: {row['Candidate count']}")
+                st.caption("Why ScopeProof classified it this way")
+                st.text(row["Rationale"])
+                if row["Missing evidence"]:
+                    st.caption("Missing evidence")
+                    for missing in row["Missing evidence"]:
+                        st.text(missing)
+                st.caption("Recommended next action")
+                st.code(row["Recommended action"], language=None)
+                if st.button(
+                    "Inspect this criterion",
+                    key=f"inspect_matrix_{row['Criterion']}",
+                ):
+                    st.session_state["selected_criterion"] = row["Criterion"]
+                    st.rerun()
 
     unresolved_ids = [
         criterion.criterion_id
@@ -1912,9 +2018,18 @@ else:
             )
 
     st.header("4 · Criterion Detail")
+    criterion_ids = [criterion.criterion_id for criterion in bundle.criteria]
+    selected_criterion = st.session_state.get("selected_criterion")
+    if selected_criterion not in criterion_ids:
+        st.session_state["selected_criterion"] = default_criterion_detail_id(
+            criterion_ids=criterion_ids,
+            unresolved_ids=unresolved_ids,
+            blocking_ids=blocking_criteria,
+            selected_id=selected_criterion,
+        )
     selected_id = st.selectbox(
         "Inspect criterion",
-        options=[criterion.criterion_id for criterion in bundle.criteria],
+        options=criterion_ids,
         key="selected_criterion",
     )
     assert review_state is not None
@@ -2114,12 +2229,32 @@ else:
         else:
             st.caption(f"Decision impact: {decision_guidance(decision)}")
         resolution_note = st.text_area("Reviewer note", key="resolution_note")
+        acceptance_below_required = (
+            decision is HumanDecision.ACCEPTED
+            and selected_finding.evidence_level.rank
+            < selected_criterion.required_evidence_level.rank
+        )
+        if acceptance_below_required:
+            st.warning("Accept despite insufficient candidate evidence")
+            st.caption(
+                f"Required {selected_criterion.required_evidence_level.value} · "
+                f"observed {selected_finding.evidence_level.value}"
+            )
+            st.caption(
+                "Add a reviewer note explaining the inspected basis for acceptance. "
+                "The note does not raise the evidence level."
+            )
+        resolution_note_ready = bool(resolution_note.strip()) or not acceptance_below_required
         if resolution_save_notice is not None:
             st.success(resolution_save_notice)
         if st.button(
             "Save resolution",
             key="save_resolution",
-            disabled=(decision is None or not decision_reviewer_ready),
+            disabled=(
+                decision is None
+                or not decision_reviewer_ready
+                or not resolution_note_ready
+            ),
         ):
             if review_state is None:
                 st.error("Run analysis before recording a human resolution.")
@@ -2627,10 +2762,11 @@ else:
                 st.success(alpha_outcome_notice)
 
 st.divider()
-st.caption(
-    "The bundled CSV export case is a deliberately constructed demo, "
-    "not a real production incident."
-)
+if bundle is None or bundle.review.input_origin is ReviewInputOrigin.CONSTRUCTED_DEMO:
+    st.caption(
+        "The bundled CSV export case is a deliberately constructed demo, "
+        "not a real production incident."
+    )
 
 has_source = st.session_state["snapshot"] is not None
 has_criteria = bool(st.session_state["criteria"])

@@ -7,6 +7,7 @@ import pytest
 
 from scopeproof_core.github.client import (
     GitHubClient,
+    GitHubIngestionError,
     GitHubRateLimited,
     InvalidPullRequestUrl,
     PrivateOrInaccessibleRepository,
@@ -28,6 +29,7 @@ def _response(status: int, data: object, headers: dict[str, str] | None = None) 
 def fixture_transport(
     *,
     file_count: int = 1,
+    files_override: list[dict] | None = None,
     pull_status: int = 200,
     pull_headers: dict[str, str] | None = None,
     check_data: dict | None = None,
@@ -36,7 +38,7 @@ def fixture_transport(
     status_status: int = 200,
     requested_urls: list[httpx.URL] | None = None,
 ) -> httpx.MockTransport:
-    files = [
+    default_files = [
         {
             "filename": f"src/export_{index}.py",
             "status": "modified",
@@ -50,6 +52,7 @@ def fixture_transport(
         }
         for index in range(file_count)
     ]
+    files = files_override if files_override is not None else default_files
 
     def handler(request: httpx.Request) -> httpx.Response:
         if requested_urls is not None:
@@ -129,6 +132,107 @@ def test_client_maps_patch_lines_and_keeps_removed_lines_distinct() -> None:
         (LineChangeType.ADDED, 11),
         (LineChangeType.CONTEXT, 12),
     ]
+
+
+@pytest.mark.parametrize(
+    ("include_patch", "patch_value"),
+    [
+        pytest.param(False, None, id="missing"),
+        pytest.param(True, None, id="null"),
+        pytest.param(True, "", id="empty"),
+    ],
+)
+def test_unavailable_patch_marks_snapshot_partial_and_names_path(
+    include_patch: bool,
+    patch_value: str | None,
+) -> None:
+    file_payload = {
+        "filename": "assets/logo.bin",
+        "status": "modified",
+        "additions": 0,
+        "deletions": 0,
+        "changes": 0,
+    }
+    if include_patch:
+        file_payload["patch"] = patch_value
+
+    snapshot = GitHubClient(
+        transport=fixture_transport(files_override=[file_payload])
+    ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+    assert snapshot.ingestion_state is IngestionState.PARTIAL
+    assert snapshot.files == []
+    assert snapshot.skipped_files == ["assets/logo.bin"]
+    assert snapshot.warnings == [
+        "Patch unavailable for assets/logo.bin; file excluded from analysis."
+    ]
+
+
+def test_unavailable_patch_does_not_discard_available_text_patches() -> None:
+    available_patch = {
+        "filename": "src/export.py",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "patch": "@@ -1 +1 @@\n+def export_csv():\n+    return rows",
+    }
+    unavailable_patch = {
+        "filename": "assets/logo.bin",
+        "status": "modified",
+        "additions": 0,
+        "deletions": 0,
+        "changes": 0,
+    }
+
+    snapshot = GitHubClient(
+        transport=fixture_transport(
+            files_override=[available_patch, unavailable_patch]
+        )
+    ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+    assert snapshot.ingestion_state is IngestionState.PARTIAL
+    assert [item.path for item in snapshot.files] == ["src/export.py"]
+    assert snapshot.files[0].lines
+    assert snapshot.skipped_files == ["assets/logo.bin"]
+    assert snapshot.warnings == [
+        "Patch unavailable for assets/logo.bin; file excluded from analysis."
+    ]
+    assert all("Total diff limit reached" not in item for item in snapshot.warnings)
+
+
+def test_non_string_patch_fails_with_bounded_ingestion_error() -> None:
+    malformed_patch = {
+        "filename": "src/export.py",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "patch": [],
+    }
+
+    with pytest.raises(GitHubIngestionError, match="malformed patch data"):
+        GitHubClient(
+            transport=fixture_transport(files_override=[malformed_patch])
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+
+@pytest.mark.parametrize(
+    "file_payload",
+    [
+        pytest.param({"patch": "@@ -1 +1 @@\n+safe"}, id="missing"),
+        pytest.param({"filename": None, "patch": "@@ -1 +1 @@\n+safe"}, id="null"),
+        pytest.param({"filename": "", "patch": "@@ -1 +1 @@\n+safe"}, id="empty"),
+        pytest.param({"filename": 7, "patch": "@@ -1 +1 @@\n+safe"}, id="non-string"),
+    ],
+)
+def test_malformed_filename_fails_with_bounded_ingestion_error(
+    file_payload: dict,
+) -> None:
+    with pytest.raises(GitHubIngestionError, match="malformed file metadata"):
+        GitHubClient(
+            transport=fixture_transport(files_override=[file_payload])
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
 
 
 def test_check_runs_and_commit_status_aggregate_to_passing() -> None:
