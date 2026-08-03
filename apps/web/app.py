@@ -51,7 +51,13 @@ from scopeproof_core.presentation import (
     evidence_status_text,
     review_status_label,
 )
-from scopeproof_core.reporting.exporters import export_csv, export_json, export_markdown
+from scopeproof_core.reporting.exporters import (
+    export_comparison_json,
+    export_comparison_markdown,
+    export_csv,
+    export_json,
+    export_markdown,
+)
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.comparison import EvidenceReference, compare_reviews
@@ -388,6 +394,7 @@ def _render_local_review_storage(
         st.session_state["deleted_review_save_fingerprint"] == current_fingerprint
     )
     with st.expander("Local review storage", expanded=save_failed):
+        st.caption(f"Storage directory: `{default_local_review_directory()}`")
         st.caption("Current review ID")
         st.code(state.review.review_id, language=None)
         for message in pending_messages:
@@ -452,7 +459,7 @@ def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
     ):
         notice = JsonReviewStore.detect_head_change(state, snapshot)
         st.session_state["source_reload_notice"] = notice
-        if notice.changed and state.bundle is not None:
+        if state.bundle is not None:
             st.session_state["comparison_base_bundle"] = state.bundle.model_copy(deep=True)
 
 
@@ -1004,7 +1011,6 @@ with st.expander("Try ScopeProof", expanded=False):
             Criterion.model_validate(item) for item in labels["criteria"]
         ]
         st.session_state["candidate_files"] = []
-        st.session_state["comparison_base_bundle"] = None
         st.session_state["criteria_source_mode"] = "demo"
         st.session_state["criteria_source_reference"] = (
             CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
@@ -1302,11 +1308,6 @@ if requirements_are_prepared and not st.session_state["criteria_confirmed"]:
     st.success("Criteria prepared. Review the set before explicitly confirming it.")
     st.markdown("[Continue to 2 · Confirm Criteria](#2-confirm-criteria)")
 
-st.caption(
-    f"Local review storage: `{storage_directory}`. Records stay under your user-owned "
-    "ScopeProof folder; GitHub tokens are never stored."
-)
-
 st.header("2 · Confirm Criteria")
 criteria: list[Criterion] = st.session_state["criteria"]
 edited_criteria = criteria
@@ -1343,12 +1344,16 @@ else:
                     "explicit constructed-source reference."
                 ),
             ).strip()
-        criteria_source_revision = st.text_input(
-            "Source revision (optional)",
-            key="criteria_source_revision",
-            on_change=_remember_criteria_source_draft,
-            help="Issue edit, document revision, or other immutable source version if known.",
-        ).strip()
+        with st.expander("Source revision (optional)", expanded=False):
+            st.caption(
+                "Add an issue edit, document revision, or other immutable source version "
+                "when one is available."
+            )
+            criteria_source_revision = st.text_input(
+                "Revision identifier",
+                key="criteria_source_revision",
+                on_change=_remember_criteria_source_draft,
+            ).strip()
         criteria_source_confirmer = st.text_input(
             "Confirmed by",
             key="criteria_source_confirmer",
@@ -1782,9 +1787,38 @@ else:
             "Candidate comparison does not prove criterion satisfaction. Review the current "
             "evidence before recording a new decision."
         )
-        for evidence_change in comparison.evidence_changes:
-            if evidence_change.kind.value == "unchanged":
-                continue
+        comparison_markdown_column, comparison_json_column = st.columns(2)
+        with comparison_markdown_column:
+            st.download_button(
+                "Download comparison Markdown",
+                export_comparison_markdown(comparison),
+                file_name=(
+                    f"scopeproof-pr-{bundle.review.pr_number}-comparison.md"
+                ),
+                mime="text/markdown",
+                key="download_comparison_markdown",
+            )
+        with comparison_json_column:
+            st.download_button(
+                "Download comparison JSON",
+                export_comparison_json(comparison),
+                file_name=(
+                    f"scopeproof-pr-{bundle.review.pr_number}-comparison.json"
+                ),
+                mime="application/json",
+                key="download_comparison_json",
+            )
+        changed_evidence = [
+            change
+            for change in comparison.evidence_changes
+            if change.kind.value != "unchanged"
+        ]
+        unchanged_evidence = [
+            change
+            for change in comparison.evidence_changes
+            if change.kind.value == "unchanged"
+        ]
+        for evidence_change in changed_evidence:
             with st.container(border=True):
                 st.markdown(
                     f"**{evidence_change.criterion_id} · "
@@ -1795,6 +1829,25 @@ else:
                     "Previous candidate", evidence_change.previous
                 )
                 _render_comparison_reference("Current candidate", evidence_change.current)
+        if unchanged_evidence:
+            with st.expander(
+                f"Unchanged candidates ({len(unchanged_evidence)})",
+                expanded=False,
+            ):
+                st.caption(
+                    "Exact immutable candidate references match across both reviews. "
+                    "This does not carry forward a human decision."
+                )
+                for evidence_change in unchanged_evidence:
+                    with st.container(border=True):
+                        st.markdown(f"**{evidence_change.criterion_id} · Unchanged**")
+                        st.caption(evidence_change.reason)
+                        _render_comparison_reference(
+                            "Previous candidate", evidence_change.previous
+                        )
+                        _render_comparison_reference(
+                            "Current candidate", evidence_change.current
+                        )
         if comparison.changed_finding_statuses:
             st.markdown("**Changed criterion findings**")
             for change in comparison.changed_finding_statuses:
@@ -2709,10 +2762,11 @@ else:
                 st.success(alpha_outcome_notice)
 
 st.divider()
-st.caption(
-    "The bundled CSV export case is a deliberately constructed demo, "
-    "not a real production incident."
-)
+if bundle is None or bundle.review.input_origin is ReviewInputOrigin.CONSTRUCTED_DEMO:
+    st.caption(
+        "The bundled CSV export case is a deliberately constructed demo, "
+        "not a real production incident."
+    )
 
 has_source = st.session_state["snapshot"] is not None
 has_criteria = bool(st.session_state["criteria"])

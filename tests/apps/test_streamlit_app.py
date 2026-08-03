@@ -192,6 +192,40 @@ def test_summary_places_exports_before_local_storage() -> None:
     assert keys.index("download_csv") < keys.index("save_review")
 
 
+def test_storage_path_is_kept_inside_local_storage_details() -> None:
+    app = analyzed_demo(new_app())
+    local_storage = next(
+        item for item in app.expander if item.label == "Local review storage"
+    )
+
+    assert any(
+        caption.value.startswith("Storage directory:")
+        for caption in local_storage.caption
+    )
+
+
+def test_optional_source_revision_is_collapsed_by_default() -> None:
+    app = load_demo(new_app())
+    revision = next(
+        item for item in app.expander if item.label == "Source revision (optional)"
+    )
+
+    assert revision.proto.expanded is False
+    assert revision.text_input(key="criteria_source_revision")
+
+
+def test_constructed_demo_disclosure_is_not_shown_for_standard_review() -> None:
+    demo = analyzed_demo(new_app())
+    standard = analyzed_standard_demo(new_app())
+    disclosure = (
+        "The bundled CSV export case is a deliberately constructed demo, "
+        "not a real production incident."
+    )
+
+    assert disclosure in [item.value for item in demo.caption]
+    assert disclosure not in [item.value for item in standard.caption]
+
+
 def test_alpha_outcome_is_ready_after_authoritative_review_autosaves(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3085,6 +3119,40 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     assert "Current candidate" in rendered
     assert "review the current evidence" in rendered.lower()
     assert "does not prove criterion satisfaction" in rendered.lower()
+
+
+def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_exports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _, review_id = saved_demo_review(new_app())
+
+    fresh = select_saved_review(new_app(), review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+    fresh = fresh.button(key="load_demo").click().run()
+    fresh = fresh.text_input(key="criteria_source_confirmer").set_value(
+        "Local reviewer"
+    ).run()
+    fresh = fresh.button(key="confirm_criteria").click().run()
+    fresh = fresh.button(key="run_analysis").click().run()
+
+    unchanged = next(
+        item for item in fresh.expander if item.label.startswith("Unchanged candidates (")
+    )
+    assert unchanged.proto.expanded is False
+    unchanged_markdown = [item.value for item in unchanged.markdown]
+    assert "**Previous candidate**" in unchanged_markdown
+    assert "**Current candidate**" in unchanged_markdown
+    assert any("github.com" in item.value for item in unchanged.markdown)
+    comparison_downloads = {
+        button.key: button for button in fresh.download_button
+        if button.key.startswith("download_comparison_")
+    }
+    assert set(comparison_downloads) == {
+        "download_comparison_markdown",
+        "download_comparison_json",
+    }
+    assert all(not button.disabled for button in comparison_downloads.values())
 
 
 def test_rereview_comparison_shows_modified_candidate_excerpt(
