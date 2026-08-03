@@ -3125,7 +3125,10 @@ def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_export
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    _, review_id = saved_demo_review(new_app())
+    saved, review_id = saved_demo_review(new_app())
+    saved_state = saved.session_state["review_state"]
+    assert saved_state.bundle is not None
+    expected_permalinks = {item.permalink for item in saved_state.bundle.evidence}
 
     fresh = select_saved_review(new_app(), review_id)
     fresh = fresh.button(key="reopen_review").click().run()
@@ -3143,7 +3146,8 @@ def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_export
     unchanged_markdown = [item.value for item in unchanged.markdown]
     assert "**Previous candidate**" in unchanged_markdown
     assert "**Current candidate**" in unchanged_markdown
-    assert any("github.com" in item.value for item in unchanged.markdown)
+    for permalink in expected_permalinks:
+        assert any(f"](<{permalink}>)" in item for item in unchanged_markdown)
     comparison_downloads = {
         button.key: button for button in fresh.download_button
         if button.key.startswith("download_comparison_")
