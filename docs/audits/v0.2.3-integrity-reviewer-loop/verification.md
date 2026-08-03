@@ -3,8 +3,8 @@
 ## Evidence identity and boundary
 
 - Date: 2026-08-03 (America/Toronto)
-- Product-code target: `b5851d0fc4b3a3ee97e75ad9c469cf8a77c726fe`
-- Product-code tree: `dffa3f185f2e3d9300e371c346f01523c9d9ecb9`
+- Product-code target: `a77ea6e945cb3c63be434d061bfece9d1df5df41`
+- Product-code tree: `c8c3b537c0728394f13c11ac2f7e80435047dc2a`
 - Base: local and remote `main` aligned at `d67fe948` before this branch
 - Branch: `codex/integrity-reviewer-loop`
 - Publication: none; v0.2.3 remains untagged and unreleased
@@ -21,7 +21,8 @@ fixtures and owner-operated checks contribute zero Stage 1 credit.
 ## Verified changes
 
 - Missing, null, or empty GitHub file patches are excluded, named in `skipped_files`, and make
-  ingestion partial. Non-string patches fail with a bounded adapter error.
+  ingestion partial. Non-string patches and missing, blank, or malformed filenames fail with a
+  bounded adapter error.
 - A reopened review prepares its canonical PR URL and unique bounded unchanged-candidate paths for
   a current-head check without carrying prior acceptance forward.
 - Evidence-matrix cards expose candidate count, rationale, missing evidence, recommended action,
@@ -44,8 +45,8 @@ review schema, and the frozen R-002 inputs and results were not changed.
 | --- | --- |
 | `uv lock --check` | Passed; 60 packages resolved. |
 | `uv run ruff check .` | Passed. |
-| Full tests with product-code coverage | 1,901 passed, 1 intentional live test skipped in 522.30 seconds. |
-| Coverage gate | 9,037 statements, 439 missed, 95.14%; 95% requirement passed. |
+| Full tests with product-code coverage | 1,905 passed, 1 intentional live test skipped in 502.30 seconds. |
+| Coverage gate | 9,043 statements, 440 missed, 95.13%; 95% requirement passed. |
 | Repository contracts | 74 passed. |
 | Constructed acceptance benchmark | 12 cases, 13 criteria, zero mismatches, zero must-have False Ready, zero false blockers, evidence-link precision 1.0. |
 | Constructed comparison benchmark | 2 cases, zero mismatches; 3 Added, 1 Modified, 1 Relocated, 3 Removed, 1 Unchanged. |
@@ -62,8 +63,8 @@ installed into a fresh Python 3.12.0 environment.
 
 | Artifact | Size | SHA-256 |
 | --- | ---: | --- |
-| `scopeproof-0.2.3-py3-none-any.whl` | 257,978 bytes | `91e0a684318a0e4d30cee1a228443fb475c5691f2f47c48b05b78e59018de8e5` |
-| `scopeproof-0.2.3.tar.gz` | 5,872,933 bytes | `c68ec06624f9a5fdc782a167694c79370ebc423db57a585bc0a79b16cec75934` |
+| `scopeproof-0.2.3-py3-none-any.whl` | 258,014 bytes | `ee05155a6180ead9408e3d683bb944a56370fa10ba33f9d68928060a349cdf44` |
+| `scopeproof-0.2.3.tar.gz` | 5,875,074 bytes | `c4ac941edc493c381e42c383d58d51bb711a1253701c9829f4fccc650d7c6721` |
 
 From outside the checkout:
 
