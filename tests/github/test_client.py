@@ -217,6 +217,24 @@ def test_non_string_patch_fails_with_bounded_ingestion_error() -> None:
         ).fetch_pull_request("https://github.com/acme/widget/pull/42")
 
 
+@pytest.mark.parametrize(
+    "file_payload",
+    [
+        pytest.param({"patch": "@@ -1 +1 @@\n+safe"}, id="missing"),
+        pytest.param({"filename": None, "patch": "@@ -1 +1 @@\n+safe"}, id="null"),
+        pytest.param({"filename": "", "patch": "@@ -1 +1 @@\n+safe"}, id="empty"),
+        pytest.param({"filename": 7, "patch": "@@ -1 +1 @@\n+safe"}, id="non-string"),
+    ],
+)
+def test_malformed_filename_fails_with_bounded_ingestion_error(
+    file_payload: dict,
+) -> None:
+    with pytest.raises(GitHubIngestionError, match="malformed file metadata"):
+        GitHubClient(
+            transport=fixture_transport(files_override=[file_payload])
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+
 def test_check_runs_and_commit_status_aggregate_to_passing() -> None:
     snapshot = GitHubClient(transport=fixture_transport()).fetch_pull_request(
         "https://github.com/acme/widget/pull/42"

@@ -491,6 +491,12 @@ class GitHubClient:
         warnings: list[str] = []
         skipped_files: list[str] = []
         ingestion_state = IngestionState.COMPLETE
+        for item in raw_files:
+            if not isinstance(item, dict):
+                raise GitHubIngestionError("GitHub returned malformed file metadata.")
+            filename = item.get("filename")
+            if not isinstance(filename, str) or not filename:
+                raise GitHubIngestionError("GitHub returned malformed file metadata.")
         if len(raw_files) > self.max_files:
             skipped_files.extend(item["filename"] for item in raw_files[self.max_files :])
             raw_files = raw_files[: self.max_files]
