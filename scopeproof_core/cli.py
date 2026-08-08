@@ -414,6 +414,18 @@ def _compare(args: argparse.Namespace) -> int:
         current.bundle.review.pr_number,
     ):
         raise ValueError("comparison requires reviews from the same repository and pull request")
+    previous_criteria = {
+        item.criterion_id: item.model_dump(mode="json")
+        for item in previous.bundle.criteria
+    }
+    current_criteria = {
+        item.criterion_id: item.model_dump(mode="json")
+        for item in current.bundle.criteria
+    }
+    if previous_criteria != current_criteria:
+        raise ValueError(
+            "comparison requires identical confirmed criterion definitions"
+        )
     comparison = compare_reviews(previous.bundle, current.bundle)
     rendered = COMPARISON_RENDERERS[args.format](comparison)
     if args.output is None:

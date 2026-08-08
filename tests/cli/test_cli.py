@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 
@@ -12,9 +12,12 @@ from scopeproof_core.criteria.confirmation import build_criteria_source_provenan
 from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.demo import build_demo_review, build_review_from_paths
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
     append_resolution,
+    attach_analysis,
+    confirm_criteria,
     new_review_state,
     revise_criteria,
 )
@@ -1241,6 +1244,84 @@ def test_compare_command_rejects_reviews_from_different_pull_requests(
 
     assert error.value.code == 2
     assert "same repository and pull request" in capsys.readouterr().err
+    assert not output.exists()
+    assert {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    } == before
+
+
+@pytest.mark.parametrize(
+    ("criterion_update", "criterion_value"),
+    [
+        ("text", "Revised confirmed criterion"),
+        ("required_evidence_level", EvidenceLevel.E3),
+    ],
+)
+def test_compare_command_rejects_different_confirmed_criterion_definitions(
+    tmp_path: Path,
+    capsys,
+    criterion_update: str,
+    criterion_value: str | EvidenceLevel,
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    store = JsonReviewStore(storage)
+    current = store.load(current_id)
+    assert current.bundle is not None
+    revised_criteria = [item.model_copy(deep=True) for item in current.bundle.criteria]
+    revised_criteria[0] = revised_criteria[0].model_copy(
+        update={criterion_update: criterion_value}
+    )
+    revised_source = "\n".join(item.text for item in revised_criteria)
+    pending = revise_criteria(current, revised_criteria, revised_source)
+    confirmed = confirm_criteria(
+        pending,
+        build_criteria_source_provenance(
+            source_uri="https://example.test/revised-requirements",
+            source_revision="revised-v2",
+            source_text=revised_source,
+            criteria=revised_criteria,
+            confirmed_by="Comparison fixture owner",
+            confirmed_at=pending.criteria_revision.created_at + timedelta(seconds=1),
+        ),
+    )
+    incoming = current.bundle.model_copy(
+        update={
+            "review": confirmed.review.model_copy(deep=True),
+            "source_text": revised_source,
+            "criteria": [item.model_copy(deep=True) for item in revised_criteria],
+            "gate": evaluate_gate(
+                confirmed.review,
+                revised_criteria,
+                current.bundle.findings,
+                [],
+            ),
+        },
+        deep=True,
+    )
+    reanalyzed = attach_analysis(confirmed, incoming)
+    store.save(reanalyzed)
+    before = {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    }
+    output = tmp_path / "criterion-mismatch-comparison.json"
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--output",
+                str(output),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "identical confirmed criterion definitions" in capsys.readouterr().err
     assert not output.exists()
     assert {
         review_id: (storage / f"{review_id}.json").read_bytes()
