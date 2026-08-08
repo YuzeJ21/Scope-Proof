@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import streamlit as st
 
+from apps.web.deferred_exports import deferred_review_export
 from apps.web.view_models import default_criterion_detail_id, group_candidate_evidence
 from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
@@ -2713,10 +2714,31 @@ else:
         )
     export_source = review_state if review_state is not None else bundle
     export_has_provenance = bundle.review.criteria_source_provenance is not None
+    expected_export_fingerprint = (
+        st.session_state["saved_review_fingerprint"]
+        if review_state is not None
+        and _review_matches_local_save(review_state)
+        else None
+    )
     if export_has_provenance:
-        markdown_report = export_markdown(export_source)
-        json_report = export_json(export_source)
-        csv_report = export_csv(export_source)
+        markdown_report = deferred_review_export(
+            export_source,
+            export_markdown,
+            store=review_store,
+            expected_fingerprint=expected_export_fingerprint,
+        )
+        json_report = deferred_review_export(
+            export_source,
+            export_json,
+            store=review_store,
+            expected_fingerprint=expected_export_fingerprint,
+        )
+        csv_report = deferred_review_export(
+            export_source,
+            export_csv,
+            store=review_store,
+            expected_fingerprint=expected_export_fingerprint,
+        )
     else:
         markdown_report = ""
         json_report = ""

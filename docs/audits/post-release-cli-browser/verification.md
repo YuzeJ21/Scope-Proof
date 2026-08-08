@@ -38,7 +38,7 @@ signals.
 | --- | --- |
 | `uv sync --extra dev --extra research --locked` | Passed; Playwright 1.62.0 was installed from `uv.lock`. |
 | `uv run ruff check .` | Passed. |
-| Final combined core/UI coverage gate | Passed after PR review repairs: 1,943 tests, 2 intentional skips, 95.21% coverage in 525.72 seconds. |
+| Final combined core/UI coverage gate | Passed after PR review repairs: 1,945 tests, 2 intentional skips, 95.20% coverage in 508.48 seconds. |
 | `uv run pytest -q tests/test_repository_contracts.py` | Passed: 76 tests. |
 | `uv run scopeproof benchmark` | Passed: 12 cases, 13 criteria, 0 mismatches, 0 must-have False Ready outcomes, 0 false blockers, 0 unexecuted categories. |
 | `uv run scopeproof comparison-benchmark` | Passed: 2 cases, 0 mismatches; aggregate 3 added, 1 modified, 1 relocated, 3 removed, 1 unchanged. |
@@ -76,7 +76,7 @@ endpoint was unreachable and no launched process remained.
 - Host environment: macOS 26.5.1 build 25F80, Apple silicon, Python 3.12.0.
 - Driver: Playwright 1.62.0 with Chrome for Testing 151.0.7922.34.
 - Command: `uv run pytest -q -m browser tests/browser`.
-- Latest result after PR review repairs: passed, 1 test in 22.40 seconds with the final
+- Latest result after PR review repairs: passed, 1 test in 24.49 seconds with the final
   loopback-only network guard.
 
 For fresh browser contexts at 1280×720 and 390×844, the test used keyboard activation for the
@@ -99,7 +99,7 @@ A fresh build produced:
 
 | Artifact | Entries | SHA-256 | Forbidden inventory matches |
 | --- | ---: | --- | ---: |
-| `scopeproof-0.2.3-py3-none-any.whl` | 99 | `fe95105bf15528d605c217e4e807332ec473b39fd0a32c970eaec151cd693da9` | 0 |
+| `scopeproof-0.2.3-py3-none-any.whl` | 100 | `d58b197a655bb068958fb7711d2a880eaba31c9718dd4a56afd65dd17ea8efd6` | 0 |
 | `scopeproof-0.2.3.tar.gz` | 546 | Not recorded because this audit is included in the sdist, making its content hash self-referential. | 0 |
 
 The scan rejected Git state, `.scopeproof`, coverage files, virtual environments, common secret
@@ -122,11 +122,12 @@ the follow-up repair changed packaged workbench and storage code. Later repaired
 SHA-256 `80f06e6868f329f37093b5938375e8d60bc235a147e9e2bf721b3543af9fd329`,
 `3cff11a506c7346b80d92a693fd7b71d0404fd1e7390e64268655fed79542f89`, and
 `23ac78c8fe7f5d25e1ca1392a8b63e13c18af37cd469698284200e5815d9afe1`, and
-`6a45e5da1a2be1630c84265f7c0fa161386f3d9c298657029354038bddcf999b`; they were superseded by
+`6a45e5da1a2be1630c84265f7c0fa161386f3d9c298657029354038bddcf999b`, and
+`fe95105bf15528d605c217e4e807332ec473b39fd0a32c970eaec151cd693da9`; they were superseded by
 the deletion-serialization/portable-lock repair, the CodeQL path-hardening repair, the workbench
-read-refresh repair, and the final criterion-definition comparison guard, respectively. The
-current wheel hash above was reproduced in two fresh builds, and an equivalent current-tree wheel
-was installed by the latest packaged-browser run.
+read-refresh repair, the criterion-definition comparison guard, and the final click-time export
+revalidation repair, respectively. The current wheel hash above was reproduced in two fresh
+builds, and an equivalent current-tree wheel was installed by the latest packaged-browser run.
 
 ## Attempt boundaries
 
@@ -204,6 +205,13 @@ required evidence levels, leading evidence-only comparison to hide the requireme
 behavior was reproduced for both fields before repair. CLI comparison now requires full confirmed
 criterion definitions to match by criterion ID before any output is rendered or created; mismatch
 failures leave both saved records and the requested output path unchanged.
+The next automated review found a second P1 truth defect: a final-acceptance revocation could land
+after page render but before a precomputed download was clicked. The installed Streamlit 1.62
+deferred-download API now executes a no-argument renderer at click time. It reloads the saved
+record, validates it through the store, requires the exact expected fingerprint, and only then
+renders the requested format. Changed, missing, or unreadable records raise one fixed safe error;
+the page retains no precomputed download URL. Unit and real-workbench regressions cover unchanged
+and externally revoked click-time states.
 
 Reviewer/source-owner identity is asserted, not authenticated. The GitHub Action remains opt-in
 and informational rather than a required branch-protection check. Native zoom, screen reader,

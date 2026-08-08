@@ -2981,6 +2981,8 @@ def test_clean_open_workbench_refreshes_external_final_acceptance_revocation(
     assert "Review refreshed from local storage after an external update." in [
         item.value for item in app.success
     ]
+    assert all(button.proto.deferred_file_id for button in app.download_button)
+    assert all(not button.proto.url for button in app.download_button)
 
 
 def test_failed_persisted_review_revalidation_blocks_status_and_exports(
