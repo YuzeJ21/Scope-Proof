@@ -119,9 +119,10 @@ class JsonReviewStore:
         flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0)
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
+        lock_name = f".{sha256(validated_id.encode('utf-8')).hexdigest()}.lock"
         try:
             descriptor = os.open(
-                self.directory / f".{validated_id}.lock",
+                self.directory / lock_name,
                 flags,
                 0o600,
             )

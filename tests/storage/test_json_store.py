@@ -294,6 +294,18 @@ def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     assert "authorization" not in path.read_text(encoding="utf-8").lower()
 
 
+def test_mutation_lock_filename_does_not_embed_the_review_id(tmp_path: Path) -> None:
+    review_id = "user-controlled-review-id"
+
+    JsonReviewStore(tmp_path).save(review_state(review_id))
+
+    lock_paths = [path for path in tmp_path.iterdir() if path.suffix == ".lock"]
+    assert [path.name for path in lock_paths] == [
+        f".{sha256(review_id.encode('utf-8')).hexdigest()}.lock"
+    ]
+    assert review_id not in lock_paths[0].name
+
+
 def test_mutate_serializes_concurrent_append_only_lifecycle_updates(
     tmp_path: Path,
 ) -> None:
