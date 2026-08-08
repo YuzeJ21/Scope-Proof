@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
@@ -42,6 +43,7 @@ _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED = (
     and os.stat in os.supports_follow_symlinks
     and os.unlink in os.supports_dir_fd
 )
+_UNCONDITIONAL_SAVE = object()
 
 
 class _ReviewRecordEnvelope(BaseModel):
@@ -65,6 +67,10 @@ class UnsupportedRecordVersion(ValueError):
 
 class UnsafeReviewStore(ValueError):
     """Raised when the configured store root is an unsafe filesystem object."""
+
+
+class StaleReviewState(ValueError):
+    """Raised when a guarded save would replace a newer local review state."""
 
 
 @dataclass(frozen=True)
@@ -186,9 +192,16 @@ class JsonReviewStore:
         finally:
             os.close(directory_fd)
 
-    def save(self, state: ReviewState) -> Path:
-        """Atomically save a versioned record without accepting credential fields."""
+    @staticmethod
+    def state_fingerprint(state: ReviewState) -> str:
+        """Return the deterministic identity used for optimistic saved-state checks."""
+
         validated = validated_review_state(state)
+        return sha256(validated.model_dump_json().encode("utf-8")).hexdigest()
+
+    def _save_unlocked(self, validated: ReviewState) -> Path:
+        """Replace one validated record while its mutation lock is already held."""
+
         self._require_safe_directory()
         self.directory.mkdir(parents=True, exist_ok=True)
         target = self._path(validated.review.review_id)
@@ -206,6 +219,30 @@ class JsonReviewStore:
         temporary.replace(target)
         return target
 
+    def save(
+        self,
+        state: ReviewState,
+        *,
+        expected_fingerprint: str | None | object = _UNCONDITIONAL_SAVE,
+    ) -> Path:
+        """Atomically save, optionally rejecting a stale read-derived state."""
+
+        validated = validated_review_state(state)
+        review_id = validated.review.review_id
+        with self._mutation_lock(review_id):
+            if expected_fingerprint is not _UNCONDITIONAL_SAVE:
+                try:
+                    current = self.load(review_id)
+                except FileNotFoundError:
+                    current_fingerprint = None
+                else:
+                    current_fingerprint = self.state_fingerprint(current)
+                if current_fingerprint != expected_fingerprint:
+                    raise StaleReviewState(
+                        "saved review changed since it was loaded; reopen it before saving"
+                    )
+            return self._save_unlocked(validated)
+
     def mutate(
         self,
         review_id: str,
@@ -219,7 +256,7 @@ class JsonReviewStore:
             updated = validated_review_state(transition(current))
             if updated.review.review_id != current.review.review_id:
                 raise ValueError("review mutation cannot change the record identity")
-            return updated, self.save(updated)
+            return updated, self._save_unlocked(updated)
 
     @staticmethod
     def _review_payload_needs_ci_gate_migration(review_payload: object) -> bool:

@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import timedelta
+from hashlib import sha256
 from pathlib import Path
 from threading import Event, Lock
 from uuid import NAMESPACE_URL, uuid5
@@ -347,6 +348,47 @@ def test_mutate_serializes_concurrent_append_only_lifecycle_updates(
         "concurrent-event-0",
         "concurrent-event-1",
     }
+
+
+def test_save_rejects_stale_state_without_overwriting_newer_lifecycle_event(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    baseline = review_state()
+    record = store.save(baseline)
+    baseline_fingerprint = sha256(
+        baseline.model_dump_json().encode("utf-8")
+    ).hexdigest()
+    external_event = ResolutionEvent(
+        event_id="external-revocation",
+        final_acceptance=False,
+        comment="External lifecycle update",
+        reviewer="CLI reviewer",
+    )
+    external, _ = store.mutate(
+        "review-1",
+        lambda state: append_resolution(state, external_event),
+    )
+    before = record.read_bytes()
+    stale_ui_state = append_resolution(
+        baseline,
+        ResolutionEvent(
+            event_id="stale-ui-resolution",
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Stale workbench update",
+            reviewer="Workbench reviewer",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="changed since it was loaded"):
+        store.save(
+            stale_ui_state,
+            expected_fingerprint=baseline_fingerprint,
+        )
+
+    assert record.read_bytes() == before
+    assert store.load("review-1") == external
 
 
 def test_attached_analysis_round_trip_preserves_reanalysis_lineage(
