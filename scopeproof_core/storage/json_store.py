@@ -247,7 +247,7 @@ class JsonReviewStore:
         self,
         state: ReviewState,
         *,
-        expected_fingerprint: str | None | object = _UNCONDITIONAL_SAVE,
+        expected_fingerprint: str | object | None = _UNCONDITIONAL_SAVE,
     ) -> Path:
         """Atomically save, optionally rejecting a stale read-derived state."""
 
