@@ -7,6 +7,8 @@ import os
 import re
 import stat
 import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -18,6 +20,11 @@ from pydantic import BaseModel, ConfigDict, StrictInt, ValidationError
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewBundle, ReviewState
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fail-closed portability guard
+    fcntl = None  # type: ignore[assignment]
 
 RECORD_VERSION = 4
 _SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4)
@@ -88,6 +95,36 @@ class JsonReviewStore:
 
     def _path(self, review_id: str) -> Path:
         return self.directory / f"{self._validate_review_id(review_id)}.json"
+
+    @contextmanager
+    def _mutation_lock(self, review_id: str) -> Iterator[None]:
+        """Serialize one record's read-transition-write lifecycle."""
+
+        if fcntl is None:
+            raise OSError("serialized review updates are unsupported on this platform")
+        validated_id = self._validate_review_id(review_id)
+        self._require_safe_directory()
+        self.directory.mkdir(parents=True, exist_ok=True)
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            descriptor = os.open(
+                self.directory / f".{validated_id}.lock",
+                flags,
+                0o600,
+            )
+        except OSError:
+            raise UnsafeReviewStore("review mutation lock must be a regular local file") from None
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise UnsafeReviewStore(
+                    "review mutation lock must be a regular local file"
+                )
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(descriptor)
 
     def _existing_record_path(self, review_id: str) -> Path:
         """Return a validated regular record file without following symlinks."""
@@ -168,6 +205,21 @@ class JsonReviewStore:
             handle.write(serialized)
         temporary.replace(target)
         return target
+
+    def mutate(
+        self,
+        review_id: str,
+        transition: Callable[[ReviewState], ReviewState],
+    ) -> tuple[ReviewState, Path]:
+        """Apply one validated transition while holding the record mutation lock."""
+
+        validated_id = self._validate_review_id(review_id)
+        with self._mutation_lock(validated_id):
+            current = self.load(validated_id)
+            updated = validated_review_state(transition(current))
+            if updated.review.review_id != current.review.review_id:
+                raise ValueError("review mutation cannot change the record identity")
+            return updated, self.save(updated)
 
     @staticmethod
     def _review_payload_needs_ci_gate_migration(review_payload: object) -> bool:

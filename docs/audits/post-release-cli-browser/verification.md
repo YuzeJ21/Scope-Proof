@@ -38,7 +38,7 @@ signals.
 | --- | --- |
 | `uv sync --extra dev --extra research --locked` | Passed; Playwright 1.62.0 was installed from `uv.lock`. |
 | `uv run ruff check .` | Passed. |
-| Final combined core/UI coverage gate | Passed: 1,930 tests, 2 intentional skips, 95.23% coverage in 495.31 seconds. |
+| Final combined core/UI coverage gate | Passed after PR review repair: 1,933 tests, 2 intentional skips, 95.20% coverage in 478.06 seconds. |
 | `uv run pytest -q tests/test_repository_contracts.py` | Passed: 76 tests. |
 | `uv run scopeproof benchmark` | Passed: 12 cases, 13 criteria, 0 mismatches, 0 must-have False Ready outcomes, 0 false blockers, 0 unexecuted categories. |
 | `uv run scopeproof comparison-benchmark` | Passed: 2 cases, 0 mismatches; aggregate 3 added, 1 modified, 1 relocated, 3 removed, 1 unchanged. |
@@ -76,7 +76,8 @@ endpoint was unreachable and no launched process remained.
 - Host environment: macOS 26.5.1 build 25F80, Apple silicon, Python 3.12.0.
 - Driver: Playwright 1.62.0 with Chrome for Testing 151.0.7922.34.
 - Command: `uv run pytest -q -m browser tests/browser`.
-- Result: passed, 1 test in 26.57 seconds with the final loopback-only network guard.
+- Latest result after PR review repair: passed, 1 test in 21.81 seconds with the final
+  loopback-only network guard.
 
 For fresh browser contexts at 1280×720 and 390×844, the test used keyboard activation for the
 stable demo-load, criteria-confirmation, and deterministic-analysis buttons. It required visible
@@ -88,8 +89,9 @@ request. No browser-console error or unhandled page error was captured. The inst
 a temporary `HOME`, and the process group was stopped even on failure.
 
 Native 200% browser zoom was not exercised; viewport resizing is not claimed as zoom evidence.
-Screen-reader operation, Windows, Linux desktop behavior, and Python 3.13 remain unverified. The
-current working tree has not run on GitHub-hosted CI because it has not been pushed.
+Screen-reader operation, Windows, Linux desktop behavior, and Python 3.13 remain unverified.
+GitHub-hosted evidence is reported separately on PR #185 and does not substitute for this local
+installed-wheel browser result.
 
 ## Distribution evidence
 
@@ -97,7 +99,7 @@ A fresh build produced:
 
 | Artifact | Entries | SHA-256 | Forbidden inventory matches |
 | --- | ---: | --- | ---: |
-| `scopeproof-0.2.3-py3-none-any.whl` | 99 | `b7817801ee196fff6c0eb4a7126819bc5d6d6fbb7ca1ad1cc50854eefe632b70` | 0 |
+| `scopeproof-0.2.3-py3-none-any.whl` | 99 | `7f5e989a8237d95c04e55a0b8d3195621b957215e18c68b32c17736314073960` | 0 |
 | `scopeproof-0.2.3.tar.gz` | 546 | Not recorded because this audit is included in the sdist, making its content hash self-referential. | 0 |
 
 The scan rejected Git state, `.scopeproof`, coverage files, virtual environments, common secret
@@ -110,6 +112,11 @@ The final wheel was reinstalled after the independent-review fixes. `pip check`,
 commands, both installed benchmarks, validated lifecycle-mutation JSON, two-review comparison,
 four-record runtime linkage, final `ready` acceptance, JSON export, workbench health, and bounded
 process-group teardown all passed.
+
+The pre-PR wheel at commit `1ec899a7d3b9b792db4cd50fef2f0a966d3bd05a` had SHA-256
+`b7817801ee196fff6c0eb4a7126819bc5d6d6fbb7ca1ad1cc50854eefe632b70`. That hash is retained as
+historical engineering evidence only; it was superseded when the PR review repair changed packaged
+CLI and storage code. The current wheel above was installed by the latest packaged-browser run.
 
 ## Attempt boundaries
 
@@ -152,14 +159,18 @@ An independent complete-diff review initially reported five Important findings: 
 envelopes could escape as tracebacks, mutation metadata lacked a Pydantic contract, Playwright was
 range-resolved rather than exact-pinned in pip CI, browser networking was not explicitly blocked,
 and the sdist hash claim was self-referential. All five were fixed and independently re-reviewed.
-The reviewer then reported no remaining Critical or Important findings and assessed the branch as
-ready to merge.
+The reviewer then reported no remaining Critical or Important findings. After PR #185 opened, its
+automated review found two additional P2 defects: lifecycle CLI read-modify-write operations could
+lose concurrent append-only events, and `compare` accepted reviews from different repositories or
+pull requests. Both were reproduced before repair. Lifecycle commands now use a store-owned
+per-record serialized mutation boundary, and comparisons reject mismatched repository/PR identity
+before rendering or creating output. The new regressions passed in the final full suite and the
+latest package/browser proof above.
 
 Reviewer/source-owner identity is asserted, not authenticated. The GitHub Action remains opt-in
 and informational rather than a required branch-protection check. Native zoom, screen reader,
 Windows, Linux desktop, Python 3.13, and genuine external Alpha use remain outside current
 evidence.
 
-The next safe action after independent complete-diff review is an owner-reviewed local commit,
-followed by a push and pull request only if explicitly authorized. No commit, push, pull request,
-release, issue mutation, or outreach was performed in this task.
+The next safe action is owner review of the current PR after its repair commit and available hosted
+checks are complete. Merge, release, issue mutation, and outreach remain separate owner gates.

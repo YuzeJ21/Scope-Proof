@@ -305,27 +305,8 @@ def _resolve(args: argparse.Namespace) -> int:
     """Append one validated human criterion resolution to a saved review."""
 
     store = JsonReviewStore(Path(args.storage_dir))
-    state = store.load(args.review_id)
-    if state.bundle is None:
-        raise ValueError("Run a confirmed analysis before recording a resolution")
-    criterion_by_id = {
-        criterion.criterion_id: criterion for criterion in state.bundle.criteria
-    }
-    finding_by_id = {finding.criterion_id: finding for finding in state.bundle.findings}
-    criterion = criterion_by_id.get(args.criterion_id)
-    finding = finding_by_id.get(args.criterion_id)
-    if criterion is None or finding is None:
-        raise ValueError("resolution must reference a criterion in the active review")
     decision = HumanDecision(args.decision)
     comment = _read_optional_comment(args.comment_file)
-    if acceptance_requires_comment(
-        decision,
-        finding.evidence_level,
-        criterion.required_evidence_level,
-    ) and not comment.strip():
-        raise ValueError(
-            "a reviewer comment is required when accepting below the required evidence level"
-        )
     event = ResolutionEvent(
         criterion_id=args.criterion_id,
         decision=decision,
@@ -333,8 +314,31 @@ def _resolve(args: argparse.Namespace) -> int:
         evidence_url=args.evidence_url,
         reviewer=args.reviewer.strip(),
     )
-    updated = append_resolution(state, event)
-    path = store.save(updated)
+
+    def transition(state: ReviewState) -> ReviewState:
+        if state.bundle is None:
+            raise ValueError("Run a confirmed analysis before recording a resolution")
+        criterion_by_id = {
+            criterion.criterion_id: criterion for criterion in state.bundle.criteria
+        }
+        finding_by_id = {
+            finding.criterion_id: finding for finding in state.bundle.findings
+        }
+        criterion = criterion_by_id.get(args.criterion_id)
+        finding = finding_by_id.get(args.criterion_id)
+        if criterion is None or finding is None:
+            raise ValueError("resolution must reference a criterion in the active review")
+        if acceptance_requires_comment(
+            decision,
+            finding.evidence_level,
+            criterion.required_evidence_level,
+        ) and not comment.strip():
+            raise ValueError(
+                "a reviewer comment is required when accepting below the required evidence level"
+            )
+        return append_resolution(state, event)
+
+    updated, path = store.mutate(args.review_id, transition)
     print(_mutation_metadata(updated, path, event.event_id).model_dump_json())
     return 0
 
@@ -343,24 +347,9 @@ def _verify_runtime(args: argparse.Namespace) -> int:
     """Atomically record human-supplied runtime evidence and its decision."""
 
     store = JsonReviewStore(Path(args.storage_dir))
-    state = store.load(args.review_id)
     runtime_id = str(uuid4())
     reviewer = args.reviewer.strip()
     level = EvidenceLevel(args.level)
-    evidence = RuntimeEvidence(
-        runtime_evidence_id=runtime_id,
-        repository=state.review.repository,
-        pr_number=state.review.pr_number,
-        head_sha=state.review.head_sha,
-        criterion_id=args.criterion_id,
-        artifact_reference=args.artifact_reference,
-        scenario=args.scenario,
-        environment=args.environment,
-        result=args.result,
-        reviewer=reviewer,
-        evidence_level=level,
-        limitations=args.limitation,
-    )
     event = ResolutionEvent(
         criterion_id=args.criterion_id,
         decision=HumanDecision.MANUALLY_VERIFIED,
@@ -369,8 +358,25 @@ def _verify_runtime(args: argparse.Namespace) -> int:
         runtime_evidence_id=runtime_id,
         reviewer=reviewer,
     )
-    updated = append_external_verification(state, evidence, event)
-    path = store.save(updated)
+
+    def transition(state: ReviewState) -> ReviewState:
+        evidence = RuntimeEvidence(
+            runtime_evidence_id=runtime_id,
+            repository=state.review.repository,
+            pr_number=state.review.pr_number,
+            head_sha=state.review.head_sha,
+            criterion_id=args.criterion_id,
+            artifact_reference=args.artifact_reference,
+            scenario=args.scenario,
+            environment=args.environment,
+            result=args.result,
+            reviewer=reviewer,
+            evidence_level=level,
+            limitations=args.limitation,
+        )
+        return append_external_verification(state, evidence, event)
+
+    updated, path = store.mutate(args.review_id, transition)
     print(_mutation_metadata(updated, path, event.event_id).model_dump_json())
     return 0
 
@@ -379,14 +385,15 @@ def _final_acceptance(args: argparse.Namespace) -> int:
     """Append a validated final-acceptance or revocation event."""
 
     store = JsonReviewStore(Path(args.storage_dir))
-    state = store.load(args.review_id)
     event = ResolutionEvent(
         final_acceptance=args.accept,
         comment=_read_optional_comment(args.comment_file),
         reviewer=args.reviewer.strip(),
     )
-    updated = append_resolution(state, event)
-    path = store.save(updated)
+    updated, path = store.mutate(
+        args.review_id,
+        lambda state: append_resolution(state, event),
+    )
     print(_mutation_metadata(updated, path, event.event_id).model_dump_json())
     return 0
 
@@ -399,6 +406,14 @@ def _compare(args: argparse.Namespace) -> int:
     current = store.load(args.current_review_id)
     if previous.bundle is None or current.bundle is None:
         raise ValueError("comparison requires an active analysis in both saved reviews")
+    if (
+        previous.bundle.review.repository,
+        previous.bundle.review.pr_number,
+    ) != (
+        current.bundle.review.repository,
+        current.bundle.review.pr_number,
+    ):
+        raise ValueError("comparison requires reviews from the same repository and pull request")
     comparison = compare_reviews(previous.bundle, current.bundle)
     rendered = COMPARISON_RENDERERS[args.format](comparison)
     if args.output is None:

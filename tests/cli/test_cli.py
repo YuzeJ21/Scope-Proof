@@ -1196,6 +1196,58 @@ def test_compare_command_rejects_review_without_active_bundle(
     assert (storage / f"{current_id}.json").read_bytes() == before
 
 
+@pytest.mark.parametrize(
+    ("identity_update", "identity_value"),
+    [("repository", "other/widget"), ("pr_number", 999)],
+)
+def test_compare_command_rejects_reviews_from_different_pull_requests(
+    tmp_path: Path,
+    capsys,
+    identity_update: str,
+    identity_value: str | int,
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    store = JsonReviewStore(storage)
+    current = store.load(current_id)
+    assert current.bundle is not None
+    current_review = current.review.model_copy(
+        update={identity_update: identity_value}
+    )
+    current_bundle = current.bundle.model_copy(
+        update={"review": current_review.model_copy(deep=True)}
+    )
+    mismatched = current.model_copy(
+        update={"review": current_review, "bundle": current_bundle}
+    )
+    store.save(mismatched)
+    before = {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    }
+    output = tmp_path / "unrelated-comparison.json"
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--output",
+                str(output),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "same repository and pull request" in capsys.readouterr().err
+    assert not output.exists()
+    assert {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    } == before
+
+
 def test_export_command_migrates_raw_v2_runtime_verification_fail_closed(
     tmp_path: Path, capsys
 ) -> None:

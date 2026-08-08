@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
+from threading import Event, Lock
 from uuid import NAMESPACE_URL, uuid5
 
 import pytest
@@ -289,6 +291,62 @@ def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     assert loaded.model_dump(mode="json") == state.model_dump(mode="json")
     assert "ghp_" not in path.read_text(encoding="utf-8")
     assert "authorization" not in path.read_text(encoding="utf-8").lower()
+
+
+def test_mutate_serializes_concurrent_append_only_lifecycle_updates(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    store.save(review_state())
+    first_entered = Event()
+    second_started = Event()
+    second_entered = Event()
+    release_first = Event()
+    call_lock = Lock()
+    call_count = 0
+
+    def append_distinct_resolution(state):
+        nonlocal call_count
+        with call_lock:
+            call_index = call_count
+            call_count += 1
+        if call_index == 0:
+            first_entered.set()
+            assert release_first.wait(timeout=2)
+        else:
+            second_entered.set()
+        return append_resolution(
+            state,
+            ResolutionEvent(
+                event_id=f"concurrent-event-{call_index}",
+                criterion_id=f"AC-0{call_index + 1}",
+                decision=HumanDecision.ACCEPTED,
+                comment="Concurrent lifecycle regression fixture",
+                reviewer="Concurrency fixture",
+            ),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(store.mutate, "review-1", append_distinct_resolution)
+        try:
+            assert first_entered.wait(timeout=2)
+            def run_second_mutation():
+                second_started.set()
+                return store.mutate("review-1", append_distinct_resolution)
+
+            second = executor.submit(run_second_mutation)
+            assert second_started.wait(timeout=2)
+            assert not second_entered.wait(timeout=0.2)
+        finally:
+            release_first.set()
+        first.result(timeout=2)
+        second.result(timeout=2)
+
+    saved = store.load("review-1")
+    assert {event.event_id for event in saved.resolution_events} == {
+        "concurrent-event-0",
+        "concurrent-event-1",
+    }
 
 
 def test_attached_analysis_round_trip_preserves_reanalysis_lineage(
