@@ -405,6 +405,12 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "scopeproof_core.evals.runner" in workflow
 
 
+def test_streamlit_floor_supports_click_time_deferred_exports() -> None:
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "streamlit>=1.52,<2" in project["project"]["dependencies"]
+
+
 def test_locked_development_environment_is_documented_and_verified() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     guide = Path("docs/development-environment.md").read_text(encoding="utf-8")
@@ -417,7 +423,7 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "uv sync --extra dev --extra research --locked" in guide
     assert "uv run pytest" in guide
     assert "uv run scopeproof benchmark" in guide
-    assert "Streamlit 1.59.2" in guide
+    assert "Streamlit 1.59.1" in guide
     assert "Streamlit 1.57.0" in guide
     assert "testing-interface regression" in guide
     assert "locked-environment:" in workflow
