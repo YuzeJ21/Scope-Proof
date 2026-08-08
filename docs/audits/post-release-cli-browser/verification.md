@@ -38,7 +38,7 @@ signals.
 | --- | --- |
 | `uv sync --extra dev --extra research --locked` | Passed; Playwright 1.62.0 was installed from `uv.lock`. |
 | `uv run ruff check .` | Passed. |
-| Final combined core/UI coverage gate | Passed after PR review repairs: 1,938 tests, 2 intentional skips, 95.19% coverage in 525.57 seconds. |
+| Final combined core/UI coverage gate | Passed after PR review repairs: 1,941 tests, 2 intentional skips, 95.21% coverage in 530.13 seconds. |
 | `uv run pytest -q tests/test_repository_contracts.py` | Passed: 76 tests. |
 | `uv run scopeproof benchmark` | Passed: 12 cases, 13 criteria, 0 mismatches, 0 must-have False Ready outcomes, 0 false blockers, 0 unexecuted categories. |
 | `uv run scopeproof comparison-benchmark` | Passed: 2 cases, 0 mismatches; aggregate 3 added, 1 modified, 1 relocated, 3 removed, 1 unchanged. |
@@ -76,7 +76,7 @@ endpoint was unreachable and no launched process remained.
 - Host environment: macOS 26.5.1 build 25F80, Apple silicon, Python 3.12.0.
 - Driver: Playwright 1.62.0 with Chrome for Testing 151.0.7922.34.
 - Command: `uv run pytest -q -m browser tests/browser`.
-- Latest result after PR review repairs: passed, 1 test in 23.46 seconds with the final
+- Latest result after PR review repairs: passed, 1 test in 22.30 seconds with the final
   loopback-only network guard.
 
 For fresh browser contexts at 1280×720 and 390×844, the test used keyboard activation for the
@@ -99,7 +99,7 @@ A fresh build produced:
 
 | Artifact | Entries | SHA-256 | Forbidden inventory matches |
 | --- | ---: | --- | ---: |
-| `scopeproof-0.2.3-py3-none-any.whl` | 99 | `23ac78c8fe7f5d25e1ca1392a8b63e13c18af37cd469698284200e5815d9afe1` | 0 |
+| `scopeproof-0.2.3-py3-none-any.whl` | 99 | `6a45e5da1a2be1630c84265f7c0fa161386f3d9c298657029354038bddcf999b` | 0 |
 | `scopeproof-0.2.3.tar.gz` | 546 | Not recorded because this audit is included in the sdist, making its content hash self-referential. | 0 |
 
 The scan rejected Git state, `.scopeproof`, coverage files, virtual environments, common secret
@@ -119,11 +119,13 @@ historical engineering evidence only; it was superseded when the PR review repai
 CLI and storage code. The intermediate repair wheel had SHA-256
 `7f5e989a8237d95c04e55a0b8d3195621b957215e18c68b32c17736314073960`; it was superseded when
 the follow-up repair changed packaged workbench and storage code. Later repaired wheels had
-SHA-256 `80f06e6868f329f37093b5938375e8d60bc235a147e9e2bf721b3543af9fd329` and
-`3cff11a506c7346b80d92a693fd7b71d0404fd1e7390e64268655fed79542f89`; they were superseded by
-the deletion-serialization/portable-lock repair and the final CodeQL path-hardening repair,
-respectively. The current wheel hash above was reproduced in two fresh builds, and an equivalent
-current-tree wheel was installed by the latest packaged-browser run.
+SHA-256 `80f06e6868f329f37093b5938375e8d60bc235a147e9e2bf721b3543af9fd329`,
+`3cff11a506c7346b80d92a693fd7b71d0404fd1e7390e64268655fed79542f89`, and
+`23ac78c8fe7f5d25e1ca1392a8b63e13c18af37cd469698284200e5815d9afe1`; they were superseded by
+the deletion-serialization/portable-lock repair, the CodeQL path-hardening repair, and the final
+workbench read-refresh repair, respectively. The current wheel hash above was reproduced in two
+fresh builds, and an equivalent current-tree wheel was installed by the latest packaged-browser
+run.
 
 ## Attempt boundaries
 
@@ -187,6 +189,14 @@ the lock filename. The alert was reproduced from the check annotation. The final
 derived from a fixed-length SHA-256 digest instead of review-ID text, with a regression proving
 the user-supplied identifier is absent. The final full suite and package/browser proof above cover
 that repair; hosted CodeQL is reported separately on PR #185.
+The next automated review found one P1 truth defect: a clean open workbench could keep rendering
+and exporting cached Ready after an external final-acceptance revocation because it only checked
+the cached session fingerprint. That behavior was reproduced before repair. A clean open review
+now revalidates and refreshes from the Pydantic-validated persisted record before rendering or
+exporting. Pending input is preserved rather than overwritten; concurrent persisted changes or
+read failures switch the visible status to `Refresh required` and disable all downloads until the
+review is reopened or the draft is cleared. The real-workbench regressions cover the clean
+revocation, pending-input, and read-failure paths.
 
 Reviewer/source-owner identity is asserted, not authenticated. The GitHub Action remains opt-in
 and informational rather than a required branch-protection check. Native zoom, screen reader,

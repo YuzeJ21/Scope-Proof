@@ -2908,7 +2908,7 @@ def test_post_save_resolution_changes_fingerprint_and_autosaves_review_again(
     assert app.button(key="save_review").disabled is True
 
 
-def test_stale_workbench_autosave_preserves_newer_cli_lifecycle_event(
+def test_pending_resolution_input_does_not_overwrite_external_lifecycle_event(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2940,6 +2940,111 @@ def test_stale_workbench_autosave_preserves_newer_cli_lifecycle_event(
     assert any(
         "newer lifecycle events are not overwritten" in message
         for message in messages
+    )
+
+
+def test_clean_open_workbench_refreshes_external_final_acceptance_revocation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+    accepted = app.session_state["review_state"]
+    assert accepted.bundle.gate.verdict is GateVerdict.READY
+    review_id = accepted.review.review_id
+    store = JsonReviewStore(default_local_review_directory())
+    revoked, _ = store.mutate(
+        review_id,
+        lambda state: append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="external-cli-final-revocation",
+                final_acceptance=False,
+                comment="CLI revocation while accepted review remained open",
+                reviewer="CLI reviewer",
+            ),
+        ),
+    )
+
+    app = app.run()
+
+    assert app.session_state["review_state"] == revoked
+    assert app.session_state["bundle"] == revoked.bundle
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(revoked)
+    )
+    assert revoked.bundle.gate.verdict is not GateVerdict.READY
+    assert "**Review status: Review complete**" not in [
+        item.value for item in app.markdown
+    ]
+    assert "Review refreshed from local storage after an external update." in [
+        item.value for item in app.success
+    ]
+
+
+def test_failed_persisted_review_revalidation_blocks_status_and_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.load",
+        side_effect=OSError("synthetic local read failure"),
+    ):
+        app = app.run()
+
+    assert "**Review status: Refresh required**" in [
+        item.value for item in app.markdown
+    ]
+    assert all(button.disabled for button in app.download_button)
+    assert any(
+        "could not be revalidated" in item.value for item in app.warning
+    )
+    assert "synthetic local read failure" not in "\n".join(
+        item.value for item in [*app.warning, *app.error]
+    )
+
+
+def test_external_update_preserves_pending_input_and_blocks_stale_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+    accepted = app.session_state["review_state"]
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "pending-runtime-artifact"
+    ).run()
+    JsonReviewStore(default_local_review_directory()).mutate(
+        accepted.review.review_id,
+        lambda state: append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="external-revocation-with-pending-input",
+                final_acceptance=False,
+                comment="External revocation while workbench input was pending",
+                reviewer="CLI reviewer",
+            ),
+        ),
+    )
+
+    app = app.run()
+
+    assert app.session_state["review_state"] == accepted
+    assert app.text_input(key="runtime_artifact_reference").value == (
+        "pending-runtime-artifact"
+    )
+    assert "**Review status: Refresh required**" in [
+        item.value for item in app.markdown
+    ]
+    assert all(button.disabled for button in app.download_button)
+    assert any(
+        "changed outside this workbench" in item.value for item in app.warning
     )
 
 

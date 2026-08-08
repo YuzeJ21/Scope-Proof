@@ -375,6 +375,47 @@ def _autosave_review_if_eligible(
     return True
 
 
+def _refresh_clean_review_from_local_store(
+    state: ReviewState | None,
+    *,
+    store: JsonReviewStore,
+    store_available: bool,
+    has_pending_review_input: bool,
+) -> ReviewState | None:
+    """Refresh a clean open review before rendering or exporting persisted truth."""
+
+    if state is None or not store_available:
+        return state
+    expected_fingerprint = st.session_state["saved_review_fingerprint"]
+    current_fingerprint = _review_state_fingerprint(state)
+    if not expected_fingerprint or current_fingerprint != expected_fingerprint:
+        return state
+    try:
+        persisted = store.load(state.review.review_id)
+    except FileNotFoundError:
+        st.session_state["saved_review_fingerprint"] = None
+        st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = False
+        return state
+    except (OSError, ValueError):
+        st.session_state["saved_review_fingerprint"] = None
+        st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = True
+        return state
+    persisted_fingerprint = _review_state_fingerprint(persisted)
+    if persisted_fingerprint == expected_fingerprint:
+        return state
+    if has_pending_review_input:
+        st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = True
+        return state
+    _hydrate_reopened_review(persisted)
+    st.session_state["review_save_notice"] = (
+        "Review refreshed from local storage after an external update."
+    )
+    return persisted
+
+
 def _mark_open_review_deleted(review_id: str) -> bool:
     current: ReviewState | None = st.session_state["review_state"]
     if current is None or current.review.review_id != review_id:
@@ -906,6 +947,12 @@ has_pending_review_input = (
     or has_pending_criterion_detail_draft
     or has_pending_criteria_source
     or has_missing_active_provenance
+)
+current_review_state = _refresh_clean_review_from_local_store(
+    current_review_state,
+    store=review_store,
+    store_available=review_store_available,
+    has_pending_review_input=has_pending_review_input,
 )
 pending_storage_messages: list[str] = []
 if has_pending_criteria_draft:
@@ -2630,8 +2677,23 @@ else:
             st.caption("No human decisions have been recorded yet.")
 
     st.header("5 · Summary & Export")
-    review_status = review_status_label(bundle.gate.verdict)
+    review_truth_conflict = bool(
+        review_state is not None
+        and st.session_state["review_save_conflict"]
+        and st.session_state["failed_review_save_fingerprint"]
+        == _review_state_fingerprint(review_state)
+    )
+    review_status = (
+        "Refresh required"
+        if review_truth_conflict
+        else review_status_label(bundle.gate.verdict)
+    )
     st.markdown(f"**Review status: {review_status}**")
+    if review_truth_conflict:
+        st.warning(
+            "The persisted review could not be revalidated. Reopen it before relying on the "
+            "status or exporting this review."
+        )
     if bundle.gate.reason_codes:
         labels = [_status_label(code) for code in bundle.gate.reason_codes]
         st.write("Gate reasons: " + " · ".join(labels))
@@ -2666,7 +2728,11 @@ else:
             markdown_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.md",
             mime="text/markdown",
-            disabled=has_pending_review_input or not export_has_provenance,
+            disabled=(
+                has_pending_review_input
+                or review_truth_conflict
+                or not export_has_provenance
+            ),
             key="download_markdown",
         )
     with json_column:
@@ -2675,7 +2741,11 @@ else:
             json_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.json",
             mime="application/json",
-            disabled=has_pending_review_input or not export_has_provenance,
+            disabled=(
+                has_pending_review_input
+                or review_truth_conflict
+                or not export_has_provenance
+            ),
             key="download_json",
         )
     with csv_column:
@@ -2684,7 +2754,11 @@ else:
             csv_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.csv",
             mime="text/csv",
-            disabled=has_pending_review_input or not export_has_provenance,
+            disabled=(
+                has_pending_review_input
+                or review_truth_conflict
+                or not export_has_provenance
+            ),
             key="download_csv",
         )
     if review_save_notice is not None:
