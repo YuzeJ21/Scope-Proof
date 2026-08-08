@@ -97,9 +97,16 @@ reviews. Independently verified PR head
 engineering foundation is restored. PR #183 merged the later integrity and
 reviewer-loop source work as `cd362a85a558645a0f56d6540f6bf035e5821809`;
 exact-main CI run `30847416893`, CodeQL run `30847415556`, and Pages run
-`30847417705` succeeded. Those runs are engineering evidence for the source
-merge, not the final v0.2.3 release merge or tag target, correctness evidence,
-customer validation, or Stage 1 credit. The
+`30847417705` succeeded. Those runs remain historical source-integration evidence,
+not correctness evidence, customer validation, or Stage 1 credit.
+
+ScopeProof v0.2.3 is published. [PR #184](https://github.com/YuzeJ21/Scope-Proof/pull/184)
+merged the release integration at
+`448c42758ea139bf9203cbf1bb04b02b02ae412c`; current `main` and the peeled
+`v0.2.3` tag resolve to that commit. Exact-main CI run `30854382641`, CodeQL run
+`30854382413`, and Pages run `30854382659` succeeded. The release and those
+checks are engineering evidence only and do not advance Stage 1, which remains
+at zero. The
 [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
 records the product-tree engineering evidence and remaining gaps.
 
@@ -206,6 +213,50 @@ scopeproof export REVIEW_ID \
 ```
 
 Available repeat-export formats are `json`, `markdown`, `csv`, and `html`.
+
+Continue the same validated local review through the CLI with explicit human decisions. Store
+reviewer notes in UTF-8 files when they are needed:
+
+```bash
+scopeproof resolve REVIEW_ID \
+  --criterion-id AC-01 \
+  --decision accepted \
+  --reviewer "Reviewer name or role" \
+  --comment-file reviewer-note.txt \
+  --storage-dir .scopeproof/reviews
+
+scopeproof verify-runtime REVIEW_ID \
+  --criterion-id AC-02 \
+  --level E3 \
+  --reviewer "Runtime reviewer" \
+  --artifact-reference https://example.test/artifacts/run-123 \
+  --scenario "Exercise the confirmed acceptance scenario" \
+  --environment "Owner-operated staging environment" \
+  --result "Observed result supplied by the reviewer" \
+  --comment-file runtime-note.txt \
+  --storage-dir .scopeproof/reviews
+
+scopeproof final-acceptance REVIEW_ID \
+  --accept \
+  --reviewer "Final reviewer" \
+  --comment-file final-note.txt \
+  --storage-dir .scopeproof/reviews
+
+scopeproof compare PREVIOUS_REVIEW_ID CURRENT_REVIEW_ID \
+  --format markdown \
+  --output comparison.md \
+  --storage-dir .scopeproof/reviews
+```
+
+`resolve` records one human criterion decision and never executes PR code.
+Static candidates never become runtime evidence through `resolve`; accepting below a criterion's
+required evidence level requires a non-empty reviewer note. `verify-runtime` is the only CLI
+command above that
+atomically links a human-supplied E3/E4 runtime record to its manual-verification decision. It
+does not run or independently verify the cited artifact. Final acceptance remains fail-closed
+until the deterministic prerequisites are satisfied; use `--revoke` to append a revocation.
+`compare` validates both saved reviews, reports candidate changes without carrying decisions
+forward, and refuses to overwrite an existing output file.
 
 CSV exports neutralize leading spreadsheet-formula characters in scalar text cells. Fields that
 can contain multiple values (`ingestion_warnings`, `skipped_files`, `evidence_links`,

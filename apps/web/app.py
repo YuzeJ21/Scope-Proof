@@ -63,6 +63,7 @@ from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.comparison import EvidenceReference, compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
+    acceptance_requires_comment,
     append_external_verification,
     append_resolution,
     attach_analysis,
@@ -2229,10 +2230,10 @@ else:
         else:
             st.caption(f"Decision impact: {decision_guidance(decision)}")
         resolution_note = st.text_area("Reviewer note", key="resolution_note")
-        acceptance_below_required = (
-            decision is HumanDecision.ACCEPTED
-            and selected_finding.evidence_level.rank
-            < selected_criterion.required_evidence_level.rank
+        acceptance_below_required = decision is not None and acceptance_requires_comment(
+            decision,
+            selected_finding.evidence_level,
+            selected_criterion.required_evidence_level,
         )
         if acceptance_below_required:
             st.warning("Accept despite insufficient candidate evidence")

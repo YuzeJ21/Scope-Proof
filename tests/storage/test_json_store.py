@@ -1535,6 +1535,17 @@ def test_unsupported_or_coercive_record_version_is_rejected(
         store.load("review-1")
 
 
+def test_load_rejects_record_missing_state_without_key_error(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    path.write_text(json.dumps({"record_version": 4}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="record envelope") as error:
+        store.load("review-1")
+
+    assert not isinstance(error.value, KeyError)
+
+
 def test_review_id_cannot_escape_store_directory(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
 

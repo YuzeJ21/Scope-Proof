@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
+from pydantic import BaseModel, ConfigDict, StrictInt, ValidationError
+
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewBundle, ReviewState
@@ -33,6 +35,16 @@ _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED = (
     and os.stat in os.supports_follow_symlinks
     and os.unlink in os.supports_dir_fd
 )
+
+
+class _ReviewRecordEnvelope(BaseModel):
+    """Strict outer contract around versioned, migratable review state."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    record_version: StrictInt
+    saved_at: str | None = None
+    state: object
 
 
 def default_local_review_directory() -> Path:
@@ -319,6 +331,8 @@ class JsonReviewStore:
     def load(self, review_id: str) -> ReviewState:
         """Load a known record format and validate all nested models."""
         payload = json.loads(self._existing_record_path(review_id).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("invalid review record envelope")
         record_version = payload.get("record_version")
         if (
             type(record_version) is not int
@@ -327,7 +341,11 @@ class JsonReviewStore:
             raise UnsupportedRecordVersion(
                 f"Unsupported review record version {record_version!r}"
             )
-        state_payload = deepcopy(payload["state"])
+        try:
+            envelope = _ReviewRecordEnvelope.model_validate(payload)
+        except ValidationError as error:
+            raise ValueError("invalid review record envelope") from error
+        state_payload = deepcopy(envelope.state)
         if record_version == 1 and isinstance(state_payload, dict):
             active_bundle = state_payload.get("bundle")
             criteria_revision = state_payload.get("criteria_revision")

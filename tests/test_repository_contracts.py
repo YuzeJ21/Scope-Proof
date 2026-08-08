@@ -31,6 +31,8 @@ PUBLIC_RELEASE_DOWNLOAD_ROOT = (
 PUBLIC_RELEASES_INDEX = "https://github.com/YuzeJ21/Scope-Proof/releases"
 PR183_SOURCE_MERGE_SHA = "cd362a85a558645a0f56d6540f6bf035e5821809"
 PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
+PR184_RELEASE_MERGE_SHA = "448c42758ea139bf9203cbf1bb04b02b02ae412c"
+PR184_EXACT_MAIN_RUN_IDS = ("30854382641", "30854382413", "30854382659")
 
 
 def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
@@ -495,6 +497,34 @@ def test_ci_starts_and_cleans_up_installed_web_workbench() -> None:
     assert 'wait "$web_pid"' in workflow
     assert "trap cleanup EXIT" in workflow
     assert 'cat "$web_log"' in workflow
+
+
+def test_packaged_browser_regression_is_dev_only_and_runs_after_wheel_smoke() -> None:
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    lock = tomllib.loads(Path("uv.lock").read_text(encoding="utf-8"))
+    runtime_dependencies = config["project"]["dependencies"]
+    dev_dependencies = config["project"]["optional-dependencies"]["dev"]
+    markers = config["tool"]["pytest"]["ini_options"]["markers"]
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    verify = workflow.split("\n  verify:", maxsplit=1)[1]
+
+    assert "playwright==1.62.0" in dev_dependencies
+    assert [
+        package["version"]
+        for package in lock["package"]
+        if package["name"] == "playwright"
+    ] == ["1.62.0"]
+    assert not any(dependency.startswith("playwright") for dependency in runtime_dependencies)
+    assert "browser: installed-wheel real-browser regression" in markers
+    assert "python -m playwright install --with-deps chromium" in verify
+    assert "python -m pytest -q -m browser tests/browser" in verify
+    assert verify.index("Installed wheel smoke") < verify.index("Packaged browser regression")
+    browser_test = Path("tests/browser/test_packaged_workbench.py").read_text(
+        encoding="utf-8"
+    )
+    assert "context.route(" in browser_test
+    assert '"**/*"' in browser_test
+    assert "external_requests == []" in browser_test
 
 
 def test_readme_documents_operating_commands() -> None:
@@ -1030,6 +1060,11 @@ def test_readme_documents_confirmed_public_pr_cli_workflow() -> None:
     assert "--confirmation requirements-confirmation.json" in readme
     assert "does not verify their identity, authority" in readme
     assert "scopeproof export" in readme
+    assert "scopeproof resolve REVIEW_ID" in readme
+    assert "scopeproof verify-runtime REVIEW_ID" in readme
+    assert "scopeproof final-acceptance REVIEW_ID" in readme
+    assert "scopeproof compare PREVIOUS_REVIEW_ID CURRENT_REVIEW_ID" in readme
+    assert "Static candidates never become runtime evidence through `resolve`" in readme
     assert "reviewer-confirmed criteria" in readme
     assert "not required or persisted" in readme
 
@@ -1248,18 +1283,27 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     assert "releases/download/v0.2.1/" not in quickstart
     assert f"ScopeProof v{PUBLIC_RELEASE_VERSION} can" in design_partner
     assert "ScopeProof v0.2.1 can" not in design_partner
+    assert "ScopeProof v0.2.3 is published" in readme
+    assert "PR #184" in readme
+    assert f"`{PR184_RELEASE_MERGE_SHA}`" in readme
+    assert "PR #183" in readme
+    assert "historical source-integration evidence" in readme
 
     for active_status in (roadmap, status_page):
         assert f"Public install: v{PUBLIC_RELEASE_VERSION}" in active_status
-        assert "PR #183 integrity/reviewer-loop source merge" in active_status
-        assert f"`{PR183_SOURCE_MERGE_SHA}`" in active_status
-        assert all(run_id in active_status for run_id in PR183_EXACT_MAIN_RUN_IDS)
+        assert "v0.2.3 is published" in active_status
+        assert "PR #184" in active_status
+        assert f"`{PR184_RELEASE_MERGE_SHA}`" in active_status
+        assert all(run_id in active_status for run_id in PR184_EXACT_MAIN_RUN_IDS)
         assert "exact-main CI, CodeQL, and Pages all succeeded" in active_status
-        assert "not the final v0.2.3 release merge or tag target" in active_status
         assert "The GitHub Release record is authoritative for publication availability." in (
             active_status
         )
-        assert "Public install: v0.2.3 applies only when" in active_status
+        assert "Public install: v0.2.3 is available" in active_status
+        assert "PR #183" in active_status
+        assert f"`{PR183_SOURCE_MERGE_SHA}`" in active_status
+        assert all(run_id in active_status for run_id in PR183_EXACT_MAIN_RUN_IDS)
+        assert "historical source-integration evidence" in active_status
         assert "publication alignment is underway" not in active_status
         assert "publication alignment is completed" not in active_status
         assert "Stage 1" in active_status
@@ -1285,10 +1329,9 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     assert "70bdca1a0d609c81ac8cd2274dc4915612067cfdb1c2205276faafd7c6358ac8" in candidate
     assert "7fff8ba0b6b6c85ae0f22fe487762de8a525d04145c50eab46792233b798573e" in candidate
     assert (
-        f'<a class="button button-primary" href="{PUBLIC_RELEASES_INDEX}">'
-        f"Check for release {PUBLIC_RELEASE_TAG}</a>"
+        f'<a class="button button-primary" href="{PUBLIC_RELEASES_INDEX}/tag/'
+        f'{PUBLIC_RELEASE_TAG}">Download {PUBLIC_RELEASE_TAG}</a>'
     ) in site
-    assert f"releases/tag/{PUBLIC_RELEASE_TAG}" not in site
 
 
 def test_public_contribution_templates_preserve_evidence_boundaries() -> None:
@@ -1569,7 +1612,7 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert "Likes, views, stars, impressions, and downloads are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
     assert PUBLIC_RELEASES_INDEX in html
-    assert f"releases/tag/{PUBLIC_RELEASE_TAG}" not in html
+    assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in html
     assert (
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
         in html
