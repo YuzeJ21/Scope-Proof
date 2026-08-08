@@ -34,16 +34,19 @@ def deferred_review_export(
         authoritative: ExportSource = captured
         if isinstance(captured, ReviewState) and expected_fingerprint is not None:
             try:
-                persisted = store.load(captured.review.review_id)
+                with store.locked_load(captured.review.review_id) as persisted:
+                    if (
+                        JsonReviewStore.state_fingerprint(persisted)
+                        != expected_fingerprint
+                    ):
+                        raise DeferredExportUnavailable(
+                            _EXPORT_REVALIDATION_MESSAGE
+                        )
+                    return renderer(persisted)
             except (OSError, ValueError):
                 raise DeferredExportUnavailable(
                     _EXPORT_REVALIDATION_MESSAGE
                 ) from None
-            if JsonReviewStore.state_fingerprint(persisted) != expected_fingerprint:
-                raise DeferredExportUnavailable(
-                    _EXPORT_REVALIDATION_MESSAGE
-                )
-            authoritative = persisted
         return renderer(authoritative)
 
     return render

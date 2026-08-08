@@ -223,6 +223,14 @@ class JsonReviewStore:
         validated = validated_review_state(state)
         return sha256(validated.model_dump_json().encode("utf-8")).hexdigest()
 
+    @contextmanager
+    def locked_load(self, review_id: str) -> Iterator[ReviewState]:
+        """Yield one validated record while excluding concurrent record mutations."""
+
+        validated_id = self._validate_review_id(review_id)
+        with self._mutation_lock(validated_id):
+            yield self.load(validated_id)
+
     def _save_unlocked(self, validated: ReviewState) -> Path:
         """Replace one validated record while its mutation lock is already held."""
 
