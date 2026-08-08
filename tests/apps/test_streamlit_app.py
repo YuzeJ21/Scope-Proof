@@ -2908,6 +2908,41 @@ def test_post_save_resolution_changes_fingerprint_and_autosaves_review_again(
     assert app.button(key="save_review").disabled is True
 
 
+def test_stale_workbench_autosave_preserves_newer_cli_lifecycle_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    store = JsonReviewStore(default_local_review_directory())
+    external, _ = store.mutate(
+        review_id,
+        lambda state: append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="external-cli-revocation",
+                final_acceptance=False,
+                comment="CLI revocation while workbench remained open",
+                reviewer="CLI reviewer",
+            ),
+        ),
+    )
+
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+    app = app.button(key="save_resolution").click().run()
+
+    assert store.load(review_id) == external
+    assert app.session_state["review_state"] != external
+    messages = [item.value for item in [*app.error, *app.warning]]
+    assert any("changed outside this workbench" in message for message in messages)
+    assert any(
+        "newer lifecycle events are not overwritten" in message
+        for message in messages
+    )
+
+
 def test_unsaved_review_requires_explicit_approval_before_replacement(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -8,6 +8,7 @@ from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews import attach_analysis
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
+    acceptance_requires_comment,
     append_external_verification,
     append_resolution,
     append_runtime_evidence,
@@ -856,6 +857,25 @@ def test_resolution_events_preserve_history_and_latest_decision_controls_gate() 
     assert current[0].decision is HumanDecision.ACCEPTED
     assert state.bundle is not None
     assert state.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+
+
+@pytest.mark.parametrize(
+    ("decision", "observed", "required", "expected"),
+    [
+        (HumanDecision.ACCEPTED, EvidenceLevel.E1, EvidenceLevel.E2, True),
+        (HumanDecision.ACCEPTED, EvidenceLevel.E2, EvidenceLevel.E2, False),
+        (HumanDecision.ACCEPTED, EvidenceLevel.E3, EvidenceLevel.E2, False),
+        (HumanDecision.CHANGE_REQUIRED, EvidenceLevel.E1, EvidenceLevel.E2, False),
+        (HumanDecision.ACCEPTED_EXCEPTION, EvidenceLevel.E1, EvidenceLevel.E2, False),
+    ],
+)
+def test_acceptance_comment_policy(
+    decision: HumanDecision,
+    observed: EvidenceLevel,
+    required: EvidenceLevel,
+    expected: bool,
+) -> None:
+    assert acceptance_requires_comment(decision, observed, required) is expected
 
 
 def test_resolution_event_requires_an_active_analysis_bundle() -> None:

@@ -33,6 +33,19 @@ class ResolutionEventStatus(StrEnum):
     PRIOR_REVISION = "prior_revision"
 
 
+def acceptance_requires_comment(
+    decision: HumanDecision,
+    observed_level: EvidenceLevel,
+    required_level: EvidenceLevel,
+) -> bool:
+    """Return whether a low-evidence acceptance needs attributable rationale."""
+
+    return (
+        decision is HumanDecision.ACCEPTED
+        and observed_level.rank < required_level.rank
+    )
+
+
 def _validated_state(state: ReviewState) -> ReviewState:
     """Revalidate mutable model input before applying a lifecycle transition."""
     return validated_review_state(state)

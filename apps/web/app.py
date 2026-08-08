@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import partial
-from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
@@ -63,6 +62,7 @@ from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.comparison import EvidenceReference, compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
+    acceptance_requires_comment,
     append_external_verification,
     append_resolution,
     attach_analysis,
@@ -92,6 +92,7 @@ from scopeproof_core.schemas.models import (
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
+    StaleReviewState,
     UnsafeReviewStore,
     UnsupportedRecordVersion,
     default_local_review_directory,
@@ -196,6 +197,7 @@ _STATE_DEFAULTS = {
     "source_reload_notice": None,
     "saved_review_fingerprint": None,
     "failed_review_save_fingerprint": None,
+    "review_save_conflict": False,
     "deleted_review_save_fingerprint": None,
     "review_save_notice": None,
     "replace_unsaved_review_confirmed": False,
@@ -261,6 +263,7 @@ def _reset_analysis() -> None:
     st.session_state["reopened_review_id"] = None
     st.session_state["saved_review_fingerprint"] = None
     st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["review_save_conflict"] = False
     st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["criteria_source_provenance"] = None
@@ -317,7 +320,7 @@ def _apply_criteria_update(
 
 def _review_state_fingerprint(state: ReviewState) -> str:
     """Return a deterministic session-only identity for a validated review state."""
-    return sha256(state.model_dump_json().encode("utf-8")).hexdigest()
+    return JsonReviewStore.state_fingerprint(state)
 
 
 def _review_matches_local_save(state: ReviewState) -> bool:
@@ -328,12 +331,21 @@ def _review_matches_local_save(state: ReviewState) -> bool:
 def _persist_review_state(state: ReviewState, store: JsonReviewStore) -> bool:
     fingerprint = _review_state_fingerprint(state)
     try:
-        store.save(state)
+        store.save(
+            state,
+            expected_fingerprint=st.session_state["saved_review_fingerprint"],
+        )
+    except StaleReviewState:
+        st.session_state["failed_review_save_fingerprint"] = fingerprint
+        st.session_state["review_save_conflict"] = True
+        return False
     except (OSError, ValueError):
         st.session_state["failed_review_save_fingerprint"] = fingerprint
+        st.session_state["review_save_conflict"] = False
         return False
     st.session_state["saved_review_fingerprint"] = fingerprint
     st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["review_save_conflict"] = False
     st.session_state["deleted_review_save_fingerprint"] = None
     return True
 
@@ -370,6 +382,7 @@ def _mark_open_review_deleted(review_id: str) -> bool:
     current_fingerprint = _review_state_fingerprint(current)
     st.session_state["saved_review_fingerprint"] = None
     st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
+    st.session_state["review_save_conflict"] = False
     if st.session_state["failed_review_save_fingerprint"] == current_fingerprint:
         st.session_state["failed_review_save_fingerprint"] = None
     return True
@@ -390,6 +403,7 @@ def _render_local_review_storage(
     save_failed = (
         st.session_state["failed_review_save_fingerprint"] == current_fingerprint
     )
+    save_conflict = bool(st.session_state["review_save_conflict"] and save_failed)
     save_deleted = (
         st.session_state["deleted_review_save_fingerprint"] == current_fingerprint
     )
@@ -413,6 +427,12 @@ def _render_local_review_storage(
             )
         elif review_matches_local_save:
             st.caption("Saved locally — current review matches local storage.")
+        elif save_conflict:
+            st.warning(
+                "The saved review changed outside this workbench. Reopen it before saving "
+                "again so newer lifecycle events are not overwritten. This open review "
+                "remains available as unsaved work."
+            )
         elif save_failed:
             st.error(
                 "The review could not be saved locally. The current review remains open as "
@@ -429,6 +449,7 @@ def _render_local_review_storage(
                 review_matches_local_save
                 or has_pending_review_input
                 or not store_available
+                or save_conflict
             ),
         )
         if save_clicked:
@@ -438,11 +459,18 @@ def _render_local_review_storage(
                 )
                 st.rerun()
             else:
-                st.error(
-                    "The review could not be saved locally. The current review remains open "
-                    "as unsaved work. Verify the local review directory and review integrity, "
-                    "then try again."
-                )
+                if st.session_state["review_save_conflict"]:
+                    st.warning(
+                        "The saved review changed outside this workbench. Reopen it before "
+                        "saving again so newer lifecycle events are not overwritten. This "
+                        "open review remains available as unsaved work."
+                    )
+                else:
+                    st.error(
+                        "The review could not be saved locally. The current review remains "
+                        "open as unsaved work. Verify the local review directory and review "
+                        "integrity, then try again."
+                    )
 
 
 def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
@@ -485,6 +513,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["source_reload_notice"] = None
     st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(state)
     st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["review_save_conflict"] = False
     st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["candidate_files"] = []
@@ -2229,10 +2258,10 @@ else:
         else:
             st.caption(f"Decision impact: {decision_guidance(decision)}")
         resolution_note = st.text_area("Reviewer note", key="resolution_note")
-        acceptance_below_required = (
-            decision is HumanDecision.ACCEPTED
-            and selected_finding.evidence_level.rank
-            < selected_criterion.required_evidence_level.rank
+        acceptance_below_required = decision is not None and acceptance_requires_comment(
+            decision,
+            selected_finding.evidence_level,
+            selected_criterion.required_evidence_level,
         )
         if acceptance_below_required:
             st.warning("Accept despite insufficient candidate evidence")

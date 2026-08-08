@@ -132,3 +132,7 @@ jobs:
             cat "$web_log"
             exit 1
           fi
+      - name: Install Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Packaged browser regression
+        run: python -m pytest -q -m browser tests/browser
