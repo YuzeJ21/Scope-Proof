@@ -38,7 +38,7 @@ signals.
 | --- | --- |
 | `uv sync --extra dev --extra research --locked` | Passed; Playwright 1.62.0 was installed from `uv.lock`. |
 | `uv run ruff check .` | Passed. |
-| Final combined core/UI coverage gate | Passed after PR review repairs: 1,935 tests, 2 intentional skips, 95.19% coverage in 521.30 seconds. |
+| Final combined core/UI coverage gate | Passed after PR review repairs: 1,937 tests, 2 intentional skips, 95.19% coverage in 523.23 seconds. |
 | `uv run pytest -q tests/test_repository_contracts.py` | Passed: 76 tests. |
 | `uv run scopeproof benchmark` | Passed: 12 cases, 13 criteria, 0 mismatches, 0 must-have False Ready outcomes, 0 false blockers, 0 unexecuted categories. |
 | `uv run scopeproof comparison-benchmark` | Passed: 2 cases, 0 mismatches; aggregate 3 added, 1 modified, 1 relocated, 3 removed, 1 unchanged. |
@@ -76,7 +76,7 @@ endpoint was unreachable and no launched process remained.
 - Host environment: macOS 26.5.1 build 25F80, Apple silicon, Python 3.12.0.
 - Driver: Playwright 1.62.0 with Chrome for Testing 151.0.7922.34.
 - Command: `uv run pytest -q -m browser tests/browser`.
-- Latest result after PR review repairs: passed, 1 test in 24.06 seconds with the final
+- Latest result after PR review repairs: passed, 1 test in 27.01 seconds with the final
   loopback-only network guard.
 
 For fresh browser contexts at 1280×720 and 390×844, the test used keyboard activation for the
@@ -99,7 +99,7 @@ A fresh build produced:
 
 | Artifact | Entries | SHA-256 | Forbidden inventory matches |
 | --- | ---: | --- | ---: |
-| `scopeproof-0.2.3-py3-none-any.whl` | 99 | `80f06e6868f329f37093b5938375e8d60bc235a147e9e2bf721b3543af9fd329` | 0 |
+| `scopeproof-0.2.3-py3-none-any.whl` | 99 | `3cff11a506c7346b80d92a693fd7b71d0404fd1e7390e64268655fed79542f89` | 0 |
 | `scopeproof-0.2.3.tar.gz` | 546 | Not recorded because this audit is included in the sdist, making its content hash self-referential. | 0 |
 
 The scan rejected Git state, `.scopeproof`, coverage files, virtual environments, common secret
@@ -118,8 +118,11 @@ The pre-PR wheel at commit `1ec899a7d3b9b792db4cd50fef2f0a966d3bd05a` had SHA-25
 historical engineering evidence only; it was superseded when the PR review repair changed packaged
 CLI and storage code. The intermediate repair wheel had SHA-256
 `7f5e989a8237d95c04e55a0b8d3195621b957215e18c68b32c17736314073960`; it was superseded when
-the follow-up repair changed packaged workbench and storage code. The current wheel above was
-installed by the latest packaged-browser run.
+the follow-up repair changed packaged workbench and storage code. A later repaired wheel had
+SHA-256 `80f06e6868f329f37093b5938375e8d60bc235a147e9e2bf721b3543af9fd329`; it was superseded by
+the final deletion-serialization and portable-lock repair. The current wheel hash above was
+reproduced in two fresh builds, and an equivalent current-tree wheel was installed by the latest
+packaged-browser run.
 
 ## Attempt boundaries
 
@@ -172,7 +175,12 @@ could still replace a newer CLI lifecycle event through an unconditional save. T
 reproduced before repair. Workbench saves now present their last persisted state fingerprint under
 the same per-record lock; a mismatch preserves the newer record, retains the open work as unsaved,
 and instructs the user to reopen instead of overwriting. The new store and real-workbench
-regressions passed in the final full suite and the latest package/browser proof above.
+regressions passed in the final full suite and the latest package/browser proof above. The next
+automated review found two further P2 defects: deletion did not participate in record
+serialization, and unconditional saves had no Windows-compatible lock fallback. Both were
+reproduced before repair. Deletion now shares the per-record lock with lifecycle mutation, and
+saves use the standard-library Windows file lock when POSIX `fcntl` is unavailable. Both new
+regressions passed in the final full suite and package/browser proof above.
 
 Reviewer/source-owner identity is asserted, not authenticated. The GitHub Action remains opt-in
 and informational rather than a required branch-protection check. Native zoom, screen reader,

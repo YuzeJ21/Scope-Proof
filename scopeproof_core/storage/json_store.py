@@ -27,6 +27,11 @@ try:
 except ImportError:  # pragma: no cover - fail-closed portability guard
     fcntl = None  # type: ignore[assignment]
 
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - exercised through the Windows-lock seam
+    msvcrt = None  # type: ignore[assignment]
+
 RECORD_VERSION = 4
 _SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
@@ -106,7 +111,7 @@ class JsonReviewStore:
     def _mutation_lock(self, review_id: str) -> Iterator[None]:
         """Serialize one record's read-transition-write lifecycle."""
 
-        if fcntl is None:
+        if fcntl is None and msvcrt is None:
             raise OSError("serialized review updates are unsupported on this platform")
         validated_id = self._validate_review_id(review_id)
         self._require_safe_directory()
@@ -127,8 +132,23 @@ class JsonReviewStore:
                 raise UnsafeReviewStore(
                     "review mutation lock must be a regular local file"
                 )
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
-            yield
+            if fcntl is not None:
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            else:
+                assert msvcrt is not None
+                if os.fstat(descriptor).st_size == 0:
+                    os.write(descriptor, b"\0")
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
+                try:
+                    yield
+                finally:
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
         finally:
             os.close(descriptor)
 
@@ -162,35 +182,38 @@ class JsonReviewStore:
         """Delete one exact safe local record without parsing its contents."""
         validated_id = self._validate_review_id(review_id)
         self._require_safe_directory()
+        if not self.directory.is_dir():
+            raise FileNotFoundError(validated_id)
         if not _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED:
             raise OSError("safe local review deletion is unsupported on this platform")
-        try:
-            directory_fd = os.open(
-                self.directory,
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-            )
-        except FileNotFoundError:
-            raise FileNotFoundError(validated_id) from None
-        except NotADirectoryError:
-            raise UnsafeReviewStore("review store path must be a directory") from None
-        try:
-            record_name = f"{validated_id}.json"
-            with os.scandir(directory_fd) as entries:
-                matching_entry = next(
-                    (
-                        entry
-                        for entry in entries
-                        if entry.name == record_name
-                        and entry.is_file(follow_symlinks=False)
-                        and stat.S_ISREG(entry.stat(follow_symlinks=False).st_mode)
-                    ),
-                    None,
+        with self._mutation_lock(validated_id):
+            try:
+                directory_fd = os.open(
+                    self.directory,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
                 )
-            if matching_entry is None:
+            except FileNotFoundError:
                 raise FileNotFoundError(validated_id) from None
-            os.unlink(matching_entry.name, dir_fd=directory_fd)
-        finally:
-            os.close(directory_fd)
+            except NotADirectoryError:
+                raise UnsafeReviewStore("review store path must be a directory") from None
+            try:
+                record_name = f"{validated_id}.json"
+                with os.scandir(directory_fd) as entries:
+                    matching_entry = next(
+                        (
+                            entry
+                            for entry in entries
+                            if entry.name == record_name
+                            and entry.is_file(follow_symlinks=False)
+                            and stat.S_ISREG(entry.stat(follow_symlinks=False).st_mode)
+                        ),
+                        None,
+                    )
+                if matching_entry is None:
+                    raise FileNotFoundError(validated_id) from None
+                os.unlink(matching_entry.name, dir_fd=directory_fd)
+            finally:
+                os.close(directory_fd)
 
     @staticmethod
     def state_fingerprint(state: ReviewState) -> str:

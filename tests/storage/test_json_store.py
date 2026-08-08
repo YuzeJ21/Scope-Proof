@@ -350,6 +350,82 @@ def test_mutate_serializes_concurrent_append_only_lifecycle_updates(
     }
 
 
+def test_delete_serializes_with_an_in_flight_lifecycle_mutation(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    target = store.save(review_state())
+    mutation_entered = Event()
+    release_mutation = Event()
+    delete_started = Event()
+    delete_finished = Event()
+
+    def append_resolution_after_release(state):
+        mutation_entered.set()
+        assert release_mutation.wait(timeout=2)
+        return append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="mutation-before-delete",
+                criterion_id="AC-01",
+                decision=HumanDecision.ACCEPTED,
+                comment="Lifecycle mutation serialized before deletion",
+                reviewer="Concurrency fixture",
+            ),
+        )
+
+    def delete_record() -> None:
+        delete_started.set()
+        store.delete("review-1")
+        delete_finished.set()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        mutation = executor.submit(
+            store.mutate,
+            "review-1",
+            append_resolution_after_release,
+        )
+        try:
+            assert mutation_entered.wait(timeout=2)
+            deletion = executor.submit(delete_record)
+            assert delete_started.wait(timeout=2)
+            assert not delete_finished.wait(timeout=0.2)
+        finally:
+            release_mutation.set()
+        mutation.result(timeout=2)
+        deletion.result(timeout=2)
+
+    assert not target.exists()
+    with pytest.raises(FileNotFoundError):
+        store.load("review-1")
+
+
+def test_save_uses_windows_file_lock_when_fcntl_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeMsvcrt:
+        LK_LOCK = 1
+        LK_UNLCK = 2
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[int, int, int]] = []
+
+        def locking(self, descriptor: int, mode: int, byte_count: int) -> None:
+            self.calls.append((descriptor, mode, byte_count))
+
+    windows_lock = FakeMsvcrt()
+    monkeypatch.setattr(json_store_module, "fcntl", None)
+    monkeypatch.setattr(json_store_module, "msvcrt", windows_lock, raising=False)
+
+    target = JsonReviewStore(tmp_path).save(review_state())
+
+    assert target.exists()
+    assert [mode for _, mode, _ in windows_lock.calls] == [
+        windows_lock.LK_LOCK,
+        windows_lock.LK_UNLCK,
+    ]
+    assert all(byte_count == 1 for _, _, byte_count in windows_lock.calls)
+
+
 def test_save_rejects_stale_state_without_overwriting_newer_lifecycle_event(
     tmp_path: Path,
 ) -> None:
