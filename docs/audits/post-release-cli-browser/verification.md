@@ -38,7 +38,7 @@ signals.
 | --- | --- |
 | `uv sync --extra dev --extra research --locked` | Passed; Playwright 1.62.0 was installed from `uv.lock`. |
 | `uv run ruff check .` | Passed. |
-| Final combined core/UI coverage gate | Passed after PR review repairs: 1,952 tests, 2 intentional skips, 95.05% coverage in 609.91 seconds. |
+| Final combined core/UI coverage gate | Passed after PR review repairs: 1,954 tests, 2 intentional skips, 95.06% coverage in 563.45 seconds. |
 | `uv run pytest -q tests/test_repository_contracts.py` | Passed: 77 tests. |
 | `uv run scopeproof benchmark` | Passed: 12 cases, 13 criteria, 0 mismatches, 0 must-have False Ready outcomes, 0 false blockers, 0 unexecuted categories. |
 | `uv run scopeproof comparison-benchmark` | Passed: 2 cases, 0 mismatches; aggregate 3 added, 1 modified, 1 relocated, 3 removed, 1 unchanged. |
@@ -82,7 +82,7 @@ does not substitute for the current-driver Chromium regression below.
 - Host environment: macOS 26.5.1 build 25F80, Apple silicon, Python 3.12.0.
 - Driver: Playwright 1.62.0 with Chrome for Testing 151.0.7922.34.
 - Command: `uv run pytest -q -m browser tests/browser`.
-- Latest result after PR review repairs: passed, 1 test in 24.46 seconds with the final
+- Latest result after PR review repairs: passed, 1 test in 24.57 seconds with the final
   loopback-only network guard.
 
 For fresh browser contexts at 1280×720 and 390×844, the test used keyboard activation for the
@@ -105,7 +105,7 @@ A fresh build produced:
 
 | Artifact | Entries | SHA-256 | Forbidden inventory matches |
 | --- | ---: | --- | ---: |
-| `scopeproof-0.2.3-py3-none-any.whl` | 100 | `dee9a80def05476e53a4e543557dbea2de958ea02ef5cf3e995afcb5cc7731c7` | 0 |
+| `scopeproof-0.2.3-py3-none-any.whl` | 101 | `e3f8f97c6debda647f6c14792aaf56a7708e828670a342dbe5d2a2573f144d8a` | 0 |
 | `scopeproof-0.2.3.tar.gz` | 546 | Not recorded because this audit is included in the sdist, making its content hash self-referential. | 0 |
 
 The scan rejected Git state, `.scopeproof`, coverage files, virtual environments, common secret
@@ -274,6 +274,15 @@ record changed in the interval, the Summary hydrates the newer state or fails cl
 input; deferred downloads retain their separate click-time validation lock. The focused regression
 requires both refresh and status rendering to participate in the shared lock. The final full suite,
 repository contracts, browser proof, and wheel proof above include the repair.
+The latest exact-head review found that the low-evidence acceptance-note rule still lived only in
+the CLI and Streamlit adapters. A different core caller, or a forged saved state, could therefore
+record an `accepted` decision below the criterion's required evidence level without attributable
+rationale and later satisfy the deterministic final-acceptance prerequisites. The shared policy is
+now enforced both when the core lifecycle appends a resolution and whenever a bundle or saved
+lifecycle state crosses trusted validation. Red-then-green regressions cover both boundaries;
+comparison fixtures now carry explicit rationale instead of relying on the prohibited state. The
+final full suite, repository contracts, browser proof, two reproducible wheel builds, and clean
+installed-wheel benchmarks above include the repair.
 
 Reviewer/source-owner identity is asserted, not authenticated. The GitHub Action remains opt-in
 and informational rather than a required branch-protection check. Native zoom, screen reader,
