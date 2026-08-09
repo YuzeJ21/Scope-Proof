@@ -21,6 +21,8 @@ from scopeproof_core.schemas.models import (
     LineChangeType,
 )
 
+_DEFAULT_PULL_REPOSITORY = object()
+
 
 def _response(status: int, data: object, headers: dict[str, str] | None = None) -> httpx.Response:
     return httpx.Response(status, json=data, headers=headers)
@@ -37,6 +39,7 @@ def fixture_transport(
     status_data: dict | None = None,
     status_status: int = 200,
     requested_urls: list[httpx.URL] | None = None,
+    pull_repository: object = _DEFAULT_PULL_REPOSITORY,
 ) -> httpx.MockTransport:
     default_files = [
         {
@@ -61,6 +64,15 @@ def fixture_transport(
         if path == "/repos/acme/widget/pulls/42":
             if pull_status != 200:
                 return _response(pull_status, {"message": "request failed"}, pull_headers)
+            base = {"sha": "base123"}
+            if pull_repository is _DEFAULT_PULL_REPOSITORY:
+                base["repo"] = {
+                    "full_name": "acme/widget",
+                    "private": False,
+                    "visibility": "public",
+                }
+            elif pull_repository is not None:
+                base["repo"] = pull_repository
             return _response(
                 200,
                 {
@@ -68,7 +80,7 @@ def fixture_transport(
                     "title": "Export CSV",
                     "body": "Adds export",
                     "html_url": "https://github.com/acme/widget/pull/42",
-                    "base": {"sha": "base123"},
+                    "base": base,
                     "head": {"sha": "head123"},
                 },
             )
@@ -117,8 +129,94 @@ def test_client_uses_optional_token_without_placing_it_in_snapshot() -> None:
     client = GitHubClient(token="secret", transport=fixture_transport())
     snapshot = client.fetch_pull_request("https://github.com/acme/widget/pull/42")
     assert snapshot.repository == "acme/widget"
+    assert snapshot.repository_visibility.value == "verified_public"
     assert "secret" not in snapshot.model_dump_json()
     assert client.last_request_authorized is True
+
+
+@pytest.mark.parametrize(
+    "repository_metadata",
+    [
+        pytest.param(
+            {"full_name": "acme/widget", "private": True, "visibility": "private"},
+            id="private",
+        ),
+        pytest.param(
+            {"full_name": "acme/widget", "private": False, "visibility": "internal"},
+            id="internal",
+        ),
+        pytest.param(
+            {"full_name": "acme/widget", "private": True, "visibility": "public"},
+            id="contradictory-private",
+        ),
+    ],
+)
+def test_client_rejects_non_public_repository_before_secondary_fetches(
+    repository_metadata: dict,
+) -> None:
+    requested_urls: list[httpx.URL] = []
+
+    with pytest.raises(GitHubIngestionError, match="verified public"):
+        GitHubClient(
+            token="session-token",
+            transport=fixture_transport(
+                pull_repository=repository_metadata,
+                requested_urls=requested_urls,
+            ),
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+    assert [url.path for url in requested_urls] == ["/repos/acme/widget/pulls/42"]
+
+
+@pytest.mark.parametrize(
+    "repository_metadata",
+    [
+        pytest.param(None, id="missing"),
+        pytest.param([], id="non-object"),
+        pytest.param(
+            {"private": False, "visibility": "public"},
+            id="missing-name",
+        ),
+        pytest.param(
+            {
+                "full_name": "acme/other",
+                "private": False,
+                "visibility": "public",
+            },
+            id="wrong-name",
+        ),
+        pytest.param(
+            {"full_name": "acme/widget", "visibility": "public"},
+            id="missing-private",
+        ),
+        pytest.param(
+            {"full_name": "acme/widget", "private": 0, "visibility": "public"},
+            id="non-boolean-private",
+        ),
+        pytest.param(
+            {"full_name": "acme/widget", "private": False},
+            id="missing-visibility",
+        ),
+        pytest.param(
+            {"full_name": "acme/widget", "private": False, "visibility": "PUBLIC"},
+            id="malformed-visibility",
+        ),
+    ],
+)
+def test_client_rejects_ambiguous_repository_visibility_before_secondary_fetches(
+    repository_metadata: object,
+) -> None:
+    requested_urls: list[httpx.URL] = []
+
+    with pytest.raises(GitHubIngestionError, match="verify public repository visibility"):
+        GitHubClient(
+            transport=fixture_transport(
+                pull_repository=repository_metadata,
+                requested_urls=requested_urls,
+            )
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+    assert [url.path for url in requested_urls] == ["/repos/acme/widget/pulls/42"]
 
 
 def test_client_maps_patch_lines_and_keeps_removed_lines_distinct() -> None:

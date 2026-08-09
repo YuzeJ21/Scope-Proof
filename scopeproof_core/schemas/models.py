@@ -82,6 +82,13 @@ class ReviewInputOrigin(StringEnum):
     LEGACY_UNKNOWN = "legacy_unknown"
 
 
+class RepositoryVisibility(StringEnum):
+    """Whether the owning repository has current verified-public provenance."""
+
+    VERIFIED_PUBLIC = "verified_public"
+    UNVERIFIED = "unverified"
+
+
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
     "scopeproof://constructed-demo/acceptance-criteria"
@@ -731,6 +738,7 @@ class RetrievedFile(BaseModel):
 
 class PullRequestSnapshot(BaseModel):
     repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    repository_visibility: RepositoryVisibility = RepositoryVisibility.UNVERIFIED
     pr_number: int = Field(gt=0)
     title: str
     description: str = ""
