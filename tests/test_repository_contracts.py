@@ -432,7 +432,10 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "python -m uv sync --extra dev --extra research --locked" in workflow
     assert "python -m uv run python -m pytest -q tests/test_repository_contracts.py" in workflow
     assert "python -m uv run scopeproof benchmark" in workflow
-    assert "needs: [compatibility-python-311, locked-environment]" in workflow
+    assert (
+        "needs: [compatibility-python-311, compatibility-python-313, locked-environment]"
+        in workflow
+    )
     assert "[reproducible development environment](docs/development-environment.md)" in readme
 
 
@@ -1191,21 +1194,38 @@ def test_public_docs_do_not_require_or_offer_external_fork_validation() -> None:
     assert "fork testing is permanently excluded" in combined
 
 
-def test_ci_validates_declared_minimum_python() -> None:
+def test_ci_validates_declared_python_compatibility() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    compatibility = workflow.split("  compatibility-python-311:", maxsplit=1)[1].split(
-        "\n  verify:", maxsplit=1
-    )[0]
+    minimum_compatibility = workflow.split(
+        "  compatibility-python-311:", maxsplit=1
+    )[1].split("\n  compatibility-python-313:", maxsplit=1)[0]
+    python_313_compatibility = workflow.split(
+        "  compatibility-python-313:", maxsplit=1
+    )[1].split("\n  locked-environment:", maxsplit=1)[0]
     verify = workflow.split("\n  verify:", maxsplit=1)[1]
 
-    assert 'python-version: "3.11"' in compatibility
-    assert "python -m pytest -q" in compatibility
-    assert "python -m scopeproof_core.evals.runner" in compatibility
-    assert "python -m pip wheel . --no-deps" in compatibility
-    assert "scopeproof --version" in compatibility
-    assert "scopeproof-web --version" in compatibility
-    assert "needs: [compatibility-python-311, locked-environment]" in verify
+    assert 'python-version: "3.11"' in minimum_compatibility
+    assert "python -m pytest -q" in minimum_compatibility
+    assert "python -m scopeproof_core.evals.runner" in minimum_compatibility
+    assert "python -m pip wheel . --no-deps" in minimum_compatibility
+    assert "scopeproof --version" in minimum_compatibility
+    assert "scopeproof-web --version" in minimum_compatibility
+
+    assert 'python-version: "3.13"' in python_313_compatibility
+    assert "python -m pytest -q" in python_313_compatibility
+    assert "python -m scopeproof_core.evals.runner" in python_313_compatibility
+    assert "scopeproof comparison-benchmark" in python_313_compatibility
+    assert "python -m pip wheel . --no-deps" in python_313_compatibility
+    assert "python -m pip check" in python_313_compatibility
+    assert "scopeproof --version" in python_313_compatibility
+    assert "scopeproof-web --version" in python_313_compatibility
+    assert "http://127.0.0.1:8513/_stcore/health" in python_313_compatibility
+    assert '"$response" = "ok"' in python_313_compatibility
+    assert (
+        "needs: [compatibility-python-311, compatibility-python-313, locked-environment]"
+        in verify
+    )
 
 
 def test_readme_documents_all_export_formats() -> None:

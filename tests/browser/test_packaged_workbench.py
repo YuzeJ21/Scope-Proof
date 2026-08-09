@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 import pytest
-from playwright.sync_api import Page, Route, expect, sync_playwright
+from playwright.sync_api import Locator, Page, Route, expect, sync_playwright
 
 pytestmark = pytest.mark.browser
 
@@ -81,28 +81,117 @@ def _wait_until_healthy(url: str, process: subprocess.Popen[str], log_path: Path
     )
 
 
-def _activate_with_keyboard(page: Page, label: str) -> None:
-    control = page.get_by_role("button", name=label, exact=True)
-    expect(control).to_be_enabled()
-    control.focus()
-    control.press("Enter")
+def _focus_with_keyboard(
+    page: Page,
+    control: Locator,
+    *,
+    label: str,
+    max_presses: int = 80,
+) -> None:
+    expect(control).to_be_visible()
+    focus_trace: list[str] = []
+
+    for _ in range(max_presses):
+        page.keyboard.press("Tab")
+        active = page.evaluate(
+            """() => {
+                const element = document.activeElement;
+                if (!element) return "<none>";
+                const name =
+                    element.getAttribute("aria-label") ||
+                    element.getAttribute("placeholder") ||
+                    element.innerText ||
+                    element.tagName;
+                return `${element.tagName}: ${name.trim().replace(/\\s+/g, " ").slice(0, 120)}`;
+            }"""
+        )
+        focus_trace.append(active)
+        if not control.evaluate("element => element === document.activeElement"):
+            continue
+
+        expect(control).to_be_enabled()
+        focus_state = control.evaluate(
+            """element => {
+                const style = getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return {
+                    boxShadow: style.boxShadow,
+                    inViewport:
+                        rect.bottom > 0 &&
+                        rect.top < window.innerHeight &&
+                        rect.right > 0 &&
+                        rect.left < window.innerWidth,
+                    outlineStyle: style.outlineStyle,
+                    outlineWidth: parseFloat(style.outlineWidth),
+                };
+            }"""
+        )
+        assert focus_state["inViewport"], f"{label} received focus outside the viewport"
+        assert (
+            focus_state["outlineStyle"] != "none" and focus_state["outlineWidth"] > 0
+        ) or focus_state["boxShadow"] != "none", f"{label} has no visible focus treatment"
+        return
+
+    pytest.fail(
+        f"keyboard focus did not reach {label} after {max_presses} Tab presses; "
+        f"trace={focus_trace}"
+    )
+
+
+def _activate_with_keyboard(
+    page: Page,
+    control: Locator,
+    *,
+    label: str,
+    key: str,
+) -> None:
+    _focus_with_keyboard(page, control, label=label)
+    page.keyboard.press(key)
 
 
 def _exercise_primary_path(page: Page, base_url: str) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     expect(page.get_by_role("heading", name="ScopeProof", exact=True)).to_be_visible()
 
-    page.get_by_text("Try ScopeProof", exact=True).click()
-    _activate_with_keyboard(page, "Load deliberately constructed demo")
+    demo_disclosure = page.locator("summary").filter(has_text="Try ScopeProof")
+    _activate_with_keyboard(
+        page,
+        demo_disclosure,
+        label="Try ScopeProof",
+        key="Enter",
+    )
+    load_demo = page.get_by_role(
+        "button", name="Load deliberately constructed demo", exact=True
+    )
+    _activate_with_keyboard(
+        page,
+        load_demo,
+        label="Load deliberately constructed demo",
+        key="Space",
+    )
     confirmer = page.get_by_label("Confirmed by", exact=True)
-    expect(confirmer).to_be_visible()
-    confirmer.fill("Packaged browser reviewer")
-    confirmer.press("Enter")
+    _focus_with_keyboard(page, confirmer, label="Confirmed by")
+    page.keyboard.type("Packaged browser reviewer")
+    expect(confirmer).to_have_value("Packaged browser reviewer")
 
-    _activate_with_keyboard(page, "Confirm criteria")
+    confirm = page.get_by_role("button", name="Confirm criteria", exact=True)
+    _activate_with_keyboard(
+        page,
+        confirm,
+        label="Confirm criteria",
+        key="Space",
+    )
     expect(page.get_by_text("Criteria confirmed by the reviewer.", exact=True)).to_be_visible()
 
-    _activate_with_keyboard(page, "Run deterministic analysis")
+    run_analysis = page.get_by_role(
+        "button", name="Run deterministic analysis", exact=True
+    )
+    _activate_with_keyboard(
+        page,
+        run_analysis,
+        label="Run deterministic analysis",
+        key="Space",
+    )
     expect(page.get_by_role("heading", name="3 · Evidence Matrix", exact=True)).to_be_visible()
     expect(page.get_by_text("Missing evidence", exact=True).first).to_be_visible()
     expect(page.get_by_text("Review status: Action required", exact=True)).to_be_visible()
