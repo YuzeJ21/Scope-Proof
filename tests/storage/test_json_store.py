@@ -36,6 +36,7 @@ from scopeproof_core.schemas.models import (
     PullRequestSnapshot,
     RepositoryVisibility,
     ResolutionEvent,
+    ReviewInputOrigin,
     RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import (
@@ -302,19 +303,28 @@ def test_legacy_saved_review_without_visibility_reopens_as_unverified(
     state = review_state()
     path = store.save(state)
     payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"]["review"]["input_origin"] = "live_public_github"
     payload["state"]["review"].pop("repository_visibility", None)
+    payload["state"]["bundle"]["review"]["input_origin"] = "live_public_github"
     payload["state"]["bundle"]["review"].pop("repository_visibility", None)
     for historical in payload["state"]["analysis_history"]:
+        historical["review"]["input_origin"] = "live_public_github"
         historical["review"].pop("repository_visibility", None)
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     loaded = store.load(state.review.review_id)
 
     assert loaded.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+    assert loaded.review.input_origin is ReviewInputOrigin.LEGACY_UNKNOWN
     assert loaded.bundle is not None
     assert loaded.bundle.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+    assert loaded.bundle.review.input_origin is ReviewInputOrigin.LEGACY_UNKNOWN
     assert all(
         bundle.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+        for bundle in loaded.analysis_history
+    )
+    assert all(
+        bundle.review.input_origin is ReviewInputOrigin.LEGACY_UNKNOWN
         for bundle in loaded.analysis_history
     )
 

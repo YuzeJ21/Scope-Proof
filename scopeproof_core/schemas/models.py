@@ -839,17 +839,34 @@ class Review(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def preserve_historical_ci_state(cls, value: object) -> object:
-        if isinstance(value, dict) and "check_state" in value:
-            if "ci_observation" not in value:
+    def preserve_historical_review_state(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        migrated = value
+        if (
+            value.get("input_origin")
+            in {ReviewInputOrigin.LIVE_PUBLIC_GITHUB, ReviewInputOrigin.LIVE_PUBLIC_GITHUB.value}
+            and value.get(
+                "repository_visibility", RepositoryVisibility.UNVERIFIED
+            )
+            not in {
+                RepositoryVisibility.VERIFIED_PUBLIC,
+                RepositoryVisibility.VERIFIED_PUBLIC.value,
+            }
+        ):
+            migrated = {**migrated, "input_origin": ReviewInputOrigin.LEGACY_UNKNOWN}
+
+        if "check_state" in migrated:
+            if "ci_observation" not in migrated:
                 return {
-                    **value,
+                    **migrated,
                     "check_state": CheckState.UNAVAILABLE,
-                    "ci_observation": _historical_ci_observation(value.get("check_state")),
+                    "ci_observation": _historical_ci_observation(migrated.get("check_state")),
                 }
-            if _requires_historical_ci_fail_closed_migration(value):
-                return {**value, "check_state": CheckState.UNAVAILABLE}
-        return value
+            if _requires_historical_ci_fail_closed_migration(migrated):
+                return {**migrated, "check_state": CheckState.UNAVAILABLE}
+        return migrated
 
     @model_validator(mode="after")
     def limitations_require_noncomplete_ingestion(self) -> Review:

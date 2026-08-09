@@ -160,8 +160,6 @@ def record_alpha_outcome(
         raise ValueError("alpha outcome requires a completed review analysis")
     if review_state.bundle.research_context is not None:
         raise ValueError("engineering research reviews cannot record alpha outcomes")
-    if review_state.review.input_origin is not ReviewInputOrigin.LIVE_PUBLIC_GITHUB:
-        raise ValueError("alpha outcome requires live public GitHub ingestion")
     if (
         review_state.review.repository_visibility
         is not RepositoryVisibility.VERIFIED_PUBLIC
@@ -169,6 +167,8 @@ def record_alpha_outcome(
         raise ValueError(
             "alpha outcome requires verified public repository visibility"
         )
+    if review_state.review.input_origin is not ReviewInputOrigin.LIVE_PUBLIC_GITHUB:
+        raise ValueError("alpha outcome requires live public GitHub ingestion")
     owner, repository, pr_number = parse_pr_url(record.public_pr_url)
     if (
         review_state.review.repository != f"{owner}/{repository}"
