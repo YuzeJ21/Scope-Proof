@@ -31,6 +31,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     LifecycleMutationMetadata,
     PullRequestSnapshot,
+    RepositoryVisibility,
     ResolutionEvent,
     ReviewInputOrigin,
     RuntimeEvidence,
@@ -261,6 +262,86 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     diagnostic = state.bundle.retrieval_diagnostics[0]
     assert diagnostic.criterion_id == "AC-01"
     assert diagnostic.accepted_candidate_count == len(state.bundle.evidence)
+
+
+def test_live_review_rejects_unverified_snapshot_without_saving(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    snapshot = PullRequestSnapshot(
+        repository="acme/repo",
+        pr_number=7,
+        title="Export CSV",
+        html_url="https://github.com/acme/repo/pull/7",
+        base_sha="b" * 40,
+        head_sha="a" * 40,
+    )
+    monkeypatch.setattr(
+        "scopeproof_core.cli.GitHubClient.fetch_pull_request",
+        lambda _self, _pr: snapshot,
+    )
+    storage = tmp_path / "reviews"
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "review",
+                "--pr",
+                "https://github.com/acme/repo/pull/7",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "verified public" in capsys.readouterr().err
+    assert not storage.exists()
+
+
+def test_live_review_persists_verified_public_snapshot_provenance(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    snapshot = PullRequestSnapshot(
+        repository="acme/repo",
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
+        pr_number=7,
+        title="Export CSV",
+        html_url="https://github.com/acme/repo/pull/7",
+        base_sha="b" * 40,
+        head_sha="a" * 40,
+    )
+    monkeypatch.setattr(
+        "scopeproof_core.cli.GitHubClient.fetch_pull_request",
+        lambda _self, _pr: snapshot,
+    )
+    storage = tmp_path / "reviews"
+
+    assert main(
+        [
+            "review",
+            "--pr",
+            "https://github.com/acme/repo/pull/7",
+            "--requirements",
+            str(requirements),
+            "--confirmation",
+            str(write_requirements_confirmation(requirements)),
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+
+    review_id = json.loads(capsys.readouterr().out)["review_id"]
+    state = JsonReviewStore(storage).load(review_id)
+    assert state.review.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
+    assert state.bundle is not None
+    assert state.bundle.review.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
 
 
 def test_fixture_review_preserves_exact_crlf_requirements_digest(
@@ -1950,6 +2031,7 @@ def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str, Path, str
     )
     snapshot = PullRequestSnapshot(
         repository="acme/repo",
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
         pr_number=7,
         title="Export CSV",
         html_url="https://github.com/acme/repo/pull/7",

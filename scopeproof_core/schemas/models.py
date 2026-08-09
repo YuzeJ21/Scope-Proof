@@ -89,6 +89,22 @@ class RepositoryVisibility(StringEnum):
     UNVERIFIED = "unverified"
 
 
+def require_verified_public_origin(
+    repository_visibility: RepositoryVisibility,
+    input_origin: ReviewInputOrigin,
+) -> None:
+    """Reject current live-public labeling without verified repository provenance."""
+
+    if (
+        input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+        and repository_visibility is not RepositoryVisibility.VERIFIED_PUBLIC
+    ):
+        raise ValueError(
+            "live public GitHub review construction requires verified public "
+            "repository visibility"
+        )
+
+
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
     "scopeproof://constructed-demo/acceptance-criteria"
@@ -793,6 +809,7 @@ class PullRequestSnapshot(BaseModel):
 class Review(BaseModel):
     review_id: str = Field(default_factory=lambda: str(uuid4()))
     repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    repository_visibility: RepositoryVisibility = RepositoryVisibility.UNVERIFIED
     pr_number: int = Field(gt=0)
     base_sha: str = Field(min_length=1)
     head_sha: str = Field(min_length=1)

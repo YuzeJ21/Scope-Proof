@@ -31,6 +31,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    RepositoryVisibility,
     ResearchContext,
     ResolutionEvent,
     RetrievalOutcome,
@@ -636,6 +637,20 @@ def test_exports_preserve_tool_and_ruleset_provenance() -> None:
     ):
         assert bundle.review.tool_version in output
         assert bundle.review.ruleset_version in output
+
+
+def test_json_export_preserves_verified_public_repository_provenance() -> None:
+    bundle = example_bundle()
+    bundle.review = Review.model_validate(
+        {
+            **bundle.review.model_dump(mode="python"),
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+        }
+    )
+
+    payload = json.loads(export_json(bundle))
+
+    assert payload["review"]["repository_visibility"] == "verified_public"
 
 
 def test_exports_preserve_ingestion_limitations_and_escape_html() -> None:

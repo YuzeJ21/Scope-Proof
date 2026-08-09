@@ -62,6 +62,7 @@ from scopeproof_core.schemas.models import (
     RuntimeEvidence,
     SavedReviewListing,
     normalize_public_https_source_uri,
+    require_verified_public_origin,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
@@ -118,8 +119,10 @@ def _build_bundle(
     research_case_id: str | None = None,
     input_origin: ReviewInputOrigin = ReviewInputOrigin.LEGACY_UNKNOWN,
 ) -> ReviewBundle:
+    require_verified_public_origin(snapshot.repository_visibility, input_origin)
     review = Review(
         repository=snapshot.repository,
+        repository_visibility=snapshot.repository_visibility,
         pr_number=snapshot.pr_number,
         base_sha=snapshot.base_sha,
         head_sha=snapshot.head_sha,

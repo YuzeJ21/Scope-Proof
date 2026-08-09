@@ -91,6 +91,7 @@ from scopeproof_core.schemas.models import (
     ReviewInputOrigin,
     ReviewState,
     RuntimeEvidence,
+    require_verified_public_origin,
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
@@ -675,8 +676,15 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
 def _analyze() -> ReviewBundle:
     snapshot = st.session_state["snapshot"]
     criteria = st.session_state["criteria"]
+    input_origin = (
+        ReviewInputOrigin.CONSTRUCTED_DEMO
+        if st.session_state["criteria_source_mode"] == "demo"
+        else ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+    )
+    require_verified_public_origin(snapshot.repository_visibility, input_origin)
     review = Review(
         repository=snapshot.repository,
+        repository_visibility=snapshot.repository_visibility,
         pr_number=snapshot.pr_number,
         base_sha=snapshot.base_sha,
         head_sha=snapshot.head_sha,
@@ -687,11 +695,7 @@ def _analyze() -> ReviewBundle:
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
-        input_origin=(
-            ReviewInputOrigin.CONSTRUCTED_DEMO
-            if st.session_state["criteria_source_mode"] == "demo"
-            else ReviewInputOrigin.LIVE_PUBLIC_GITHUB
-        ),
+        input_origin=input_origin,
     )
     retrieval_result = retrieve_evidence_with_diagnostics(
         snapshot, criteria, unchanged_files=st.session_state["candidate_files"]

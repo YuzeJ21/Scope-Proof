@@ -18,6 +18,7 @@ from scopeproof_core.schemas.models import (
     IngestionState,
     Priority,
     PullRequestSnapshot,
+    RepositoryVisibility,
     Review,
     SavedReviewListing,
 )
@@ -239,6 +240,13 @@ def test_review_identity_rejects_whitespace_only_shas(model, field_name, blank) 
         ValidationError, match="review identity must contain non-whitespace text"
     ):
         model.model_validate(review_identity_payload(model, **{field_name: blank}))
+
+
+@pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
+def test_historical_review_models_default_repository_visibility_to_unverified(model) -> None:
+    value = model.model_validate(review_identity_payload(model))
+
+    assert value.repository_visibility is RepositoryVisibility.UNVERIFIED
 
 
 @pytest.mark.parametrize("model", [PullRequestSnapshot, Review])
