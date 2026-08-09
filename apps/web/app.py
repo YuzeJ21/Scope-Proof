@@ -398,7 +398,19 @@ def _refresh_clean_review_from_local_store(
     if not expected_fingerprint or current_fingerprint != expected_fingerprint:
         return state
     try:
-        persisted = store.load(state.review.review_id)
+        with store.locked_load(state.review.review_id) as persisted:
+            persisted_fingerprint = _review_state_fingerprint(persisted)
+            if persisted_fingerprint == expected_fingerprint:
+                return state
+            if has_pending_review_input:
+                st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+                st.session_state["review_save_conflict"] = True
+                return state
+            _hydrate_reopened_review(persisted)
+            st.session_state["review_save_notice"] = (
+                "Review refreshed from local storage after an external update."
+            )
+            return persisted
     except FileNotFoundError:
         st.session_state["saved_review_fingerprint"] = None
         st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
@@ -409,18 +421,6 @@ def _refresh_clean_review_from_local_store(
         st.session_state["failed_review_save_fingerprint"] = current_fingerprint
         st.session_state["review_save_conflict"] = True
         return state
-    persisted_fingerprint = _review_state_fingerprint(persisted)
-    if persisted_fingerprint == expected_fingerprint:
-        return state
-    if has_pending_review_input:
-        st.session_state["failed_review_save_fingerprint"] = current_fingerprint
-        st.session_state["review_save_conflict"] = True
-        return state
-    _hydrate_reopened_review(persisted)
-    st.session_state["review_save_notice"] = (
-        "Review refreshed from local storage after an external update."
-    )
-    return persisted
 
 
 def _mark_open_review_deleted(review_id: str) -> bool:

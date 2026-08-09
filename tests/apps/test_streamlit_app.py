@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -2983,6 +2984,30 @@ def test_clean_open_workbench_refreshes_external_final_acceptance_revocation(
     ]
     assert all(button.proto.deferred_file_id for button in app.download_button)
     assert all(not button.proto.url for button in app.download_button)
+
+
+def test_clean_open_workbench_refresh_uses_shared_record_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+    review_id = app.session_state["review_state"].review.review_id
+    locked_review_ids: list[str] = []
+    original_locked_load = JsonReviewStore.locked_load
+
+    @contextmanager
+    def tracking_locked_load(store: JsonReviewStore, target_review_id: str):
+        locked_review_ids.append(target_review_id)
+        with original_locked_load(store, target_review_id) as state:
+            yield state
+
+    with patch.object(JsonReviewStore, "locked_load", tracking_locked_load):
+        app = app.run()
+
+    assert not app.exception
+    assert locked_review_ids == [review_id]
 
 
 def test_failed_persisted_review_revalidation_blocks_status_and_exports(
