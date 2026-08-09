@@ -1,10 +1,13 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
+from threading import Event
 
 import pytest
 
+import scopeproof_core.cli as cli_module
 from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import _build_bundle, main
@@ -677,6 +680,93 @@ def test_export_command_supports_self_contained_html(tmp_path: Path, capsys) -> 
 
     assert main(["export", review_id, "--storage-dir", str(storage), "--format", "html"]) == 0
     assert "<!doctype html>" in capsys.readouterr().out.lower()
+
+
+def test_export_command_serializes_with_concurrent_final_acceptance_revocation(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = tmp_path / "reviews"
+    store = JsonReviewStore(storage)
+    accepted = new_review_state(build_demo_review())
+    assert accepted.bundle is not None
+    for criterion in accepted.bundle.criteria:
+        accepted = append_resolution(
+            accepted,
+            ResolutionEvent(
+                event_id=f"cli-export-accepted-{criterion.criterion_id}",
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment="CLI export concurrency fixture acceptance",
+                reviewer="CLI export fixture",
+            ),
+        )
+    accepted = append_resolution(
+        accepted,
+        ResolutionEvent(
+            event_id="cli-export-final-acceptance",
+            final_acceptance=True,
+            comment="CLI export concurrency fixture final acceptance",
+            reviewer="CLI export fixture",
+        ),
+    )
+    store.save(accepted)
+    renderer_entered = Event()
+    release_renderer = Event()
+    mutation_started = Event()
+    mutation_finished = Event()
+    json_renderer = cli_module.EXPORT_RENDERERS["json"]
+
+    def blocking_renderer(state):
+        renderer_entered.set()
+        assert release_renderer.wait(timeout=2)
+        return json_renderer(state)
+
+    monkeypatch.setitem(cli_module.EXPORT_RENDERERS, "json", blocking_renderer)
+
+    def revoke_final_acceptance():
+        mutation_started.set()
+        revoked, _ = store.mutate(
+            accepted.review.review_id,
+            lambda state: append_resolution(
+                state,
+                ResolutionEvent(
+                    event_id="concurrent-cli-export-revocation",
+                    final_acceptance=False,
+                    comment="Concurrent revocation during CLI export",
+                    reviewer="CLI reviewer",
+                ),
+            ),
+        )
+        mutation_finished.set()
+        return revoked
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        export_future = executor.submit(
+            main,
+            [
+                "export",
+                accepted.review.review_id,
+                "--storage-dir",
+                str(storage),
+                "--format",
+                "json",
+            ],
+        )
+        try:
+            assert renderer_entered.wait(timeout=2)
+            mutation_future = executor.submit(revoke_final_acceptance)
+            assert mutation_started.wait(timeout=2)
+            assert not mutation_finished.wait(timeout=0.2)
+        finally:
+            release_renderer.set()
+        assert export_future.result(timeout=2) == 0
+        revoked = mutation_future.result(timeout=2)
+
+    exported = json.loads(capsys.readouterr().out)
+    assert exported["review"]["final_acceptance"] is True
+    assert revoked.review.final_acceptance is False
 
 
 def _save_demo_review(tmp_path: Path) -> tuple[Path, str]:

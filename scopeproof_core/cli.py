@@ -251,8 +251,9 @@ def _review(args: argparse.Namespace) -> int:
 
 
 def _export(args: argparse.Namespace) -> int:
-    state = JsonReviewStore(Path(args.storage_dir)).load(args.review_id)
-    print(EXPORT_RENDERERS[args.format](state), end="")
+    store = JsonReviewStore(Path(args.storage_dir))
+    with store.locked_load(args.review_id) as state:
+        print(EXPORT_RENDERERS[args.format](state), end="")
     return 0
 
 

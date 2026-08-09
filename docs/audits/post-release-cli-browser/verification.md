@@ -38,7 +38,7 @@ signals.
 | --- | --- |
 | `uv sync --extra dev --extra research --locked` | Passed; Playwright 1.62.0 was installed from `uv.lock`. |
 | `uv run ruff check .` | Passed. |
-| Final combined core/UI coverage gate | Passed after PR review repairs: 1,947 tests, 2 intentional skips, 95.20% coverage in 519.75 seconds. |
+| Final combined core/UI coverage gate | Passed after PR review repairs: 1,948 tests, 2 intentional skips, 95.20% coverage in 517.72 seconds. |
 | `uv run pytest -q tests/test_repository_contracts.py` | Passed: 77 tests. |
 | `uv run scopeproof benchmark` | Passed: 12 cases, 13 criteria, 0 mismatches, 0 must-have False Ready outcomes, 0 false blockers, 0 unexecuted categories. |
 | `uv run scopeproof comparison-benchmark` | Passed: 2 cases, 0 mismatches; aggregate 3 added, 1 modified, 1 relocated, 3 removed, 1 unchanged. |
@@ -82,7 +82,7 @@ does not substitute for the current-driver Chromium regression below.
 - Host environment: macOS 26.5.1 build 25F80, Apple silicon, Python 3.12.0.
 - Driver: Playwright 1.62.0 with Chrome for Testing 151.0.7922.34.
 - Command: `uv run pytest -q -m browser tests/browser`.
-- Latest result after PR review repairs: passed, 1 test in 21.11 seconds with the final
+- Latest result after PR review repairs: passed, 1 test in 21.63 seconds with the final
   loopback-only network guard.
 
 For fresh browser contexts at 1280×720 and 390×844, the test used keyboard activation for the
@@ -105,7 +105,7 @@ A fresh build produced:
 
 | Artifact | Entries | SHA-256 | Forbidden inventory matches |
 | --- | ---: | --- | ---: |
-| `scopeproof-0.2.3-py3-none-any.whl` | 100 | `05c7de221e407c1c2d887f78b280ee5378f2c7d785395e337055f82db3886d83` | 0 |
+| `scopeproof-0.2.3-py3-none-any.whl` | 100 | `452a83f5336b5e7b05cf06bdf8e8d3210c1b7d8cc8988ab69e1f40504bb46c74` | 0 |
 | `scopeproof-0.2.3.tar.gz` | 546 | Not recorded because this audit is included in the sdist, making its content hash self-referential. | 0 |
 
 The scan rejected Git state, `.scopeproof`, coverage files, virtual environments, common secret
@@ -131,12 +131,14 @@ SHA-256 `80f06e6868f329f37093b5938375e8d60bc235a147e9e2bf721b3543af9fd329`,
 `6a45e5da1a2be1630c84265f7c0fa161386f3d9c298657029354038bddcf999b`,
 `fe95105bf15528d605c217e4e807332ec473b39fd0a32c970eaec151cd693da9`,
 `d58b197a655bb068958fb7711d2a880eaba31c9718dd4a56afd65dd17ea8efd6`,
-`4f661c3e3ba5344ceada76d4917cfa975002392e031e1148cc105aee8fac6326`, and
-`3e4fecee45a0136a65a7ee08c00495c60024f3e2ea41f78d465d603eccbf3106`; they were superseded by
+`4f661c3e3ba5344ceada76d4917cfa975002392e031e1148cc105aee8fac6326`,
+`3e4fecee45a0136a65a7ee08c00495c60024f3e2ea41f78d465d603eccbf3106`, and
+`05c7de221e407c1c2d887f78b280ee5378f2c7d785395e337055f82db3886d83`; they were superseded by
 the deletion-serialization/portable-lock repair, the CodeQL path-hardening repair, the workbench
 read-refresh repair, the criterion-definition comparison guard, and the final click-time export
 revalidation repair, the hosted-Ruff union-order repair, and the minimum Streamlit floor repair,
-and the export/lifecycle serialization repair, respectively. The current wheel hash above was reproduced in two fresh
+the browser export/lifecycle serialization repair, and the CLI export/lifecycle serialization
+repair, respectively. The current wheel hash above was reproduced in two fresh
 builds, and an equivalent current-tree wheel was installed by the latest packaged-browser run.
 
 ## Attempt boundaries
@@ -231,6 +233,11 @@ Deferred export now holds the store's shared per-record lock across validated lo
 comparison, and rendering. A deterministic two-thread regression proves revocation cannot complete
 while that export is in progress; the full suite, minimum-floor probe, and package/browser proof
 above include the repair.
+The exact-head review then found the same ordering gap in `scopeproof export`: its unlocked
+load-and-render path could print an accepted report after a concurrent revocation completed. CLI
+export now holds the shared per-record lock across validated load, rendering, and output. A second
+two-thread regression proves revocation waits for CLI export completion; the final full suite and
+package proofs above include this parity repair.
 
 Reviewer/source-owner identity is asserted, not authenticated. The GitHub Action remains opt-in
 and informational rather than a required branch-protection check. Native zoom, screen reader,
