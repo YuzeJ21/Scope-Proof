@@ -4,8 +4,8 @@
 
 - Date: 2026-08-09 (America/Toronto).
 - Branch: `codex/accessibility-platform-evidence`.
-- Product/test implementation HEAD: `5cf3aaffad3659401ec5cbe349b0db95d8392bfd` with tree
-  `8f81308c3b437c0d7c22d653b6edba7f0ccbb2e1`.
+- Final executable/test verification HEAD: `1a3defcfec5f9f2231a67e8f0a4450d43a63b9b4`
+  with tree `b01e358b5aefefd7eaf8abf28e0bf7502cf962af`.
 - Base: `origin/main` at `30177733ef312ced22e6a2e57e3df6fdb1e92507`.
 - Host: macOS 26.5.1 build 25F80 on Apple silicon.
 
@@ -28,8 +28,9 @@ The canonical Stage 1 counts remain:
   with page-level Tab navigation, keyboard typing, Enter, and Space only. It no longer clicks the
   demo disclosure or moves focus programmatically.
 - The regression requires the demo disclosure, demo-load button, reviewer input, criteria-confirm
-  button, and deterministic-analysis button to be enabled, intersect the viewport, and expose a
-  visible outline or focus shadow when active.
+  button, and deterministic-analysis button to be enabled and intersect the viewport. It compares
+  unfocused and focused computed styles and requires a changed, nontransparent outline or shadow,
+  so always-on decoration and transparent focus styling cannot satisfy the assertion.
 - Existing 1280-by-720 and 390-by-844 contexts, isolated temporary home, loopback-only network
   guard, browser-error assertions, evidence content, export controls, width checks, and process
   cleanup remain in force.
@@ -47,11 +48,19 @@ Command:
 uv run pytest -q -m browser tests/browser/test_packaged_workbench.py
 ```
 
-Result on the implementation tree: `1 passed in 29.53s` after the test-helper ordering defect was
-identified and corrected. The first new regression run failed because the helper required the
-Confirm button to be enabled before Tab blurred and committed the reviewer input. The DOM already
+Result on the final executable/test verification tree: `3 passed in 26.11s`. This includes the
+full installed-wheel browser journey plus pure regressions proving that unchanged always-on
+decoration is rejected and a changed visible outline is accepted. The complete suite on the same
+tree passed with `1,956 passed, 2 skipped` and 95.06% combined coverage. The hosted `verify` job
+also passed the packaged browser regression on this exact head.
+
+Earlier in the slice, the first new journey run failed because the helper required the Confirm
+button to be enabled before Tab blurred and committed the reviewer input. The DOM already
 contained the full reviewer value. Moving the enabled assertion to the point where keyboard focus
-actually reaches the target fixed the test; no ScopeProof product change was required.
+actually reaches the target fixed that ordering defect. A subsequent independent review found
+that the original focus predicate could accept unchanged or transparent decoration; the final
+helper and the two pure regressions above close that false-pass path. No ScopeProof product change
+was required for either repair.
 
 The final regression repeated the full path in fresh 1280-by-720 and 390-by-844 contexts. It
 opened `Try ScopeProof`, loaded the deliberately constructed demo, entered the asserted reviewer
@@ -117,7 +126,9 @@ Python 3.13 evidence is claimed. Neither result is Linux desktop evidence.
 
 ## Verification status
 
-The focused browser regression, repository contracts, and local Python 3.13 package/CLI/health
-checks passed on the implementation tree. Full final-tree verification and hosted PR checks are
-reported in the pull request because the audit-document commit necessarily follows the product
-and test implementation commit.
+The focused browser regression, repository contracts, complete local suite, and local Python 3.13
+package/CLI/health checks passed on the final executable/test verification tree. Hosted CI passed
+the Python 3.11, Python 3.13, locked-environment, full verification, packaged-browser, and CodeQL
+checks on the same head. The opt-in informational ScopeProof evidence-review job skipped by design.
+The audit-only commit that records these results necessarily follows the tested head and does not
+change executable or test content.
