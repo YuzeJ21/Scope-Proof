@@ -610,9 +610,43 @@ def test_alpha_mode_creates_case_after_confirming_criteria(
     record = JsonAlphaCaseStore(default_alpha_case_directory()).load(
         app.session_state["alpha_case_id"]
     )
+    assert record.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
     assert record.outcome is AlphaOutcome.FOUND_USEFUL_GAP
     assert record.publication_consent.report is False
     assert record.publication_consent.quote is False
+
+
+def test_alpha_mode_does_not_qualify_an_unverified_loaded_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = new_app().checkbox(key="alpha_feedback_mode").check().run()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/repo/pull/7"
+    ).run()
+    app = app.text_input(key="requirements_source_url").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.checkbox(key="source_owner_confirmed").check().run()
+    app = app.checkbox(key="no_confidential_information").check().run()
+    snapshot = load_demo_snapshot().model_copy(
+        update={"repository": "acme/repo", "pr_number": 7, "head_sha": "a" * 40}
+    )
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+    app = app.text_area(key="requirements_input").set_value("Export CSV").run()
+    app = app.button(key="prepare_criteria").click().run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Alpha source owner"
+    ).run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert app.session_state["alpha_case_id"] is None
+    assert any("could not be confirmed" in item.value for item in app.error)
 
 
 @pytest.mark.parametrize(

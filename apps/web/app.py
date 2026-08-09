@@ -17,6 +17,7 @@ from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
     AlphaQualification,
+    AlphaQualificationInput,
     ParticipantRole,
 )
 from scopeproof_core.alpha.service import ensure_alpha_case, record_alpha_outcome
@@ -1205,6 +1206,7 @@ with st.expander("Alpha feedback session (optional)", expanded=False):
             key="no_confidential_information",
         )
 alpha_qualification_ready = True
+alpha_qualification_input: AlphaQualificationInput | None = None
 alpha_qualification: AlphaQualification | None = None
 if alpha_feedback_mode:
     alpha_qualification_ready = False
@@ -1215,7 +1217,7 @@ if alpha_feedback_mode:
         and no_confidential_information
     ):
         try:
-            alpha_qualification = AlphaQualification(
+            alpha_qualification_input = AlphaQualificationInput(
                 public_pr_url=pr_url,
                 requirements_source_url=requirements_source_url,
                 participant_role=ParticipantRole(participant_role),
@@ -1226,6 +1228,23 @@ if alpha_feedback_mode:
             st.warning("Use a public HTTPS requirements source and a canonical public PR URL.")
         else:
             alpha_qualification_ready = True
+    loaded_for_alpha = st.session_state["snapshot"]
+    if alpha_qualification_input is not None and loaded_for_alpha is not None:
+        try:
+            alpha_owner, alpha_repository, alpha_pr_number = parse_pr_url(
+                alpha_qualification_input.public_pr_url
+            )
+            if (
+                f"{alpha_owner}/{alpha_repository}" != loaded_for_alpha.repository
+                or alpha_pr_number != loaded_for_alpha.pr_number
+            ):
+                raise ValueError("alpha qualification must match the loaded public PR")
+            alpha_qualification = AlphaQualification(
+                **alpha_qualification_input.model_dump(mode="python"),
+                repository_visibility=loaded_for_alpha.repository_visibility,
+            )
+        except ValueError:
+            alpha_qualification = None
 else:
     st.caption("Standard review mode does not create participant research records.")
 
@@ -1760,6 +1779,7 @@ else:
                     confirmed_criteria=[item.text for item in edited_criteria],
                     confirmed_criterion_snapshot=edited_criteria,
                     criteria_source_provenance=provenance,
+                    repository_visibility=alpha_qualification.repository_visibility,
                 )
         except ValueError:
             st.error(

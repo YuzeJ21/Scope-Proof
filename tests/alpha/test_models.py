@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+import scopeproof_core.alpha.models as alpha_models
 from scopeproof_core.alpha.models import (
     AlphaCaseRecord,
     AlphaFrictionStage,
@@ -12,7 +13,7 @@ from scopeproof_core.alpha.models import (
     ParticipantRole,
 )
 from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
-from scopeproof_core.schemas.models import Criterion
+from scopeproof_core.schemas.models import Criterion, RepositoryVisibility
 
 
 def criteria_source_provenance(*, source_uri: str = "https://github.com/acme/repo/issues/6"):
@@ -53,6 +54,7 @@ def test_alpha_qualification_accepts_only_confirmed_public_safe_inputs() -> None
         participant_role=ParticipantRole.PRODUCT_MANAGER,
         source_owner_confirmed=True,
         no_confidential_information=True,
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
     )
 
     assert qualification.source_owner_confirmed is True
@@ -78,11 +80,45 @@ def test_alpha_qualification_rejects_unqualified_inputs(field: str, value: objec
         "participant_role": ParticipantRole.QA,
         "source_owner_confirmed": True,
         "no_confidential_information": True,
+        "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
     }
     data[field] = value
 
     with pytest.raises(ValidationError):
         AlphaQualification(**data)
+
+
+def test_alpha_qualification_requires_verified_public_repository_visibility() -> None:
+    inputs: dict[str, object] = {
+        "public_pr_url": "https://github.com/acme/repo/pull/7",
+        "requirements_source_url": "https://github.com/acme/repo/issues/6",
+        "participant_role": ParticipantRole.QA,
+        "source_owner_confirmed": True,
+        "no_confidential_information": True,
+    }
+
+    with pytest.raises(ValidationError):
+        AlphaQualification(**inputs)
+    with pytest.raises(ValidationError):
+        AlphaQualification(
+            **inputs,
+            repository_visibility=RepositoryVisibility.UNVERIFIED,
+        )
+
+
+def test_session_preflight_model_does_not_claim_verified_visibility() -> None:
+    intake_model = getattr(alpha_models, "AlphaQualificationInput", None)
+
+    assert intake_model is not None
+    intake = intake_model(
+        public_pr_url="https://github.com/acme/repo/pull/7",
+        requirements_source_url="https://github.com/acme/repo/issues/6",
+        participant_role=ParticipantRole.QA,
+        source_owner_confirmed=True,
+        no_confidential_information=True,
+    )
+
+    assert "repository_visibility" not in intake.model_dump(mode="json")
 
 
 def test_alpha_record_has_privacy_safe_defaults() -> None:
@@ -93,12 +129,22 @@ def test_alpha_record_has_privacy_safe_defaults() -> None:
     assert record.outcome is None
     assert record.completed_at is None
     assert record.criteria_source_provenance == criteria_source_provenance()
+    assert record.repository_visibility is RepositoryVisibility.UNVERIFIED
     assert [item.text for item in record.confirmed_criterion_snapshot or []] == (
         record.confirmed_criteria
     )
     schema_fields = {field.lower() for field in AlphaCaseRecord.model_fields}
     for prohibited in ("name", "email", "profile", "dm"):
         assert all(prohibited not in field for field in schema_fields)
+
+
+def test_alpha_record_persists_verified_public_repository_visibility() -> None:
+    record = AlphaCaseRecord(
+        **valid_record_data(),
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
+    )
+
+    assert record.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
 
 
 @pytest.mark.parametrize(

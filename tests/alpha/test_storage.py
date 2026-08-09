@@ -14,6 +14,7 @@ from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import (
     Criterion,
     PullRequestSnapshot,
+    RepositoryVisibility,
     ReviewInputOrigin,
 )
 
@@ -41,6 +42,7 @@ def alpha_case():
             Criterion(criterion_id="AC-01", text="Export CSV")
         ],
         criteria_source_provenance=criteria_source_provenance(),
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
     )
 
 
@@ -48,6 +50,7 @@ def matching_review_state():
     criteria = [Criterion(criterion_id="AC-01", text="Export CSV")]
     snapshot = PullRequestSnapshot(
         repository="acme/repo",
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
         pr_number=7,
         title="Export CSV",
         html_url="https://github.com/acme/repo/pull/7",
@@ -151,11 +154,13 @@ def test_alpha_store_reads_legacy_record_without_inventing_provenance(
     path = store.save(record)
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload.pop("criteria_source_provenance")
+    payload.pop("repository_visibility")
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     loaded = store.load(record.case_id)
 
     assert loaded.criteria_source_provenance is None
+    assert loaded.repository_visibility is RepositoryVisibility.UNVERIFIED
 
 
 @pytest.mark.parametrize("case_id", ["../escape", "alpha-not-a-uuid", "/tmp/case"])

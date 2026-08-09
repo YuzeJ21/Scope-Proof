@@ -510,6 +510,7 @@ def _alpha_init(args: argparse.Namespace) -> int:
         source_text=source_text,
         criteria=criteria,
     )
+    snapshot = GitHubClient(token=args.token or None).fetch_pull_request(args.pr)
     record = initialize_alpha_case(
         public_pr_url=args.pr,
         requirements_source_url=args.requirements_source,
@@ -519,6 +520,7 @@ def _alpha_init(args: argparse.Namespace) -> int:
         confirmed_criteria=[criterion.text for criterion in criteria],
         confirmed_criterion_snapshot=criteria,
         criteria_source_provenance=provenance,
+        repository_visibility=snapshot.repository_visibility,
     )
     path = JsonAlphaCaseStore(Path(args.storage_dir)).save(record)
     payload = record.model_dump(mode="json")
@@ -754,6 +756,9 @@ def _parser() -> argparse.ArgumentParser:
         help="Confirm the case contains no private or confidential information",
     )
     alpha_init.add_argument("--storage-dir", default=".scopeproof/alpha-cases")
+    alpha_init.add_argument(
+        "--token", help="Optional GitHub token; never persisted or printed"
+    )
     alpha_init.set_defaults(handler=_alpha_init)
     alpha_outcome = alpha_commands.add_parser(
         "outcome", help="Record one bounded alpha outcome"

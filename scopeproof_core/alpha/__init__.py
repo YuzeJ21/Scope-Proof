@@ -7,6 +7,7 @@ from scopeproof_core.alpha.models import (
     AlphaOutcome,
     AlphaPublicationConsent,
     AlphaQualification,
+    AlphaQualificationInput,
     ParticipantRole,
 )
 from scopeproof_core.alpha.rehearsal import (
@@ -35,6 +36,7 @@ __all__ = [
     "AlphaOutcome",
     "AlphaPublicationConsent",
     "AlphaQualification",
+    "AlphaQualificationInput",
     "AlphaRehearsalInput",
     "AlphaRehearsalRecord",
     "JsonAlphaCaseStore",

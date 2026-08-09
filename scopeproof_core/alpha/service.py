@@ -10,6 +10,7 @@ from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
     AlphaPublicationConsent,
+    AlphaQualification,
     ParticipantRole,
 )
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
@@ -18,6 +19,7 @@ from scopeproof_core.github.client import parse_pr_url
 from scopeproof_core.schemas.models import (
     CriteriaSourceProvenance,
     Criterion,
+    RepositoryVisibility,
     ReviewInputOrigin,
     ReviewState,
     normalize_public_https_source_uri,
@@ -32,6 +34,12 @@ _NEW_CASE_CRITERIA_SNAPSHOT_REQUIRED = (
 )
 _LEGACY_CRITERIA_SNAPSHOT_REQUIRED = (
     "legacy alpha case must reconfirm a criteria snapshot before recording an outcome"
+)
+_VERIFIED_PUBLIC_QUALIFICATION_REQUIRED = (
+    "alpha qualification requires verified public repository visibility"
+)
+_LEGACY_VISIBILITY_REQUIRED = (
+    "legacy alpha case must be re-fetched before recording an outcome"
 )
 
 
@@ -52,13 +60,16 @@ def initialize_alpha_case(
     confirmed_criteria: list[str],
     confirmed_criterion_snapshot: list[Criterion] | None = None,
     criteria_source_provenance: CriteriaSourceProvenance | None = None,
+    repository_visibility: RepositoryVisibility = RepositoryVisibility.UNVERIFIED,
 ) -> AlphaCaseRecord:
     """Create a qualified local case without claiming an outcome."""
     if criteria_source_provenance is None:
         raise ValueError(_NEW_CASE_PROVENANCE_REQUIRED)
     if confirmed_criterion_snapshot is None:
         raise ValueError(_NEW_CASE_CRITERIA_SNAPSHOT_REQUIRED)
-    return AlphaCaseRecord(
+    if repository_visibility is not RepositoryVisibility.VERIFIED_PUBLIC:
+        raise ValueError(_VERIFIED_PUBLIC_QUALIFICATION_REQUIRED)
+    qualification = AlphaQualification(
         public_pr_url=public_pr_url,
         requirements_source_url=normalize_public_https_source_uri(
             requirements_source_url
@@ -66,6 +77,10 @@ def initialize_alpha_case(
         participant_role=participant_role,
         source_owner_confirmed=source_owner_confirmed,
         no_confidential_information=no_confidential_information,
+        repository_visibility=repository_visibility,
+    )
+    return AlphaCaseRecord(
+        **qualification.model_dump(mode="python"),
         confirmed_criteria=confirmed_criteria,
         confirmed_criterion_snapshot=confirmed_criterion_snapshot,
         criteria_source_provenance=criteria_source_provenance,
@@ -83,6 +98,7 @@ def ensure_alpha_case(
     confirmed_criteria: list[str],
     confirmed_criterion_snapshot: list[Criterion] | None = None,
     criteria_source_provenance: CriteriaSourceProvenance | None = None,
+    repository_visibility: RepositoryVisibility = RepositoryVisibility.UNVERIFIED,
     case_id: str | None = None,
 ) -> AlphaCaseRecord:
     """Create one validated case or return the matching case already named by the caller."""
@@ -96,6 +112,7 @@ def ensure_alpha_case(
         confirmed_criteria=confirmed_criteria,
         confirmed_criterion_snapshot=confirmed_criterion_snapshot,
         criteria_source_provenance=criteria_source_provenance,
+        repository_visibility=repository_visibility,
     )
     if case_id is None:
         store.save(candidate)
@@ -104,6 +121,7 @@ def ensure_alpha_case(
     existing = store.load(case_id)
     comparable_fields = (
         "public_pr_url",
+        "repository_visibility",
         "requirements_source_url",
         "participant_role",
         "source_owner_confirmed",
@@ -131,6 +149,8 @@ def record_alpha_outcome(
     record = _require_genuine_alpha_case_record(record)
     if record.outcome is not None:
         raise ValueError("alpha outcome may be recorded only once")
+    if record.repository_visibility is not RepositoryVisibility.VERIFIED_PUBLIC:
+        raise ValueError(_LEGACY_VISIBILITY_REQUIRED)
     if record.criteria_source_provenance is None:
         raise ValueError(_LEGACY_RECONFIRMATION_REQUIRED)
     if record.confirmed_criterion_snapshot is None:
@@ -142,6 +162,13 @@ def record_alpha_outcome(
         raise ValueError("engineering research reviews cannot record alpha outcomes")
     if review_state.review.input_origin is not ReviewInputOrigin.LIVE_PUBLIC_GITHUB:
         raise ValueError("alpha outcome requires live public GitHub ingestion")
+    if (
+        review_state.review.repository_visibility
+        is not RepositoryVisibility.VERIFIED_PUBLIC
+    ):
+        raise ValueError(
+            "alpha outcome requires verified public repository visibility"
+        )
     owner, repository, pr_number = parse_pr_url(record.public_pr_url)
     if (
         review_state.review.repository != f"{owner}/{repository}"
@@ -186,6 +213,8 @@ def public_alpha_summary(record: AlphaCaseRecord) -> AlphaCasePublicSummary:
     record = _require_genuine_alpha_case_record(record)
     if not record.publication_consent.report:
         raise ValueError("public summary requires report publication consent")
+    if record.repository_visibility is not RepositoryVisibility.VERIFIED_PUBLIC:
+        raise ValueError("public summary requires verified public repository visibility")
     if record.outcome is None or record.reviewed_head_sha is None or record.completed_at is None:
         raise ValueError("public summary requires a completed alpha outcome")
     if (
@@ -199,6 +228,7 @@ def public_alpha_summary(record: AlphaCaseRecord) -> AlphaCasePublicSummary:
     return AlphaCasePublicSummary(
         case_id=record.case_id,
         public_pr_url=record.public_pr_url,
+        repository_visibility=record.repository_visibility,
         requirements_source_url=requirements_source_url,
         participant_role=record.participant_role,
         reviewed_head_sha=record.reviewed_head_sha,

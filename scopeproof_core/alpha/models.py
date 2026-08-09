@@ -13,6 +13,7 @@ from scopeproof_core.schemas.models import (
     CriteriaSourceProvenance,
     Criterion,
     LocalReviewId,
+    RepositoryVisibility,
     normalize_public_https_source_uri,
     normalized_criteria_sha256,
 )
@@ -43,8 +44,8 @@ class AlphaFrictionStage(StrEnum):
     INTEGRATION = "integration"
 
 
-class AlphaQualification(BaseModel):
-    """Session-safe preflight contract for a genuine public-alpha review."""
+class AlphaQualificationInput(BaseModel):
+    """Session-safe human inputs collected before repository verification."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -59,6 +60,12 @@ class AlphaQualification(BaseModel):
     def require_https_source(cls, value: HttpUrl) -> HttpUrl:
         normalize_public_https_source_uri(str(value))
         return value
+
+
+class AlphaQualification(AlphaQualificationInput):
+    """Genuine public-alpha qualification bound to verified repository visibility."""
+
+    repository_visibility: Literal[RepositoryVisibility.VERIFIED_PUBLIC]
 
 
 class AlphaPublicationConsent(BaseModel):
@@ -80,6 +87,7 @@ class AlphaCaseRecord(BaseModel):
         pattern=r"^alpha-[0-9a-f]{32}$",
     )
     public_pr_url: str = Field(pattern=PUBLIC_PR_PATTERN)
+    repository_visibility: RepositoryVisibility = RepositoryVisibility.UNVERIFIED
     requirements_source_url: HttpUrl
     participant_role: ParticipantRole
     source_owner_confirmed: Literal[True]
@@ -182,6 +190,7 @@ class AlphaCasePublicSummary(BaseModel):
 
     case_id: str
     public_pr_url: str = Field(pattern=PUBLIC_PR_PATTERN)
+    repository_visibility: Literal[RepositoryVisibility.VERIFIED_PUBLIC]
     requirements_source_url: HttpUrl
     participant_role: ParticipantRole
     reviewed_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
