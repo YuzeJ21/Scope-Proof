@@ -403,40 +403,43 @@ def _compare(args: argparse.Namespace) -> int:
     """Compare two validated saved review bundles without carrying decisions forward."""
 
     store = JsonReviewStore(Path(args.storage_dir))
-    previous = store.load(args.previous_review_id)
-    current = store.load(args.current_review_id)
-    if previous.bundle is None or current.bundle is None:
-        raise ValueError("comparison requires an active analysis in both saved reviews")
-    if (
-        previous.bundle.review.repository,
-        previous.bundle.review.pr_number,
-    ) != (
-        current.bundle.review.repository,
-        current.bundle.review.pr_number,
-    ):
-        raise ValueError("comparison requires reviews from the same repository and pull request")
-    previous_criteria = {
-        item.criterion_id: item.model_dump(mode="json")
-        for item in previous.bundle.criteria
-    }
-    current_criteria = {
-        item.criterion_id: item.model_dump(mode="json")
-        for item in current.bundle.criteria
-    }
-    if previous_criteria != current_criteria:
-        raise ValueError(
-            "comparison requires identical confirmed criterion definitions"
-        )
-    comparison = compare_reviews(previous.bundle, current.bundle)
-    rendered = COMPARISON_RENDERERS[args.format](comparison)
-    if args.output is None:
-        print(rendered, end="")
-    else:
-        output_path = Path(args.output)
-        if output_path.exists():
-            raise FileExistsError(f"comparison output already exists: {output_path}")
-        with output_path.open("x", encoding="utf-8") as handle:
-            handle.write(rendered)
+    with store.locked_load_many(
+        (args.previous_review_id, args.current_review_id)
+    ) as (previous, current):
+        if previous.bundle is None or current.bundle is None:
+            raise ValueError("comparison requires an active analysis in both saved reviews")
+        if (
+            previous.bundle.review.repository,
+            previous.bundle.review.pr_number,
+        ) != (
+            current.bundle.review.repository,
+            current.bundle.review.pr_number,
+        ):
+            raise ValueError(
+                "comparison requires reviews from the same repository and pull request"
+            )
+        previous_criteria = {
+            item.criterion_id: item.model_dump(mode="json")
+            for item in previous.bundle.criteria
+        }
+        current_criteria = {
+            item.criterion_id: item.model_dump(mode="json")
+            for item in current.bundle.criteria
+        }
+        if previous_criteria != current_criteria:
+            raise ValueError(
+                "comparison requires identical confirmed criterion definitions"
+            )
+        comparison = compare_reviews(previous.bundle, current.bundle)
+        rendered = COMPARISON_RENDERERS[args.format](comparison)
+        if args.output is None:
+            print(rendered, end="")
+        else:
+            output_path = Path(args.output)
+            if output_path.exists():
+                raise FileExistsError(f"comparison output already exists: {output_path}")
+            with output_path.open("x", encoding="utf-8") as handle:
+                handle.write(rendered)
     return 0
 
 

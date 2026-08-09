@@ -7,8 +7,8 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -230,6 +230,20 @@ class JsonReviewStore:
         validated_id = self._validate_review_id(review_id)
         with self._mutation_lock(validated_id):
             yield self.load(validated_id)
+
+    @contextmanager
+    def locked_load_many(
+        self, review_ids: Sequence[str]
+    ) -> Iterator[tuple[ReviewState, ...]]:
+        """Yield validated records from one deadlock-safe mutation snapshot."""
+
+        validated_ids = tuple(self._validate_review_id(item) for item in review_ids)
+        unique_ids = sorted(set(validated_ids))
+        with ExitStack() as stack:
+            for review_id in unique_ids:
+                stack.enter_context(self._mutation_lock(review_id))
+            states = {review_id: self.load(review_id) for review_id in unique_ids}
+            yield tuple(states[review_id] for review_id in validated_ids)
 
     def _save_unlocked(self, validated: ReviewState) -> Path:
         """Replace one validated record while its mutation lock is already held."""

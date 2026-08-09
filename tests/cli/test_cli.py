@@ -1215,6 +1215,74 @@ def test_compare_command_writes_validated_json_to_stdout_without_mutating_review
     assert current_record.read_bytes() == before[1]
 
 
+@pytest.mark.parametrize("compare_same_review", [False, True])
+def test_compare_command_serializes_snapshot_with_concurrent_lifecycle_mutation(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+    compare_same_review: bool,
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    if compare_same_review:
+        current_id = previous_id
+    store = JsonReviewStore(storage)
+    renderer_entered = Event()
+    release_renderer = Event()
+    mutation_started = Event()
+    mutation_finished = Event()
+    json_renderer = cli_module.COMPARISON_RENDERERS["json"]
+
+    def blocking_renderer(comparison):
+        renderer_entered.set()
+        assert release_renderer.wait(timeout=2)
+        return json_renderer(comparison)
+
+    monkeypatch.setitem(cli_module.COMPARISON_RENDERERS, "json", blocking_renderer)
+
+    def mutate_current_review():
+        mutation_started.set()
+        updated, _ = store.mutate(
+            current_id,
+            lambda state: append_resolution(
+                state,
+                ResolutionEvent(
+                    event_id=f"concurrent-compare-resolution-{compare_same_review}",
+                    criterion_id="AC-01",
+                    decision=HumanDecision.ACCEPTED,
+                    comment="Concurrent lifecycle mutation during CLI comparison",
+                    reviewer="CLI comparison fixture",
+                ),
+            ),
+        )
+        mutation_finished.set()
+        return updated
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        compare_future = executor.submit(
+            main,
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--storage-dir",
+                str(storage),
+            ],
+        )
+        try:
+            assert renderer_entered.wait(timeout=2)
+            mutation_future = executor.submit(mutate_current_review)
+            assert mutation_started.wait(timeout=2)
+            assert not mutation_finished.wait(timeout=0.2)
+        finally:
+            release_renderer.set()
+        assert compare_future.result(timeout=2) == 0
+        updated = mutation_future.result(timeout=2)
+
+    comparison = json.loads(capsys.readouterr().out)
+    assert comparison["changed_human_resolutions"] == []
+    assert updated.resolution_events[-1].decision is HumanDecision.ACCEPTED
+
+
 def test_compare_command_writes_markdown_and_refuses_overwrite(
     tmp_path: Path, capsys
 ) -> None:
