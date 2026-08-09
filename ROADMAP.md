@@ -42,6 +42,8 @@ advances Stage 1, which remains at zero.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
+- [x] Live reviews and genuine-alpha records require an explicit verified-public repository fact;
+  private, ambiguous, and legacy-unverified sources fail closed for Stage 1.
 - [x] Enforce at the core boundary that manual verification records runtime
   evidence and its decision atomically, and reject unpaired reconstructed
   bundles or states at every trusted boundary.
