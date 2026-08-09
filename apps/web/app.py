@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -421,6 +422,67 @@ def _refresh_clean_review_from_local_store(
         st.session_state["failed_review_save_fingerprint"] = current_fingerprint
         st.session_state["review_save_conflict"] = True
         return state
+
+
+@contextmanager
+def _locked_review_status_snapshot(
+    state: ReviewState | None,
+    *,
+    store: JsonReviewStore,
+    store_available: bool,
+    has_pending_review_input: bool,
+) -> Iterator[ReviewState | None]:
+    """Hold persisted review truth stable through Summary status rendering."""
+
+    if state is None or not store_available:
+        yield _refresh_clean_review_from_local_store(
+            state,
+            store=store,
+            store_available=store_available,
+            has_pending_review_input=has_pending_review_input,
+        )
+        return
+    expected_fingerprint = st.session_state["saved_review_fingerprint"]
+    current_fingerprint = _review_state_fingerprint(state)
+    if not expected_fingerprint or current_fingerprint != expected_fingerprint:
+        yield state
+        return
+    lock_stack = ExitStack()
+    try:
+        persisted = lock_stack.enter_context(
+            store.locked_load(state.review.review_id)
+        )
+    except FileNotFoundError:
+        lock_stack.close()
+        st.session_state["saved_review_fingerprint"] = None
+        st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = False
+        yield state
+        return
+    except (OSError, ValueError):
+        lock_stack.close()
+        st.session_state["saved_review_fingerprint"] = None
+        st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = True
+        yield state
+        return
+    try:
+        persisted_fingerprint = _review_state_fingerprint(persisted)
+        if persisted_fingerprint == expected_fingerprint:
+            refreshed = state
+        elif has_pending_review_input:
+            st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+            st.session_state["review_save_conflict"] = True
+            refreshed = state
+        else:
+            _hydrate_reopened_review(persisted)
+            st.session_state["review_save_notice"] = (
+                "Review refreshed from local storage after an external update."
+            )
+            refreshed = persisted
+        yield refreshed
+    finally:
+        lock_stack.close()
 
 
 def _mark_open_review_deleted(review_id: str) -> bool:
@@ -2683,36 +2745,46 @@ else:
         else:
             st.caption("No human decisions have been recorded yet.")
 
-    st.header("5 · Summary & Export")
-    review_truth_conflict = bool(
-        review_state is not None
-        and st.session_state["review_save_conflict"]
-        and st.session_state["failed_review_save_fingerprint"]
-        == _review_state_fingerprint(review_state)
-    )
-    review_status = (
-        "Refresh required"
-        if review_truth_conflict
-        else review_status_label(bundle.gate.verdict)
-    )
-    st.markdown(f"**Review status: {review_status}**")
-    if review_truth_conflict:
-        st.warning(
-            "The persisted review could not be revalidated. Reopen it before relying on the "
-            "status or exporting this review."
+    with _locked_review_status_snapshot(
+        review_state,
+        store=review_store,
+        store_available=review_store_available,
+        has_pending_review_input=has_pending_review_input,
+    ) as status_review_state:
+        if status_review_state is not None:
+            review_state = status_review_state
+            if status_review_state.bundle is not None:
+                bundle = status_review_state.bundle
+        st.header("5 · Summary & Export")
+        review_truth_conflict = bool(
+            review_state is not None
+            and st.session_state["review_save_conflict"]
+            and st.session_state["failed_review_save_fingerprint"]
+            == _review_state_fingerprint(review_state)
         )
-    if bundle.gate.reason_codes:
-        labels = [_status_label(code) for code in bundle.gate.reason_codes]
-        st.write("Gate reasons: " + " · ".join(labels))
-    guidance = gate_guidance(bundle.gate)
-    if guidance:
-        st.markdown("### What to do next")
-        for message in guidance:
-            st.text(message)
-    st.caption(
-        f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
-        "results are reproducible from the exported review"
-    )
+        review_status = (
+            "Refresh required"
+            if review_truth_conflict
+            else review_status_label(bundle.gate.verdict)
+        )
+        st.markdown(f"**Review status: {review_status}**")
+        if review_truth_conflict:
+            st.warning(
+                "The persisted review could not be revalidated. Reopen it before relying on the "
+                "status or exporting this review."
+            )
+        if bundle.gate.reason_codes:
+            labels = [_status_label(code) for code in bundle.gate.reason_codes]
+            st.write("Gate reasons: " + " · ".join(labels))
+        guidance = gate_guidance(bundle.gate)
+        if guidance:
+            st.markdown("### What to do next")
+            for message in guidance:
+                st.text(message)
+        st.caption(
+            f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
+            "results are reproducible from the exported review"
+        )
     if has_pending_review_input:
         st.warning(
             "Resolve, submit, discard, or clear pending inputs before exporting the "

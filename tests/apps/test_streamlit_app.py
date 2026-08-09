@@ -2986,7 +2986,7 @@ def test_clean_open_workbench_refreshes_external_final_acceptance_revocation(
     assert all(not button.proto.url for button in app.download_button)
 
 
-def test_clean_open_workbench_refresh_uses_shared_record_lock(
+def test_clean_open_workbench_refresh_and_status_use_shared_record_lock(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3007,7 +3007,7 @@ def test_clean_open_workbench_refresh_uses_shared_record_lock(
         app = app.run()
 
     assert not app.exception
-    assert locked_review_ids == [review_id]
+    assert locked_review_ids == [review_id, review_id]
 
 
 def test_failed_persisted_review_revalidation_blocks_status_and_exports(

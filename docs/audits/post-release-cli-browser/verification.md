@@ -38,7 +38,7 @@ signals.
 | --- | --- |
 | `uv sync --extra dev --extra research --locked` | Passed; Playwright 1.62.0 was installed from `uv.lock`. |
 | `uv run ruff check .` | Passed. |
-| Final combined core/UI coverage gate | Passed after PR review repairs: 1,952 tests, 2 intentional skips, 95.21% coverage in 548.03 seconds. |
+| Final combined core/UI coverage gate | Passed after PR review repairs: 1,952 tests, 2 intentional skips, 95.05% coverage in 609.91 seconds. |
 | `uv run pytest -q tests/test_repository_contracts.py` | Passed: 77 tests. |
 | `uv run scopeproof benchmark` | Passed: 12 cases, 13 criteria, 0 mismatches, 0 must-have False Ready outcomes, 0 false blockers, 0 unexecuted categories. |
 | `uv run scopeproof comparison-benchmark` | Passed: 2 cases, 0 mismatches; aggregate 3 added, 1 modified, 1 relocated, 3 removed, 1 unchanged. |
@@ -82,7 +82,7 @@ does not substitute for the current-driver Chromium regression below.
 - Host environment: macOS 26.5.1 build 25F80, Apple silicon, Python 3.12.0.
 - Driver: Playwright 1.62.0 with Chrome for Testing 151.0.7922.34.
 - Command: `uv run pytest -q -m browser tests/browser`.
-- Latest result after PR review repairs: passed, 1 test in 23.16 seconds with the final
+- Latest result after PR review repairs: passed, 1 test in 24.46 seconds with the final
   loopback-only network guard.
 
 For fresh browser contexts at 1280×720 and 390×844, the test used keyboard activation for the
@@ -105,7 +105,7 @@ A fresh build produced:
 
 | Artifact | Entries | SHA-256 | Forbidden inventory matches |
 | --- | ---: | --- | ---: |
-| `scopeproof-0.2.3-py3-none-any.whl` | 100 | `df3931bf7d9c36c8284f910f4eb2c7e7ba9f32977a07b99d19e4840ef5921c8b` | 0 |
+| `scopeproof-0.2.3-py3-none-any.whl` | 100 | `dee9a80def05476e53a4e543557dbea2de958ea02ef5cf3e995afcb5cc7731c7` | 0 |
 | `scopeproof-0.2.3.tar.gz` | 546 | Not recorded because this audit is included in the sdist, making its content hash self-referential. | 0 |
 
 The scan rejected Git state, `.scopeproof`, coverage files, virtual environments, common secret
@@ -135,15 +135,16 @@ SHA-256 `80f06e6868f329f37093b5938375e8d60bc235a147e9e2bf721b3543af9fd329`,
 `3e4fecee45a0136a65a7ee08c00495c60024f3e2ea41f78d465d603eccbf3106`,
 `05c7de221e407c1c2d887f78b280ee5378f2c7d785395e337055f82db3886d83`,
 `452a83f5336b5e7b05cf06bdf8e8d3210c1b7d8cc8988ab69e1f40504bb46c74`,
-`a95eb10677565e327cbaae69ed60faa47bbd914983c22d4aaccd6ac1c00342fd`, and
-`39f92637b8bcc4dabe799fa956aab9b9dc27bc2a9b7b0176ff4e99f8c220bcdc`; they were superseded by
+`a95eb10677565e327cbaae69ed60faa47bbd914983c22d4aaccd6ac1c00342fd`,
+`39f92637b8bcc4dabe799fa956aab9b9dc27bc2a9b7b0176ff4e99f8c220bcdc`, and
+`df3931bf7d9c36c8284f910f4eb2c7e7ba9f32977a07b99d19e4840ef5921c8b`; they were superseded by
 the deletion-serialization/portable-lock repair, the CodeQL path-hardening repair, the workbench
 read-refresh repair, the criterion-definition comparison guard, and the final click-time export
 revalidation repair, the hosted-Ruff union-order repair, and the minimum Streamlit floor repair,
 the browser export/lifecycle serialization repair, the CLI export/lifecycle serialization repair,
 the CLI comparison snapshot-serialization repair, the unavailable-storage/release-baseline truth
-repair, and the locked workbench refresh repair, respectively. The current wheel hash above was
-reproduced in two fresh
+repair, the locked workbench refresh repair, and the locked Summary status snapshot repair,
+respectively. The current wheel hash above was reproduced in two fresh
 builds, and an equivalent current-tree wheel was installed by the latest packaged-browser run.
 
 ## Attempt boundaries
@@ -266,6 +267,13 @@ pending-input conflict handling, and hydration. A red-then-green AppTest proves 
 refresh uses that shared lock; the related revocation and fail-closed refresh regressions remain
 green. The final full suite, repository contracts, browser proof, and wheel proof above include the
 repair.
+The following exact-head review identified the remaining interval between refresh-lock release and
+visible Summary status rendering. The workbench now takes a second validated persisted snapshot and
+holds its per-record lock through status, gate-reason, guidance, and provenance rendering. If the
+record changed in the interval, the Summary hydrates the newer state or fails closed for pending
+input; deferred downloads retain their separate click-time validation lock. The focused regression
+requires both refresh and status rendering to participate in the shared lock. The final full suite,
+repository contracts, browser proof, and wheel proof above include the repair.
 
 Reviewer/source-owner identity is asserted, not authenticated. The GitHub Action remains opt-in
 and informational rather than a required branch-protection check. Native zoom, screen reader,
