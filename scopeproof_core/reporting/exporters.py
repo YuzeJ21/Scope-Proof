@@ -355,6 +355,8 @@ def export_markdown(bundle: ExportableReview) -> str:
         f"**Review status:** {review_status}",
         f"**Review ID:** {_render_markdown_code(bundle.review.review_id)}",
         f"**Repository:** {_render_markdown_code(bundle.review.repository)}",
+        "**Repository visibility:** "
+        f"{_render_markdown_code(bundle.review.repository_visibility.value)}",
         f"**Pull request:** #{bundle.review.pr_number}",
         f"**Base SHA:** {_render_markdown_code(bundle.review.base_sha)}",
         f"**Head SHA:** {_render_markdown_code(bundle.review.head_sha)}",
@@ -683,6 +685,7 @@ def export_csv(bundle: ExportableReview) -> str:
     fieldnames = [
         "review_id",
         "repository",
+        "repository_visibility",
         "pr_number",
         "base_sha",
         "head_sha",
@@ -763,6 +766,7 @@ def export_csv(bundle: ExportableReview) -> str:
             {
                 "review_id": _csv_text(bundle.review.review_id),
                 "repository": _csv_text(bundle.review.repository),
+                "repository_visibility": bundle.review.repository_visibility.value,
                 "pr_number": bundle.review.pr_number,
                 "base_sha": _csv_text(bundle.review.base_sha),
                 "head_sha": _csv_text(bundle.review.head_sha),
@@ -1007,6 +1011,8 @@ def export_html(value: ExportableReview) -> str:
             f"<p><strong>Review status:</strong> {review_status}</p>",
             f"<p>Review ID: <code>{html.escape(bundle.review.review_id)}</code> · "
             f"Repository: <code>{html.escape(bundle.review.repository)}</code> · "
+            "Repository visibility: "
+            f"<code>{html.escape(bundle.review.repository_visibility.value)}</code> · "
             f"PR #{bundle.review.pr_number} · Base SHA "
             f"<code>{html.escape(bundle.review.base_sha)}</code> · Head SHA "
             f"<code>{html.escape(bundle.review.head_sha)}</code> · "

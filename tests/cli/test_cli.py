@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from threading import Event
+from unittest.mock import patch
 
 import pytest
 
@@ -31,6 +32,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     LifecycleMutationMetadata,
     PullRequestSnapshot,
+    RepositoryVisibility,
     ResolutionEvent,
     ReviewInputOrigin,
     RuntimeEvidence,
@@ -263,6 +265,86 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     assert diagnostic.accepted_candidate_count == len(state.bundle.evidence)
 
 
+def test_live_review_rejects_unverified_snapshot_without_saving(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    snapshot = PullRequestSnapshot(
+        repository="acme/repo",
+        pr_number=7,
+        title="Export CSV",
+        html_url="https://github.com/acme/repo/pull/7",
+        base_sha="b" * 40,
+        head_sha="a" * 40,
+    )
+    monkeypatch.setattr(
+        "scopeproof_core.cli.GitHubClient.fetch_pull_request",
+        lambda _self, _pr: snapshot,
+    )
+    storage = tmp_path / "reviews"
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "review",
+                "--pr",
+                "https://github.com/acme/repo/pull/7",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "verified public" in capsys.readouterr().err
+    assert not storage.exists()
+
+
+def test_live_review_persists_verified_public_snapshot_provenance(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    snapshot = PullRequestSnapshot(
+        repository="acme/repo",
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
+        pr_number=7,
+        title="Export CSV",
+        html_url="https://github.com/acme/repo/pull/7",
+        base_sha="b" * 40,
+        head_sha="a" * 40,
+    )
+    monkeypatch.setattr(
+        "scopeproof_core.cli.GitHubClient.fetch_pull_request",
+        lambda _self, _pr: snapshot,
+    )
+    storage = tmp_path / "reviews"
+
+    assert main(
+        [
+            "review",
+            "--pr",
+            "https://github.com/acme/repo/pull/7",
+            "--requirements",
+            str(requirements),
+            "--confirmation",
+            str(write_requirements_confirmation(requirements)),
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+
+    review_id = json.loads(capsys.readouterr().out)["review_id"]
+    state = JsonReviewStore(storage).load(review_id)
+    assert state.review.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
+    assert state.bundle is not None
+    assert state.bundle.review.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
+
+
 def test_fixture_review_preserves_exact_crlf_requirements_digest(
     tmp_path: Path, capsys
 ) -> None:
@@ -339,6 +421,40 @@ def test_fixture_review_metadata_reports_validated_ci_observation(tmp_path: Path
     assert "research_case_id" not in metadata
     assert "research_classification" not in metadata
     assert "stage1_credit" not in metadata
+
+
+def test_fixture_review_cannot_self_assert_verified_public_visibility(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    fixture_payload = json.loads(
+        Path("evals/fixtures/complete_implementation_pr.json").read_text(encoding="utf-8")
+    )
+    fixture_payload["repository_visibility"] = "verified_public"
+    fixture = tmp_path / "self-asserted-public.json"
+    fixture.write_text(json.dumps(fixture_payload), encoding="utf-8")
+    storage = tmp_path / "reviews"
+
+    assert main(
+        [
+            "review",
+            "--fixture",
+            str(fixture),
+            "--requirements",
+            str(requirements),
+            "--confirmation",
+            str(write_requirements_confirmation(requirements)),
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+
+    review_id = json.loads(capsys.readouterr().out)["review_id"]
+    state = JsonReviewStore(storage).load(review_id)
+    assert state.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+    assert state.bundle is not None
+    assert state.bundle.review.repository_visibility is RepositoryVisibility.UNVERIFIED
 
 
 def test_fixture_review_metadata_reports_ci_collection_notes(tmp_path: Path, capsys) -> None:
@@ -1920,26 +2036,39 @@ def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str, Path, str
         requirements, source_uri="https://github.com/acme/repo/issues/6"
     )
     store = tmp_path / "alpha-cases"
-    assert main(
-        [
-            "alpha",
-            "init",
-            "--pr",
-            "https://github.com/acme/repo/pull/7",
-            "--requirements-source",
-            "https://github.com/acme/repo/issues/6",
-            "--participant-role",
-            "qa",
-            "--requirements",
-            str(requirements),
-            "--confirmation",
-            str(confirmation),
-            "--source-owner-confirmed",
-            "--confirmed-no-confidential-information",
-            "--storage-dir",
-            str(store),
-        ]
-    ) == 0
+    verified_snapshot = PullRequestSnapshot(
+        repository="acme/repo",
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
+        pr_number=7,
+        title="Export CSV",
+        html_url="https://github.com/acme/repo/pull/7",
+        base_sha="b" * 40,
+        head_sha="a" * 40,
+    )
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=verified_snapshot,
+    ):
+        assert main(
+            [
+                "alpha",
+                "init",
+                "--pr",
+                "https://github.com/acme/repo/pull/7",
+                "--requirements-source",
+                "https://github.com/acme/repo/issues/6",
+                "--participant-role",
+                "qa",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(confirmation),
+                "--source-owner-confirmed",
+                "--confirmed-no-confidential-information",
+                "--storage-dir",
+                str(store),
+            ]
+        ) == 0
     case_id = json.loads(capsys.readouterr().out)["case_id"]
     criteria = [
         Criterion(criterion_id=draft.criterion_id, text=draft.text)
@@ -1950,6 +2079,7 @@ def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str, Path, str
     )
     snapshot = PullRequestSnapshot(
         repository="acme/repo",
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
         pr_number=7,
         title="Export CSV",
         html_url="https://github.com/acme/repo/pull/7",
@@ -1970,6 +2100,54 @@ def _initialize_alpha_case(tmp_path: Path, capsys) -> tuple[Path, str, Path, str
     return store, case_id, review_store, review_state.review.review_id
 
 
+def test_alpha_init_rejects_unverified_repository_without_saving(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "alpha-requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    confirmation = write_requirements_confirmation(
+        requirements, source_uri="https://github.com/acme/repo/issues/6"
+    )
+    monkeypatch.setattr(
+        "scopeproof_core.cli.GitHubClient.fetch_pull_request",
+        lambda _self, _pr: PullRequestSnapshot(
+            repository="acme/repo",
+            pr_number=7,
+            title="Export CSV",
+            html_url="https://github.com/acme/repo/pull/7",
+            base_sha="b" * 40,
+            head_sha="a" * 40,
+        ),
+    )
+    storage = tmp_path / "alpha-cases"
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "alpha",
+                "init",
+                "--pr",
+                "https://github.com/acme/repo/pull/7",
+                "--requirements-source",
+                "https://github.com/acme/repo/issues/6",
+                "--participant-role",
+                "qa",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(confirmation),
+                "--source-owner-confirmed",
+                "--confirmed-no-confidential-information",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "verified public" in capsys.readouterr().err
+    assert not storage.exists()
+
+
 def test_alpha_init_creates_validated_local_record(tmp_path: Path, capsys) -> None:
     store_dir, case_id, _, _ = _initialize_alpha_case(tmp_path, capsys)
 
@@ -1978,6 +2156,7 @@ def test_alpha_init_creates_validated_local_record(tmp_path: Path, capsys) -> No
     assert record.confirmed_criteria == ["Export CSV", "Show an error state"]
     assert record.source_owner_confirmed is True
     assert record.no_confidential_information is True
+    assert record.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
     assert record.criteria_source_provenance is not None
     assert record.criteria_source_provenance.source_uri == (
         "https://github.com/acme/repo/issues/6"

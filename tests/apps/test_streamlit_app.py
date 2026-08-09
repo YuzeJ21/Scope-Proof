@@ -33,6 +33,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     IngestionState,
     Priority,
+    RepositoryVisibility,
     ResearchContext,
     ResolutionEvent,
     ReviewState,
@@ -65,6 +66,9 @@ def analyzed_demo(app: AppTest) -> AppTest:
 
 def analyzed_standard_demo(app: AppTest) -> AppTest:
     app = app.button(key="load_demo").click().run()
+    app.session_state["snapshot"] = app.session_state["snapshot"].model_copy(
+        update={"repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC}
+    )
     app.session_state["criteria_source_mode"] = "standard"
     app = app.run()
     app = app.text_input(key="criteria_source_reference").set_value(
@@ -168,7 +172,12 @@ def qualified_alpha_analyzed_app(app: AppTest) -> AppTest:
     app = app.checkbox(key="source_owner_confirmed").check().run()
     app = app.checkbox(key="no_confidential_information").check().run()
     snapshot = load_demo_snapshot().model_copy(
-        update={"repository": "acme/repo", "pr_number": 7, "head_sha": "a" * 40}
+        update={
+            "repository": "acme/repo",
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+            "pr_number": 7,
+            "head_sha": "a" * 40,
+        }
     )
     with patch(
         "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
@@ -225,6 +234,24 @@ def test_constructed_demo_disclosure_is_not_shown_for_standard_review() -> None:
 
     assert disclosure in [item.value for item in demo.caption]
     assert disclosure not in [item.value for item in standard.caption]
+
+
+def test_standard_analysis_rejects_unverified_repository_snapshot() -> None:
+    app = load_demo(new_app())
+    app.session_state["criteria_source_mode"] = "standard"
+    app = app.run()
+    app = app.text_input(key="criteria_source_reference").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Product owner"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+
+    app = app.button(key="run_analysis").click().run()
+
+    assert app.session_state["review_state"] is None
+    assert any("could not be completed" in item.value for item in app.error)
 
 
 def test_alpha_outcome_is_ready_after_authoritative_review_autosaves(
@@ -583,9 +610,43 @@ def test_alpha_mode_creates_case_after_confirming_criteria(
     record = JsonAlphaCaseStore(default_alpha_case_directory()).load(
         app.session_state["alpha_case_id"]
     )
+    assert record.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
     assert record.outcome is AlphaOutcome.FOUND_USEFUL_GAP
     assert record.publication_consent.report is False
     assert record.publication_consent.quote is False
+
+
+def test_alpha_mode_does_not_qualify_an_unverified_loaded_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = new_app().checkbox(key="alpha_feedback_mode").check().run()
+    app = app.text_input(key="pr_url").set_value(
+        "https://github.com/acme/repo/pull/7"
+    ).run()
+    app = app.text_input(key="requirements_source_url").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.checkbox(key="source_owner_confirmed").check().run()
+    app = app.checkbox(key="no_confidential_information").check().run()
+    snapshot = load_demo_snapshot().model_copy(
+        update={"repository": "acme/repo", "pr_number": 7, "head_sha": "a" * 40}
+    )
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        return_value=snapshot,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+    app = app.text_area(key="requirements_input").set_value("Export CSV").run()
+    app = app.button(key="prepare_criteria").click().run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Alpha source owner"
+    ).run()
+
+    app = app.button(key="confirm_criteria").click().run()
+
+    assert app.session_state["alpha_case_id"] is None
+    assert any("could not be confirmed" in item.value for item in app.error)
 
 
 @pytest.mark.parametrize(
@@ -3279,7 +3340,12 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     monkeypatch.setenv("HOME", str(tmp_path))
     saved, review_id = saved_demo_review(new_app())
     previous_head = saved.session_state["review_state"].review.head_sha
-    changed_snapshot = load_demo_snapshot().model_copy(update={"head_sha": "b" * 40})
+    changed_snapshot = load_demo_snapshot().model_copy(
+        update={
+            "head_sha": "b" * 40,
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+        }
+    )
 
     fresh = new_app()
     fresh = select_saved_review(fresh, review_id)
@@ -3366,7 +3432,11 @@ def test_rereview_comparison_shows_modified_candidate_excerpt(
     )
     files[0] = files[0].model_copy(update={"lines": lines})
     changed_snapshot = original.model_copy(
-        update={"head_sha": "c" * 40, "files": files}
+        update={
+            "head_sha": "c" * 40,
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+            "files": files,
+        }
     )
 
     fresh = new_app()

@@ -19,6 +19,7 @@ from scopeproof_core.schemas.models import (
     IngestionState,
     LineChangeType,
     PullRequestSnapshot,
+    RepositoryVisibility,
     RetrievedFile,
 )
 
@@ -41,6 +42,10 @@ class PullRequestNotFound(GitHubIngestionError):
 
 
 class PrivateOrInaccessibleRepository(GitHubIngestionError):
+    pass
+
+
+class RepositoryVisibilityUnverified(GitHubIngestionError):
     pass
 
 
@@ -191,6 +196,41 @@ class GitHubClient:
             response.raise_for_status()
         except httpx.HTTPStatusError as error:
             raise GitHubIngestionError(f"GitHub returned HTTP {response.status_code}.") from error
+
+    @staticmethod
+    def _verified_repository_visibility(
+        pr_data: object,
+        *,
+        expected_repository: str,
+    ) -> RepositoryVisibility:
+        """Return verified-public only for complete, consistent GitHub metadata."""
+
+        base = pr_data.get("base") if isinstance(pr_data, dict) else None
+        repository = base.get("repo") if isinstance(base, dict) else None
+        if not isinstance(repository, dict):
+            raise RepositoryVisibilityUnverified(
+                "GitHub did not provide enough metadata to verify public repository visibility."
+            )
+
+        full_name = repository.get("full_name")
+        private = repository.get("private")
+        visibility = repository.get("visibility")
+        if private is True or (
+            isinstance(visibility, str) and visibility in {"private", "internal"}
+        ):
+            raise PrivateOrInaccessibleRepository(
+                "ScopeProof accepts only a verified public GitHub repository."
+            )
+        if (
+            not isinstance(full_name, str)
+            or full_name.casefold() != expected_repository.casefold()
+            or private is not False
+            or visibility != "public"
+        ):
+            raise RepositoryVisibilityUnverified(
+                "GitHub did not provide enough metadata to verify public repository visibility."
+            )
+        return RepositoryVisibility.VERIFIED_PUBLIC
 
     def _get_all(self, path: str) -> list[dict]:
         """Follow GitHub pagination while retaining normal HTTP error handling."""
@@ -478,6 +518,10 @@ class GitHubClient:
         pr_response = self._get(f"{root}/pulls/{pr_number}")
         self._raise_for_pr(pr_response)
         pr_data = pr_response.json()
+        repository_visibility = self._verified_repository_visibility(
+            pr_data,
+            expected_repository=f"{owner}/{repository}",
+        )
 
         raw_files = self._get_all(f"{root}/pulls/{pr_number}/files?per_page=100")
         raw_commits = self._get_all(f"{root}/pulls/{pr_number}/commits?per_page=100")
@@ -570,6 +614,7 @@ class GitHubClient:
         )
         return PullRequestSnapshot(
             repository=f"{owner}/{repository}",
+            repository_visibility=repository_visibility,
             pr_number=pr_number,
             title=pr_data.get("title", ""),
             description=pr_data.get("body") or "",

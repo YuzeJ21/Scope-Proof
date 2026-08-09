@@ -40,7 +40,8 @@ They do not establish correctness, customer validation, or target-repository run
 3. **Minute 3 — enter public sources.** Paste the canonical public PR URL and public HTTPS
    requirements source. Select only your role; ScopeProof does not collect names or contact data.
 4. **Minute 4 — load the PR.** Confirm source authority and no confidential information, then fetch
-   the PR. A session-only token is optional under Advanced source options.
+   the PR. ScopeProof confirms public visibility from GitHub metadata; a session-only token is
+   optional under Advanced source options but cannot make a private repository eligible.
 5. **Minute 5 — confirm criteria.** Prepare one independently judgeable behavior per line, review
    the normalized set, and explicitly confirm it. This creates one validated local alpha case.
 6. **Minute 6 — review coverage.** Run analysis and inspect every Strong candidate, Weak candidate,

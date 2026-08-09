@@ -23,6 +23,7 @@ from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import (
     Criterion,
     PullRequestSnapshot,
+    RepositoryVisibility,
     ReviewInputOrigin,
 )
 
@@ -52,6 +53,7 @@ def initialized_case():
         confirmed_criteria=["Export CSV"],
         confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
         criteria_source_provenance=criteria_source_provenance(),
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
     )
 
 
@@ -66,6 +68,7 @@ def matching_review_state(
     provenance = criteria_source_provenance()
     snapshot = PullRequestSnapshot(
         repository=repository,
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
         pr_number=pr_number,
         title="Export CSV",
         html_url=f"https://github.com/{repository}/pull/{pr_number}",
@@ -84,6 +87,21 @@ def matching_review_state(
     )
 
 
+def test_initialize_alpha_case_requires_verified_public_visibility() -> None:
+    with pytest.raises(
+        ValueError,
+        match="alpha qualification requires verified public repository visibility",
+    ):
+        initialize_alpha_case(
+            public_pr_url="https://github.com/acme/repo/pull/7",
+            requirements_source_url="https://github.com/acme/repo/issues/6",
+            participant_role=ParticipantRole.QA,
+            source_owner_confirmed=True,
+            no_confidential_information=True,
+            confirmed_criteria=["Export CSV"],
+            confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
+            criteria_source_provenance=criteria_source_provenance(),
+        )
 def test_initialize_alpha_case_is_qualified_and_unpublished() -> None:
     record = initialized_case()
 
@@ -104,6 +122,7 @@ def test_ensure_alpha_case_creates_once_and_returns_matching_existing(tmp_path) 
         "confirmed_criteria": ["Export CSV"],
         "confirmed_criterion_snapshot": confirmed_criterion_snapshot(),
         "criteria_source_provenance": criteria_source_provenance(),
+        "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
     }
 
     created = ensure_alpha_case(store=store, **inputs)
@@ -125,6 +144,7 @@ def test_ensure_alpha_case_rejects_reusing_id_for_different_case(tmp_path) -> No
         confirmed_criteria=["Export CSV"],
         confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
         criteria_source_provenance=criteria_source_provenance(),
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
     )
 
     with pytest.raises(ValueError, match="does not match"):
@@ -139,6 +159,7 @@ def test_ensure_alpha_case_rejects_reusing_id_for_different_case(tmp_path) -> No
             confirmed_criteria=["Export CSV"],
             confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
             criteria_source_provenance=criteria_source_provenance(),
+            repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
         )
 
 
@@ -159,6 +180,7 @@ def test_initialize_alpha_case_requires_explicit_safe_confirmations(
             confirmed_criteria=["Export CSV"],
             confirmed_criterion_snapshot=confirmed_criterion_snapshot(),
             criteria_source_provenance=criteria_source_provenance(),
+            repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
         )
 
 
@@ -216,6 +238,7 @@ def test_initialize_alpha_case_rejects_criteria_provenance_mismatch() -> None:
                 Criterion(criterion_id="AC-01", text="Delete production data")
             ],
             criteria_source_provenance=criteria_source_provenance(),
+            repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
         )
 
 
@@ -297,6 +320,46 @@ def test_record_alpha_outcome_rejects_engineering_only_review_sources(
         )
 
 
+def test_record_alpha_outcome_rejects_unverified_legacy_review() -> None:
+    state = matching_review_state()
+    assert state.bundle is not None
+    unverified_review = state.review.model_copy(
+        update={"repository_visibility": RepositoryVisibility.UNVERIFIED}
+    )
+    state = state.model_copy(
+        update={
+            "review": unverified_review,
+            "bundle": state.bundle.model_copy(update={"review": unverified_review}),
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="alpha outcome requires verified public repository visibility",
+    ):
+        record_alpha_outcome(
+            initialized_case(),
+            review_state=state,
+            outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+        )
+
+
+def test_record_alpha_outcome_rejects_legacy_case_without_verified_visibility() -> None:
+    payload = initialized_case().model_dump(mode="python")
+    payload["repository_visibility"] = RepositoryVisibility.UNVERIFIED
+    legacy = AlphaCaseRecord.model_validate(payload)
+
+    with pytest.raises(
+        ValueError,
+        match="legacy alpha case must be re-fetched before recording an outcome",
+    ):
+        record_alpha_outcome(
+            legacy,
+            review_state=matching_review_state(),
+            outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+        )
+
+
 def test_public_summary_requires_report_consent() -> None:
     completed = record_alpha_outcome(
         initialized_case(),
@@ -326,6 +389,7 @@ def test_public_summary_omits_local_notes_and_consent_fields() -> None:
     payload = public_alpha_summary(completed).model_dump(mode="json")
 
     assert payload["outcome"] == "showed_only_known_information"
+    assert payload["repository_visibility"] == "verified_public"
     assert "outcome_notes" not in payload
     assert "publication_consent" not in payload
     assert "criteria_source_provenance" not in payload

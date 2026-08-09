@@ -50,6 +50,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
     )
     review = Review(
         repository=snapshot.repository,
+        repository_visibility=snapshot.repository_visibility,
         pr_number=snapshot.pr_number,
         base_sha=snapshot.base_sha,
         head_sha=snapshot.head_sha,

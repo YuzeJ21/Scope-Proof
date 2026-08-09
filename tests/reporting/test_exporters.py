@@ -31,11 +31,13 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    RepositoryVisibility,
     ResearchContext,
     ResolutionEvent,
     RetrievalOutcome,
     Review,
     ReviewBundle,
+    ReviewInputOrigin,
     RuntimeEvidence,
 )
 
@@ -636,6 +638,40 @@ def test_exports_preserve_tool_and_ruleset_provenance() -> None:
     ):
         assert bundle.review.tool_version in output
         assert bundle.review.ruleset_version in output
+
+
+def test_json_export_preserves_verified_public_repository_provenance() -> None:
+    bundle = example_bundle()
+    bundle.review = Review.model_validate(
+        {
+            **bundle.review.model_dump(mode="python"),
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+            "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+        }
+    )
+
+    payload = json.loads(export_json(bundle))
+
+    assert payload["review"]["repository_visibility"] == "verified_public"
+
+
+def test_human_readable_exports_preserve_verified_public_repository_provenance() -> None:
+    bundle = example_bundle()
+    bundle.review = Review.model_validate(
+        {
+            **bundle.review.model_dump(mode="python"),
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+            "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+        }
+    )
+
+    markdown_report = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+
+    assert "**Repository visibility:** <code>verified_public</code>" in markdown_report
+    assert csv_row["repository_visibility"] == "verified_public"
+    assert "Repository visibility: <code>verified_public</code>" in html_report
 
 
 def test_exports_preserve_ingestion_limitations_and_escape_html() -> None:

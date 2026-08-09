@@ -34,7 +34,9 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     PullRequestSnapshot,
+    RepositoryVisibility,
     ResolutionEvent,
+    ReviewInputOrigin,
     RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import (
@@ -292,6 +294,39 @@ def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     assert loaded.model_dump(mode="json") == state.model_dump(mode="json")
     assert "ghp_" not in path.read_text(encoding="utf-8")
     assert "authorization" not in path.read_text(encoding="utf-8").lower()
+
+
+def test_legacy_saved_review_without_visibility_reopens_as_unverified(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"]["review"]["input_origin"] = "live_public_github"
+    payload["state"]["review"].pop("repository_visibility", None)
+    payload["state"]["bundle"]["review"]["input_origin"] = "live_public_github"
+    payload["state"]["bundle"]["review"].pop("repository_visibility", None)
+    for historical in payload["state"]["analysis_history"]:
+        historical["review"]["input_origin"] = "live_public_github"
+        historical["review"].pop("repository_visibility", None)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = store.load(state.review.review_id)
+
+    assert loaded.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+    assert loaded.review.input_origin is ReviewInputOrigin.LEGACY_UNKNOWN
+    assert loaded.bundle is not None
+    assert loaded.bundle.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+    assert loaded.bundle.review.input_origin is ReviewInputOrigin.LEGACY_UNKNOWN
+    assert all(
+        bundle.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+        for bundle in loaded.analysis_history
+    )
+    assert all(
+        bundle.review.input_origin is ReviewInputOrigin.LEGACY_UNKNOWN
+        for bundle in loaded.analysis_history
+    )
 
 
 def test_mutation_lock_filename_does_not_embed_the_review_id(tmp_path: Path) -> None:

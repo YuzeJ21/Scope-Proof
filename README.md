@@ -172,6 +172,10 @@ reviewer-confirmed criteria against a real public PR.
 
 The commands below describe the `0.2.3` source workflow. From a current source checkout, the CLI
 provides the same read-only public-PR ingestion and deterministic core without starting Streamlit.
+Live ingestion labels a review public only when GitHub returns matching, unambiguous repository
+metadata (`private: false` and `visibility: public`). A token-accessible private repository and
+missing, malformed, or contradictory visibility metadata fail closed before review data is saved.
+Historical records without that verified fact remain readable but cannot qualify for Stage 1.
 First create `requirements.txt` with
 one atomic criterion per line. A human requirements owner or authorized role must inspect and
 approve the exact file before creating the confirmation record. `--confirmed-by` is that human's
@@ -314,7 +318,9 @@ is a symbolic link or another existing non-directory. This app-owned local direc
 browser input from selecting arbitrary file paths. Records preserve the review SHAs, criteria
 revisions, evidence, findings, resolution history, and gate decision. They never contain the
 optional GitHub token. A reopened review prepares its public PR URL and bounded unchanged-candidate
-paths for a one-click current-head check rather than silently reusing old evidence. After a new
+paths for a one-click current-head check rather than silently reusing old evidence. Records also
+preserve whether public repository visibility was verified; legacy records without that fact
+remain explicitly unverified. After a new
 analysis, the workbench compares previous and current heads, candidates,
 finding states, reviewer decisions, and review status without mutating either bundle. Candidate
 evidence is classified as **Unchanged**, **Relocated**, **Modified**, **Added**, or **Removed**.

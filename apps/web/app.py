@@ -17,6 +17,7 @@ from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
     AlphaQualification,
+    AlphaQualificationInput,
     ParticipantRole,
 )
 from scopeproof_core.alpha.service import ensure_alpha_case, record_alpha_outcome
@@ -91,6 +92,7 @@ from scopeproof_core.schemas.models import (
     ReviewInputOrigin,
     ReviewState,
     RuntimeEvidence,
+    require_verified_public_origin,
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
@@ -675,8 +677,15 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
 def _analyze() -> ReviewBundle:
     snapshot = st.session_state["snapshot"]
     criteria = st.session_state["criteria"]
+    input_origin = (
+        ReviewInputOrigin.CONSTRUCTED_DEMO
+        if st.session_state["criteria_source_mode"] == "demo"
+        else ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+    )
+    require_verified_public_origin(snapshot.repository_visibility, input_origin)
     review = Review(
         repository=snapshot.repository,
+        repository_visibility=snapshot.repository_visibility,
         pr_number=snapshot.pr_number,
         base_sha=snapshot.base_sha,
         head_sha=snapshot.head_sha,
@@ -687,11 +696,7 @@ def _analyze() -> ReviewBundle:
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
-        input_origin=(
-            ReviewInputOrigin.CONSTRUCTED_DEMO
-            if st.session_state["criteria_source_mode"] == "demo"
-            else ReviewInputOrigin.LIVE_PUBLIC_GITHUB
-        ),
+        input_origin=input_origin,
     )
     retrieval_result = retrieve_evidence_with_diagnostics(
         snapshot, criteria, unchanged_files=st.session_state["candidate_files"]
@@ -1201,6 +1206,7 @@ with st.expander("Alpha feedback session (optional)", expanded=False):
             key="no_confidential_information",
         )
 alpha_qualification_ready = True
+alpha_qualification_input: AlphaQualificationInput | None = None
 alpha_qualification: AlphaQualification | None = None
 if alpha_feedback_mode:
     alpha_qualification_ready = False
@@ -1211,7 +1217,7 @@ if alpha_feedback_mode:
         and no_confidential_information
     ):
         try:
-            alpha_qualification = AlphaQualification(
+            alpha_qualification_input = AlphaQualificationInput(
                 public_pr_url=pr_url,
                 requirements_source_url=requirements_source_url,
                 participant_role=ParticipantRole(participant_role),
@@ -1222,6 +1228,23 @@ if alpha_feedback_mode:
             st.warning("Use a public HTTPS requirements source and a canonical public PR URL.")
         else:
             alpha_qualification_ready = True
+    loaded_for_alpha = st.session_state["snapshot"]
+    if alpha_qualification_input is not None and loaded_for_alpha is not None:
+        try:
+            alpha_owner, alpha_repository, alpha_pr_number = parse_pr_url(
+                alpha_qualification_input.public_pr_url
+            )
+            if (
+                f"{alpha_owner}/{alpha_repository}" != loaded_for_alpha.repository
+                or alpha_pr_number != loaded_for_alpha.pr_number
+            ):
+                raise ValueError("alpha qualification must match the loaded public PR")
+            alpha_qualification = AlphaQualification(
+                **alpha_qualification_input.model_dump(mode="python"),
+                repository_visibility=loaded_for_alpha.repository_visibility,
+            )
+        except ValueError:
+            alpha_qualification = None
 else:
     st.caption("Standard review mode does not create participant research records.")
 
@@ -1756,6 +1779,7 @@ else:
                     confirmed_criteria=[item.text for item in edited_criteria],
                     confirmed_criterion_snapshot=edited_criteria,
                     criteria_source_provenance=provenance,
+                    repository_visibility=alpha_qualification.repository_visibility,
                 )
         except ValueError:
             st.error(

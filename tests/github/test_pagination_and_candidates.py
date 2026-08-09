@@ -24,7 +24,14 @@ def paged_transport() -> httpx.MockTransport:
                     "title": "Paged export",
                     "body": "",
                     "html_url": "https://github.com/acme/widget/pull/42",
-                    "base": {"sha": "base"},
+                    "base": {
+                        "sha": "base",
+                        "repo": {
+                            "full_name": "acme/widget",
+                            "private": False,
+                            "visibility": "public",
+                        },
+                    },
                     "head": {"sha": "head"},
                 }
             )

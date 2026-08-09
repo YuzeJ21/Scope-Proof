@@ -78,6 +78,7 @@ class JsonAlphaCaseStore:
             raise ValueError("alpha-case update must preserve criteria source provenance")
         immutable_fields = (
             "public_pr_url",
+            "repository_visibility",
             "requirements_source_url",
             "participant_role",
             "source_owner_confirmed",

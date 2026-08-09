@@ -82,6 +82,29 @@ class ReviewInputOrigin(StringEnum):
     LEGACY_UNKNOWN = "legacy_unknown"
 
 
+class RepositoryVisibility(StringEnum):
+    """Whether the owning repository has current verified-public provenance."""
+
+    VERIFIED_PUBLIC = "verified_public"
+    UNVERIFIED = "unverified"
+
+
+def require_verified_public_origin(
+    repository_visibility: RepositoryVisibility,
+    input_origin: ReviewInputOrigin,
+) -> None:
+    """Reject current live-public labeling without verified repository provenance."""
+
+    if (
+        input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+        and repository_visibility is not RepositoryVisibility.VERIFIED_PUBLIC
+    ):
+        raise ValueError(
+            "live public GitHub review construction requires verified public "
+            "repository visibility"
+        )
+
+
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
     "scopeproof://constructed-demo/acceptance-criteria"
@@ -731,6 +754,7 @@ class RetrievedFile(BaseModel):
 
 class PullRequestSnapshot(BaseModel):
     repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    repository_visibility: RepositoryVisibility = RepositoryVisibility.UNVERIFIED
     pr_number: int = Field(gt=0)
     title: str
     description: str = ""
@@ -785,6 +809,7 @@ class PullRequestSnapshot(BaseModel):
 class Review(BaseModel):
     review_id: str = Field(default_factory=lambda: str(uuid4()))
     repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    repository_visibility: RepositoryVisibility = RepositoryVisibility.UNVERIFIED
     pr_number: int = Field(gt=0)
     base_sha: str = Field(min_length=1)
     head_sha: str = Field(min_length=1)
@@ -814,17 +839,50 @@ class Review(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def preserve_historical_ci_state(cls, value: object) -> object:
-        if isinstance(value, dict) and "check_state" in value:
-            if "ci_observation" not in value:
+    def preserve_historical_review_state(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        migrated = value
+        if (
+            value.get("input_origin")
+            in {ReviewInputOrigin.LIVE_PUBLIC_GITHUB, ReviewInputOrigin.LIVE_PUBLIC_GITHUB.value}
+            and value.get(
+                "repository_visibility", RepositoryVisibility.UNVERIFIED
+            )
+            not in {
+                RepositoryVisibility.VERIFIED_PUBLIC,
+                RepositoryVisibility.VERIFIED_PUBLIC.value,
+            }
+        ):
+            migrated = {**migrated, "input_origin": ReviewInputOrigin.LEGACY_UNKNOWN}
+        elif (
+            value.get("input_origin", ReviewInputOrigin.LEGACY_UNKNOWN)
+            not in {
+                ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+                ReviewInputOrigin.LIVE_PUBLIC_GITHUB.value,
+            }
+            and value.get("repository_visibility")
+            in {
+                RepositoryVisibility.VERIFIED_PUBLIC,
+                RepositoryVisibility.VERIFIED_PUBLIC.value,
+            }
+        ):
+            migrated = {
+                **migrated,
+                "repository_visibility": RepositoryVisibility.UNVERIFIED,
+            }
+
+        if "check_state" in migrated:
+            if "ci_observation" not in migrated:
                 return {
-                    **value,
+                    **migrated,
                     "check_state": CheckState.UNAVAILABLE,
-                    "ci_observation": _historical_ci_observation(value.get("check_state")),
+                    "ci_observation": _historical_ci_observation(migrated.get("check_state")),
                 }
-            if _requires_historical_ci_fail_closed_migration(value):
-                return {**value, "check_state": CheckState.UNAVAILABLE}
-        return value
+            if _requires_historical_ci_fail_closed_migration(migrated):
+                return {**migrated, "check_state": CheckState.UNAVAILABLE}
+        return migrated
 
     @model_validator(mode="after")
     def limitations_require_noncomplete_ingestion(self) -> Review:
