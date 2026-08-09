@@ -180,6 +180,39 @@ def test_validated_review_state_rejects_resolutions_without_active_events() -> N
         validated_review_state(state)
 
 
+def test_validated_review_state_rejects_low_evidence_acceptance_without_comment() -> None:
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    event = ResolutionEvent(
+        event_id="unsupported-acceptance",
+        criterion_id="AC-03",
+        decision=HumanDecision.ACCEPTED,
+        comment="   ",
+        criteria_revision_number=1,
+    )
+    state.resolution_events = [event]
+    state.bundle.resolutions = [
+        HumanResolution(
+            criterion_id="AC-03",
+            decision=HumanDecision.ACCEPTED,
+            comment="   ",
+            timestamp=event.timestamp,
+        )
+    ]
+    state.bundle.gate = evaluate_gate(
+        state.bundle.review,
+        state.bundle.criteria,
+        state.bundle.findings,
+        state.bundle.resolutions,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="reviewer comment is required when accepting below the required evidence level",
+    ):
+        validated_review_state(state)
+
+
 def test_validated_review_bundle_rejects_final_acceptance_without_resolutions() -> None:
     bundle = build_demo_review()
     bundle.review.final_acceptance = True
@@ -312,6 +345,7 @@ def test_validated_review_state_rejects_final_acceptance_recorded_too_early() ->
             event_id=f"accepted-{criterion.criterion_id}",
             criterion_id=criterion.criterion_id,
             decision=HumanDecision.ACCEPTED,
+            comment="Historical acceptance rationale",
             criteria_revision_number=1,
         )
         for criterion in state.bundle.criteria
@@ -323,6 +357,7 @@ def test_validated_review_state_rejects_final_acceptance_recorded_too_early() ->
         HumanResolution(
             criterion_id=event.criterion_id,
             decision=HumanDecision.ACCEPTED,
+            comment="Historical acceptance rationale",
             timestamp=event.timestamp,
         )
         for event in criterion_events
@@ -407,6 +442,7 @@ def test_validated_review_state_preserves_legacy_positive_acceptance_as_non_read
             event_id=f"accepted-{criterion.criterion_id}",
             criterion_id=criterion.criterion_id,
             decision=HumanDecision.ACCEPTED,
+            comment="Historical acceptance rationale",
             criteria_revision_number=1,
         )
         for criterion in state.bundle.criteria
@@ -428,6 +464,7 @@ def test_validated_review_state_preserves_legacy_positive_acceptance_as_non_read
             HumanResolution(
                 criterion_id=event.criterion_id,
                 decision=HumanDecision.ACCEPTED,
+                comment="Historical acceptance rationale",
                 timestamp=event.timestamp,
             )
             for event in accepted_events

@@ -162,6 +162,7 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
             decision=(
                 HumanDecision.ACCEPTED if with_evidence else HumanDecision.CHANGE_REQUIRED
             ),
+            comment="Reviewed candidate evidence" if with_evidence else "",
         )
     ]
     findings = [

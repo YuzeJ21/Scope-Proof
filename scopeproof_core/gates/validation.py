@@ -2,6 +2,7 @@
 
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.resolution_events import current_resolutions, final_acceptance
+from scopeproof_core.review_policy import acceptance_requires_comment
 from scopeproof_core.schemas.models import (
     CheckState,
     HumanDecision,
@@ -69,6 +70,32 @@ def _require_manual_verification_evidence(
         )
 
 
+def _require_low_evidence_acceptance_comments(
+    bundle: ReviewBundle, location: str
+) -> None:
+    criteria_by_id = {
+        criterion.criterion_id: criterion for criterion in bundle.criteria
+    }
+    findings_by_id = {finding.criterion_id: finding for finding in bundle.findings}
+    unsupported = [
+        resolution.criterion_id
+        for resolution in bundle.resolutions
+        if (criterion := criteria_by_id.get(resolution.criterion_id)) is not None
+        and (finding := findings_by_id.get(resolution.criterion_id)) is not None
+        and acceptance_requires_comment(
+            resolution.decision,
+            finding.evidence_level,
+            criterion.required_evidence_level,
+        )
+        and not resolution.comment.strip()
+    ]
+    if unsupported:
+        raise ValueError(
+            f"{location} reviewer comment is required when accepting below the "
+            "required evidence level"
+        )
+
+
 def _require_final_acceptance_prerequisites(
     bundle: ReviewBundle, location: str
 ) -> None:
@@ -101,6 +128,7 @@ def _require_final_acceptance_prerequisites(
 
 def _require_evidence_integrity(bundle: ReviewBundle, location: str) -> None:
     _require_manual_verification_evidence(bundle, location)
+    _require_low_evidence_acceptance_comments(bundle, location)
     _require_final_acceptance_prerequisites(bundle, location)
 
 

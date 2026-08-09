@@ -1,27 +1,35 @@
 import json
-from datetime import UTC, datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
+from threading import Event
 
 import pytest
 
+import scopeproof_core.cli as cli_module
 from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import _build_bundle, main
 from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.criteria.service import parse_criteria
-from scopeproof_core.demo import build_demo_review
+from scopeproof_core.demo import build_demo_review, build_review_from_paths
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
     append_resolution,
+    attach_analysis,
+    confirm_criteria,
     new_review_state,
+    revise_criteria,
 )
 from scopeproof_core.schemas.models import (
     CriteriaSourceProvenance,
     Criterion,
     EvidenceLevel,
     HumanDecision,
+    LifecycleMutationMetadata,
     PullRequestSnapshot,
     ResolutionEvent,
     ReviewInputOrigin,
@@ -672,6 +680,811 @@ def test_export_command_supports_self_contained_html(tmp_path: Path, capsys) -> 
 
     assert main(["export", review_id, "--storage-dir", str(storage), "--format", "html"]) == 0
     assert "<!doctype html>" in capsys.readouterr().out.lower()
+
+
+def test_export_command_serializes_with_concurrent_final_acceptance_revocation(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = tmp_path / "reviews"
+    store = JsonReviewStore(storage)
+    accepted = new_review_state(build_demo_review())
+    assert accepted.bundle is not None
+    for criterion in accepted.bundle.criteria:
+        accepted = append_resolution(
+            accepted,
+            ResolutionEvent(
+                event_id=f"cli-export-accepted-{criterion.criterion_id}",
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment="CLI export concurrency fixture acceptance",
+                reviewer="CLI export fixture",
+            ),
+        )
+    accepted = append_resolution(
+        accepted,
+        ResolutionEvent(
+            event_id="cli-export-final-acceptance",
+            final_acceptance=True,
+            comment="CLI export concurrency fixture final acceptance",
+            reviewer="CLI export fixture",
+        ),
+    )
+    store.save(accepted)
+    renderer_entered = Event()
+    release_renderer = Event()
+    mutation_started = Event()
+    mutation_finished = Event()
+    json_renderer = cli_module.EXPORT_RENDERERS["json"]
+
+    def blocking_renderer(state):
+        renderer_entered.set()
+        assert release_renderer.wait(timeout=2)
+        return json_renderer(state)
+
+    monkeypatch.setitem(cli_module.EXPORT_RENDERERS, "json", blocking_renderer)
+
+    def revoke_final_acceptance():
+        mutation_started.set()
+        revoked, _ = store.mutate(
+            accepted.review.review_id,
+            lambda state: append_resolution(
+                state,
+                ResolutionEvent(
+                    event_id="concurrent-cli-export-revocation",
+                    final_acceptance=False,
+                    comment="Concurrent revocation during CLI export",
+                    reviewer="CLI reviewer",
+                ),
+            ),
+        )
+        mutation_finished.set()
+        return revoked
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        export_future = executor.submit(
+            main,
+            [
+                "export",
+                accepted.review.review_id,
+                "--storage-dir",
+                str(storage),
+                "--format",
+                "json",
+            ],
+        )
+        try:
+            assert renderer_entered.wait(timeout=2)
+            mutation_future = executor.submit(revoke_final_acceptance)
+            assert mutation_started.wait(timeout=2)
+            assert not mutation_finished.wait(timeout=0.2)
+        finally:
+            release_renderer.set()
+        assert export_future.result(timeout=2) == 0
+        revoked = mutation_future.result(timeout=2)
+
+    exported = json.loads(capsys.readouterr().out)
+    assert exported["review"]["final_acceptance"] is True
+    assert revoked.review.final_acceptance is False
+
+
+def _save_demo_review(tmp_path: Path) -> tuple[Path, str]:
+    storage = tmp_path / "reviews"
+    state = new_review_state(build_demo_review())
+    JsonReviewStore(storage).save(state)
+    return storage, state.review.review_id
+
+
+def test_resolve_command_appends_validated_resolution_and_reports_gate(
+    tmp_path: Path, capsys
+) -> None:
+    storage, review_id = _save_demo_review(tmp_path)
+
+    assert main(
+        [
+            "resolve",
+            review_id,
+            "--criterion-id",
+            "AC-01",
+            "--decision",
+            HumanDecision.ACCEPTED.value,
+            "--reviewer",
+            "CLI reviewer",
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+
+    payload = LifecycleMutationMetadata.model_validate_json(
+        capsys.readouterr().out
+    ).model_dump(mode="json")
+    saved = JsonReviewStore(storage).load(review_id)
+    assert payload["review_id"] == review_id
+    assert payload["head_sha"] == saved.review.head_sha
+    assert payload["event_id"] == saved.resolution_events[-1].event_id
+    assert payload["verdict"] == saved.bundle.gate.verdict.value
+    assert payload["gate_reason_codes"] == saved.bundle.gate.reason_codes
+    assert saved.bundle.resolutions[0].decision is HumanDecision.ACCEPTED
+    assert saved.bundle.resolutions[0].reviewer == "CLI reviewer"
+
+
+def test_resolve_command_rejects_manual_verification_without_mutation(
+    tmp_path: Path, capsys
+) -> None:
+    storage, review_id = _save_demo_review(tmp_path)
+    record = storage / f"{review_id}.json"
+    before = record.read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "resolve",
+                review_id,
+                "--criterion-id",
+                "AC-01",
+                "--decision",
+                HumanDecision.MANUALLY_VERIFIED.value,
+                "--reviewer",
+                "CLI reviewer",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "manually_verified" in capsys.readouterr().err
+    assert record.read_bytes() == before
+
+
+def test_resolve_command_requires_comment_for_low_evidence_acceptance_atomically(
+    tmp_path: Path, capsys
+) -> None:
+    storage, review_id = _save_demo_review(tmp_path)
+    record = storage / f"{review_id}.json"
+    before = record.read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "resolve",
+                review_id,
+                "--criterion-id",
+                "AC-03",
+                "--decision",
+                HumanDecision.ACCEPTED.value,
+                "--reviewer",
+                "CLI reviewer",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "reviewer comment" in capsys.readouterr().err
+    assert record.read_bytes() == before
+
+
+def test_verify_runtime_command_atomically_appends_matching_evidence_and_resolution(
+    tmp_path: Path, capsys
+) -> None:
+    storage, review_id = _save_demo_review(tmp_path)
+    comment = tmp_path / "runtime-comment.txt"
+    comment.write_text("Observed the constructed export scenario.", encoding="utf-8")
+
+    assert main(
+        [
+            "verify-runtime",
+            review_id,
+            "--criterion-id",
+            "AC-03",
+            "--level",
+            EvidenceLevel.E3.value,
+            "--reviewer",
+            "Runtime reviewer",
+            "--artifact-reference",
+            "https://example.test/runtime/42",
+            "--scenario",
+            "Exercise the missing-evidence behavior",
+            "--environment",
+            "local constructed fixture",
+            "--result",
+            "Observed expected behavior",
+            "--comment-file",
+            str(comment),
+            "--limitation",
+            "Constructed fixture only",
+            "--limitation",
+            "No target code executed",
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+
+    payload = LifecycleMutationMetadata.model_validate_json(
+        capsys.readouterr().out
+    ).model_dump(mode="json")
+    saved = JsonReviewStore(storage).load(review_id)
+    runtime = saved.bundle.runtime_evidence[0]
+    resolution = next(
+        item for item in saved.bundle.resolutions if item.criterion_id == "AC-03"
+    )
+    assert payload["event_id"] == saved.resolution_events[-1].event_id
+    assert runtime.runtime_evidence_id == resolution.runtime_evidence_id
+    assert runtime.repository == saved.review.repository
+    assert runtime.pr_number == saved.review.pr_number
+    assert runtime.head_sha == saved.review.head_sha
+    assert runtime.reviewer == resolution.reviewer == "Runtime reviewer"
+    assert runtime.limitations == ["Constructed fixture only", "No target code executed"]
+    assert resolution.decision is HumanDecision.MANUALLY_VERIFIED
+    assert resolution.claimed_evidence_level is EvidenceLevel.E3
+
+
+@pytest.mark.parametrize(
+    ("criterion_id", "level", "comment_text"),
+    [
+        ("AC-03", EvidenceLevel.E2.value, "Observed scenario"),
+        ("AC-99", EvidenceLevel.E3.value, "Observed scenario"),
+        ("AC-03", EvidenceLevel.E3.value, "   \n"),
+    ],
+)
+def test_verify_runtime_command_rejects_invalid_input_without_mutation(
+    tmp_path: Path,
+    capsys,
+    criterion_id: str,
+    level: str,
+    comment_text: str,
+) -> None:
+    storage, review_id = _save_demo_review(tmp_path)
+    record = storage / f"{review_id}.json"
+    before = record.read_bytes()
+    comment = tmp_path / "runtime-comment.txt"
+    comment.write_text(comment_text, encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "verify-runtime",
+                review_id,
+                "--criterion-id",
+                criterion_id,
+                "--level",
+                level,
+                "--reviewer",
+                "Runtime reviewer",
+                "--artifact-reference",
+                "https://example.test/runtime/42",
+                "--scenario",
+                "Exercise the scenario",
+                "--environment",
+                "local constructed fixture",
+                "--result",
+                "Observed expected behavior",
+                "--comment-file",
+                str(comment),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "Traceback" not in capsys.readouterr().err
+    assert record.read_bytes() == before
+
+
+def _save_final_acceptance_ready_review(tmp_path: Path) -> tuple[Path, str]:
+    storage = tmp_path / "reviews"
+    state = new_review_state(build_demo_review())
+    for criterion in state.bundle.criteria:
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                criterion_id=criterion.criterion_id,
+                decision=(
+                    HumanDecision.ACCEPTED
+                    if criterion.criterion_id in {"AC-01", "AC-02"}
+                    else HumanDecision.ACCEPTED_EXCEPTION
+                ),
+                comment="Reviewed the criterion and its explicit evidence boundary.",
+                reviewer="Fixture reviewer",
+            ),
+        )
+    JsonReviewStore(storage).save(state)
+    return storage, state.review.review_id
+
+
+def test_final_acceptance_command_accepts_and_revokes_through_lifecycle(
+    tmp_path: Path, capsys
+) -> None:
+    storage, review_id = _save_final_acceptance_ready_review(tmp_path)
+
+    assert main(
+        [
+            "final-acceptance",
+            review_id,
+            "--accept",
+            "--reviewer",
+            "Final reviewer",
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+    accepted_payload = LifecycleMutationMetadata.model_validate_json(
+        capsys.readouterr().out
+    ).model_dump(mode="json")
+    accepted = JsonReviewStore(storage).load(review_id)
+    assert accepted.review.final_acceptance is True
+    assert accepted_payload["event_id"] == accepted.resolution_events[-1].event_id
+
+    assert main(
+        [
+            "final-acceptance",
+            review_id,
+            "--revoke",
+            "--reviewer",
+            "Final reviewer",
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+    revoked_payload = LifecycleMutationMetadata.model_validate_json(
+        capsys.readouterr().out
+    ).model_dump(mode="json")
+    revoked = JsonReviewStore(storage).load(review_id)
+    assert revoked.review.final_acceptance is False
+    assert revoked_payload["event_id"] == revoked.resolution_events[-1].event_id
+
+
+def test_final_acceptance_command_rejects_premature_acceptance_without_mutation(
+    tmp_path: Path, capsys
+) -> None:
+    storage, review_id = _save_demo_review(tmp_path)
+    record = storage / f"{review_id}.json"
+    before = record.read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "final-acceptance",
+                review_id,
+                "--accept",
+                "--reviewer",
+                "Final reviewer",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "prerequisites" in capsys.readouterr().err
+    assert record.read_bytes() == before
+
+
+def test_final_acceptance_command_requires_exactly_one_action(
+    tmp_path: Path, capsys
+) -> None:
+    storage, review_id = _save_demo_review(tmp_path)
+
+    with pytest.raises(SystemExit) as missing:
+        main(
+            [
+                "final-acceptance",
+                review_id,
+                "--reviewer",
+                "Final reviewer",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+    assert missing.value.code == 2
+    assert "one of the arguments --accept --revoke is required" in capsys.readouterr().err
+
+    with pytest.raises(SystemExit) as conflicting:
+        main(
+            [
+                "final-acceptance",
+                review_id,
+                "--accept",
+                "--revoke",
+                "--reviewer",
+                "Final reviewer",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+    assert conflicting.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "command_name",
+    ["resolve", "verify-runtime", "final-acceptance", "compare"],
+)
+def test_lifecycle_commands_reject_malformed_record_envelope_without_traceback(
+    tmp_path: Path,
+    capsys,
+    command_name: str,
+) -> None:
+    storage = tmp_path / "reviews"
+    storage.mkdir()
+    record = storage / "broken-review.json"
+    record.write_text('{"record_version": 4}', encoding="utf-8")
+    before = record.read_bytes()
+    comment = tmp_path / "comment.txt"
+    comment.write_text("Constructed reviewer note", encoding="utf-8")
+    commands = {
+        "resolve": [
+            "resolve",
+            "broken-review",
+            "--criterion-id",
+            "AC-01",
+            "--decision",
+            HumanDecision.REJECTED_FINDING.value,
+            "--reviewer",
+            "CLI reviewer",
+        ],
+        "verify-runtime": [
+            "verify-runtime",
+            "broken-review",
+            "--criterion-id",
+            "AC-01",
+            "--level",
+            EvidenceLevel.E3.value,
+            "--reviewer",
+            "CLI reviewer",
+            "--artifact-reference",
+            "https://example.test/runtime/42",
+            "--scenario",
+            "Constructed scenario",
+            "--environment",
+            "Constructed environment",
+            "--result",
+            "Constructed result",
+            "--comment-file",
+            str(comment),
+        ],
+        "final-acceptance": [
+            "final-acceptance",
+            "broken-review",
+            "--revoke",
+            "--reviewer",
+            "CLI reviewer",
+        ],
+        "compare": ["compare", "broken-review", "broken-review"],
+    }
+
+    with pytest.raises(SystemExit) as error:
+        main([*commands[command_name], "--storage-dir", str(storage)])
+
+    stderr = capsys.readouterr().err
+    assert error.value.code == 2
+    assert "record envelope" in stderr
+    assert "Traceback" not in stderr
+    assert record.read_bytes() == before
+
+
+def _save_comparison_reviews(tmp_path: Path) -> tuple[Path, str, str]:
+    storage = tmp_path / "reviews"
+    store = JsonReviewStore(storage)
+    previous = new_review_state(
+        build_review_from_paths(
+            Path("evals/comparisons/previous_pr.json"),
+            Path("evals/comparisons/previous_labels.json"),
+        )
+    )
+    current = new_review_state(
+        build_review_from_paths(
+            Path("evals/comparisons/current_pr.json"),
+            Path("evals/comparisons/current_labels.json"),
+        )
+    )
+    store.save(previous)
+    store.save(current)
+    return storage, previous.review.review_id, current.review.review_id
+
+
+def test_compare_command_writes_validated_json_to_stdout_without_mutating_reviews(
+    tmp_path: Path, capsys
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    previous_record = storage / f"{previous_id}.json"
+    current_record = storage / f"{current_id}.json"
+    before = (previous_record.read_bytes(), current_record.read_bytes())
+
+    assert main(
+        [
+            "compare",
+            previous_id,
+            current_id,
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["previous_head_sha"] == "constructed-previous-001"
+    assert payload["current_head_sha"] == "constructed-current-001"
+    assert payload["evidence_change_counts"] == {
+        "added": 3,
+        "modified": 1,
+        "relocated": 1,
+        "removed": 3,
+        "unchanged": 0,
+    }
+    assert previous_record.read_bytes() == before[0]
+    assert current_record.read_bytes() == before[1]
+
+
+@pytest.mark.parametrize("compare_same_review", [False, True])
+def test_compare_command_serializes_snapshot_with_concurrent_lifecycle_mutation(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+    compare_same_review: bool,
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    if compare_same_review:
+        current_id = previous_id
+    store = JsonReviewStore(storage)
+    renderer_entered = Event()
+    release_renderer = Event()
+    mutation_started = Event()
+    mutation_finished = Event()
+    json_renderer = cli_module.COMPARISON_RENDERERS["json"]
+
+    def blocking_renderer(comparison):
+        renderer_entered.set()
+        assert release_renderer.wait(timeout=2)
+        return json_renderer(comparison)
+
+    monkeypatch.setitem(cli_module.COMPARISON_RENDERERS, "json", blocking_renderer)
+
+    def mutate_current_review():
+        mutation_started.set()
+        updated, _ = store.mutate(
+            current_id,
+            lambda state: append_resolution(
+                state,
+                ResolutionEvent(
+                    event_id=f"concurrent-compare-resolution-{compare_same_review}",
+                    criterion_id="AC-01",
+                    decision=HumanDecision.ACCEPTED,
+                    comment="Concurrent lifecycle mutation during CLI comparison",
+                    reviewer="CLI comparison fixture",
+                ),
+            ),
+        )
+        mutation_finished.set()
+        return updated
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        compare_future = executor.submit(
+            main,
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--storage-dir",
+                str(storage),
+            ],
+        )
+        try:
+            assert renderer_entered.wait(timeout=2)
+            mutation_future = executor.submit(mutate_current_review)
+            assert mutation_started.wait(timeout=2)
+            assert not mutation_finished.wait(timeout=0.2)
+        finally:
+            release_renderer.set()
+        assert compare_future.result(timeout=2) == 0
+        updated = mutation_future.result(timeout=2)
+
+    comparison = json.loads(capsys.readouterr().out)
+    assert comparison["changed_human_resolutions"] == []
+    assert updated.resolution_events[-1].decision is HumanDecision.ACCEPTED
+
+
+def test_compare_command_writes_markdown_and_refuses_overwrite(
+    tmp_path: Path, capsys
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    output = tmp_path / "comparison.md"
+
+    assert main(
+        [
+            "compare",
+            previous_id,
+            current_id,
+            "--format",
+            "markdown",
+            "--output",
+            str(output),
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+    assert capsys.readouterr().out == ""
+    report = output.read_text(encoding="utf-8")
+    assert "# ScopeProof Re-review Comparison" in report
+    assert "Candidate comparison does not prove criterion satisfaction" in report
+
+    before = output.read_bytes()
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--format",
+                "markdown",
+                "--output",
+                str(output),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+    assert error.value.code == 2
+    assert "already exists" in capsys.readouterr().err
+    assert output.read_bytes() == before
+
+
+def test_compare_command_rejects_review_without_active_bundle(
+    tmp_path: Path, capsys
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    store = JsonReviewStore(storage)
+    current = store.load(current_id)
+    pending = revise_criteria(
+        current,
+        [Criterion(criterion_id="AC-01", text="Revised criterion")],
+        "Revised criterion",
+    )
+    store.save(pending)
+    before = (storage / f"{current_id}.json").read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "active analysis" in capsys.readouterr().err
+    assert (storage / f"{current_id}.json").read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("identity_update", "identity_value"),
+    [("repository", "other/widget"), ("pr_number", 999)],
+)
+def test_compare_command_rejects_reviews_from_different_pull_requests(
+    tmp_path: Path,
+    capsys,
+    identity_update: str,
+    identity_value: str | int,
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    store = JsonReviewStore(storage)
+    current = store.load(current_id)
+    assert current.bundle is not None
+    current_review = current.review.model_copy(
+        update={identity_update: identity_value}
+    )
+    current_bundle = current.bundle.model_copy(
+        update={"review": current_review.model_copy(deep=True)}
+    )
+    mismatched = current.model_copy(
+        update={"review": current_review, "bundle": current_bundle}
+    )
+    store.save(mismatched)
+    before = {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    }
+    output = tmp_path / "unrelated-comparison.json"
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--output",
+                str(output),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "same repository and pull request" in capsys.readouterr().err
+    assert not output.exists()
+    assert {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    } == before
+
+
+@pytest.mark.parametrize(
+    ("criterion_update", "criterion_value"),
+    [
+        ("text", "Revised confirmed criterion"),
+        ("required_evidence_level", EvidenceLevel.E3),
+    ],
+)
+def test_compare_command_rejects_different_confirmed_criterion_definitions(
+    tmp_path: Path,
+    capsys,
+    criterion_update: str,
+    criterion_value: str | EvidenceLevel,
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    store = JsonReviewStore(storage)
+    current = store.load(current_id)
+    assert current.bundle is not None
+    revised_criteria = [item.model_copy(deep=True) for item in current.bundle.criteria]
+    revised_criteria[0] = revised_criteria[0].model_copy(
+        update={criterion_update: criterion_value}
+    )
+    revised_source = "\n".join(item.text for item in revised_criteria)
+    pending = revise_criteria(current, revised_criteria, revised_source)
+    confirmed = confirm_criteria(
+        pending,
+        build_criteria_source_provenance(
+            source_uri="https://example.test/revised-requirements",
+            source_revision="revised-v2",
+            source_text=revised_source,
+            criteria=revised_criteria,
+            confirmed_by="Comparison fixture owner",
+            confirmed_at=pending.criteria_revision.created_at + timedelta(seconds=1),
+        ),
+    )
+    incoming = current.bundle.model_copy(
+        update={
+            "review": confirmed.review.model_copy(deep=True),
+            "source_text": revised_source,
+            "criteria": [item.model_copy(deep=True) for item in revised_criteria],
+            "gate": evaluate_gate(
+                confirmed.review,
+                revised_criteria,
+                current.bundle.findings,
+                [],
+            ),
+        },
+        deep=True,
+    )
+    reanalyzed = attach_analysis(confirmed, incoming)
+    store.save(reanalyzed)
+    before = {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    }
+    output = tmp_path / "criterion-mismatch-comparison.json"
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--output",
+                str(output),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "identical confirmed criterion definitions" in capsys.readouterr().err
+    assert not output.exists()
+    assert {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    } == before
 
 
 def test_export_command_migrates_raw_v2_runtime_verification_fail_closed(

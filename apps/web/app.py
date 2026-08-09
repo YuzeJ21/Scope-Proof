@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from functools import partial
-from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
 import streamlit as st
 
+from apps.web.deferred_exports import deferred_review_export
 from apps.web.view_models import default_criterion_detail_id, group_candidate_evidence
 from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
@@ -63,6 +64,7 @@ from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.comparison import EvidenceReference, compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
+    acceptance_requires_comment,
     append_external_verification,
     append_resolution,
     attach_analysis,
@@ -92,6 +94,7 @@ from scopeproof_core.schemas.models import (
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
+    StaleReviewState,
     UnsafeReviewStore,
     UnsupportedRecordVersion,
     default_local_review_directory,
@@ -196,6 +199,7 @@ _STATE_DEFAULTS = {
     "source_reload_notice": None,
     "saved_review_fingerprint": None,
     "failed_review_save_fingerprint": None,
+    "review_save_conflict": False,
     "deleted_review_save_fingerprint": None,
     "review_save_notice": None,
     "replace_unsaved_review_confirmed": False,
@@ -261,6 +265,7 @@ def _reset_analysis() -> None:
     st.session_state["reopened_review_id"] = None
     st.session_state["saved_review_fingerprint"] = None
     st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["review_save_conflict"] = False
     st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["criteria_source_provenance"] = None
@@ -317,7 +322,7 @@ def _apply_criteria_update(
 
 def _review_state_fingerprint(state: ReviewState) -> str:
     """Return a deterministic session-only identity for a validated review state."""
-    return sha256(state.model_dump_json().encode("utf-8")).hexdigest()
+    return JsonReviewStore.state_fingerprint(state)
 
 
 def _review_matches_local_save(state: ReviewState) -> bool:
@@ -328,12 +333,21 @@ def _review_matches_local_save(state: ReviewState) -> bool:
 def _persist_review_state(state: ReviewState, store: JsonReviewStore) -> bool:
     fingerprint = _review_state_fingerprint(state)
     try:
-        store.save(state)
+        store.save(
+            state,
+            expected_fingerprint=st.session_state["saved_review_fingerprint"],
+        )
+    except StaleReviewState:
+        st.session_state["failed_review_save_fingerprint"] = fingerprint
+        st.session_state["review_save_conflict"] = True
+        return False
     except (OSError, ValueError):
         st.session_state["failed_review_save_fingerprint"] = fingerprint
+        st.session_state["review_save_conflict"] = False
         return False
     st.session_state["saved_review_fingerprint"] = fingerprint
     st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["review_save_conflict"] = False
     st.session_state["deleted_review_save_fingerprint"] = None
     return True
 
@@ -363,6 +377,114 @@ def _autosave_review_if_eligible(
     return True
 
 
+def _refresh_clean_review_from_local_store(
+    state: ReviewState | None,
+    *,
+    store: JsonReviewStore,
+    store_available: bool,
+    has_pending_review_input: bool,
+) -> ReviewState | None:
+    """Refresh a clean open review before rendering or exporting persisted truth."""
+
+    if state is None:
+        return state
+    expected_fingerprint = st.session_state["saved_review_fingerprint"]
+    current_fingerprint = _review_state_fingerprint(state)
+    if not store_available:
+        if expected_fingerprint:
+            st.session_state["saved_review_fingerprint"] = None
+            st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+            st.session_state["review_save_conflict"] = True
+        return state
+    if not expected_fingerprint or current_fingerprint != expected_fingerprint:
+        return state
+    try:
+        with store.locked_load(state.review.review_id) as persisted:
+            persisted_fingerprint = _review_state_fingerprint(persisted)
+            if persisted_fingerprint == expected_fingerprint:
+                return state
+            if has_pending_review_input:
+                st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+                st.session_state["review_save_conflict"] = True
+                return state
+            _hydrate_reopened_review(persisted)
+            st.session_state["review_save_notice"] = (
+                "Review refreshed from local storage after an external update."
+            )
+            return persisted
+    except FileNotFoundError:
+        st.session_state["saved_review_fingerprint"] = None
+        st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = False
+        return state
+    except (OSError, ValueError):
+        st.session_state["saved_review_fingerprint"] = None
+        st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = True
+        return state
+
+
+@contextmanager
+def _locked_review_status_snapshot(
+    state: ReviewState | None,
+    *,
+    store: JsonReviewStore,
+    store_available: bool,
+    has_pending_review_input: bool,
+) -> Iterator[ReviewState | None]:
+    """Hold persisted review truth stable through Summary status rendering."""
+
+    if state is None or not store_available:
+        yield _refresh_clean_review_from_local_store(
+            state,
+            store=store,
+            store_available=store_available,
+            has_pending_review_input=has_pending_review_input,
+        )
+        return
+    expected_fingerprint = st.session_state["saved_review_fingerprint"]
+    current_fingerprint = _review_state_fingerprint(state)
+    if not expected_fingerprint or current_fingerprint != expected_fingerprint:
+        yield state
+        return
+    lock_stack = ExitStack()
+    try:
+        persisted = lock_stack.enter_context(
+            store.locked_load(state.review.review_id)
+        )
+    except FileNotFoundError:
+        lock_stack.close()
+        st.session_state["saved_review_fingerprint"] = None
+        st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = False
+        yield state
+        return
+    except (OSError, ValueError):
+        lock_stack.close()
+        st.session_state["saved_review_fingerprint"] = None
+        st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+        st.session_state["review_save_conflict"] = True
+        yield state
+        return
+    try:
+        persisted_fingerprint = _review_state_fingerprint(persisted)
+        if persisted_fingerprint == expected_fingerprint:
+            refreshed = state
+        elif has_pending_review_input:
+            st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+            st.session_state["review_save_conflict"] = True
+            refreshed = state
+        else:
+            _hydrate_reopened_review(persisted)
+            st.session_state["review_save_notice"] = (
+                "Review refreshed from local storage after an external update."
+            )
+            refreshed = persisted
+        yield refreshed
+    finally:
+        lock_stack.close()
+
+
 def _mark_open_review_deleted(review_id: str) -> bool:
     current: ReviewState | None = st.session_state["review_state"]
     if current is None or current.review.review_id != review_id:
@@ -370,6 +492,7 @@ def _mark_open_review_deleted(review_id: str) -> bool:
     current_fingerprint = _review_state_fingerprint(current)
     st.session_state["saved_review_fingerprint"] = None
     st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
+    st.session_state["review_save_conflict"] = False
     if st.session_state["failed_review_save_fingerprint"] == current_fingerprint:
         st.session_state["failed_review_save_fingerprint"] = None
     return True
@@ -390,6 +513,7 @@ def _render_local_review_storage(
     save_failed = (
         st.session_state["failed_review_save_fingerprint"] == current_fingerprint
     )
+    save_conflict = bool(st.session_state["review_save_conflict"] and save_failed)
     save_deleted = (
         st.session_state["deleted_review_save_fingerprint"] == current_fingerprint
     )
@@ -413,6 +537,12 @@ def _render_local_review_storage(
             )
         elif review_matches_local_save:
             st.caption("Saved locally — current review matches local storage.")
+        elif save_conflict:
+            st.warning(
+                "The saved review changed outside this workbench. Reopen it before saving "
+                "again so newer lifecycle events are not overwritten. This open review "
+                "remains available as unsaved work."
+            )
         elif save_failed:
             st.error(
                 "The review could not be saved locally. The current review remains open as "
@@ -429,6 +559,7 @@ def _render_local_review_storage(
                 review_matches_local_save
                 or has_pending_review_input
                 or not store_available
+                or save_conflict
             ),
         )
         if save_clicked:
@@ -438,11 +569,18 @@ def _render_local_review_storage(
                 )
                 st.rerun()
             else:
-                st.error(
-                    "The review could not be saved locally. The current review remains open "
-                    "as unsaved work. Verify the local review directory and review integrity, "
-                    "then try again."
-                )
+                if st.session_state["review_save_conflict"]:
+                    st.warning(
+                        "The saved review changed outside this workbench. Reopen it before "
+                        "saving again so newer lifecycle events are not overwritten. This "
+                        "open review remains available as unsaved work."
+                    )
+                else:
+                    st.error(
+                        "The review could not be saved locally. The current review remains "
+                        "open as unsaved work. Verify the local review directory and review "
+                        "integrity, then try again."
+                    )
 
 
 def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
@@ -485,6 +623,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["source_reload_notice"] = None
     st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(state)
     st.session_state["failed_review_save_fingerprint"] = None
+    st.session_state["review_save_conflict"] = False
     st.session_state["deleted_review_save_fingerprint"] = None
     st.session_state["review_save_notice"] = None
     st.session_state["candidate_files"] = []
@@ -877,6 +1016,12 @@ has_pending_review_input = (
     or has_pending_criterion_detail_draft
     or has_pending_criteria_source
     or has_missing_active_provenance
+)
+current_review_state = _refresh_clean_review_from_local_store(
+    current_review_state,
+    store=review_store,
+    store_available=review_store_available,
+    has_pending_review_input=has_pending_review_input,
 )
 pending_storage_messages: list[str] = []
 if has_pending_criteria_draft:
@@ -2229,10 +2374,10 @@ else:
         else:
             st.caption(f"Decision impact: {decision_guidance(decision)}")
         resolution_note = st.text_area("Reviewer note", key="resolution_note")
-        acceptance_below_required = (
-            decision is HumanDecision.ACCEPTED
-            and selected_finding.evidence_level.rank
-            < selected_criterion.required_evidence_level.rank
+        acceptance_below_required = decision is not None and acceptance_requires_comment(
+            decision,
+            selected_finding.evidence_level,
+            selected_criterion.required_evidence_level,
         )
         if acceptance_below_required:
             st.warning("Accept despite insufficient candidate evidence")
@@ -2600,21 +2745,46 @@ else:
         else:
             st.caption("No human decisions have been recorded yet.")
 
-    st.header("5 · Summary & Export")
-    review_status = review_status_label(bundle.gate.verdict)
-    st.markdown(f"**Review status: {review_status}**")
-    if bundle.gate.reason_codes:
-        labels = [_status_label(code) for code in bundle.gate.reason_codes]
-        st.write("Gate reasons: " + " · ".join(labels))
-    guidance = gate_guidance(bundle.gate)
-    if guidance:
-        st.markdown("### What to do next")
-        for message in guidance:
-            st.text(message)
-    st.caption(
-        f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
-        "results are reproducible from the exported review"
-    )
+    with _locked_review_status_snapshot(
+        review_state,
+        store=review_store,
+        store_available=review_store_available,
+        has_pending_review_input=has_pending_review_input,
+    ) as status_review_state:
+        if status_review_state is not None:
+            review_state = status_review_state
+            if status_review_state.bundle is not None:
+                bundle = status_review_state.bundle
+        st.header("5 · Summary & Export")
+        review_truth_conflict = bool(
+            review_state is not None
+            and st.session_state["review_save_conflict"]
+            and st.session_state["failed_review_save_fingerprint"]
+            == _review_state_fingerprint(review_state)
+        )
+        review_status = (
+            "Refresh required"
+            if review_truth_conflict
+            else review_status_label(bundle.gate.verdict)
+        )
+        st.markdown(f"**Review status: {review_status}**")
+        if review_truth_conflict:
+            st.warning(
+                "The persisted review could not be revalidated. Reopen it before relying on the "
+                "status or exporting this review."
+            )
+        if bundle.gate.reason_codes:
+            labels = [_status_label(code) for code in bundle.gate.reason_codes]
+            st.write("Gate reasons: " + " · ".join(labels))
+        guidance = gate_guidance(bundle.gate)
+        if guidance:
+            st.markdown("### What to do next")
+            for message in guidance:
+                st.text(message)
+        st.caption(
+            f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
+            "results are reproducible from the exported review"
+        )
     if has_pending_review_input:
         st.warning(
             "Resolve, submit, discard, or clear pending inputs before exporting the "
@@ -2622,10 +2792,31 @@ else:
         )
     export_source = review_state if review_state is not None else bundle
     export_has_provenance = bundle.review.criteria_source_provenance is not None
+    expected_export_fingerprint = (
+        st.session_state["saved_review_fingerprint"]
+        if review_state is not None
+        and _review_matches_local_save(review_state)
+        else None
+    )
     if export_has_provenance:
-        markdown_report = export_markdown(export_source)
-        json_report = export_json(export_source)
-        csv_report = export_csv(export_source)
+        markdown_report = deferred_review_export(
+            export_source,
+            export_markdown,
+            store=review_store,
+            expected_fingerprint=expected_export_fingerprint,
+        )
+        json_report = deferred_review_export(
+            export_source,
+            export_json,
+            store=review_store,
+            expected_fingerprint=expected_export_fingerprint,
+        )
+        csv_report = deferred_review_export(
+            export_source,
+            export_csv,
+            store=review_store,
+            expected_fingerprint=expected_export_fingerprint,
+        )
     else:
         markdown_report = ""
         json_report = ""
@@ -2637,7 +2828,11 @@ else:
             markdown_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.md",
             mime="text/markdown",
-            disabled=has_pending_review_input or not export_has_provenance,
+            disabled=(
+                has_pending_review_input
+                or review_truth_conflict
+                or not export_has_provenance
+            ),
             key="download_markdown",
         )
     with json_column:
@@ -2646,7 +2841,11 @@ else:
             json_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.json",
             mime="application/json",
-            disabled=has_pending_review_input or not export_has_provenance,
+            disabled=(
+                has_pending_review_input
+                or review_truth_conflict
+                or not export_has_provenance
+            ),
             key="download_json",
         )
     with csv_column:
@@ -2655,7 +2854,11 @@ else:
             csv_report,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.csv",
             mime="text/csv",
-            disabled=has_pending_review_input or not export_has_provenance,
+            disabled=(
+                has_pending_review_input
+                or review_truth_conflict
+                or not export_has_provenance
+            ),
             key="download_csv",
         )
     if review_save_notice is not None:

@@ -10,6 +10,7 @@ from scopeproof_core.gates.validation import (
     validated_review_state,
 )
 from scopeproof_core.resolution_events import current_resolutions, final_acceptance
+from scopeproof_core.review_policy import acceptance_requires_comment
 from scopeproof_core.schemas.models import (
     CheckState,
     CriteriaRevision,
@@ -268,6 +269,29 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
         criterion.criterion_id for criterion in state.bundle.criteria
     }:
         raise ValueError("resolution event must reference a criterion in the active review")
+    if event.criterion_id is not None:
+        criterion_by_id = {
+            criterion.criterion_id: criterion for criterion in state.bundle.criteria
+        }
+        finding_by_id = {
+            finding.criterion_id: finding for finding in state.bundle.findings
+        }
+        criterion = criterion_by_id[event.criterion_id]
+        finding = finding_by_id.get(event.criterion_id)
+        if (
+            finding is not None
+            and event.decision is not None
+            and acceptance_requires_comment(
+                event.decision,
+                finding.evidence_level,
+                criterion.required_evidence_level,
+            )
+            and not event.comment.strip()
+        ):
+            raise ValueError(
+                "a reviewer comment is required when accepting below the required "
+                "evidence level"
+            )
     bound_event = ResolutionEvent.model_validate(
         {
             **event.model_dump(),

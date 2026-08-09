@@ -8,6 +8,7 @@ from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews import attach_analysis
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
+    acceptance_requires_comment,
     append_external_verification,
     append_resolution,
     append_runtime_evidence,
@@ -855,6 +856,61 @@ def test_resolution_events_preserve_history_and_latest_decision_controls_gate() 
     assert len(state.resolution_events) == 2
     assert current[0].decision is HumanDecision.ACCEPTED
     assert state.bundle is not None
+    assert state.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+
+
+@pytest.mark.parametrize(
+    ("decision", "observed", "required", "expected"),
+    [
+        (HumanDecision.ACCEPTED, EvidenceLevel.E1, EvidenceLevel.E2, True),
+        (HumanDecision.ACCEPTED, EvidenceLevel.E2, EvidenceLevel.E2, False),
+        (HumanDecision.ACCEPTED, EvidenceLevel.E3, EvidenceLevel.E2, False),
+        (HumanDecision.CHANGE_REQUIRED, EvidenceLevel.E1, EvidenceLevel.E2, False),
+        (HumanDecision.ACCEPTED_EXCEPTION, EvidenceLevel.E1, EvidenceLevel.E2, False),
+    ],
+)
+def test_acceptance_comment_policy(
+    decision: HumanDecision,
+    observed: EvidenceLevel,
+    required: EvidenceLevel,
+    expected: bool,
+) -> None:
+    assert acceptance_requires_comment(decision, observed, required) is expected
+
+
+def test_append_resolution_requires_comment_for_low_evidence_acceptance() -> None:
+    state = initial_state()
+    assert state.bundle is not None
+    criterion = state.bundle.criteria[0].model_copy(
+        update={"required_evidence_level": EvidenceLevel.E2}
+    )
+    provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text=state.bundle.source_text,
+        criteria=[criterion],
+        confirmed_by="Fixture owner",
+        confirmed_at=state.review.created_at,
+    )
+    state.bundle.criteria = [criterion]
+    state.bundle.review.criteria_source_provenance = provenance
+    state.criteria_revision.criteria = [criterion.model_copy(deep=True)]
+    state.criteria_revision.source_provenance = provenance.model_copy(deep=True)
+    state.criteria_revision.confirmed_at = provenance.confirmed_at
+    state.review.criteria_source_provenance = provenance.model_copy(deep=True)
+
+    with pytest.raises(
+        ValueError,
+        match="reviewer comment is required when accepting below the required evidence level",
+    ):
+        append_resolution(
+            state,
+            ResolutionEvent(
+                criterion_id="AC-01",
+                decision=HumanDecision.ACCEPTED,
+                comment="   ",
+            ),
+        )
+    assert state.resolution_events == []
     assert state.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
 
 

@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -2906,6 +2907,197 @@ def test_post_save_resolution_changes_fingerprint_and_autosaves_review_again(
     assert _review_fingerprint_for_test(current_state) != previous_fingerprint
     assert persisted_state == current_state
     assert app.button(key="save_review").disabled is True
+
+
+def test_pending_resolution_input_does_not_overwrite_external_lifecycle_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app, review_id = saved_demo_review(new_app())
+    store = JsonReviewStore(default_local_review_directory())
+    external, _ = store.mutate(
+        review_id,
+        lambda state: append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="external-cli-revocation",
+                final_acceptance=False,
+                comment="CLI revocation while workbench remained open",
+                reviewer="CLI reviewer",
+            ),
+        ),
+    )
+
+    app = app.selectbox(key="resolution_decision").set_value(
+        HumanDecision.ACCEPTED
+    ).run()
+    app = app.button(key="save_resolution").click().run()
+
+    assert store.load(review_id) == external
+    assert app.session_state["review_state"] != external
+    messages = [item.value for item in [*app.error, *app.warning]]
+    assert any("changed outside this workbench" in message for message in messages)
+    assert any(
+        "newer lifecycle events are not overwritten" in message
+        for message in messages
+    )
+
+
+def test_clean_open_workbench_refreshes_external_final_acceptance_revocation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+    accepted = app.session_state["review_state"]
+    assert accepted.bundle.gate.verdict is GateVerdict.READY
+    review_id = accepted.review.review_id
+    store = JsonReviewStore(default_local_review_directory())
+    revoked, _ = store.mutate(
+        review_id,
+        lambda state: append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="external-cli-final-revocation",
+                final_acceptance=False,
+                comment="CLI revocation while accepted review remained open",
+                reviewer="CLI reviewer",
+            ),
+        ),
+    )
+
+    app = app.run()
+
+    assert app.session_state["review_state"] == revoked
+    assert app.session_state["bundle"] == revoked.bundle
+    assert app.session_state["saved_review_fingerprint"] == (
+        _review_fingerprint_for_test(revoked)
+    )
+    assert revoked.bundle.gate.verdict is not GateVerdict.READY
+    assert "**Review status: Review complete**" not in [
+        item.value for item in app.markdown
+    ]
+    assert "Review refreshed from local storage after an external update." in [
+        item.value for item in app.success
+    ]
+    assert all(button.proto.deferred_file_id for button in app.download_button)
+    assert all(not button.proto.url for button in app.download_button)
+
+
+def test_clean_open_workbench_refresh_and_status_use_shared_record_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+    review_id = app.session_state["review_state"].review.review_id
+    locked_review_ids: list[str] = []
+    original_locked_load = JsonReviewStore.locked_load
+
+    @contextmanager
+    def tracking_locked_load(store: JsonReviewStore, target_review_id: str):
+        locked_review_ids.append(target_review_id)
+        with original_locked_load(store, target_review_id) as state:
+            yield state
+
+    with patch.object(JsonReviewStore, "locked_load", tracking_locked_load):
+        app = app.run()
+
+    assert not app.exception
+    assert locked_review_ids == [review_id, review_id]
+
+
+def test_failed_persisted_review_revalidation_blocks_status_and_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.load",
+        side_effect=OSError("synthetic local read failure"),
+    ):
+        app = app.run()
+
+    assert "**Review status: Refresh required**" in [
+        item.value for item in app.markdown
+    ]
+    assert all(button.disabled for button in app.download_button)
+    assert any(
+        "could not be revalidated" in item.value for item in app.warning
+    )
+    assert "synthetic local read failure" not in "\n".join(
+        item.value for item in [*app.warning, *app.error]
+    )
+
+
+def test_unavailable_saved_review_store_blocks_status_and_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.list_review_ids",
+        side_effect=OSError("synthetic unavailable review store"),
+    ):
+        app = app.run()
+
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["review_save_conflict"] is True
+    assert "**Review status: Refresh required**" in [
+        item.value for item in app.markdown
+    ]
+    assert all(button.disabled for button in app.download_button)
+    assert "synthetic unavailable review store" not in "\n".join(
+        item.value for item in [*app.warning, *app.error]
+    )
+
+
+def test_external_update_preserves_pending_input_and_blocks_stale_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+    accepted = app.session_state["review_state"]
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "pending-runtime-artifact"
+    ).run()
+    JsonReviewStore(default_local_review_directory()).mutate(
+        accepted.review.review_id,
+        lambda state: append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="external-revocation-with-pending-input",
+                final_acceptance=False,
+                comment="External revocation while workbench input was pending",
+                reviewer="CLI reviewer",
+            ),
+        ),
+    )
+
+    app = app.run()
+
+    assert app.session_state["review_state"] == accepted
+    assert app.text_input(key="runtime_artifact_reference").value == (
+        "pending-runtime-artifact"
+    )
+    assert "**Review status: Refresh required**" in [
+        item.value for item in app.markdown
+    ]
+    assert all(button.disabled for button in app.download_button)
+    assert any(
+        "changed outside this workbench" in item.value for item in app.warning
+    )
 
 
 def test_unsaved_review_requires_explicit_approval_before_replacement(

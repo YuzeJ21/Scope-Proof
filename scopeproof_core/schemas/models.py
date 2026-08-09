@@ -240,6 +240,19 @@ class GateVerdict(StringEnum):
     NEEDS_REVIEW = "needs_review"
 
 
+class LifecycleMutationMetadata(BaseModel):
+    """Validated CLI output for one persisted lifecycle mutation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    review_id: LocalReviewId
+    record: str = Field(min_length=1)
+    head_sha: str = Field(min_length=1)
+    event_id: str = Field(min_length=1)
+    verdict: GateVerdict
+    gate_reason_codes: list[str] = Field(default_factory=list)
+
+
 class CheckState(StringEnum):
     PASSING = "passing"
     FAILING = "failing"

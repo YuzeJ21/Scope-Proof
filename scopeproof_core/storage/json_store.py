@@ -7,15 +7,30 @@ import os
 import re
 import stat
 import tempfile
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
+
+from pydantic import BaseModel, ConfigDict, StrictInt, ValidationError
 
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewBundle, ReviewState
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fail-closed portability guard
+    fcntl = None  # type: ignore[assignment]
+
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - exercised through the Windows-lock seam
+    msvcrt = None  # type: ignore[assignment]
 
 RECORD_VERSION = 4
 _SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4)
@@ -33,6 +48,17 @@ _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED = (
     and os.stat in os.supports_follow_symlinks
     and os.unlink in os.supports_dir_fd
 )
+_UNCONDITIONAL_SAVE = object()
+
+
+class _ReviewRecordEnvelope(BaseModel):
+    """Strict outer contract around versioned, migratable review state."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    record_version: StrictInt
+    saved_at: str | None = None
+    state: object
 
 
 def default_local_review_directory() -> Path:
@@ -46,6 +72,10 @@ class UnsupportedRecordVersion(ValueError):
 
 class UnsafeReviewStore(ValueError):
     """Raised when the configured store root is an unsafe filesystem object."""
+
+
+class StaleReviewState(ValueError):
+    """Raised when a guarded save would replace a newer local review state."""
 
 
 @dataclass(frozen=True)
@@ -77,6 +107,52 @@ class JsonReviewStore:
     def _path(self, review_id: str) -> Path:
         return self.directory / f"{self._validate_review_id(review_id)}.json"
 
+    @contextmanager
+    def _mutation_lock(self, review_id: str) -> Iterator[None]:
+        """Serialize one record's read-transition-write lifecycle."""
+
+        if fcntl is None and msvcrt is None:
+            raise OSError("serialized review updates are unsupported on this platform")
+        validated_id = self._validate_review_id(review_id)
+        self._require_safe_directory()
+        self.directory.mkdir(parents=True, exist_ok=True)
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        lock_name = f".{sha256(validated_id.encode('utf-8')).hexdigest()}.lock"
+        try:
+            descriptor = os.open(
+                self.directory / lock_name,
+                flags,
+                0o600,
+            )
+        except OSError:
+            raise UnsafeReviewStore("review mutation lock must be a regular local file") from None
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise UnsafeReviewStore(
+                    "review mutation lock must be a regular local file"
+                )
+            if fcntl is not None:
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            else:
+                assert msvcrt is not None
+                if os.fstat(descriptor).st_size == 0:
+                    os.write(descriptor, b"\0")
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
+                try:
+                    yield
+                finally:
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+        finally:
+            os.close(descriptor)
+
     def _existing_record_path(self, review_id: str) -> Path:
         """Return a validated regular record file without following symlinks."""
         validated_id = self._validate_review_id(review_id)
@@ -107,39 +183,71 @@ class JsonReviewStore:
         """Delete one exact safe local record without parsing its contents."""
         validated_id = self._validate_review_id(review_id)
         self._require_safe_directory()
+        if not self.directory.is_dir():
+            raise FileNotFoundError(validated_id)
         if not _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED:
             raise OSError("safe local review deletion is unsupported on this platform")
-        try:
-            directory_fd = os.open(
-                self.directory,
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-            )
-        except FileNotFoundError:
-            raise FileNotFoundError(validated_id) from None
-        except NotADirectoryError:
-            raise UnsafeReviewStore("review store path must be a directory") from None
-        try:
-            record_name = f"{validated_id}.json"
-            with os.scandir(directory_fd) as entries:
-                matching_entry = next(
-                    (
-                        entry
-                        for entry in entries
-                        if entry.name == record_name
-                        and entry.is_file(follow_symlinks=False)
-                        and stat.S_ISREG(entry.stat(follow_symlinks=False).st_mode)
-                    ),
-                    None,
+        with self._mutation_lock(validated_id):
+            try:
+                directory_fd = os.open(
+                    self.directory,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
                 )
-            if matching_entry is None:
+            except FileNotFoundError:
                 raise FileNotFoundError(validated_id) from None
-            os.unlink(matching_entry.name, dir_fd=directory_fd)
-        finally:
-            os.close(directory_fd)
+            except NotADirectoryError:
+                raise UnsafeReviewStore("review store path must be a directory") from None
+            try:
+                record_name = f"{validated_id}.json"
+                with os.scandir(directory_fd) as entries:
+                    matching_entry = next(
+                        (
+                            entry
+                            for entry in entries
+                            if entry.name == record_name
+                            and entry.is_file(follow_symlinks=False)
+                            and stat.S_ISREG(entry.stat(follow_symlinks=False).st_mode)
+                        ),
+                        None,
+                    )
+                if matching_entry is None:
+                    raise FileNotFoundError(validated_id) from None
+                os.unlink(matching_entry.name, dir_fd=directory_fd)
+            finally:
+                os.close(directory_fd)
 
-    def save(self, state: ReviewState) -> Path:
-        """Atomically save a versioned record without accepting credential fields."""
+    @staticmethod
+    def state_fingerprint(state: ReviewState) -> str:
+        """Return the deterministic identity used for optimistic saved-state checks."""
+
         validated = validated_review_state(state)
+        return sha256(validated.model_dump_json().encode("utf-8")).hexdigest()
+
+    @contextmanager
+    def locked_load(self, review_id: str) -> Iterator[ReviewState]:
+        """Yield one validated record while excluding concurrent record mutations."""
+
+        validated_id = self._validate_review_id(review_id)
+        with self._mutation_lock(validated_id):
+            yield self.load(validated_id)
+
+    @contextmanager
+    def locked_load_many(
+        self, review_ids: Sequence[str]
+    ) -> Iterator[tuple[ReviewState, ...]]:
+        """Yield validated records from one deadlock-safe mutation snapshot."""
+
+        validated_ids = tuple(self._validate_review_id(item) for item in review_ids)
+        unique_ids = sorted(set(validated_ids))
+        with ExitStack() as stack:
+            for review_id in unique_ids:
+                stack.enter_context(self._mutation_lock(review_id))
+            states = {review_id: self.load(review_id) for review_id in unique_ids}
+            yield tuple(states[review_id] for review_id in validated_ids)
+
+    def _save_unlocked(self, validated: ReviewState) -> Path:
+        """Replace one validated record while its mutation lock is already held."""
+
         self._require_safe_directory()
         self.directory.mkdir(parents=True, exist_ok=True)
         target = self._path(validated.review.review_id)
@@ -156,6 +264,45 @@ class JsonReviewStore:
             handle.write(serialized)
         temporary.replace(target)
         return target
+
+    def save(
+        self,
+        state: ReviewState,
+        *,
+        expected_fingerprint: str | object | None = _UNCONDITIONAL_SAVE,
+    ) -> Path:
+        """Atomically save, optionally rejecting a stale read-derived state."""
+
+        validated = validated_review_state(state)
+        review_id = validated.review.review_id
+        with self._mutation_lock(review_id):
+            if expected_fingerprint is not _UNCONDITIONAL_SAVE:
+                try:
+                    current = self.load(review_id)
+                except FileNotFoundError:
+                    current_fingerprint = None
+                else:
+                    current_fingerprint = self.state_fingerprint(current)
+                if current_fingerprint != expected_fingerprint:
+                    raise StaleReviewState(
+                        "saved review changed since it was loaded; reopen it before saving"
+                    )
+            return self._save_unlocked(validated)
+
+    def mutate(
+        self,
+        review_id: str,
+        transition: Callable[[ReviewState], ReviewState],
+    ) -> tuple[ReviewState, Path]:
+        """Apply one validated transition while holding the record mutation lock."""
+
+        validated_id = self._validate_review_id(review_id)
+        with self._mutation_lock(validated_id):
+            current = self.load(validated_id)
+            updated = validated_review_state(transition(current))
+            if updated.review.review_id != current.review.review_id:
+                raise ValueError("review mutation cannot change the record identity")
+            return updated, self._save_unlocked(updated)
 
     @staticmethod
     def _review_payload_needs_ci_gate_migration(review_payload: object) -> bool:
@@ -319,6 +466,8 @@ class JsonReviewStore:
     def load(self, review_id: str) -> ReviewState:
         """Load a known record format and validate all nested models."""
         payload = json.loads(self._existing_record_path(review_id).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("invalid review record envelope")
         record_version = payload.get("record_version")
         if (
             type(record_version) is not int
@@ -327,7 +476,11 @@ class JsonReviewStore:
             raise UnsupportedRecordVersion(
                 f"Unsupported review record version {record_version!r}"
             )
-        state_payload = deepcopy(payload["state"])
+        try:
+            envelope = _ReviewRecordEnvelope.model_validate(payload)
+        except ValidationError as error:
+            raise ValueError("invalid review record envelope") from error
+        state_payload = deepcopy(envelope.state)
         if record_version == 1 and isinstance(state_payload, dict):
             active_bundle = state_payload.get("bundle")
             criteria_revision = state_payload.get("criteria_revision")

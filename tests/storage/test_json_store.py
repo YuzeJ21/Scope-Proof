@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import timedelta
+from hashlib import sha256
 from pathlib import Path
+from threading import Event, Lock
 from uuid import NAMESPACE_URL, uuid5
 
 import pytest
@@ -289,6 +292,191 @@ def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     assert loaded.model_dump(mode="json") == state.model_dump(mode="json")
     assert "ghp_" not in path.read_text(encoding="utf-8")
     assert "authorization" not in path.read_text(encoding="utf-8").lower()
+
+
+def test_mutation_lock_filename_does_not_embed_the_review_id(tmp_path: Path) -> None:
+    review_id = "user-controlled-review-id"
+
+    JsonReviewStore(tmp_path).save(review_state(review_id))
+
+    lock_paths = [path for path in tmp_path.iterdir() if path.suffix == ".lock"]
+    assert [path.name for path in lock_paths] == [
+        f".{sha256(review_id.encode('utf-8')).hexdigest()}.lock"
+    ]
+    assert review_id not in lock_paths[0].name
+
+
+def test_mutate_serializes_concurrent_append_only_lifecycle_updates(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    store.save(review_state())
+    first_entered = Event()
+    second_started = Event()
+    second_entered = Event()
+    release_first = Event()
+    call_lock = Lock()
+    call_count = 0
+
+    def append_distinct_resolution(state):
+        nonlocal call_count
+        with call_lock:
+            call_index = call_count
+            call_count += 1
+        if call_index == 0:
+            first_entered.set()
+            assert release_first.wait(timeout=2)
+        else:
+            second_entered.set()
+        return append_resolution(
+            state,
+            ResolutionEvent(
+                event_id=f"concurrent-event-{call_index}",
+                criterion_id=f"AC-0{call_index + 1}",
+                decision=HumanDecision.ACCEPTED,
+                comment="Concurrent lifecycle regression fixture",
+                reviewer="Concurrency fixture",
+            ),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(store.mutate, "review-1", append_distinct_resolution)
+        try:
+            assert first_entered.wait(timeout=2)
+            def run_second_mutation():
+                second_started.set()
+                return store.mutate("review-1", append_distinct_resolution)
+
+            second = executor.submit(run_second_mutation)
+            assert second_started.wait(timeout=2)
+            assert not second_entered.wait(timeout=0.2)
+        finally:
+            release_first.set()
+        first.result(timeout=2)
+        second.result(timeout=2)
+
+    saved = store.load("review-1")
+    assert {event.event_id for event in saved.resolution_events} == {
+        "concurrent-event-0",
+        "concurrent-event-1",
+    }
+
+
+def test_delete_serializes_with_an_in_flight_lifecycle_mutation(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    target = store.save(review_state())
+    mutation_entered = Event()
+    release_mutation = Event()
+    delete_started = Event()
+    delete_finished = Event()
+
+    def append_resolution_after_release(state):
+        mutation_entered.set()
+        assert release_mutation.wait(timeout=2)
+        return append_resolution(
+            state,
+            ResolutionEvent(
+                event_id="mutation-before-delete",
+                criterion_id="AC-01",
+                decision=HumanDecision.ACCEPTED,
+                comment="Lifecycle mutation serialized before deletion",
+                reviewer="Concurrency fixture",
+            ),
+        )
+
+    def delete_record() -> None:
+        delete_started.set()
+        store.delete("review-1")
+        delete_finished.set()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        mutation = executor.submit(
+            store.mutate,
+            "review-1",
+            append_resolution_after_release,
+        )
+        try:
+            assert mutation_entered.wait(timeout=2)
+            deletion = executor.submit(delete_record)
+            assert delete_started.wait(timeout=2)
+            assert not delete_finished.wait(timeout=0.2)
+        finally:
+            release_mutation.set()
+        mutation.result(timeout=2)
+        deletion.result(timeout=2)
+
+    assert not target.exists()
+    with pytest.raises(FileNotFoundError):
+        store.load("review-1")
+
+
+def test_save_uses_windows_file_lock_when_fcntl_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeMsvcrt:
+        LK_LOCK = 1
+        LK_UNLCK = 2
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[int, int, int]] = []
+
+        def locking(self, descriptor: int, mode: int, byte_count: int) -> None:
+            self.calls.append((descriptor, mode, byte_count))
+
+    windows_lock = FakeMsvcrt()
+    monkeypatch.setattr(json_store_module, "fcntl", None)
+    monkeypatch.setattr(json_store_module, "msvcrt", windows_lock, raising=False)
+
+    target = JsonReviewStore(tmp_path).save(review_state())
+
+    assert target.exists()
+    assert [mode for _, mode, _ in windows_lock.calls] == [
+        windows_lock.LK_LOCK,
+        windows_lock.LK_UNLCK,
+    ]
+    assert all(byte_count == 1 for _, _, byte_count in windows_lock.calls)
+
+
+def test_save_rejects_stale_state_without_overwriting_newer_lifecycle_event(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    baseline = review_state()
+    record = store.save(baseline)
+    baseline_fingerprint = sha256(
+        baseline.model_dump_json().encode("utf-8")
+    ).hexdigest()
+    external_event = ResolutionEvent(
+        event_id="external-revocation",
+        final_acceptance=False,
+        comment="External lifecycle update",
+        reviewer="CLI reviewer",
+    )
+    external, _ = store.mutate(
+        "review-1",
+        lambda state: append_resolution(state, external_event),
+    )
+    before = record.read_bytes()
+    stale_ui_state = append_resolution(
+        baseline,
+        ResolutionEvent(
+            event_id="stale-ui-resolution",
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Stale workbench update",
+            reviewer="Workbench reviewer",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="changed since it was loaded"):
+        store.save(
+            stale_ui_state,
+            expected_fingerprint=baseline_fingerprint,
+        )
+
+    assert record.read_bytes() == before
+    assert store.load("review-1") == external
 
 
 def test_attached_analysis_round_trip_preserves_reanalysis_lineage(
@@ -1533,6 +1721,17 @@ def test_unsupported_or_coercive_record_version_is_rejected(
 
     with pytest.raises(UnsupportedRecordVersion):
         store.load("review-1")
+
+
+def test_load_rejects_record_missing_state_without_key_error(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    path.write_text(json.dumps({"record_version": 4}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="record envelope") as error:
+        store.load("review-1")
+
+    assert not isinstance(error.value, KeyError)
 
 
 def test_review_id_cannot_escape_store_directory(tmp_path: Path) -> None:

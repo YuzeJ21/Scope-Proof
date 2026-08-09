@@ -11,17 +11,18 @@ automated activity. The current external state is
 ## Current release and validation state
 
 The GitHub Release record is authoritative for publication availability.
-Public install: v0.2.3 applies only when the
-[GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) shows the
-v0.2.3 tag with the matching wheel and checksum manifest.
+ScopeProof v0.2.3 is published. Public install: v0.2.3 is available from the
+[v0.2.3 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.3),
+which provides the wheel, source archive, and checksum manifest.
 
 | Area | Current state |
 |---|---|
-| Published install | Conditional v0.2.3 path; use only when the authoritative GitHub Release record shows the matching wheel and checksum manifest |
-| Verified product baseline | PR #183 integrity/reviewer-loop source merge landed on `main` at `cd362a85a558645a0f56d6540f6bf035e5821809` |
+| Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
+| Verified product baseline | PR #184 release integration landed on `main` at `448c42758ea139bf9203cbf1bb04b02b02ae412c` |
 | Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
-| Current main baseline | PR #183 integrity/reviewer-loop source merge at `cd362a85a558645a0f56d6540f6bf035e5821809`; exact-main CI, CodeQL, and Pages all succeeded |
-| Integration authority | PR #183 exact-main CI run `30847416893`, CodeQL run `30847415556`, and Pages run `30847417705` verify the source merge; it is not the final v0.2.3 release merge or tag target |
+| Release integration evidence | PR #184 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; exact-main CI, CodeQL, and Pages all succeeded, and `origin/main` matched at the 2026-08-08 branch-start snapshot |
+| Integration authority | PR #184 exact-main CI run `30854382641`, CodeQL run `30854382413`, and Pages run `30854382659` verify the release integration |
+| Historical source integration | PR #183 integrity/reviewer-loop source merge at `cd362a85a558645a0f56d6540f6bf035e5821809`; runs `30847416893`, `30847415556`, and `30847417705` remain historical source-integration evidence |
 | Product validation | Publication state does not change Stage 1, which remains at zero; Stages 2–4 remain gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
@@ -32,11 +33,12 @@ milestones can proceed while Stage 1 waits, but they do not advance product-vali
 Status: prior PR #177 repairs remain historical engineering evidence. PR #180
 merged the exact-head runtime-evidence repair, PR #181 aligned the
 documentation, PR #182 merged product convergence, and PR #183 merged the
-integrity/reviewer-loop source work. The PR #183 exact-main runs above verify
-that source merge; they are not the final v0.2.3 release merge or tag target.
-The GitHub Release record, exact tag target, and matching assets determine
-publication availability. None of this engineering evidence advances Stage 1,
-which remains at zero.
+integrity/reviewer-loop source work. PR #184 then merged the v0.2.3 release
+integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; the peeled tag and
+release baseline resolve to the same commit. `origin/main` also matched at the
+2026-08-08 branch-start snapshot. The GitHub Release record is
+authoritative for publication availability. None of this engineering evidence
+advances Stage 1, which remains at zero.
 
 - [x] Acceptance-coverage vocabulary separates candidate strength from reviewer decisions.
 - [x] Standard flow is public PR → confirmed criteria → coverage → decisions → export.
@@ -104,9 +106,10 @@ Status: the earlier candidate and PR #177 repairs remain merged history. PR #179
 merged the first workbench UX change, PR #180 merged exact-head runtime-evidence
 hardening, PR #181 aligned post-merge documentation, PR #182 merged product
 convergence, and PR #183 merged the integrity/reviewer-loop source work at
-`cd362a85a558645a0f56d6540f6bf035e5821809`. The GitHub Release record is
-authoritative for publication availability. This engineering and release work
-earns zero Stage 1 credit.
+`cd362a85a558645a0f56d6540f6bf035e5821809`. PR #184 merged the published
+v0.2.3 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`.
+The GitHub Release record is authoritative for publication availability. This
+engineering and release work earns zero Stage 1 credit.
 
 - [x] Add validated retrieval outcomes and one deterministic diagnostic per criterion.
 - [x] Record searched terms, identifiers, paths, evidence types, inspected-line counts, filtering

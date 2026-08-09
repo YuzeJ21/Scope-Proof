@@ -6,6 +6,7 @@ import argparse
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from scopeproof_core.alpha.models import AlphaFrictionStage, AlphaOutcome, ParticipantRole
 from scopeproof_core.alpha.rehearsal import initialize_alpha_rehearsal
@@ -29,22 +30,36 @@ from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
 from scopeproof_core.reporting.exporters import (
+    export_comparison_json,
+    export_comparison_markdown,
     export_csv,
     export_html,
     export_json,
     export_markdown,
 )
 from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
-from scopeproof_core.reviews.lifecycle import new_review_state
+from scopeproof_core.reviews.comparison import compare_reviews
+from scopeproof_core.reviews.lifecycle import (
+    acceptance_requires_comment,
+    append_external_verification,
+    append_resolution,
+    new_review_state,
+)
 from scopeproof_core.schemas.models import (
     ActionValidationRecord,
     CriteriaSourceProvenance,
     Criterion,
+    EvidenceLevel,
+    HumanDecision,
+    LifecycleMutationMetadata,
     PullRequestSnapshot,
     ResearchContext,
+    ResolutionEvent,
     Review,
     ReviewBundle,
     ReviewInputOrigin,
+    ReviewState,
+    RuntimeEvidence,
     SavedReviewListing,
     normalize_public_https_source_uri,
 )
@@ -64,6 +79,11 @@ REPORT_SUFFIX_FORMATS = {
     ".json": "json",
     ".csv": "csv",
     ".html": "html",
+}
+
+COMPARISON_RENDERERS = {
+    "json": export_comparison_json,
+    "markdown": export_comparison_markdown,
 }
 
 
@@ -231,8 +251,9 @@ def _review(args: argparse.Namespace) -> int:
 
 
 def _export(args: argparse.Namespace) -> int:
-    state = JsonReviewStore(Path(args.storage_dir)).load(args.review_id)
-    print(EXPORT_RENDERERS[args.format](state), end="")
+    store = JsonReviewStore(Path(args.storage_dir))
+    with store.locked_load(args.review_id) as state:
+        print(EXPORT_RENDERERS[args.format](state), end="")
     return 0
 
 
@@ -255,6 +276,170 @@ def _delete(args: argparse.Namespace) -> int:
             sort_keys=True,
         )
     )
+    return 0
+
+
+def _read_optional_comment(path: str | None) -> str:
+    """Read a human-authored note without interpreting its contents."""
+
+    return "" if path is None else Path(path).read_text(encoding="utf-8")
+
+
+def _mutation_metadata(
+    state: ReviewState, path: Path, event_id: str
+) -> LifecycleMutationMetadata:
+    """Return deterministic metadata for one persisted lifecycle mutation."""
+
+    if state.bundle is None:
+        raise ValueError("Run a confirmed analysis before recording a lifecycle event")
+    return LifecycleMutationMetadata(
+        review_id=state.review.review_id,
+        record=str(path),
+        head_sha=state.review.head_sha,
+        event_id=event_id,
+        verdict=state.bundle.gate.verdict,
+        gate_reason_codes=state.bundle.gate.reason_codes,
+    )
+
+
+def _resolve(args: argparse.Namespace) -> int:
+    """Append one validated human criterion resolution to a saved review."""
+
+    store = JsonReviewStore(Path(args.storage_dir))
+    decision = HumanDecision(args.decision)
+    comment = _read_optional_comment(args.comment_file)
+    event = ResolutionEvent(
+        criterion_id=args.criterion_id,
+        decision=decision,
+        comment=comment,
+        evidence_url=args.evidence_url,
+        reviewer=args.reviewer.strip(),
+    )
+
+    def transition(state: ReviewState) -> ReviewState:
+        if state.bundle is None:
+            raise ValueError("Run a confirmed analysis before recording a resolution")
+        criterion_by_id = {
+            criterion.criterion_id: criterion for criterion in state.bundle.criteria
+        }
+        finding_by_id = {
+            finding.criterion_id: finding for finding in state.bundle.findings
+        }
+        criterion = criterion_by_id.get(args.criterion_id)
+        finding = finding_by_id.get(args.criterion_id)
+        if criterion is None or finding is None:
+            raise ValueError("resolution must reference a criterion in the active review")
+        if acceptance_requires_comment(
+            decision,
+            finding.evidence_level,
+            criterion.required_evidence_level,
+        ) and not comment.strip():
+            raise ValueError(
+                "a reviewer comment is required when accepting below the required evidence level"
+            )
+        return append_resolution(state, event)
+
+    updated, path = store.mutate(args.review_id, transition)
+    print(_mutation_metadata(updated, path, event.event_id).model_dump_json())
+    return 0
+
+
+def _verify_runtime(args: argparse.Namespace) -> int:
+    """Atomically record human-supplied runtime evidence and its decision."""
+
+    store = JsonReviewStore(Path(args.storage_dir))
+    runtime_id = str(uuid4())
+    reviewer = args.reviewer.strip()
+    level = EvidenceLevel(args.level)
+    event = ResolutionEvent(
+        criterion_id=args.criterion_id,
+        decision=HumanDecision.MANUALLY_VERIFIED,
+        comment=Path(args.comment_file).read_text(encoding="utf-8"),
+        claimed_evidence_level=level,
+        runtime_evidence_id=runtime_id,
+        reviewer=reviewer,
+    )
+
+    def transition(state: ReviewState) -> ReviewState:
+        evidence = RuntimeEvidence(
+            runtime_evidence_id=runtime_id,
+            repository=state.review.repository,
+            pr_number=state.review.pr_number,
+            head_sha=state.review.head_sha,
+            criterion_id=args.criterion_id,
+            artifact_reference=args.artifact_reference,
+            scenario=args.scenario,
+            environment=args.environment,
+            result=args.result,
+            reviewer=reviewer,
+            evidence_level=level,
+            limitations=args.limitation,
+        )
+        return append_external_verification(state, evidence, event)
+
+    updated, path = store.mutate(args.review_id, transition)
+    print(_mutation_metadata(updated, path, event.event_id).model_dump_json())
+    return 0
+
+
+def _final_acceptance(args: argparse.Namespace) -> int:
+    """Append a validated final-acceptance or revocation event."""
+
+    store = JsonReviewStore(Path(args.storage_dir))
+    event = ResolutionEvent(
+        final_acceptance=args.accept,
+        comment=_read_optional_comment(args.comment_file),
+        reviewer=args.reviewer.strip(),
+    )
+    updated, path = store.mutate(
+        args.review_id,
+        lambda state: append_resolution(state, event),
+    )
+    print(_mutation_metadata(updated, path, event.event_id).model_dump_json())
+    return 0
+
+
+def _compare(args: argparse.Namespace) -> int:
+    """Compare two validated saved review bundles without carrying decisions forward."""
+
+    store = JsonReviewStore(Path(args.storage_dir))
+    with store.locked_load_many(
+        (args.previous_review_id, args.current_review_id)
+    ) as (previous, current):
+        if previous.bundle is None or current.bundle is None:
+            raise ValueError("comparison requires an active analysis in both saved reviews")
+        if (
+            previous.bundle.review.repository,
+            previous.bundle.review.pr_number,
+        ) != (
+            current.bundle.review.repository,
+            current.bundle.review.pr_number,
+        ):
+            raise ValueError(
+                "comparison requires reviews from the same repository and pull request"
+            )
+        previous_criteria = {
+            item.criterion_id: item.model_dump(mode="json")
+            for item in previous.bundle.criteria
+        }
+        current_criteria = {
+            item.criterion_id: item.model_dump(mode="json")
+            for item in current.bundle.criteria
+        }
+        if previous_criteria != current_criteria:
+            raise ValueError(
+                "comparison requires identical confirmed criterion definitions"
+            )
+        comparison = compare_reviews(previous.bundle, current.bundle)
+        rendered = COMPARISON_RENDERERS[args.format](comparison)
+        if args.output is None:
+            print(rendered, end="")
+        else:
+            output_path = Path(args.output)
+            if output_path.exists():
+                raise FileExistsError(f"comparison output already exists: {output_path}")
+            with output_path.open("x", encoding="utf-8") as handle:
+                handle.write(rendered)
     return 0
 
 
@@ -435,6 +620,62 @@ def _parser() -> argparse.ArgumentParser:
     delete.add_argument("review_id")
     delete.add_argument("--storage-dir", default=".scopeproof/reviews")
     delete.set_defaults(handler=_delete)
+    resolve = commands.add_parser("resolve", help="Record one human criterion decision")
+    resolve.add_argument("review_id")
+    resolve.add_argument("--criterion-id", required=True)
+    resolve.add_argument(
+        "--decision",
+        required=True,
+        choices=[
+            decision.value
+            for decision in HumanDecision
+            if decision is not HumanDecision.MANUALLY_VERIFIED
+        ],
+    )
+    resolve.add_argument("--reviewer", required=True)
+    resolve.add_argument("--comment-file")
+    resolve.add_argument("--evidence-url")
+    resolve.add_argument("--storage-dir", default=".scopeproof/reviews")
+    resolve.set_defaults(handler=_resolve)
+    verify_runtime = commands.add_parser(
+        "verify-runtime",
+        help="Atomically record external runtime evidence and manual verification",
+    )
+    verify_runtime.add_argument("review_id")
+    verify_runtime.add_argument("--criterion-id", required=True)
+    verify_runtime.add_argument(
+        "--level",
+        required=True,
+        choices=[EvidenceLevel.E3.value, EvidenceLevel.E4.value],
+    )
+    verify_runtime.add_argument("--reviewer", required=True)
+    verify_runtime.add_argument("--artifact-reference", required=True)
+    verify_runtime.add_argument("--scenario", required=True)
+    verify_runtime.add_argument("--environment", required=True)
+    verify_runtime.add_argument("--result", required=True)
+    verify_runtime.add_argument("--comment-file", required=True)
+    verify_runtime.add_argument("--limitation", action="append", default=[])
+    verify_runtime.add_argument("--storage-dir", default=".scopeproof/reviews")
+    verify_runtime.set_defaults(handler=_verify_runtime)
+    final_acceptance = commands.add_parser(
+        "final-acceptance",
+        help="Record or revoke final human acceptance",
+    )
+    final_acceptance.add_argument("review_id")
+    final_action = final_acceptance.add_mutually_exclusive_group(required=True)
+    final_action.add_argument("--accept", action="store_true", dest="accept")
+    final_action.add_argument("--revoke", action="store_false", dest="accept")
+    final_acceptance.add_argument("--reviewer", required=True)
+    final_acceptance.add_argument("--comment-file")
+    final_acceptance.add_argument("--storage-dir", default=".scopeproof/reviews")
+    final_acceptance.set_defaults(handler=_final_acceptance)
+    compare = commands.add_parser("compare", help="Compare two saved review heads")
+    compare.add_argument("previous_review_id")
+    compare.add_argument("current_review_id")
+    compare.add_argument("--format", choices=sorted(COMPARISON_RENDERERS), default="json")
+    compare.add_argument("--output")
+    compare.add_argument("--storage-dir", default=".scopeproof/reviews")
+    compare.set_defaults(handler=_compare)
     benchmark = commands.add_parser("benchmark", help="Run every labelled local benchmark case")
     benchmark.set_defaults(handler=lambda _: _benchmark())
     comparison_benchmark = commands.add_parser(
