@@ -385,10 +385,16 @@ def _refresh_clean_review_from_local_store(
 ) -> ReviewState | None:
     """Refresh a clean open review before rendering or exporting persisted truth."""
 
-    if state is None or not store_available:
+    if state is None:
         return state
     expected_fingerprint = st.session_state["saved_review_fingerprint"]
     current_fingerprint = _review_state_fingerprint(state)
+    if not store_available:
+        if expected_fingerprint:
+            st.session_state["saved_review_fingerprint"] = None
+            st.session_state["failed_review_save_fingerprint"] = current_fingerprint
+            st.session_state["review_save_conflict"] = True
+        return state
     if not expected_fingerprint or current_fingerprint != expected_fingerprint:
         return state
     try:

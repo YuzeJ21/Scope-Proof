@@ -3011,6 +3011,31 @@ def test_failed_persisted_review_revalidation_blocks_status_and_exports(
     )
 
 
+def test_unavailable_saved_review_store_blocks_status_and_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+
+    with patch(
+        "scopeproof_core.storage.json_store.JsonReviewStore.list_review_ids",
+        side_effect=OSError("synthetic unavailable review store"),
+    ):
+        app = app.run()
+
+    assert app.session_state["saved_review_fingerprint"] is None
+    assert app.session_state["review_save_conflict"] is True
+    assert "**Review status: Refresh required**" in [
+        item.value for item in app.markdown
+    ]
+    assert all(button.disabled for button in app.download_button)
+    assert "synthetic unavailable review store" not in "\n".join(
+        item.value for item in [*app.warning, *app.error]
+    )
+
+
 def test_external_update_preserves_pending_input_and_blocks_stale_exports(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

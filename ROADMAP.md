@@ -20,7 +20,7 @@ which provides the wheel, source archive, and checksum manifest.
 | Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
 | Verified product baseline | PR #184 release integration landed on `main` at `448c42758ea139bf9203cbf1bb04b02b02ae412c` |
 | Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
-| Current main baseline | PR #184 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; exact-main CI, CodeQL, and Pages all succeeded |
+| Release integration evidence | PR #184 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; exact-main CI, CodeQL, and Pages all succeeded, and `origin/main` matched at the 2026-08-08 branch-start snapshot |
 | Integration authority | PR #184 exact-main CI run `30854382641`, CodeQL run `30854382413`, and Pages run `30854382659` verify the release integration |
 | Historical source integration | PR #183 integrity/reviewer-loop source merge at `cd362a85a558645a0f56d6540f6bf035e5821809`; runs `30847416893`, `30847415556`, and `30847417705` remain historical source-integration evidence |
 | Product validation | Publication state does not change Stage 1, which remains at zero; Stages 2–4 remain gated |
@@ -35,7 +35,8 @@ merged the exact-head runtime-evidence repair, PR #181 aligned the
 documentation, PR #182 merged product convergence, and PR #183 merged the
 integrity/reviewer-loop source work. PR #184 then merged the v0.2.3 release
 integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; the peeled tag and
-current `main` resolve to the same commit. The GitHub Release record is
+release baseline resolve to the same commit. `origin/main` also matched at the
+2026-08-08 branch-start snapshot. The GitHub Release record is
 authoritative for publication availability. None of this engineering evidence
 advances Stage 1, which remains at zero.
 

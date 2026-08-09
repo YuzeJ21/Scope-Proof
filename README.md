@@ -102,8 +102,9 @@ not correctness evidence, customer validation, or Stage 1 credit.
 
 ScopeProof v0.2.3 is published. [PR #184](https://github.com/YuzeJ21/Scope-Proof/pull/184)
 merged the release integration at
-`448c42758ea139bf9203cbf1bb04b02b02ae412c`; current `main` and the peeled
-`v0.2.3` tag resolve to that commit. Exact-main CI run `30854382641`, CodeQL run
+`448c42758ea139bf9203cbf1bb04b02b02ae412c`; the peeled `v0.2.3` tag resolves
+to that release baseline. At the 2026-08-08 branch-start snapshot, `origin/main`
+also resolved to that commit. Exact-main CI run `30854382641`, CodeQL run
 `30854382413`, and Pages run `30854382659` succeeded. The release and those
 checks are engineering evidence only and do not advance Stage 1, which remains
 at zero. The
