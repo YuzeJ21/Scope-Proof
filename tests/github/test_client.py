@@ -201,6 +201,14 @@ def test_client_rejects_non_public_repository_before_secondary_fetches(
             {"full_name": "acme/widget", "private": False, "visibility": "PUBLIC"},
             id="malformed-visibility",
         ),
+        pytest.param(
+            {"full_name": "acme/widget", "private": False, "visibility": []},
+            id="unhashable-list-visibility",
+        ),
+        pytest.param(
+            {"full_name": "acme/widget", "private": False, "visibility": {}},
+            id="unhashable-object-visibility",
+        ),
     ],
 )
 def test_client_rejects_ambiguous_repository_visibility_before_secondary_fetches(

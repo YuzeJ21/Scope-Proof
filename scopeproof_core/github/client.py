@@ -215,7 +215,9 @@ class GitHubClient:
         full_name = repository.get("full_name")
         private = repository.get("private")
         visibility = repository.get("visibility")
-        if private is True or visibility in {"private", "internal"}:
+        if private is True or (
+            isinstance(visibility, str) and visibility in {"private", "internal"}
+        ):
             raise PrivateOrInaccessibleRepository(
                 "ScopeProof accepts only a verified public GitHub repository."
             )

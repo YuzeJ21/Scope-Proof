@@ -423,6 +423,40 @@ def test_fixture_review_metadata_reports_validated_ci_observation(tmp_path: Path
     assert "stage1_credit" not in metadata
 
 
+def test_fixture_review_cannot_self_assert_verified_public_visibility(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    fixture_payload = json.loads(
+        Path("evals/fixtures/complete_implementation_pr.json").read_text(encoding="utf-8")
+    )
+    fixture_payload["repository_visibility"] = "verified_public"
+    fixture = tmp_path / "self-asserted-public.json"
+    fixture.write_text(json.dumps(fixture_payload), encoding="utf-8")
+    storage = tmp_path / "reviews"
+
+    assert main(
+        [
+            "review",
+            "--fixture",
+            str(fixture),
+            "--requirements",
+            str(requirements),
+            "--confirmation",
+            str(write_requirements_confirmation(requirements)),
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+
+    review_id = json.loads(capsys.readouterr().out)["review_id"]
+    state = JsonReviewStore(storage).load(review_id)
+    assert state.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+    assert state.bundle is not None
+    assert state.bundle.review.repository_visibility is RepositoryVisibility.UNVERIFIED
+
+
 def test_fixture_review_metadata_reports_ci_collection_notes(tmp_path: Path, capsys) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Export CSV\n", encoding="utf-8")

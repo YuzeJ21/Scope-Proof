@@ -37,6 +37,7 @@ from scopeproof_core.schemas.models import (
     RetrievalOutcome,
     Review,
     ReviewBundle,
+    ReviewInputOrigin,
     RuntimeEvidence,
 )
 
@@ -645,6 +646,7 @@ def test_json_export_preserves_verified_public_repository_provenance() -> None:
         {
             **bundle.review.model_dump(mode="python"),
             "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+            "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
         }
     )
 
@@ -659,6 +661,7 @@ def test_human_readable_exports_preserve_verified_public_repository_provenance()
         {
             **bundle.review.model_dump(mode="python"),
             "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+            "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
         }
     )
 

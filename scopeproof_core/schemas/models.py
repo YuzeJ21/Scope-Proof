@@ -856,6 +856,22 @@ class Review(BaseModel):
             }
         ):
             migrated = {**migrated, "input_origin": ReviewInputOrigin.LEGACY_UNKNOWN}
+        elif (
+            value.get("input_origin", ReviewInputOrigin.LEGACY_UNKNOWN)
+            not in {
+                ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+                ReviewInputOrigin.LIVE_PUBLIC_GITHUB.value,
+            }
+            and value.get("repository_visibility")
+            in {
+                RepositoryVisibility.VERIFIED_PUBLIC,
+                RepositoryVisibility.VERIFIED_PUBLIC.value,
+            }
+        ):
+            migrated = {
+                **migrated,
+                "repository_visibility": RepositoryVisibility.UNVERIFIED,
+            }
 
         if "check_state" in migrated:
             if "ci_observation" not in migrated:
