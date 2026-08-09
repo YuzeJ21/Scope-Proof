@@ -22,6 +22,43 @@ VIEWPORTS = (
     {"width": 1280, "height": 720},
     {"width": 390, "height": 844},
 )
+FOCUS_STYLE_SCRIPT = """element => {
+    const colorIsVisible = value => {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized || normalized === "none" || normalized === "transparent") {
+            return false;
+        }
+        if (/\\brgb\\(/.test(normalized)) {
+            return true;
+        }
+        const alphaValues = [...normalized.matchAll(
+            /rgba\\([^)]*,\\s*([0-9.]+)\\)/g
+        )].map(match => Number(match[1]));
+        if (alphaValues.length) {
+            return alphaValues.some(alpha => alpha > 0);
+        }
+        return true;
+    };
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return {
+        boxShadow: style.boxShadow,
+        boxShadowVisible:
+            style.boxShadow !== "none" && colorIsVisible(style.boxShadow),
+        inViewport:
+            rect.bottom > 0 &&
+            rect.top < window.innerHeight &&
+            rect.right > 0 &&
+            rect.left < window.innerWidth,
+        outlineColor: style.outlineColor,
+        outlineStyle: style.outlineStyle,
+        outlineVisible:
+            style.outlineStyle !== "none" &&
+            parseFloat(style.outlineWidth) > 0 &&
+            colorIsVisible(style.outlineColor),
+        outlineWidth: parseFloat(style.outlineWidth),
+    };
+}"""
 
 
 def _run(*command: str, cwd: Path | None = None) -> None:
@@ -81,6 +118,53 @@ def _wait_until_healthy(url: str, process: subprocess.Popen[str], log_path: Path
     )
 
 
+def test_focus_specific_treatment_rejects_unchanged_visible_decoration() -> None:
+    always_on_shadow = {
+        "boxShadow": "rgb(0, 0, 0) 0px 0px 0px 2px",
+        "boxShadowVisible": True,
+        "outlineColor": "rgb(0, 0, 0)",
+        "outlineStyle": "none",
+        "outlineVisible": False,
+        "outlineWidth": 0,
+    }
+
+    assert not _has_focus_specific_treatment(always_on_shadow, always_on_shadow)
+
+
+def test_focus_specific_treatment_accepts_changed_visible_outline() -> None:
+    unfocused = {
+        "boxShadow": "none",
+        "boxShadowVisible": False,
+        "outlineColor": "rgb(0, 0, 0)",
+        "outlineStyle": "none",
+        "outlineVisible": False,
+        "outlineWidth": 0,
+    }
+    focused = {
+        **unfocused,
+        "outlineColor": "rgb(255, 191, 71)",
+        "outlineStyle": "solid",
+        "outlineVisible": True,
+        "outlineWidth": 3,
+    }
+
+    assert _has_focus_specific_treatment(unfocused, focused)
+
+
+def _has_focus_specific_treatment(
+    unfocused: dict[str, bool | float | str],
+    focused: dict[str, bool | float | str],
+) -> bool:
+    outline_changed = any(
+        focused[key] != unfocused[key]
+        for key in ("outlineColor", "outlineStyle", "outlineWidth")
+    )
+    shadow_changed = focused["boxShadow"] != unfocused["boxShadow"]
+    return (
+        bool(focused["outlineVisible"]) and outline_changed
+    ) or bool(focused["boxShadowVisible"] and shadow_changed)
+
+
 def _focus_with_keyboard(
     page: Page,
     control: Locator,
@@ -89,6 +173,10 @@ def _focus_with_keyboard(
     max_presses: int = 80,
 ) -> None:
     expect(control).to_be_visible()
+    unfocused_state = control.evaluate(FOCUS_STYLE_SCRIPT)
+    assert not control.evaluate("element => element === document.activeElement"), (
+        f"{label} must start unfocused so the regression can compare focus styles"
+    )
     focus_trace: list[str] = []
 
     for _ in range(max_presses):
@@ -110,26 +198,12 @@ def _focus_with_keyboard(
             continue
 
         expect(control).to_be_enabled()
-        focus_state = control.evaluate(
-            """element => {
-                const style = getComputedStyle(element);
-                const rect = element.getBoundingClientRect();
-                return {
-                    boxShadow: style.boxShadow,
-                    inViewport:
-                        rect.bottom > 0 &&
-                        rect.top < window.innerHeight &&
-                        rect.right > 0 &&
-                        rect.left < window.innerWidth,
-                    outlineStyle: style.outlineStyle,
-                    outlineWidth: parseFloat(style.outlineWidth),
-                };
-            }"""
-        )
+        focus_state = control.evaluate(FOCUS_STYLE_SCRIPT)
         assert focus_state["inViewport"], f"{label} received focus outside the viewport"
-        assert (
-            focus_state["outlineStyle"] != "none" and focus_state["outlineWidth"] > 0
-        ) or focus_state["boxShadow"] != "none", f"{label} has no visible focus treatment"
+        assert _has_focus_specific_treatment(unfocused_state, focus_state), (
+            f"{label} has no changed, nontransparent focus-specific treatment; "
+            f"unfocused={unfocused_state}, focused={focus_state}"
+        )
         return
 
     pytest.fail(
