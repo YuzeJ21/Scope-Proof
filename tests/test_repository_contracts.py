@@ -700,7 +700,7 @@ def _assert_published_version_matches_repository(
         capture_output=True,
         text=True,
     ).stdout.splitlines()
-    untracked_package_inputs = [
+    untracked_package_inputs = {
         path
         for path in untracked_paths
         if not (
@@ -710,7 +710,39 @@ def _assert_published_version_matches_repository(
             or path == ".superpowers"
             or path.startswith(".superpowers/")
         )
-    ]
+    }
+    build_config_path = repository / "pyproject.toml"
+    build_config = (
+        tomllib.loads(build_config_path.read_text(encoding="utf-8"))
+        if build_config_path.exists()
+        else {}
+    )
+    force_included_sources = list(
+        build_config.get("tool", {})
+        .get("hatch", {})
+        .get("build", {})
+        .get("targets", {})
+        .get("wheel", {})
+        .get("force-include", {})
+    )
+    if force_included_sources:
+        ignored_force_included_paths = subprocess.run(
+            [
+                "git",
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "--",
+                *force_included_sources,
+            ],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        untracked_package_inputs.update(ignored_force_included_paths)
+    untracked_package_inputs = sorted(untracked_package_inputs)
     assert not untracked_package_inputs, (
         f"version {current_version} is already published from {published_tag}, but untracked "
         f"package inputs exist: {', '.join(untracked_package_inputs)}; track them and advance "
@@ -784,6 +816,44 @@ def test_published_final_contract_rejects_untracked_package_input(tmp_path: Path
 
     assert "scopeproof_core/untracked_probe.py" in str(error.value)
     assert ".coverage 2" not in str(error.value)
+
+
+def test_published_final_contract_rejects_ignored_force_included_input(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    force_included = repository / "evals"
+    force_included.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "scopeproof-contract@example.test"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "ScopeProof contract"],
+        cwd=repository,
+        check=True,
+    )
+    (repository / ".gitignore").write_text("*.py[cod]\n", encoding="utf-8")
+    (repository / "pyproject.toml").write_text(
+        '[tool.hatch.build.targets.wheel.force-include]\n"evals" = "evals"\n',
+        encoding="utf-8",
+    )
+    (force_included / "README.md").write_text("published\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    ignored_package_input = force_included / "probe.pyc"
+    ignored_package_input.write_bytes(b"different package bytes\n")
+
+    with pytest.raises(AssertionError, match="untracked package inputs") as error:
+        _assert_published_version_matches_repository(
+            repository=repository,
+            current_version="0.2.3",
+        )
+
+    assert "evals/probe.pyc" in str(error.value)
 
 
 class _StrictVerificationModel(BaseModel):
