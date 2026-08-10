@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
@@ -16,7 +17,11 @@ from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
     ReviewBundle,
+    ReviewInputOrigin,
 )
+
+
+_EXACT_GIT_HEAD = re.compile(r"^[0-9a-f]{40}$")
 
 
 class EvidenceChangeKind(StrEnum):
@@ -418,11 +423,53 @@ def _resolution_decisions(bundle: ReviewBundle) -> dict[str, HumanDecision]:
     return {resolution.criterion_id: resolution.decision for resolution in bundle.resolutions}
 
 
-def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComparison:
-    """Compare stable review facts without treating evidence IDs as semantic identity."""
+def _criteria_source_identity(bundle: ReviewBundle) -> tuple[str, str | None, str, str]:
+    provenance = bundle.review.criteria_source_provenance
+    if provenance is None:
+        raise ValueError("comparison requires confirmed criteria-source provenance")
+    return (
+        provenance.source_uri,
+        provenance.source_revision,
+        provenance.source_text_sha256,
+        provenance.normalized_criteria_sha256,
+    )
+
+
+def _validate_review_head_identity(bundle: ReviewBundle) -> None:
+    review = bundle.review
+    if (
+        review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+        and _EXACT_GIT_HEAD.fullmatch(review.head_sha) is None
+    ):
+        raise ValueError("comparison live public reviews require exact head SHAs")
+    if any(item.commit_sha != review.head_sha for item in bundle.evidence):
+        raise ValueError("comparison evidence candidates must match the reviewed head")
+
+
+def validate_comparison_relationship(
+    previous: ReviewBundle, current: ReviewBundle
+) -> tuple[ReviewBundle, ReviewBundle]:
+    """Validate that two review snapshots describe one comparable relationship."""
 
     previous = validated_review_bundle(previous)
     current = validated_review_bundle(current)
+    if previous.review.repository != current.review.repository:
+        raise ValueError("comparison requires the same repository")
+    if previous.review.pr_number != current.review.pr_number:
+        raise ValueError("comparison requires the same pull request")
+    _validate_review_head_identity(previous)
+    _validate_review_head_identity(current)
+    if previous.criteria != current.criteria:
+        raise ValueError("comparison requires identical ordered criterion definitions")
+    if _criteria_source_identity(previous) != _criteria_source_identity(current):
+        raise ValueError("comparison requires compatible criteria-source provenance")
+    return previous, current
+
+
+def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComparison:
+    """Compare stable review facts without treating evidence IDs as semantic identity."""
+
+    previous, current = validate_comparison_relationship(previous, current)
     previous_findings = _finding_statuses(previous)
     current_findings = _finding_statuses(current)
     previous_resolutions = _resolution_decisions(previous)
