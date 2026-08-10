@@ -18,6 +18,7 @@ from scopeproof_core.criteria.confirmation import build_criteria_source_provenan
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import export_html, export_markdown
+from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
     append_resolution,
@@ -53,6 +54,53 @@ def review_state(review_id: str = "review-1"):
     bundle = build_demo_review()
     bundle.review.review_id = review_id
     return new_review_state(bundle)
+
+
+def test_locked_comparison_failure_preserves_saved_record_bytes(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    previous = review_state("previous-review")
+    current = review_state("current-review")
+    assert current.bundle is not None
+    provenance = current.review.criteria_source_provenance
+    assert provenance is not None
+    changed_provenance = provenance.model_copy(
+        update={"source_uri": "https://example.test/changed-requirements"}
+    )
+    changed_review = current.review.model_copy(
+        update={"criteria_source_provenance": changed_provenance}
+    )
+    changed_bundle = current.bundle.model_copy(
+        update={"review": changed_review.model_copy(deep=True)}
+    )
+    changed_revision = current.criteria_revision.model_copy(
+        update={"source_provenance": changed_provenance}
+    )
+    current = current.model_copy(
+        update={
+            "review": changed_review,
+            "criteria_revision": changed_revision,
+            "bundle": changed_bundle,
+        }
+    )
+    store.save(previous)
+    store.save(current)
+    before = {
+        review_id: (tmp_path / f"{review_id}.json").read_bytes()
+        for review_id in (previous.review.review_id, current.review.review_id)
+    }
+
+    with store.locked_load_many(
+        (previous.review.review_id, current.review.review_id)
+    ) as (loaded_previous, loaded_current):
+        assert loaded_previous.bundle is not None
+        assert loaded_current.bundle is not None
+        with pytest.raises(ValueError, match="compatible criteria-source provenance"):
+            compare_reviews(loaded_previous.bundle, loaded_current.bundle)
+
+    assert {
+        review_id: (tmp_path / f"{review_id}.json").read_bytes()
+        for review_id in (previous.review.review_id, current.review.review_id)
+    } == before
 
 
 def confirm_pending_revision(state):
