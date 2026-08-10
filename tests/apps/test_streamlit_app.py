@@ -81,6 +81,26 @@ def analyzed_standard_demo(app: AppTest) -> AppTest:
     return app.button(key="run_analysis").click().run()
 
 
+def analyzed_exact_head_standard_demo(app: AppTest) -> AppTest:
+    app = app.button(key="load_demo").click().run()
+    app.session_state["snapshot"] = app.session_state["snapshot"].model_copy(
+        update={
+            "head_sha": "a" * 40,
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+        }
+    )
+    app.session_state["criteria_source_mode"] = "standard"
+    app = app.run()
+    app = app.text_input(key="criteria_source_reference").set_value(
+        "https://github.com/acme/repo/issues/6"
+    ).run()
+    app = app.text_input(key="criteria_source_confirmer").set_value(
+        "Product owner"
+    ).run()
+    app = app.button(key="confirm_criteria").click().run()
+    return app.button(key="run_analysis").click().run()
+
+
 def resolve_all_criteria(app: AppTest) -> AppTest:
     state = app.session_state["review_state"]
     resolved_criterion_ids = {
@@ -3338,7 +3358,8 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    saved, review_id = saved_demo_review(new_app())
+    saved = analyzed_exact_head_standard_demo(new_app())
+    review_id = saved.session_state["review_state"].review.review_id
     previous_head = saved.session_state["review_state"].review.head_sha
     changed_snapshot = load_demo_snapshot().model_copy(
         update={
@@ -3359,7 +3380,7 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     ):
         fresh = fresh.button(key="fetch_pr").click().run()
     fresh = fresh.text_input(key="criteria_source_reference").set_value(
-        "https://github.com/scopeproof/demo-stock-research/issues/7"
+        "https://github.com/acme/repo/issues/6"
     ).run()
     fresh = fresh.text_input(key="criteria_source_confirmer").set_value(
         "Local reviewer"
@@ -3417,11 +3438,45 @@ def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_export
     assert all(not button.disabled for button in comparison_downloads.values())
 
 
+def test_ineligible_comparison_base_is_cleared_without_hiding_current_analysis() -> None:
+    app = analyzed_demo(new_app())
+    current_bundle = app.session_state["bundle"].model_copy(deep=True)
+    comparison_base = current_bundle.model_copy(deep=True)
+    provenance = comparison_base.review.criteria_source_provenance
+    assert provenance is not None
+    comparison_base.review = comparison_base.review.model_copy(
+        update={
+            "criteria_source_provenance": provenance.model_copy(
+                update={"source_uri": "https://example.test/stale-criteria-source"}
+            )
+        }
+    )
+    app.session_state["comparison_base_bundle"] = comparison_base
+
+    app = app.run()
+
+    assert app.session_state["comparison_base_bundle"] is None
+    assert app.session_state["bundle"] == current_bundle
+    assert any(
+        "previous review cannot be compared" in item.value.lower()
+        and "no prior decisions were carried forward" in item.value.lower()
+        for item in app.warning
+    )
+    assert not [
+        button
+        for button in app.download_button
+        if button.key.startswith("download_comparison_")
+    ]
+    rendered = "\n".join(item.value for item in [*app.markdown, *app.caption])
+    assert "Evidence status describes deterministic candidates" in rendered
+
+
 def test_rereview_comparison_shows_modified_candidate_excerpt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    _, review_id = saved_demo_review(new_app())
+    saved = analyzed_exact_head_standard_demo(new_app())
+    review_id = saved.session_state["review_state"].review.review_id
     original = load_demo_snapshot()
     files = [item.model_copy(deep=True) for item in original.files]
     lines = [item.model_copy(deep=True) for item in files[0].lines]
@@ -3451,7 +3506,7 @@ def test_rereview_comparison_shows_modified_candidate_excerpt(
     ):
         fresh = fresh.button(key="fetch_pr").click().run()
     fresh = fresh.text_input(key="criteria_source_reference").set_value(
-        "https://github.com/scopeproof/demo-stock-research/issues/7"
+        "https://github.com/acme/repo/issues/6"
     ).run()
     fresh = fresh.text_input(key="criteria_source_confirmer").set_value(
         "Local reviewer"
