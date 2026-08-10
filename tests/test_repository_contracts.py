@@ -693,6 +693,18 @@ def _assert_published_version_matches_repository(
         f"version {current_version} is already published from {published_tag}, but the tracked "
         "working tree differs; advance the development version before packaging"
     )
+    untracked_package_inputs = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert not untracked_package_inputs, (
+        f"version {current_version} is already published from {published_tag}, but untracked "
+        f"package inputs exist: {', '.join(untracked_package_inputs)}; track them and advance "
+        "the development version before packaging"
+    )
 
 
 def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
@@ -728,6 +740,40 @@ def test_published_final_contract_rejects_dirty_tracked_tree(tmp_path: Path) -> 
             repository=repository,
             current_version="0.2.3",
         )
+
+
+def test_published_final_contract_rejects_untracked_package_input(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    package = repository / "scopeproof_core"
+    package.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "scopeproof-contract@example.test"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "ScopeProof contract"],
+        cwd=repository,
+        check=True,
+    )
+    (repository / ".gitignore").write_text(".coverage*\n", encoding="utf-8")
+    (package / "__init__.py").write_text("published = True\n", encoding="utf-8")
+    subprocess.run(["git", "add", ".gitignore", "scopeproof_core"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    (repository / ".coverage 2").write_text("preserve me\n", encoding="utf-8")
+    untracked_package_input = package / "untracked_probe.py"
+    untracked_package_input.write_text("different_package_bytes = True\n", encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="untracked package inputs") as error:
+        _assert_published_version_matches_repository(
+            repository=repository,
+            current_version="0.2.3",
+        )
+
+    assert "scopeproof_core/untracked_probe.py" in str(error.value)
+    assert ".coverage 2" not in str(error.value)
 
 
 class _StrictVerificationModel(BaseModel):
