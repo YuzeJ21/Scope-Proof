@@ -693,13 +693,24 @@ def _assert_published_version_matches_repository(
         f"version {current_version} is already published from {published_tag}, but the tracked "
         "working tree differs; advance the development version before packaging"
     )
-    untracked_package_inputs = subprocess.run(
+    untracked_paths = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard"],
         cwd=repository,
         check=True,
         capture_output=True,
         text=True,
     ).stdout.splitlines()
+    untracked_package_inputs = [
+        path
+        for path in untracked_paths
+        if not (
+            path.startswith(".coverage")
+            or path == ".scopeproof"
+            or path.startswith(".scopeproof/")
+            or path == ".superpowers"
+            or path.startswith(".superpowers/")
+        )
+    ]
     assert not untracked_package_inputs, (
         f"version {current_version} is already published from {published_tag}, but untracked "
         f"package inputs exist: {', '.join(untracked_package_inputs)}; track them and advance "
@@ -757,9 +768,8 @@ def test_published_final_contract_rejects_untracked_package_input(tmp_path: Path
         cwd=repository,
         check=True,
     )
-    (repository / ".gitignore").write_text(".coverage*\n", encoding="utf-8")
     (package / "__init__.py").write_text("published = True\n", encoding="utf-8")
-    subprocess.run(["git", "add", ".gitignore", "scopeproof_core"], cwd=repository, check=True)
+    subprocess.run(["git", "add", "scopeproof_core"], cwd=repository, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
     subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
     (repository / ".coverage 2").write_text("preserve me\n", encoding="utf-8")
