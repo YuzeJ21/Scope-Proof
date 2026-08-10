@@ -1,5 +1,9 @@
 # ScopeProof v0.2.3 product-convergence verification
 
+> **Historical evidence boundary:** This audit remains bound to its named commit, tree, version,
+> and environment. The [current status](../../releases/v0.2.3-status-and-next-stages.md) supersedes
+> unqualified present-state inferences and does not rewrite the results below.
+
 ## Evidence identity and boundary
 
 - Date: 2026-08-02 (America/Toronto)

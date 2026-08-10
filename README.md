@@ -111,6 +111,12 @@ at zero. The
 [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
 records the product-tree engineering evidence and remaining gaps.
 
+The repository's current source line is the unreleased development version `0.2.4.dev0`; it is
+not a replacement release asset. Post-v0.2.3 engineering merged CLI lifecycle commands, strict
+saved-record validation, installed Chromium coverage, Python 3.13 and bounded keyboard/focus
+evidence, and verified-public provenance enforcement. Those changes remain engineering evidence
+only. The public install continues to be the immutable v0.2.3 release, and Stage 1 remains zero.
+
 GitHub exposes visible check runs but does not reliably expose every repository's required-check
 policy to anonymous clients. ScopeProof therefore labels this value **Observed CI state** and counts
 only explicit success as passing.
