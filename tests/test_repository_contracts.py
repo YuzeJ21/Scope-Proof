@@ -9,6 +9,7 @@ from struct import unpack
 from typing import Literal
 from urllib.parse import urlsplit
 
+import pytest
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -653,31 +654,80 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert f'__version__ = "{DEVELOPMENT_VERSION}"' in version_source
 
 
-def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
+def _assert_published_version_matches_repository(
+    *, repository: Path, current_version: str
+) -> None:
     published_final_tags = {PUBLIC_RELEASE_VERSION: PUBLIC_RELEASE_TAG}
-    published_tag = published_final_tags.get(__version__)
+    published_tag = published_final_tags.get(current_version)
 
     if published_tag is None:
-        assert __version__ == DEVELOPMENT_VERSION
+        assert current_version == DEVELOPMENT_VERSION
         return
 
     current_tree = subprocess.run(
         ["git", "rev-parse", "HEAD^{tree}"],
+        cwd=repository,
         check=True,
         capture_output=True,
         text=True,
     ).stdout.strip()
     published_tree = subprocess.run(
         ["git", "rev-parse", f"{published_tag}^{{tree}}"],
+        cwd=repository,
         check=True,
         capture_output=True,
         text=True,
     ).stdout.strip()
 
     assert current_tree == published_tree, (
-        f"version {__version__} is already published from {published_tag}, but the current "
+        f"version {current_version} is already published from {published_tag}, but the current "
         "committed tree differs; advance the development version before packaging"
     )
+    tracked_diff = subprocess.run(
+        ["git", "diff", "--quiet", published_tag, "--"],
+        cwd=repository,
+        check=False,
+    )
+    assert tracked_diff.returncode in {0, 1}, "Git could not compare tracked package inputs"
+    assert tracked_diff.returncode == 0, (
+        f"version {current_version} is already published from {published_tag}, but the tracked "
+        "working tree differs; advance the development version before packaging"
+    )
+
+
+def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
+    _assert_published_version_matches_repository(
+        repository=Path.cwd(),
+        current_version=__version__,
+    )
+
+
+def test_published_final_contract_rejects_dirty_tracked_tree(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "scopeproof-contract@example.test"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "ScopeProof contract"],
+        cwd=repository,
+        check=True,
+    )
+    tracked = repository / "versioned.txt"
+    tracked.write_text("published\n", encoding="utf-8")
+    subprocess.run(["git", "add", "versioned.txt"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    tracked.write_text("different package bytes\n", encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="tracked working tree differs"):
+        _assert_published_version_matches_repository(
+            repository=repository,
+            current_version="0.2.3",
+        )
 
 
 class _StrictVerificationModel(BaseModel):
@@ -1442,6 +1492,11 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
         assert "verified-public provenance enforcement" in active_status
         for count in ("0/5", "0/3", "0/2"):
             assert count in active_status
+
+    python_313_row = next(line for line in status.splitlines() if "| Python 3.13 |" in line)
+    assert "Protected Python 3.13 CI passed" in python_313_row
+    assert "not Linux desktop evidence" in python_313_row
+    assert "must pass" not in python_313_row
 
     prioritized = status.split("## Prioritized post-release decision candidates", maxsplit=1)[1]
     assert "**CLI lifecycle parity:**" not in prioritized
