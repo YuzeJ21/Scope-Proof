@@ -9,7 +9,28 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-No changes currently recorded.
+Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 release.
+
+### Post-release engineering
+
+- Added CLI lifecycle parity for criterion resolution, atomic external E3/E4 runtime-evidence
+  recording, final acceptance, and changed-head comparison over validated local records.
+- Enforced a strict saved-record envelope and lifecycle-output validation. Failed commands do not
+  mutate saved records, and low-evidence acceptance notes share one fail-closed core policy across
+  CLI and Streamlit.
+- Added an installed-wheel packaged Chromium regression at 1280×720 and 390×844 with exact
+  Playwright 1.62.0, isolated local storage, loopback-only networking, and console/page-error
+  assertions.
+- Added Python 3.13 package, CLI, deterministic-benchmark, and exact workbench-health engineering
+  coverage in both a genuine local CPython 3.13 environment and protected CI.
+- Added a keyboard-only installed-workbench path with visible-focus assertions and
+  bounded native 200% zoom evidence on the tested macOS/Chrome configuration.
+- Enforced verified-public provenance before a live GitHub source can be persisted, exported, or
+  counted toward Alpha. Private, ambiguous, malformed, and legacy-unverified sources fail closed.
+
+These changes are ScopeProof engineering evidence only and earn zero Stage 1 credit. Real
+screen-reader operation, Windows desktop, Linux desktop, non-Chromium browser behavior, and WCAG
+conformance remain unsupported.
 
 ## 0.2.3 — Evidence integrity and reviewer loop
 

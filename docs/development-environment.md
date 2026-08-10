@@ -1,6 +1,14 @@
 # Reproducible development environment
 
-ScopeProof supports Python 3.11 and newer. The contributor baseline is Python 3.12 with dependencies resolved by the checked-in `uv.lock`. This path uses only local and free open-source tooling; it does not require an OpenAI or other paid LLM API.
+The public install remains v0.2.3; the current repository source is the unreleased `0.2.4.dev0`
+development line. Python 3.11, Python 3.12, and Python 3.13 have current package/CLI engineering
+coverage. Python 3.11 is the declared floor, Python 3.12 is the locked contributor baseline, and
+Python 3.13 is exercised in protected compatibility CI and a genuine local interpreter check.
+Python 3.14 is unverified pending a clean, genuine compatibility run; the current `>=3.11`
+metadata must not be read as verified 3.14 support.
+
+Dependencies are resolved by the checked-in `uv.lock`. This path uses only local and free
+open-source tooling; it does not require an OpenAI or other paid LLM API.
 
 ## Create or refresh the environment
 
@@ -68,7 +76,12 @@ Run the local workbench with:
 uv run scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
-The Python 3.11 CI lane remains the compatibility floor. A separate locked Python 3.12 lane verifies that the committed resolution can be recreated and runs repository contracts plus the deterministic benchmark before the required `verify` job.
+The Python 3.11 CI lane remains the compatibility floor. A separate locked Python 3.12 lane
+verifies that the committed resolution can be recreated and runs repository contracts plus both
+deterministic benchmarks. The Python 3.13 lane runs the complete suite, builds and installs a wheel,
+checks dependencies and both CLI versions, runs both installed benchmarks, and requires exact
+loopback workbench health before the required `verify` job. These Linux-runner checks are package
+and CLI evidence, not Linux desktop evidence.
 
 ## Known-good UI baseline
 

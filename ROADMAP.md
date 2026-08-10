@@ -18,6 +18,7 @@ which provides the wheel, source archive, and checksum manifest.
 | Area | Current state |
 |---|---|
 | Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
+| Active source line | Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists |
 | Verified product baseline | PR #184 release integration landed on `main` at `448c42758ea139bf9203cbf1bb04b02b02ae412c` |
 | Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
 | Release integration evidence | PR #184 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; exact-main CI, CodeQL, and Pages all succeeded, and `origin/main` matched at the 2026-08-08 branch-start snapshot |
@@ -27,6 +28,14 @@ which provides the wheel, source archive, and checksum manifest.
 
 Verify live GitHub and current release records before relying on publication state. Engineering
 milestones can proceed while Stage 1 waits, but they do not advance product-validation stages.
+
+After the v0.2.3 release, PR #185 merged core-backed CLI lifecycle parity and packaged Chromium
+proof at `30177733ef312ced22e6a2e57e3df6fdb1e92507`; PR #187 merged Python 3.13 plus bounded
+keyboard/focus and zoom engineering evidence at `c548759b5464ad5bb98baf1e996397f241dfc455`; and
+PR #188 merged verified-public provenance enforcement at
+`077f9351283b319b82854ad1df95eac7ce614e21`. CLI lifecycle parity is implemented;
+verified-public provenance enforcement is implemented. These changes form the `0.2.4.dev0`
+development line and earn no Stage 1 credit.
 
 ## Stage 0 — Reviewer-first product reset
 

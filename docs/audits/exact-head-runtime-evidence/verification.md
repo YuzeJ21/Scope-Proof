@@ -1,5 +1,9 @@
 # Exact-head merged-product runtime-evidence verification
 
+> **Historical evidence boundary:** This audit remains bound to its named commit, tree, version,
+> and environment. The [current status](../../releases/v0.2.3-status-and-next-stages.md) supersedes
+> unqualified present-state inferences and does not rewrite the results below.
+
 Machine-readable evidence manifest:
 [`verification.json`](verification.json). The manifest is the structured
 repository-contract input; this document remains the human-readable audit.

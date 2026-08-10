@@ -1,5 +1,6 @@
 import json
 import re
+import subprocess
 import tomllib
 from hashlib import sha256
 from html.parser import HTMLParser
@@ -8,6 +9,7 @@ from struct import unpack
 from typing import Literal
 from urllib.parse import urlsplit
 
+import pytest
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,9 +23,11 @@ from scopeproof_core.evals.r002_models import (
     load_source_manifest,
 )
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
+from scopeproof_core.version import __version__
 
 PUBLIC_RELEASE_VERSION = "0.2.3"
 PUBLIC_RELEASE_TAG = "v0.2.3"
+DEVELOPMENT_VERSION = "0.2.4.dev0"
 PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.3-py3-none-any.whl"
 PUBLIC_RELEASE_DOWNLOAD_ROOT = (
     "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
@@ -647,7 +651,209 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert f'__version__ = "{PUBLIC_RELEASE_VERSION}"' in version_source
+    assert f'__version__ = "{DEVELOPMENT_VERSION}"' in version_source
+
+
+def _assert_published_version_matches_repository(
+    *, repository: Path, current_version: str
+) -> None:
+    published_final_tags = {PUBLIC_RELEASE_VERSION: PUBLIC_RELEASE_TAG}
+    published_tag = published_final_tags.get(current_version)
+
+    if published_tag is None:
+        assert current_version == DEVELOPMENT_VERSION
+        return
+
+    current_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    published_tree = subprocess.run(
+        ["git", "rev-parse", f"{published_tag}^{{tree}}"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    assert current_tree == published_tree, (
+        f"version {current_version} is already published from {published_tag}, but the current "
+        "committed tree differs; advance the development version before packaging"
+    )
+    tracked_diff = subprocess.run(
+        ["git", "diff", "--quiet", published_tag, "--"],
+        cwd=repository,
+        check=False,
+    )
+    assert tracked_diff.returncode in {0, 1}, "Git could not compare tracked package inputs"
+    assert tracked_diff.returncode == 0, (
+        f"version {current_version} is already published from {published_tag}, but the tracked "
+        "working tree differs; advance the development version before packaging"
+    )
+    untracked_paths = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    untracked_package_inputs = {
+        path
+        for path in untracked_paths
+        if not (
+            path.startswith(".coverage")
+            or path == ".scopeproof"
+            or path.startswith(".scopeproof/")
+            or path == ".superpowers"
+            or path.startswith(".superpowers/")
+        )
+    }
+    build_config_path = repository / "pyproject.toml"
+    build_config = (
+        tomllib.loads(build_config_path.read_text(encoding="utf-8"))
+        if build_config_path.exists()
+        else {}
+    )
+    force_included_sources = list(
+        build_config.get("tool", {})
+        .get("hatch", {})
+        .get("build", {})
+        .get("targets", {})
+        .get("wheel", {})
+        .get("force-include", {})
+    )
+    if force_included_sources:
+        ignored_force_included_paths = subprocess.run(
+            [
+                "git",
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "--",
+                *force_included_sources,
+            ],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        untracked_package_inputs.update(ignored_force_included_paths)
+    untracked_package_inputs = sorted(untracked_package_inputs)
+    assert not untracked_package_inputs, (
+        f"version {current_version} is already published from {published_tag}, but untracked "
+        f"package inputs exist: {', '.join(untracked_package_inputs)}; track them and advance "
+        "the development version before packaging"
+    )
+
+
+def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
+    _assert_published_version_matches_repository(
+        repository=Path.cwd(),
+        current_version=__version__,
+    )
+
+
+def test_published_final_contract_rejects_dirty_tracked_tree(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "scopeproof-contract@example.test"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "ScopeProof contract"],
+        cwd=repository,
+        check=True,
+    )
+    tracked = repository / "versioned.txt"
+    tracked.write_text("published\n", encoding="utf-8")
+    subprocess.run(["git", "add", "versioned.txt"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    tracked.write_text("different package bytes\n", encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="tracked working tree differs"):
+        _assert_published_version_matches_repository(
+            repository=repository,
+            current_version="0.2.3",
+        )
+
+
+def test_published_final_contract_rejects_untracked_package_input(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    package = repository / "scopeproof_core"
+    package.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "scopeproof-contract@example.test"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "ScopeProof contract"],
+        cwd=repository,
+        check=True,
+    )
+    (package / "__init__.py").write_text("published = True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "scopeproof_core"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    (repository / ".coverage 2").write_text("preserve me\n", encoding="utf-8")
+    untracked_package_input = package / "untracked_probe.py"
+    untracked_package_input.write_text("different_package_bytes = True\n", encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="untracked package inputs") as error:
+        _assert_published_version_matches_repository(
+            repository=repository,
+            current_version="0.2.3",
+        )
+
+    assert "scopeproof_core/untracked_probe.py" in str(error.value)
+    assert ".coverage 2" not in str(error.value)
+
+
+def test_published_final_contract_rejects_ignored_force_included_input(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    force_included = repository / "evals"
+    force_included.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "scopeproof-contract@example.test"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "ScopeProof contract"],
+        cwd=repository,
+        check=True,
+    )
+    (repository / ".gitignore").write_text("*.py[cod]\n", encoding="utf-8")
+    (repository / "pyproject.toml").write_text(
+        '[tool.hatch.build.targets.wheel.force-include]\n"evals" = "evals"\n',
+        encoding="utf-8",
+    )
+    (force_included / "README.md").write_text("published\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    ignored_package_input = force_included / "probe.pyc"
+    ignored_package_input.write_bytes(b"different package bytes\n")
+
+    with pytest.raises(AssertionError, match="untracked package inputs") as error:
+        _assert_published_version_matches_repository(
+            repository=repository,
+            current_version="0.2.3",
+        )
+
+    assert "evals/probe.pyc" in str(error.value)
 
 
 class _StrictVerificationModel(BaseModel):
@@ -1259,6 +1465,34 @@ def test_changelog_points_to_authoritative_release_history() -> None:
     assert "does not reconstruct" in changelog
 
 
+def test_unreleased_ledger_records_post_v023_engineering_without_stage_credit() -> None:
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    unreleased = changelog.split("## Unreleased", maxsplit=1)[1].split(
+        "## 0.2.3", maxsplit=1
+    )[0]
+    normalized_unreleased = " ".join(unreleased.split())
+
+    for expected in (
+        "Development version: `0.2.4.dev0`",
+        "CLI lifecycle parity",
+        "strict saved-record envelope",
+        "packaged Chromium",
+        "Python 3.13",
+        "keyboard-only",
+        "bounded native 200% zoom",
+        "verified-public provenance",
+        "Private, ambiguous, malformed, and legacy-unverified",
+        "zero Stage 1 credit",
+        "screen-reader",
+        "Windows desktop",
+        "Linux desktop",
+        "non-Chromium",
+        "WCAG conformance",
+    ):
+        assert expected in normalized_unreleased
+    assert "No changes currently recorded" not in unreleased
+
+
 def test_changelog_discloses_v021_rereview_evidence_boundaries() -> None:
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
 
@@ -1358,6 +1592,85 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
         f'<a class="button button-primary" href="{PUBLIC_RELEASES_INDEX}/tag/'
         f'{PUBLIC_RELEASE_TAG}">Download {PUBLIC_RELEASE_TAG}</a>'
     ) in site
+
+
+def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_progress() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    environment = Path("docs/development-environment.md").read_text(encoding="utf-8")
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+    platform = Path("docs/releases/v0.2.3-platform-package-matrix.md").read_text(
+        encoding="utf-8"
+    )
+    market = Path("docs/commercialization/market-comparison-2026-07-26.md").read_text(
+        encoding="utf-8"
+    )
+
+    for active_surface in (readme, roadmap, environment, status, platform, market):
+        assert "0.2.4.dev0" in active_surface
+        assert "v0.2.3" in active_surface
+
+    for active_status in (roadmap, status):
+        assert all(pr in active_status for pr in ("PR #185", "PR #187", "PR #188"))
+        assert "CLI lifecycle parity is implemented" in active_status
+        assert "verified-public provenance enforcement" in active_status
+        for count in ("0/5", "0/3", "0/2"):
+            assert count in active_status
+
+    python_313_row = next(line for line in status.splitlines() if "| Python 3.13 |" in line)
+    assert "Protected Python 3.13 CI passed" in python_313_row
+    assert "not Linux desktop evidence" in python_313_row
+    assert "must pass" not in python_313_row
+
+    prioritized = status.split("## Prioritized post-release decision candidates", maxsplit=1)[1]
+    assert "**CLI lifecycle parity:**" not in prioritized
+    assert "**Real-browser regression coverage:**" not in prioritized
+
+    assert "Python 3.11, Python 3.12, and Python 3.13" in environment
+    assert "Python 3.14" in environment
+    python_314_line = environment.split("Python 3.14", maxsplit=1)[1].split(
+        "\n", maxsplit=1
+    )[0]
+    assert "unverified" in python_314_line
+
+    normalized_market = " ".join(market.split())
+    assert (
+        "keyboard-only and visible-focus engineering evidence is implemented"
+        in normalized_market
+    )
+    assert "CLI lifecycle parity is implemented" in normalized_market
+    assert "not yet verified with keyboard-only completion" not in normalized_market
+    assert "Finish keyboard, zoom" not in normalized_market
+
+    for unsupported in (
+        "real screen-reader",
+        "Windows desktop",
+        "Linux desktop",
+        "non-Chromium",
+        "WCAG conformance",
+    ):
+        assert unsupported in platform
+
+
+def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:
+    historical_audits = (
+        Path("docs/audits/exact-head-runtime-evidence/verification.md"),
+        Path("docs/audits/v0.2.3-integrity-reviewer-loop/verification.md"),
+        Path("docs/audits/v0.2.3-product-convergence/verification.md"),
+        Path("docs/audits/workbench-ux-simplification/verification.md"),
+        Path("docs/audits/post-release-cli-browser/verification.md"),
+        Path("docs/audits/accessibility-platform-evidence/verification.md"),
+        Path("docs/audits/v0.2.3-workbench/accessibility-and-first-use-audit.md"),
+    )
+
+    for audit in historical_audits:
+        text = audit.read_text(encoding="utf-8")
+        opening = "\n".join(text.splitlines()[:10])
+        assert "Historical evidence boundary" in opening
+        assert "../../releases/v0.2.3-status-and-next-stages.md" in opening
+        assert "does not rewrite" in opening
 
 
 def test_public_contribution_templates_preserve_evidence_boundaries() -> None:

@@ -6,6 +6,9 @@ Boundary: competitor capabilities below are vendor-advertised unless explicitly
 labelled as a ScopeProof implementation fact. This document is not customer or
 market validation.
 
+Version boundary: public install remains v0.2.3; current source is the unreleased `0.2.4.dev0`
+development line. Post-release engineering changes do not constitute market validation.
+
 ## Product category
 
 ScopeProof is not a general AI code reviewer, test-management system, or static
@@ -87,6 +90,10 @@ criterion is supported at this exact head.”
 - Conservative False Ready posture and inspectable missing-evidence
   explanations.
 - Portable exports and versioned local records.
+- CLI lifecycle parity is implemented for core-backed resolution, external runtime verification,
+  final acceptance, and changed-head comparison.
+- Bounded keyboard-only and visible-focus engineering evidence is implemented for the installed
+  Chromium path; it is not accessibility conformance.
 
 ### Where ScopeProof is immature
 
@@ -97,8 +104,9 @@ criterion is supported at this exact head.”
   integration with an issue or test-management source.
 - Retrieval coverage is intentionally conservative and the completed R-002
   baseline found candidates for only 5 of 20 research criteria.
-- Accessibility is not yet verified with keyboard-only completion, a screen
-  reader, 200% zoom, Windows, or Linux.
+- Real screen-reader operation, Windows desktop, Linux desktop, non-Chromium browser behavior, and
+  WCAG conformance remain unsupported. The bounded keyboard/focus and native-zoom checks do not
+  establish those broader claims.
 - There is no evidence yet that users will repeat the workflow or pay for a team
   product.
 
@@ -112,7 +120,8 @@ criterion is supported at this exact head.”
 2. Preserve retrieval diagnostics as explanations, never verdict evidence.
 3. Improve conservative retrieval only through new constructed regressions and
    a prospectively frozen holdout; do not retune on R-002.
-4. Finish keyboard, zoom, assistive-technology, and available-platform checks.
+4. Attempt real assistive-technology and available desktop-platform checks only in genuine,
+   observable environments; keep unavailable rows unsupported.
 5. Keep export, changed-head re-review, and missing-evidence explanations clear.
 
 ### Design now, implement only after genuine use evidence
