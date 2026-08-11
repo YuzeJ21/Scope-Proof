@@ -86,6 +86,7 @@ def bundle_with(*items: EvidenceItem, head_sha: str) -> ReviewBundle:
         pr_number=1,
         base_sha="base",
         head_sha=head_sha,
+        input_origin=ReviewInputOrigin.CONSTRUCTED_DEMO,
         check_state=CheckState.PASSING,
         ci_observation=passing_ci_observation(),
         criteria_confirmed=True,
@@ -144,6 +145,7 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
         pr_number=1,
         base_sha="base",
         head_sha=head_sha,
+        input_origin=ReviewInputOrigin.CONSTRUCTED_DEMO,
         check_state=CheckState.PASSING,
         ci_observation=passing_ci_observation(),
         criteria_confirmed=True,
@@ -595,6 +597,18 @@ def test_comparison_relationship_rejects_non_exact_live_public_head() -> None:
                 "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
                 "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
             }
+        )
+
+    with pytest.raises(ValueError, match="exact head SHAs"):
+        compare_reviews(previous, current)
+
+
+def test_comparison_relationship_rejects_non_exact_legacy_unknown_head() -> None:
+    previous = bundle(head_sha="old-head", status=FindingStatus.MISSING, with_evidence=False)
+    current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
+    for review_bundle in (previous, current):
+        review_bundle.review = review_bundle.review.model_copy(
+            update={"input_origin": ReviewInputOrigin.LEGACY_UNKNOWN}
         )
 
     with pytest.raises(ValueError, match="exact head SHAs"):

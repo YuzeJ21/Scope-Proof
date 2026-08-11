@@ -437,10 +437,16 @@ def _criteria_source_identity(bundle: ReviewBundle) -> tuple[str, str | None, st
 def _validate_review_head_identity(bundle: ReviewBundle) -> None:
     review = bundle.review
     if (
-        review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+        review.input_origin
+        not in {
+            ReviewInputOrigin.LOCAL_FIXTURE,
+            ReviewInputOrigin.CONSTRUCTED_DEMO,
+        }
         and _EXACT_GIT_HEAD.fullmatch(review.head_sha) is None
     ):
-        raise ValueError("comparison live public reviews require exact head SHAs")
+        raise ValueError(
+            "comparison live or unknown-origin reviews require exact head SHAs"
+        )
     if any(item.commit_sha != review.head_sha for item in bundle.evidence):
         raise ValueError("comparison evidence candidates must match the reviewed head")
 
