@@ -20,7 +20,6 @@ from scopeproof_core.schemas.models import (
     ReviewInputOrigin,
 )
 
-
 _EXACT_GIT_HEAD = re.compile(r"^[0-9a-f]{40}$")
 
 

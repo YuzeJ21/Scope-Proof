@@ -446,6 +446,30 @@ def test_change_model_rejects_blank_criterion_identity() -> None:
         )
 
 
+def test_change_model_rejects_blank_reason() -> None:
+    reference = EvidenceReference.from_item(evidence("EV-1", sha="head"))
+
+    with pytest.raises(ValidationError, match="non-whitespace text"):
+        EvidenceChange(
+            criterion_id="AC-01",
+            kind=EvidenceChangeKind.ADDED,
+            current=reference,
+            reason=" ",
+        )
+
+
+def test_change_model_rejects_reference_for_a_different_criterion() -> None:
+    reference = EvidenceReference.from_item(evidence("EV-1", sha="head"))
+
+    with pytest.raises(ValidationError, match="change criterion ID"):
+        EvidenceChange(
+            criterion_id="AC-02",
+            kind=EvidenceChangeKind.ADDED,
+            current=reference,
+            reason="Candidate appears only in the current review.",
+        )
+
+
 @pytest.mark.parametrize(
     ("field_name", "field_value", "message"),
     [

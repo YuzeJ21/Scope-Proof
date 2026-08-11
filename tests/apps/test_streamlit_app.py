@@ -43,6 +43,7 @@ from scopeproof_core.storage.json_store import (
     JsonReviewStore,
     default_local_review_directory,
 )
+from scopeproof_core.verification.service import build_findings
 
 APP_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "app.py"
 
@@ -3469,6 +3470,70 @@ def test_ineligible_comparison_base_is_cleared_without_hiding_current_analysis()
     ]
     rendered = "\n".join(item.value for item in [*app.markdown, *app.caption])
     assert "Evidence status describes deterministic candidates" in rendered
+
+
+def test_comparison_renders_removed_prior_decision_without_carrying_it_forward() -> None:
+    app = analyzed_demo(new_app())
+    current_state = app.session_state["review_state"]
+    current_bundle = current_state.bundle.model_copy(deep=True)
+    previous_state = append_resolution(
+        current_state,
+        ResolutionEvent(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            comment="Previous reviewer decision",
+        ),
+    )
+    assert previous_state.bundle is not None
+    app.session_state["comparison_base_bundle"] = previous_state.bundle
+    app.session_state["review_state"] = current_state
+    app.session_state["bundle"] = current_bundle
+
+    app = app.run()
+
+    rendered = "\n".join(item.value for item in app.markdown)
+    assert "Changed reviewer decisions" in rendered
+    assert "AC-01: Accepted → None" in rendered
+    assert app.session_state["review_state"] == current_state
+    assert current_bundle.resolutions == []
+
+
+def test_comparison_renders_changed_finding_status_from_current_evidence_only() -> None:
+    app = analyzed_demo(new_app())
+    current_state = app.session_state["review_state"]
+    assert current_state.bundle is not None
+    comparison_base = current_state.bundle.model_copy(deep=True)
+    current_bundle = current_state.bundle.model_copy(deep=True)
+    current_bundle.evidence = [
+        item for item in current_bundle.evidence if item.criterion_id != "AC-01"
+    ]
+    current_bundle.retrieval_diagnostics = []
+    current_bundle.findings = build_findings(
+        current_bundle.criteria,
+        current_bundle.evidence,
+        current_bundle.review.ingestion_state,
+    )
+    current_bundle.gate = evaluate_gate(
+        current_bundle.review,
+        current_bundle.criteria,
+        current_bundle.findings,
+        current_bundle.resolutions,
+    )
+    current_state = ReviewState.model_validate(
+        current_state.model_copy(update={"bundle": current_bundle}).model_dump(
+            mode="python"
+        )
+    )
+    app.session_state["comparison_base_bundle"] = comparison_base
+    app.session_state["review_state"] = current_state
+    app.session_state["bundle"] = current_bundle
+
+    app = app.run()
+
+    rendered = "\n".join(item.value for item in app.markdown)
+    assert "Changed criterion findings" in rendered
+    assert "AC-01: Evidence Found → Missing" in rendered
+    assert app.session_state["bundle"] == current_bundle
 
 
 def test_rereview_comparison_shows_modified_candidate_excerpt(
