@@ -1,5 +1,5 @@
 {
-  "source_text": "Deliberately constructed current requirements for engineering research only.",
+  "source_text": "Deliberately constructed comparison requirements for engineering research only.",
   "criteria_confirmed": true,
   "criteria": [
     {"criterion_id": "AC-01", "text": "relocateproof", "priority": "must_have", "required_evidence_level": "E1"},

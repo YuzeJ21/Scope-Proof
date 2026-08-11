@@ -11,6 +11,7 @@ from scopeproof_core.reviews.comparison import (
     EvidenceChange,
     EvidenceChangeKind,
     EvidenceReference,
+    ResolutionChange,
     ReviewComparison,
 )
 from scopeproof_core.schemas.models import (
@@ -18,6 +19,7 @@ from scopeproof_core.schemas.models import (
     EvidenceSourceScope,
     EvidenceType,
     GateVerdict,
+    HumanDecision,
 )
 
 
@@ -116,6 +118,30 @@ def test_comparison_markdown_shows_two_sides_and_evidence_boundary() -> None:
     assert "Prior Decisions Requiring Review" in report
     assert "AC\\-01" in report
     assert "never carries acceptance to a changed head" in report
+
+
+def test_comparison_exports_do_not_carry_a_previous_decision_into_current() -> None:
+    comparison = example_comparison()
+    comparison.changed_human_resolutions = [
+        ResolutionChange(
+            criterion_id="AC-01",
+            previous_decision=HumanDecision.ACCEPTED,
+            current_decision=None,
+        )
+    ]
+
+    payload = json.loads(export_comparison_json(comparison))
+    report = export_comparison_markdown(comparison)
+
+    assert payload["changed_human_resolutions"] == [
+        {
+            "criterion_id": "AC-01",
+            "previous_decision": "accepted",
+            "current_decision": None,
+        }
+    ]
+    assert "<code>accepted</code> → <code>none</code>" in report
+    assert "does not carry forward a prior human decision" in report
 
 
 def test_comparison_markdown_escapes_repository_controlled_text() -> None:

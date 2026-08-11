@@ -62,7 +62,11 @@ from scopeproof_core.reporting.exporters import (
 )
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
-from scopeproof_core.reviews.comparison import EvidenceReference, compare_reviews
+from scopeproof_core.reviews.comparison import (
+    EvidenceReference,
+    ReviewComparison,
+    compare_reviews,
+)
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     acceptance_requires_comment,
@@ -1935,8 +1939,18 @@ if bundle is None:
         )
 else:
     comparison_base: ReviewBundle | None = st.session_state["comparison_base_bundle"]
+    comparison: ReviewComparison | None = None
     if comparison_base is not None:
-        comparison = compare_reviews(comparison_base, bundle)
+        try:
+            comparison = compare_reviews(comparison_base, bundle)
+        except ValueError:
+            st.session_state["comparison_base_bundle"] = None
+            st.warning(
+                "The previous review cannot be compared with this analysis because the pull "
+                "request, exact head identity, confirmed criteria, or criteria source changed. "
+                "No prior decisions were carried forward."
+            )
+    if comparison is not None:
         st.markdown("### Re-review comparison")
         st.caption(f"Previous head: {comparison.previous_head_sha}")
         st.caption(f"Current head: {comparison.current_head_sha}")

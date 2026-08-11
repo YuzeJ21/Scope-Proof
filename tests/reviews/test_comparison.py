@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 from pydantic import ValidationError
 
@@ -23,8 +25,10 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    RepositoryVisibility,
     Review,
     ReviewBundle,
+    ReviewInputOrigin,
 )
 from scopeproof_core.verification.service import build_findings
 
@@ -76,21 +80,30 @@ def bundle_with(*items: EvidenceItem, head_sha: str) -> ReviewBundle:
         Criterion(criterion_id=criterion_id, text=f"Requirement {criterion_id}")
         for criterion_id in criterion_ids
     ]
+    source_text = "\n".join(criterion.text for criterion in criteria)
     review = Review(
         repository="acme/widget",
         pr_number=1,
         base_sha="base",
         head_sha=head_sha,
+        input_origin=ReviewInputOrigin.CONSTRUCTED_DEMO,
         check_state=CheckState.PASSING,
         ci_observation=passing_ci_observation(),
         criteria_confirmed=True,
+    )
+    review.criteria_source_provenance = build_criteria_source_provenance(
+        source_uri="https://example.test/requirements",
+        source_text=source_text,
+        criteria=criteria,
+        confirmed_by="Fixture owner",
+        confirmed_at=review.created_at,
     )
     item_list = list(items)
     findings = build_findings(criteria, item_list, IngestionState.COMPLETE)
     gate = evaluate_gate(review, criteria, findings, [])
     return ReviewBundle(
         review=review,
-        source_text="\n".join(criterion.text for criterion in criteria),
+        source_text=source_text,
         criteria=criteria,
         evidence=item_list,
         findings=findings,
@@ -132,6 +145,7 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
         pr_number=1,
         base_sha="base",
         head_sha=head_sha,
+        input_origin=ReviewInputOrigin.CONSTRUCTED_DEMO,
         check_state=CheckState.PASSING,
         ci_observation=passing_ci_observation(),
         criteria_confirmed=True,
@@ -432,3 +446,170 @@ def test_change_model_rejects_blank_criterion_identity() -> None:
             current=reference,
             reason="Candidate appears only in the current review.",
         )
+
+
+def test_change_model_rejects_blank_reason() -> None:
+    reference = EvidenceReference.from_item(evidence("EV-1", sha="head"))
+
+    with pytest.raises(ValidationError, match="non-whitespace text"):
+        EvidenceChange(
+            criterion_id="AC-01",
+            kind=EvidenceChangeKind.ADDED,
+            current=reference,
+            reason=" ",
+        )
+
+
+def test_change_model_rejects_reference_for_a_different_criterion() -> None:
+    reference = EvidenceReference.from_item(evidence("EV-1", sha="head"))
+
+    with pytest.raises(ValidationError, match="change criterion ID"):
+        EvidenceChange(
+            criterion_id="AC-02",
+            kind=EvidenceChangeKind.ADDED,
+            current=reference,
+            reason="Candidate appears only in the current review.",
+        )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "message"),
+    [
+        ("repository", "acme/other", "same repository"),
+        ("pr_number", 2, "same pull request"),
+    ],
+)
+def test_comparison_relationship_rejects_different_pull_request_identity(
+    field_name: str, field_value: str | int, message: str
+) -> None:
+    previous = bundle(head_sha="old-head", status=FindingStatus.MISSING, with_evidence=False)
+    current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
+    current.review = current.review.model_copy(update={field_name: field_value})
+
+    with pytest.raises(ValueError, match=message):
+        compare_reviews(previous, current)
+
+
+def test_comparison_relationship_rejects_changed_ordered_criteria() -> None:
+    previous = bundle_with(
+        evidence("EV-AC-01", sha="old-head", criterion_id="AC-01"),
+        evidence("EV-AC-02", sha="old-head", criterion_id="AC-02"),
+        head_sha="old-head",
+    )
+    current = bundle_with(
+        evidence("EV-AC-01", sha="new-head", criterion_id="AC-01"),
+        evidence("EV-AC-02", sha="new-head", criterion_id="AC-02"),
+        head_sha="new-head",
+    )
+    current.criteria = list(reversed(current.criteria))
+    current.review = current.review.model_copy(
+        update={
+            "criteria_source_provenance": build_criteria_source_provenance(
+                source_uri="https://example.test/requirements",
+                source_text=current.source_text,
+                criteria=current.criteria,
+                confirmed_by="Fixture owner",
+                confirmed_at=current.review.created_at,
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="identical ordered criterion definitions"):
+        compare_reviews(previous, current)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("source_uri", "https://example.test/other-requirements"),
+        ("source_revision", "revision-2"),
+    ],
+)
+def test_comparison_relationship_rejects_incompatible_criteria_source_provenance(
+    field_name: str, field_value: str
+) -> None:
+    previous = bundle(head_sha="old-head", status=FindingStatus.MISSING, with_evidence=False)
+    current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
+    provenance = current.review.criteria_source_provenance
+    assert provenance is not None
+    current.review = current.review.model_copy(
+        update={
+            "criteria_source_provenance": provenance.model_copy(
+                update={field_name: field_value}
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="compatible criteria-source provenance"):
+        compare_reviews(previous, current)
+
+
+def test_comparison_relationship_rejects_missing_criteria_source_provenance() -> None:
+    previous = bundle(head_sha="old-head", status=FindingStatus.MISSING, with_evidence=False)
+    current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
+    current.review = current.review.model_copy(update={"criteria_source_provenance": None})
+
+    with pytest.raises(ValueError, match="criteria-source provenance"):
+        compare_reviews(previous, current)
+
+
+def test_comparison_relationship_allows_new_confirmation_attestation() -> None:
+    previous = bundle(head_sha="old-head", status=FindingStatus.MISSING, with_evidence=False)
+    current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
+    provenance = current.review.criteria_source_provenance
+    assert provenance is not None
+    current.review = current.review.model_copy(
+        update={
+            "criteria_source_provenance": provenance.model_copy(
+                update={
+                    "confirmed_by": "Second fixture owner",
+                    "confirmed_at": provenance.confirmed_at + timedelta(minutes=5),
+                }
+            )
+        }
+    )
+
+    comparison = compare_reviews(previous, current)
+
+    assert comparison.current_head_sha == "new-head"
+
+
+def test_comparison_relationship_rejects_candidate_from_unrelated_head() -> None:
+    previous = bundle_with(
+        evidence("EV-old", sha="old-head"),
+        head_sha="old-head",
+    )
+    current = bundle_with(
+        evidence("EV-new", sha="unrelated-head"),
+        head_sha="new-head",
+    )
+
+    with pytest.raises(ValueError, match="evidence candidates must match the reviewed head"):
+        compare_reviews(previous, current)
+
+
+def test_comparison_relationship_rejects_non_exact_live_public_head() -> None:
+    previous = bundle(head_sha="old-head", status=FindingStatus.MISSING, with_evidence=False)
+    current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
+    for review_bundle in (previous, current):
+        review_bundle.review = review_bundle.review.model_copy(
+            update={
+                "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+                "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+            }
+        )
+
+    with pytest.raises(ValueError, match="exact head SHAs"):
+        compare_reviews(previous, current)
+
+
+def test_comparison_relationship_rejects_non_exact_legacy_unknown_head() -> None:
+    previous = bundle(head_sha="old-head", status=FindingStatus.MISSING, with_evidence=False)
+    current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
+    for review_bundle in (previous, current):
+        review_bundle.review = review_bundle.review.model_copy(
+            update={"input_origin": ReviewInputOrigin.LEGACY_UNKNOWN}
+        )
+
+    with pytest.raises(ValueError, match="exact head SHAs"):
+        compare_reviews(previous, current)

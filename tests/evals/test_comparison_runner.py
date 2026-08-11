@@ -80,6 +80,19 @@ def test_comparison_benchmark_reports_bounded_count_mismatch(tmp_path: Path) -> 
     assert result.does_not_advance_stage_1 is True
 
 
+def test_comparison_benchmark_rejects_changed_criteria_source(tmp_path: Path) -> None:
+    source = Path(__file__).resolve().parents[2] / "evals" / "comparisons"
+    target = tmp_path / "comparisons"
+    shutil.copytree(source, target)
+    labels_path = target / "current_labels.json"
+    labels = json.loads(labels_path.read_text(encoding="utf-8"))
+    labels["source_text"] = "Changed criteria source that invalidates the comparison base."
+    labels_path.write_text(json.dumps(labels), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="compatible criteria-source provenance"):
+        run_comparison_benchmark(target)
+
+
 def test_comparison_benchmark_rejects_empty_corpus(tmp_path: Path) -> None:
     source = Path(__file__).resolve().parents[2] / "evals" / "comparisons"
     target = tmp_path / "comparisons"

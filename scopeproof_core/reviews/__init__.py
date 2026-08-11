@@ -1,6 +1,10 @@
 """Lifecycle helpers for user-owned criteria and human acceptance history."""
 
-from scopeproof_core.reviews.comparison import ReviewComparison, compare_reviews
+from scopeproof_core.reviews.comparison import (
+    ReviewComparison,
+    compare_reviews,
+    validate_comparison_relationship,
+)
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     append_external_verification,
@@ -29,4 +33,5 @@ __all__ = [
     "new_review_state",
     "resolution_event_statuses",
     "revise_criteria",
+    "validate_comparison_relationship",
 ]

@@ -1474,14 +1474,18 @@ def test_compare_command_rejects_review_without_active_bundle(
 
 
 @pytest.mark.parametrize(
-    ("identity_update", "identity_value"),
-    [("repository", "other/widget"), ("pr_number", 999)],
+    ("identity_update", "identity_value", "message"),
+    [
+        ("repository", "other/widget", "same repository"),
+        ("pr_number", 999, "same pull request"),
+    ],
 )
 def test_compare_command_rejects_reviews_from_different_pull_requests(
     tmp_path: Path,
     capsys,
     identity_update: str,
     identity_value: str | int,
+    message: str,
 ) -> None:
     storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
     store = JsonReviewStore(storage)
@@ -1517,7 +1521,7 @@ def test_compare_command_rejects_reviews_from_different_pull_requests(
         )
 
     assert error.value.code == 2
-    assert "same repository and pull request" in capsys.readouterr().err
+    assert message in capsys.readouterr().err
     assert not output.exists()
     assert {
         review_id: (storage / f"{review_id}.json").read_bytes()
@@ -1595,7 +1599,134 @@ def test_compare_command_rejects_different_confirmed_criterion_definitions(
         )
 
     assert error.value.code == 2
-    assert "identical confirmed criterion definitions" in capsys.readouterr().err
+    assert "identical ordered criterion definitions" in capsys.readouterr().err
+    assert not output.exists()
+    assert {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    } == before
+
+
+@pytest.mark.parametrize(
+    ("invalid_relationship", "message"),
+    [
+        ("criterion_order", "identical ordered criterion definitions"),
+        ("criteria_source", "compatible criteria-source provenance"),
+        ("candidate_head", "evidence candidates must match the reviewed head"),
+        ("live_head", "exact head SHAs"),
+    ],
+)
+def test_compare_command_uses_core_relationship_validator_before_render_or_output(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_relationship: str,
+    message: str,
+) -> None:
+    storage, previous_id, current_id = _save_comparison_reviews(tmp_path)
+    store = JsonReviewStore(storage)
+    current = store.load(current_id)
+    assert current.bundle is not None
+    review = current.review.model_copy(deep=True)
+    bundle = current.bundle.model_copy(deep=True)
+    criteria_revision = current.criteria_revision.model_copy(deep=True)
+
+    if invalid_relationship == "criterion_order":
+        criteria = list(reversed(bundle.criteria))
+        provenance = review.criteria_source_provenance
+        assert provenance is not None
+        revised_provenance = build_criteria_source_provenance(
+            source_uri=provenance.source_uri,
+            source_revision=provenance.source_revision,
+            source_text=bundle.source_text,
+            criteria=criteria,
+            confirmed_by=provenance.confirmed_by,
+            confirmed_at=provenance.confirmed_at,
+        )
+        review = review.model_copy(
+            update={"criteria_source_provenance": revised_provenance}
+        )
+        bundle = bundle.model_copy(
+            update={
+                "review": review.model_copy(deep=True),
+                "criteria": criteria,
+            }
+        )
+        criteria_revision = criteria_revision.model_copy(
+            update={
+                "criteria": criteria,
+                "source_provenance": revised_provenance,
+            }
+        )
+    elif invalid_relationship == "criteria_source":
+        provenance = review.criteria_source_provenance
+        assert provenance is not None
+        revised_provenance = provenance.model_copy(
+            update={"source_uri": "https://example.test/changed-requirements"}
+        )
+        review = review.model_copy(
+            update={"criteria_source_provenance": revised_provenance}
+        )
+        bundle = bundle.model_copy(
+            update={"review": review.model_copy(deep=True)}
+        )
+        criteria_revision = criteria_revision.model_copy(
+            update={"source_provenance": revised_provenance}
+        )
+    elif invalid_relationship == "candidate_head":
+        evidence = [item.model_copy(deep=True) for item in bundle.evidence]
+        evidence[0] = evidence[0].model_copy(update={"commit_sha": "unrelated-head"})
+        bundle = bundle.model_copy(update={"evidence": evidence})
+    else:
+        review = review.model_copy(
+            update={
+                "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+                "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+            }
+        )
+        bundle = bundle.model_copy(
+            update={"review": review.model_copy(deep=True)}
+        )
+
+    store.save(
+        current.model_copy(
+            update={
+                "review": review,
+                "criteria_revision": criteria_revision,
+                "bundle": bundle,
+            }
+        )
+    )
+    before = {
+        review_id: (storage / f"{review_id}.json").read_bytes()
+        for review_id in (previous_id, current_id)
+    }
+    output = tmp_path / "ineligible-comparison.json"
+    renderer_called = False
+
+    def unexpected_renderer(_comparison):
+        nonlocal renderer_called
+        renderer_called = True
+        return "unexpected"
+
+    monkeypatch.setitem(cli_module.COMPARISON_RENDERERS, "json", unexpected_renderer)
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "compare",
+                previous_id,
+                current_id,
+                "--output",
+                str(output),
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert message in capsys.readouterr().err
+    assert renderer_called is False
     assert not output.exists()
     assert {
         review_id: (storage / f"{review_id}.json").read_bytes()

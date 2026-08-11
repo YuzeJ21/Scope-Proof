@@ -411,28 +411,6 @@ def _compare(args: argparse.Namespace) -> int:
     ) as (previous, current):
         if previous.bundle is None or current.bundle is None:
             raise ValueError("comparison requires an active analysis in both saved reviews")
-        if (
-            previous.bundle.review.repository,
-            previous.bundle.review.pr_number,
-        ) != (
-            current.bundle.review.repository,
-            current.bundle.review.pr_number,
-        ):
-            raise ValueError(
-                "comparison requires reviews from the same repository and pull request"
-            )
-        previous_criteria = {
-            item.criterion_id: item.model_dump(mode="json")
-            for item in previous.bundle.criteria
-        }
-        current_criteria = {
-            item.criterion_id: item.model_dump(mode="json")
-            for item in current.bundle.criteria
-        }
-        if previous_criteria != current_criteria:
-            raise ValueError(
-                "comparison requires identical confirmed criterion definitions"
-            )
         comparison = compare_reviews(previous.bundle, current.bundle)
         rendered = COMPARISON_RENDERERS[args.format](comparison)
         if args.output is None:

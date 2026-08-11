@@ -27,6 +27,10 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
   bounded native 200% zoom evidence on the tested macOS/Chrome configuration.
 - Enforced verified-public provenance before a live GitHub source can be persisted, exported, or
   counted toward Alpha. Private, ambiguous, malformed, and legacy-unverified sources fail closed.
+- Centralized comparison eligibility in the core: repository and pull-request identity, exact
+  reviewed heads, ordered criterion definitions, and criteria-source provenance must remain
+  compatible. CLI and Streamlit now reject stale comparison bases without carrying decisions or
+  mutating saved reviews.
 
 These changes are ScopeProof engineering evidence only and earn zero Stage 1 credit. Real
 screen-reader operation, Windows desktop, Linux desktop, non-Chromium browser behavior, and WCAG
