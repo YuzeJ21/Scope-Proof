@@ -294,6 +294,52 @@ def test_portable_read_and_listing_return_only_regular_direct_children(
     assert list_regular_files(tmp_path) == [record]
 
 
+def test_portable_listing_ignores_entry_removed_before_metadata_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class VanishedEntry:
+        name = "vanished.json"
+
+        @staticmethod
+        def stat(*, follow_symlinks: bool):
+            assert follow_symlinks is False
+            raise FileNotFoundError("removed during listing")
+
+    class VanishedEntries:
+        def __enter__(self):
+            return iter([VanishedEntry()])
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "scandir", lambda _directory: VanishedEntries())
+
+    assert list_regular_files(tmp_path) == []
+
+
+def test_content_hash_rejects_record_identity_drift(tmp_path: Path) -> None:
+    target = tmp_path / "record.json"
+    target.write_text("validated\n", encoding="utf-8")
+    metadata = target.stat()
+    wrong_identity = (metadata.st_dev, metadata.st_ino + 1)
+
+    with pytest.raises(UnsafeAtomicPath, match="content was verified"):
+        atomic_files_module._sha256_regular_path(target, wrong_identity)
+
+    if atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        directory_fd = os.open(tmp_path, os.O_RDONLY | atomic_files_module._DIRECTORY)
+        try:
+            with pytest.raises(UnsafeAtomicPath, match="content was verified"):
+                atomic_files_module._sha256_regular_at(
+                    directory_fd,
+                    target.name,
+                    wrong_identity,
+                )
+        finally:
+            os.close(directory_fd)
+
+
 def test_failed_exclusive_publish_cleans_private_temporary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
