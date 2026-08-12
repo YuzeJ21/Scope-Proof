@@ -6,6 +6,7 @@ from threading import Barrier
 import pytest
 from pydantic import ValidationError
 
+import scopeproof_core.alpha.rehearsal_storage as rehearsal_storage_module
 from scopeproof_core.alpha.rehearsal import initialize_alpha_rehearsal
 from scopeproof_core.alpha.rehearsal_storage import (
     JsonAlphaRehearsalStore,
@@ -42,6 +43,22 @@ def test_rehearsal_round_trips_as_validated_json(tmp_path: Path) -> None:
     assert path.name == f"{record.rehearsal_id}.json"
     assert store.list_rehearsal_ids() == [record.rehearsal_id]
     assert not hasattr(store, "update")
+
+
+def test_portable_rehearsal_backend_round_trips_without_posix_descriptors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(rehearsal_storage_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    record = alpha_rehearsal()
+    store = JsonAlphaRehearsalStore(tmp_path / "portable" / "rehearsals")
+
+    path = store.save(record)
+
+    assert path.read_text(encoding="utf-8").endswith("\n")
+    assert store.load(record.rehearsal_id) == record
+    assert store.list_rehearsal_ids() == [record.rehearsal_id]
+    with pytest.raises(FileExistsError):
+        store.save(record)
 
 
 def test_rehearsal_listing_is_deterministically_sorted(tmp_path: Path) -> None:

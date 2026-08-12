@@ -273,6 +273,37 @@ def test_concurrent_process_outcome_updates_commit_exactly_once(tmp_path: Path) 
     assert sorted(path.name for path in tmp_path.iterdir()) == [f"{record.case_id}.json"]
 
 
+def test_interrupted_outcome_update_preserves_prior_record_and_cleans_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopeproof_core.alpha.models import AlphaOutcome
+    from scopeproof_core.alpha.service import record_alpha_outcome
+
+    record = alpha_case()
+    store = JsonAlphaCaseStore(tmp_path)
+    path = store.save(record)
+    before = path.read_bytes()
+    completed = record_alpha_outcome(
+        record,
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+    )
+
+    def interrupt_replace(*_args, **_kwargs):
+        raise OSError("simulated alpha update interruption")
+
+    monkeypatch.setattr(
+        "scopeproof_core.alpha.storage.atomic_replace_text",
+        interrupt_replace,
+    )
+
+    with pytest.raises(OSError, match="alpha update interruption"):
+        store.update(completed)
+
+    assert path.read_bytes() == before
+    assert sorted(item.name for item in tmp_path.iterdir()) == [path.name]
+
+
 def test_alpha_store_reads_legacy_record_without_inventing_provenance(
     tmp_path: Path,
 ) -> None:
@@ -329,6 +360,28 @@ def test_alpha_store_revalidates_loaded_payload(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError):
         store.load(record.case_id)
+
+
+def test_alpha_store_rejects_malformed_json(tmp_path: Path) -> None:
+    record = alpha_case()
+    store = JsonAlphaCaseStore(tmp_path)
+    path = store.save(record)
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(json.JSONDecodeError):
+        store.load(record.case_id)
+
+
+def test_alpha_store_rejects_symlink_record_target(tmp_path: Path) -> None:
+    record = alpha_case()
+    outside = tmp_path / "outside.json"
+    outside.write_text(record.model_dump_json(), encoding="utf-8")
+    directory = tmp_path / "cases"
+    directory.mkdir()
+    (directory / f"{record.case_id}.json").symlink_to(outside)
+
+    with pytest.raises(UnsafeAlphaCaseStore, match="regular local file"):
+        JsonAlphaCaseStore(directory).load(record.case_id)
 
 
 def test_alpha_store_rejects_valid_record_under_different_id(tmp_path: Path) -> None:
