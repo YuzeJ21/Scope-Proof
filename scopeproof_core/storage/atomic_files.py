@@ -379,9 +379,12 @@ def _create_backup_at(
             continue
         metadata = _require_regular_at(directory_fd, backup)
         if not _same_file(metadata, expected):
-            with suppress(OSError):
-                os.unlink(backup, dir_fd=directory_fd)
-            raise UnsafeAtomicPath("existing record changed while backup was created")
+            _quarantine_and_remove_at(
+                directory_fd,
+                backup,
+                expected,
+                changed_message="existing record changed while backup was created",
+            )
         return backup
     raise FileExistsError("could not allocate replacement backup")
 
@@ -398,9 +401,11 @@ def _create_backup_path(target: Path, expected: tuple[int, int]) -> Path:
             continue
         metadata = _require_regular_file(backup)
         if not _same_file(metadata, expected):
-            with suppress(OSError):
-                os.unlink(backup)
-            raise UnsafeAtomicPath("existing record changed while backup was created")
+            _quarantine_and_remove_path(
+                backup,
+                expected,
+                changed_message="existing record changed while backup was created",
+            )
         return backup
     raise FileExistsError("could not allocate replacement backup")
 
@@ -760,6 +765,8 @@ def atomic_replace_text(
         if existing_identity != claim.record_identity:
             raise UnsafeAtomicPath("existing record changed after mutation claim")
         temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
+        temporary_metadata = os.fstat(descriptor)
+        temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
         backup = ""
         published = False
         committed = False
@@ -789,6 +796,10 @@ def atomic_replace_text(
         except BaseException:
             if published and backup:
                 try:
+                    backup_metadata = _require_regular_at(directory_fd, backup)
+                    if not _same_file(backup_metadata, existing_identity):
+                        preserve_backup = True
+                        raise UnsafeAtomicPath("replacement backup changed before rollback")
                     _quarantine_and_remove_at(
                         directory_fd,
                         target.name,
@@ -813,12 +824,27 @@ def atomic_replace_text(
         finally:
             if descriptor >= 0:
                 os.close(descriptor)
-            with suppress(OSError):
-                os.unlink(temporary, dir_fd=directory_fd)
+            try:
+                _quarantine_and_remove_at(
+                    directory_fd,
+                    temporary,
+                    temporary_identity,
+                    changed_message="private temporary file changed before cleanup",
+                )
+            except FileNotFoundError:
+                pass
+            except (OSError, UnsafeAtomicPath):
+                if not committed:
+                    raise
             if backup and not preserve_backup:
                 try:
-                    os.unlink(backup, dir_fd=directory_fd)
-                except OSError:
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        backup,
+                        existing_identity,
+                        changed_message="replacement backup changed before cleanup",
+                    )
+                except (OSError, UnsafeAtomicPath):
                     if not committed:
                         raise
     portable_directory = _capture_safe_directory(target.parent, create=False)
@@ -835,6 +861,8 @@ def atomic_replace_text(
     if claim is not None and existing_identity != claim.record_identity:
         raise UnsafeAtomicPath("existing record changed after mutation claim")
     temporary, descriptor = _open_private_temporary(parent, target.stem)
+    temporary_metadata = os.fstat(descriptor)
+    temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
     backup: Path | None = None
     published = False
     committed = False
@@ -870,6 +898,10 @@ def atomic_replace_text(
             _assert_portable_directory(portable_directory)
             _assert_directory_identity(parent, parent_identity)
             try:
+                backup_metadata = _require_regular_file(backup)
+                if not _same_file(backup_metadata, existing_identity):
+                    preserve_backup = True
+                    raise UnsafeAtomicPath("replacement backup changed before rollback")
                 _quarantine_and_remove_path(
                     target,
                     (expected.st_dev, expected.st_ino),
@@ -895,13 +927,26 @@ def atomic_replace_text(
         except (OSError, UnsafeAtomicPath):
             cleanup_safe = False
         if cleanup_safe:
-            with suppress(OSError):
-                os.unlink(temporary)
+            try:
+                _quarantine_and_remove_path(
+                    temporary,
+                    temporary_identity,
+                    changed_message="private temporary file changed before cleanup",
+                )
+            except FileNotFoundError:
+                pass
+            except (OSError, UnsafeAtomicPath):
+                if not committed:
+                    raise
             if backup is not None and not preserve_backup:
                 try:
-                    os.unlink(backup)
+                    _quarantine_and_remove_path(
+                        backup,
+                        existing_identity,
+                        changed_message="replacement backup changed before cleanup",
+                    )
                 except FileNotFoundError:
                     pass
-                except OSError:
+                except (OSError, UnsafeAtomicPath):
                     if not committed:
                         raise

@@ -15,6 +15,7 @@ from pathlib import Path
 from scopeproof_core.alpha.rehearsal import AlphaRehearsalRecord
 from scopeproof_core.storage.atomic_files import (
     UnsafeAtomicPath,
+    _quarantine_and_remove_at,
     atomic_create_text,
     list_regular_files,
     read_text_no_follow,
@@ -240,6 +241,8 @@ class JsonAlphaRehearsalStore:
             directory_fd,
             target_name,
         )
+        temporary_metadata = os.fstat(temporary_fd)
+        temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
         published = False
         try:
             remaining = memoryview(serialized)
@@ -259,16 +262,30 @@ class JsonAlphaRehearsalStore:
                 )
             except FileExistsError:
                 raise FileExistsError(record.rehearsal_id) from None
+            target_metadata = os.stat(
+                target_name,
+                dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+            if (target_metadata.st_dev, target_metadata.st_ino) != temporary_identity:
+                raise UnsafeAlphaRehearsalStore(
+                    "private rehearsal temporary changed before publication"
+                )
             published = True
             with suppress(OSError):
                 os.fsync(directory_fd)
         finally:
             os.close(temporary_fd)
             try:
-                os.unlink(temporary_name, dir_fd=directory_fd)
+                _quarantine_and_remove_at(
+                    directory_fd,
+                    temporary_name,
+                    temporary_identity,
+                    changed_message="private rehearsal temporary changed before cleanup",
+                )
             except FileNotFoundError:
                 pass
-            except OSError:
+            except (OSError, UnsafeAtomicPath):
                 if not published:
                     raise
             if published:

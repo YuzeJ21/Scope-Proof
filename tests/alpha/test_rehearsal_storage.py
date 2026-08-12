@@ -86,20 +86,60 @@ def test_committed_rehearsal_does_not_report_failure_when_cleanup_is_denied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     record = alpha_rehearsal()
-    original_unlink = os.unlink
+    original_rename = os.rename
 
-    def deny_temporary_cleanup(path, *args, **kwargs):
-        if str(path).endswith(".tmp"):
+    def deny_temporary_cleanup(source, destination, *args, **kwargs):
+        if str(source).endswith(".tmp"):
             raise PermissionError("simulated cleanup denial")
-        return original_unlink(path, *args, **kwargs)
+        return original_rename(source, destination, *args, **kwargs)
 
-    monkeypatch.setattr(os, "unlink", deny_temporary_cleanup)
+    monkeypatch.setattr(os, "rename", deny_temporary_cleanup)
 
     path = JsonAlphaRehearsalStore(tmp_path).save(record)
 
     assert JsonAlphaRehearsalStore(tmp_path).load(record.rehearsal_id) == record
     assert path.exists()
     assert any(item.suffix == ".tmp" for item in tmp_path.iterdir())
+
+
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_committed_rehearsal_never_deletes_foreign_temporary_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_rehearsal()
+    original_link = os.link
+    foreign_name = ""
+
+    def replace_temporary_after_publication(source, destination, *args, **kwargs):
+        nonlocal foreign_name
+        if not str(source).endswith(".tmp"):
+            return original_link(source, destination, *args, **kwargs)
+        result = original_link(source, destination, *args, **kwargs)
+        directory_fd = kwargs["src_dir_fd"]
+        os.unlink(source, dir_fd=directory_fd)
+        descriptor = os.open(
+            source,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+            dir_fd=directory_fd,
+        )
+        try:
+            os.write(descriptor, b"foreign rehearsal temporary\n")
+        finally:
+            os.close(descriptor)
+        foreign_name = source
+        return result
+
+    monkeypatch.setattr(os, "link", replace_temporary_after_publication)
+
+    path = JsonAlphaRehearsalStore(tmp_path).save(record)
+
+    assert JsonAlphaRehearsalStore(tmp_path).load(record.rehearsal_id) == record
+    assert path.exists()
+    assert (tmp_path / foreign_name).read_bytes() == b"foreign rehearsal temporary\n"
 
 
 @pytest.mark.parametrize(

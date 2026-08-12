@@ -623,9 +623,9 @@ def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
     original_rename = os.rename
 
     def fail_replace(source, destination, *args, **kwargs):
-        if str(source).endswith(".claim"):
-            return original_rename(source, destination, *args, **kwargs)
-        raise OSError("simulated replacement interruption")
+        if str(source).endswith(".tmp") and Path(destination).name == target.name:
+            raise OSError("simulated replacement interruption")
+        return original_rename(source, destination, *args, **kwargs)
 
     monkeypatch.setattr(os, "rename", fail_replace)
 
@@ -1393,26 +1393,57 @@ def test_backup_allocators_fail_after_the_bounded_collision_budget(
             os.close(descriptor)
 
 
-@pytest.mark.skipif(
-    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
-    reason="descriptor-relative storage backend is unavailable",
-)
-def test_descriptor_backup_rejects_identity_drift(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("portable", [False, True])
+def test_backup_identity_drift_preserves_foreign_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
     target.write_text("valid\n", encoding="utf-8")
     metadata = target.stat()
     identity = (metadata.st_dev, metadata.st_ino)
-    descriptor = os.open(tmp_path, os.O_RDONLY | atomic_files_module._DIRECTORY)
-    monkeypatch.setattr(atomic_files_module, "_same_file", lambda *_args: False)
-    try:
-        with pytest.raises(UnsafeAtomicPath, match="changed while backup was created"):
-            atomic_files_module._create_backup_at(descriptor, target.name, identity)
-    finally:
-        os.close(descriptor)
+    original_link = os.link
+    foreign_path: Path | None = None
 
-    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
+    def replace_backup(source, destination, *args, **kwargs):
+        nonlocal foreign_path
+        result = original_link(source, destination, *args, **kwargs)
+        directory_fd = kwargs.get("dst_dir_fd")
+        if directory_fd is None:
+            foreign_path = Path(destination)
+            foreign_path.unlink()
+            foreign_path.write_text("foreign backup\n", encoding="utf-8")
+        else:
+            foreign_path = tmp_path / str(destination)
+            os.unlink(destination, dir_fd=directory_fd)
+            descriptor = os.open(
+                destination,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=directory_fd,
+            )
+            try:
+                os.write(descriptor, b"foreign backup\n")
+            finally:
+                os.close(descriptor)
+        return result
+
+    monkeypatch.setattr(os, "link", replace_backup)
+    if portable:
+        with pytest.raises(UnsafeAtomicPath, match="changed while backup was created"):
+            atomic_files_module._create_backup_path(target, identity)
+    else:
+        directory_fd = os.open(tmp_path, os.O_RDONLY | atomic_files_module._DIRECTORY)
+        try:
+            with pytest.raises(UnsafeAtomicPath, match="changed while backup was created"):
+                atomic_files_module._create_backup_at(directory_fd, target.name, identity)
+        finally:
+            os.close(directory_fd)
+
+    assert target.read_bytes() == b"valid\n"
+    assert foreign_path is not None
+    assert foreign_path.read_bytes() == b"foreign backup\n"
 
 
 def test_quarantine_allocators_fail_after_the_bounded_collision_budget(
