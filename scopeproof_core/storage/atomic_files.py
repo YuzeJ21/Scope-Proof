@@ -43,6 +43,7 @@ class MutationClaim:
     target: Path
     parent: Path
     identity: tuple[int, int]
+    record_identity: tuple[int, int]
     directory_fd: int | None = None
     portable_ancestors: tuple[tuple[Path, tuple[int, int]], ...] = ()
 
@@ -85,23 +86,41 @@ def _capture_safe_directory(directory: Path, *, create: bool) -> _PortableDirect
     ancestors: list[tuple[Path, tuple[int, int]]] = [
         (current, (root_metadata.st_dev, root_metadata.st_ino))
     ]
-    for component in absolute.parts[1:]:
-        current /= component
-        try:
-            metadata = os.lstat(current)
-        except FileNotFoundError:
-            if not create:
-                raise
-            with suppress(FileExistsError):
-                current.mkdir(mode=0o700)
-            metadata = os.lstat(current)
-        _raise_if_link_or_reparse(current, metadata)
-        if not stat.S_ISDIR(metadata.st_mode):
-            raise UnsafeAtomicPath(f"app-owned path component must be a directory: {current}")
-        ancestors.append((current, (metadata.st_dev, metadata.st_ino)))
-    captured = _PortableDirectory(path=absolute, ancestors=tuple(ancestors))
-    _assert_portable_directory(captured)
-    return captured
+    created: list[tuple[Path, tuple[int, int]]] = []
+    try:
+        for component in absolute.parts[1:]:
+            current /= component
+            try:
+                metadata = os.lstat(current)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                created_here = False
+                try:
+                    current.mkdir(mode=0o700)
+                    created_here = True
+                except FileExistsError:
+                    pass
+                metadata = os.lstat(current)
+                if created_here:
+                    created.append((current, (metadata.st_dev, metadata.st_ino)))
+            _raise_if_link_or_reparse(current, metadata)
+            if not stat.S_ISDIR(metadata.st_mode):
+                raise UnsafeAtomicPath(f"app-owned path component must be a directory: {current}")
+            ancestors.append((current, (metadata.st_dev, metadata.st_ino)))
+        captured = _PortableDirectory(path=absolute, ancestors=tuple(ancestors))
+        _assert_portable_directory(captured)
+        return captured
+    except BaseException:
+        for created_path, expected in reversed(created):
+            try:
+                metadata = os.lstat(created_path)
+                _raise_if_link_or_reparse(created_path, metadata)
+                if (metadata.st_dev, metadata.st_ino) == expected:
+                    created_path.rmdir()
+            except (OSError, UnsafeAtomicPath):
+                pass
+        raise
 
 
 def _assert_portable_directory(directory: _PortableDirectory) -> None:
@@ -193,6 +212,8 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
     if claim is not None and claim.directory_fd is not None:
         directory_fd = claim.directory_fd
         before = _require_regular_at(directory_fd, target.name)
+        if (before.st_dev, before.st_ino) != claim.record_identity:
+            raise UnsafeAtomicPath("existing record changed after mutation claim")
         descriptor = os.open(
             target.name,
             os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC,
@@ -244,6 +265,8 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
     _assert_portable_directory(portable_directory)
     _assert_directory_identity(target.parent, parent_identity)
     before = _require_regular_file(target)
+    if claim is not None and (before.st_dev, before.st_ino) != claim.record_identity:
+        raise UnsafeAtomicPath("existing record changed after mutation claim")
     descriptor = os.open(target, os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC)
     try:
         _assert_directory_identity(target.parent, parent_identity)
@@ -369,7 +392,7 @@ def _create_backup_path(target: Path, expected: tuple[int, int]) -> Path:
         try:
             try:
                 os.link(target, backup, follow_symlinks=False)
-            except TypeError:  # pragma: no cover - older Windows Python seam
+            except (TypeError, NotImplementedError):  # pragma: no cover - platform seam
                 os.link(target, backup)
         except FileExistsError:
             continue
@@ -428,7 +451,7 @@ def _restore_quarantined_path(quarantine: Path, target: Path) -> None:
     try:
         try:
             os.link(quarantine, target, follow_symlinks=False)
-        except TypeError:  # pragma: no cover - older Windows Python seam
+        except (TypeError, NotImplementedError):  # pragma: no cover - platform seam
             os.link(quarantine, target)
     except FileExistsError:
         return
@@ -490,6 +513,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             else:
                 raise FileExistsError(f"target already exists: {target}")
             temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
+            temporary_metadata = os.fstat(descriptor)
+            temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
             try:
                 _write_all(descriptor, text.encode("utf-8"))
                 expected = os.fstat(descriptor)
@@ -518,10 +543,15 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 if descriptor >= 0:
                     os.close(descriptor)
                 try:
-                    os.unlink(temporary, dir_fd=directory_fd)
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        temporary,
+                        temporary_identity,
+                        changed_message="private temporary file changed before cleanup",
+                    )
                 except FileNotFoundError:
                     pass
-                except OSError:
+                except (OSError, UnsafeAtomicPath):
                     if not committed:
                         raise
     portable_directory = _capture_safe_directory(target.parent, create=True)
@@ -535,6 +565,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     else:
         raise FileExistsError(f"target already exists: {target}")
     temporary, descriptor = _open_private_temporary(parent, target.stem)
+    temporary_metadata = os.fstat(descriptor)
+    temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
     published_identity: tuple[int, int] | None = None
     try:
         _assert_portable_directory(portable_directory)
@@ -546,7 +578,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 _assert_portable_directory(portable_directory)
                 _assert_directory_identity(parent, parent_identity)
                 os.link(temporary, target, follow_symlinks=False)
-            except TypeError:  # pragma: no cover - older Windows Python seam
+            except (TypeError, NotImplementedError):  # pragma: no cover - platform seam
                 os.link(temporary, target)
         except FileExistsError:
             raise FileExistsError(f"target already exists: {target}") from None
@@ -576,10 +608,14 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         try:
-            os.unlink(temporary)
+            _quarantine_and_remove_path(
+                temporary,
+                temporary_identity,
+                changed_message="private temporary file changed before cleanup",
+            )
         except FileNotFoundError:
             pass
-        except OSError:
+        except (OSError, UnsafeAtomicPath):
             if not committed:
                 raise
 
@@ -644,6 +680,8 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
             claim_metadata = os.fstat(descriptor)
             claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
             try:
+                record_metadata = _require_regular_at(directory_fd, target.name)
+                record_identity = (record_metadata.st_dev, record_metadata.st_ino)
                 if not stat.S_ISREG(claim_metadata.st_mode):
                     raise UnsafeAtomicPath("mutation claim must be a regular local file")
                 _write_all(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
@@ -652,6 +690,7 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                     target=target,
                     parent=target.parent,
                     identity=(metadata.st_dev, metadata.st_ino),
+                    record_identity=record_identity,
                     directory_fd=directory_fd,
                 )
             finally:
@@ -679,6 +718,8 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
     claim_metadata = os.fstat(descriptor)
     claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
     try:
+        record_metadata = _require_regular_file(target)
+        record_identity = (record_metadata.st_dev, record_metadata.st_ino)
         if not stat.S_ISREG(claim_metadata.st_mode):
             raise UnsafeAtomicPath("mutation claim must be a regular local file")
         _write_all(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
@@ -688,6 +729,7 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
             target=target,
             parent=parent,
             identity=parent_identity,
+            record_identity=record_identity,
             portable_ancestors=portable_directory.ancestors,
         )
     finally:
@@ -715,16 +757,20 @@ def atomic_replace_text(
         directory_fd = claim.directory_fd
         existing = _require_regular_at(directory_fd, target.name)
         existing_identity = (existing.st_dev, existing.st_ino)
+        if existing_identity != claim.record_identity:
+            raise UnsafeAtomicPath("existing record changed after mutation claim")
         temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
         backup = ""
         published = False
         committed = False
+        preserve_backup = False
         try:
             backup = _create_backup_at(directory_fd, target.name, existing_identity)
             _write_all(descriptor, text.encode("utf-8"))
             expected = os.fstat(descriptor)
             current = _require_regular_at(directory_fd, target.name)
             if not _same_file(current, existing_identity):
+                preserve_backup = True
                 raise UnsafeAtomicPath("existing record changed before replacement")
             os.rename(
                 temporary,
@@ -742,12 +788,26 @@ def atomic_replace_text(
             return target
         except BaseException:
             if published and backup:
-                os.rename(
-                    backup,
-                    target.name,
-                    src_dir_fd=directory_fd,
-                    dst_dir_fd=directory_fd,
-                )
+                try:
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        target.name,
+                        (expected.st_dev, expected.st_ino),
+                        changed_message="replacement changed before rollback",
+                    )
+                except BaseException:
+                    preserve_backup = True
+                    raise
+                try:
+                    os.rename(
+                        backup,
+                        target.name,
+                        src_dir_fd=directory_fd,
+                        dst_dir_fd=directory_fd,
+                    )
+                except BaseException:
+                    preserve_backup = True
+                    raise
                 backup = ""
             raise
         finally:
@@ -755,7 +815,7 @@ def atomic_replace_text(
                 os.close(descriptor)
             with suppress(OSError):
                 os.unlink(temporary, dir_fd=directory_fd)
-            if backup:
+            if backup and not preserve_backup:
                 try:
                     os.unlink(backup, dir_fd=directory_fd)
                 except OSError:
@@ -772,10 +832,13 @@ def atomic_replace_text(
     _assert_directory_identity(parent, parent_identity)
     existing = _require_regular_file(target)
     existing_identity = (existing.st_dev, existing.st_ino)
+    if claim is not None and existing_identity != claim.record_identity:
+        raise UnsafeAtomicPath("existing record changed after mutation claim")
     temporary, descriptor = _open_private_temporary(parent, target.stem)
     backup: Path | None = None
     published = False
     committed = False
+    preserve_backup = False
     try:
         backup = _create_backup_path(target, existing_identity)
         _assert_portable_directory(portable_directory)
@@ -789,6 +852,7 @@ def atomic_replace_text(
         _assert_directory_identity(parent, parent_identity)
         current = _require_regular_file(target)
         if not _same_file(current, existing_identity):
+            preserve_backup = True
             raise UnsafeAtomicPath("existing record changed before replacement")
         expected = _require_regular_file(temporary)
         os.replace(temporary, target)
@@ -805,7 +869,20 @@ def atomic_replace_text(
         if published and backup is not None:
             _assert_portable_directory(portable_directory)
             _assert_directory_identity(parent, parent_identity)
-            os.replace(backup, target)
+            try:
+                _quarantine_and_remove_path(
+                    target,
+                    (expected.st_dev, expected.st_ino),
+                    changed_message="replacement changed before rollback",
+                )
+            except BaseException:
+                preserve_backup = True
+                raise
+            try:
+                os.replace(backup, target)
+            except BaseException:
+                preserve_backup = True
+                raise
             backup = None
         raise
     finally:
@@ -820,7 +897,7 @@ def atomic_replace_text(
         if cleanup_safe:
             with suppress(OSError):
                 os.unlink(temporary)
-            if backup is not None:
+            if backup is not None and not preserve_backup:
                 try:
                     os.unlink(backup)
                 except FileNotFoundError:
