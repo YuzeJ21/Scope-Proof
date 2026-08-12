@@ -14,6 +14,7 @@ from pathlib import Path
 
 _CLOSE_ON_EXEC = getattr(os, "O_CLOEXEC", 0)
 _NO_FOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_NONBLOCK = getattr(os, "O_NONBLOCK", 0)
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
 _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
 _DESCRIPTOR_BACKEND_SUPPORTED = (
@@ -152,7 +153,7 @@ def read_text_no_follow(path: Path) -> str:
             try:
                 descriptor = os.open(
                     target.name,
-                    os.O_RDONLY | _NO_FOLLOW | _CLOSE_ON_EXEC,
+                    os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC,
                     dir_fd=directory_fd,
                 )
             except OSError as error:

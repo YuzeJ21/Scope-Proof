@@ -68,6 +68,28 @@ def test_descriptor_read_rejects_fifo_before_open(
         read_text_no_follow(target)
 
 
+def test_descriptor_read_rejects_fifo_swapped_between_stat_and_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "record.json"
+    target.write_text("validated\n", encoding="utf-8")
+    original_open = os.open
+    swapped = False
+
+    def swap_to_fifo(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and path == target.name and kwargs.get("dir_fd") is not None:
+            swapped = True
+            target.unlink()
+            os.mkfifo(target)
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap_to_fifo)
+
+    with pytest.raises(UnsafeAtomicPath, match="regular file"):
+        read_text_no_follow(target)
+
+
 def test_missing_directory_lists_no_records(tmp_path: Path) -> None:
     assert list_regular_files(tmp_path / "absent") == []
 
