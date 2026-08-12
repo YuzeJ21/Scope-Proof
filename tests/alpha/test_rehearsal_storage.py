@@ -226,6 +226,31 @@ def test_committed_rehearsal_ignores_final_directory_close_failure(
     not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
     reason="descriptor-relative rehearsal backend is unavailable",
 )
+def test_interrupted_final_directory_sync_rolls_back_unreported_rehearsal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_fsync = os.fsync
+    calls = 0
+
+    def interrupt_directory_sync(descriptor: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise KeyboardInterrupt("simulated rehearsal directory sync interruption")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", interrupt_directory_sync)
+
+    with pytest.raises(KeyboardInterrupt, match="rehearsal directory sync interruption"):
+        JsonAlphaRehearsalStore(tmp_path).save(alpha_rehearsal())
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
 def test_rehearsal_temporary_allocator_fails_after_collision_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

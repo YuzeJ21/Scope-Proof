@@ -828,6 +828,63 @@ def test_directory_sync_unavailability_after_create_does_not_report_false_failur
     assert target.read_bytes() == b"committed bytes\n"
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_interrupted_final_directory_sync_rolls_back_unreported_create(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "record.json"
+    original_fsync = os.fsync
+    calls = 0
+
+    def interrupt_directory_sync(descriptor: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise KeyboardInterrupt("simulated final directory sync interruption")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", interrupt_directory_sync)
+
+    with pytest.raises(KeyboardInterrupt, match="final directory sync interruption"):
+        atomic_create_text(target, "unreported bytes\n")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_receipt_rollback_removes_owned_temporary_left_after_committed_create(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "report.md"
+    original_rename = os.rename
+    denied = False
+
+    def deny_first_temporary_cleanup(source, destination, *args, **kwargs):
+        nonlocal denied
+        if str(source).endswith(".tmp") and not denied:
+            denied = True
+            raise PermissionError("simulated cleanup denial")
+        return original_rename(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "rename", deny_first_temporary_cleanup)
+
+    receipt = atomic_create_text_with_receipt(target, "full generated report\n")
+
+    assert denied is True
+    assert len(receipt.orphaned_paths) == 1
+    assert receipt.orphaned_paths[0].read_bytes() == b"full generated report\n"
+    rollback_created_file(receipt)
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_committed_create_does_not_report_failure_when_temporary_cleanup_is_denied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

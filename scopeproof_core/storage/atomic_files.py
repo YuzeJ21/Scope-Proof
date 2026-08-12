@@ -58,6 +58,7 @@ class CreatedFileReceipt:
     content_sha256: str
     descriptor_backend: bool
     portable_ancestors: tuple[tuple[Path, tuple[int, int]], ...] = ()
+    orphaned_paths: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -706,6 +707,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 directory_fd, target.stem
             )
             published_identity: tuple[int, int] | None = None
+            receipt_identity: tuple[int, int] | None = None
+            orphaned_paths: list[Path] = []
             try:
                 _write_all(descriptor, payload)
                 expected = os.fstat(descriptor)
@@ -742,15 +745,10 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 published = _require_regular_at(directory_fd, target.name)
                 if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
                     raise UnsafeAtomicPath("private temporary file changed before publication")
-                committed = True
                 with suppress(OSError):
                     os.fsync(directory_fd)
-                return CreatedFileReceipt(
-                    path=target,
-                    identity=(published.st_dev, published.st_ino),
-                    content_sha256=content_sha256,
-                    descriptor_backend=True,
-                )
+                receipt_identity = (published.st_dev, published.st_ino)
+                committed = True
             finally:
                 if descriptor >= 0:
                     os.close(descriptor)
@@ -778,11 +776,36 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                     )
                 except FileNotFoundError:
                     pass
-                except (OSError, UnsafeAtomicPath):
+                except BaseException:
                     if not committed:
                         raise
+                    try:
+                        orphan = _require_regular_at(directory_fd, temporary)
+                        orphan_identity = (orphan.st_dev, orphan.st_ino)
+                        orphan_owned = (
+                            orphan_identity == temporary_identity
+                            and _sha256_regular_at(
+                                directory_fd, temporary, temporary_identity
+                            )
+                            == content_sha256
+                        )
+                    except FileNotFoundError:
+                        orphan_owned = False
+                    except BaseException:
+                        orphan_owned = None
+                    if orphan_owned is not False:
+                        orphaned_paths.append(target.parent / temporary)
                 if publication_cleanup_error is not None:
                     raise publication_cleanup_error
+            if receipt_identity is None:  # pragma: no cover - defensive invariant
+                raise RuntimeError("published file identity was not captured")
+            return CreatedFileReceipt(
+                path=target,
+                identity=receipt_identity,
+                content_sha256=content_sha256,
+                descriptor_backend=True,
+                orphaned_paths=tuple(orphaned_paths),
+            )
     portable_directory = _capture_safe_directory(target.parent, create=True)
     parent = portable_directory.path
     parent_identity = _directory_identity(parent)
@@ -795,6 +818,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         raise FileExistsError(f"target already exists: {target}")
     temporary, descriptor, temporary_identity = _open_private_temporary(parent, target.stem)
     published_identity: tuple[int, int] | None = None
+    receipt_identity: tuple[int, int] | None = None
+    orphaned_paths: list[Path] = []
     try:
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
@@ -832,15 +857,9 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             raise UnsafeAtomicPath("private temporary file changed before publication")
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
-        committed = True
         _fsync_directory(parent)
-        return CreatedFileReceipt(
-            path=target,
-            identity=(published.st_dev, published.st_ino),
-            content_sha256=content_sha256,
-            descriptor_backend=False,
-            portable_ancestors=portable_directory.ancestors,
-        )
+        receipt_identity = (published.st_dev, published.st_ino)
+        committed = True
     finally:
         if descriptor >= 0:
             os.close(descriptor)
@@ -866,11 +885,34 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             )
         except FileNotFoundError:
             pass
-        except (OSError, UnsafeAtomicPath):
+        except BaseException:
             if not committed:
                 raise
+            try:
+                orphan = _require_regular_file(temporary)
+                orphan_identity = (orphan.st_dev, orphan.st_ino)
+                orphan_owned = (
+                    orphan_identity == temporary_identity
+                    and _sha256_regular_path(temporary, temporary_identity) == content_sha256
+                )
+            except FileNotFoundError:
+                orphan_owned = False
+            except BaseException:
+                orphan_owned = None
+            if orphan_owned is not False:
+                orphaned_paths.append(temporary)
         if publication_cleanup_error is not None:
             raise publication_cleanup_error
+    if receipt_identity is None:  # pragma: no cover - defensive invariant
+        raise RuntimeError("published file identity was not captured")
+    return CreatedFileReceipt(
+        path=target,
+        identity=receipt_identity,
+        content_sha256=content_sha256,
+        descriptor_backend=False,
+        portable_ancestors=portable_directory.ancestors,
+        orphaned_paths=tuple(orphaned_paths),
+    )
 
 
 def atomic_create_text(target: Path, text: str) -> Path:
@@ -885,37 +927,85 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
     target = Path(os.path.abspath(receipt.path))
     if target != receipt.path:
         raise UnsafeAtomicPath("created-file receipt path is not absolute")
+    rollback_paths = (target, *receipt.orphaned_paths)
+    if len(set(rollback_paths)) != len(rollback_paths):
+        raise UnsafeAtomicPath("created-file receipt rollback paths must be unique")
+    if any(
+        path != Path(os.path.abspath(path)) or path.parent != target.parent
+        for path in receipt.orphaned_paths
+    ):
+        raise UnsafeAtomicPath("created-file receipt orphan paths must share its parent")
     if receipt.descriptor_backend:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
-            metadata = _require_regular_at(directory_fd, target.name)
-            if (metadata.st_dev, metadata.st_ino) != receipt.identity:
-                raise UnsafeAtomicPath("published file changed before rollback")
-            _quarantine_and_remove_at(
-                directory_fd,
-                target.name,
-                receipt.identity,
-                changed_message="published file changed before rollback",
-                expected_sha256=receipt.content_sha256,
-            )
-            with suppress(OSError):
+            existing_names: list[str] = []
+            for index, path in enumerate(rollback_paths):
+                try:
+                    metadata = _require_regular_at(directory_fd, path.name)
+                except FileNotFoundError:
+                    if index == 0:
+                        raise
+                    continue
+                if (metadata.st_dev, metadata.st_ino) != receipt.identity:
+                    raise UnsafeAtomicPath("published file changed before rollback")
+                if (
+                    _sha256_regular_at(directory_fd, path.name, receipt.identity)
+                    != receipt.content_sha256
+                ):
+                    raise UnsafeAtomicPath("published file changed before rollback")
+                existing_names.append(path.name)
+            rollback_error: BaseException | None = None
+            for name in existing_names:
+                try:
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        name,
+                        receipt.identity,
+                        changed_message="published file changed before rollback",
+                        expected_sha256=receipt.content_sha256,
+                    )
+                except BaseException as error:
+                    if rollback_error is None:
+                        rollback_error = error
+            with suppress(BaseException):
                 os.fsync(directory_fd)
+            if rollback_error is not None:
+                raise rollback_error
         return
     portable_directory = _PortableDirectory(
         path=target.parent,
         ancestors=receipt.portable_ancestors,
     )
     _assert_portable_directory(portable_directory)
-    metadata = _require_regular_file(target)
-    if (metadata.st_dev, metadata.st_ino) != receipt.identity:
-        raise UnsafeAtomicPath("published file changed before rollback")
+    existing_paths: list[Path] = []
+    for index, path in enumerate(rollback_paths):
+        try:
+            metadata = _require_regular_file(path)
+        except FileNotFoundError:
+            if index == 0:
+                raise
+            continue
+        if (metadata.st_dev, metadata.st_ino) != receipt.identity:
+            raise UnsafeAtomicPath("published file changed before rollback")
+        if _sha256_regular_path(path, receipt.identity) != receipt.content_sha256:
+            raise UnsafeAtomicPath("published file changed before rollback")
+        existing_paths.append(path)
     _assert_portable_directory(portable_directory)
-    _quarantine_and_remove_path(
-        target,
-        receipt.identity,
-        changed_message="published file changed before rollback",
-        expected_sha256=receipt.content_sha256,
-    )
-    _fsync_directory(target.parent)
+    rollback_error = None
+    for path in existing_paths:
+        try:
+            _quarantine_and_remove_path(
+                path,
+                receipt.identity,
+                changed_message="published file changed before rollback",
+                expected_sha256=receipt.content_sha256,
+            )
+        except BaseException as error:
+            if rollback_error is None:
+                rollback_error = error
+    with suppress(BaseException):
+        _fsync_directory(target.parent)
+    if rollback_error is not None:
+        raise rollback_error
 
 
 @contextmanager

@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 import scopeproof_core.cli as cli_module
+import scopeproof_core.storage.atomic_files as atomic_files_module
 from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import _build_bundle, main
@@ -790,6 +791,61 @@ def test_review_rolls_back_report_when_review_persistence_fails(
     assert raised.value.code == 2
     assert "review store path must be a directory" in capsys.readouterr().err
     assert not report.exists()
+    assert invalid_storage.read_bytes() == b"owner bytes\n"
+
+
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_review_rollback_removes_owned_report_temporary_after_cleanup_denial(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "report.md"
+    invalid_storage = tmp_path / "not-a-directory"
+    invalid_storage.write_text("owner bytes\n", encoding="utf-8")
+    original_cleanup = atomic_files_module._quarantine_and_remove_at
+    denied = False
+
+    def deny_first_report_temporary_cleanup(
+        directory_fd: int, name: str, *args, **kwargs
+    ) -> None:
+        nonlocal denied
+        if name.endswith(".tmp") and not denied:
+            denied = True
+            raise PermissionError("simulated report temporary cleanup denial")
+        original_cleanup(directory_fd, name, *args, **kwargs)
+
+    monkeypatch.setattr(
+        atomic_files_module,
+        "_quarantine_and_remove_at",
+        deny_first_report_temporary_cleanup,
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(invalid_storage),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert raised.value.code == 2
+    assert denied is True
+    assert "review store path must be a directory" in capsys.readouterr().err
+    assert not report.exists()
+    assert not list(tmp_path.glob("*.tmp"))
     assert invalid_storage.read_bytes() == b"owner bytes\n"
 
 

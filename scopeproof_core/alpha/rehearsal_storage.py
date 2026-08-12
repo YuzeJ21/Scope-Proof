@@ -304,9 +304,9 @@ class JsonAlphaRehearsalStore:
                 raise UnsafeAlphaRehearsalStore(
                     "private rehearsal temporary changed before publication"
                 )
-            published = True
             with suppress(OSError):
                 os.fsync(directory_fd)
+            published = True
         finally:
             if temporary_fd >= 0:
                 os.close(temporary_fd)
@@ -334,11 +334,11 @@ class JsonAlphaRehearsalStore:
                 )
             except FileNotFoundError:
                 pass
-            except (OSError, UnsafeAtomicPath):
+            except BaseException:
                 if not published:
                     raise
             if publication_cleanup_error is not None:
                 raise publication_cleanup_error
             if published:
-                with suppress(OSError):
+                with suppress(BaseException):
                     os.fsync(directory_fd)
