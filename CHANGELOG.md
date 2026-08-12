@@ -13,9 +13,10 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
-- Updated the transitive GitPython lock from 3.1.57 to 3.1.59 after GitHub reported eleven
-  security advisories, and raised the repository contract to reject versions below the patched
-  3.1.59 floor. GitPython remains an indirect Streamlit dependency.
+- Updated the transitive GitPython lock from 3.1.57 to 3.1.59 after GitHub reported six
+  Dependabot alerts fixed in 3.1.58 and upstream documented five additional security fixes in
+  3.1.59. The repository contract now rejects lower versions. GitPython remains an indirect
+  Streamlit dependency.
 - Added CLI lifecycle parity for criterion resolution, atomic external E3/E4 runtime-evidence
   recording, final acceptance, and changed-head comparison over validated local records.
 - Enforced a strict saved-record envelope and lifecycle-output validation. Failed commands do not
