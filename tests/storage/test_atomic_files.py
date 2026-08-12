@@ -429,6 +429,58 @@ def test_temporary_metadata_failure_cleans_owned_temporary(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_temporary_metadata_failure_preserves_ambiguous_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_fstat = os.fstat
+
+    def fail_regular_descriptor_metadata(descriptor: int):
+        metadata = original_fstat(descriptor)
+        if atomic_files_module.stat.S_ISREG(metadata.st_mode):
+            raise OSError("simulated temporary metadata failure")
+        return metadata
+
+    monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
+    if portable:
+        original_require_regular_file = atomic_files_module._require_regular_file
+
+        def fail_temporary_path_metadata(path: Path):
+            if path.suffix == ".tmp":
+                raise OSError("simulated cleanup metadata failure")
+            return original_require_regular_file(path)
+
+        monkeypatch.setattr(
+            atomic_files_module,
+            "_require_regular_file",
+            fail_temporary_path_metadata,
+        )
+    else:
+        original_require_regular_at = atomic_files_module._require_regular_at
+
+        def fail_temporary_name_metadata(directory_fd: int, name: str):
+            if name.endswith(".tmp"):
+                raise OSError("simulated cleanup metadata failure")
+            return original_require_regular_at(directory_fd, name)
+
+        monkeypatch.setattr(
+            atomic_files_module,
+            "_require_regular_at",
+            fail_temporary_name_metadata,
+        )
+
+    target = tmp_path / "record.json"
+    with pytest.raises(OSError, match="temporary metadata failure"):
+        atomic_create_text(target, "validated\n")
+
+    assert not target.exists()
+    assert len([path for path in tmp_path.iterdir() if path.suffix == ".tmp"]) == 1
+
+
 @pytest.mark.skipif(
     os.name == "nt",
     reason="Windows prevents unlinking an open temporary file",

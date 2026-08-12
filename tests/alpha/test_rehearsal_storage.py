@@ -127,6 +127,65 @@ def test_descriptor_rehearsal_metadata_failure_cleans_owned_temporary(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_descriptor_rehearsal_metadata_failure_preserves_ambiguous_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_fstat = os.fstat
+    original_stat = os.stat
+
+    def fail_regular_descriptor_metadata(descriptor: int):
+        metadata = original_fstat(descriptor)
+        if rehearsal_storage_module.stat.S_ISREG(metadata.st_mode):
+            raise OSError("simulated rehearsal metadata failure")
+        return metadata
+
+    def fail_temporary_path_metadata(path, *args, **kwargs):
+        if str(path).endswith(".tmp") and kwargs.get("dir_fd") is not None:
+            raise OSError("simulated cleanup metadata failure")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
+    monkeypatch.setattr(os, "stat", fail_temporary_path_metadata)
+
+    with pytest.raises(OSError, match="rehearsal metadata failure"):
+        JsonAlphaRehearsalStore(tmp_path).save(alpha_rehearsal())
+
+    assert list(tmp_path.glob("*.json")) == []
+    assert len([path for path in tmp_path.iterdir() if path.suffix == ".tmp"]) == 1
+
+
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_rehearsal_temporary_allocator_fails_after_collision_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory_fd = os.open(
+        tmp_path,
+        os.O_RDONLY | rehearsal_storage_module._DIRECTORY,
+    )
+    try:
+        monkeypatch.setattr(
+            os,
+            "open",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                FileExistsError("occupied")
+            ),
+        )
+        with pytest.raises(FileExistsError, match="exclusive rehearsal temp"):
+            JsonAlphaRehearsalStore._open_random_temporary(
+                directory_fd,
+                "rehearsal-" + "a" * 32 + ".json",
+            )
+    finally:
+        os.close(directory_fd)
+
+
 def test_rehearsal_listing_is_deterministically_sorted(tmp_path: Path) -> None:
     records = [alpha_rehearsal(pull_number=number) for number in (9, 7, 8)]
     store = JsonAlphaRehearsalStore(tmp_path)
