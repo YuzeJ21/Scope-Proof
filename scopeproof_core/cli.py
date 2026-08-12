@@ -190,10 +190,8 @@ def _review(args: argparse.Namespace) -> int:
         ),
     )
     state = new_review_state(bundle)
-    path = JsonReviewStore(Path(args.storage_dir)).save(state)
     metadata = {
         "review_id": state.review.review_id,
-        "record": str(path),
         "verdict": bundle.gate.verdict.value,
         "head_sha": bundle.review.head_sha,
         "ingestion_state": bundle.review.ingestion_state.value,
@@ -250,6 +248,8 @@ def _review(args: argparse.Namespace) -> int:
         report_path, renderer = report_target
         atomic_create_text(report_path, renderer(state))
         metadata["report"] = str(report_path)
+    path = JsonReviewStore(Path(args.storage_dir)).save(state)
+    metadata["record"] = str(path)
     print(json.dumps(metadata, sort_keys=True))
     return 0
 

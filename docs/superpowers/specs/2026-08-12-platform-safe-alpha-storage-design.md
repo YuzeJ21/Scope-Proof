@@ -33,13 +33,15 @@ When all required capabilities are available, the shared primitives keep the ope
 directory descriptor through create, claim, and replacement so an ancestor swap cannot redirect a
 mutation. Capability detection uses `getattr`/`hasattr` and never dereferences missing constants
 during import. Other platforms use the portable validated-path backend and revalidate the same
-directory identity immediately before mutation. Both backends validate every loaded or saved
-object with Pydantic.
+identity of every traversed ancestor at operation boundaries. If a hostile swap makes a portable
+cleanup path ambiguous, the operation fails closed and preserves the orphaned private temporary
+rather than risk deleting a foreign file. Both backends validate every loaded or saved object with
+Pydantic.
 
 The rehearsal and alpha-case stores use these shared primitives while retaining the rehearsal
 store's descriptor-relative POSIX read/list implementation. CLI reports use the exclusive
-publication primitive at the final write boundary, so a destination created after the initial
-check is never overwritten.
+publication primitive before the new review is persisted, so a destination created after the
+initial check is never overwritten and a report-publication failure leaves no saved review.
 
 ## Path and mutation contract
 

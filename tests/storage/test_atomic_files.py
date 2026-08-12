@@ -50,6 +50,10 @@ def test_regular_file_read_rejects_directory_target(tmp_path: Path) -> None:
         read_text_no_follow(target)
 
 
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
 def test_descriptor_read_rejects_fifo_before_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -68,6 +72,10 @@ def test_descriptor_read_rejects_fifo_before_open(
         read_text_no_follow(target)
 
 
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
 def test_descriptor_read_rejects_fifo_swapped_between_stat_and_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -90,6 +98,10 @@ def test_descriptor_read_rejects_fifo_swapped_between_stat_and_open(
         read_text_no_follow(target)
 
 
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
 def test_descriptor_read_rejects_regular_file_swap_between_stat_and_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -265,6 +277,10 @@ def test_directory_sync_is_optional_when_flags_or_open_are_unavailable(
     atomic_files_module._fsync_directory(tmp_path)
 
 
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
 def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -415,6 +431,69 @@ def test_portable_create_rejects_ancestor_swapped_during_validation(
     assert list((outside / "nested").iterdir()) == []
 
 
+def test_portable_create_rechecks_ancestor_after_component_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    (safe / "nested").mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "nested").mkdir()
+    target = safe / "nested" / "record.json"
+    original_lstat = os.lstat
+    safe_checks = 0
+
+    def swapping_after_confirmation(path, *args, **kwargs):
+        nonlocal safe_checks
+        metadata = original_lstat(path, *args, **kwargs)
+        if Path(path) == safe:
+            safe_checks += 1
+            if safe_checks == 2:
+                safe.rename(moved)
+                safe.symlink_to(outside, target_is_directory=True)
+        return metadata
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "lstat", swapping_after_confirmation)
+
+    with pytest.raises(UnsafeAtomicPath, match=r"symbolic link|changed"):
+        atomic_create_text(target, "must not escape\n")
+
+    assert list((outside / "nested").iterdir()) == []
+
+
+def test_portable_create_cleanup_never_deletes_foreign_swapped_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = safe / "record.json"
+    foreign_path: Path | None = None
+
+    def swap_then_fail(source, destination, *args, **kwargs):
+        nonlocal foreign_path
+        safe.rename(moved)
+        safe.symlink_to(outside, target_is_directory=True)
+        foreign_path = outside / Path(source).name
+        foreign_path.write_text("foreign bytes\n", encoding="utf-8")
+        raise OSError("simulated publication interruption")
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "link", swap_then_fail)
+
+    with pytest.raises(UnsafeAtomicPath, match=r"symbolic link|changed"):
+        atomic_create_text(target, "validated bytes\n")
+
+    assert foreign_path is not None
+    assert foreign_path.read_text(encoding="utf-8") == "foreign bytes\n"
+    assert any(path.suffix == ".tmp" for path in moved.iterdir())
+
+
 def test_portable_create_rejects_ancestor_swap_before_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -437,7 +516,7 @@ def test_portable_create_rejects_ancestor_swap_before_publication(
     with pytest.raises(UnsafeAtomicPath, match=r"changed during storage operation|symbolic link"):
         atomic_create_text(target, "must not escape\n")
 
-    assert list(outside.iterdir()) == []
+    assert len(list(outside.glob("*.tmp"))) == 1
     assert list(moved.iterdir()) == []
 
 
@@ -470,6 +549,42 @@ def test_portable_replace_rejects_ancestor_swap_after_claim(
 
     assert (moved / target.name).read_text(encoding="utf-8") == "old valid bytes\n"
     assert (outside / target.name).read_text(encoding="utf-8") == "attacker bytes\n"
+
+
+def test_portable_replace_cleanup_never_deletes_foreign_swapped_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = safe / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    foreign_path: Path | None = None
+
+    def swap_then_fail(source, destination, *args, **kwargs):
+        nonlocal foreign_path
+        safe.rename(moved)
+        safe.symlink_to(outside, target_is_directory=True)
+        foreign_path = outside / Path(source).name
+        foreign_path.write_text("foreign bytes\n", encoding="utf-8")
+        (outside / Path(destination).name).write_text("foreign record\n", encoding="utf-8")
+        raise OSError("simulated replacement interruption")
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "replace", swap_then_fail)
+
+    with (
+        pytest.raises(UnsafeAtomicPath, match=r"symbolic link|changed"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert foreign_path is not None
+    assert foreign_path.read_text(encoding="utf-8") == "foreign bytes\n"
+    assert (moved / target.name).read_text(encoding="utf-8") == "old valid bytes\n"
+    assert any(path.suffix == ".tmp" for path in moved.iterdir())
 
 
 def test_read_rejects_symlink_target(tmp_path: Path) -> None:

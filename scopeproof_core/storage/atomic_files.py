@@ -44,6 +44,13 @@ class MutationClaim:
     parent: Path
     identity: tuple[int, int]
     directory_fd: int | None = None
+    portable_ancestors: tuple[tuple[Path, tuple[int, int]], ...] = ()
+
+
+@dataclass(frozen=True)
+class _PortableDirectory:
+    path: Path
+    ancestors: tuple[tuple[Path, tuple[int, int]], ...]
 
 
 def _is_reparse_point(metadata: os.stat_result) -> bool:
@@ -58,11 +65,16 @@ def _raise_if_link_or_reparse(path: Path, metadata: os.stat_result) -> None:
         )
 
 
-def ensure_safe_directory(directory: Path, *, create: bool) -> Path:
-    """Validate every existing component and optionally create missing directories."""
-
+def _capture_safe_directory(directory: Path, *, create: bool) -> _PortableDirectory:
     absolute = Path(os.path.abspath(directory))
     current = Path(absolute.anchor)
+    root_metadata = os.lstat(current)
+    _raise_if_link_or_reparse(current, root_metadata)
+    if not stat.S_ISDIR(root_metadata.st_mode):
+        raise UnsafeAtomicPath(f"app-owned path component must be a directory: {current}")
+    ancestors: list[tuple[Path, tuple[int, int]]] = [
+        (current, (root_metadata.st_dev, root_metadata.st_ino))
+    ]
     for component in absolute.parts[1:]:
         current /= component
         try:
@@ -76,13 +88,26 @@ def ensure_safe_directory(directory: Path, *, create: bool) -> Path:
         _raise_if_link_or_reparse(current, metadata)
         if not stat.S_ISDIR(metadata.st_mode):
             raise UnsafeAtomicPath(f"app-owned path component must be a directory: {current}")
-        confirmed = os.lstat(current)
-        _raise_if_link_or_reparse(current, confirmed)
-        if not stat.S_ISDIR(confirmed.st_mode):
-            raise UnsafeAtomicPath(f"app-owned path component must be a directory: {current}")
-        if (metadata.st_dev, metadata.st_ino) != (confirmed.st_dev, confirmed.st_ino):
-            raise UnsafeAtomicPath("app-owned directory changed during path validation")
-    return absolute
+        ancestors.append((current, (metadata.st_dev, metadata.st_ino)))
+    captured = _PortableDirectory(path=absolute, ancestors=tuple(ancestors))
+    _assert_portable_directory(captured)
+    return captured
+
+
+def _assert_portable_directory(directory: _PortableDirectory) -> None:
+    for component, expected in directory.ancestors:
+        metadata = os.lstat(component)
+        _raise_if_link_or_reparse(component, metadata)
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise UnsafeAtomicPath(f"app-owned path component must be a directory: {component}")
+        if (metadata.st_dev, metadata.st_ino) != expected:
+            raise UnsafeAtomicPath("app-owned directory changed during storage operation")
+
+
+def ensure_safe_directory(directory: Path, *, create: bool) -> Path:
+    """Validate every existing component and optionally create missing directories."""
+
+    return _capture_safe_directory(directory, create=create).path
 
 
 def _require_regular_file(path: Path) -> os.stat_result:
@@ -204,8 +229,9 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
             finally:
                 if descriptor >= 0:
                     os.close(descriptor)
-    ensure_safe_directory(target.parent, create=False)
+    portable_directory = _capture_safe_directory(target.parent, create=False)
     parent_identity = claim.identity if claim is not None else _directory_identity(target.parent)
+    _assert_portable_directory(portable_directory)
     _assert_directory_identity(target.parent, parent_identity)
     before = _require_regular_file(target)
     descriptor = os.open(target, os.O_RDONLY | _NO_FOLLOW | _CLOSE_ON_EXEC)
@@ -243,9 +269,11 @@ def list_regular_files(directory: Path) -> list[Path]:
         except FileNotFoundError:
             return []
     try:
-        root = ensure_safe_directory(directory, create=False)
+        portable_directory = _capture_safe_directory(directory, create=False)
     except FileNotFoundError:
         return []
+    root = portable_directory.path
+    _assert_portable_directory(portable_directory)
     result: list[Path] = []
     with os.scandir(root) as entries:
         for entry in entries:
@@ -348,7 +376,8 @@ def atomic_create_text(target: Path, text: str) -> Path:
                     os.close(descriptor)
                 with suppress(FileNotFoundError):
                     os.unlink(temporary, dir_fd=directory_fd)
-    parent = ensure_safe_directory(target.parent, create=True)
+    portable_directory = _capture_safe_directory(target.parent, create=True)
+    parent = portable_directory.path
     parent_identity = _directory_identity(parent)
     try:
         _require_regular_file(target)
@@ -358,17 +387,20 @@ def atomic_create_text(target: Path, text: str) -> Path:
         raise FileExistsError(f"target already exists: {target}")
     temporary, descriptor = _open_private_temporary(parent, target.stem)
     try:
+        _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         _write_all(descriptor, text.encode("utf-8"))
         expected = os.fstat(descriptor)
         try:
             try:
+                _assert_portable_directory(portable_directory)
                 _assert_directory_identity(parent, parent_identity)
                 os.link(temporary, target, follow_symlinks=False)
             except TypeError:  # pragma: no cover - older Windows Python seam
                 os.link(temporary, target)
         except FileExistsError:
             raise FileExistsError(f"target already exists: {target}") from None
+        _assert_portable_directory(portable_directory)
         published = _require_regular_file(target)
         if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
             raise UnsafeAtomicPath("private temporary file changed before publication")
@@ -378,9 +410,10 @@ def atomic_create_text(target: Path, text: str) -> Path:
     finally:
         if descriptor >= 0:
             os.close(descriptor)
+        _assert_portable_directory(portable_directory)
+        _assert_directory_identity(parent, parent_identity)
         with suppress(FileNotFoundError):
             os.unlink(temporary)
-        _assert_directory_identity(parent, parent_identity)
 
 
 @contextmanager
@@ -415,7 +448,8 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                 with suppress(OSError):
                     os.fsync(directory_fd)
         return
-    parent = ensure_safe_directory(target.parent, create=False)
+    portable_directory = _capture_safe_directory(target.parent, create=False)
+    parent = portable_directory.path
     parent_identity = _directory_identity(parent)
     digest = sha256(os.fsencode(target.name)).hexdigest()
     claim = parent / f".{digest}.claim"
@@ -428,10 +462,17 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise UnsafeAtomicPath("mutation claim must be a regular local file")
         _write_all(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
+        _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
-        yield MutationClaim(target=target, parent=parent, identity=parent_identity)
+        yield MutationClaim(
+            target=target,
+            parent=parent,
+            identity=parent_identity,
+            portable_ancestors=portable_directory.ancestors,
+        )
     finally:
         os.close(descriptor)
+        _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         with suppress(FileNotFoundError):
             os.unlink(claim)
@@ -471,26 +512,36 @@ def atomic_replace_text(
                 os.close(descriptor)
             with suppress(FileNotFoundError):
                 os.unlink(temporary, dir_fd=directory_fd)
-    parent = ensure_safe_directory(target.parent, create=False)
+    portable_directory = _capture_safe_directory(target.parent, create=False)
+    if claim is not None and claim.portable_ancestors:
+        portable_directory = _PortableDirectory(
+            path=claim.parent,
+            ancestors=claim.portable_ancestors,
+        )
+    parent = portable_directory.path
     parent_identity = claim.identity if claim is not None else _directory_identity(parent)
     _assert_directory_identity(parent, parent_identity)
     _require_regular_file(target)
     temporary, descriptor = _open_private_temporary(parent, target.stem)
     try:
+        _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         try:
             _write_all(descriptor, text.encode("utf-8"))
         finally:
             os.close(descriptor)
             descriptor = -1
+        _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         _require_regular_file(target)
         os.replace(temporary, target)
+        _assert_portable_directory(portable_directory)
         _fsync_directory(parent)
         return target
     finally:
         if descriptor >= 0:
             os.close(descriptor)
+        _assert_portable_directory(portable_directory)
+        _assert_directory_identity(parent, parent_identity)
         with suppress(FileNotFoundError):
             os.unlink(temporary)
-        _assert_directory_identity(parent, parent_identity)
