@@ -1,6 +1,11 @@
 import json
+import multiprocessing
+import subprocess
+import sys
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import BrokenBarrierError
 
 import pytest
 from pydantic import ValidationError
@@ -46,6 +51,36 @@ def alpha_case():
     )
 
 
+class SynchronizedAlphaCaseStore(JsonAlphaCaseStore):
+    def __init__(self, directory: Path, barrier) -> None:
+        super().__init__(directory)
+        self.barrier = barrier
+
+    def _write(self, target, record):
+        with suppress(BrokenBarrierError):
+            self.barrier.wait(timeout=3)
+        return super()._write(target, record)
+
+
+def _run_alpha_mutation(
+    directory: str,
+    record_payload: dict,
+    operation: str,
+    barrier,
+    outcomes,
+) -> None:
+    from scopeproof_core.alpha.models import AlphaCaseRecord
+
+    record = AlphaCaseRecord.model_validate(record_payload)
+    store = SynchronizedAlphaCaseStore(Path(directory), barrier)
+    try:
+        getattr(store, operation)(record)
+    except (FileExistsError, ValueError) as error:
+        outcomes.put(type(error).__name__)
+    else:
+        outcomes.put("success")
+
+
 def matching_review_state():
     criteria = [Criterion(criterion_id="AC-01", text="Export CSV")]
     snapshot = PullRequestSnapshot(
@@ -86,6 +121,61 @@ def test_alpha_case_save_refuses_silent_overwrite(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError):
         store.save(record)
+
+
+def test_cli_and_alpha_storage_import_without_posix_only_constants() -> None:
+    script = """
+import importlib
+import os
+for name in ('O_DIRECTORY', 'O_NOFOLLOW'):
+    if hasattr(os, name):
+        delattr(os, name)
+importlib.import_module('scopeproof_core.cli')
+importlib.import_module('scopeproof_core.alpha.storage')
+importlib.import_module('scopeproof_core.alpha.rehearsal_storage')
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_concurrent_process_alpha_creates_publish_exactly_once(tmp_path: Path) -> None:
+    context = multiprocessing.get_context("spawn")
+    barrier = context.Barrier(2)
+    outcomes = context.Queue()
+    record = alpha_case()
+    processes = [
+        context.Process(
+            target=_run_alpha_mutation,
+            args=(
+                str(tmp_path),
+                record.model_dump(mode="json"),
+                "save",
+                barrier,
+                outcomes,
+            ),
+        )
+        for _ in range(2)
+    ]
+
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(timeout=15)
+        assert process.exitcode == 0
+
+    assert sorted(outcomes.get(timeout=2) for _ in range(2)) == [
+        "FileExistsError",
+        "success",
+    ]
+    assert JsonAlphaCaseStore(tmp_path).load(record.case_id) == record
+    assert sorted(path.name for path in tmp_path.iterdir()) == [f"{record.case_id}.json"]
 
 
 def test_alpha_case_update_requires_existing_same_case(tmp_path: Path) -> None:
@@ -146,6 +236,43 @@ def test_alpha_case_update_rejects_completed_outcome_overwrite(tmp_path: Path) -
         store.update(overwritten)
 
 
+def test_concurrent_process_outcome_updates_commit_exactly_once(tmp_path: Path) -> None:
+    from scopeproof_core.alpha.models import AlphaOutcome
+    from scopeproof_core.alpha.service import record_alpha_outcome
+
+    record = alpha_case()
+    JsonAlphaCaseStore(tmp_path).save(record)
+    first = record_alpha_outcome(
+        record,
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+    )
+    second = first.model_copy(
+        update={"outcome": AlphaOutcome.SHOWED_ONLY_KNOWN_INFORMATION}
+    )
+    context = multiprocessing.get_context("spawn")
+    barrier = context.Barrier(2)
+    outcomes = context.Queue()
+    processes = [
+        context.Process(
+            target=_run_alpha_mutation,
+            args=(str(tmp_path), item.model_dump(mode="json"), "update", barrier, outcomes),
+        )
+        for item in (first, second)
+    ]
+
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(timeout=15)
+        assert process.exitcode == 0
+
+    assert sorted(outcomes.get(timeout=2) for _ in range(2)) == ["ValueError", "success"]
+    stored = JsonAlphaCaseStore(tmp_path).load(record.case_id)
+    assert stored in (first, second)
+    assert sorted(path.name for path in tmp_path.iterdir()) == [f"{record.case_id}.json"]
+
+
 def test_alpha_store_reads_legacy_record_without_inventing_provenance(
     tmp_path: Path,
 ) -> None:
@@ -179,6 +306,19 @@ def test_alpha_store_rejects_symlink_root(tmp_path: Path) -> None:
         JsonAlphaCaseStore(link).list_case_ids()
 
 
+def test_alpha_store_rejects_symlinked_existing_ancestor(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked = tmp_path / "linked"
+    linked.symlink_to(outside, target_is_directory=True)
+    store = JsonAlphaCaseStore(linked / "cases")
+
+    with pytest.raises(UnsafeAlphaCaseStore, match="ancestor"):
+        store.save(alpha_case())
+
+    assert list(outside.iterdir()) == []
+
+
 def test_alpha_store_revalidates_loaded_payload(tmp_path: Path) -> None:
     record = alpha_case()
     store = JsonAlphaCaseStore(tmp_path)
@@ -189,3 +329,24 @@ def test_alpha_store_revalidates_loaded_payload(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError):
         store.load(record.case_id)
+
+
+def test_alpha_store_rejects_valid_record_under_different_id(tmp_path: Path) -> None:
+    requested = alpha_case()
+    replacement = initialize_alpha_case(
+        public_pr_url="https://github.com/acme/repo/pull/8",
+        requirements_source_url="https://github.com/acme/repo/issues/6",
+        participant_role=ParticipantRole.ENGINEERING,
+        source_owner_confirmed=True,
+        no_confidential_information=True,
+        confirmed_criteria=["Export CSV"],
+        confirmed_criterion_snapshot=[Criterion(criterion_id="AC-01", text="Export CSV")],
+        criteria_source_provenance=criteria_source_provenance(),
+        repository_visibility=RepositoryVisibility.VERIFIED_PUBLIC,
+    )
+    store = JsonAlphaCaseStore(tmp_path)
+    path = store.save(requested)
+    path.write_text(replacement.model_dump_json(), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="does not match requested ID"):
+        store.load(requested.case_id)
