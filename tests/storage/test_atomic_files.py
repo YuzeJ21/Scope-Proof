@@ -406,7 +406,7 @@ def test_failed_exclusive_publish_cleans_private_temporary(
 
 
 @pytest.mark.parametrize("portable", [False, True])
-def test_temporary_metadata_failure_cleans_owned_temporary(
+def test_temporary_metadata_failure_preserves_ambiguous_temporary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
@@ -426,11 +426,15 @@ def test_temporary_metadata_failure_cleans_owned_temporary(
     with pytest.raises(OSError, match="temporary metadata failure"):
         atomic_create_text(tmp_path / "record.json", "validated\n")
 
-    assert list(tmp_path.iterdir()) == []
+    assert len([path for path in tmp_path.iterdir() if path.suffix == ".tmp"]) == 1
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents replacing an open temporary file",
+)
 @pytest.mark.parametrize("portable", [False, True])
-def test_temporary_metadata_failure_preserves_ambiguous_temporary(
+def test_temporary_metadata_failure_never_deletes_recreated_foreign_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
@@ -438,47 +442,57 @@ def test_temporary_metadata_failure_preserves_ambiguous_temporary(
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     original_fstat = os.fstat
+    bounded_stem = sha256(os.fsencode("record")).hexdigest()[:16]
+    temporary_name = f".{bounded_stem}-{'a' * 32}.tmp"
+    temporary = tmp_path / temporary_name
+    swapped = False
+
+    monkeypatch.setattr(atomic_files_module.secrets, "token_hex", lambda _size: "a" * 32)
 
     def fail_regular_descriptor_metadata(descriptor: int):
+        nonlocal swapped
         metadata = original_fstat(descriptor)
-        if atomic_files_module.stat.S_ISREG(metadata.st_mode):
+        if atomic_files_module.stat.S_ISREG(metadata.st_mode) and not swapped:
+            swapped = True
+            temporary.unlink()
+            temporary.write_bytes(b"foreign bytes\n")
             raise OSError("simulated temporary metadata failure")
         return metadata
 
     monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
-    if portable:
-        original_require_regular_file = atomic_files_module._require_regular_file
-
-        def fail_temporary_path_metadata(path: Path):
-            if path.suffix == ".tmp":
-                raise OSError("simulated cleanup metadata failure")
-            return original_require_regular_file(path)
-
-        monkeypatch.setattr(
-            atomic_files_module,
-            "_require_regular_file",
-            fail_temporary_path_metadata,
-        )
-    else:
-        original_require_regular_at = atomic_files_module._require_regular_at
-
-        def fail_temporary_name_metadata(directory_fd: int, name: str):
-            if name.endswith(".tmp"):
-                raise OSError("simulated cleanup metadata failure")
-            return original_require_regular_at(directory_fd, name)
-
-        monkeypatch.setattr(
-            atomic_files_module,
-            "_require_regular_at",
-            fail_temporary_name_metadata,
-        )
-
     target = tmp_path / "record.json"
     with pytest.raises(OSError, match="temporary metadata failure"):
         atomic_create_text(target, "validated\n")
 
+    assert swapped is True
     assert not target.exists()
-    assert len([path for path in tmp_path.iterdir() if path.suffix == ".tmp"]) == 1
+    assert temporary.read_bytes() == b"foreign bytes\n"
+
+
+def test_portable_raw_data_descriptors_request_binary_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binary_flag = 1 << 29
+    opened_data_flags: list[int] = []
+    original_open = os.open
+
+    def recording_open(path, flags, *args, **kwargs):
+        candidate = Path(path)
+        if candidate.is_absolute() and candidate.parent == tmp_path:
+            opened_data_flags.append(flags)
+        return original_open(path, flags & ~binary_flag, *args, **kwargs)
+
+    monkeypatch.setattr(atomic_files_module, "_BINARY", binary_flag, raising=False)
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "open", recording_open)
+    target = tmp_path / "record.json"
+
+    receipt = atomic_create_text_with_receipt(target, "validated\n")
+    assert read_text_no_follow(target) == "validated\n"
+    rollback_created_file(receipt)
+
+    assert opened_data_flags
+    assert all(flags & binary_flag for flags in opened_data_flags)
 
 
 @pytest.mark.parametrize("portable", [False, True])
@@ -1358,7 +1372,7 @@ def test_missing_record_claim_failure_cleans_claim_file(
 
 
 @pytest.mark.parametrize("portable", [False, True])
-def test_claim_metadata_failure_cleans_owned_claim_file(
+def test_claim_metadata_failure_preserves_ambiguous_claim_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
@@ -1383,7 +1397,113 @@ def test_claim_metadata_failure_cleans_owned_claim_file(
     ):
         raise AssertionError("failed claim setup must never be entered")
 
-    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
+    assert len(list(tmp_path.glob("*.claim"))) == 1
+    assert target.read_bytes() == b"valid\n"
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents replacing an open mutation claim",
+)
+@pytest.mark.parametrize("portable", [False, True])
+def test_claim_metadata_failure_never_deletes_recreated_foreign_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    target = tmp_path / "record.json"
+    target.write_text("valid\n", encoding="utf-8")
+    claim = tmp_path / f".{sha256(os.fsencode(target.name)).hexdigest()}.claim"
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_fstat = os.fstat
+    swapped = False
+
+    def replace_claim_then_fail(descriptor: int):
+        nonlocal swapped
+        metadata = original_fstat(descriptor)
+        if atomic_files_module.stat.S_ISREG(metadata.st_mode) and not swapped:
+            swapped = True
+            claim.unlink()
+            claim.write_bytes(b"foreign claim\n")
+            raise OSError("simulated claim metadata failure")
+        return metadata
+
+    monkeypatch.setattr(os, "fstat", replace_claim_then_fail)
+
+    with (
+        pytest.raises(OSError, match="claim metadata failure"),
+        exclusive_path_claim(target),
+    ):
+        raise AssertionError("failed claim setup must never be entered")
+
+    assert swapped is True
+    assert claim.read_bytes() == b"foreign claim\n"
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_claim_close_failure_does_not_override_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    target = tmp_path / "record.json"
+    target.write_text("valid\n", encoding="utf-8")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    owner = exclusive_path_claim(target)
+    owner.__enter__()
+    claim = tmp_path / f".{sha256(os.fsencode(target.name)).hexdigest()}.claim"
+    claim_metadata = claim.stat()
+    claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
+    original_close = os.close
+    original_fstat = os.fstat
+    failed = False
+
+    def close_claim_then_fail(descriptor: int) -> None:
+        nonlocal failed
+        metadata = original_fstat(descriptor)
+        original_close(descriptor)
+        if (metadata.st_dev, metadata.st_ino) == claim_identity and not failed:
+            failed = True
+            raise OSError("simulated claim close failure")
+
+    monkeypatch.setattr(os, "close", close_claim_then_fail)
+
+    owner.__exit__(None, None, None)
+
+    assert failed is True
+    assert not claim.exists()
+    with exclusive_path_claim(target):
+        pass
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_committed_create_ignores_final_directory_close_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    parent_metadata = tmp_path.stat()
+    parent_identity = (parent_metadata.st_dev, parent_metadata.st_ino)
+    original_close = os.close
+    original_fstat = os.fstat
+    failed = False
+
+    def close_parent_then_fail(descriptor: int) -> None:
+        nonlocal failed
+        metadata = original_fstat(descriptor)
+        original_close(descriptor)
+        if (metadata.st_dev, metadata.st_ino) == parent_identity and not failed:
+            failed = True
+            raise OSError("simulated directory close failure")
+
+    monkeypatch.setattr(os, "close", close_parent_then_fail)
+    target = tmp_path / "record.json"
+
+    assert atomic_create_text(target, "committed\n") == target
+    assert failed is True
+    assert target.read_bytes() == b"committed\n"
 
 
 @pytest.mark.skipif(

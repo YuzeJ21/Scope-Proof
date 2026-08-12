@@ -108,7 +108,7 @@ def test_descriptor_rehearsal_create_cleans_publication_when_link_fails_after_su
     not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
     reason="descriptor-relative rehearsal backend is unavailable",
 )
-def test_descriptor_rehearsal_metadata_failure_cleans_owned_temporary(
+def test_descriptor_rehearsal_metadata_failure_preserves_ambiguous_temporary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     original_fstat = os.fstat
@@ -124,38 +124,43 @@ def test_descriptor_rehearsal_metadata_failure_cleans_owned_temporary(
     with pytest.raises(OSError, match="rehearsal metadata failure"):
         JsonAlphaRehearsalStore(tmp_path).save(alpha_rehearsal())
 
-    assert list(tmp_path.iterdir()) == []
+    assert len(list(tmp_path.glob("*.tmp"))) == 1
 
 
 @pytest.mark.skipif(
     not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
     reason="descriptor-relative rehearsal backend is unavailable",
 )
-def test_descriptor_rehearsal_metadata_failure_preserves_ambiguous_temporary(
+def test_descriptor_rehearsal_metadata_failure_never_deletes_recreated_foreign_temporary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    record = alpha_rehearsal()
+    target_name = f"{record.rehearsal_id}.json"
+    temporary_name = f".{Path(target_name).stem}-{'b' * 32}.tmp"
+    temporary = tmp_path / temporary_name
     original_fstat = os.fstat
-    original_stat = os.stat
+    swapped = False
+
+    monkeypatch.setattr(rehearsal_storage_module.secrets, "token_hex", lambda _size: "b" * 32)
 
     def fail_regular_descriptor_metadata(descriptor: int):
+        nonlocal swapped
         metadata = original_fstat(descriptor)
-        if rehearsal_storage_module.stat.S_ISREG(metadata.st_mode):
+        if rehearsal_storage_module.stat.S_ISREG(metadata.st_mode) and not swapped:
+            swapped = True
+            temporary.unlink()
+            temporary.write_bytes(b"foreign rehearsal temporary\n")
             raise OSError("simulated rehearsal metadata failure")
         return metadata
 
-    def fail_temporary_path_metadata(path, *args, **kwargs):
-        if str(path).endswith(".tmp") and kwargs.get("dir_fd") is not None:
-            raise OSError("simulated cleanup metadata failure")
-        return original_stat(path, *args, **kwargs)
-
     monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
-    monkeypatch.setattr(os, "stat", fail_temporary_path_metadata)
 
     with pytest.raises(OSError, match="rehearsal metadata failure"):
-        JsonAlphaRehearsalStore(tmp_path).save(alpha_rehearsal())
+        JsonAlphaRehearsalStore(tmp_path).save(record)
 
+    assert swapped is True
     assert list(tmp_path.glob("*.json")) == []
-    assert len([path for path in tmp_path.iterdir() if path.suffix == ".tmp"]) == 1
+    assert temporary.read_bytes() == b"foreign rehearsal temporary\n"
 
 
 @pytest.mark.skipif(
@@ -184,6 +189,37 @@ def test_descriptor_rehearsal_close_failure_happens_before_publication(
 
     assert failed is True
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_committed_rehearsal_ignores_final_directory_close_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_rehearsal()
+    parent_metadata = tmp_path.stat()
+    parent_identity = (parent_metadata.st_dev, parent_metadata.st_ino)
+    original_close = os.close
+    original_fstat = os.fstat
+    failed = False
+
+    def close_parent_then_fail(descriptor: int) -> None:
+        nonlocal failed
+        metadata = original_fstat(descriptor)
+        original_close(descriptor)
+        if (metadata.st_dev, metadata.st_ino) == parent_identity and not failed:
+            failed = True
+            raise OSError("simulated rehearsal directory close failure")
+
+    monkeypatch.setattr(os, "close", close_parent_then_fail)
+
+    path = JsonAlphaRehearsalStore(tmp_path).save(record)
+
+    assert failed is True
+    assert path.exists()
+    assert JsonAlphaRehearsalStore(tmp_path).load(record.rehearsal_id) == record
 
 
 @pytest.mark.skipif(

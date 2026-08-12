@@ -108,7 +108,8 @@ class JsonAlphaRehearsalStore:
                 current_fd = child_fd
             yield current_fd
         finally:
-            os.close(current_fd)
+            with suppress(OSError):
+                os.close(current_fd)
 
     @staticmethod
     def _validate_rehearsal_id(rehearsal_id: str) -> str:
@@ -233,25 +234,8 @@ class JsonAlphaRehearsalStore:
             try:
                 temporary_metadata = os.fstat(temporary_fd)
             except BaseException:
-                try:
-                    interrupted = os.stat(
-                        temporary_name,
-                        dir_fd=directory_fd,
-                        follow_symlinks=False,
-                    )
-                except OSError:
+                with suppress(OSError):
                     os.close(temporary_fd)
-                else:
-                    temporary_identity = (interrupted.st_dev, interrupted.st_ino)
-                    os.close(temporary_fd)
-                    _quarantine_and_remove_at(
-                        directory_fd,
-                        temporary_name,
-                        temporary_identity,
-                        changed_message=(
-                            "private rehearsal temporary changed during failed setup cleanup"
-                        ),
-                    )
                 raise
             return (
                 temporary_name,

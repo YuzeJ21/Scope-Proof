@@ -13,6 +13,7 @@ from hashlib import sha256
 from pathlib import Path
 
 _CLOSE_ON_EXEC = getattr(os, "O_CLOEXEC", 0)
+_BINARY = getattr(os, "O_BINARY", 0)
 _NO_FOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _NONBLOCK = getattr(os, "O_NONBLOCK", 0)
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
@@ -193,7 +194,8 @@ def _open_directory_descriptor(directory: Path, *, create: bool) -> Iterator[int
             current_fd = child_fd
         yield current_fd
     finally:
-        os.close(current_fd)
+        with suppress(OSError):
+            os.close(current_fd)
 
 
 def _require_regular_at(directory_fd: int, name: str) -> os.stat_result:
@@ -217,7 +219,7 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
             raise UnsafeAtomicPath("existing record changed after mutation claim")
         descriptor = os.open(
             target.name,
-            os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC,
+            os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC | _BINARY,
             dir_fd=directory_fd,
         )
         try:
@@ -240,7 +242,7 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
             try:
                 descriptor = os.open(
                     target.name,
-                    os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC,
+                    os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC | _BINARY,
                     dir_fd=directory_fd,
                 )
             except OSError as error:
@@ -268,7 +270,10 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
     before = _require_regular_file(target)
     if claim is not None and (before.st_dev, before.st_ino) != claim.record_identity:
         raise UnsafeAtomicPath("existing record changed after mutation claim")
-    descriptor = os.open(target, os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC)
+    descriptor = os.open(
+        target,
+        os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC | _BINARY,
+    )
     try:
         _assert_directory_identity(target.parent, parent_identity)
         after = os.fstat(descriptor)
@@ -324,7 +329,7 @@ def list_regular_files(directory: Path) -> list[Path]:
 def _open_private_temporary(
     parent: Path, stem: str
 ) -> tuple[Path, int, tuple[int, int]]:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC | _BINARY
     bounded_stem = sha256(os.fsencode(stem)).hexdigest()[:16]
     for _ in range(128):
         temporary = parent / f".{bounded_stem}-{secrets.token_hex(16)}.tmp"
@@ -335,18 +340,8 @@ def _open_private_temporary(
         try:
             metadata = os.fstat(descriptor)
         except BaseException:
-            try:
-                interrupted = _require_regular_file(temporary)
-            except (OSError, UnsafeAtomicPath):
+            with suppress(OSError):
                 os.close(descriptor)
-            else:
-                identity = (interrupted.st_dev, interrupted.st_ino)
-                os.close(descriptor)
-                _quarantine_and_remove_path(
-                    temporary,
-                    identity,
-                    changed_message="private temporary changed during failed setup cleanup",
-                )
             raise
         return temporary, descriptor, (metadata.st_dev, metadata.st_ino)
     raise FileExistsError("could not allocate an exclusive temporary file")
@@ -355,7 +350,7 @@ def _open_private_temporary(
 def _open_private_temporary_at(
     directory_fd: int, stem: str
 ) -> tuple[str, int, tuple[int, int]]:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC | _BINARY
     bounded_stem = sha256(os.fsencode(stem)).hexdigest()[:16]
     for _ in range(128):
         name = f".{bounded_stem}-{secrets.token_hex(16)}.tmp"
@@ -366,19 +361,8 @@ def _open_private_temporary_at(
         try:
             metadata = os.fstat(descriptor)
         except BaseException:
-            try:
-                interrupted = _require_regular_at(directory_fd, name)
-            except (OSError, UnsafeAtomicPath):
+            with suppress(OSError):
                 os.close(descriptor)
-            else:
-                identity = (interrupted.st_dev, interrupted.st_ino)
-                os.close(descriptor)
-                _quarantine_and_remove_at(
-                    directory_fd,
-                    name,
-                    identity,
-                    changed_message="private temporary changed during failed setup cleanup",
-                )
             raise
         return name, descriptor, (metadata.st_dev, metadata.st_ino)
     raise FileExistsError("could not allocate an exclusive temporary file")
@@ -537,7 +521,7 @@ def _sha256_regular_at(
         raise UnsafeAtomicPath("app-owned record changed while its content was verified")
     descriptor = os.open(
         name,
-        os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC,
+        os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC | _BINARY,
         dir_fd=directory_fd,
     )
     try:
@@ -620,7 +604,10 @@ def _sha256_regular_path(path: Path, expected: tuple[int, int]) -> str:
     metadata = _require_regular_file(path)
     if not _same_file(metadata, expected):
         raise UnsafeAtomicPath("app-owned record changed while its content was verified")
-    descriptor = os.open(path, os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC)
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC | _BINARY,
+    )
     try:
         opened = os.fstat(descriptor)
         if not stat.S_ISREG(opened.st_mode) or not _same_file(opened, expected):
@@ -696,7 +683,8 @@ def _fsync_directory(directory: Path) -> None:
         with suppress(OSError):
             os.fsync(descriptor)
     finally:
-        os.close(descriptor)
+        with suppress(OSError):
+            os.close(descriptor)
 
 
 def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileReceipt:
@@ -939,7 +927,14 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
             digest = sha256(os.fsencode(target.name)).hexdigest()
             claim_name = f".{digest}.claim"
-            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
+            flags = (
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | _NO_FOLLOW
+                | _CLOSE_ON_EXEC
+                | _BINARY
+            )
             try:
                 descriptor = os.open(claim_name, flags, 0o600, dir_fd=directory_fd)
             except FileExistsError:
@@ -949,15 +944,6 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                 try:
                     claim_metadata = os.fstat(descriptor)
                 except BaseException:
-                    try:
-                        interrupted_claim = _require_regular_at(directory_fd, claim_name)
-                    except (OSError, UnsafeAtomicPath):
-                        pass
-                    else:
-                        claim_identity = (
-                            interrupted_claim.st_dev,
-                            interrupted_claim.st_ino,
-                        )
                     raise
                 claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
                 record_metadata = _require_regular_at(directory_fd, target.name)
@@ -974,7 +960,8 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                     directory_fd=directory_fd,
                 )
             finally:
-                os.close(descriptor)
+                with suppress(OSError):
+                    os.close(descriptor)
                 if claim_identity is not None:
                     with suppress(OSError):
                         _quarantine_and_remove_at(
@@ -991,7 +978,7 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
     parent_identity = _directory_identity(parent)
     digest = sha256(os.fsencode(target.name)).hexdigest()
     claim = parent / f".{digest}.claim"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC | _BINARY
     try:
         descriptor = os.open(claim, flags, 0o600)
     except FileExistsError:
@@ -1001,12 +988,6 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         try:
             claim_metadata = os.fstat(descriptor)
         except BaseException:
-            try:
-                interrupted_claim = _require_regular_file(claim)
-            except (OSError, UnsafeAtomicPath):
-                pass
-            else:
-                claim_identity = (interrupted_claim.st_dev, interrupted_claim.st_ino)
             raise
         claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
         record_metadata = _require_regular_file(target)
@@ -1024,7 +1005,8 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
             portable_ancestors=portable_directory.ancestors,
         )
     finally:
-        os.close(descriptor)
+        with suppress(OSError):
+            os.close(descriptor)
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         if claim_identity is not None:
