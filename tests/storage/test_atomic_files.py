@@ -345,6 +345,31 @@ def test_competing_mutation_claim_fails_without_removing_owner_claim(tmp_path: P
         raise AssertionError("competing claim must never be entered")
 
 
+def test_portable_claim_cleanup_never_deletes_foreign_swapped_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = safe / "record.json"
+    target.write_text("valid\n", encoding="utf-8")
+    claim_name = f".{sha256(os.fsencode(target.name)).hexdigest()}.claim"
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+
+    with (
+        pytest.raises(UnsafeAtomicPath, match=r"symbolic link|changed"),
+        exclusive_path_claim(target),
+    ):
+        safe.rename(moved)
+        safe.symlink_to(outside, target_is_directory=True)
+        (outside / claim_name).write_text("foreign claim\n", encoding="utf-8")
+
+    assert (outside / claim_name).read_text(encoding="utf-8") == "foreign claim\n"
+    assert (moved / claim_name).exists()
+
+
 def test_portable_path_operations_reject_symlinked_ancestor(tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -356,6 +381,38 @@ def test_portable_path_operations_reject_symlinked_ancestor(tmp_path: Path) -> N
         atomic_create_text(target, "must not escape\n")
 
     assert list(outside.iterdir()) == []
+
+
+def test_portable_create_rejects_ancestor_swapped_during_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    (safe / "nested").mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "nested").mkdir()
+    target = safe / "nested" / "record.json"
+    original_lstat = os.lstat
+    swapped = False
+
+    def swapping_lstat(path, *args, **kwargs):
+        nonlocal swapped
+        metadata = original_lstat(path, *args, **kwargs)
+        if not swapped and Path(path) == safe:
+            safe.rename(moved)
+            safe.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return metadata
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "lstat", swapping_lstat)
+
+    with pytest.raises(UnsafeAtomicPath, match=r"symbolic link|changed"):
+        atomic_create_text(target, "must not escape\n")
+
+    assert list((outside / "nested").iterdir()) == []
 
 
 def test_portable_create_rejects_ancestor_swap_before_publication(

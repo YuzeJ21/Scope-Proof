@@ -76,6 +76,12 @@ def ensure_safe_directory(directory: Path, *, create: bool) -> Path:
         _raise_if_link_or_reparse(current, metadata)
         if not stat.S_ISDIR(metadata.st_mode):
             raise UnsafeAtomicPath(f"app-owned path component must be a directory: {current}")
+        confirmed = os.lstat(current)
+        _raise_if_link_or_reparse(current, confirmed)
+        if not stat.S_ISDIR(confirmed.st_mode):
+            raise UnsafeAtomicPath(f"app-owned path component must be a directory: {current}")
+        if (metadata.st_dev, metadata.st_ino) != (confirmed.st_dev, confirmed.st_ino):
+            raise UnsafeAtomicPath("app-owned directory changed during path validation")
     return absolute
 
 
