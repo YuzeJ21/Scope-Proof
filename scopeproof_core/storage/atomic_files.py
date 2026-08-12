@@ -54,6 +54,7 @@ class CreatedFileReceipt:
 
     path: Path
     identity: tuple[int, int]
+    content_sha256: str
     descriptor_backend: bool
     portable_ancestors: tuple[tuple[Path, tuple[int, int]], ...] = ()
 
@@ -424,12 +425,39 @@ def _restore_quarantined_at(directory_fd: int, quarantine: str, target: str) -> 
     os.unlink(quarantine, dir_fd=directory_fd)
 
 
+def _sha256_regular_at(
+    directory_fd: int, name: str, expected: tuple[int, int]
+) -> str:
+    metadata = _require_regular_at(directory_fd, name)
+    if not _same_file(metadata, expected):
+        raise UnsafeAtomicPath("app-owned record changed while its content was verified")
+    descriptor = os.open(
+        name,
+        os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC,
+        dir_fd=directory_fd,
+    )
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or not _same_file(opened, expected):
+            raise UnsafeAtomicPath("app-owned record changed while its content was verified")
+        digest = sha256()
+        while chunk := os.read(descriptor, 65536):
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        if (opened.st_size, opened.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+            raise UnsafeAtomicPath("app-owned record changed while its content was verified")
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
 def _quarantine_and_remove_at(
     directory_fd: int,
     target: str,
     expected: tuple[int, int],
     *,
     changed_message: str,
+    expected_sha256: str | None = None,
 ) -> None:
     for _ in range(128):
         quarantine = _quarantine_name(target)
@@ -449,6 +477,13 @@ def _quarantine_and_remove_at(
     if not _same_file(metadata, expected):
         _restore_quarantined_at(directory_fd, quarantine, target)
         raise UnsafeAtomicPath(changed_message)
+    if expected_sha256 is not None:
+        try:
+            if _sha256_regular_at(directory_fd, quarantine, expected) != expected_sha256:
+                raise UnsafeAtomicPath(changed_message)
+        except BaseException:
+            _restore_quarantined_at(directory_fd, quarantine, target)
+            raise
     os.unlink(quarantine, dir_fd=directory_fd)
 
 
@@ -463,11 +498,32 @@ def _restore_quarantined_path(quarantine: Path, target: Path) -> None:
     os.unlink(quarantine)
 
 
+def _sha256_regular_path(path: Path, expected: tuple[int, int]) -> str:
+    metadata = _require_regular_file(path)
+    if not _same_file(metadata, expected):
+        raise UnsafeAtomicPath("app-owned record changed while its content was verified")
+    descriptor = os.open(path, os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or not _same_file(opened, expected):
+            raise UnsafeAtomicPath("app-owned record changed while its content was verified")
+        digest = sha256()
+        while chunk := os.read(descriptor, 65536):
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        if (opened.st_size, opened.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+            raise UnsafeAtomicPath("app-owned record changed while its content was verified")
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
 def _quarantine_and_remove_path(
     target: Path,
     expected: tuple[int, int],
     *,
     changed_message: str,
+    expected_sha256: str | None = None,
 ) -> None:
     for _ in range(128):
         quarantine = target.parent / _quarantine_name(target.name)
@@ -482,6 +538,13 @@ def _quarantine_and_remove_path(
     if not _same_file(metadata, expected):
         _restore_quarantined_path(quarantine, target)
         raise UnsafeAtomicPath(changed_message)
+    if expected_sha256 is not None:
+        try:
+            if _sha256_regular_path(quarantine, expected) != expected_sha256:
+                raise UnsafeAtomicPath(changed_message)
+        except BaseException:
+            _restore_quarantined_path(quarantine, target)
+            raise
     os.unlink(quarantine)
 
 
@@ -508,6 +571,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     """Publish UTF-8 text exactly once and return its rollback identity."""
 
     target = Path(os.path.abspath(target))
+    payload = text.encode("utf-8")
+    content_sha256 = sha256(payload).hexdigest()
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=True) as directory_fd:
             committed = False
@@ -521,7 +586,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             temporary_metadata = os.fstat(descriptor)
             temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
             try:
-                _write_all(descriptor, text.encode("utf-8"))
+                _write_all(descriptor, payload)
                 expected = os.fstat(descriptor)
                 try:
                     os.link(
@@ -542,6 +607,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 return CreatedFileReceipt(
                     path=target,
                     identity=(published.st_dev, published.st_ino),
+                    content_sha256=content_sha256,
                     descriptor_backend=True,
                 )
             finally:
@@ -576,7 +642,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     try:
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
-        _write_all(descriptor, text.encode("utf-8"))
+        _write_all(descriptor, payload)
         expected = os.fstat(descriptor)
         try:
             try:
@@ -598,6 +664,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         return CreatedFileReceipt(
             path=target,
             identity=(published.st_dev, published.st_ino),
+            content_sha256=content_sha256,
             descriptor_backend=False,
             portable_ancestors=portable_directory.ancestors,
         )
@@ -655,6 +722,7 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
                 target.name,
                 receipt.identity,
                 changed_message="published file changed before rollback",
+                expected_sha256=receipt.content_sha256,
             )
             with suppress(OSError):
                 os.fsync(directory_fd)
@@ -672,6 +740,7 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
         target,
         receipt.identity,
         changed_message="published file changed before rollback",
+        expected_sha256=receipt.content_sha256,
     )
     _fsync_directory(target.parent)
 
