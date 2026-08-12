@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import secrets
 import stat
@@ -26,7 +27,7 @@ _DESCRIPTOR_BACKEND_SUPPORTED = (
     and os.unlink in os.supports_dir_fd
     and os.link in os.supports_dir_fd
     and os.link in os.supports_follow_symlinks
-    and os.replace in os.supports_dir_fd
+    and os.rename in os.supports_dir_fd
 )
 
 
@@ -112,7 +113,10 @@ def _open_child_directory(parent_fd: int, component: str, *, create: bool) -> in
         except OSError as error:
             raise UnsafeAtomicPath("app-owned directory changed during creation") from error
     except OSError as error:
-        raise UnsafeAtomicPath("app-owned path must not traverse an unsafe directory") from error
+        raise UnsafeAtomicPath(
+            "app-owned path must not traverse a symbolic link, reparse point, "
+            "or non-directory"
+        ) from error
 
 
 @contextmanager
@@ -143,11 +147,18 @@ def read_text_no_follow(path: Path) -> str:
     target = Path(os.path.abspath(path))
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
-            descriptor = os.open(
-                target.name,
-                os.O_RDONLY | _NO_FOLLOW | _CLOSE_ON_EXEC,
-                dir_fd=directory_fd,
-            )
+            try:
+                descriptor = os.open(
+                    target.name,
+                    os.O_RDONLY | _NO_FOLLOW | _CLOSE_ON_EXEC,
+                    dir_fd=directory_fd,
+                )
+            except OSError as error:
+                if error.errno == errno.ELOOP:
+                    raise UnsafeAtomicPath(
+                        f"app-owned record must not be a symbolic link or reparse point: {target}"
+                    ) from error
+                raise
             try:
                 if not stat.S_ISREG(os.fstat(descriptor).st_mode):
                     raise UnsafeAtomicPath(f"app-owned record must be a regular file: {target}")
@@ -403,7 +414,7 @@ def atomic_replace_text(
                 os.close(descriptor)
                 descriptor = -1
             _require_regular_at(directory_fd, target.name)
-            os.replace(
+            os.rename(
                 temporary,
                 target.name,
                 src_dir_fd=directory_fd,

@@ -53,7 +53,10 @@ def test_missing_directory_lists_no_records(tmp_path: Path) -> None:
     assert list_regular_files(tmp_path / "absent") == []
 
 
-def test_read_and_listing_return_only_regular_direct_children(tmp_path: Path) -> None:
+def test_portable_read_and_listing_return_only_regular_direct_children(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     record = tmp_path / "record.json"
     record.write_text("validated\n", encoding="utf-8")
     nested = tmp_path / "nested"
@@ -118,6 +121,7 @@ def test_atomic_create_uses_legacy_link_signature_when_needed(
         return original_link(source, target)
 
     monkeypatch.setattr(os, "link", legacy_link)
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
 
     target = atomic_create_text(tmp_path / "record.json", "validated\n")
 
@@ -165,7 +169,7 @@ def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
     def fail_replace(*_args, **_kwargs):
         raise OSError("simulated replacement interruption")
 
-    monkeypatch.setattr(os, "replace", fail_replace)
+    monkeypatch.setattr(os, "rename", fail_replace)
 
     with (
         pytest.raises(OSError, match="replacement interruption"),
@@ -180,6 +184,7 @@ def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
 def test_directory_sync_unavailability_after_replace_does_not_report_false_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     target = tmp_path / "alpha-record.json"
     target.write_text("old valid bytes\n", encoding="utf-8")
     original_fsync = os.fsync
