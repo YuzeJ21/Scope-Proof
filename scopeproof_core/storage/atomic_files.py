@@ -225,8 +225,9 @@ def list_regular_files(directory: Path) -> list[Path]:
 
 def _open_private_temporary(parent: Path, stem: str) -> tuple[Path, int]:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
+    bounded_stem = sha256(stem.encode("utf-8")).hexdigest()[:16]
     for _ in range(128):
-        temporary = parent / f".{stem}-{secrets.token_hex(16)}.tmp"
+        temporary = parent / f".{bounded_stem}-{secrets.token_hex(16)}.tmp"
         try:
             return temporary, os.open(temporary, flags, 0o600)
         except FileExistsError:
@@ -236,8 +237,9 @@ def _open_private_temporary(parent: Path, stem: str) -> tuple[Path, int]:
 
 def _open_private_temporary_at(directory_fd: int, stem: str) -> tuple[str, int]:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
+    bounded_stem = sha256(stem.encode("utf-8")).hexdigest()[:16]
     for _ in range(128):
-        name = f".{stem}-{secrets.token_hex(16)}.tmp"
+        name = f".{bounded_stem}-{secrets.token_hex(16)}.tmp"
         try:
             return name, os.open(name, flags, 0o600, dir_fd=directory_fd)
         except FileExistsError:

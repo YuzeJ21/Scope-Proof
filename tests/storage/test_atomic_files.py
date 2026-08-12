@@ -1,4 +1,5 @@
 import os
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -105,12 +106,20 @@ def test_failed_exclusive_publish_cleans_private_temporary(
 def test_atomic_create_retries_private_temporary_name_collision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (tmp_path / ".record-collision.tmp").write_text("occupied", encoding="utf-8")
+    bounded = sha256(b"record").hexdigest()[:16]
+    (tmp_path / f".{bounded}-collision.tmp").write_text("occupied", encoding="utf-8")
     tokens = iter(("collision", "available"))
     monkeypatch.setattr(atomic_files_module.secrets, "token_hex", lambda _size: next(tokens))
 
     target = atomic_create_text(tmp_path / "record.json", "validated\n")
 
+    assert target.read_text(encoding="utf-8") == "validated\n"
+
+
+def test_atomic_create_bounds_temporary_name_for_long_valid_target(tmp_path: Path) -> None:
+    target = tmp_path / ("a" * 220 + ".json")
+
+    assert atomic_create_text(target, "validated\n") == target
     assert target.read_text(encoding="utf-8") == "validated\n"
 
 

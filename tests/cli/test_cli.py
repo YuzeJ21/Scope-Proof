@@ -757,7 +757,7 @@ def test_review_report_final_publication_does_not_overwrite_racing_target(
     assert raised.value.code == 2
     assert "already exists" in capsys.readouterr().err
     assert report.read_bytes() == b"owner-created bytes\n"
-    assert not any(path.name.startswith(".racing-") for path in tmp_path.iterdir())
+    assert not any(path.suffix == ".tmp" for path in tmp_path.iterdir())
 
 
 def test_review_rejects_unsupported_report_suffix_before_reading_inputs(
