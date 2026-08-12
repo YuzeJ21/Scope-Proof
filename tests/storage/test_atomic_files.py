@@ -1803,6 +1803,36 @@ def test_backup_allocators_fail_after_the_bounded_collision_budget(
 
 
 @pytest.mark.parametrize("portable", [False, True])
+def test_interrupted_backup_publication_cleans_owned_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    target = tmp_path / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    original_link = os.link
+
+    def publish_then_interrupt(source, destination, *args, **kwargs):
+        result = original_link(source, destination, *args, **kwargs)
+        if Path(destination).suffix == ".rollback":
+            raise KeyboardInterrupt("simulated backup publication interruption")
+        return result
+
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "link", publish_then_interrupt)
+
+    with (
+        pytest.raises(KeyboardInterrupt, match="backup publication interruption"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
+
+
+@pytest.mark.parametrize("portable", [False, True])
 def test_backup_identity_drift_preserves_foreign_replacement(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:

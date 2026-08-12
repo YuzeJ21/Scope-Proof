@@ -379,6 +379,22 @@ def _create_backup_at(
             )
         except FileExistsError:
             continue
+        except BaseException:
+            try:
+                metadata = _require_regular_at(directory_fd, backup)
+            except (OSError, UnsafeAtomicPath):
+                pass
+            else:
+                if _same_file(metadata, expected):
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        backup,
+                        expected,
+                        changed_message=(
+                            "existing record changed during failed backup cleanup"
+                        ),
+                    )
+            raise
         metadata = _require_regular_at(directory_fd, backup)
         if not _same_file(metadata, expected):
             _quarantine_and_remove_at(
@@ -401,6 +417,21 @@ def _create_backup_path(target: Path, expected: tuple[int, int]) -> Path:
                 os.link(target, backup)
         except FileExistsError:
             continue
+        except BaseException:
+            try:
+                metadata = _require_regular_file(backup)
+            except (OSError, UnsafeAtomicPath):
+                pass
+            else:
+                if _same_file(metadata, expected):
+                    _quarantine_and_remove_path(
+                        backup,
+                        expected,
+                        changed_message=(
+                            "existing record changed during failed backup cleanup"
+                        ),
+                    )
+            raise
         metadata = _require_regular_file(backup)
         if not _same_file(metadata, expected):
             _quarantine_and_remove_path(
