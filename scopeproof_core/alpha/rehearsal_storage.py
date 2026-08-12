@@ -264,6 +264,21 @@ class JsonAlphaRehearsalStore:
                 )
             except FileExistsError:
                 raise FileExistsError(record.rehearsal_id) from None
+            except BaseException:
+                try:
+                    interrupted_publication = os.stat(
+                        target_name,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                except OSError:
+                    pass
+                else:
+                    publication_created = (
+                        interrupted_publication.st_dev,
+                        interrupted_publication.st_ino,
+                    ) == temporary_identity
+                raise
             publication_created = True
             target_metadata = os.stat(
                 target_name,

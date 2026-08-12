@@ -82,6 +82,28 @@ assert storage._DESCRIPTOR_BACKEND_SUPPORTED is False
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_descriptor_rehearsal_create_cleans_publication_when_link_fails_after_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_rehearsal()
+    original_link = os.link
+
+    def publish_then_fail(source, destination, *args, **kwargs):
+        original_link(source, destination, *args, **kwargs)
+        raise OSError("simulated post-publication interruption")
+
+    monkeypatch.setattr(os, "link", publish_then_fail)
+
+    with pytest.raises(OSError, match="post-publication interruption"):
+        JsonAlphaRehearsalStore(tmp_path).save(record)
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_rehearsal_listing_is_deterministically_sorted(tmp_path: Path) -> None:
     records = [alpha_rehearsal(pull_number=number) for number in (9, 7, 8)]
     store = JsonAlphaRehearsalStore(tmp_path)
