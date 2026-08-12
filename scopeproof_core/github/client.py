@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import base64
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from urllib.parse import quote, urlparse
+from urllib.parse import parse_qsl, quote, urlparse
 
 import httpx
 
@@ -27,6 +28,10 @@ _PR_PATH = re.compile(r"^/([^/]+)/([^/]+)/pull/(\d+)/?$")
 _HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 _FAILING_CONCLUSIONS = {"failure", "timed_out", "cancelled", "action_required", "startup_failure"}
 _PASSING_CONCLUSIONS = {"success"}
+_NEXT_RELATION = re.compile(
+    r'\brel\s*=\s*(?:"next"|next)(?=\s*(?:;|,|$))',
+    flags=re.IGNORECASE,
+)
 
 
 class GitHubIngestionError(RuntimeError):
@@ -62,6 +67,56 @@ class GitHubNetworkError(GitHubIngestionError):
 
 class DiffLimitExceeded(GitHubIngestionError):
     pass
+
+
+class GitHubPaginationError(GitHubIngestionError):
+    """A pagination target or traversal exceeded the supported trust boundary."""
+
+
+@dataclass
+class _FetchBudget:
+    max_requests: int
+    max_pages: int
+    max_items: int
+    max_response_bytes: int
+    max_total_response_bytes: int
+    requests_used: int = 0
+    pages_used: int = 0
+    items_used: int = 0
+    total_response_bytes: int = 0
+
+    def charge_request(self) -> None:
+        if self.requests_used >= self.max_requests:
+            raise GitHubPaginationError("GitHub request budget was exhausted.")
+        self.requests_used += 1
+
+    def charge_page(self) -> None:
+        if self.pages_used >= self.max_pages:
+            raise GitHubPaginationError("GitHub pagination page budget was exhausted.")
+        self.pages_used += 1
+
+    def charge_items(self, count: int) -> None:
+        if self.items_used + count > self.max_items:
+            raise GitHubPaginationError("GitHub pagination item budget was exhausted.")
+        self.items_used += count
+
+    def charge_response(self, response: httpx.Response) -> None:
+        decoded_bytes = len(response.content)
+        if decoded_bytes > self.max_response_bytes:
+            raise GitHubPaginationError(
+                "GitHub decoded response byte budget was exhausted."
+            )
+        if self.total_response_bytes + decoded_bytes > self.max_total_response_bytes:
+            raise GitHubPaginationError(
+                "GitHub total decoded response byte budget was exhausted."
+            )
+        self.total_response_bytes += decoded_bytes
+
+
+@dataclass(frozen=True)
+class _PaginatedResult:
+    items: list[dict]
+    truncated: bool = False
 
 
 def _reported_total_note(payload: dict, label: str, valid_entry_count: int) -> str | None:
@@ -148,10 +203,29 @@ class GitHubClient:
         max_files: int = 100,
         max_patch_bytes: int = 200_000,
         max_total_diff_bytes: int = 1_000_000,
+        max_commits: int = 250,
         max_candidate_files: int = 8,
         max_candidate_bytes: int = 200_000,
+        max_requests: int = 16,
+        max_pagination_pages: int = 10,
+        max_pagination_items: int = 1_000,
+        max_response_bytes: int = 4 * 1024 * 1024,
+        max_total_response_bytes: int = 16 * 1024 * 1024,
         timeout_seconds: float = 15.0,
     ) -> None:
+        configured_limits = {
+            "max_files": max_files,
+            "max_commits": max_commits,
+            "max_requests": max_requests,
+            "max_pagination_pages": max_pagination_pages,
+            "max_pagination_items": max_pagination_items,
+            "max_response_bytes": max_response_bytes,
+            "max_total_response_bytes": max_total_response_bytes,
+        }
+        invalid_limits = [name for name, value in configured_limits.items() if value <= 0]
+        if invalid_limits:
+            names = ", ".join(invalid_limits)
+            raise ValueError(f"GitHub ingestion limits must be positive: {names}")
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
@@ -166,20 +240,34 @@ class GitHubClient:
             timeout=timeout_seconds,
         )
         self.max_files = max_files
+        self.max_commits = max_commits
         self.max_patch_bytes = max_patch_bytes
         self.max_total_diff_bytes = max_total_diff_bytes
         self.max_candidate_files = max_candidate_files
         self.max_candidate_bytes = max_candidate_bytes
+        self.max_requests = max_requests
+        self.max_pagination_pages = max_pagination_pages
+        self.max_pagination_items = max_pagination_items
+        self.max_response_bytes = max_response_bytes
+        self.max_total_response_bytes = max_total_response_bytes
         self.last_request_authorized = "Authorization" in headers
 
     def _get(
-        self, path: str, *, params: dict[str, str] | None = None
+        self,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+        budget: _FetchBudget | None = None,
     ) -> httpx.Response:
+        if budget is not None:
+            budget.charge_request()
         try:
             response = self._client.get(path, params=params)
         except httpx.HTTPError as error:
             message = "Could not reach GitHub. Retry without losing criteria."
             raise GitHubNetworkError(message) from error
+        if budget is not None:
+            budget.charge_response(response)
         return response
 
     @staticmethod
@@ -232,16 +320,170 @@ class GitHubClient:
             )
         return RepositoryVisibility.VERIFIED_PUBLIC
 
-    def _get_all(self, path: str) -> list[dict]:
-        """Follow GitHub pagination while retaining normal HTTP error handling."""
-        response = self._get(path)
-        self._raise_for_pr(response)
-        items = list(response.json())
-        while next_link := response.links.get("next", {}).get("url"):
-            response = self._get(next_link)
+    @staticmethod
+    def _next_link(response: httpx.Response) -> str | None:
+        raw_link = ", ".join(response.headers.get_list("link"))
+        if not raw_link:
+            return None
+        next_relation_count = len(_NEXT_RELATION.findall(raw_link))
+        if next_relation_count > 1:
+            raise GitHubPaginationError(
+                "GitHub pagination response contained ambiguous next links."
+            )
+        try:
+            parsed_links = response.links
+            next_link = parsed_links.get("next", {}).get("url")
+        except (KeyError, TypeError, ValueError) as error:
+            raise GitHubPaginationError(
+                "GitHub pagination response contained a malformed Link header."
+            ) from error
+        if next_relation_count == 0 and next_link is None:
+            if not parsed_links or any(
+                not isinstance(link.get("rel"), str)
+                or not link["rel"]
+                or not isinstance(link.get("url"), str)
+                or not link["url"]
+                for link in parsed_links.values()
+            ):
+                raise GitHubPaginationError(
+                    "GitHub pagination response contained a malformed Link header."
+                )
+            return None
+        if next_relation_count != 1 or not isinstance(next_link, str) or not next_link:
+            raise GitHubPaginationError(
+                "GitHub pagination response contained a malformed next link."
+            )
+        return next_link
+
+    @staticmethod
+    def _validated_pagination_target(
+        target: str,
+        *,
+        expected_paths: frozenset[str],
+        canonical_path: str,
+        per_page: int,
+    ) -> tuple[str, str]:
+        try:
+            parsed_target = urlparse(target)
+            target_port = parsed_target.port
+            query_items = parse_qsl(
+                parsed_target.query,
+                keep_blank_values=True,
+                strict_parsing=True,
+            )
+        except ValueError as error:
+            raise GitHubPaginationError(
+                "GitHub pagination target is malformed."
+            ) from error
+        if (
+            parsed_target.scheme != "https"
+            or parsed_target.hostname != "api.github.com"
+            or parsed_target.username is not None
+            or parsed_target.password is not None
+            or parsed_target.fragment
+            or target_port not in {None, 443}
+        ):
+            raise GitHubPaginationError(
+                "GitHub pagination target is outside the expected GitHub API origin."
+            )
+        if parsed_target.path not in expected_paths:
+            raise GitHubPaginationError(
+                "GitHub pagination target escaped the expected repository endpoint."
+            )
+        if len(query_items) != 2 or {name for name, _ in query_items} != {
+            "page",
+            "per_page",
+        }:
+            raise GitHubPaginationError(
+                "GitHub pagination target query is malformed or ambiguous."
+            )
+        query = dict(query_items)
+        page_text = query.get("page", "")
+        per_page_text = query.get("per_page", "")
+        if not re.fullmatch(r"[1-9][0-9]*", page_text) or not re.fullmatch(
+            r"[1-9][0-9]*", per_page_text
+        ):
+            raise GitHubPaginationError(
+                "GitHub pagination target query is malformed or ambiguous."
+            )
+        try:
+            page = int(page_text)
+            target_per_page = int(per_page_text)
+        except (KeyError, ValueError) as error:
+            raise GitHubPaginationError(
+                "GitHub pagination target query is malformed or ambiguous."
+            ) from error
+        if page < 1 or target_per_page != per_page:
+            raise GitHubPaginationError(
+                "GitHub pagination target query is malformed or ambiguous."
+            )
+        canonical_target = f"{canonical_path}?page={page}&per_page={per_page}"
+        relative_target = f"{parsed_target.path}?page={page}&per_page={per_page}"
+        return canonical_target, relative_target
+
+    def _get_paginated(
+        self,
+        path: str,
+        *,
+        expected_paths: frozenset[str],
+        canonical_path: str,
+        per_page: int,
+        retain_limit: int,
+        budget: _FetchBudget,
+    ) -> _PaginatedResult:
+        """Return one ordered, lineage-bound collection with bounded overflow."""
+        canonical_initial = f"{canonical_path}?page=1&per_page={per_page}"
+        visited = {canonical_initial}
+        response = self._get(
+            path,
+            params={"per_page": str(per_page)},
+            budget=budget,
+        )
+        items: list[dict] = []
+        while True:
             self._raise_for_pr(response)
-            items.extend(response.json())
-        return items
+            budget.charge_page()
+            try:
+                page_items = response.json()
+            except ValueError as error:
+                raise GitHubPaginationError(
+                    "GitHub pagination response was not valid JSON."
+                ) from error
+            if not isinstance(page_items, list) or any(
+                not isinstance(item, dict) for item in page_items
+            ):
+                raise GitHubPaginationError(
+                    "GitHub pagination expected a list response of objects."
+                )
+            budget.charge_items(len(page_items))
+            remaining = retain_limit + 1 - len(items)
+            if remaining > 0:
+                items.extend(page_items[:remaining])
+            next_link = self._next_link(response)
+            canonical_target: str | None = None
+            relative_target: str | None = None
+            if next_link is not None:
+                canonical_target, relative_target = self._validated_pagination_target(
+                    next_link,
+                    expected_paths=expected_paths,
+                    canonical_path=canonical_path,
+                    per_page=per_page,
+                )
+                if canonical_target in visited:
+                    raise GitHubPaginationError(
+                        "GitHub pagination did not advance; a cycle or repeated target "
+                        "was rejected."
+                    )
+            if len(items) > retain_limit:
+                return _PaginatedResult(items=items, truncated=True)
+            if next_link is None:
+                return _PaginatedResult(items=items)
+            if len(items) == retain_limit:
+                return _PaginatedResult(items=items, truncated=True)
+            assert canonical_target is not None
+            assert relative_target is not None
+            visited.add(canonical_target)
+            response = self._get(relative_target, budget=budget)
 
     @staticmethod
     def _validate_candidate_path(path: str) -> str:
@@ -515,36 +757,113 @@ class GitHubClient:
     def fetch_pull_request(self, url: str) -> PullRequestSnapshot:
         owner, repository, pr_number = parse_pr_url(url)
         root = f"/repos/{owner}/{repository}"
-        pr_response = self._get(f"{root}/pulls/{pr_number}")
+        budget = _FetchBudget(
+            max_requests=self.max_requests,
+            max_pages=self.max_pagination_pages,
+            max_items=self.max_pagination_items,
+            max_response_bytes=self.max_response_bytes,
+            max_total_response_bytes=self.max_total_response_bytes,
+        )
+        pr_response = self._get(f"{root}/pulls/{pr_number}", budget=budget)
         self._raise_for_pr(pr_response)
         pr_data = pr_response.json()
         repository_visibility = self._verified_repository_visibility(
             pr_data,
             expected_repository=f"{owner}/{repository}",
         )
+        base = pr_data.get("base") if isinstance(pr_data, dict) else None
+        repository_data = base.get("repo") if isinstance(base, dict) else None
+        repository_id = (
+            repository_data.get("id") if isinstance(repository_data, dict) else None
+        )
+        verified_repository_id = (
+            repository_id
+            if isinstance(repository_id, int)
+            and not isinstance(repository_id, bool)
+            and repository_id > 0
+            else None
+        )
 
-        raw_files = self._get_all(f"{root}/pulls/{pr_number}/files?per_page=100")
-        raw_commits = self._get_all(f"{root}/pulls/{pr_number}/commits?per_page=100")
+        files_path = f"{root}/pulls/{pr_number}/files"
+        file_paths = {files_path}
+        if verified_repository_id is not None:
+            file_paths.add(
+                f"/repositories/{verified_repository_id}/pulls/{pr_number}/files"
+            )
+        file_result = self._get_paginated(
+            files_path,
+            expected_paths=frozenset(file_paths),
+            canonical_path=files_path,
+            per_page=min(100, self.max_files + 1),
+            retain_limit=self.max_files,
+            budget=budget,
+        )
+        for item in file_result.items:
+            filename = item.get("filename")
+            if not isinstance(filename, str) or not filename:
+                raise GitHubIngestionError("GitHub returned malformed file metadata.")
+        raw_files = file_result.items[: self.max_files]
+        observed_file_overflow = file_result.items[self.max_files :]
+
+        commits_path = f"{root}/pulls/{pr_number}/commits"
+        commit_paths = {commits_path}
+        if verified_repository_id is not None:
+            commit_paths.add(
+                f"/repositories/{verified_repository_id}/pulls/{pr_number}/commits"
+            )
+        commit_result = self._get_paginated(
+            commits_path,
+            expected_paths=frozenset(commit_paths),
+            canonical_path=commits_path,
+            per_page=min(100, self.max_commits + 1),
+            retain_limit=self.max_commits,
+            budget=budget,
+        )
+        all_commits: list[CommitInfo] = []
+        for item in commit_result.items:
+            sha = item.get("sha")
+            commit = item.get("commit")
+            message = commit.get("message") if isinstance(commit, dict) else None
+            html_url = item.get("html_url")
+            if (
+                not isinstance(sha, str)
+                or not sha
+                or not isinstance(message, str)
+                or not isinstance(html_url, str)
+            ):
+                raise GitHubIngestionError("GitHub returned malformed commit metadata.")
+            all_commits.append(CommitInfo(sha=sha, message=message, html_url=html_url))
 
         head_sha = pr_data["head"]["sha"]
-        check_response = self._get(f"{root}/commits/{head_sha}/check-runs?per_page=100")
-        status_response = self._get(f"{root}/commits/{head_sha}/status?per_page=100")
+        check_response = self._get(
+            f"{root}/commits/{head_sha}/check-runs",
+            params={"per_page": "100"},
+            budget=budget,
+        )
+        status_response = self._get(
+            f"{root}/commits/{head_sha}/status",
+            params={"per_page": "100"},
+            budget=budget,
+        )
         check_data = check_response.json() if check_response.is_success else {}
         status_data = status_response.json() if status_response.is_success else {}
 
         warnings: list[str] = []
         skipped_files: list[str] = []
         ingestion_state = IngestionState.COMPLETE
-        for item in raw_files:
-            if not isinstance(item, dict):
-                raise GitHubIngestionError("GitHub returned malformed file metadata.")
-            filename = item.get("filename")
-            if not isinstance(filename, str) or not filename:
-                raise GitHubIngestionError("GitHub returned malformed file metadata.")
-        if len(raw_files) > self.max_files:
-            skipped_files.extend(item["filename"] for item in raw_files[self.max_files :])
-            raw_files = raw_files[: self.max_files]
-            warnings.append(f"File limit reached; skipped {len(skipped_files)} changed files.")
+        if file_result.truncated:
+            for item in observed_file_overflow:
+                filename = item.get("filename")
+                if isinstance(filename, str) and filename:
+                    skipped_files.append(filename)
+            warnings.append(
+                "File limit reached; additional changed files were not retrieved."
+            )
+            ingestion_state = IngestionState.PARTIAL
+        if commit_result.truncated:
+            warnings.append(
+                "Commit history limit reached; additional commits were not retrieved."
+            )
             ingestion_state = IngestionState.PARTIAL
 
         total_bytes = 0
@@ -598,14 +917,7 @@ class GitHubClient:
                 f"{diff_limit_skipped_count} changed files."
             )
 
-        commits = [
-            CommitInfo(
-                sha=item["sha"],
-                message=item.get("commit", {}).get("message", ""),
-                html_url=item.get("html_url", ""),
-            )
-            for item in raw_commits
-        ]
+        commits = all_commits[: self.max_commits]
         ci_observation = self._check_observation(
             check_data,
             status_data,

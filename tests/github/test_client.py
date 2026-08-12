@@ -804,8 +804,11 @@ def test_file_limit_marks_snapshot_partial_and_lists_skipped_files() -> None:
     snapshot = client.fetch_pull_request("https://github.com/acme/widget/pull/42")
     assert snapshot.ingestion_state is IngestionState.PARTIAL
     assert len(snapshot.files) == 1
-    assert snapshot.skipped_files == ["src/export_1.py", "src/export_2.py"]
-    assert any("file limit" in warning.lower() for warning in snapshot.warnings)
+    assert snapshot.skipped_files == ["src/export_1.py"]
+    assert any(
+        "additional changed files were not retrieved" in warning
+        for warning in snapshot.warnings
+    )
 
 
 def test_snapshot_json_contains_no_authorization_header() -> None:

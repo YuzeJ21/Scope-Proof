@@ -17,6 +17,7 @@ from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.demo import build_demo_review, build_review_from_paths
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
+from scopeproof_core.github.client import GitHubPaginationError
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
     append_resolution,
@@ -302,6 +303,53 @@ def test_live_review_rejects_unverified_snapshot_without_saving(
     assert error.value.code == 2
     assert "verified public" in capsys.readouterr().err
     assert not storage.exists()
+
+
+def test_live_review_pagination_failure_preserves_storage_and_report(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    confirmation = write_requirements_confirmation(requirements)
+    storage = tmp_path / "reviews"
+    storage.mkdir()
+    sentinel = storage / "existing-record.json"
+    sentinel.write_bytes(b'{"preserved":true}\n')
+    before = sentinel.read_bytes()
+    report = tmp_path / "must-not-exist.json"
+    monkeypatch.setattr(
+        "scopeproof_core.cli.GitHubClient.fetch_pull_request",
+        lambda _self, _pr: (_ for _ in ()).throw(
+            GitHubPaginationError("GitHub pagination target was rejected.")
+        ),
+    )
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "review",
+                "--pr",
+                "https://github.com/acme/repo/pull/7",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(confirmation),
+                "--storage-dir",
+                str(storage),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert error.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "pagination target was rejected" in stderr
+    assert "Traceback" not in stderr
+    assert sentinel.read_bytes() == before
+    assert list(storage.iterdir()) == [sentinel]
+    assert not report.exists()
 
 
 def test_live_review_persists_verified_public_snapshot_provenance(

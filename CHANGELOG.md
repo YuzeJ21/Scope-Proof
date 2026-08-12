@@ -13,6 +13,10 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
+- Bound public GitHub file and commit pagination to the exact HTTPS API origin and expected
+  repository endpoint, rejecting ambiguous, escaped, cyclic, or over-budget traversal before an
+  optional session token can be forwarded. File and commit truncation remains ordered, explicit,
+  and fail-closed evidence.
 - Updated the transitive GitPython lock from 3.1.57 to 3.1.59 after GitHub reported six
   Dependabot alerts fixed in 3.1.58 and upstream documented five additional security fixes in
   3.1.59. The repository contract now rejects lower versions. GitPython remains an indirect
