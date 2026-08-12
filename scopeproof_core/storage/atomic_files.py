@@ -143,10 +143,31 @@ def _require_regular_at(directory_fd: int, name: str) -> os.stat_result:
     return metadata
 
 
-def read_text_no_follow(path: Path) -> str:
+def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> str:
     """Read one regular UTF-8 file without knowingly following a link or reparse point."""
 
     target = Path(os.path.abspath(path))
+    if claim is not None and claim.target != target:
+        raise UnsafeAtomicPath("mutation claim does not match read target")
+    if claim is not None and claim.directory_fd is not None:
+        directory_fd = claim.directory_fd
+        _require_regular_at(directory_fd, target.name)
+        descriptor = os.open(
+            target.name,
+            os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC,
+            dir_fd=directory_fd,
+        )
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise UnsafeAtomicPath(f"app-owned record must be a regular file: {target}")
+            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                descriptor = -1
+                return handle.read()
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+    if claim is not None:
+        _assert_directory_identity(target.parent, claim.identity)
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
             _require_regular_at(directory_fd, target.name)

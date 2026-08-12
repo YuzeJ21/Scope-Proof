@@ -2,7 +2,7 @@ import json
 import multiprocessing
 import subprocess
 import sys
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import BrokenBarrierError
@@ -10,6 +10,7 @@ from threading import BrokenBarrierError
 import pytest
 from pydantic import ValidationError
 
+import scopeproof_core.alpha.storage as alpha_storage_module
 from scopeproof_core.alpha.models import ParticipantRole
 from scopeproof_core.alpha.service import initialize_alpha_case
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore, UnsafeAlphaCaseStore
@@ -239,6 +240,44 @@ def test_alpha_case_update_rejects_completed_outcome_overwrite(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="alpha-case outcome is immutable once recorded"):
         store.update(overwritten)
+
+
+def test_alpha_case_update_validates_through_claimed_directory_after_root_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopeproof_core.alpha.models import AlphaOutcome
+    from scopeproof_core.alpha.service import record_alpha_outcome
+
+    root = tmp_path / "cases"
+    moved = tmp_path / "moved"
+    record = alpha_case()
+    first = record_alpha_outcome(
+        record,
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+    )
+    second = first.model_copy(update={"outcome": AlphaOutcome.SHOWED_ONLY_KNOWN_INFORMATION})
+    store = JsonAlphaCaseStore(root)
+    store.save(first)
+    real_claim = alpha_storage_module.exclusive_path_claim
+
+    @contextmanager
+    def swapping_claim(target: Path):
+        with real_claim(target) as claim:
+            root.rename(moved)
+            root.mkdir()
+            (root / target.name).write_text(
+                record.model_dump_json(indent=2) + "\n", encoding="utf-8"
+            )
+            yield claim
+
+    monkeypatch.setattr(alpha_storage_module, "exclusive_path_claim", swapping_claim)
+
+    with pytest.raises(ValueError, match="outcome is immutable"):
+        store.update(second)
+
+    assert JsonAlphaCaseStore(moved).load(record.case_id).outcome is AlphaOutcome.FOUND_USEFUL_GAP
+    assert JsonAlphaCaseStore(root).load(record.case_id).outcome is None
 
 
 def test_concurrent_process_outcome_updates_commit_exactly_once(tmp_path: Path) -> None:

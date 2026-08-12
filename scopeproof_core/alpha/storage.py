@@ -91,7 +91,10 @@ class JsonAlphaCaseStore:
         target = self._path(validated.case_id)
         try:
             with exclusive_path_claim(target) as claim:
-                existing = self.load(validated.case_id)
+                payload = json.loads(read_text_no_follow(target, claim=claim))
+                existing = AlphaCaseRecord.model_validate(payload)
+                if existing.case_id != validated.case_id:
+                    raise ValueError("stored alpha-case record does not match requested ID")
                 self._validate_update(existing, validated)
                 serialized = validated.model_dump_json(indent=2) + "\n"
                 try:
