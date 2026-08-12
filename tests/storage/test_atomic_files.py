@@ -49,6 +49,24 @@ def test_regular_file_read_rejects_directory_target(tmp_path: Path) -> None:
         read_text_no_follow(target)
 
 
+def test_descriptor_read_rejects_fifo_before_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "record.json"
+    os.mkfifo(target)
+    original_open = os.open
+
+    def reject_fifo_open(path, flags, *args, **kwargs):
+        if path == target.name and kwargs.get("dir_fd") is not None:
+            raise AssertionError("FIFO must be rejected before a blocking open")
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", reject_fifo_open)
+
+    with pytest.raises(UnsafeAtomicPath, match="regular file"):
+        read_text_no_follow(target)
+
+
 def test_missing_directory_lists_no_records(tmp_path: Path) -> None:
     assert list_regular_files(tmp_path / "absent") == []
 

@@ -136,7 +136,8 @@ def _open_directory_descriptor(directory: Path, *, create: bool) -> Iterator[int
 
 def _require_regular_at(directory_fd: int, name: str) -> os.stat_result:
     metadata = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
-    if not stat.S_ISREG(metadata.st_mode) or _is_reparse_point(metadata):
+    _raise_if_link_or_reparse(Path(name), metadata)
+    if not stat.S_ISREG(metadata.st_mode):
         raise UnsafeAtomicPath(f"app-owned record must be a regular file: {name}")
     return metadata
 
@@ -147,6 +148,7 @@ def read_text_no_follow(path: Path) -> str:
     target = Path(os.path.abspath(path))
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
+            _require_regular_at(directory_fd, target.name)
             try:
                 descriptor = os.open(
                     target.name,
