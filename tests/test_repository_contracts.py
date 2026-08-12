@@ -452,7 +452,7 @@ def test_locked_gitpython_excludes_known_command_execution_advisories() -> None:
     ]
 
     assert len(versions) == 1
-    assert tuple(int(part) for part in versions[0].split(".")) >= (3, 1, 55)
+    assert tuple(int(part) for part in versions[0].split(".")) >= (3, 1, 59)
 
 
 def test_ci_avoids_duplicate_feature_branch_runs() -> None:
