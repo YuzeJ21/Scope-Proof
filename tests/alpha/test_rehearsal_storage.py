@@ -104,6 +104,29 @@ def test_descriptor_rehearsal_create_cleans_publication_when_link_fails_after_su
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_descriptor_rehearsal_metadata_failure_cleans_owned_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_fstat = os.fstat
+
+    def fail_regular_descriptor_metadata(descriptor: int):
+        metadata = original_fstat(descriptor)
+        if rehearsal_storage_module.stat.S_ISREG(metadata.st_mode):
+            raise OSError("simulated rehearsal metadata failure")
+        return metadata
+
+    monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
+
+    with pytest.raises(OSError, match="rehearsal metadata failure"):
+        JsonAlphaRehearsalStore(tmp_path).save(alpha_rehearsal())
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_rehearsal_listing_is_deterministically_sorted(tmp_path: Path) -> None:
     records = [alpha_rehearsal(pull_number=number) for number in (9, 7, 8)]
     store = JsonAlphaRehearsalStore(tmp_path)

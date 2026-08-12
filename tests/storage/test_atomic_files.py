@@ -405,6 +405,30 @@ def test_failed_exclusive_publish_cleans_private_temporary(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_temporary_metadata_failure_cleans_owned_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_fstat = os.fstat
+
+    def fail_regular_descriptor_metadata(descriptor: int):
+        metadata = original_fstat(descriptor)
+        if atomic_files_module.stat.S_ISREG(metadata.st_mode):
+            raise OSError("simulated temporary metadata failure")
+        return metadata
+
+    monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
+
+    with pytest.raises(OSError, match="temporary metadata failure"):
+        atomic_create_text(tmp_path / "record.json", "validated\n")
+
+    assert list(tmp_path.iterdir()) == []
+
+
 @pytest.mark.skipif(
     os.name == "nt",
     reason="Windows prevents unlinking an open temporary file",

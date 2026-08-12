@@ -321,27 +321,66 @@ def list_regular_files(directory: Path) -> list[Path]:
     return result
 
 
-def _open_private_temporary(parent: Path, stem: str) -> tuple[Path, int]:
+def _open_private_temporary(
+    parent: Path, stem: str
+) -> tuple[Path, int, tuple[int, int]]:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
     bounded_stem = sha256(os.fsencode(stem)).hexdigest()[:16]
     for _ in range(128):
         temporary = parent / f".{bounded_stem}-{secrets.token_hex(16)}.tmp"
         try:
-            return temporary, os.open(temporary, flags, 0o600)
+            descriptor = os.open(temporary, flags, 0o600)
         except FileExistsError:
             continue
+        try:
+            metadata = os.fstat(descriptor)
+        except BaseException:
+            try:
+                interrupted = _require_regular_file(temporary)
+            except (OSError, UnsafeAtomicPath):
+                os.close(descriptor)
+            else:
+                identity = (interrupted.st_dev, interrupted.st_ino)
+                os.close(descriptor)
+                _quarantine_and_remove_path(
+                    temporary,
+                    identity,
+                    changed_message="private temporary changed during failed setup cleanup",
+                )
+            raise
+        return temporary, descriptor, (metadata.st_dev, metadata.st_ino)
     raise FileExistsError("could not allocate an exclusive temporary file")
 
 
-def _open_private_temporary_at(directory_fd: int, stem: str) -> tuple[str, int]:
+def _open_private_temporary_at(
+    directory_fd: int, stem: str
+) -> tuple[str, int, tuple[int, int]]:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
     bounded_stem = sha256(os.fsencode(stem)).hexdigest()[:16]
     for _ in range(128):
         name = f".{bounded_stem}-{secrets.token_hex(16)}.tmp"
         try:
-            return name, os.open(name, flags, 0o600, dir_fd=directory_fd)
+            descriptor = os.open(name, flags, 0o600, dir_fd=directory_fd)
         except FileExistsError:
             continue
+        try:
+            metadata = os.fstat(descriptor)
+        except BaseException:
+            try:
+                interrupted = _require_regular_at(directory_fd, name)
+            except (OSError, UnsafeAtomicPath):
+                os.close(descriptor)
+            else:
+                identity = (interrupted.st_dev, interrupted.st_ino)
+                os.close(descriptor)
+                _quarantine_and_remove_at(
+                    directory_fd,
+                    name,
+                    identity,
+                    changed_message="private temporary changed during failed setup cleanup",
+                )
+            raise
+        return name, descriptor, (metadata.st_dev, metadata.st_ino)
     raise FileExistsError("could not allocate an exclusive temporary file")
 
 
@@ -642,9 +681,9 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 pass
             else:
                 raise FileExistsError(f"target already exists: {target}")
-            temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
-            temporary_metadata = os.fstat(descriptor)
-            temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
+            temporary, descriptor, temporary_identity = _open_private_temporary_at(
+                directory_fd, target.stem
+            )
             published_identity: tuple[int, int] | None = None
             try:
                 _write_all(descriptor, payload)
@@ -729,9 +768,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         pass
     else:
         raise FileExistsError(f"target already exists: {target}")
-    temporary, descriptor = _open_private_temporary(parent, target.stem)
-    temporary_metadata = os.fstat(descriptor)
-    temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
+    temporary, descriptor, temporary_identity = _open_private_temporary(parent, target.stem)
     published_identity: tuple[int, int] | None = None
     try:
         _assert_portable_directory(portable_directory)
@@ -973,9 +1010,9 @@ def atomic_replace_text(
         existing_identity = (existing.st_dev, existing.st_ino)
         if existing_identity != claim.record_identity:
             raise UnsafeAtomicPath("existing record changed after mutation claim")
-        temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
-        temporary_metadata = os.fstat(descriptor)
-        temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
+        temporary, descriptor, temporary_identity = _open_private_temporary_at(
+            directory_fd, target.stem
+        )
         backup = ""
         published = False
         committed = False
@@ -1078,9 +1115,7 @@ def atomic_replace_text(
     existing_identity = (existing.st_dev, existing.st_ino)
     if claim is not None and existing_identity != claim.record_identity:
         raise UnsafeAtomicPath("existing record changed after mutation claim")
-    temporary, descriptor = _open_private_temporary(parent, target.stem)
-    temporary_metadata = os.fstat(descriptor)
-    temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
+    temporary, descriptor, temporary_identity = _open_private_temporary(parent, target.stem)
     backup: Path | None = None
     published = False
     committed = False

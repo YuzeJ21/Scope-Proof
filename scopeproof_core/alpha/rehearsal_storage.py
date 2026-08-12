@@ -215,7 +215,9 @@ class JsonAlphaRehearsalStore:
                 os.close(record_fd)
 
     @staticmethod
-    def _open_random_temporary(directory_fd: int, target_name: str) -> tuple[str, int]:
+    def _open_random_temporary(
+        directory_fd: int, target_name: str
+    ) -> tuple[str, int, tuple[int, int]]:
         target_stem = Path(target_name).stem
         for _ in range(128):
             temporary_name = f".{target_stem}-{secrets.token_hex(16)}.tmp"
@@ -228,7 +230,34 @@ class JsonAlphaRehearsalStore:
                 )
             except FileExistsError:
                 continue
-            return temporary_name, temporary_fd
+            try:
+                temporary_metadata = os.fstat(temporary_fd)
+            except BaseException:
+                try:
+                    interrupted = os.stat(
+                        temporary_name,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                except OSError:
+                    os.close(temporary_fd)
+                else:
+                    temporary_identity = (interrupted.st_dev, interrupted.st_ino)
+                    os.close(temporary_fd)
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        temporary_name,
+                        temporary_identity,
+                        changed_message=(
+                            "private rehearsal temporary changed during failed setup cleanup"
+                        ),
+                    )
+                raise
+            return (
+                temporary_name,
+                temporary_fd,
+                (temporary_metadata.st_dev, temporary_metadata.st_ino),
+            )
         raise FileExistsError("could not allocate an exclusive rehearsal temp file")
 
     def _write(
@@ -238,12 +267,10 @@ class JsonAlphaRehearsalStore:
         record: AlphaRehearsalRecord,
     ) -> None:
         serialized = (record.model_dump_json(indent=2) + "\n").encode("utf-8")
-        temporary_name, temporary_fd = self._open_random_temporary(
+        temporary_name, temporary_fd, temporary_identity = self._open_random_temporary(
             directory_fd,
             target_name,
         )
-        temporary_metadata = os.fstat(temporary_fd)
-        temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
         published = False
         publication_created = False
         try:
