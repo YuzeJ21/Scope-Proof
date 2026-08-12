@@ -133,6 +133,7 @@ for name in ('O_DIRECTORY', 'O_NOFOLLOW'):
 importlib.import_module('scopeproof_core.cli')
 importlib.import_module('scopeproof_core.alpha.storage')
 importlib.import_module('scopeproof_core.alpha.rehearsal_storage')
+importlib.import_module('apps.web.app')
 """
 
     result = subprocess.run(

@@ -1436,6 +1436,7 @@ def test_ci_validates_declared_python_compatibility() -> None:
     assert "runs-on: windows-latest" in windows_compatibility
     assert 'python-version: "3.12"' in windows_compatibility
     assert "scopeproof_core.alpha.rehearsal_storage" in windows_compatibility
+    assert "import apps.web.app" in windows_compatibility
     assert "tests/storage/test_atomic_files.py" in windows_compatibility
     assert "test_concurrent_process_alpha_creates_publish_exactly_once" in windows_compatibility
     assert "test_concurrent_process_outcome_updates_commit_exactly_once" in windows_compatibility
