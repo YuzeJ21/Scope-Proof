@@ -142,6 +142,30 @@ def test_committed_rehearsal_never_deletes_foreign_temporary_replacement(
     assert (tmp_path / foreign_name).read_bytes() == b"foreign rehearsal temporary\n"
 
 
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_rehearsal_failure_after_publication_removes_owned_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_rehearsal()
+    target_name = f"{record.rehearsal_id}.json"
+    original_stat = os.stat
+
+    def fail_target_validation(path, *args, **kwargs):
+        if path == target_name and kwargs.get("dir_fd") is not None:
+            raise OSError("simulated rehearsal publication validation failure")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", fail_target_validation)
+
+    with pytest.raises(OSError, match="publication validation failure"):
+        JsonAlphaRehearsalStore(tmp_path).save(record)
+
+    assert list(tmp_path.iterdir()) == []
+
+
 @pytest.mark.parametrize(
     "rehearsal_id",
     [

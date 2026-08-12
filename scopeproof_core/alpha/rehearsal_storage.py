@@ -244,6 +244,7 @@ class JsonAlphaRehearsalStore:
         temporary_metadata = os.fstat(temporary_fd)
         temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
         published = False
+        publication_created = False
         try:
             remaining = memoryview(serialized)
             while remaining:
@@ -262,6 +263,7 @@ class JsonAlphaRehearsalStore:
                 )
             except FileExistsError:
                 raise FileExistsError(record.rehearsal_id) from None
+            publication_created = True
             target_metadata = os.stat(
                 target_name,
                 dir_fd=directory_fd,
@@ -276,6 +278,21 @@ class JsonAlphaRehearsalStore:
                 os.fsync(directory_fd)
         finally:
             os.close(temporary_fd)
+            publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
+            if publication_created and not published:
+                try:
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        target_name,
+                        temporary_identity,
+                        changed_message=(
+                            "published rehearsal changed during failed create cleanup"
+                        ),
+                    )
+                except FileNotFoundError:
+                    pass
+                except (OSError, UnsafeAtomicPath) as error:
+                    publication_cleanup_error = error
             try:
                 _quarantine_and_remove_at(
                     directory_fd,
@@ -288,6 +305,8 @@ class JsonAlphaRehearsalStore:
             except (OSError, UnsafeAtomicPath):
                 if not published:
                     raise
+            if publication_cleanup_error is not None:
+                raise publication_cleanup_error
             if published:
                 with suppress(OSError):
                     os.fsync(directory_fd)
