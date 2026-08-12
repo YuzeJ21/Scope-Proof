@@ -152,7 +152,7 @@ def test_directory_sync_unavailability_after_create_does_not_report_false_failur
 def test_directory_sync_is_optional_when_flags_or_open_are_unavailable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delattr(os, "O_DIRECTORY")
+    monkeypatch.delattr(os, "O_DIRECTORY", raising=False)
     atomic_files_module._fsync_directory(tmp_path)
 
     monkeypatch.undo()
@@ -173,6 +173,28 @@ def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
 
     with (
         pytest.raises(OSError, match="replacement interruption"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
+
+
+def test_portable_claimed_replace_preserves_old_bytes_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "alpha-record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+
+    def fail_replace(*_args, **_kwargs):
+        raise OSError("simulated portable replacement interruption")
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "replace", fail_replace)
+
+    with (
+        pytest.raises(OSError, match="portable replacement interruption"),
         exclusive_path_claim(target) as claim,
     ):
         atomic_replace_text(target, "new valid bytes\n", claim=claim)
