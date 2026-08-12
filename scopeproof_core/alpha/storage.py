@@ -152,4 +152,5 @@ class JsonAlphaCaseStore:
 
     def _write(self, target: Path, record: AlphaCaseRecord) -> Path:
         serialized = record.model_dump_json(indent=2) + "\n"
-        return atomic_create_text(target, serialized)
+        atomic_create_text(target, serialized)
+        return target

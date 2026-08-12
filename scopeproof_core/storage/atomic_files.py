@@ -67,6 +67,13 @@ class _PortableDirectory:
     ancestors: tuple[tuple[Path, tuple[int, int]], ...]
 
 
+def _absolute_path(path: Path) -> Path:
+    original = Path(path)
+    if ".." in original.parts:
+        raise UnsafeAtomicPath("app-owned path must not contain parent traversal")
+    return Path(os.path.abspath(original))
+
+
 def _is_reparse_point(metadata: os.stat_result) -> bool:
     attributes = getattr(metadata, "st_file_attributes", 0)
     return bool(_REPARSE_POINT and attributes & _REPARSE_POINT)
@@ -80,7 +87,7 @@ def _raise_if_link_or_reparse(path: Path, metadata: os.stat_result) -> None:
 
 
 def _capture_safe_directory(directory: Path, *, create: bool) -> _PortableDirectory:
-    absolute = Path(os.path.abspath(directory))
+    absolute = _absolute_path(directory)
     current = Path(absolute.anchor)
     root_metadata = os.lstat(current)
     _raise_if_link_or_reparse(current, root_metadata)
@@ -185,7 +192,7 @@ def _open_child_directory(parent_fd: int, component: str, *, create: bool) -> in
 
 @contextmanager
 def _open_directory_descriptor(directory: Path, *, create: bool) -> Iterator[int]:
-    absolute = Path(os.path.abspath(directory))
+    absolute = _absolute_path(directory)
     flags = os.O_RDONLY | _DIRECTORY | _NO_FOLLOW | _CLOSE_ON_EXEC
     current_fd = os.open(absolute.anchor, flags)
     try:
@@ -210,7 +217,7 @@ def _require_regular_at(directory_fd: int, name: str) -> os.stat_result:
 def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> str:
     """Read one regular UTF-8 file without knowingly following a link or reparse point."""
 
-    target = Path(os.path.abspath(path))
+    target = _absolute_path(path)
     if claim is not None and claim.target != target:
         raise UnsafeAtomicPath("mutation claim does not match read target")
     if claim is not None and claim.directory_fd is not None:
@@ -293,7 +300,7 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
 def list_regular_files(directory: Path) -> list[Path]:
     """List direct regular children without following links or reparse points."""
 
-    absolute = Path(os.path.abspath(directory))
+    absolute = _absolute_path(directory)
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         try:
             with _open_directory_descriptor(absolute, create=False) as directory_fd:
@@ -714,7 +721,7 @@ def _fsync_directory(directory: Path) -> None:
 def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileReceipt:
     """Publish UTF-8 text exactly once and return its rollback identity."""
 
-    target = Path(os.path.abspath(target))
+    target = _absolute_path(target)
     payload = text.encode("utf-8")
     content_sha256 = sha256(payload).hexdigest()
     if _DESCRIPTOR_BACKEND_SUPPORTED:
@@ -947,14 +954,14 @@ def atomic_create_text(target: Path, text: str) -> Path:
 def rollback_created_file(receipt: CreatedFileReceipt) -> None:
     """Remove only the exact file published by a prior create receipt."""
 
-    target = Path(os.path.abspath(receipt.path))
+    target = _absolute_path(receipt.path)
     if target != receipt.path:
         raise UnsafeAtomicPath("created-file receipt path is not absolute")
     rollback_paths = (target, *receipt.orphaned_paths)
     if len(set(rollback_paths)) != len(rollback_paths):
         raise UnsafeAtomicPath("created-file receipt rollback paths must be unique")
     if any(
-        path != Path(os.path.abspath(path)) or path.parent != target.parent
+        path != _absolute_path(path) or path.parent != target.parent
         for path in receipt.orphaned_paths
     ):
         raise UnsafeAtomicPath("created-file receipt orphan paths must share its parent")
@@ -979,12 +986,10 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
                 if owned:
                     rollback_names.append(candidate)
             existing_names: list[str] = []
-            for index, name in enumerate(rollback_names):
+            for name in rollback_names:
                 try:
                     metadata = _require_regular_at(directory_fd, name)
                 except FileNotFoundError:
-                    if index == 0:
-                        raise
                     continue
                 if (metadata.st_dev, metadata.st_ino) != receipt.identity:
                     raise UnsafeAtomicPath("published file changed before rollback")
@@ -1039,12 +1044,10 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
                 expanded_paths.append(candidate)
     _assert_portable_directory(portable_directory)
     existing_paths: list[Path] = []
-    for index, path in enumerate(expanded_paths):
+    for path in expanded_paths:
         try:
             metadata = _require_regular_file(path)
         except FileNotFoundError:
-            if index == 0:
-                raise
             continue
         if (metadata.st_dev, metadata.st_ino) != receipt.identity:
             raise UnsafeAtomicPath("published file changed before rollback")
@@ -1074,7 +1077,7 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
 def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
     """Acquire a fail-closed, process-exclusive claim for one target mutation."""
 
-    target = Path(os.path.abspath(target))
+    target = _absolute_path(target)
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
             digest = sha256(os.fsencode(target.name)).hexdigest()
@@ -1176,7 +1179,7 @@ def atomic_replace_text(
 ) -> Path:
     """Replace one existing regular target after its caller acquires a mutation claim."""
 
-    target = Path(os.path.abspath(target))
+    target = _absolute_path(target)
     if claim is not None and claim.target != target:
         raise UnsafeAtomicPath("mutation claim does not match replacement target")
     if claim is not None and claim.directory_fd is not None:
@@ -1267,7 +1270,7 @@ def atomic_replace_text(
                 )
             except FileNotFoundError:
                 pass
-            except (OSError, UnsafeAtomicPath):
+            except BaseException:
                 if not committed:
                     raise
             if backup and not preserve_backup:
@@ -1278,7 +1281,7 @@ def atomic_replace_text(
                         existing_identity,
                         changed_message="replacement backup changed before cleanup",
                     )
-                except (OSError, UnsafeAtomicPath):
+                except BaseException:
                     if not committed:
                         raise
     portable_directory = _capture_safe_directory(target.parent, create=False)
@@ -1370,7 +1373,7 @@ def atomic_replace_text(
         except (OSError, UnsafeAtomicPath):
             cleanup_safe = False
         if cleanup_safe:
-            temporary_cleanup_error: OSError | UnsafeAtomicPath | None = None
+            temporary_cleanup_error: BaseException | None = None
             try:
                 _quarantine_and_remove_path(
                     temporary,
@@ -1379,7 +1382,7 @@ def atomic_replace_text(
                 )
             except FileNotFoundError:
                 pass
-            except (OSError, UnsafeAtomicPath) as error:
+            except BaseException as error:
                 if not committed:
                     temporary_cleanup_error = error
             if backup is not None and not preserve_backup:
@@ -1391,7 +1394,7 @@ def atomic_replace_text(
                     )
                 except FileNotFoundError:
                     pass
-                except (OSError, UnsafeAtomicPath):
+                except BaseException:
                     if not committed:
                         raise
             if temporary_cleanup_error is not None:

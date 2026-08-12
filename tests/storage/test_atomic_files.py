@@ -38,6 +38,23 @@ def test_atomic_create_builds_missing_safe_directories(tmp_path: Path) -> None:
     assert target.read_text(encoding="utf-8") == "validated\n"
 
 
+def test_atomic_create_rejects_parent_traversal_before_normalizing(
+    tmp_path: Path,
+) -> None:
+    safe = tmp_path / "safe"
+    outside = tmp_path / "outside"
+    safe.mkdir()
+    (outside / "inner").mkdir(parents=True)
+    (safe / "linked").symlink_to(outside / "inner", target_is_directory=True)
+    requested = safe / "linked" / ".." / "report.md"
+
+    with pytest.raises(UnsafeAtomicPath, match="parent traversal"):
+        atomic_create_text(requested, "must not be redirected\n")
+
+    assert not (safe / "report.md").exists()
+    assert not (outside / "report.md").exists()
+
+
 def test_safe_directory_rejects_non_directory_component(tmp_path: Path) -> None:
     component = tmp_path / "not-a-directory"
     component.write_text("file\n", encoding="utf-8")
@@ -1063,6 +1080,40 @@ def test_receipt_rollback_tolerates_missing_recorded_temporary(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_receipt_rollback_retry_cleans_orphan_after_primary_was_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "report.md"
+    orphan = tmp_path / "owned.tmp"
+    receipt = atomic_create_text_with_receipt(target, "sensitive report\n")
+    os.link(target, orphan)
+    receipt = replace(receipt, orphaned_paths=(orphan,))
+    original_unlink = os.unlink
+    orphan_prefix = atomic_files_module._quarantine_prefix(orphan.name)
+
+    def deny_orphan_quarantine(path, *args, **kwargs):
+        if Path(path).name.startswith(orphan_prefix):
+            raise PermissionError("simulated orphan cleanup denial")
+        return original_unlink(path, *args, **kwargs)
+
+    with monkeypatch.context() as denied:
+        denied.setattr(os, "unlink", deny_orphan_quarantine)
+        with pytest.raises(PermissionError, match="orphan cleanup denial"):
+            rollback_created_file(receipt)
+
+    assert not target.exists()
+    assert orphan.exists()
+
+    rollback_created_file(receipt)
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_committed_create_does_not_report_failure_when_temporary_cleanup_is_denied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1213,6 +1264,32 @@ def test_committed_replace_ignores_claim_cleanup_denial(
     monkeypatch.setattr(os, "unlink", deny_claim_cleanup)
 
     with exclusive_path_claim(target) as claim:
+        assert atomic_replace_text(target, "new valid bytes\n", claim=claim) == target
+
+    assert target.read_bytes() == b"new valid bytes\n"
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_committed_replace_ignores_backup_cleanup_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    function_name = "_quarantine_and_remove_path" if portable else "_quarantine_and_remove_at"
+    cleanup = getattr(atomic_files_module, function_name)
+
+    def interrupt_backup_cleanup(*args, **kwargs):
+        candidate = args[0] if portable else args[1]
+        if str(candidate).endswith(".rollback"):
+            raise KeyboardInterrupt("simulated backup cleanup interruption")
+        return cleanup(*args, **kwargs)
+
+    with exclusive_path_claim(target) as claim:
+        monkeypatch.setattr(atomic_files_module, function_name, interrupt_backup_cleanup)
         assert atomic_replace_text(target, "new valid bytes\n", claim=claim) == target
 
     assert target.read_bytes() == b"new valid bytes\n"

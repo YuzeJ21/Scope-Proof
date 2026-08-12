@@ -164,16 +164,15 @@ class JsonAlphaRehearsalStore:
         )
         target_name = self._target_name(validated.rehearsal_id)
         if not _DESCRIPTOR_BACKEND_SUPPORTED:
+            target = self.directory / target_name
             try:
-                return atomic_create_text(
-                    self.directory / target_name,
-                    validated.model_dump_json(indent=2) + "\n",
-                )
+                atomic_create_text(target, validated.model_dump_json(indent=2) + "\n")
             except UnsafeAtomicPath as error:
                 raise UnsafeAlphaRehearsalStore(
                     "alpha-rehearsal directory and existing ancestors must not be "
                     "symbolic links, reparse points, or non-directories"
                 ) from error
+            return target
         with self._open_directory(create=True) as directory_fd:
             self._write(directory_fd, target_name, validated)
         return self.directory / target_name

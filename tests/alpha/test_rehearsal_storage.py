@@ -64,6 +64,21 @@ def test_portable_rehearsal_backend_round_trips_without_posix_descriptors(
         store.save(record)
 
 
+def test_portable_rehearsal_preserves_relative_caller_facing_save_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(rehearsal_storage_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    record = alpha_rehearsal()
+    store = JsonAlphaRehearsalStore(Path("rehearsals"))
+
+    path = store.save(record)
+
+    assert path == Path("rehearsals") / f"{record.rehearsal_id}.json"
+    assert not path.is_absolute()
+    assert store.load(record.rehearsal_id) == record
+
+
 def test_rehearsal_backend_requires_descriptor_relative_rename() -> None:
     script = """
 import os

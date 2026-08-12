@@ -394,6 +394,20 @@ def test_alpha_store_rejects_symlinked_existing_ancestor(tmp_path: Path) -> None
     assert list(outside.iterdir()) == []
 
 
+def test_alpha_store_preserves_relative_caller_facing_save_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    record = alpha_case()
+    store = JsonAlphaCaseStore(Path("cases"))
+
+    path = store.save(record)
+
+    assert path == Path("cases") / f"{record.case_id}.json"
+    assert not path.is_absolute()
+    assert store.load(record.case_id) == record
+
+
 def test_alpha_store_revalidates_loaded_payload(tmp_path: Path) -> None:
     record = alpha_case()
     store = JsonAlphaCaseStore(tmp_path)
