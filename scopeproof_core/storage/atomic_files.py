@@ -587,8 +587,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 os.link(temporary, target)
         except FileExistsError:
             raise FileExistsError(f"target already exists: {target}") from None
+        published_identity = (expected.st_dev, expected.st_ino)
         published = _require_regular_file(target)
-        published_identity = (published.st_dev, published.st_ino)
         if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
             raise UnsafeAtomicPath("private temporary file changed before publication")
         _assert_portable_directory(portable_directory)
@@ -604,12 +604,18 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     finally:
         if descriptor >= 0:
             os.close(descriptor)
+        publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
         if not committed and published_identity is not None:
-            _quarantine_and_remove_path(
-                target,
-                published_identity,
-                changed_message="published file changed during failed create cleanup",
-            )
+            try:
+                _quarantine_and_remove_path(
+                    target,
+                    published_identity,
+                    changed_message="published file changed during failed create cleanup",
+                )
+            except FileNotFoundError:
+                pass
+            except (OSError, UnsafeAtomicPath) as error:
+                publication_cleanup_error = error
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         try:
@@ -623,6 +629,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         except (OSError, UnsafeAtomicPath):
             if not committed:
                 raise
+        if publication_cleanup_error is not None:
+            raise publication_cleanup_error
 
 
 def atomic_create_text(target: Path, text: str) -> Path:
