@@ -244,7 +244,7 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
     _assert_portable_directory(portable_directory)
     _assert_directory_identity(target.parent, parent_identity)
     before = _require_regular_file(target)
-    descriptor = os.open(target, os.O_RDONLY | _NO_FOLLOW | _CLOSE_ON_EXEC)
+    descriptor = os.open(target, os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC)
     try:
         _assert_directory_identity(target.parent, parent_identity)
         after = os.fstat(descriptor)
@@ -641,8 +641,10 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                 descriptor = os.open(claim_name, flags, 0o600, dir_fd=directory_fd)
             except FileExistsError:
                 raise FileExistsError(f"another process is updating {target.name}") from None
+            claim_metadata = os.fstat(descriptor)
+            claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
             try:
-                if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                if not stat.S_ISREG(claim_metadata.st_mode):
                     raise UnsafeAtomicPath("mutation claim must be a regular local file")
                 _write_all(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
                 metadata = os.fstat(directory_fd)
@@ -655,7 +657,12 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
             finally:
                 os.close(descriptor)
                 with suppress(OSError):
-                    os.unlink(claim_name, dir_fd=directory_fd)
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        claim_name,
+                        claim_identity,
+                        changed_message="mutation claim changed before cleanup",
+                    )
                 with suppress(OSError):
                     os.fsync(directory_fd)
         return
@@ -669,8 +676,10 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         descriptor = os.open(claim, flags, 0o600)
     except FileExistsError:
         raise FileExistsError(f"another process is updating {target.name}") from None
+    claim_metadata = os.fstat(descriptor)
+    claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
     try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        if not stat.S_ISREG(claim_metadata.st_mode):
             raise UnsafeAtomicPath("mutation claim must be a regular local file")
         _write_all(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
         _assert_portable_directory(portable_directory)
@@ -686,7 +695,11 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         with suppress(OSError):
-            os.unlink(claim)
+            _quarantine_and_remove_path(
+                claim,
+                claim_identity,
+                changed_message="mutation claim changed before cleanup",
+            )
         _fsync_directory(parent)
 
 
@@ -702,11 +715,12 @@ def atomic_replace_text(
         directory_fd = claim.directory_fd
         existing = _require_regular_at(directory_fd, target.name)
         existing_identity = (existing.st_dev, existing.st_ino)
-        backup = _create_backup_at(directory_fd, target.name, existing_identity)
         temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
+        backup = ""
         published = False
         committed = False
         try:
+            backup = _create_backup_at(directory_fd, target.name, existing_identity)
             _write_all(descriptor, text.encode("utf-8"))
             expected = os.fstat(descriptor)
             current = _require_regular_at(directory_fd, target.name)
@@ -721,13 +735,6 @@ def atomic_replace_text(
             published = True
             replacement = _require_regular_at(directory_fd, target.name)
             if not _same_file(replacement, (expected.st_dev, expected.st_ino)):
-                os.rename(
-                    backup,
-                    target.name,
-                    src_dir_fd=directory_fd,
-                    dst_dir_fd=directory_fd,
-                )
-                backup = ""
                 raise UnsafeAtomicPath("private temporary file changed before replacement")
             committed = True
             with suppress(OSError):
@@ -765,11 +772,12 @@ def atomic_replace_text(
     _assert_directory_identity(parent, parent_identity)
     existing = _require_regular_file(target)
     existing_identity = (existing.st_dev, existing.st_ino)
-    backup = _create_backup_path(target, existing_identity)
     temporary, descriptor = _open_private_temporary(parent, target.stem)
+    backup: Path | None = None
     published = False
     committed = False
     try:
+        backup = _create_backup_path(target, existing_identity)
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         try:
@@ -787,8 +795,6 @@ def atomic_replace_text(
         published = True
         replacement = _require_regular_file(target)
         if not _same_file(replacement, (expected.st_dev, expected.st_ino)):
-            os.replace(backup, target)
-            backup = None
             raise UnsafeAtomicPath("private temporary file changed before replacement")
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
@@ -797,6 +803,8 @@ def atomic_replace_text(
         return target
     except BaseException:
         if published and backup is not None:
+            _assert_portable_directory(portable_directory)
+            _assert_directory_identity(parent, parent_identity)
             os.replace(backup, target)
             backup = None
         raise

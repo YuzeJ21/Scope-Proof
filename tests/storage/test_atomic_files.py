@@ -100,6 +100,31 @@ def test_descriptor_read_rejects_fifo_swapped_between_stat_and_open(
         read_text_no_follow(target)
 
 
+def test_portable_read_rejects_fifo_swapped_between_stat_and_open_without_blocking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("FIFO creation is unavailable")
+    target = tmp_path / "record.json"
+    target.write_text("validated\n", encoding="utf-8")
+    original_open = os.open
+    swapped = False
+
+    def swap_to_fifo(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and Path(path) == target and not flags & os.O_CREAT:
+            swapped = True
+            target.unlink()
+            os.mkfifo(target)
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "open", swap_to_fifo)
+
+    with pytest.raises(UnsafeAtomicPath, match="regular file"):
+        read_text_no_follow(target)
+
+
 @pytest.mark.skipif(
     not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
     reason="descriptor-relative storage backend is unavailable",
@@ -447,7 +472,11 @@ def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
     target = tmp_path / "alpha-record.json"
     target.write_text("old valid bytes\n", encoding="utf-8")
 
-    def fail_replace(*_args, **_kwargs):
+    original_rename = os.rename
+
+    def fail_replace(source, destination, *args, **kwargs):
+        if str(source).endswith(".claim"):
+            return original_rename(source, destination, *args, **kwargs)
         raise OSError("simulated replacement interruption")
 
     monkeypatch.setattr(os, "rename", fail_replace)
@@ -476,6 +505,53 @@ def test_portable_claimed_replace_preserves_old_bytes_on_failure(
 
     with (
         pytest.raises(OSError, match="portable replacement interruption"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
+
+
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_claimed_replace_cleans_backup_when_temporary_allocation_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "alpha-record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+
+    def fail_temporary(*_args, **_kwargs):
+        raise OSError("simulated temporary allocation failure")
+
+    monkeypatch.setattr(atomic_files_module, "_open_private_temporary_at", fail_temporary)
+
+    with (
+        pytest.raises(OSError, match="temporary allocation failure"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
+
+
+def test_portable_claimed_replace_cleans_backup_when_temporary_allocation_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "alpha-record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+
+    def fail_temporary(*_args, **_kwargs):
+        raise OSError("simulated temporary allocation failure")
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(atomic_files_module, "_open_private_temporary", fail_temporary)
+
+    with (
+        pytest.raises(OSError, match="temporary allocation failure"),
         exclusive_path_claim(target) as claim,
     ):
         atomic_replace_text(target, "new valid bytes\n", claim=claim)
@@ -519,6 +595,60 @@ def test_competing_mutation_claim_fails_without_removing_owner_claim(tmp_path: P
         exclusive_path_claim(target),
     ):
         raise AssertionError("competing claim must never be entered")
+
+
+def test_claim_cleanup_never_deletes_recreated_foreign_claim(tmp_path: Path) -> None:
+    target = tmp_path / "record.json"
+    target.write_text("valid\n", encoding="utf-8")
+    claim_name = f".{sha256(os.fsencode(target.name)).hexdigest()}.claim"
+    owner = exclusive_path_claim(target)
+    owner.__enter__()
+    (tmp_path / claim_name).unlink()
+    competitor = exclusive_path_claim(target)
+    competitor.__enter__()
+
+    with pytest.raises(UnsafeAtomicPath, match="claim changed"):
+        owner.__exit__(None, None, None)
+
+    assert (tmp_path / claim_name).exists()
+    competitor.__exit__(None, None, None)
+
+
+def test_portable_replace_never_restores_through_swapped_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = safe / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    original_replace = os.replace
+    calls = 0
+
+    def swap_after_publication(source, destination, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            original_replace(source, destination, *args, **kwargs)
+            safe.rename(moved)
+            safe.symlink_to(outside, target_is_directory=True)
+            (outside / Path(destination).name).write_text("foreign target\n", encoding="utf-8")
+            return None
+        return original_replace(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "replace", swap_after_publication)
+
+    with (
+        pytest.raises(UnsafeAtomicPath, match=r"symbolic link|changed"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert (outside / target.name).read_bytes() == b"foreign target\n"
+    assert any(path.suffix == ".rollback" for path in moved.iterdir())
 
 
 def test_portable_claim_cleanup_never_deletes_foreign_swapped_path(
