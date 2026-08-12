@@ -83,6 +83,13 @@ checks dependencies and both CLI versions, runs both installed benchmarks, and r
 loopback workbench health before the required `verify` job. These Linux-runner checks are package
 and CLI evidence, not Linux desktop evidence.
 
+A separate hosted Windows Python 3.12 lane imports the package, CLI, and both alpha-storage
+backends; runs the portable storage, process-concurrency, and no-clobber report regressions; builds
+and installs the wheel; checks dependencies and both CLI versions; and runs both installed
+deterministic benchmarks. It is a required dependency of `verify`. A passing lane is package,
+CLI, and storage evidence only: it is not a real Windows desktop workflow, browser workflow,
+screen-reader observation, accessibility-conformance result, customer signal, or Stage 1 credit.
+
 ## Known-good UI baseline
 
 The checked-in lock currently resolves Streamlit 1.59.1, which passes ScopeProof's complete AppTest suite. ScopeProof requires Streamlit 1.52 or newer because the workbench relies on click-time deferred download generation to revalidate saved review truth immediately before export. During this work, Streamlit 1.57.0 exposed a testing-interface regression; that observation is why the lock is the reproducible baseline rather than a claim that every version in the supported range behaves identically. CI still installs the newest versions allowed by `pyproject.toml` in the compatibility and verification lanes so future incompatibilities remain visible without a scheduled monitor or notification workflow.

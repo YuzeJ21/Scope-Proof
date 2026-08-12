@@ -106,6 +106,40 @@ jobs:
             exit 1
           fi
 
+  compatibility-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Upgrade packaging tools
+        run: python -m pip install --upgrade pip
+      - name: Install
+        run: python -m pip install -e '.[dev,research]'
+      - name: Import package, CLI, and storage backends
+        run: python -c "import scopeproof_core; import scopeproof_core.cli; import scopeproof_core.alpha.storage; import scopeproof_core.alpha.rehearsal_storage"
+      - name: Platform-safe storage and CLI regressions
+        run: python -m pytest -q tests/storage/test_atomic_files.py tests/alpha/test_storage.py::test_alpha_case_round_trips_as_validated_json tests/alpha/test_storage.py::test_alpha_case_save_refuses_silent_overwrite tests/alpha/test_storage.py::test_cli_and_alpha_storage_import_without_posix_only_constants tests/alpha/test_storage.py::test_concurrent_process_alpha_creates_publish_exactly_once tests/alpha/test_storage.py::test_concurrent_process_outcome_updates_commit_exactly_once tests/alpha/test_storage.py::test_alpha_case_update_rejects_completed_outcome_overwrite tests/alpha/test_storage.py::test_alpha_store_rejects_symlinked_existing_ancestor tests/alpha/test_storage.py::test_alpha_store_revalidates_loaded_payload tests/alpha/test_storage.py::test_alpha_store_rejects_valid_record_under_different_id tests/alpha/test_rehearsal_storage.py::test_default_rehearsal_directory_is_separate_from_genuine_cases tests/alpha/test_rehearsal_storage.py::test_rehearsal_round_trips_as_validated_json tests/alpha/test_rehearsal_storage.py::test_rehearsal_listing_is_deterministically_sorted tests/alpha/test_rehearsal_storage.py::test_rehearsal_save_refuses_silent_overwrite tests/alpha/test_rehearsal_storage.py::test_rehearsal_store_revalidates_loaded_payload tests/alpha/test_rehearsal_storage.py::test_concurrent_rehearsal_saves_create_exactly_once tests/alpha/test_rehearsal_storage.py::test_rehearsal_store_rejects_valid_record_under_different_id tests/cli/test_cli.py::test_review_can_write_markdown_report_in_one_command tests/cli/test_cli.py::test_review_refuses_to_overwrite_report_before_reading_inputs tests/cli/test_cli.py::test_review_report_final_publication_does_not_overwrite_racing_target
+      - name: Build and install wheel
+        shell: pwsh
+        run: |
+          $wheelDir = Join-Path $env:RUNNER_TEMP "scopeproof-wheel-windows"
+          python -m pip wheel . --no-deps --wheel-dir $wheelDir
+          $wheel = (Get-ChildItem $wheelDir -Filter "scopeproof-*.whl" | Select-Object -First 1).FullName
+          python -m pip install --force-reinstall --no-deps $wheel
+          python -m pip check
+          Push-Location $env:RUNNER_TEMP
+          python -c "from importlib.metadata import version; from scopeproof_core import __version__; assert version('scopeproof') == __version__"
+          scopeproof --version
+          scopeproof-web --version
+          scopeproof benchmark
+          scopeproof comparison-benchmark
+          Pop-Location
+
   locked-environment:
     runs-on: ubuntu-latest
     steps:
@@ -127,7 +161,7 @@ jobs:
         run: python -m uv run scopeproof comparison-benchmark
 
   verify:
-    needs: [compatibility-python-311, compatibility-python-313, locked-environment]
+    needs: [compatibility-python-311, compatibility-python-313, compatibility-windows, locked-environment]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

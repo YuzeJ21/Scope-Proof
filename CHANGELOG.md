@@ -13,6 +13,10 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
+- Added a cross-platform, fail-closed alpha-storage boundary: POSIX rehearsal persistence keeps its
+  descriptor-relative protections, while portable creates, outcome updates, and CLI reports use
+  exclusive publication and process-safe mutation claims. A hosted Windows package/CLI/storage
+  lane verifies the portable path without claiming a Windows desktop workflow or Stage 1 credit.
 - Bound public GitHub file and commit pagination to the exact HTTPS API origin and expected
   repository endpoint, rejecting ambiguous, escaped, cyclic, or over-budget traversal before an
   optional session token can be forwarded. File and commit truncation remains ordered, explicit,
