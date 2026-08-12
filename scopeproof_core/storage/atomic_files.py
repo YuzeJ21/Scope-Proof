@@ -599,6 +599,21 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                     )
                 except FileExistsError:
                     raise FileExistsError(f"target already exists: {target}") from None
+                except BaseException:
+                    try:
+                        interrupted_publication = _require_regular_at(
+                            directory_fd, target.name
+                        )
+                    except (OSError, UnsafeAtomicPath):
+                        pass
+                    else:
+                        interrupted_identity = (
+                            interrupted_publication.st_dev,
+                            interrupted_publication.st_ino,
+                        )
+                        if interrupted_identity == (expected.st_dev, expected.st_ino):
+                            published_identity = interrupted_identity
+                    raise
                 published_identity = (expected.st_dev, expected.st_ino)
                 published = _require_regular_at(directory_fd, target.name)
                 if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
@@ -672,6 +687,19 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 os.link(temporary, target)
         except FileExistsError:
             raise FileExistsError(f"target already exists: {target}") from None
+        except BaseException:
+            try:
+                interrupted_publication = _require_regular_file(target)
+            except (OSError, UnsafeAtomicPath):
+                pass
+            else:
+                interrupted_identity = (
+                    interrupted_publication.st_dev,
+                    interrupted_publication.st_ino,
+                )
+                if interrupted_identity == (expected.st_dev, expected.st_ino):
+                    published_identity = interrupted_identity
+            raise
         published_identity = (expected.st_dev, expected.st_ino)
         published = _require_regular_file(target)
         if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
