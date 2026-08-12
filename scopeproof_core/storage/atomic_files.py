@@ -891,6 +891,8 @@ def atomic_replace_text(
             preserve_backup = True
             raise UnsafeAtomicPath("existing record changed before replacement")
         expected = _require_regular_file(temporary)
+        if not _same_file(expected, temporary_identity):
+            raise UnsafeAtomicPath("private temporary file changed before replacement")
         os.replace(temporary, target)
         published = True
         replacement = _require_regular_file(target)
@@ -935,6 +937,7 @@ def atomic_replace_text(
         except (OSError, UnsafeAtomicPath):
             cleanup_safe = False
         if cleanup_safe:
+            temporary_cleanup_error: OSError | UnsafeAtomicPath | None = None
             try:
                 _quarantine_and_remove_path(
                     temporary,
@@ -943,9 +946,9 @@ def atomic_replace_text(
                 )
             except FileNotFoundError:
                 pass
-            except (OSError, UnsafeAtomicPath):
+            except (OSError, UnsafeAtomicPath) as error:
                 if not committed:
-                    raise
+                    temporary_cleanup_error = error
             if backup is not None and not preserve_backup:
                 try:
                     _quarantine_and_remove_path(
@@ -958,3 +961,5 @@ def atomic_replace_text(
                 except (OSError, UnsafeAtomicPath):
                     if not committed:
                         raise
+            if temporary_cleanup_error is not None:
+                raise temporary_cleanup_error

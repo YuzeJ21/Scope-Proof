@@ -768,6 +768,42 @@ def test_portable_claimed_replace_commits_and_cleans_artifacts(
     assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents unlinking an open temporary file",
+)
+def test_portable_replace_rejects_foreign_temporary_before_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "alpha-record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    original_backup = atomic_files_module._create_backup_path
+    foreign_temporary: Path | None = None
+
+    def swap_temporary_after_backup(path: Path, identity: tuple[int, int]) -> Path:
+        nonlocal foreign_temporary
+        backup = original_backup(path, identity)
+        [temporary] = list(tmp_path.glob("*.tmp"))
+        temporary.unlink()
+        temporary.write_text("foreign unvalidated bytes\n", encoding="utf-8")
+        foreign_temporary = temporary
+        return backup
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(atomic_files_module, "_create_backup_path", swap_temporary_after_backup)
+
+    with (
+        pytest.raises(UnsafeAtomicPath, match="temporary file changed"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert foreign_temporary is not None
+    assert foreign_temporary.read_bytes() == b"foreign unvalidated bytes\n"
+    assert not any(path.suffix == ".rollback" for path in tmp_path.iterdir())
+
+
 def test_claims_are_bound_to_their_exact_read_and_replace_target(tmp_path: Path) -> None:
     target = tmp_path / "record.json"
     neighbor = tmp_path / "neighbor.json"
