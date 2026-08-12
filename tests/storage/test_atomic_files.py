@@ -1358,8 +1358,11 @@ def test_private_name_allocators_fail_after_the_bounded_collision_budget(
     with pytest.raises(FileExistsError, match="allocate an exclusive temporary"):
         atomic_files_module._open_private_temporary(tmp_path, "record")
 
+    if not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        return
+
     monkeypatch.setattr(os, "open", original_open)
-    descriptor = os.open(tmp_path, os.O_RDONLY)
+    descriptor = os.open(tmp_path, os.O_RDONLY | atomic_files_module._DIRECTORY)
     try:
         monkeypatch.setattr(os, "open", collide)
         with pytest.raises(FileExistsError, match="allocate an exclusive temporary"):
