@@ -317,6 +317,7 @@ def list_regular_files(directory: Path) -> list[Path]:
                 continue
             if stat.S_ISREG(metadata.st_mode) and not _is_reparse_point(metadata):
                 result.append(root / entry.name)
+    _assert_portable_directory(portable_directory)
     return result
 
 

@@ -294,6 +294,34 @@ def test_portable_read_and_listing_return_only_regular_direct_children(
     assert list_regular_files(tmp_path) == [record]
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents this symlink-based ancestor-swap simulation",
+)
+def test_portable_listing_rejects_ancestor_swap_during_enumeration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    foreign = outside / "alpha-0123456789abcdef0123456789abcdef.json"
+    foreign.write_text("foreign\n", encoding="utf-8")
+    original_scandir = os.scandir
+
+    def swap_before_enumeration(path):
+        safe.rename(moved)
+        safe.symlink_to(outside, target_is_directory=True)
+        return original_scandir(path)
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "scandir", swap_before_enumeration)
+
+    with pytest.raises(UnsafeAtomicPath, match=r"symbolic link|changed"):
+        list_regular_files(safe)
+
+
 def test_portable_listing_ignores_entry_removed_before_metadata_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
