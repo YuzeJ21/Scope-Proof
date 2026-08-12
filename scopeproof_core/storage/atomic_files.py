@@ -502,6 +502,20 @@ def _quarantine_and_remove_at(
             )
         except FileExistsError:
             continue
+        except BaseException:
+            try:
+                interrupted = _require_regular_at(directory_fd, quarantine)
+                owned = _same_file(interrupted, expected)
+                if owned and expected_sha256 is not None:
+                    owned = (
+                        _sha256_regular_at(directory_fd, quarantine, expected)
+                        == expected_sha256
+                    )
+            except (OSError, UnsafeAtomicPath):
+                owned = False
+            if owned:
+                os.unlink(quarantine, dir_fd=directory_fd)
+            raise
         break
     else:
         raise FileExistsError("could not allocate rollback quarantine")
@@ -563,6 +577,20 @@ def _quarantine_and_remove_path(
             os.rename(target, quarantine)
         except FileExistsError:
             continue
+        except BaseException:
+            try:
+                interrupted = _require_regular_file(quarantine)
+                owned = _same_file(interrupted, expected)
+                if owned and expected_sha256 is not None:
+                    owned = (
+                        _sha256_regular_path(quarantine, expected)
+                        == expected_sha256
+                    )
+            except (OSError, UnsafeAtomicPath):
+                owned = False
+            if owned:
+                os.unlink(quarantine)
+            raise
         break
     else:
         raise FileExistsError("could not allocate rollback quarantine")
