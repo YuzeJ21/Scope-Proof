@@ -384,8 +384,21 @@ def _same_file(metadata: os.stat_result, expected: tuple[int, int]) -> bool:
 
 
 def _quarantine_name(stem: str) -> str:
+    return f"{_quarantine_prefix(stem)}{secrets.token_hex(16)}.rollback"
+
+
+def _quarantine_prefix(stem: str) -> str:
     bounded_stem = sha256(os.fsencode(stem)).hexdigest()[:16]
-    return f".{bounded_stem}-{secrets.token_hex(16)}.rollback"
+    return f".{bounded_stem}-"
+
+
+def _matches_quarantine_name(candidate: str, original: str) -> bool:
+    prefix = _quarantine_prefix(original)
+    suffix = ".rollback"
+    if not candidate.startswith(prefix) or not candidate.endswith(suffix):
+        return False
+    token = candidate[len(prefix) : -len(suffix)]
+    return len(token) == 32 and all(character in "0123456789abcdef" for character in token)
 
 
 def _create_backup_at(
@@ -587,7 +600,12 @@ def _quarantine_and_remove_at(
         except BaseException:
             _restore_quarantined_at(directory_fd, quarantine, target)
             raise
-    os.unlink(quarantine, dir_fd=directory_fd)
+    try:
+        os.unlink(quarantine, dir_fd=directory_fd)
+    except BaseException:
+        with suppress(BaseException):
+            _restore_quarantined_at(directory_fd, quarantine, target)
+        raise
 
 
 def _restore_quarantined_path(quarantine: Path, target: Path) -> None:
@@ -665,7 +683,12 @@ def _quarantine_and_remove_path(
         except BaseException:
             _restore_quarantined_path(quarantine, target)
             raise
-    os.unlink(quarantine)
+    try:
+        os.unlink(quarantine)
+    except BaseException:
+        with suppress(BaseException):
+            _restore_quarantined_path(quarantine, target)
+        raise
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -937,10 +960,28 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
         raise UnsafeAtomicPath("created-file receipt orphan paths must share its parent")
     if receipt.descriptor_backend:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
-            existing_names: list[str] = []
-            for index, path in enumerate(rollback_paths):
+            rollback_names = [path.name for path in rollback_paths]
+            for candidate in os.listdir(directory_fd):
+                if candidate in rollback_names or not any(
+                    _matches_quarantine_name(candidate, original)
+                    for original in tuple(rollback_names)
+                ):
+                    continue
                 try:
-                    metadata = _require_regular_at(directory_fd, path.name)
+                    metadata = _require_regular_at(directory_fd, candidate)
+                    owned = (
+                        (metadata.st_dev, metadata.st_ino) == receipt.identity
+                        and _sha256_regular_at(directory_fd, candidate, receipt.identity)
+                        == receipt.content_sha256
+                    )
+                except (OSError, UnsafeAtomicPath):
+                    owned = False
+                if owned:
+                    rollback_names.append(candidate)
+            existing_names: list[str] = []
+            for index, name in enumerate(rollback_names):
+                try:
+                    metadata = _require_regular_at(directory_fd, name)
                 except FileNotFoundError:
                     if index == 0:
                         raise
@@ -948,11 +989,11 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
                 if (metadata.st_dev, metadata.st_ino) != receipt.identity:
                     raise UnsafeAtomicPath("published file changed before rollback")
                 if (
-                    _sha256_regular_at(directory_fd, path.name, receipt.identity)
+                    _sha256_regular_at(directory_fd, name, receipt.identity)
                     != receipt.content_sha256
                 ):
                     raise UnsafeAtomicPath("published file changed before rollback")
-                existing_names.append(path.name)
+                existing_names.append(name)
             rollback_error: BaseException | None = None
             for name in existing_names:
                 try:
@@ -976,8 +1017,29 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
         ancestors=receipt.portable_ancestors,
     )
     _assert_portable_directory(portable_directory)
+    expanded_paths = list(rollback_paths)
+    source_names = tuple(path.name for path in rollback_paths)
+    with os.scandir(target.parent) as entries:
+        for entry in entries:
+            candidate = target.parent / entry.name
+            if candidate in expanded_paths or not any(
+                _matches_quarantine_name(entry.name, original) for original in source_names
+            ):
+                continue
+            try:
+                metadata = _require_regular_file(candidate)
+                owned = (
+                    (metadata.st_dev, metadata.st_ino) == receipt.identity
+                    and _sha256_regular_path(candidate, receipt.identity)
+                    == receipt.content_sha256
+                )
+            except (OSError, UnsafeAtomicPath):
+                owned = False
+            if owned:
+                expanded_paths.append(candidate)
+    _assert_portable_directory(portable_directory)
     existing_paths: list[Path] = []
-    for index, path in enumerate(rollback_paths):
+    for index, path in enumerate(expanded_paths):
         try:
             metadata = _require_regular_file(path)
         except FileNotFoundError:

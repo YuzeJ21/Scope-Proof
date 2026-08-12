@@ -1,5 +1,6 @@
 import errno
 import os
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 
@@ -808,6 +809,31 @@ def test_receipt_rollback_rejects_relative_path(tmp_path: Path) -> None:
         rollback_created_file(receipt)
 
 
+@pytest.mark.parametrize(
+    ("orphaned_paths", "message"),
+    [
+        ("duplicate", "rollback paths must be unique"),
+        ("outside", "orphan paths must share its parent"),
+        ("relative", "orphan paths must share its parent"),
+    ],
+)
+def test_receipt_rollback_rejects_invalid_orphan_paths(
+    tmp_path: Path, orphaned_paths: str, message: str
+) -> None:
+    target = tmp_path / "report.md"
+    receipt = atomic_create_text_with_receipt(target, "validated report\n")
+    paths = {
+        "duplicate": (target,),
+        "outside": (tmp_path.parent / "outside.tmp",),
+        "relative": (Path("relative.tmp"),),
+    }[orphaned_paths]
+
+    with pytest.raises(UnsafeAtomicPath, match=message):
+        rollback_created_file(replace(receipt, orphaned_paths=paths))
+
+    assert target.read_bytes() == b"validated report\n"
+
+
 def test_directory_sync_unavailability_after_create_does_not_report_false_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -882,6 +908,158 @@ def test_receipt_rollback_removes_owned_temporary_left_after_committed_create(
     assert len(receipt.orphaned_paths) == 1
     assert receipt.orphaned_paths[0].read_bytes() == b"full generated report\n"
     rollback_created_file(receipt)
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_failed_receipt_rollback_restores_known_path_and_retry_cleans_quarantine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "report.md"
+    receipt = atomic_create_text_with_receipt(target, "sensitive generated report\n")
+    original_unlink = os.unlink
+
+    def deny_quarantine_unlink(path, *args, **kwargs):
+        if str(path).endswith(".rollback"):
+            raise PermissionError("simulated quarantine unlink denial")
+        return original_unlink(path, *args, **kwargs)
+
+    with monkeypatch.context() as denied:
+        denied.setattr(os, "unlink", deny_quarantine_unlink)
+        with pytest.raises(PermissionError, match="quarantine unlink denial"):
+            rollback_created_file(receipt)
+
+    assert target.read_bytes() == b"sensitive generated report\n"
+    assert any(path.suffix == ".rollback" for path in tmp_path.iterdir())
+
+    rollback_created_file(receipt)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_receipt_rollback_restores_target_when_content_changes_after_quarantine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "report.md"
+    receipt = atomic_create_text_with_receipt(target, "validated report\n")
+    digest_function_name = "_sha256_regular_path" if portable else "_sha256_regular_at"
+    digest_function = getattr(atomic_files_module, digest_function_name)
+    calls = 0
+
+    def report_changed_content(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            return sha256(b"changed after quarantine").hexdigest()
+        return digest_function(*args, **kwargs)
+
+    monkeypatch.setattr(atomic_files_module, digest_function_name, report_changed_content)
+
+    with pytest.raises(UnsafeAtomicPath, match="changed before rollback"):
+        rollback_created_file(receipt)
+
+    assert target.read_bytes() == b"validated report\n"
+    assert list(tmp_path.iterdir()) == [target]
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_quarantine_restore_preserves_existing_target(
+    tmp_path: Path, portable: bool
+) -> None:
+    target = tmp_path / "report.md"
+    quarantine = tmp_path / "report.rollback"
+    target.write_text("existing owner bytes\n", encoding="utf-8")
+    quarantine.write_text("quarantined bytes\n", encoding="utf-8")
+
+    if portable:
+        atomic_files_module._restore_quarantined_path(quarantine, target)
+    else:
+        if not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+            pytest.skip("descriptor-relative storage backend is unavailable")
+        with atomic_files_module._open_directory_descriptor(
+            tmp_path, create=False
+        ) as directory_fd:
+            atomic_files_module._restore_quarantined_at(
+                directory_fd, quarantine.name, target.name
+            )
+
+    assert target.read_bytes() == b"existing owner bytes\n"
+    assert quarantine.read_bytes() == b"quarantined bytes\n"
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_receipt_tracks_restored_temporary_and_retry_cleans_its_quarantine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "report.md"
+    original_unlink = os.unlink
+
+    def deny_quarantine_unlink(path, *args, **kwargs):
+        if str(path).endswith(".rollback"):
+            raise PermissionError("simulated temporary quarantine unlink denial")
+        return original_unlink(path, *args, **kwargs)
+
+    with monkeypatch.context() as denied:
+        denied.setattr(os, "unlink", deny_quarantine_unlink)
+        receipt = atomic_create_text_with_receipt(target, "sensitive generated report\n")
+
+    assert len(receipt.orphaned_paths) == 1
+    assert receipt.orphaned_paths[0].read_bytes() == b"sensitive generated report\n"
+    assert any(path.suffix == ".rollback" for path in tmp_path.iterdir())
+
+    rollback_created_file(receipt)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_receipt_rollback_ignores_foreign_quarantine_shaped_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "report.md"
+    receipt = atomic_create_text_with_receipt(target, "validated report\n")
+    foreign = tmp_path / (
+        f"{atomic_files_module._quarantine_prefix(target.name)}"
+        f"{'a' * 32}.rollback"
+    )
+    foreign.mkdir()
+
+    rollback_created_file(receipt)
+
+    assert list(tmp_path.iterdir()) == [foreign]
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_receipt_rollback_tolerates_missing_recorded_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "report.md"
+    receipt = atomic_create_text_with_receipt(target, "validated report\n")
+    missing = tmp_path / "already-removed.tmp"
+
+    rollback_created_file(replace(receipt, orphaned_paths=(missing,)))
+
     assert list(tmp_path.iterdir()) == []
 
 
