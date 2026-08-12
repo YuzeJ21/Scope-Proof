@@ -125,6 +125,40 @@ def test_failed_exclusive_publish_cleans_private_temporary(
     assert list(tmp_path.iterdir()) == []
 
 
+def test_atomic_create_rejects_private_temporary_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "report.json"
+    original_link = os.link
+
+    def swap_source_before_link(source, destination, **kwargs):
+        directory_fd = kwargs.get("src_dir_fd")
+        if directory_fd is None:
+            Path(source).unlink()
+            Path(source).write_text("attacker bytes\n", encoding="utf-8")
+        else:
+            os.unlink(source, dir_fd=directory_fd)
+            descriptor = os.open(
+                source,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=directory_fd,
+            )
+            try:
+                os.write(descriptor, b"attacker bytes\n")
+            finally:
+                os.close(descriptor)
+        return original_link(source, destination, **kwargs)
+
+    monkeypatch.setattr(os, "link", swap_source_before_link)
+
+    with pytest.raises(UnsafeAtomicPath, match="temporary file changed"):
+        atomic_create_text(target, "validated bytes\n")
+
+    assert target.read_bytes() == b"attacker bytes\n"
+    assert not any(path.suffix == ".tmp" for path in tmp_path.iterdir())
+
+
 def test_atomic_create_retries_private_temporary_name_collision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -291,11 +291,8 @@ def atomic_create_text(target: Path, text: str) -> Path:
                 raise FileExistsError(f"target already exists: {target}")
             temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
             try:
-                try:
-                    _write_all(descriptor, text.encode("utf-8"))
-                finally:
-                    os.close(descriptor)
-                    descriptor = -1
+                _write_all(descriptor, text.encode("utf-8"))
+                expected = os.fstat(descriptor)
                 try:
                     os.link(
                         temporary,
@@ -306,6 +303,9 @@ def atomic_create_text(target: Path, text: str) -> Path:
                     )
                 except FileExistsError:
                     raise FileExistsError(f"target already exists: {target}") from None
+                published = _require_regular_at(directory_fd, target.name)
+                if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
+                    raise UnsafeAtomicPath("private temporary file changed before publication")
                 with suppress(OSError):
                     os.fsync(directory_fd)
                 return target
@@ -325,11 +325,8 @@ def atomic_create_text(target: Path, text: str) -> Path:
     temporary, descriptor = _open_private_temporary(parent, target.stem)
     try:
         _assert_directory_identity(parent, parent_identity)
-        try:
-            _write_all(descriptor, text.encode("utf-8"))
-        finally:
-            os.close(descriptor)
-            descriptor = -1
+        _write_all(descriptor, text.encode("utf-8"))
+        expected = os.fstat(descriptor)
         try:
             try:
                 os.link(temporary, target, follow_symlinks=False)
@@ -337,6 +334,9 @@ def atomic_create_text(target: Path, text: str) -> Path:
                 os.link(temporary, target)
         except FileExistsError:
             raise FileExistsError(f"target already exists: {target}") from None
+        published = _require_regular_file(target)
+        if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
+            raise UnsafeAtomicPath("private temporary file changed before publication")
         _fsync_directory(parent)
         return target
     finally:
