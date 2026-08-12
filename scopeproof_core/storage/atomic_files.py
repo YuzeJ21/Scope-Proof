@@ -918,6 +918,15 @@ def atomic_replace_text(
                 os.fsync(directory_fd)
             return target
         except BaseException:
+            if not published:
+                try:
+                    interrupted_replacement = _require_regular_at(
+                        directory_fd, target.name
+                    )
+                except (OSError, UnsafeAtomicPath):
+                    pass
+                else:
+                    published = _same_file(interrupted_replacement, temporary_identity)
             if published and backup:
                 try:
                     backup_metadata = _require_regular_at(directory_fd, backup)
@@ -927,7 +936,7 @@ def atomic_replace_text(
                     _quarantine_and_remove_at(
                         directory_fd,
                         target.name,
-                        (expected.st_dev, expected.st_ino),
+                        temporary_identity,
                         changed_message="replacement changed before rollback",
                     )
                 except BaseException:
@@ -1020,6 +1029,13 @@ def atomic_replace_text(
         _fsync_directory(parent)
         return target
     except BaseException:
+        if not published:
+            try:
+                interrupted_replacement = _require_regular_file(target)
+            except (OSError, UnsafeAtomicPath):
+                pass
+            else:
+                published = _same_file(interrupted_replacement, temporary_identity)
         if published and backup is not None:
             _assert_portable_directory(portable_directory)
             _assert_directory_identity(parent, parent_identity)
@@ -1030,7 +1046,7 @@ def atomic_replace_text(
                     raise UnsafeAtomicPath("replacement backup changed before rollback")
                 _quarantine_and_remove_path(
                     target,
-                    (expected.st_dev, expected.st_ino),
+                    temporary_identity,
                     changed_message="replacement changed before rollback",
                 )
             except BaseException:

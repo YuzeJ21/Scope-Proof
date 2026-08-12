@@ -1333,6 +1333,61 @@ def test_portable_replace_restores_old_bytes_after_post_publication_failure(
     assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
 
 
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_descriptor_replace_restores_old_bytes_when_rename_is_interrupted_after_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    original_rename = os.rename
+
+    def replace_then_interrupt(source, destination, *args, **kwargs):
+        result = original_rename(source, destination, *args, **kwargs)
+        if str(source).endswith(".tmp") and destination == target.name:
+            raise KeyboardInterrupt("simulated post-replacement interruption")
+        return result
+
+    monkeypatch.setattr(os, "rename", replace_then_interrupt)
+
+    with (
+        pytest.raises(KeyboardInterrupt, match="post-replacement interruption"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
+
+
+def test_portable_replace_restores_old_bytes_when_replace_is_interrupted_after_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    original_replace = os.replace
+
+    def replace_then_interrupt(source, destination, *args, **kwargs):
+        result = original_replace(source, destination, *args, **kwargs)
+        if str(source).endswith(".tmp") and Path(destination) == target:
+            raise KeyboardInterrupt("simulated post-replacement interruption")
+        return result
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(os, "replace", replace_then_interrupt)
+
+    with (
+        pytest.raises(KeyboardInterrupt, match="post-replacement interruption"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
+
+
 @pytest.mark.parametrize("portable", [False, True])
 def test_failed_rollback_preserves_old_backup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
