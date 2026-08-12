@@ -330,6 +330,133 @@ def _write_all(descriptor: int, payload: bytes) -> None:
     os.fsync(descriptor)
 
 
+def _same_file(metadata: os.stat_result, expected: tuple[int, int]) -> bool:
+    return (metadata.st_dev, metadata.st_ino) == expected
+
+
+def _quarantine_name(stem: str) -> str:
+    bounded_stem = sha256(os.fsencode(stem)).hexdigest()[:16]
+    return f".{bounded_stem}-{secrets.token_hex(16)}.rollback"
+
+
+def _create_backup_at(
+    directory_fd: int, target: str, expected: tuple[int, int]
+) -> str:
+    for _ in range(128):
+        backup = _quarantine_name(target)
+        try:
+            os.link(
+                target,
+                backup,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+        except FileExistsError:
+            continue
+        metadata = _require_regular_at(directory_fd, backup)
+        if not _same_file(metadata, expected):
+            with suppress(OSError):
+                os.unlink(backup, dir_fd=directory_fd)
+            raise UnsafeAtomicPath("existing record changed while backup was created")
+        return backup
+    raise FileExistsError("could not allocate replacement backup")
+
+
+def _create_backup_path(target: Path, expected: tuple[int, int]) -> Path:
+    for _ in range(128):
+        backup = target.parent / _quarantine_name(target.name)
+        try:
+            try:
+                os.link(target, backup, follow_symlinks=False)
+            except TypeError:  # pragma: no cover - older Windows Python seam
+                os.link(target, backup)
+        except FileExistsError:
+            continue
+        metadata = _require_regular_file(backup)
+        if not _same_file(metadata, expected):
+            with suppress(OSError):
+                os.unlink(backup)
+            raise UnsafeAtomicPath("existing record changed while backup was created")
+        return backup
+    raise FileExistsError("could not allocate replacement backup")
+
+
+def _restore_quarantined_at(directory_fd: int, quarantine: str, target: str) -> None:
+    try:
+        os.link(
+            quarantine,
+            target,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+            follow_symlinks=False,
+        )
+    except FileExistsError:
+        return
+    os.unlink(quarantine, dir_fd=directory_fd)
+
+
+def _quarantine_and_remove_at(
+    directory_fd: int,
+    target: str,
+    expected: tuple[int, int],
+    *,
+    changed_message: str,
+) -> None:
+    for _ in range(128):
+        quarantine = _quarantine_name(target)
+        try:
+            os.rename(
+                target,
+                quarantine,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            continue
+        break
+    else:
+        raise FileExistsError("could not allocate rollback quarantine")
+    metadata = _require_regular_at(directory_fd, quarantine)
+    if not _same_file(metadata, expected):
+        _restore_quarantined_at(directory_fd, quarantine, target)
+        raise UnsafeAtomicPath(changed_message)
+    os.unlink(quarantine, dir_fd=directory_fd)
+
+
+def _restore_quarantined_path(quarantine: Path, target: Path) -> None:
+    try:
+        try:
+            os.link(quarantine, target, follow_symlinks=False)
+        except TypeError:  # pragma: no cover - older Windows Python seam
+            os.link(quarantine, target)
+    except FileExistsError:
+        return
+    os.unlink(quarantine)
+
+
+def _quarantine_and_remove_path(
+    target: Path,
+    expected: tuple[int, int],
+    *,
+    changed_message: str,
+) -> None:
+    for _ in range(128):
+        quarantine = target.parent / _quarantine_name(target.name)
+        try:
+            os.rename(target, quarantine)
+        except FileExistsError:
+            continue
+        break
+    else:
+        raise FileExistsError("could not allocate rollback quarantine")
+    metadata = _require_regular_file(quarantine)
+    if not _same_file(metadata, expected):
+        _restore_quarantined_path(quarantine, target)
+        raise UnsafeAtomicPath(changed_message)
+    os.unlink(quarantine)
+
+
 def _fsync_directory(directory: Path) -> None:
     directory_flag = getattr(os, "O_DIRECTORY", None)
     no_follow_flag = getattr(os, "O_NOFOLLOW", None)
@@ -408,6 +535,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     else:
         raise FileExistsError(f"target already exists: {target}")
     temporary, descriptor = _open_private_temporary(parent, target.stem)
+    published_identity: tuple[int, int] | None = None
     try:
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
@@ -422,10 +550,11 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 os.link(temporary, target)
         except FileExistsError:
             raise FileExistsError(f"target already exists: {target}") from None
-        _assert_portable_directory(portable_directory)
         published = _require_regular_file(target)
+        published_identity = (published.st_dev, published.st_ino)
         if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
             raise UnsafeAtomicPath("private temporary file changed before publication")
+        _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         committed = True
         _fsync_directory(parent)
@@ -438,6 +567,12 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     finally:
         if descriptor >= 0:
             os.close(descriptor)
+        if not committed and published_identity is not None:
+            _quarantine_and_remove_path(
+                target,
+                published_identity,
+                changed_message="published file changed during failed create cleanup",
+            )
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         try:
@@ -466,7 +601,12 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
             metadata = _require_regular_at(directory_fd, target.name)
             if (metadata.st_dev, metadata.st_ino) != receipt.identity:
                 raise UnsafeAtomicPath("published file changed before rollback")
-            os.unlink(target.name, dir_fd=directory_fd)
+            _quarantine_and_remove_at(
+                directory_fd,
+                target.name,
+                receipt.identity,
+                changed_message="published file changed before rollback",
+            )
             with suppress(OSError):
                 os.fsync(directory_fd)
         return
@@ -479,7 +619,11 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
     if (metadata.st_dev, metadata.st_ino) != receipt.identity:
         raise UnsafeAtomicPath("published file changed before rollback")
     _assert_portable_directory(portable_directory)
-    os.unlink(target)
+    _quarantine_and_remove_path(
+        target,
+        receipt.identity,
+        changed_message="published file changed before rollback",
+    )
     _fsync_directory(target.parent)
 
 
@@ -510,7 +654,7 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                 )
             finally:
                 os.close(descriptor)
-                with suppress(FileNotFoundError):
+                with suppress(OSError):
                     os.unlink(claim_name, dir_fd=directory_fd)
                 with suppress(OSError):
                     os.fsync(directory_fd)
@@ -541,7 +685,7 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         os.close(descriptor)
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
-        with suppress(FileNotFoundError):
+        with suppress(OSError):
             os.unlink(claim)
         _fsync_directory(parent)
 
@@ -556,29 +700,60 @@ def atomic_replace_text(
         raise UnsafeAtomicPath("mutation claim does not match replacement target")
     if claim is not None and claim.directory_fd is not None:
         directory_fd = claim.directory_fd
-        _require_regular_at(directory_fd, target.name)
+        existing = _require_regular_at(directory_fd, target.name)
+        existing_identity = (existing.st_dev, existing.st_ino)
+        backup = _create_backup_at(directory_fd, target.name, existing_identity)
         temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
+        published = False
+        committed = False
         try:
-            try:
-                _write_all(descriptor, text.encode("utf-8"))
-            finally:
-                os.close(descriptor)
-                descriptor = -1
-            _require_regular_at(directory_fd, target.name)
+            _write_all(descriptor, text.encode("utf-8"))
+            expected = os.fstat(descriptor)
+            current = _require_regular_at(directory_fd, target.name)
+            if not _same_file(current, existing_identity):
+                raise UnsafeAtomicPath("existing record changed before replacement")
             os.rename(
                 temporary,
                 target.name,
                 src_dir_fd=directory_fd,
                 dst_dir_fd=directory_fd,
             )
+            published = True
+            replacement = _require_regular_at(directory_fd, target.name)
+            if not _same_file(replacement, (expected.st_dev, expected.st_ino)):
+                os.rename(
+                    backup,
+                    target.name,
+                    src_dir_fd=directory_fd,
+                    dst_dir_fd=directory_fd,
+                )
+                backup = ""
+                raise UnsafeAtomicPath("private temporary file changed before replacement")
+            committed = True
             with suppress(OSError):
                 os.fsync(directory_fd)
             return target
+        except BaseException:
+            if published and backup:
+                os.rename(
+                    backup,
+                    target.name,
+                    src_dir_fd=directory_fd,
+                    dst_dir_fd=directory_fd,
+                )
+                backup = ""
+            raise
         finally:
             if descriptor >= 0:
                 os.close(descriptor)
-            with suppress(FileNotFoundError):
+            with suppress(OSError):
                 os.unlink(temporary, dir_fd=directory_fd)
+            if backup:
+                try:
+                    os.unlink(backup, dir_fd=directory_fd)
+                except OSError:
+                    if not committed:
+                        raise
     portable_directory = _capture_safe_directory(target.parent, create=False)
     if claim is not None and claim.portable_ancestors:
         portable_directory = _PortableDirectory(
@@ -588,8 +763,12 @@ def atomic_replace_text(
     parent = portable_directory.path
     parent_identity = claim.identity if claim is not None else _directory_identity(parent)
     _assert_directory_identity(parent, parent_identity)
-    _require_regular_file(target)
+    existing = _require_regular_file(target)
+    existing_identity = (existing.st_dev, existing.st_ino)
+    backup = _create_backup_path(target, existing_identity)
     temporary, descriptor = _open_private_temporary(parent, target.stem)
+    published = False
+    committed = False
     try:
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
@@ -600,15 +779,44 @@ def atomic_replace_text(
             descriptor = -1
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
-        _require_regular_file(target)
+        current = _require_regular_file(target)
+        if not _same_file(current, existing_identity):
+            raise UnsafeAtomicPath("existing record changed before replacement")
+        expected = _require_regular_file(temporary)
         os.replace(temporary, target)
+        published = True
+        replacement = _require_regular_file(target)
+        if not _same_file(replacement, (expected.st_dev, expected.st_ino)):
+            os.replace(backup, target)
+            backup = None
+            raise UnsafeAtomicPath("private temporary file changed before replacement")
         _assert_portable_directory(portable_directory)
+        _assert_directory_identity(parent, parent_identity)
+        committed = True
         _fsync_directory(parent)
         return target
+    except BaseException:
+        if published and backup is not None:
+            os.replace(backup, target)
+            backup = None
+        raise
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        _assert_portable_directory(portable_directory)
-        _assert_directory_identity(parent, parent_identity)
-        with suppress(FileNotFoundError):
-            os.unlink(temporary)
+        cleanup_safe = True
+        try:
+            _assert_portable_directory(portable_directory)
+            _assert_directory_identity(parent, parent_identity)
+        except (OSError, UnsafeAtomicPath):
+            cleanup_safe = False
+        if cleanup_safe:
+            with suppress(OSError):
+                os.unlink(temporary)
+            if backup is not None:
+                try:
+                    os.unlink(backup)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    if not committed:
+                        raise
