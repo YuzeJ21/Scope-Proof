@@ -208,6 +208,77 @@ def test_rehearsal_failure_after_publication_removes_owned_target(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_rehearsal_failure_tolerates_publication_removed_before_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_rehearsal()
+    target_name = f"{record.rehearsal_id}.json"
+    original_stat = os.stat
+    original_cleanup = rehearsal_storage_module._quarantine_and_remove_at
+
+    def fail_target_validation(path, *args, **kwargs):
+        if path == target_name and kwargs.get("dir_fd") is not None:
+            raise OSError("simulated rehearsal publication validation failure")
+        return original_stat(path, *args, **kwargs)
+
+    def remove_publication_before_cleanup(directory_fd, name, *args, **kwargs):
+        if name == target_name:
+            os.unlink(name, dir_fd=directory_fd)
+            raise FileNotFoundError(name)
+        return original_cleanup(directory_fd, name, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", fail_target_validation)
+    monkeypatch.setattr(
+        rehearsal_storage_module,
+        "_quarantine_and_remove_at",
+        remove_publication_before_cleanup,
+    )
+
+    with pytest.raises(OSError, match="publication validation failure"):
+        JsonAlphaRehearsalStore(tmp_path).save(record)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_rehearsal_failure_surfaces_publication_cleanup_denial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_rehearsal()
+    target_name = f"{record.rehearsal_id}.json"
+    original_stat = os.stat
+    original_cleanup = rehearsal_storage_module._quarantine_and_remove_at
+
+    def fail_target_validation(path, *args, **kwargs):
+        if path == target_name and kwargs.get("dir_fd") is not None:
+            raise OSError("simulated rehearsal publication validation failure")
+        return original_stat(path, *args, **kwargs)
+
+    def deny_publication_cleanup(directory_fd, name, *args, **kwargs):
+        if name == target_name:
+            raise PermissionError("simulated rehearsal cleanup denial")
+        return original_cleanup(directory_fd, name, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", fail_target_validation)
+    monkeypatch.setattr(
+        rehearsal_storage_module,
+        "_quarantine_and_remove_at",
+        deny_publication_cleanup,
+    )
+
+    with pytest.raises(PermissionError, match="cleanup denial"):
+        JsonAlphaRehearsalStore(tmp_path).save(record)
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == [target_name]
+
+
 @pytest.mark.parametrize(
     "rehearsal_id",
     [
