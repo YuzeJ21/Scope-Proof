@@ -1219,6 +1219,35 @@ def test_missing_record_claim_failure_cleans_claim_file(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_claim_metadata_failure_cleans_owned_claim_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    target = tmp_path / "record.json"
+    target.write_text("valid\n", encoding="utf-8")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_fstat = os.fstat
+
+    def fail_regular_descriptor_metadata(descriptor: int):
+        metadata = original_fstat(descriptor)
+        if atomic_files_module.stat.S_ISREG(metadata.st_mode):
+            raise OSError("simulated claim metadata failure")
+        return metadata
+
+    monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
+
+    with (
+        pytest.raises(OSError, match="claim metadata failure"),
+        exclusive_path_claim(target),
+    ):
+        raise AssertionError("failed claim setup must never be entered")
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
+
+
 @pytest.mark.skipif(
     os.name == "nt",
     reason="Windows prevents deleting an open mutation claim",

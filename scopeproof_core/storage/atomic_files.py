@@ -866,9 +866,22 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                 descriptor = os.open(claim_name, flags, 0o600, dir_fd=directory_fd)
             except FileExistsError:
                 raise FileExistsError(f"another process is updating {target.name}") from None
-            claim_metadata = os.fstat(descriptor)
-            claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
+            claim_identity: tuple[int, int] | None = None
             try:
+                try:
+                    claim_metadata = os.fstat(descriptor)
+                except BaseException:
+                    try:
+                        interrupted_claim = _require_regular_at(directory_fd, claim_name)
+                    except (OSError, UnsafeAtomicPath):
+                        pass
+                    else:
+                        claim_identity = (
+                            interrupted_claim.st_dev,
+                            interrupted_claim.st_ino,
+                        )
+                    raise
+                claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
                 record_metadata = _require_regular_at(directory_fd, target.name)
                 record_identity = (record_metadata.st_dev, record_metadata.st_ino)
                 if not stat.S_ISREG(claim_metadata.st_mode):
@@ -884,13 +897,14 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                 )
             finally:
                 os.close(descriptor)
-                with suppress(OSError):
-                    _quarantine_and_remove_at(
-                        directory_fd,
-                        claim_name,
-                        claim_identity,
-                        changed_message="mutation claim changed before cleanup",
-                    )
+                if claim_identity is not None:
+                    with suppress(OSError):
+                        _quarantine_and_remove_at(
+                            directory_fd,
+                            claim_name,
+                            claim_identity,
+                            changed_message="mutation claim changed before cleanup",
+                        )
                 with suppress(OSError):
                     os.fsync(directory_fd)
         return
@@ -904,9 +918,19 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         descriptor = os.open(claim, flags, 0o600)
     except FileExistsError:
         raise FileExistsError(f"another process is updating {target.name}") from None
-    claim_metadata = os.fstat(descriptor)
-    claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
+    claim_identity = None
     try:
+        try:
+            claim_metadata = os.fstat(descriptor)
+        except BaseException:
+            try:
+                interrupted_claim = _require_regular_file(claim)
+            except (OSError, UnsafeAtomicPath):
+                pass
+            else:
+                claim_identity = (interrupted_claim.st_dev, interrupted_claim.st_ino)
+            raise
+        claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
         record_metadata = _require_regular_file(target)
         record_identity = (record_metadata.st_dev, record_metadata.st_ino)
         if not stat.S_ISREG(claim_metadata.st_mode):
@@ -925,12 +949,13 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         os.close(descriptor)
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
-        with suppress(OSError):
-            _quarantine_and_remove_path(
-                claim,
-                claim_identity,
-                changed_message="mutation claim changed before cleanup",
-            )
+        if claim_identity is not None:
+            with suppress(OSError):
+                _quarantine_and_remove_path(
+                    claim,
+                    claim_identity,
+                    changed_message="mutation claim changed before cleanup",
+                )
         _fsync_directory(parent)
 
 
