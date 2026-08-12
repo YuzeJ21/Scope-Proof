@@ -29,14 +29,17 @@ outcome from an unresolved case. A competing process fails without mutation. A s
 process termination is intentionally fail-closed rather than guessed safe; recovery requires an
 owner-observed local cleanup, never silent takeover.
 
-The rehearsal store retains its stronger descriptor-relative POSIX implementation when all
-required capabilities are available. Capability detection uses `getattr`/`hasattr` and never
-dereferences missing constants during import. Other platforms use the portable validated-path and
-exclusive-publication backend. Both backends validate every loaded or saved object with Pydantic.
+When all required capabilities are available, the shared primitives keep the opened POSIX
+directory descriptor through create, claim, and replacement so an ancestor swap cannot redirect a
+mutation. Capability detection uses `getattr`/`hasattr` and never dereferences missing constants
+during import. Other platforms use the portable validated-path backend and revalidate the same
+directory identity immediately before mutation. Both backends validate every loaded or saved
+object with Pydantic.
 
-The alpha-case store uses the same portable primitives for create and update. CLI reports use the
-exclusive publication primitive at the final write boundary, so a destination created after the
-initial check is never overwritten.
+The rehearsal and alpha-case stores use these shared primitives while retaining the rehearsal
+store's descriptor-relative POSIX read/list implementation. CLI reports use the exclusive
+publication primitive at the final write boundary, so a destination created after the initial
+check is never overwritten.
 
 ## Path and mutation contract
 

@@ -90,12 +90,12 @@ class JsonAlphaCaseStore:
         validated = AlphaCaseRecord.model_validate(record.model_dump(mode="python"))
         target = self._path(validated.case_id)
         try:
-            with exclusive_path_claim(target):
+            with exclusive_path_claim(target) as claim:
                 existing = self.load(validated.case_id)
                 self._validate_update(existing, validated)
                 serialized = validated.model_dump_json(indent=2) + "\n"
                 try:
-                    return atomic_replace_text(target, serialized)
+                    return atomic_replace_text(target, serialized, claim=claim)
                 except UnsafeAtomicPath as error:
                     raise UnsafeAlphaCaseStore(
                         "alpha-case record must remain a regular local file"

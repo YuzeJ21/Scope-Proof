@@ -169,9 +169,9 @@ def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
 
     with (
         pytest.raises(OSError, match="replacement interruption"),
-        exclusive_path_claim(target),
+        exclusive_path_claim(target) as claim,
     ):
-        atomic_replace_text(target, "new valid bytes\n")
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
 
     assert target.read_bytes() == b"old valid bytes\n"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
@@ -194,8 +194,8 @@ def test_directory_sync_unavailability_after_replace_does_not_report_false_failu
 
     monkeypatch.setattr(os, "fsync", fail_directory_sync)
 
-    with exclusive_path_claim(target):
-        assert atomic_replace_text(target, "new valid bytes\n") == target
+    with exclusive_path_claim(target) as claim:
+        assert atomic_replace_text(target, "new valid bytes\n", claim=claim) == target
 
     assert target.read_bytes() == b"new valid bytes\n"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
@@ -224,6 +224,63 @@ def test_portable_path_operations_reject_symlinked_ancestor(tmp_path: Path) -> N
         atomic_create_text(target, "must not escape\n")
 
     assert list(outside.iterdir()) == []
+
+
+def test_portable_create_rejects_ancestor_swap_before_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = safe / "record.json"
+    original_open = atomic_files_module._open_private_temporary
+
+    def swap_parent(parent: Path, stem: str):
+        safe.rename(moved)
+        safe.symlink_to(outside, target_is_directory=True)
+        return original_open(parent, stem)
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(atomic_files_module, "_open_private_temporary", swap_parent)
+
+    with pytest.raises(UnsafeAtomicPath, match=r"changed during storage operation|symbolic link"):
+        atomic_create_text(target, "must not escape\n")
+
+    assert list(outside.iterdir()) == []
+    assert list(moved.iterdir()) == []
+
+
+def test_portable_replace_rejects_ancestor_swap_after_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    moved = tmp_path / "moved"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = safe / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    original_open = atomic_files_module._open_private_temporary
+
+    def swap_parent(parent: Path, stem: str):
+        safe.rename(moved)
+        safe.symlink_to(outside, target_is_directory=True)
+        (outside / target.name).write_text("attacker bytes\n", encoding="utf-8")
+        return original_open(parent, stem)
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(atomic_files_module, "_open_private_temporary", swap_parent)
+
+    with (
+        pytest.raises(UnsafeAtomicPath, match=r"changed during storage operation|symbolic link"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "must not escape\n", claim=claim)
+
+    assert (moved / target.name).read_text(encoding="utf-8") == "old valid bytes\n"
+    assert (outside / target.name).read_text(encoding="utf-8") == "attacker bytes\n"
 
 
 def test_read_rejects_symlink_target(tmp_path: Path) -> None:
