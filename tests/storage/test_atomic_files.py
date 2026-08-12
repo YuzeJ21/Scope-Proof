@@ -837,6 +837,10 @@ def test_committed_replace_ignores_claim_cleanup_denial(
     assert target.read_bytes() == b"new valid bytes\n"
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents renaming a directory containing an open storage file",
+)
 def test_portable_create_removes_published_target_after_parent_escape(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1210,6 +1214,10 @@ def test_claim_cleanup_never_deletes_recreated_foreign_claim(tmp_path: Path) -> 
     competitor.__exit__(None, None, None)
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents renaming a directory containing open storage files",
+)
 def test_portable_replace_never_restores_through_swapped_parent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1599,6 +1607,10 @@ def test_portable_create_rechecks_ancestor_after_component_validation(
     assert list((outside / "nested").iterdir()) == []
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents renaming a directory containing an open storage file",
+)
 def test_portable_create_cleanup_never_deletes_foreign_swapped_temporary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
