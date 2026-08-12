@@ -90,6 +90,28 @@ def test_descriptor_read_rejects_fifo_swapped_between_stat_and_open(
         read_text_no_follow(target)
 
 
+def test_descriptor_read_rejects_regular_file_swap_between_stat_and_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "record.json"
+    target.write_text("validated\n", encoding="utf-8")
+    original_open = os.open
+    swapped = False
+
+    def swap_regular_file(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and path == target.name and kwargs.get("dir_fd") is not None:
+            swapped = True
+            target.unlink()
+            target.write_text("different bytes\n", encoding="utf-8")
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap_regular_file)
+
+    with pytest.raises(UnsafeAtomicPath, match="changed while it was being opened"):
+        read_text_no_follow(target)
+
+
 def test_missing_directory_lists_no_records(tmp_path: Path) -> None:
     assert list_regular_files(tmp_path / "absent") == []
 

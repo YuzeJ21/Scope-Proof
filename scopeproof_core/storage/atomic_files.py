@@ -151,15 +151,18 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
         raise UnsafeAtomicPath("mutation claim does not match read target")
     if claim is not None and claim.directory_fd is not None:
         directory_fd = claim.directory_fd
-        _require_regular_at(directory_fd, target.name)
+        before = _require_regular_at(directory_fd, target.name)
         descriptor = os.open(
             target.name,
             os.O_RDONLY | _NO_FOLLOW | _NONBLOCK | _CLOSE_ON_EXEC,
             dir_fd=directory_fd,
         )
         try:
-            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            after = os.fstat(descriptor)
+            if not stat.S_ISREG(after.st_mode):
                 raise UnsafeAtomicPath(f"app-owned record must be a regular file: {target}")
+            if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+                raise UnsafeAtomicPath("app-owned record changed while it was being opened")
             with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
                 descriptor = -1
                 return handle.read()
@@ -170,7 +173,7 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
         _assert_directory_identity(target.parent, claim.identity)
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
-            _require_regular_at(directory_fd, target.name)
+            before = _require_regular_at(directory_fd, target.name)
             try:
                 descriptor = os.open(
                     target.name,
@@ -184,8 +187,11 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
                     ) from error
                 raise
             try:
-                if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                after = os.fstat(descriptor)
+                if not stat.S_ISREG(after.st_mode):
                     raise UnsafeAtomicPath(f"app-owned record must be a regular file: {target}")
+                if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+                    raise UnsafeAtomicPath("app-owned record changed while it was being opened")
                 with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
                     descriptor = -1
                     return handle.read()
@@ -193,7 +199,8 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
                 if descriptor >= 0:
                     os.close(descriptor)
     ensure_safe_directory(target.parent, create=False)
-    parent_identity = _directory_identity(target.parent)
+    parent_identity = claim.identity if claim is not None else _directory_identity(target.parent)
+    _assert_directory_identity(target.parent, parent_identity)
     before = _require_regular_file(target)
     descriptor = os.open(target, os.O_RDONLY | _NO_FOLLOW | _CLOSE_ON_EXEC)
     try:
@@ -350,6 +357,7 @@ def atomic_create_text(target: Path, text: str) -> Path:
         expected = os.fstat(descriptor)
         try:
             try:
+                _assert_directory_identity(parent, parent_identity)
                 os.link(temporary, target, follow_symlinks=False)
             except TypeError:  # pragma: no cover - older Windows Python seam
                 os.link(temporary, target)
@@ -358,6 +366,7 @@ def atomic_create_text(target: Path, text: str) -> Path:
         published = _require_regular_file(target)
         if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
             raise UnsafeAtomicPath("private temporary file changed before publication")
+        _assert_directory_identity(parent, parent_identity)
         _fsync_directory(parent)
         return target
     finally:
@@ -365,6 +374,7 @@ def atomic_create_text(target: Path, text: str) -> Path:
             os.close(descriptor)
         with suppress(FileNotFoundError):
             os.unlink(temporary)
+        _assert_directory_identity(parent, parent_identity)
 
 
 @contextmanager
@@ -416,6 +426,7 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         yield MutationClaim(target=target, parent=parent, identity=parent_identity)
     finally:
         os.close(descriptor)
+        _assert_directory_identity(parent, parent_identity)
         with suppress(FileNotFoundError):
             os.unlink(claim)
         _fsync_directory(parent)
@@ -466,6 +477,7 @@ def atomic_replace_text(
         finally:
             os.close(descriptor)
             descriptor = -1
+        _assert_directory_identity(parent, parent_identity)
         _require_regular_file(target)
         os.replace(temporary, target)
         _fsync_directory(parent)
@@ -475,3 +487,4 @@ def atomic_replace_text(
             os.close(descriptor)
         with suppress(FileNotFoundError):
             os.unlink(temporary)
+        _assert_directory_identity(parent, parent_identity)
