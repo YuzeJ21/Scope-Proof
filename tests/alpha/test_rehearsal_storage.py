@@ -1,4 +1,5 @@
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
@@ -79,6 +80,26 @@ def test_rehearsal_save_refuses_silent_overwrite(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError):
         store.save(record)
+
+
+def test_committed_rehearsal_does_not_report_failure_when_cleanup_is_denied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_rehearsal()
+    original_unlink = os.unlink
+
+    def deny_temporary_cleanup(path, *args, **kwargs):
+        if str(path).endswith(".tmp"):
+            raise PermissionError("simulated cleanup denial")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", deny_temporary_cleanup)
+
+    path = JsonAlphaRehearsalStore(tmp_path).save(record)
+
+    assert JsonAlphaRehearsalStore(tmp_path).load(record.rehearsal_id) == record
+    assert path.exists()
+    assert any(item.suffix == ".tmp" for item in tmp_path.iterdir())
 
 
 @pytest.mark.parametrize(

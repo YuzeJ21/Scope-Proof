@@ -260,10 +260,17 @@ class JsonAlphaRehearsalStore:
             except FileExistsError:
                 raise FileExistsError(record.rehearsal_id) from None
             published = True
-            os.fsync(directory_fd)
+            with suppress(OSError):
+                os.fsync(directory_fd)
         finally:
             os.close(temporary_fd)
-            with suppress(FileNotFoundError):
+            try:
                 os.unlink(temporary_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                if not published:
+                    raise
             if published:
-                os.fsync(directory_fd)
+                with suppress(OSError):
+                    os.fsync(directory_fd)

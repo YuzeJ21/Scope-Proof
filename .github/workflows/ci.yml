@@ -127,6 +127,7 @@ jobs:
       - name: Build and install wheel
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           $wheelDir = Join-Path $env:RUNNER_TEMP "scopeproof-wheel-windows"
           python -m pip wheel . --no-deps --wheel-dir $wheelDir
           $wheel = (Get-ChildItem $wheelDir -Filter "scopeproof-*.whl" | Select-Object -First 1).FullName

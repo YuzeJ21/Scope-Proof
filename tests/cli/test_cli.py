@@ -761,6 +761,38 @@ def test_review_report_final_publication_does_not_overwrite_racing_target(
     assert not list((tmp_path / "reviews").glob("*.json"))
 
 
+def test_review_rolls_back_report_when_review_persistence_fails(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "report.md"
+    invalid_storage = tmp_path / "not-a-directory"
+    invalid_storage.write_text("owner bytes\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(invalid_storage),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert raised.value.code == 2
+    assert "review store path must be a directory" in capsys.readouterr().err
+    assert not report.exists()
+    assert invalid_storage.read_bytes() == b"owner bytes\n"
+
+
 def test_review_rejects_unsupported_report_suffix_before_reading_inputs(
     tmp_path: Path, capsys
 ) -> None:

@@ -48,6 +48,16 @@ class MutationClaim:
 
 
 @dataclass(frozen=True)
+class CreatedFileReceipt:
+    """Bind a newly published file to the exact object eligible for rollback."""
+
+    path: Path
+    identity: tuple[int, int]
+    descriptor_backend: bool
+    portable_ancestors: tuple[tuple[Path, tuple[int, int]], ...] = ()
+
+
+@dataclass(frozen=True)
 class _PortableDirectory:
     path: Path
     ancestors: tuple[tuple[Path, tuple[int, int]], ...]
@@ -339,12 +349,13 @@ def _fsync_directory(directory: Path) -> None:
         os.close(descriptor)
 
 
-def atomic_create_text(target: Path, text: str) -> Path:
-    """Publish UTF-8 text exactly once without replacing an existing destination."""
+def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileReceipt:
+    """Publish UTF-8 text exactly once and return its rollback identity."""
 
     target = Path(os.path.abspath(target))
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=True) as directory_fd:
+            committed = False
             try:
                 _require_regular_at(directory_fd, target.name)
             except FileNotFoundError:
@@ -368,17 +379,28 @@ def atomic_create_text(target: Path, text: str) -> Path:
                 published = _require_regular_at(directory_fd, target.name)
                 if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
                     raise UnsafeAtomicPath("private temporary file changed before publication")
+                committed = True
                 with suppress(OSError):
                     os.fsync(directory_fd)
-                return target
+                return CreatedFileReceipt(
+                    path=target,
+                    identity=(published.st_dev, published.st_ino),
+                    descriptor_backend=True,
+                )
             finally:
                 if descriptor >= 0:
                     os.close(descriptor)
-                with suppress(FileNotFoundError):
+                try:
                     os.unlink(temporary, dir_fd=directory_fd)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    if not committed:
+                        raise
     portable_directory = _capture_safe_directory(target.parent, create=True)
     parent = portable_directory.path
     parent_identity = _directory_identity(parent)
+    committed = False
     try:
         _require_regular_file(target)
     except FileNotFoundError:
@@ -405,15 +427,60 @@ def atomic_create_text(target: Path, text: str) -> Path:
         if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
             raise UnsafeAtomicPath("private temporary file changed before publication")
         _assert_directory_identity(parent, parent_identity)
+        committed = True
         _fsync_directory(parent)
-        return target
+        return CreatedFileReceipt(
+            path=target,
+            identity=(published.st_dev, published.st_ino),
+            descriptor_backend=False,
+            portable_ancestors=portable_directory.ancestors,
+        )
     finally:
         if descriptor >= 0:
             os.close(descriptor)
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
-        with suppress(FileNotFoundError):
+        try:
             os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            if not committed:
+                raise
+
+
+def atomic_create_text(target: Path, text: str) -> Path:
+    """Publish UTF-8 text exactly once without replacing an existing destination."""
+
+    return atomic_create_text_with_receipt(target, text).path
+
+
+def rollback_created_file(receipt: CreatedFileReceipt) -> None:
+    """Remove only the exact file published by a prior create receipt."""
+
+    target = Path(os.path.abspath(receipt.path))
+    if target != receipt.path:
+        raise UnsafeAtomicPath("created-file receipt path is not absolute")
+    if receipt.descriptor_backend:
+        with _open_directory_descriptor(target.parent, create=False) as directory_fd:
+            metadata = _require_regular_at(directory_fd, target.name)
+            if (metadata.st_dev, metadata.st_ino) != receipt.identity:
+                raise UnsafeAtomicPath("published file changed before rollback")
+            os.unlink(target.name, dir_fd=directory_fd)
+            with suppress(OSError):
+                os.fsync(directory_fd)
+        return
+    portable_directory = _PortableDirectory(
+        path=target.parent,
+        ancestors=receipt.portable_ancestors,
+    )
+    _assert_portable_directory(portable_directory)
+    metadata = _require_regular_file(target)
+    if (metadata.st_dev, metadata.st_ino) != receipt.identity:
+        raise UnsafeAtomicPath("published file changed before rollback")
+    _assert_portable_directory(portable_directory)
+    os.unlink(target)
+    _fsync_directory(target.parent)
 
 
 @contextmanager
