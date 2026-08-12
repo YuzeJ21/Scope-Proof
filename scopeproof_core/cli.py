@@ -64,6 +64,7 @@ from scopeproof_core.schemas.models import (
     normalize_public_https_source_uri,
     require_verified_public_origin,
 )
+from scopeproof_core.storage.atomic_files import atomic_create_text
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
 from scopeproof_core.version import __version__
@@ -247,7 +248,7 @@ def _review(args: argparse.Namespace) -> int:
         )
     if report_target is not None:
         report_path, renderer = report_target
-        report_path.write_text(renderer(state), encoding="utf-8")
+        atomic_create_text(report_path, renderer(state))
         metadata["report"] = str(report_path)
     print(json.dumps(metadata, sort_keys=True))
     return 0

@@ -13,15 +13,35 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from scopeproof_core.alpha.rehearsal import AlphaRehearsalRecord
+from scopeproof_core.storage.atomic_files import (
+    UnsafeAtomicPath,
+    atomic_create_text,
+    list_regular_files,
+    read_text_no_follow,
+)
 
 _REHEARSAL_ID = re.compile(r"^rehearsal-[0-9a-f]{32}$")
 _CLOSE_ON_EXEC = getattr(os, "O_CLOEXEC", 0)
-_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | _CLOSE_ON_EXEC
-_FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | _CLOSE_ON_EXEC
+_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+_NO_FOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | _DIRECTORY | _NO_FOLLOW | _CLOSE_ON_EXEC
+_FILE_OPEN_FLAGS = os.O_RDONLY | _NO_FOLLOW | _CLOSE_ON_EXEC
 _TEMP_OPEN_FLAGS = (
-    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | _CLOSE_ON_EXEC
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
 )
 _UNSAFE_TRAVERSAL_ERRNOS = {errno.ELOOP, errno.ENOTDIR}
+_DESCRIPTOR_BACKEND_SUPPORTED = (
+    os.name != "nt"
+    and bool(_DIRECTORY)
+    and bool(_NO_FOLLOW)
+    and os.open in os.supports_dir_fd
+    and os.mkdir in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
+    and os.stat in os.supports_follow_symlinks
+    and os.unlink in os.supports_dir_fd
+    and os.link in os.supports_dir_fd
+    and os.link in os.supports_follow_symlinks
+)
 
 
 def default_alpha_rehearsal_directory() -> Path:
@@ -100,6 +120,18 @@ class JsonAlphaRehearsalStore:
         return f"{self._validate_rehearsal_id(rehearsal_id)}.json"
 
     def list_rehearsal_ids(self) -> list[str]:
+        if not _DESCRIPTOR_BACKEND_SUPPORTED:
+            try:
+                return sorted(
+                    path.stem
+                    for path in list_regular_files(self.directory)
+                    if path.suffix == ".json" and _REHEARSAL_ID.fullmatch(path.stem)
+                )
+            except UnsafeAtomicPath as error:
+                raise UnsafeAlphaRehearsalStore(
+                    "alpha-rehearsal directory and existing ancestors must not be "
+                    "symbolic links, reparse points, or non-directories"
+                ) from error
         try:
             with self._open_directory(create=False) as directory_fd:
                 rehearsal_ids: list[str] = []
@@ -128,14 +160,35 @@ class JsonAlphaRehearsalStore:
             record.model_dump(mode="python")
         )
         target_name = self._target_name(validated.rehearsal_id)
+        if not _DESCRIPTOR_BACKEND_SUPPORTED:
+            try:
+                return atomic_create_text(
+                    self.directory / target_name,
+                    validated.model_dump_json(indent=2) + "\n",
+                )
+            except UnsafeAtomicPath as error:
+                raise UnsafeAlphaRehearsalStore(
+                    "alpha-rehearsal directory and existing ancestors must not be "
+                    "symbolic links, reparse points, or non-directories"
+                ) from error
         with self._open_directory(create=True) as directory_fd:
             self._write(directory_fd, target_name, validated)
         return self.directory / target_name
 
     def load(self, rehearsal_id: str) -> AlphaRehearsalRecord:
         target_name = self._target_name(rehearsal_id)
-        with self._open_directory(create=False) as directory_fd:
-            payload = self._read(directory_fd, target_name)
+        if _DESCRIPTOR_BACKEND_SUPPORTED:
+            with self._open_directory(create=False) as directory_fd:
+                payload = self._read(directory_fd, target_name)
+        else:
+            try:
+                payload = json.loads(
+                    read_text_no_follow(self.directory / target_name)
+                )
+            except UnsafeAtomicPath as error:
+                raise UnsafeAlphaRehearsalStore(
+                    "alpha-rehearsal record must be a regular local file"
+                ) from error
         validated = AlphaRehearsalRecord.model_validate(payload)
         if validated.rehearsal_id != rehearsal_id:
             raise ValueError("stored rehearsal record does not match requested ID")
