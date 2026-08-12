@@ -3,11 +3,14 @@ from pathlib import Path
 
 import pytest
 
+import scopeproof_core.storage.atomic_files as atomic_files_module
 from scopeproof_core.storage.atomic_files import (
     UnsafeAtomicPath,
     atomic_create_text,
     atomic_replace_text,
+    ensure_safe_directory,
     exclusive_path_claim,
+    list_regular_files,
     read_text_no_follow,
 )
 
@@ -21,6 +24,45 @@ def test_atomic_create_never_overwrites_existing_target(tmp_path: Path) -> None:
 
     assert target.read_bytes() == b"owner bytes\n"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["report.json"]
+
+
+def test_atomic_create_builds_missing_safe_directories(tmp_path: Path) -> None:
+    target = tmp_path / "nested" / "records" / "record.json"
+
+    assert atomic_create_text(target, "validated\n") == target
+    assert target.read_text(encoding="utf-8") == "validated\n"
+
+
+def test_safe_directory_rejects_non_directory_component(tmp_path: Path) -> None:
+    component = tmp_path / "not-a-directory"
+    component.write_text("file\n", encoding="utf-8")
+
+    with pytest.raises(UnsafeAtomicPath, match="must be a directory"):
+        ensure_safe_directory(component / "nested", create=True)
+
+
+def test_regular_file_read_rejects_directory_target(tmp_path: Path) -> None:
+    target = tmp_path / "record.json"
+    target.mkdir()
+
+    with pytest.raises(UnsafeAtomicPath, match="regular file"):
+        read_text_no_follow(target)
+
+
+def test_missing_directory_lists_no_records(tmp_path: Path) -> None:
+    assert list_regular_files(tmp_path / "absent") == []
+
+
+def test_read_and_listing_return_only_regular_direct_children(tmp_path: Path) -> None:
+    record = tmp_path / "record.json"
+    record.write_text("validated\n", encoding="utf-8")
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    (nested / "nested.json").write_text("not direct\n", encoding="utf-8")
+    (tmp_path / "linked.json").symlink_to(record)
+
+    assert read_text_no_follow(record) == "validated\n"
+    assert list_regular_files(tmp_path) == [record]
 
 
 def test_failed_exclusive_publish_cleans_private_temporary(
@@ -37,6 +79,50 @@ def test_failed_exclusive_publish_cleans_private_temporary(
         atomic_create_text(target, "validated bytes\n")
 
     assert list(tmp_path.iterdir()) == []
+
+
+def test_atomic_create_retries_private_temporary_name_collision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".record-collision.tmp").write_text("occupied", encoding="utf-8")
+    tokens = iter(("collision", "available"))
+    monkeypatch.setattr(atomic_files_module.secrets, "token_hex", lambda _size: next(tokens))
+
+    target = atomic_create_text(tmp_path / "record.json", "validated\n")
+
+    assert target.read_text(encoding="utf-8") == "validated\n"
+
+
+def test_zero_byte_progress_fails_and_cleans_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(os, "write", lambda *_args, **_kwargs: 0)
+
+    with pytest.raises(OSError, match="complete local record"):
+        atomic_create_text(tmp_path / "record.json", "validated\n")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_atomic_create_uses_legacy_link_signature_when_needed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_link = os.link
+    calls = 0
+
+    def legacy_link(source, target, **kwargs):
+        nonlocal calls
+        calls += 1
+        if kwargs:
+            raise TypeError("follow_symlinks unsupported")
+        return original_link(source, target)
+
+    monkeypatch.setattr(os, "link", legacy_link)
+
+    target = atomic_create_text(tmp_path / "record.json", "validated\n")
+
+    assert target.read_text(encoding="utf-8") == "validated\n"
+    assert calls == 2
 
 
 def test_directory_sync_unavailability_after_create_does_not_report_false_failure(
@@ -57,6 +143,17 @@ def test_directory_sync_unavailability_after_create_does_not_report_false_failur
 
     assert atomic_create_text(target, "committed bytes\n") == target
     assert target.read_bytes() == b"committed bytes\n"
+
+
+def test_directory_sync_is_optional_when_flags_or_open_are_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delattr(os, "O_DIRECTORY")
+    atomic_files_module._fsync_directory(tmp_path)
+
+    monkeypatch.undo()
+    monkeypatch.setattr(os, "open", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError()))
+    atomic_files_module._fsync_directory(tmp_path)
 
 
 def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
@@ -102,6 +199,18 @@ def test_directory_sync_unavailability_after_replace_does_not_report_false_failu
 
     assert target.read_bytes() == b"new valid bytes\n"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
+
+
+def test_competing_mutation_claim_fails_without_removing_owner_claim(tmp_path: Path) -> None:
+    target = tmp_path / "alpha-record.json"
+    target.write_text("valid\n", encoding="utf-8")
+
+    with (
+        exclusive_path_claim(target),
+        pytest.raises(FileExistsError, match="another process"),
+        exclusive_path_claim(target),
+    ):
+        raise AssertionError("competing claim must never be entered")
 
 
 def test_portable_path_operations_reject_symlinked_ancestor(tmp_path: Path) -> None:
