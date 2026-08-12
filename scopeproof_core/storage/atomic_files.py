@@ -585,6 +585,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             temporary, descriptor = _open_private_temporary_at(directory_fd, target.stem)
             temporary_metadata = os.fstat(descriptor)
             temporary_identity = (temporary_metadata.st_dev, temporary_metadata.st_ino)
+            published_identity: tuple[int, int] | None = None
             try:
                 _write_all(descriptor, payload)
                 expected = os.fstat(descriptor)
@@ -598,6 +599,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                     )
                 except FileExistsError:
                     raise FileExistsError(f"target already exists: {target}") from None
+                published_identity = (expected.st_dev, expected.st_ino)
                 published = _require_regular_at(directory_fd, target.name)
                 if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
                     raise UnsafeAtomicPath("private temporary file changed before publication")
@@ -613,6 +615,21 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             finally:
                 if descriptor >= 0:
                     os.close(descriptor)
+                publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
+                if not committed and published_identity is not None:
+                    try:
+                        _quarantine_and_remove_at(
+                            directory_fd,
+                            target.name,
+                            published_identity,
+                            changed_message=(
+                                "published file changed during failed create cleanup"
+                            ),
+                        )
+                    except FileNotFoundError:
+                        pass
+                    except (OSError, UnsafeAtomicPath) as error:
+                        publication_cleanup_error = error
                 try:
                     _quarantine_and_remove_at(
                         directory_fd,
@@ -625,6 +642,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 except (OSError, UnsafeAtomicPath):
                     if not committed:
                         raise
+                if publication_cleanup_error is not None:
+                    raise publication_cleanup_error
     portable_directory = _capture_safe_directory(target.parent, create=True)
     parent = portable_directory.path
     parent_identity = _directory_identity(parent)
