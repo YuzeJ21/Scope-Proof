@@ -793,6 +793,38 @@ def test_review_rolls_back_report_when_review_persistence_fails(
     assert invalid_storage.read_bytes() == b"owner bytes\n"
 
 
+def test_review_rolls_back_report_when_persistence_is_interrupted(
+    tmp_path: Path,
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "report.md"
+    storage = tmp_path / "reviews"
+
+    with (
+        patch.object(cli_module.JsonReviewStore, "save", side_effect=KeyboardInterrupt),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(storage),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert not report.exists()
+    assert not list(storage.glob("*.json"))
+
+
 def test_review_rejects_unsupported_report_suffix_before_reading_inputs(
     tmp_path: Path, capsys
 ) -> None:

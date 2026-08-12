@@ -40,6 +40,7 @@ _DESCRIPTOR_BACKEND_SUPPORTED = (
     and os.stat in os.supports_dir_fd
     and os.stat in os.supports_follow_symlinks
     and os.unlink in os.supports_dir_fd
+    and os.rename in os.supports_dir_fd
     and os.link in os.supports_dir_fd
     and os.link in os.supports_follow_symlinks
 )

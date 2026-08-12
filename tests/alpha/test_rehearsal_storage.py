@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
@@ -60,6 +62,24 @@ def test_portable_rehearsal_backend_round_trips_without_posix_descriptors(
     assert store.list_rehearsal_ids() == [record.rehearsal_id]
     with pytest.raises(FileExistsError):
         store.save(record)
+
+
+def test_rehearsal_backend_requires_descriptor_relative_rename() -> None:
+    script = """
+import os
+os.supports_dir_fd.discard(os.rename)
+import scopeproof_core.alpha.rehearsal_storage as storage
+assert storage._DESCRIPTOR_BACKEND_SUPPORTED is False
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_rehearsal_listing_is_deterministically_sorted(tmp_path: Path) -> None:

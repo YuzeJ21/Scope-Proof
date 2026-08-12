@@ -254,7 +254,7 @@ def _review(args: argparse.Namespace) -> int:
         metadata["report"] = str(report_path)
     try:
         path = JsonReviewStore(Path(args.storage_dir)).save(state)
-    except Exception:
+    except BaseException:
         if report_receipt is not None:
             rollback_created_file(report_receipt)
         raise

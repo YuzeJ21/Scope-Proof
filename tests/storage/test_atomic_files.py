@@ -567,6 +567,10 @@ def test_portable_create_refuses_existing_target(
     assert target.read_bytes() == b"owner bytes\n"
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents unlinking a published link to an open temporary file",
+)
 def test_portable_failed_create_preserves_foreign_target_replacing_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
