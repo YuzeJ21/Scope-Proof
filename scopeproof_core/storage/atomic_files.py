@@ -434,7 +434,24 @@ def _create_backup_at(
                         ),
                     )
             raise
-        metadata = _require_regular_at(directory_fd, backup)
+        try:
+            metadata = _require_regular_at(directory_fd, backup)
+        except BaseException:
+            try:
+                interrupted = _require_regular_at(directory_fd, backup)
+            except (OSError, UnsafeAtomicPath):
+                pass
+            else:
+                if _same_file(interrupted, expected):
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        backup,
+                        expected,
+                        changed_message=(
+                            "existing record changed during failed backup cleanup"
+                        ),
+                    )
+            raise
         if not _same_file(metadata, expected):
             _quarantine_and_remove_at(
                 directory_fd,
@@ -471,7 +488,23 @@ def _create_backup_path(target: Path, expected: tuple[int, int]) -> Path:
                         ),
                     )
             raise
-        metadata = _require_regular_file(backup)
+        try:
+            metadata = _require_regular_file(backup)
+        except BaseException:
+            try:
+                interrupted = _require_regular_file(backup)
+            except (OSError, UnsafeAtomicPath):
+                pass
+            else:
+                if _same_file(interrupted, expected):
+                    _quarantine_and_remove_path(
+                        backup,
+                        expected,
+                        changed_message=(
+                            "existing record changed during failed backup cleanup"
+                        ),
+                    )
+            raise
         if not _same_file(metadata, expected):
             _quarantine_and_remove_path(
                 backup,

@@ -1964,6 +1964,57 @@ def test_interrupted_backup_publication_cleans_owned_backup(
 
 
 @pytest.mark.parametrize("portable", [False, True])
+def test_backup_metadata_failure_cleans_owned_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    target = tmp_path / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    failed = False
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+        original_require = atomic_files_module._require_regular_file
+
+        def fail_first_backup_metadata(path: Path):
+            nonlocal failed
+            if path.suffix == ".rollback" and not failed:
+                failed = True
+                raise OSError("simulated backup metadata failure")
+            return original_require(path)
+
+        monkeypatch.setattr(
+            atomic_files_module,
+            "_require_regular_file",
+            fail_first_backup_metadata,
+        )
+    else:
+        original_require_at = atomic_files_module._require_regular_at
+
+        def fail_first_backup_metadata_at(directory_fd: int, name: str):
+            nonlocal failed
+            if name.endswith(".rollback") and not failed:
+                failed = True
+                raise OSError("simulated backup metadata failure")
+            return original_require_at(directory_fd, name)
+
+        monkeypatch.setattr(
+            atomic_files_module,
+            "_require_regular_at",
+            fail_first_backup_metadata_at,
+        )
+
+    with (
+        pytest.raises(OSError, match="backup metadata failure"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
+
+
+@pytest.mark.parametrize("portable", [False, True])
 def test_backup_identity_drift_preserves_foreign_replacement(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
