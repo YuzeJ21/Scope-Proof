@@ -1018,6 +1018,10 @@ def test_missing_record_claim_failure_cleans_claim_file(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents deleting an open mutation claim",
+)
 def test_claim_cleanup_never_deletes_recreated_foreign_claim(tmp_path: Path) -> None:
     target = tmp_path / "record.json"
     target.write_text("valid\n", encoding="utf-8")
@@ -1072,6 +1076,10 @@ def test_portable_replace_never_restores_through_swapped_parent(
     assert any(path.suffix == ".rollback" for path in moved.iterdir())
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents renaming a directory containing an open mutation claim",
+)
 def test_portable_claim_cleanup_never_deletes_foreign_swapped_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1097,6 +1105,10 @@ def test_portable_claim_cleanup_never_deletes_foreign_swapped_path(
     assert (moved / claim_name).exists()
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents deleting an open mutation claim",
+)
 def test_portable_claim_cleanup_preserves_recreated_foreign_claim(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1417,6 +1429,10 @@ def test_portable_create_rejects_ancestor_swap_before_publication(
     assert list(moved.iterdir()) == []
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents renaming a directory containing an open mutation claim",
+)
 def test_portable_replace_rejects_ancestor_swap_after_claim(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1448,6 +1464,10 @@ def test_portable_replace_rejects_ancestor_swap_after_claim(
     assert (outside / target.name).read_text(encoding="utf-8") == "attacker bytes\n"
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows prevents renaming a directory containing open storage files",
+)
 def test_portable_replace_cleanup_never_deletes_foreign_swapped_temporary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

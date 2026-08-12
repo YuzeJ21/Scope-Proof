@@ -29,6 +29,13 @@ outcome from an unresolved case. A competing process fails without mutation. A s
 process termination is intentionally fail-closed rather than guessed safe; recovery requires an
 owner-observed local cleanup, never silent takeover.
 
+That serialization guarantee applies to ScopeProof writers that use the shared claim boundary.
+Standard portable filesystem APIs do not provide an atomic compare-and-swap rename, so a same-user
+process that deliberately bypasses the claim and mutates app-owned files during the final rename is
+outside the supported integrity boundary. ScopeProof still revalidates identities at operation
+boundaries and fails closed when it can observe interference; it does not claim protection from an
+account that can directly rewrite the storage directory.
+
 When all required capabilities are available, the shared primitives keep the opened POSIX
 directory descriptor through create, claim, and replacement so an ancestor swap cannot redirect a
 mutation. Capability detection uses `getattr`/`hasattr` and never dereferences missing constants

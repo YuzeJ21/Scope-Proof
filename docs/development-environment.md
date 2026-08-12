@@ -89,6 +89,10 @@ and installs the wheel; checks dependencies and both CLI versions; and runs both
 deterministic benchmarks. It is a required dependency of `verify`. A passing lane is package,
 CLI, and storage evidence only: it is not a real Windows desktop workflow, browser workflow,
 screen-reader observation, accessibility-conformance result, customer signal, or Stage 1 credit.
+The process-concurrency contract serializes ScopeProof writers through app-owned mutation claims.
+It does not claim atomic compare-and-swap protection against a same-user process that deliberately
+bypasses those claims and directly rewrites the storage directory during the final filesystem
+rename; that hostile local-account scenario remains unsupported and must not be counted as proven.
 
 ## Known-good UI baseline
 

@@ -1454,6 +1454,19 @@ def test_ci_validates_declared_python_compatibility() -> None:
     )
 
 
+def test_platform_storage_docs_do_not_overclaim_hostile_local_account_protection() -> None:
+    design = Path(
+        "docs/superpowers/specs/2026-08-12-platform-safe-alpha-storage-design.md"
+    ).read_text(encoding="utf-8")
+    environment = Path("docs/development-environment.md").read_text(encoding="utf-8")
+    combined = f"{design}\n{environment}"
+
+    assert "ScopeProof writers that use the shared claim boundary" in combined
+    assert "same-user\nprocess that deliberately bypasses" in combined
+    assert "atomic compare-and-swap protection" in combined
+    assert "remains unsupported" in combined
+
+
 def test_readme_documents_all_export_formats() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
