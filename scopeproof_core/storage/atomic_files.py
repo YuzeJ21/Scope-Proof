@@ -722,6 +722,10 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 _write_all(descriptor, payload)
                 expected = os.fstat(descriptor)
                 try:
+                    os.close(descriptor)
+                finally:
+                    descriptor = -1
+                try:
                     os.link(
                         temporary,
                         target.name,
@@ -808,6 +812,10 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         _assert_directory_identity(parent, parent_identity)
         _write_all(descriptor, payload)
         expected = os.fstat(descriptor)
+        try:
+            os.close(descriptor)
+        finally:
+            descriptor = -1
         try:
             try:
                 _assert_portable_directory(portable_directory)
@@ -1054,6 +1062,10 @@ def atomic_replace_text(
             backup = _create_backup_at(directory_fd, target.name, existing_identity)
             _write_all(descriptor, text.encode("utf-8"))
             expected = os.fstat(descriptor)
+            try:
+                os.close(descriptor)
+            finally:
+                descriptor = -1
             current = _require_regular_at(directory_fd, target.name)
             if not _same_file(current, existing_identity):
                 preserve_backup = True
@@ -1160,8 +1172,10 @@ def atomic_replace_text(
         try:
             _write_all(descriptor, text.encode("utf-8"))
         finally:
-            os.close(descriptor)
-            descriptor = -1
+            try:
+                os.close(descriptor)
+            finally:
+                descriptor = -1
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         current = _require_regular_file(target)

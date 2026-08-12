@@ -162,6 +162,34 @@ def test_descriptor_rehearsal_metadata_failure_preserves_ambiguous_temporary(
     not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
     reason="descriptor-relative rehearsal backend is unavailable",
 )
+def test_descriptor_rehearsal_close_failure_happens_before_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_close = os.close
+    original_fstat = os.fstat
+    failed = False
+
+    def close_regular_then_fail(descriptor: int) -> None:
+        nonlocal failed
+        metadata = original_fstat(descriptor)
+        original_close(descriptor)
+        if rehearsal_storage_module.stat.S_ISREG(metadata.st_mode) and not failed:
+            failed = True
+            raise OSError("simulated rehearsal close failure")
+
+    monkeypatch.setattr(os, "close", close_regular_then_fail)
+
+    with pytest.raises(OSError, match="rehearsal close failure"):
+        JsonAlphaRehearsalStore(tmp_path).save(alpha_rehearsal())
+
+    assert failed is True
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
 def test_rehearsal_temporary_allocator_fails_after_collision_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

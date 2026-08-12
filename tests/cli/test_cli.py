@@ -825,6 +825,47 @@ def test_review_rolls_back_report_when_persistence_is_interrupted(
     assert not list(storage.glob("*.json"))
 
 
+def test_review_keeps_report_when_persistence_committed_before_teardown_failure(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "report.md"
+    storage = tmp_path / "reviews"
+    original_save = JsonReviewStore.save
+
+    def commit_then_fail(store, state, **kwargs):
+        original_save(store, state, **kwargs)
+        raise OSError("simulated post-commit teardown failure")
+
+    monkeypatch.setattr(JsonReviewStore, "save", commit_then_fail)
+
+    assert (
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(storage),
+                "--report",
+                str(report),
+            ]
+        )
+        == 0
+    )
+
+    metadata = json.loads(capsys.readouterr().out)
+    review_id = metadata["review_id"]
+    assert JsonReviewStore(storage).load(review_id).review.review_id == review_id
+    assert metadata["record"] == str(storage / f"{review_id}.json")
+    assert report.exists()
+
+
 def test_review_rejects_unsupported_report_suffix_before_reading_inputs(
     tmp_path: Path, capsys
 ) -> None:

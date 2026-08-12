@@ -481,6 +481,36 @@ def test_temporary_metadata_failure_preserves_ambiguous_temporary(
     assert len([path for path in tmp_path.iterdir() if path.suffix == ".tmp"]) == 1
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_temporary_close_failure_happens_before_create_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_close = os.close
+    original_fstat = os.fstat
+    failed = False
+
+    def close_regular_then_fail(descriptor: int) -> None:
+        nonlocal failed
+        metadata = original_fstat(descriptor)
+        original_close(descriptor)
+        if atomic_files_module.stat.S_ISREG(metadata.st_mode) and not failed:
+            failed = True
+            raise OSError("simulated temporary close failure")
+
+    monkeypatch.setattr(os, "close", close_regular_then_fail)
+    target = tmp_path / "record.json"
+
+    with pytest.raises(OSError, match="temporary close failure"):
+        atomic_create_text(target, "validated\n")
+
+    assert failed is True
+    assert list(tmp_path.iterdir()) == []
+
+
 @pytest.mark.skipif(
     os.name == "nt",
     reason="Windows prevents unlinking an open temporary file",
@@ -1062,6 +1092,38 @@ def test_portable_claimed_replace_commits_and_cleans_artifacts(
 
     assert target.read_bytes() == b"new valid bytes\n"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_temporary_close_failure_happens_before_replacement_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    target = tmp_path / "record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_close = os.close
+    original_fstat = os.fstat
+    failed = False
+
+    def close_regular_then_fail(descriptor: int) -> None:
+        nonlocal failed
+        metadata = original_fstat(descriptor)
+        original_close(descriptor)
+        if atomic_files_module.stat.S_ISREG(metadata.st_mode) and not failed:
+            failed = True
+            raise OSError("simulated replacement close failure")
+
+    with exclusive_path_claim(target) as claim:
+        monkeypatch.setattr(os, "close", close_regular_then_fail)
+        with pytest.raises(OSError, match="replacement close failure"):
+            atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    assert failed is True
+    assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
 
 
 @pytest.mark.skipif(

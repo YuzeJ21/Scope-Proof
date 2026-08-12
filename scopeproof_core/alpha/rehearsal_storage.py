@@ -282,6 +282,10 @@ class JsonAlphaRehearsalStore:
                 remaining = remaining[written:]
             os.fsync(temporary_fd)
             try:
+                os.close(temporary_fd)
+            finally:
+                temporary_fd = -1
+            try:
                 os.link(
                     temporary_name,
                     target_name,
@@ -320,7 +324,8 @@ class JsonAlphaRehearsalStore:
             with suppress(OSError):
                 os.fsync(directory_fd)
         finally:
-            os.close(temporary_fd)
+            if temporary_fd >= 0:
+                os.close(temporary_fd)
             publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
             if publication_created and not published:
                 try:

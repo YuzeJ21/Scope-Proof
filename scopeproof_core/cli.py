@@ -252,12 +252,22 @@ def _review(args: argparse.Namespace) -> int:
         report_path, renderer = report_target
         report_receipt = atomic_create_text_with_receipt(report_path, renderer(state))
         metadata["report"] = str(report_path)
+    storage_dir = Path(args.storage_dir)
+    store = JsonReviewStore(storage_dir)
     try:
-        path = JsonReviewStore(Path(args.storage_dir)).save(state)
-    except BaseException:
-        if report_receipt is not None:
-            rollback_created_file(report_receipt)
-        raise
+        path = store.save(state)
+    except BaseException as save_error:
+        try:
+            committed = store.load(state.review.review_id)
+        except BaseException:
+            if report_receipt is not None:
+                rollback_created_file(report_receipt)
+            raise save_error from None
+        if committed != state:
+            if report_receipt is not None:
+                rollback_created_file(report_receipt)
+            raise save_error from None
+        path = storage_dir / f"{state.review.review_id}.json"
     metadata["record"] = str(path)
     print(json.dumps(metadata, sort_keys=True))
     return 0
