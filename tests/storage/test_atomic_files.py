@@ -318,6 +318,27 @@ def test_portable_listing_ignores_entry_removed_before_metadata_read(
     assert list_regular_files(tmp_path) == []
 
 
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_descriptor_listing_ignores_entry_removed_before_metadata_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_stat = os.stat
+
+    monkeypatch.setattr(os, "listdir", lambda _directory_fd: ["vanished.json"])
+
+    def vanish_before_metadata(path, *args, **kwargs):
+        if path == "vanished.json" and kwargs.get("dir_fd") is not None:
+            raise FileNotFoundError("removed during listing")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", vanish_before_metadata)
+
+    assert list_regular_files(tmp_path) == []
+
+
 def test_content_hash_rejects_record_identity_drift(tmp_path: Path) -> None:
     target = tmp_path / "record.json"
     target.write_text("validated\n", encoding="utf-8")
