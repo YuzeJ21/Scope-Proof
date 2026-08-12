@@ -226,7 +226,7 @@ def list_regular_files(directory: Path) -> list[Path]:
 
 def _open_private_temporary(parent: Path, stem: str) -> tuple[Path, int]:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
-    bounded_stem = sha256(stem.encode("utf-8")).hexdigest()[:16]
+    bounded_stem = sha256(os.fsencode(stem)).hexdigest()[:16]
     for _ in range(128):
         temporary = parent / f".{bounded_stem}-{secrets.token_hex(16)}.tmp"
         try:
@@ -238,7 +238,7 @@ def _open_private_temporary(parent: Path, stem: str) -> tuple[Path, int]:
 
 def _open_private_temporary_at(directory_fd: int, stem: str) -> tuple[str, int]:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
-    bounded_stem = sha256(stem.encode("utf-8")).hexdigest()[:16]
+    bounded_stem = sha256(os.fsencode(stem)).hexdigest()[:16]
     for _ in range(128):
         name = f".{bounded_stem}-{secrets.token_hex(16)}.tmp"
         try:
@@ -353,7 +353,7 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
     target = Path(os.path.abspath(target))
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
-            digest = sha256(target.name.encode("utf-8")).hexdigest()
+            digest = sha256(os.fsencode(target.name)).hexdigest()
             claim_name = f".{digest}.claim"
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
             try:
@@ -380,7 +380,7 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         return
     parent = ensure_safe_directory(target.parent, create=False)
     parent_identity = _directory_identity(parent)
-    digest = sha256(target.name.encode("utf-8")).hexdigest()
+    digest = sha256(os.fsencode(target.name)).hexdigest()
     claim = parent / f".{digest}.claim"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
     try:
