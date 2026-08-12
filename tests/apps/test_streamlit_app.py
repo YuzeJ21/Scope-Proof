@@ -17,7 +17,7 @@ from scopeproof_core.alpha.storage import (
 )
 from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.gates.evaluator import evaluate_gate
-from scopeproof_core.github.client import GitHubNetworkError
+from scopeproof_core.github.client import GitHubNetworkError, GitHubPaginationError
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
     append_resolution,
@@ -1599,7 +1599,16 @@ def test_canonical_public_pr_url_enables_fetch_without_format_warning() -> None:
     assert app.button(key="fetch_pr").disabled is False
 
 
-def test_public_pr_fetch_failure_preserves_inputs_and_shows_retry_guidance() -> None:
+@pytest.mark.parametrize(
+    "fetch_error",
+    [
+        GitHubNetworkError("Could not reach GitHub."),
+        GitHubPaginationError("GitHub pagination target was rejected."),
+    ],
+)
+def test_public_pr_fetch_failure_preserves_inputs_and_shows_retry_guidance(
+    fetch_error: Exception,
+) -> None:
     requirement = "The export error state remains visible and retryable."
     app = new_app()
     app = app.text_input(key="pr_url").set_value(
@@ -1610,12 +1619,12 @@ def test_public_pr_fetch_failure_preserves_inputs_and_shows_retry_guidance() -> 
 
     with patch(
         "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
-        side_effect=GitHubNetworkError("Could not reach GitHub."),
+        side_effect=fetch_error,
     ):
         app = app.button(key="fetch_pr").click().run()
 
     rendered_errors = "\n".join(item.value for item in app.error)
-    assert "Could not reach GitHub." in rendered_errors
+    assert str(fetch_error) in rendered_errors
     assert "No review data was changed." in rendered_errors
     assert "Verify that the PR is public and try again." in rendered_errors
     assert app.text_input(key="pr_url").value == "https://github.com/acme/widget/pull/42"
