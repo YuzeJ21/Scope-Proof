@@ -65,8 +65,10 @@ A `next` target is accepted only when all conditions hold:
 
 1. The URL is absolute HTTPS with hostname exactly `api.github.com`, no user information, no
    fragment, and the default HTTPS port.
-2. Its path exactly matches the collection path initially requested for that pull request. A file
-   page cannot become a commit page, another repository, another pull request, or another endpoint.
+2. Its path matches either the collection path initially requested for that pull request or
+   GitHub's numeric `/repositories/ID` canonical alias bound to the verified base-repository ID.
+   A file page cannot become a commit page, another repository, another pull request, or another
+   endpoint.
 3. Its query contains exactly one positive integer `page` and one `per_page` matching the initial
    page size; unknown and duplicate parameters are rejected.
 4. The response exposes at most one unambiguous `rel="next"` target.

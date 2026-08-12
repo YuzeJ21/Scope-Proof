@@ -359,7 +359,8 @@ class GitHubClient:
     def _validated_pagination_target(
         target: str,
         *,
-        expected_path: str,
+        expected_paths: frozenset[str],
+        canonical_path: str,
         per_page: int,
     ) -> tuple[str, str]:
         try:
@@ -385,7 +386,7 @@ class GitHubClient:
             raise GitHubPaginationError(
                 "GitHub pagination target is outside the expected GitHub API origin."
             )
-        if parsed_target.path != expected_path:
+        if parsed_target.path not in expected_paths:
             raise GitHubPaginationError(
                 "GitHub pagination target escaped the expected repository endpoint."
             )
@@ -416,20 +417,22 @@ class GitHubClient:
             raise GitHubPaginationError(
                 "GitHub pagination target query is malformed or ambiguous."
             )
-        canonical_target = f"{expected_path}?page={page}&per_page={per_page}"
-        return canonical_target, canonical_target
+        canonical_target = f"{canonical_path}?page={page}&per_page={per_page}"
+        relative_target = f"{parsed_target.path}?page={page}&per_page={per_page}"
+        return canonical_target, relative_target
 
     def _get_paginated(
         self,
         path: str,
         *,
-        expected_path: str,
+        expected_paths: frozenset[str],
+        canonical_path: str,
         per_page: int,
         retain_limit: int,
         budget: _FetchBudget,
     ) -> _PaginatedResult:
         """Return one ordered, lineage-bound collection with bounded overflow."""
-        canonical_initial = f"{expected_path}?page=1&per_page={per_page}"
+        canonical_initial = f"{canonical_path}?page=1&per_page={per_page}"
         visited = {canonical_initial}
         response = self._get(
             path,
@@ -462,7 +465,8 @@ class GitHubClient:
             if next_link is not None:
                 canonical_target, relative_target = self._validated_pagination_target(
                     next_link,
-                    expected_path=expected_path,
+                    expected_paths=expected_paths,
+                    canonical_path=canonical_path,
                     per_page=per_page,
                 )
                 if canonical_target in visited:
@@ -767,11 +771,29 @@ class GitHubClient:
             pr_data,
             expected_repository=f"{owner}/{repository}",
         )
+        base = pr_data.get("base") if isinstance(pr_data, dict) else None
+        repository_data = base.get("repo") if isinstance(base, dict) else None
+        repository_id = (
+            repository_data.get("id") if isinstance(repository_data, dict) else None
+        )
+        verified_repository_id = (
+            repository_id
+            if isinstance(repository_id, int)
+            and not isinstance(repository_id, bool)
+            and repository_id > 0
+            else None
+        )
 
         files_path = f"{root}/pulls/{pr_number}/files"
+        file_paths = {files_path}
+        if verified_repository_id is not None:
+            file_paths.add(
+                f"/repositories/{verified_repository_id}/pulls/{pr_number}/files"
+            )
         file_result = self._get_paginated(
             files_path,
-            expected_path=files_path,
+            expected_paths=frozenset(file_paths),
+            canonical_path=files_path,
             per_page=min(100, self.max_files + 1),
             retain_limit=self.max_files,
             budget=budget,
@@ -784,9 +806,15 @@ class GitHubClient:
         observed_file_overflow = file_result.items[self.max_files :]
 
         commits_path = f"{root}/pulls/{pr_number}/commits"
+        commit_paths = {commits_path}
+        if verified_repository_id is not None:
+            commit_paths.add(
+                f"/repositories/{verified_repository_id}/pulls/{pr_number}/commits"
+            )
         commit_result = self._get_paginated(
             commits_path,
-            expected_path=commits_path,
+            expected_paths=frozenset(commit_paths),
+            canonical_path=commits_path,
             per_page=min(100, self.max_commits + 1),
             retain_limit=self.max_commits,
             budget=budget,

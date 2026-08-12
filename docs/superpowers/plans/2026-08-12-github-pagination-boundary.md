@@ -44,7 +44,8 @@ malformed or exhausted traversals raise a user-safe ingestion error before adapt
 - Produces: private `_FetchBudget.charge_request()`, `_FetchBudget.charge_response(response)`,
   `_FetchBudget.charge_page()`, and `_FetchBudget.charge_items(count)` methods.
 - Produces: private `_PaginatedResult(items: list[dict], truncated: bool)`.
-- Produces: `_get_paginated(path, *, expected_path, per_page, retain_limit, budget)`.
+- Produces: `_get_paginated(path, *, expected_paths, canonical_path, per_page, retain_limit,
+  budget)`.
 - Consumes: existing `_get`, `_raise_for_pr`, and `httpx.Response` behavior.
 
 - [ ] **Step 1: Write failing origin, lineage, and cycle tests**
@@ -116,9 +117,10 @@ Extend `GitHubClient.__init__` with `max_commits=250`, `max_requests=16`,
 `max_total_response_bytes=16 * 1024 * 1024`. Reject non-positive limits with `ValueError`.
 
 Implement a target validator with `urlsplit` and `parse_qsl(keep_blank_values=True)`. Require HTTPS,
-hostname `api.github.com`, no user information or fragment, port absent or 443, exact collection
-path, and exactly `[('page', positive_integer), ('per_page', expected_size)]` after deterministic
-sorting. Return a relative canonical target such as:
+hostname `api.github.com`, no user information or fragment, port absent or 443, the exact named
+collection path or GitHub's `/repositories/ID` alias bound to verified PR metadata, and exactly
+`[('page', positive_integer), ('per_page', expected_size)]` after deterministic sorting. Return a
+relative request target and one named-path canonical identity such as:
 
 ```python
 return f"{expected_path}?page={page}&per_page={per_page}"
@@ -201,7 +203,8 @@ files with `per_page=min(100, max_files + 1)` and commits with
 ```python
 file_result = self._get_paginated(
     f"{root}/pulls/{pr_number}/files",
-    expected_path=f"{root}/pulls/{pr_number}/files",
+    expected_paths=frozenset({named_path, verified_numeric_path}),
+    canonical_path=named_path,
     per_page=file_page_size,
     retain_limit=self.max_files,
     budget=budget,

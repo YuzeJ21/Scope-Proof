@@ -9,6 +9,7 @@ from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
 
 HEAD_SHA = "b" * 40
 PR_URL = "https://github.com/acme/widget/pull/42"
+REPOSITORY_ID = 12_345
 
 
 def _pull_payload() -> dict:
@@ -21,6 +22,7 @@ def _pull_payload() -> dict:
             "sha": "a" * 40,
             "repo": {
                 "full_name": "acme/widget",
+                "id": REPOSITORY_ID,
                 "private": False,
                 "visibility": "public",
             },
@@ -57,9 +59,15 @@ def pagination_transport(
         page = int(request.url.params.get("page", "1"))
         if path == "/repos/acme/widget/pulls/42":
             return response(pull_payload or _pull_payload())
-        if path == "/repos/acme/widget/pulls/42/files":
+        if path in {
+            "/repos/acme/widget/pulls/42/files",
+            f"/repositories/{REPOSITORY_ID}/pulls/42/files",
+        }:
             return response(file_pages.get(page, []), link=file_links.get(page))
-        if path == "/repos/acme/widget/pulls/42/commits":
+        if path in {
+            "/repos/acme/widget/pulls/42/commits",
+            f"/repositories/{REPOSITORY_ID}/pulls/42/commits",
+        }:
             return response(commit_pages.get(page, []), link=commit_links.get(page))
         if path == f"/repos/acme/widget/commits/{HEAD_SHA}/check-runs":
             return response({"check_runs": []})
@@ -184,6 +192,65 @@ def test_pagination_rejects_off_origin_before_forwarding_token() -> None:
         "api.github.com",
     ]
     assert all(request.url.host != "attacker.invalid" for request in requests)
+
+
+@pytest.mark.parametrize("collection", ["files", "commits"])
+def test_pagination_accepts_github_numeric_repository_canonical_path(
+    collection: str,
+) -> None:
+    item = (
+        {
+            "filename": "src/second.py",
+            "status": "modified",
+            "patch": "@@ -1 +1 @@\n+second",
+        }
+        if collection == "files"
+        else {
+            "sha": "2" * 40,
+            "commit": {"message": "Second"},
+            "html_url": "https://github.com/acme/widget/commit/2",
+        }
+    )
+    next_link = (
+        f"https://api.github.com/repositories/{REPOSITORY_ID}/pulls/42/"
+        f"{collection}?per_page=100&page=2"
+    )
+    transport_kwargs = (
+        {
+            "file_pages": {1: [], 2: [item]},
+            "file_links": {1: f'<{next_link}>; rel="next"'},
+        }
+        if collection == "files"
+        else {
+            "commit_pages": {1: [], 2: [item]},
+            "commit_links": {1: f'<{next_link}>; rel="next"'},
+        }
+    )
+    transport, requests = pagination_transport(**transport_kwargs)
+
+    snapshot = GitHubClient(transport=transport).fetch_pull_request(PR_URL)
+
+    observed = snapshot.files if collection == "files" else snapshot.commits
+    assert len(observed) == 1
+    assert any(
+        request.url.path.startswith(f"/repositories/{REPOSITORY_ID}/")
+        for request in requests
+    )
+
+
+def test_pagination_rejects_numeric_canonical_path_for_another_repository() -> None:
+    escaped_link = (
+        "https://api.github.com/repositories/999999/pulls/42/"
+        "files?per_page=100&page=2"
+    )
+    transport, requests = pagination_transport(
+        file_links={1: f'<{escaped_link}>; rel="next"'},
+    )
+
+    with pytest.raises(GitHubIngestionError, match="expected repository endpoint"):
+        GitHubClient(transport=transport).fetch_pull_request(PR_URL)
+
+    assert len(requests) == 2
 
 
 def test_pagination_validates_unfollowed_next_link_at_overflow_boundary() -> None:
