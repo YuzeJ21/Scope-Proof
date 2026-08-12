@@ -90,8 +90,16 @@ class JsonAlphaCaseStore:
         validated = AlphaCaseRecord.model_validate(record.model_dump(mode="python"))
         target = self._path(validated.case_id)
         try:
-            claim = exclusive_path_claim(target)
-            claim.__enter__()
+            with exclusive_path_claim(target):
+                existing = self.load(validated.case_id)
+                self._validate_update(existing, validated)
+                serialized = validated.model_dump_json(indent=2) + "\n"
+                try:
+                    return atomic_replace_text(target, serialized)
+                except UnsafeAtomicPath as error:
+                    raise UnsafeAlphaCaseStore(
+                        "alpha-case record must remain a regular local file"
+                    ) from error
         except FileExistsError:
             raise ValueError("alpha-case update is already in progress") from None
         except UnsafeAtomicPath as error:
@@ -99,18 +107,6 @@ class JsonAlphaCaseStore:
                 "alpha-case directory and existing ancestors must not be symbolic links, "
                 "reparse points, or non-directories"
             ) from error
-        try:
-            existing = self.load(validated.case_id)
-            self._validate_update(existing, validated)
-            serialized = validated.model_dump_json(indent=2) + "\n"
-            try:
-                return atomic_replace_text(target, serialized)
-            except UnsafeAtomicPath as error:
-                raise UnsafeAlphaCaseStore(
-                    "alpha-case record must remain a regular local file"
-                ) from error
-        finally:
-            claim.__exit__(None, None, None)
 
     @staticmethod
     def _validate_update(existing: AlphaCaseRecord, validated: AlphaCaseRecord) -> None:

@@ -126,12 +126,16 @@ def _fsync_directory(directory: Path) -> None:
     no_follow_flag = getattr(os, "O_NOFOLLOW", None)
     if directory_flag is None or no_follow_flag is None:
         return
-    descriptor = os.open(
-        directory,
-        os.O_RDONLY | directory_flag | no_follow_flag | _CLOSE_ON_EXEC,
-    )
     try:
-        os.fsync(descriptor)
+        descriptor = os.open(
+            directory,
+            os.O_RDONLY | directory_flag | no_follow_flag | _CLOSE_ON_EXEC,
+        )
+    except OSError:
+        return
+    try:
+        with suppress(OSError):
+            os.fsync(descriptor)
     finally:
         os.close(descriptor)
 
@@ -175,7 +179,7 @@ def exclusive_path_claim(target: Path) -> Iterator[None]:
     """Acquire a fail-closed, process-exclusive claim for one target mutation."""
 
     target = Path(os.path.abspath(target))
-    parent = ensure_safe_directory(target.parent, create=True)
+    parent = ensure_safe_directory(target.parent, create=False)
     digest = sha256(target.name.encode("utf-8")).hexdigest()
     claim = parent / f".{digest}.claim"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC

@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
+
 from scopeproof_core.storage.atomic_files import (
     UnsafeAtomicPath,
     atomic_create_text,
@@ -38,6 +39,26 @@ def test_failed_exclusive_publish_cleans_private_temporary(
     assert list(tmp_path.iterdir()) == []
 
 
+def test_directory_sync_unavailability_after_create_does_not_report_false_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "record.json"
+    original_fsync = os.fsync
+    calls = 0
+
+    def fail_directory_sync(descriptor: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("directory sync unsupported")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", fail_directory_sync)
+
+    assert atomic_create_text(target, "committed bytes\n") == target
+    assert target.read_bytes() == b"committed bytes\n"
+
+
 def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -56,6 +77,30 @@ def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
         atomic_replace_text(target, "new valid bytes\n")
 
     assert target.read_bytes() == b"old valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
+
+
+def test_directory_sync_unavailability_after_replace_does_not_report_false_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "alpha-record.json"
+    target.write_text("old valid bytes\n", encoding="utf-8")
+    original_fsync = os.fsync
+    calls = 0
+
+    def fail_directory_sync(descriptor: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise OSError("directory sync unsupported")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", fail_directory_sync)
+
+    with exclusive_path_claim(target):
+        assert atomic_replace_text(target, "new valid bytes\n") == target
+
+    assert target.read_bytes() == b"new valid bytes\n"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["alpha-record.json"]
 
 

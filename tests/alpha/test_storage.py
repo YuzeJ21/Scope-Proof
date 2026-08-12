@@ -180,14 +180,18 @@ def test_concurrent_process_alpha_creates_publish_exactly_once(tmp_path: Path) -
 
 def test_alpha_case_update_requires_existing_same_case(tmp_path: Path) -> None:
     record = alpha_case()
-    store = JsonAlphaCaseStore(tmp_path)
+    directory = tmp_path / "missing" / "alpha-cases"
+    store = JsonAlphaCaseStore(directory)
 
     with pytest.raises(FileNotFoundError):
         store.update(record)
 
-    store.save(record)
+    assert not directory.exists()
+
+    existing_store = JsonAlphaCaseStore(tmp_path)
+    existing_store.save(record)
     with pytest.raises(ValueError, match="alpha-case update must record one outcome"):
-        store.update(record)
+        existing_store.update(record)
 
 
 def test_alpha_case_update_rejects_criteria_source_provenance_drift(
