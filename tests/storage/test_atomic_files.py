@@ -45,9 +45,80 @@ def test_safe_directory_rejects_non_directory_component(tmp_path: Path) -> None:
         ensure_safe_directory(component / "nested", create=True)
 
 
+def test_portable_directory_creation_accepts_a_competing_creator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raced = tmp_path / "raced"
+    target = raced / "nested"
+    original_mkdir = Path.mkdir
+
+    def create_then_report_collision(path: Path, *args, **kwargs) -> None:
+        original_mkdir(path, *args, **kwargs)
+        if path == raced:
+            raise FileExistsError("simulated competing directory creator")
+
+    monkeypatch.setattr(Path, "mkdir", create_then_report_collision)
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+
+    assert ensure_safe_directory(target, create=True) == target
+    assert target.is_dir()
+
+
+def test_failed_portable_directory_creation_preserves_foreign_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = tmp_path / "created"
+    blocked = created / "blocked"
+    foreign = created / "foreign.txt"
+    original_mkdir = Path.mkdir
+
+    def fail_after_foreign_content_arrives(path: Path, *args, **kwargs) -> None:
+        if path == blocked:
+            foreign.write_text("foreign bytes\n", encoding="utf-8")
+            raise PermissionError("simulated directory creation denial")
+        original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_after_foreign_content_arrives)
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+
+    with pytest.raises(PermissionError, match="creation denial"):
+        ensure_safe_directory(blocked, create=True)
+
+    assert foreign.read_bytes() == b"foreign bytes\n"
+
+
+def test_portable_directory_identity_checks_reject_type_and_identity_changes(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / "directory"
+    directory.mkdir()
+    captured = atomic_files_module._capture_safe_directory(directory, create=False)
+
+    with pytest.raises(UnsafeAtomicPath, match="changed during storage operation"):
+        atomic_files_module._assert_directory_identity(directory, (-1, -1))
+
+    directory.rmdir()
+    directory.write_text("not a directory\n", encoding="utf-8")
+    with pytest.raises(UnsafeAtomicPath, match="must be a directory"):
+        atomic_files_module._assert_portable_directory(captured)
+    with pytest.raises(UnsafeAtomicPath, match="must be a directory"):
+        atomic_files_module._directory_identity(directory)
+
+
 def test_regular_file_read_rejects_directory_target(tmp_path: Path) -> None:
     target = tmp_path / "record.json"
     target.mkdir()
+
+    with pytest.raises(UnsafeAtomicPath, match="regular file"):
+        read_text_no_follow(target)
+
+
+def test_portable_read_rejects_directory_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "record.json"
+    target.mkdir()
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
 
     with pytest.raises(UnsafeAtomicPath, match="regular file"):
         read_text_no_follow(target)
