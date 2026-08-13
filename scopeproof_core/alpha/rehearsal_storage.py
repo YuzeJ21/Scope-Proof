@@ -13,15 +13,38 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from scopeproof_core.alpha.rehearsal import AlphaRehearsalRecord
+from scopeproof_core.storage.atomic_files import (
+    PORTABLE_HARD_LINK_REQUIRED,
+    UnsafeAtomicPath,
+    _quarantine_and_remove_at,
+    atomic_create_text,
+    list_regular_files,
+    read_text_no_follow,
+)
 
 _REHEARSAL_ID = re.compile(r"^rehearsal-[0-9a-f]{32}$")
 _CLOSE_ON_EXEC = getattr(os, "O_CLOEXEC", 0)
-_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | _CLOSE_ON_EXEC
-_FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | _CLOSE_ON_EXEC
+_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+_NO_FOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | _DIRECTORY | _NO_FOLLOW | _CLOSE_ON_EXEC
+_FILE_OPEN_FLAGS = os.O_RDONLY | _NO_FOLLOW | _CLOSE_ON_EXEC
 _TEMP_OPEN_FLAGS = (
-    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | _CLOSE_ON_EXEC
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NO_FOLLOW | _CLOSE_ON_EXEC
 )
 _UNSAFE_TRAVERSAL_ERRNOS = {errno.ELOOP, errno.ENOTDIR}
+_DESCRIPTOR_BACKEND_SUPPORTED = (
+    os.name != "nt"
+    and bool(_DIRECTORY)
+    and bool(_NO_FOLLOW)
+    and os.open in os.supports_dir_fd
+    and os.mkdir in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
+    and os.stat in os.supports_follow_symlinks
+    and os.unlink in os.supports_dir_fd
+    and os.rename in os.supports_dir_fd
+    and os.link in os.supports_dir_fd
+    and os.link in os.supports_follow_symlinks
+)
 
 
 def default_alpha_rehearsal_directory() -> Path:
@@ -31,6 +54,12 @@ def default_alpha_rehearsal_directory() -> Path:
 
 class UnsafeAlphaRehearsalStore(ValueError):
     """Raised when a rehearsal root is a symlink or non-directory."""
+
+
+def _store_error_message(error: UnsafeAtomicPath, fallback: str) -> str:
+    if str(error) == PORTABLE_HARD_LINK_REQUIRED:
+        return PORTABLE_HARD_LINK_REQUIRED
+    return fallback
 
 
 class JsonAlphaRehearsalStore:
@@ -86,7 +115,8 @@ class JsonAlphaRehearsalStore:
                 current_fd = child_fd
             yield current_fd
         finally:
-            os.close(current_fd)
+            with suppress(OSError):
+                os.close(current_fd)
 
     @staticmethod
     def _validate_rehearsal_id(rehearsal_id: str) -> str:
@@ -99,7 +129,30 @@ class JsonAlphaRehearsalStore:
     def _target_name(self, rehearsal_id: str) -> str:
         return f"{self._validate_rehearsal_id(rehearsal_id)}.json"
 
+    def _require_current_directory_identity(self, expected: tuple[int, int]) -> None:
+        with self._open_directory(create=False) as directory_fd:
+            metadata = os.fstat(directory_fd)
+            if (metadata.st_dev, metadata.st_ino) != expected:
+                raise UnsafeAlphaRehearsalStore(
+                    "alpha-rehearsal directory changed during storage operation"
+                )
+
     def list_rehearsal_ids(self) -> list[str]:
+        if not _DESCRIPTOR_BACKEND_SUPPORTED:
+            try:
+                return sorted(
+                    path.stem
+                    for path in list_regular_files(self.directory)
+                    if path.suffix == ".json" and _REHEARSAL_ID.fullmatch(path.stem)
+                )
+            except UnsafeAtomicPath as error:
+                raise UnsafeAlphaRehearsalStore(
+                    _store_error_message(
+                        error,
+                        "alpha-rehearsal directory and existing ancestors must not be "
+                        "symbolic links, reparse points, or non-directories",
+                    )
+                ) from error
         try:
             with self._open_directory(create=False) as directory_fd:
                 rehearsal_ids: list[str] = []
@@ -128,14 +181,37 @@ class JsonAlphaRehearsalStore:
             record.model_dump(mode="python")
         )
         target_name = self._target_name(validated.rehearsal_id)
+        if not _DESCRIPTOR_BACKEND_SUPPORTED:
+            target = self.directory / target_name
+            try:
+                atomic_create_text(target, validated.model_dump_json(indent=2) + "\n")
+            except UnsafeAtomicPath as error:
+                raise UnsafeAlphaRehearsalStore(
+                    _store_error_message(
+                        error,
+                        "alpha-rehearsal directory and existing ancestors must not be "
+                        "symbolic links, reparse points, or non-directories",
+                    )
+                ) from error
+            return target
         with self._open_directory(create=True) as directory_fd:
             self._write(directory_fd, target_name, validated)
         return self.directory / target_name
 
     def load(self, rehearsal_id: str) -> AlphaRehearsalRecord:
         target_name = self._target_name(rehearsal_id)
-        with self._open_directory(create=False) as directory_fd:
-            payload = self._read(directory_fd, target_name)
+        if _DESCRIPTOR_BACKEND_SUPPORTED:
+            with self._open_directory(create=False) as directory_fd:
+                payload = self._read(directory_fd, target_name)
+        else:
+            try:
+                payload = json.loads(
+                    read_text_no_follow(self.directory / target_name)
+                )
+            except UnsafeAtomicPath as error:
+                raise UnsafeAlphaRehearsalStore(
+                    "alpha-rehearsal record must be a regular local file"
+                ) from error
         validated = AlphaRehearsalRecord.model_validate(payload)
         if validated.rehearsal_id != rehearsal_id:
             raise ValueError("stored rehearsal record does not match requested ID")
@@ -160,7 +236,9 @@ class JsonAlphaRehearsalStore:
                 os.close(record_fd)
 
     @staticmethod
-    def _open_random_temporary(directory_fd: int, target_name: str) -> tuple[str, int]:
+    def _open_random_temporary(
+        directory_fd: int, target_name: str
+    ) -> tuple[str, int, tuple[int, int]]:
         target_stem = Path(target_name).stem
         for _ in range(128):
             temporary_name = f".{target_stem}-{secrets.token_hex(16)}.tmp"
@@ -173,7 +251,17 @@ class JsonAlphaRehearsalStore:
                 )
             except FileExistsError:
                 continue
-            return temporary_name, temporary_fd
+            try:
+                temporary_metadata = os.fstat(temporary_fd)
+            except BaseException:
+                with suppress(OSError):
+                    os.close(temporary_fd)
+                raise
+            return (
+                temporary_name,
+                temporary_fd,
+                (temporary_metadata.st_dev, temporary_metadata.st_ino),
+            )
         raise FileExistsError("could not allocate an exclusive rehearsal temp file")
 
     def _write(
@@ -183,11 +271,14 @@ class JsonAlphaRehearsalStore:
         record: AlphaRehearsalRecord,
     ) -> None:
         serialized = (record.model_dump_json(indent=2) + "\n").encode("utf-8")
-        temporary_name, temporary_fd = self._open_random_temporary(
+        directory_metadata = os.fstat(directory_fd)
+        directory_identity = (directory_metadata.st_dev, directory_metadata.st_ino)
+        temporary_name, temporary_fd, temporary_identity = self._open_random_temporary(
             directory_fd,
             target_name,
         )
         published = False
+        publication_created = False
         try:
             remaining = memoryview(serialized)
             while remaining:
@@ -196,6 +287,10 @@ class JsonAlphaRehearsalStore:
                     raise OSError("failed to write rehearsal record")
                 remaining = remaining[written:]
             os.fsync(temporary_fd)
+            try:
+                os.close(temporary_fd)
+            finally:
+                temporary_fd = -1
             try:
                 os.link(
                     temporary_name,
@@ -206,11 +301,67 @@ class JsonAlphaRehearsalStore:
                 )
             except FileExistsError:
                 raise FileExistsError(record.rehearsal_id) from None
-            published = True
-            os.fsync(directory_fd)
-        finally:
-            os.close(temporary_fd)
-            with suppress(FileNotFoundError):
-                os.unlink(temporary_name, dir_fd=directory_fd)
-            if published:
+            except BaseException:
+                try:
+                    interrupted_publication = os.stat(
+                        target_name,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                except OSError:
+                    pass
+                else:
+                    publication_created = (
+                        interrupted_publication.st_dev,
+                        interrupted_publication.st_ino,
+                    ) == temporary_identity
+                raise
+            publication_created = True
+            target_metadata = os.stat(
+                target_name,
+                dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+            if (target_metadata.st_dev, target_metadata.st_ino) != temporary_identity:
+                raise UnsafeAlphaRehearsalStore(
+                    "private rehearsal temporary changed before publication"
+                )
+            self._require_current_directory_identity(directory_identity)
+            with suppress(OSError):
                 os.fsync(directory_fd)
+            published = True
+        finally:
+            if temporary_fd >= 0:
+                os.close(temporary_fd)
+            publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
+            if publication_created and not published:
+                try:
+                    _quarantine_and_remove_at(
+                        directory_fd,
+                        target_name,
+                        temporary_identity,
+                        changed_message=(
+                            "published rehearsal changed during failed create cleanup"
+                        ),
+                    )
+                except FileNotFoundError:
+                    pass
+                except (OSError, UnsafeAtomicPath) as error:
+                    publication_cleanup_error = error
+            try:
+                _quarantine_and_remove_at(
+                    directory_fd,
+                    temporary_name,
+                    temporary_identity,
+                    changed_message="private rehearsal temporary changed before cleanup",
+                )
+            except FileNotFoundError:
+                pass
+            except BaseException:
+                if not published:
+                    raise
+            if publication_cleanup_error is not None:
+                raise publication_cleanup_error
+            if published:
+                with suppress(BaseException):
+                    os.fsync(directory_fd)

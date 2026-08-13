@@ -137,10 +137,14 @@ def test_ci_checkouts_include_history_for_source_pin_contract() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     python_313_compatibility = workflow.split(
         "  compatibility-python-313:", maxsplit=1
+    )[1].split("\n  compatibility-windows:", maxsplit=1)[0]
+    windows_compatibility = workflow.split(
+        "  compatibility-windows:", maxsplit=1
     )[1].split("\n  locked-environment:", maxsplit=1)[0]
 
-    assert workflow.count("fetch-depth: 0") == 4
+    assert workflow.count("fetch-depth: 0") == 5
     assert "fetch-depth: 0" in python_313_compatibility
+    assert "fetch-depth: 0" in windows_compatibility
 
 
 def test_single_account_alpha_policy_explicitly_skips_external_fork_testing() -> None:

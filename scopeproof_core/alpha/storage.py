@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import json
 import re
-import tempfile
 from pathlib import Path
 
 from scopeproof_core.alpha.models import AlphaCaseRecord
+from scopeproof_core.storage.atomic_files import (
+    PORTABLE_HARD_LINK_REQUIRED,
+    UnsafeAtomicPath,
+    atomic_create_text,
+    atomic_replace_text,
+    ensure_safe_directory,
+    exclusive_path_claim,
+    list_regular_files,
+    read_text_no_follow,
+)
 
 _CASE_ID = re.compile(r"^alpha-[0-9a-f]{32}$")
 
@@ -21,6 +30,12 @@ class UnsafeAlphaCaseStore(ValueError):
     """Raised when an alpha-case root is a symlink or non-directory."""
 
 
+def _store_error_message(error: UnsafeAtomicPath, fallback: str) -> str:
+    if str(error) == PORTABLE_HARD_LINK_REQUIRED:
+        return PORTABLE_HARD_LINK_REQUIRED
+    return fallback
+
+
 class JsonAlphaCaseStore:
     """Store one Pydantic-validated JSON record per public-alpha case."""
 
@@ -28,10 +43,18 @@ class JsonAlphaCaseStore:
         self.directory = directory
 
     def _require_safe_directory(self) -> None:
-        if self.directory.is_symlink():
-            raise UnsafeAlphaCaseStore("alpha-case directory must not be a symbolic link")
-        if self.directory.exists() and not self.directory.is_dir():
-            raise UnsafeAlphaCaseStore("alpha-case path must be a directory")
+        try:
+            ensure_safe_directory(self.directory, create=False)
+        except FileNotFoundError:
+            return
+        except UnsafeAtomicPath as error:
+            raise UnsafeAlphaCaseStore(
+                _store_error_message(
+                    error,
+                    "alpha-case directory and existing ancestors must not be symbolic links, "
+                    "reparse points, or non-directories",
+                )
+            ) from error
 
     @staticmethod
     def _validate_case_id(case_id: str) -> str:
@@ -45,33 +68,71 @@ class JsonAlphaCaseStore:
     def _existing_path(self, case_id: str) -> Path:
         self._require_safe_directory()
         target = self._path(case_id)
-        if target.is_symlink() or not target.is_file():
-            raise FileNotFoundError(case_id)
+        try:
+            read_text_no_follow(target)
+        except FileNotFoundError:
+            raise FileNotFoundError(case_id) from None
+        except UnsafeAtomicPath as error:
+            raise UnsafeAlphaCaseStore("alpha-case record must be a regular local file") from error
         return target
 
     def list_case_ids(self) -> list[str]:
         self._require_safe_directory()
-        if not self.directory.is_dir():
-            return []
         return sorted(
             path.stem
-            for path in self.directory.glob("alpha-*.json")
-            if path.is_file() and not path.is_symlink() and _CASE_ID.fullmatch(path.stem)
+            for path in list_regular_files(self.directory)
+            if path.suffix == ".json" and _CASE_ID.fullmatch(path.stem)
         )
 
     def save(self, record: AlphaCaseRecord) -> Path:
         validated = AlphaCaseRecord.model_validate(record.model_dump(mode="python"))
         self._require_safe_directory()
-        self.directory.mkdir(parents=True, exist_ok=True)
         target = self._path(validated.case_id)
-        if target.exists() or target.is_symlink():
-            raise FileExistsError(validated.case_id)
-        return self._write(target, validated)
+        try:
+            return self._write(target, validated)
+        except UnsafeAtomicPath as error:
+            raise UnsafeAlphaCaseStore(
+                _store_error_message(
+                    error,
+                    "alpha-case directory and existing ancestors must not be symbolic links, "
+                    "reparse points, or non-directories",
+                )
+            ) from error
 
     def update(self, record: AlphaCaseRecord) -> Path:
         validated = AlphaCaseRecord.model_validate(record.model_dump(mode="python"))
-        target = self._existing_path(validated.case_id)
-        existing = self.load(validated.case_id)
+        target = self._path(validated.case_id)
+        try:
+            with exclusive_path_claim(target) as claim:
+                payload = json.loads(read_text_no_follow(target, claim=claim))
+                existing = AlphaCaseRecord.model_validate(payload)
+                if existing.case_id != validated.case_id:
+                    raise ValueError("stored alpha-case record does not match requested ID")
+                self._validate_update(existing, validated)
+                serialized = validated.model_dump_json(indent=2) + "\n"
+                try:
+                    atomic_replace_text(target, serialized, claim=claim)
+                    return target
+                except UnsafeAtomicPath as error:
+                    raise UnsafeAlphaCaseStore(
+                        _store_error_message(
+                            error,
+                            "alpha-case record must remain a regular local file",
+                        )
+                    ) from error
+        except FileExistsError:
+            raise ValueError("alpha-case update is already in progress") from None
+        except UnsafeAtomicPath as error:
+            raise UnsafeAlphaCaseStore(
+                _store_error_message(
+                    error,
+                    "alpha-case directory and existing ancestors must not be symbolic links, "
+                    "reparse points, or non-directories",
+                )
+            ) from error
+
+    @staticmethod
+    def _validate_update(existing: AlphaCaseRecord, validated: AlphaCaseRecord) -> None:
         if existing.case_id != validated.case_id:
             raise ValueError("alpha-case update must preserve case ID")
         if existing.criteria_source_provenance != validated.criteria_source_provenance:
@@ -96,22 +157,20 @@ class JsonAlphaCaseStore:
             raise ValueError("alpha-case outcome is immutable once recorded")
         if validated.outcome is None:
             raise ValueError("alpha-case update must record one outcome")
-        return self._write(target, validated)
 
     def load(self, case_id: str) -> AlphaCaseRecord:
-        payload = json.loads(self._existing_path(case_id).read_text(encoding="utf-8"))
-        return AlphaCaseRecord.model_validate(payload)
+        validated_id = self._validate_case_id(case_id)
+        target = self._existing_path(validated_id)
+        try:
+            payload = json.loads(read_text_no_follow(target))
+        except UnsafeAtomicPath as error:
+            raise UnsafeAlphaCaseStore("alpha-case record must be a regular local file") from error
+        validated = AlphaCaseRecord.model_validate(payload)
+        if validated.case_id != validated_id:
+            raise ValueError("stored alpha-case record does not match requested ID")
+        return validated
 
     def _write(self, target: Path, record: AlphaCaseRecord) -> Path:
         serialized = record.model_dump_json(indent=2) + "\n"
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=self.directory,
-            prefix=f".{target.stem}-",
-            delete=False,
-        ) as handle:
-            temporary = Path(handle.name)
-            handle.write(serialized)
-        temporary.replace(target)
+        atomic_create_text(target, serialized)
         return target

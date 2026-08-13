@@ -9,10 +9,14 @@ from unittest.mock import patch
 import pytest
 
 import scopeproof_core.cli as cli_module
+import scopeproof_core.storage.atomic_files as atomic_files_module
 from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import _build_bundle, main
-from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+from scopeproof_core.criteria.confirmation import (
+    build_criteria_source_provenance,
+    read_exact_utf8_text,
+)
 from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.demo import build_demo_review, build_review_from_paths
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
@@ -71,7 +75,7 @@ def write_requirements_confirmation(
     source_uri: str = "https://example.test/requirements",
     source_revision: str | None = "revision-42",
 ) -> Path:
-    source_text = requirements.read_text(encoding="utf-8")
+    source_text = read_exact_utf8_text(requirements)
     criteria = [
         Criterion(criterion_id=draft.criterion_id, text=draft.text)
         for draft in parse_criteria(source_text)
@@ -720,6 +724,205 @@ def test_review_refuses_to_overwrite_report_before_reading_inputs(
     assert "report path already exists" in stderr
     assert "Traceback" not in stderr
     assert report.read_text(encoding="utf-8") == "keep me"
+
+
+def test_review_report_final_publication_does_not_overwrite_racing_target(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "racing.md"
+    original_renderer = cli_module.EXPORT_RENDERERS["markdown"]
+
+    def racing_renderer(state):
+        rendered = original_renderer(state)
+        report.write_bytes(b"owner-created bytes\n")
+        return rendered
+
+    monkeypatch.setitem(cli_module.EXPORT_RENDERERS, "markdown", racing_renderer)
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(tmp_path / "reviews"),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert raised.value.code == 2
+    assert "already exists" in capsys.readouterr().err
+    assert report.read_bytes() == b"owner-created bytes\n"
+    assert not any(path.suffix == ".tmp" for path in tmp_path.iterdir())
+    assert not list((tmp_path / "reviews").glob("*.json"))
+
+
+def test_review_rolls_back_report_when_review_persistence_fails(
+    tmp_path: Path, capsys
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "report.md"
+    invalid_storage = tmp_path / "not-a-directory"
+    invalid_storage.write_text("owner bytes\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(invalid_storage),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert raised.value.code == 2
+    assert "review store path must be a directory" in capsys.readouterr().err
+    assert not report.exists()
+    assert invalid_storage.read_bytes() == b"owner bytes\n"
+
+
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_review_rollback_removes_owned_report_temporary_after_cleanup_denial(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "report.md"
+    invalid_storage = tmp_path / "not-a-directory"
+    invalid_storage.write_text("owner bytes\n", encoding="utf-8")
+    original_cleanup = atomic_files_module._quarantine_and_remove_at
+    denied = False
+
+    def deny_first_report_temporary_cleanup(
+        directory_fd: int, name: str, *args, **kwargs
+    ) -> None:
+        nonlocal denied
+        if name.endswith(".tmp") and not denied:
+            denied = True
+            raise PermissionError("simulated report temporary cleanup denial")
+        original_cleanup(directory_fd, name, *args, **kwargs)
+
+    monkeypatch.setattr(
+        atomic_files_module,
+        "_quarantine_and_remove_at",
+        deny_first_report_temporary_cleanup,
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(invalid_storage),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert raised.value.code == 2
+    assert denied is True
+    assert "review store path must be a directory" in capsys.readouterr().err
+    assert not report.exists()
+    assert not list(tmp_path.glob("*.tmp"))
+    assert invalid_storage.read_bytes() == b"owner bytes\n"
+
+
+def test_review_rolls_back_report_when_persistence_is_interrupted(
+    tmp_path: Path,
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "report.md"
+    storage = tmp_path / "reviews"
+
+    with (
+        patch.object(cli_module.JsonReviewStore, "save", side_effect=KeyboardInterrupt),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(storage),
+                "--report",
+                str(report),
+            ]
+        )
+
+    assert not report.exists()
+    assert not list(storage.glob("*.json"))
+
+
+def test_review_keeps_report_when_persistence_committed_before_teardown_failure(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("Export CSV\n", encoding="utf-8")
+    report = tmp_path / "report.md"
+    storage = tmp_path / "reviews"
+    original_save = JsonReviewStore.save
+
+    def commit_then_fail(store, state, **kwargs):
+        original_save(store, state, **kwargs)
+        raise OSError("simulated post-commit teardown failure")
+
+    monkeypatch.setattr(JsonReviewStore, "save", commit_then_fail)
+
+    assert (
+        main(
+            [
+                "review",
+                "--fixture",
+                "evals/fixtures/complete_implementation_pr.json",
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(write_requirements_confirmation(requirements)),
+                "--storage-dir",
+                str(storage),
+                "--report",
+                str(report),
+            ]
+        )
+        == 0
+    )
+
+    metadata = json.loads(capsys.readouterr().out)
+    review_id = metadata["review_id"]
+    assert JsonReviewStore(storage).load(review_id).review.review_id == review_id
+    assert metadata["record"] == str(storage / f"{review_id}.json")
+    assert report.exists()
 
 
 def test_review_rejects_unsupported_report_suffix_before_reading_inputs(

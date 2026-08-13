@@ -437,7 +437,8 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "python -m uv run python -m pytest -q tests/test_repository_contracts.py" in workflow
     assert "python -m uv run scopeproof benchmark" in workflow
     assert (
-        "needs: [compatibility-python-311, compatibility-python-313, locked-environment]"
+        "needs: [compatibility-python-311, compatibility-python-313, "
+        "compatibility-windows, locked-environment]"
         in workflow
     )
     assert "[reproducible development environment](docs/development-environment.md)" in readme
@@ -1408,6 +1409,9 @@ def test_ci_validates_declared_python_compatibility() -> None:
     )[1].split("\n  compatibility-python-313:", maxsplit=1)[0]
     python_313_compatibility = workflow.split(
         "  compatibility-python-313:", maxsplit=1
+    )[1].split("\n  compatibility-windows:", maxsplit=1)[0]
+    windows_compatibility = workflow.split(
+        "  compatibility-windows:", maxsplit=1
     )[1].split("\n  locked-environment:", maxsplit=1)[0]
     verify = workflow.split("\n  verify:", maxsplit=1)[1]
 
@@ -1428,10 +1432,39 @@ def test_ci_validates_declared_python_compatibility() -> None:
     assert "scopeproof-web --version" in python_313_compatibility
     assert "http://127.0.0.1:8513/_stcore/health" in python_313_compatibility
     assert '"$response" = "ok"' in python_313_compatibility
+
+    assert "runs-on: windows-latest" in windows_compatibility
+    assert '$PSNativeCommandUseErrorActionPreference = $true' in windows_compatibility
+    assert 'python-version: "3.12"' in windows_compatibility
+    assert "scopeproof_core.alpha.rehearsal_storage" in windows_compatibility
+    assert "import apps.web.app" in windows_compatibility
+    assert "tests/storage/test_atomic_files.py" in windows_compatibility
+    assert "test_concurrent_process_alpha_creates_publish_exactly_once" in windows_compatibility
+    assert "test_concurrent_process_outcome_updates_commit_exactly_once" in windows_compatibility
+    assert "python -m pip wheel . --no-deps" in windows_compatibility
+    assert "python -m pip check" in windows_compatibility
+    assert "scopeproof --version" in windows_compatibility
+    assert "scopeproof-web --version" in windows_compatibility
+    assert "scopeproof benchmark" in windows_compatibility
+    assert "scopeproof comparison-benchmark" in windows_compatibility
     assert (
-        "needs: [compatibility-python-311, compatibility-python-313, locked-environment]"
+        "needs: [compatibility-python-311, compatibility-python-313, "
+        "compatibility-windows, locked-environment]"
         in verify
     )
+
+
+def test_platform_storage_docs_do_not_overclaim_hostile_local_account_protection() -> None:
+    design = Path(
+        "docs/superpowers/specs/2026-08-12-platform-safe-alpha-storage-design.md"
+    ).read_text(encoding="utf-8")
+    environment = Path("docs/development-environment.md").read_text(encoding="utf-8")
+    combined = f"{design}\n{environment}"
+
+    assert "ScopeProof writers that use the shared claim boundary" in combined
+    assert "same-user\nprocess that deliberately bypasses" in combined
+    assert "atomic compare-and-swap protection" in combined
+    assert "remains unsupported" in combined
 
 
 def test_readme_documents_all_export_formats() -> None:

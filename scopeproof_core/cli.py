@@ -64,6 +64,10 @@ from scopeproof_core.schemas.models import (
     normalize_public_https_source_uri,
     require_verified_public_origin,
 )
+from scopeproof_core.storage.atomic_files import (
+    atomic_create_text_with_receipt,
+    rollback_created_file,
+)
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
 from scopeproof_core.version import __version__
@@ -189,10 +193,8 @@ def _review(args: argparse.Namespace) -> int:
         ),
     )
     state = new_review_state(bundle)
-    path = JsonReviewStore(Path(args.storage_dir)).save(state)
     metadata = {
         "review_id": state.review.review_id,
-        "record": str(path),
         "verdict": bundle.gate.verdict.value,
         "head_sha": bundle.review.head_sha,
         "ingestion_state": bundle.review.ingestion_state.value,
@@ -245,10 +247,28 @@ def _review(args: argparse.Namespace) -> int:
                 "research_boundary_note": bundle.research_context.boundary_note,
             }
         )
+    report_receipt = None
     if report_target is not None:
         report_path, renderer = report_target
-        report_path.write_text(renderer(state), encoding="utf-8")
+        report_receipt = atomic_create_text_with_receipt(report_path, renderer(state))
         metadata["report"] = str(report_path)
+    storage_dir = Path(args.storage_dir)
+    store = JsonReviewStore(storage_dir)
+    try:
+        path = store.save(state)
+    except BaseException as save_error:
+        try:
+            committed = store.load(state.review.review_id)
+        except BaseException:
+            if report_receipt is not None:
+                rollback_created_file(report_receipt)
+            raise save_error from None
+        if committed != state:
+            if report_receipt is not None:
+                rollback_created_file(report_receipt)
+            raise save_error from None
+        path = storage_dir / f"{state.review.review_id}.json"
+    metadata["record"] = str(path)
     print(json.dumps(metadata, sort_keys=True))
     return 0
 
