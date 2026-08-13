@@ -115,22 +115,10 @@ def _capture_safe_directory(directory: Path, *, create: bool) -> _PortableDirect
                     created_here = True
                 except FileExistsError:
                     pass
-                try:
-                    metadata = os.lstat(current)
-                except BaseException:
-                    if created_here:
-                        # Recover the identity after a transient metadata failure so the
-                        # outer failure path can remove only this unchanged empty directory.
-                        # Preserve it when identity remains ambiguous.
-                        with suppress(OSError):
-                            cleanup_metadata = os.lstat(current)
-                            created.append(
-                                (
-                                    current,
-                                    (cleanup_metadata.st_dev, cleanup_metadata.st_ino),
-                                )
-                            )
-                    raise
+                # A failed first metadata capture leaves ownership ambiguous on the
+                # portable backend. Do not retry and misattribute a replacement path;
+                # the outer cleanup can remove only directories with captured identity.
+                metadata = os.lstat(current)
                 if created_here:
                     created.append((current, (metadata.st_dev, metadata.st_ino)))
             _raise_if_link_or_reparse(current, metadata)

@@ -195,7 +195,7 @@ def test_descriptor_directory_metadata_failure_cleans_new_directory(
     assert not created_parent.exists()
 
 
-def test_portable_directory_metadata_failure_cleans_new_directory(
+def test_portable_directory_metadata_failure_preserves_ambiguous_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     created_parent = tmp_path / "created"
@@ -225,7 +225,45 @@ def test_portable_directory_metadata_failure_cleans_new_directory(
         atomic_create_text(created_parent / "record.json", "validated\n")
 
     assert failed is True
-    assert not created_parent.exists()
+    assert created_parent.is_dir()
+    assert list(created_parent.iterdir()) == []
+
+
+def test_portable_directory_metadata_failure_preserves_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created_parent = tmp_path / "created"
+    moved_created_parent = tmp_path / "created-original"
+    original_mkdir = Path.mkdir
+    original_lstat = os.lstat
+    created = False
+    replaced = False
+
+    def record_created_directory(path: Path, *args, **kwargs) -> None:
+        nonlocal created
+        original_mkdir(path, *args, **kwargs)
+        if path == created_parent:
+            created = True
+
+    def replace_then_fail_metadata(path, *args, **kwargs):
+        nonlocal replaced
+        if created and Path(path) == created_parent and not replaced:
+            replaced = True
+            created_parent.rename(moved_created_parent)
+            original_mkdir(created_parent)
+            raise OSError("simulated metadata failure after directory replacement")
+        return original_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(Path, "mkdir", record_created_directory)
+    monkeypatch.setattr(os, "lstat", replace_then_fail_metadata)
+
+    with pytest.raises(OSError, match="metadata failure after directory replacement"):
+        atomic_create_text(created_parent / "record.json", "validated\n")
+
+    assert replaced is True
+    assert moved_created_parent.is_dir()
+    assert created_parent.is_dir()
 
 
 @pytest.mark.skipif(
