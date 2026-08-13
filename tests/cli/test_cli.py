@@ -736,7 +736,7 @@ def test_review_report_final_publication_does_not_overwrite_racing_target(
 
     def racing_renderer(state):
         rendered = original_renderer(state)
-        report.write_text("owner-created bytes\n", encoding="utf-8")
+        report.write_bytes(b"owner-created bytes\n")
         return rendered
 
     monkeypatch.setitem(cli_module.EXPORT_RENDERERS, "markdown", racing_renderer)
