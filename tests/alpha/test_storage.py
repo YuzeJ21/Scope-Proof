@@ -1,5 +1,7 @@
+import errno
 import json
 import multiprocessing
+import os
 import subprocess
 import sys
 from contextlib import contextmanager, suppress
@@ -11,6 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 import scopeproof_core.alpha.storage as alpha_storage_module
+import scopeproof_core.storage.atomic_files as atomic_files_module
 from scopeproof_core.alpha.models import ParticipantRole
 from scopeproof_core.alpha.service import initialize_alpha_case
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore, UnsafeAlphaCaseStore
@@ -124,6 +127,28 @@ def test_alpha_case_save_refuses_silent_overwrite(tmp_path: Path) -> None:
         store.save(record)
 
 
+def test_portable_alpha_save_reports_missing_hard_link_capability(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_case()
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(
+        os,
+        "link",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError(errno.EOPNOTSUPP, "hard links are unsupported")
+        ),
+    )
+
+    with pytest.raises(
+        UnsafeAlphaCaseStore,
+        match="portable atomic storage requires local hard-link support",
+    ):
+        JsonAlphaCaseStore(tmp_path).save(record)
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_cli_and_alpha_storage_import_without_posix_only_constants() -> None:
     script = """
 import importlib
@@ -215,6 +240,40 @@ def test_alpha_case_update_rejects_criteria_source_provenance_drift(
         match="alpha-case update must preserve criteria source provenance",
     ):
         store.update(replacement)
+
+
+def test_portable_alpha_update_reports_missing_hard_link_capability_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopeproof_core.alpha.models import AlphaOutcome
+    from scopeproof_core.alpha.service import record_alpha_outcome
+
+    record = alpha_case()
+    store = JsonAlphaCaseStore(tmp_path)
+    path = store.save(record)
+    before = path.read_bytes()
+    completed = record_alpha_outcome(
+        record,
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+    )
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(
+        os,
+        "link",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError(errno.EOPNOTSUPP, "hard links are unsupported")
+        ),
+    )
+
+    with pytest.raises(
+        UnsafeAlphaCaseStore,
+        match="portable atomic storage requires local hard-link support",
+    ):
+        store.update(completed)
+
+    assert path.read_bytes() == before
+    assert sorted(item.name for item in tmp_path.iterdir()) == [path.name]
 
 
 def test_alpha_case_update_rejects_completed_outcome_overwrite(tmp_path: Path) -> None:

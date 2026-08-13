@@ -18,6 +18,7 @@ _NO_FOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _NONBLOCK = getattr(os, "O_NONBLOCK", 0)
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
 _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+PORTABLE_HARD_LINK_REQUIRED = "portable atomic storage requires local hard-link support"
 _DESCRIPTOR_BACKEND_SUPPORTED = (
     os.name != "nt"
     and bool(_DIRECTORY)
@@ -476,9 +477,7 @@ def _portable_hard_link(source: Path, target: Path) -> None:
     except FileExistsError:
         raise
     except OSError as error:
-        raise UnsafeAtomicPath(
-            "portable atomic storage requires local hard-link support"
-        ) from error
+        raise UnsafeAtomicPath(PORTABLE_HARD_LINK_REQUIRED) from error
 
 
 def _quarantine_name(stem: str) -> str:

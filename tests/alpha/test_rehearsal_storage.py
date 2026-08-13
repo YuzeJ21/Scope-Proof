@@ -1,3 +1,4 @@
+import errno
 import json
 import os
 import subprocess
@@ -10,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 import scopeproof_core.alpha.rehearsal_storage as rehearsal_storage_module
+import scopeproof_core.storage.atomic_files as atomic_files_module
 from scopeproof_core.alpha.rehearsal import initialize_alpha_rehearsal
 from scopeproof_core.alpha.rehearsal_storage import (
     JsonAlphaRehearsalStore,
@@ -308,6 +310,29 @@ def test_rehearsal_save_refuses_silent_overwrite(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError):
         store.save(record)
+
+
+def test_portable_rehearsal_save_reports_missing_hard_link_capability(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = alpha_rehearsal()
+    monkeypatch.setattr(rehearsal_storage_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(
+        os,
+        "link",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError(errno.EOPNOTSUPP, "hard links are unsupported")
+        ),
+    )
+
+    with pytest.raises(
+        UnsafeAlphaRehearsalStore,
+        match="portable atomic storage requires local hard-link support",
+    ):
+        JsonAlphaRehearsalStore(tmp_path).save(record)
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_committed_rehearsal_does_not_report_failure_when_cleanup_is_denied(

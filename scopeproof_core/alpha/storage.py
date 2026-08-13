@@ -8,6 +8,7 @@ from pathlib import Path
 
 from scopeproof_core.alpha.models import AlphaCaseRecord
 from scopeproof_core.storage.atomic_files import (
+    PORTABLE_HARD_LINK_REQUIRED,
     UnsafeAtomicPath,
     atomic_create_text,
     atomic_replace_text,
@@ -29,6 +30,12 @@ class UnsafeAlphaCaseStore(ValueError):
     """Raised when an alpha-case root is a symlink or non-directory."""
 
 
+def _store_error_message(error: UnsafeAtomicPath, fallback: str) -> str:
+    if str(error) == PORTABLE_HARD_LINK_REQUIRED:
+        return PORTABLE_HARD_LINK_REQUIRED
+    return fallback
+
+
 class JsonAlphaCaseStore:
     """Store one Pydantic-validated JSON record per public-alpha case."""
 
@@ -42,8 +49,11 @@ class JsonAlphaCaseStore:
             return
         except UnsafeAtomicPath as error:
             raise UnsafeAlphaCaseStore(
-                "alpha-case directory and existing ancestors must not be symbolic links, "
-                "reparse points, or non-directories"
+                _store_error_message(
+                    error,
+                    "alpha-case directory and existing ancestors must not be symbolic links, "
+                    "reparse points, or non-directories",
+                )
             ) from error
 
     @staticmethod
@@ -82,8 +92,11 @@ class JsonAlphaCaseStore:
             return self._write(target, validated)
         except UnsafeAtomicPath as error:
             raise UnsafeAlphaCaseStore(
-                "alpha-case directory and existing ancestors must not be symbolic links, "
-                "reparse points, or non-directories"
+                _store_error_message(
+                    error,
+                    "alpha-case directory and existing ancestors must not be symbolic links, "
+                    "reparse points, or non-directories",
+                )
             ) from error
 
     def update(self, record: AlphaCaseRecord) -> Path:
@@ -102,14 +115,20 @@ class JsonAlphaCaseStore:
                     return target
                 except UnsafeAtomicPath as error:
                     raise UnsafeAlphaCaseStore(
-                        "alpha-case record must remain a regular local file"
+                        _store_error_message(
+                            error,
+                            "alpha-case record must remain a regular local file",
+                        )
                     ) from error
         except FileExistsError:
             raise ValueError("alpha-case update is already in progress") from None
         except UnsafeAtomicPath as error:
             raise UnsafeAlphaCaseStore(
-                "alpha-case directory and existing ancestors must not be symbolic links, "
-                "reparse points, or non-directories"
+                _store_error_message(
+                    error,
+                    "alpha-case directory and existing ancestors must not be symbolic links, "
+                    "reparse points, or non-directories",
+                )
             ) from error
 
     @staticmethod

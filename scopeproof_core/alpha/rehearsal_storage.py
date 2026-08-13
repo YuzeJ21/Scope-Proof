@@ -14,6 +14,7 @@ from pathlib import Path
 
 from scopeproof_core.alpha.rehearsal import AlphaRehearsalRecord
 from scopeproof_core.storage.atomic_files import (
+    PORTABLE_HARD_LINK_REQUIRED,
     UnsafeAtomicPath,
     _quarantine_and_remove_at,
     atomic_create_text,
@@ -53,6 +54,12 @@ def default_alpha_rehearsal_directory() -> Path:
 
 class UnsafeAlphaRehearsalStore(ValueError):
     """Raised when a rehearsal root is a symlink or non-directory."""
+
+
+def _store_error_message(error: UnsafeAtomicPath, fallback: str) -> str:
+    if str(error) == PORTABLE_HARD_LINK_REQUIRED:
+        return PORTABLE_HARD_LINK_REQUIRED
+    return fallback
 
 
 class JsonAlphaRehearsalStore:
@@ -132,8 +139,11 @@ class JsonAlphaRehearsalStore:
                 )
             except UnsafeAtomicPath as error:
                 raise UnsafeAlphaRehearsalStore(
-                    "alpha-rehearsal directory and existing ancestors must not be "
-                    "symbolic links, reparse points, or non-directories"
+                    _store_error_message(
+                        error,
+                        "alpha-rehearsal directory and existing ancestors must not be "
+                        "symbolic links, reparse points, or non-directories",
+                    )
                 ) from error
         try:
             with self._open_directory(create=False) as directory_fd:
@@ -169,8 +179,11 @@ class JsonAlphaRehearsalStore:
                 atomic_create_text(target, validated.model_dump_json(indent=2) + "\n")
             except UnsafeAtomicPath as error:
                 raise UnsafeAlphaRehearsalStore(
-                    "alpha-rehearsal directory and existing ancestors must not be "
-                    "symbolic links, reparse points, or non-directories"
+                    _store_error_message(
+                        error,
+                        "alpha-rehearsal directory and existing ancestors must not be "
+                        "symbolic links, reparse points, or non-directories",
+                    )
                 ) from error
             return target
         with self._open_directory(create=True) as directory_fd:
