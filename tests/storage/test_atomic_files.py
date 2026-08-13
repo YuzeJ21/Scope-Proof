@@ -753,6 +753,40 @@ def test_portable_create_receipt_supports_identity_bound_rollback(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_receipt_rollback_removes_empty_parent_directories_created_for_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    report_root = tmp_path / "new" / "reports"
+    receipt = atomic_create_text_with_receipt(
+        report_root / "review.md", "validated report\n"
+    )
+
+    rollback_created_file(receipt)
+
+    assert not (tmp_path / "new").exists()
+
+
+def test_portable_create_classifies_filesystems_without_hard_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+
+    def reject_hard_link(*args, **kwargs):
+        raise OSError(errno.EOPNOTSUPP, "hard links are unsupported")
+
+    monkeypatch.setattr(os, "link", reject_hard_link)
+
+    with pytest.raises(UnsafeAtomicPath, match="hard-link support"):
+        atomic_create_text(tmp_path / "new" / "report.md", "validated report\n")
+
+    assert not (tmp_path / "new").exists()
+
+
 def test_portable_create_refuses_existing_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -60,12 +60,14 @@ class CreatedFileReceipt:
     parent_identity: tuple[int, int] | None = None
     portable_ancestors: tuple[tuple[Path, tuple[int, int]], ...] = ()
     orphaned_paths: tuple[Path, ...] = ()
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...] = ()
 
 
 @dataclass(frozen=True)
 class _PortableDirectory:
     path: Path
     ancestors: tuple[tuple[Path, tuple[int, int]], ...]
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...] = ()
 
 
 def _absolute_path(path: Path) -> Path:
@@ -119,7 +121,11 @@ def _capture_safe_directory(directory: Path, *, create: bool) -> _PortableDirect
             if not stat.S_ISDIR(metadata.st_mode):
                 raise UnsafeAtomicPath(f"app-owned path component must be a directory: {current}")
             ancestors.append((current, (metadata.st_dev, metadata.st_ino)))
-        captured = _PortableDirectory(path=absolute, ancestors=tuple(ancestors))
+        captured = _PortableDirectory(
+            path=absolute,
+            ancestors=tuple(ancestors),
+            created_directories=tuple(created),
+        )
         _assert_portable_directory(captured)
         return captured
     except BaseException:
@@ -171,17 +177,23 @@ def _assert_directory_identity(directory: Path, expected: tuple[int, int]) -> No
         raise UnsafeAtomicPath("app-owned directory changed during storage operation")
 
 
-def _open_child_directory(parent_fd: int, component: str, *, create: bool) -> int:
+def _open_child_directory(
+    parent_fd: int, component: str, *, create: bool
+) -> tuple[int, bool]:
     flags = os.O_RDONLY | _DIRECTORY | _NO_FOLLOW | _CLOSE_ON_EXEC
     try:
-        return os.open(component, flags, dir_fd=parent_fd)
+        return os.open(component, flags, dir_fd=parent_fd), False
     except FileNotFoundError:
         if not create:
             raise
-        with suppress(FileExistsError):
-            os.mkdir(component, mode=0o700, dir_fd=parent_fd)
+        created = False
         try:
-            return os.open(component, flags, dir_fd=parent_fd)
+            os.mkdir(component, mode=0o700, dir_fd=parent_fd)
+            created = True
+        except FileExistsError:
+            pass
+        try:
+            return os.open(component, flags, dir_fd=parent_fd), created
         except OSError as error:
             raise UnsafeAtomicPath("app-owned directory changed during creation") from error
     except OSError as error:
@@ -191,20 +203,56 @@ def _open_child_directory(parent_fd: int, component: str, *, create: bool) -> in
         ) from error
 
 
+def _remove_empty_created_directories(
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
+) -> None:
+    for directory, expected in reversed(created_directories):
+        try:
+            metadata = os.lstat(directory)
+            _raise_if_link_or_reparse(directory, metadata)
+            if stat.S_ISDIR(metadata.st_mode) and _same_file(metadata, expected):
+                directory.rmdir()
+        except (OSError, UnsafeAtomicPath):
+            pass
+
+
 @contextmanager
-def _open_directory_descriptor(directory: Path, *, create: bool) -> Iterator[int]:
+def _open_directory_descriptor(
+    directory: Path,
+    *,
+    create: bool,
+    created_directories: list[tuple[Path, tuple[int, int]]] | None = None,
+) -> Iterator[int]:
     absolute = _absolute_path(directory)
     flags = os.O_RDONLY | _DIRECTORY | _NO_FOLLOW | _CLOSE_ON_EXEC
     current_fd = os.open(absolute.anchor, flags)
+    current_path = Path(absolute.anchor)
+    created: list[tuple[Path, tuple[int, int]]] = []
+    completed = False
     try:
         for component in absolute.parts[1:]:
-            child_fd = _open_child_directory(current_fd, component, create=create)
+            child_fd, created_here = _open_child_directory(
+                current_fd, component, create=create
+            )
             os.close(current_fd)
             current_fd = child_fd
+            current_path /= component
+            if created_here:
+                metadata = os.fstat(current_fd)
+                created_directory = (
+                    current_path,
+                    (metadata.st_dev, metadata.st_ino),
+                )
+                created.append(created_directory)
+                if created_directories is not None:
+                    created_directories.append(created_directory)
         yield current_fd
+        completed = True
     finally:
         with suppress(OSError):
             os.close(current_fd)
+        if not completed:
+            _remove_empty_created_directories(tuple(created))
 
 
 def _require_regular_at(directory_fd: int, name: str) -> os.stat_result:
@@ -391,6 +439,20 @@ def _same_file(metadata: os.stat_result, expected: tuple[int, int]) -> bool:
     return (metadata.st_dev, metadata.st_ino) == expected
 
 
+def _portable_hard_link(source: Path, target: Path) -> None:
+    try:
+        try:
+            os.link(source, target, follow_symlinks=False)
+        except (TypeError, NotImplementedError):  # pragma: no cover - platform seam
+            os.link(source, target)
+    except FileExistsError:
+        raise
+    except OSError as error:
+        raise UnsafeAtomicPath(
+            "portable atomic storage requires local hard-link support"
+        ) from error
+
+
 def _quarantine_name(stem: str) -> str:
     return f"{_quarantine_prefix(stem)}{secrets.token_hex(16)}.rollback"
 
@@ -487,10 +549,7 @@ def _create_backup_path(target: Path, expected: tuple[int, int]) -> Path:
     for _ in range(128):
         backup = target.parent / _quarantine_name(target.name)
         try:
-            try:
-                os.link(target, backup, follow_symlinks=False)
-            except (TypeError, NotImplementedError):  # pragma: no cover - platform seam
-                os.link(target, backup)
+            _portable_hard_link(target, backup)
         except FileExistsError:
             continue
         except BaseException:
@@ -632,10 +691,7 @@ def _quarantine_and_remove_at(
 
 def _restore_quarantined_path(quarantine: Path, target: Path) -> None:
     try:
-        try:
-            os.link(quarantine, target, follow_symlinks=False)
-        except (TypeError, NotImplementedError):  # pragma: no cover - platform seam
-            os.link(quarantine, target)
+        _portable_hard_link(quarantine, target)
     except FileExistsError:
         return
     os.unlink(quarantine)
@@ -740,7 +796,12 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     payload = text.encode("utf-8")
     content_sha256 = sha256(payload).hexdigest()
     if _DESCRIPTOR_BACKEND_SUPPORTED:
-        with _open_directory_descriptor(target.parent, create=True) as directory_fd:
+        created_directories: list[tuple[Path, tuple[int, int]]] = []
+        with _open_directory_descriptor(
+            target.parent,
+            create=True,
+            created_directories=created_directories,
+        ) as directory_fd:
             parent_metadata = os.fstat(directory_fd)
             parent_identity = (parent_metadata.st_dev, parent_metadata.st_ino)
             committed = False
@@ -838,6 +899,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 descriptor_backend=True,
                 parent_identity=parent_identity,
                 orphaned_paths=tuple(orphaned_paths),
+                created_directories=tuple(created_directories),
             )
     portable_directory = _capture_safe_directory(target.parent, create=True)
     parent = portable_directory.path
@@ -863,12 +925,9 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         finally:
             descriptor = -1
         try:
-            try:
-                _assert_portable_directory(portable_directory)
-                _assert_directory_identity(parent, parent_identity)
-                os.link(temporary, target, follow_symlinks=False)
-            except (TypeError, NotImplementedError):  # pragma: no cover - platform seam
-                os.link(temporary, target)
+            _assert_portable_directory(portable_directory)
+            _assert_directory_identity(parent, parent_identity)
+            _portable_hard_link(temporary, target)
         except FileExistsError:
             raise FileExistsError(f"target already exists: {target}") from None
         except BaseException:
@@ -924,6 +983,10 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             orphaned_paths.append(temporary)
         if publication_cleanup_error is not None:
             raise publication_cleanup_error
+        if not committed:
+            _remove_empty_created_directories(
+                portable_directory.created_directories
+            )
     if receipt_identity is None:  # pragma: no cover - defensive invariant
         raise RuntimeError("published file identity was not captured")
     return CreatedFileReceipt(
@@ -933,6 +996,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         descriptor_backend=False,
         portable_ancestors=portable_directory.ancestors,
         orphaned_paths=tuple(orphaned_paths),
+        created_directories=portable_directory.created_directories,
     )
 
 
@@ -956,6 +1020,16 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
         for path in receipt.orphaned_paths
     ):
         raise UnsafeAtomicPath("created-file receipt orphan paths must share its parent")
+    created_directory_paths = tuple(
+        directory for directory, _identity in receipt.created_directories
+    )
+    if len(set(created_directory_paths)) != len(created_directory_paths) or any(
+        directory != _absolute_path(directory) or directory not in target.parents
+        for directory in created_directory_paths
+    ):
+        raise UnsafeAtomicPath(
+            "created-file receipt directories must be unique absolute ancestors"
+        )
     if receipt.descriptor_backend:
         if receipt.parent_identity is None:
             raise UnsafeAtomicPath("created-file receipt is missing its parent identity")
@@ -1034,6 +1108,7 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
                 os.fsync(directory_fd)
             if rollback_error is not None:
                 raise rollback_error
+        _remove_empty_created_directories(receipt.created_directories)
         return
     portable_directory = _PortableDirectory(
         path=target.parent,
@@ -1110,6 +1185,7 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
         _fsync_directory(target.parent)
     if rollback_error is not None:
         raise rollback_error
+    _remove_empty_created_directories(receipt.created_directories)
 
 
 @contextmanager

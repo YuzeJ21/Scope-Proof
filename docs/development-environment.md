@@ -90,6 +90,9 @@ deterministic benchmarks. It is a required dependency of `verify`. A passing lan
 CLI, and storage evidence only: it is not a real Windows desktop workflow, browser workflow,
 screen-reader observation, accessibility-conformance result, customer signal, or Stage 1 credit.
 The process-concurrency contract serializes ScopeProof writers through app-owned mutation claims.
+The portable backend also requires a local filesystem with hard-link support so it can publish
+without replacing an existing record; unsupported filesystems fail closed with an explicit storage
+error instead of weakening no-clobber behavior.
 It does not claim atomic compare-and-swap protection against a same-user process that deliberately
 bypasses those claims and directly rewrites the storage directory during the final filesystem
 rename; that hostile local-account scenario remains unsupported and must not be counted as proven.
