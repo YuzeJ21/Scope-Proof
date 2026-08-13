@@ -195,6 +195,39 @@ def test_descriptor_directory_metadata_failure_cleans_new_directory(
     assert not created_parent.exists()
 
 
+def test_portable_directory_metadata_failure_cleans_new_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created_parent = tmp_path / "created"
+    original_mkdir = Path.mkdir
+    original_lstat = os.lstat
+    created = False
+    failed = False
+
+    def record_created_directory(path: Path, *args, **kwargs) -> None:
+        nonlocal created
+        original_mkdir(path, *args, **kwargs)
+        if path == created_parent:
+            created = True
+
+    def fail_created_directory_metadata(path, *args, **kwargs):
+        nonlocal failed
+        if created and Path(path) == created_parent and not failed:
+            failed = True
+            raise OSError("simulated portable directory metadata failure")
+        return original_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(Path, "mkdir", record_created_directory)
+    monkeypatch.setattr(os, "lstat", fail_created_directory_metadata)
+
+    with pytest.raises(OSError, match="portable directory metadata failure"):
+        atomic_create_text(created_parent / "record.json", "validated\n")
+
+    assert failed is True
+    assert not created_parent.exists()
+
+
 @pytest.mark.skipif(
     not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
     reason="descriptor-relative storage backend is unavailable",
