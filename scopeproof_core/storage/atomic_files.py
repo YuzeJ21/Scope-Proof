@@ -1083,7 +1083,9 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     merged_created_directories.update(receipt.created_directories)
     return replace(
         receipt,
-        created_directories=tuple(merged_created_directories.items()),
+        created_directories=tuple(
+            sorted(merged_created_directories.items(), key=lambda item: len(item[0].parts))
+        ),
     )
 
 

@@ -1550,13 +1550,16 @@ def test_receipt_uses_recreated_parent_identity_without_duplicate_directory(
         pytest.skip("descriptor-relative storage backend is unavailable")
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
-    target = tmp_path / "created-parent" / "report.md"
+    existing_parent = tmp_path / "existing-parent"
+    existing_parent.mkdir()
+    target = existing_parent / "created-parent" / "report.md"
     create_unclaimed = atomic_files_module._atomic_create_text_with_receipt_unclaimed
     recreated = False
 
     def remove_prepared_parent_then_create(path: Path, text: str):
         nonlocal recreated
         path.parent.rmdir()
+        path.parent.parent.rmdir()
         recreated = True
         return create_unclaimed(path, text)
 
