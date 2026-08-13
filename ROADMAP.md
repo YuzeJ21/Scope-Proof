@@ -19,14 +19,14 @@ which provides the wheel, source archive, and checksum manifest.
 |---|---|
 | Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
 | Active source line | Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists |
-| Current resulting `main` | PR #193 merged at `432371c4faec0b790f70fec32b4d3fc4d5132cfa` (PR head `8bb407079a0ff7098d2fc18af3d75b216725df2e`, base `9426e8714ffd2c3742bb074ae26fc788f1049c63`) |
+| Post-PR #193 resulting-main snapshot (2026-08-13) | PR #193 product-source baseline at `432371c4faec0b790f70fec32b4d3fc4d5132cfa` (PR head `8bb407079a0ff7098d2fc18af3d75b216725df2e`, base `9426e8714ffd2c3742bb074ae26fc788f1049c63`) |
 | Verified product baseline | PR #184 release integration landed on `main` at `448c42758ea139bf9203cbf1bb04b02b02ae412c` |
 | Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
 | Release integration evidence | PR #184 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; exact-main CI, CodeQL, and Pages all succeeded, and `origin/main` matched at the 2026-08-08 branch-start snapshot |
 | Integration authority | PR #184 exact-main CI run `30854382641`, CodeQL run `30854382413`, and Pages run `30854382659` verify the release integration |
 | Historical source integration | PR #183 integrity/reviewer-loop source merge at `cd362a85a558645a0f56d6540f6bf035e5821809`; runs `30847416893`, `30847415556`, and `30847417705` remain historical source-integration evidence |
-| Fresh pre-merge local verification | 2,251 passed, 2 intentional skips, and 95.27% coverage |
-| Resulting-main engineering checks | CI, CodeQL, Pages, Python 3.11, Python 3.13, Windows, installed-wheel, deterministic benchmark, and packaged-browser checks succeeded |
+| Snapshot verification | Exact PR #193 tree `432371c4faec0b790f70fec32b4d3fc4d5132cfa`: 2,251 passed, 2 intentional skips, and 95.27% coverage |
+| Snapshot engineering checks | CI, CodeQL, Pages, Python 3.11, Python 3.13, Windows, installed-wheel, deterministic benchmark, and packaged-browser checks succeeded |
 | Product validation | Publication state does not change Stage 1, which remains at zero; Stages 2–4 remain gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
@@ -43,8 +43,9 @@ development line and earn no Stage 1 credit.
 PR #189 established the post-release development identity; PR #190 preserved comparison
 relationship integrity; PR #191 remediated the GitPython dependency and security issue; PR #192
 bounded same-origin GitHub pagination; and PR #193 hardened cross-platform identity-bound alpha
-storage. PR #193 produced current `main` at
-`432371c4faec0b790f70fec32b4d3fc4d5132cfa`. These are engineering changes on `0.2.4.dev0`, not a
+storage. The dated post-PR #193 resulting-main snapshot at
+`432371c4faec0b790f70fec32b4d3fc4d5132cfa` is the PR #193 product-source baseline, not a
+declaration of perpetually current `main`. These are engineering changes on `0.2.4.dev0`, not a
 new published release; v0.2.3 remains the published release and none earns Stage 1 credit.
 
 ### Verification and evidence boundaries
@@ -247,8 +248,9 @@ research path. It helps collect evidence but does not satisfy any gate by itself
 
 ### Owner activation checklist — separate authorization required
 
-This checklist is preparation only; it does not authorize outreach. If the owner separately
-authorizes genuine Stage 1 outreach, keep the following distinctions explicit:
+This checklist is preparation only; it does not authorize outreach. Current policy remains passive
+and inbound-only absent separate owner authorization. If the owner separately authorizes genuine
+Stage 1 outreach, keep the following distinctions explicit:
 
 - Preparation is not outreach: prepare public, source-safe materials and qualification records
   before contacting anyone, but do not contact, recruit, or message a participant without that
