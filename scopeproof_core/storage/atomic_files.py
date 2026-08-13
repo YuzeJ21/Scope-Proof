@@ -887,6 +887,7 @@ def _atomic_create_text_with_receipt_unclaimed(target: Path, text: str) -> Creat
                 published = _require_regular_at(directory_fd, target.name)
                 if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
                     raise UnsafeAtomicPath("private temporary file changed before publication")
+                _assert_directory_identity(target.parent, parent_identity)
                 with suppress(OSError):
                     os.fsync(directory_fd)
                 receipt_identity = (published.st_dev, published.st_ino)
