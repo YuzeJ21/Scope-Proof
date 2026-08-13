@@ -394,9 +394,12 @@ def test_alpha_store_rejects_symlinked_existing_ancestor(tmp_path: Path) -> None
     assert list(outside.iterdir()) == []
 
 
-def test_alpha_store_preserves_relative_caller_facing_save_path(
+def test_alpha_store_preserves_relative_caller_facing_mutation_paths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from scopeproof_core.alpha.models import AlphaOutcome
+    from scopeproof_core.alpha.service import record_alpha_outcome
+
     monkeypatch.chdir(tmp_path)
     record = alpha_case()
     store = JsonAlphaCaseStore(Path("cases"))
@@ -406,6 +409,17 @@ def test_alpha_store_preserves_relative_caller_facing_save_path(
     assert path == Path("cases") / f"{record.case_id}.json"
     assert not path.is_absolute()
     assert store.load(record.case_id) == record
+
+    completed = record_alpha_outcome(
+        record,
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+    )
+    updated_path = store.update(completed)
+
+    assert updated_path == path
+    assert not updated_path.is_absolute()
+    assert store.load(record.case_id) == completed
 
 
 def test_alpha_store_revalidates_loaded_payload(tmp_path: Path) -> None:

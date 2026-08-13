@@ -57,6 +57,7 @@ class CreatedFileReceipt:
     identity: tuple[int, int]
     content_sha256: str
     descriptor_backend: bool
+    parent_identity: tuple[int, int] | None = None
     portable_ancestors: tuple[tuple[Path, tuple[int, int]], ...] = ()
     orphaned_paths: tuple[Path, ...] = ()
 
@@ -726,6 +727,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     content_sha256 = sha256(payload).hexdigest()
     if _DESCRIPTOR_BACKEND_SUPPORTED:
         with _open_directory_descriptor(target.parent, create=True) as directory_fd:
+            parent_metadata = os.fstat(directory_fd)
+            parent_identity = (parent_metadata.st_dev, parent_metadata.st_ino)
             committed = False
             try:
                 _require_regular_at(directory_fd, target.name)
@@ -809,22 +812,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 except BaseException:
                     if not committed:
                         raise
-                    try:
-                        orphan = _require_regular_at(directory_fd, temporary)
-                        orphan_identity = (orphan.st_dev, orphan.st_ino)
-                        orphan_owned = (
-                            orphan_identity == temporary_identity
-                            and _sha256_regular_at(
-                                directory_fd, temporary, temporary_identity
-                            )
-                            == content_sha256
-                        )
-                    except FileNotFoundError:
-                        orphan_owned = False
-                    except BaseException:
-                        orphan_owned = None
-                    if orphan_owned is not False:
-                        orphaned_paths.append(target.parent / temporary)
+                    orphaned_paths.append(target.parent / temporary)
                 if publication_cleanup_error is not None:
                     raise publication_cleanup_error
             if receipt_identity is None:  # pragma: no cover - defensive invariant
@@ -834,6 +822,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 identity=receipt_identity,
                 content_sha256=content_sha256,
                 descriptor_backend=True,
+                parent_identity=parent_identity,
                 orphaned_paths=tuple(orphaned_paths),
             )
     portable_directory = _capture_safe_directory(target.parent, create=True)
@@ -918,19 +907,7 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         except BaseException:
             if not committed:
                 raise
-            try:
-                orphan = _require_regular_file(temporary)
-                orphan_identity = (orphan.st_dev, orphan.st_ino)
-                orphan_owned = (
-                    orphan_identity == temporary_identity
-                    and _sha256_regular_path(temporary, temporary_identity) == content_sha256
-                )
-            except FileNotFoundError:
-                orphan_owned = False
-            except BaseException:
-                orphan_owned = None
-            if orphan_owned is not False:
-                orphaned_paths.append(temporary)
+            orphaned_paths.append(temporary)
         if publication_cleanup_error is not None:
             raise publication_cleanup_error
     if receipt_identity is None:  # pragma: no cover - defensive invariant
@@ -966,7 +943,12 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
     ):
         raise UnsafeAtomicPath("created-file receipt orphan paths must share its parent")
     if receipt.descriptor_backend:
+        if receipt.parent_identity is None:
+            raise UnsafeAtomicPath("created-file receipt is missing its parent identity")
         with _open_directory_descriptor(target.parent, create=False) as directory_fd:
+            parent_metadata = os.fstat(directory_fd)
+            if (parent_metadata.st_dev, parent_metadata.st_ino) != receipt.parent_identity:
+                raise UnsafeAtomicPath("app-owned directory changed before rollback")
             rollback_names = [path.name for path in rollback_paths]
             for candidate in os.listdir(directory_fd):
                 if candidate in rollback_names or not any(

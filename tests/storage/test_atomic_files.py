@@ -1043,6 +1043,64 @@ def test_receipt_tracks_restored_temporary_and_retry_cleans_its_quarantine(
 
 
 @pytest.mark.parametrize("portable", [False, True])
+def test_receipt_tracks_temporary_when_cleanup_and_restore_both_fail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "report.md"
+    original_link = os.link
+    original_unlink = os.unlink
+
+    def deny_quarantine_unlink(path, *args, **kwargs):
+        if str(path).endswith(".rollback"):
+            raise PermissionError("simulated temporary quarantine unlink denial")
+        return original_unlink(path, *args, **kwargs)
+
+    def deny_quarantine_restore(source, destination, *args, **kwargs):
+        if str(source).endswith(".rollback"):
+            raise PermissionError("simulated temporary restore denial")
+        return original_link(source, destination, *args, **kwargs)
+
+    with monkeypatch.context() as denied:
+        denied.setattr(os, "unlink", deny_quarantine_unlink)
+        denied.setattr(os, "link", deny_quarantine_restore)
+        receipt = atomic_create_text_with_receipt(target, "sensitive generated report\n")
+
+    assert len(receipt.orphaned_paths) == 1
+    assert not receipt.orphaned_paths[0].exists()
+    assert any(path.suffix == ".rollback" for path in tmp_path.iterdir())
+
+    rollback_created_file(receipt)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_descriptor_receipt_rollback_rejects_replaced_parent_directory(
+    tmp_path: Path,
+) -> None:
+    parent = tmp_path / "reports"
+    parent.mkdir()
+    target = parent / "report.md"
+    receipt = atomic_create_text_with_receipt(target, "sensitive generated report\n")
+    moved = tmp_path / "moved-reports"
+    parent.rename(moved)
+    parent.mkdir()
+
+    with pytest.raises(UnsafeAtomicPath, match="directory changed"):
+        rollback_created_file(receipt)
+
+    assert (moved / target.name).read_bytes() == b"sensitive generated report\n"
+    assert list(parent.iterdir()) == []
+
+
+@pytest.mark.parametrize("portable", [False, True])
 def test_receipt_rollback_ignores_foreign_quarantine_shaped_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
