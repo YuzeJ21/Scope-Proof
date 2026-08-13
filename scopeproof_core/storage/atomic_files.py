@@ -1079,9 +1079,11 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     except BaseException:
         _remove_empty_created_directories(created_directories)
         raise
+    merged_created_directories = dict(created_directories)
+    merged_created_directories.update(receipt.created_directories)
     return replace(
         receipt,
-        created_directories=created_directories + receipt.created_directories,
+        created_directories=tuple(merged_created_directories.items()),
     )
 
 

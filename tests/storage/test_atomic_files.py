@@ -1542,6 +1542,40 @@ def test_receipt_rollback_retry_cleans_orphan_after_primary_was_removed(
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_receipt_uses_recreated_parent_identity_without_duplicate_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    target = tmp_path / "created-parent" / "report.md"
+    create_unclaimed = atomic_files_module._atomic_create_text_with_receipt_unclaimed
+    recreated = False
+
+    def remove_prepared_parent_then_create(path: Path, text: str):
+        nonlocal recreated
+        path.parent.rmdir()
+        recreated = True
+        return create_unclaimed(path, text)
+
+    monkeypatch.setattr(
+        atomic_files_module,
+        "_atomic_create_text_with_receipt_unclaimed",
+        remove_prepared_parent_then_create,
+    )
+
+    receipt = atomic_create_text_with_receipt(target, "validated report\n")
+
+    assert recreated is True
+    assert len({path for path, _identity in receipt.created_directories}) == len(
+        receipt.created_directories
+    )
+    rollback_created_file(receipt)
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_committed_create_does_not_report_failure_when_temporary_cleanup_is_denied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
