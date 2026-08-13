@@ -1732,6 +1732,8 @@ def test_committed_create_ignores_claim_cleanup_interruption(
 def test_committed_create_ignores_claim_final_sync_interruption(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
+    if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
+        pytest.skip("directory fsync interruption seam is unavailable")
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     if portable:
