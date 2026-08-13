@@ -234,18 +234,42 @@ def _open_directory_descriptor(
             child_fd, created_here = _open_child_directory(
                 current_fd, component, create=create
             )
-            os.close(current_fd)
-            current_fd = child_fd
-            current_path /= component
+            child_path = current_path / component
+            created_directory: tuple[Path, tuple[int, int]] | None = None
             if created_here:
-                metadata = os.fstat(current_fd)
+                try:
+                    metadata = os.fstat(child_fd)
+                except BaseException:
+                    # A transient metadata failure must not strand a directory we can still
+                    # bind to the open child descriptor. Preserve it when identity remains
+                    # ambiguous rather than risking deletion of a replacement.
+                    with suppress(OSError):
+                        cleanup_metadata = os.fstat(child_fd)
+                        created_directory = (
+                            child_path,
+                            (cleanup_metadata.st_dev, cleanup_metadata.st_ino),
+                        )
+                        created.append(created_directory)
+                        if created_directories is not None:
+                            created_directories.append(created_directory)
+                    with suppress(OSError):
+                        os.close(child_fd)
+                    raise
                 created_directory = (
-                    current_path,
+                    child_path,
                     (metadata.st_dev, metadata.st_ino),
                 )
                 created.append(created_directory)
                 if created_directories is not None:
                     created_directories.append(created_directory)
+            try:
+                os.close(current_fd)
+            except BaseException:
+                with suppress(OSError):
+                    os.close(child_fd)
+                raise
+            current_fd = child_fd
+            current_path = child_path
         yield current_fd
         completed = True
     finally:

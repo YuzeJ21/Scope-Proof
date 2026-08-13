@@ -1,5 +1,6 @@
 import errno
 import os
+from contextlib import suppress
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -36,6 +37,89 @@ def test_atomic_create_builds_missing_safe_directories(tmp_path: Path) -> None:
 
     assert atomic_create_text(target, "validated\n") == target
     assert target.read_text(encoding="utf-8") == "validated\n"
+
+
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_descriptor_directory_metadata_failure_cleans_new_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created_parent = tmp_path / "created"
+    original_mkdir = os.mkdir
+    original_fstat = os.fstat
+    created = False
+    failed = False
+
+    def record_created_directory(path, *args, **kwargs) -> None:
+        nonlocal created
+        original_mkdir(path, *args, **kwargs)
+        if path == created_parent.name:
+            created = True
+
+    def fail_created_directory_metadata(descriptor: int):
+        nonlocal failed
+        metadata = original_fstat(descriptor)
+        if created and not failed and atomic_files_module.stat.S_ISDIR(metadata.st_mode):
+            failed = True
+            raise OSError("simulated created-directory metadata failure")
+        return metadata
+
+    monkeypatch.setattr(os, "mkdir", record_created_directory)
+    monkeypatch.setattr(os, "fstat", fail_created_directory_metadata)
+
+    with pytest.raises(OSError, match="created-directory metadata failure"):
+        atomic_create_text(created_parent / "record.json", "validated\n")
+
+    assert failed is True
+    assert not created_parent.exists()
+
+
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_descriptor_parent_close_failure_cleans_new_directory_and_child_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created_parent = tmp_path / "created"
+    original_open = os.open
+    original_close = os.close
+    original_fstat = os.fstat
+    created_descriptor: int | None = None
+    failed = False
+
+    def record_created_directory_open(path, flags, *args, **kwargs):
+        nonlocal created_descriptor
+        descriptor = original_open(path, flags, *args, **kwargs)
+        if path == created_parent.name:
+            created_descriptor = descriptor
+        return descriptor
+
+    def close_parent_then_fail(descriptor: int) -> None:
+        nonlocal failed
+        original_close(descriptor)
+        if created_descriptor is not None and descriptor != created_descriptor and not failed:
+            failed = True
+            raise OSError("simulated parent-directory close failure")
+
+    monkeypatch.setattr(os, "open", record_created_directory_open)
+    monkeypatch.setattr(os, "close", close_parent_then_fail)
+
+    try:
+        with pytest.raises(OSError, match="parent-directory close failure"):
+            atomic_create_text(created_parent / "record.json", "validated\n")
+
+        assert failed is True
+        assert not created_parent.exists()
+        assert created_descriptor is not None
+        with pytest.raises(OSError):
+            original_fstat(created_descriptor)
+    finally:
+        if created_descriptor is not None:
+            with suppress(OSError):
+                original_close(created_descriptor)
 
 
 def test_atomic_create_rejects_parent_traversal_before_normalizing(
