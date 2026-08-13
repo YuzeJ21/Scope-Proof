@@ -1324,17 +1324,17 @@ def _exclusive_path_claim(
                     directory_fd=directory_fd,
                 )
             finally:
-                with suppress(OSError):
+                with suppress(OSError, KeyboardInterrupt):
                     os.close(descriptor)
                 if claim_identity is not None:
-                    with suppress(OSError):
+                    with suppress(OSError, KeyboardInterrupt):
                         _quarantine_and_remove_at(
                             directory_fd,
                             claim_name,
                             claim_identity,
                             changed_message="mutation claim changed before cleanup",
                         )
-                with suppress(OSError):
+                with suppress(OSError, KeyboardInterrupt):
                     os.fsync(directory_fd)
         return
     portable_directory = _capture_safe_directory(target.parent, create=False)
@@ -1375,18 +1375,19 @@ def _exclusive_path_claim(
             portable_ancestors=portable_directory.ancestors,
         )
     finally:
-        with suppress(OSError):
+        with suppress(OSError, KeyboardInterrupt):
             os.close(descriptor)
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         if claim_identity is not None:
-            with suppress(OSError):
+            with suppress(OSError, KeyboardInterrupt):
                 _quarantine_and_remove_path(
                     claim,
                     claim_identity,
                     changed_message="mutation claim changed before cleanup",
                 )
-        _fsync_directory(parent)
+        with suppress(OSError, KeyboardInterrupt):
+            _fsync_directory(parent)
 
 
 @contextmanager

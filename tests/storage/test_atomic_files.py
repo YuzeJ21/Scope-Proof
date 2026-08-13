@@ -1704,6 +1704,59 @@ def test_committed_replace_ignores_claim_cleanup_denial(
 
 
 @pytest.mark.parametrize("portable", [False, True])
+def test_committed_create_ignores_claim_cleanup_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    function_name = "_quarantine_and_remove_path" if portable else "_quarantine_and_remove_at"
+    cleanup = getattr(atomic_files_module, function_name)
+
+    def interrupt_claim_cleanup(*args, **kwargs):
+        candidate = args[0] if portable else args[1]
+        result = cleanup(*args, **kwargs)
+        if str(candidate).endswith(".claim"):
+            raise KeyboardInterrupt("simulated claim cleanup interruption")
+        return result
+
+    monkeypatch.setattr(atomic_files_module, function_name, interrupt_claim_cleanup)
+    target = tmp_path / "record.json"
+
+    assert atomic_create_text(target, "committed bytes\n") == target
+    assert target.read_bytes() == b"committed bytes\n"
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_committed_create_ignores_claim_final_sync_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_fsync = os.fsync
+    directory_syncs = 0
+
+    def interrupt_second_directory_sync(descriptor: int) -> None:
+        nonlocal directory_syncs
+        metadata = os.fstat(descriptor)
+        if atomic_files_module.stat.S_ISDIR(metadata.st_mode):
+            directory_syncs += 1
+            if directory_syncs == 2:
+                raise KeyboardInterrupt("simulated claim final sync interruption")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", interrupt_second_directory_sync)
+    target = tmp_path / "record.json"
+
+    assert atomic_create_text(target, "committed bytes\n") == target
+    assert directory_syncs == 2
+    assert target.read_bytes() == b"committed bytes\n"
+
+
+@pytest.mark.parametrize("portable", [False, True])
 def test_committed_replace_ignores_backup_cleanup_interruption(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
