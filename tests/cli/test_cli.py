@@ -13,7 +13,10 @@ import scopeproof_core.storage.atomic_files as atomic_files_module
 from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.cli import _build_bundle, main
-from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+from scopeproof_core.criteria.confirmation import (
+    build_criteria_source_provenance,
+    read_exact_utf8_text,
+)
 from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.demo import build_demo_review, build_review_from_paths
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
@@ -72,7 +75,7 @@ def write_requirements_confirmation(
     source_uri: str = "https://example.test/requirements",
     source_revision: str | None = "revision-42",
 ) -> Path:
-    source_text = requirements.read_text(encoding="utf-8")
+    source_text = read_exact_utf8_text(requirements)
     criteria = [
         Criterion(criterion_id=draft.criterion_id, text=draft.text)
         for draft in parse_criteria(source_text)

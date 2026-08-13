@@ -22,7 +22,7 @@ from scopeproof_core.storage.atomic_files import (
 
 def test_atomic_create_never_overwrites_existing_target(tmp_path: Path) -> None:
     target = tmp_path / "report.json"
-    target.write_text("owner bytes\n", encoding="utf-8")
+    target.write_bytes(b"owner bytes\n")
 
     with pytest.raises(FileExistsError):
         atomic_create_text(target, "new bytes\n")
@@ -57,7 +57,7 @@ def test_atomic_create_rejects_parent_traversal_before_normalizing(
 
 def test_safe_directory_rejects_non_directory_component(tmp_path: Path) -> None:
     component = tmp_path / "not-a-directory"
-    component.write_text("file\n", encoding="utf-8")
+    component.write_bytes(b"file\n")
 
     with pytest.raises(UnsafeAtomicPath, match="must be a directory"):
         ensure_safe_directory(component / "nested", create=True)
@@ -92,7 +92,7 @@ def test_failed_portable_directory_creation_preserves_foreign_content(
 
     def fail_after_foreign_content_arrives(path: Path, *args, **kwargs) -> None:
         if path == blocked:
-            foreign.write_text("foreign bytes\n", encoding="utf-8")
+            foreign.write_bytes(b"foreign bytes\n")
             raise PermissionError("simulated directory creation denial")
         original_mkdir(path, *args, **kwargs)
 
@@ -116,7 +116,7 @@ def test_portable_directory_identity_checks_reject_type_and_identity_changes(
         atomic_files_module._assert_directory_identity(directory, (-1, -1))
 
     directory.rmdir()
-    directory.write_text("not a directory\n", encoding="utf-8")
+    directory.write_bytes(b"not a directory\n")
     with pytest.raises(UnsafeAtomicPath, match="must be a directory"):
         atomic_files_module._assert_portable_directory(captured)
     with pytest.raises(UnsafeAtomicPath, match="must be a directory"):
@@ -172,7 +172,7 @@ def test_descriptor_read_rejects_fifo_swapped_between_stat_and_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("validated\n", encoding="utf-8")
+    target.write_bytes(b"validated\n")
     original_open = os.open
     swapped = False
 
@@ -196,7 +196,7 @@ def test_portable_read_rejects_fifo_swapped_between_stat_and_open_without_blocki
     if not hasattr(os, "mkfifo"):
         pytest.skip("FIFO creation is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("validated\n", encoding="utf-8")
+    target.write_bytes(b"validated\n")
     original_open = os.open
     swapped = False
 
@@ -223,7 +223,7 @@ def test_descriptor_read_rejects_regular_file_swap_between_stat_and_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("validated\n", encoding="utf-8")
+    target.write_bytes(b"validated\n")
     original_open = os.open
     swapped = False
 
@@ -232,7 +232,7 @@ def test_descriptor_read_rejects_regular_file_swap_between_stat_and_open(
         if not swapped and path == target.name and kwargs.get("dir_fd") is not None:
             swapped = True
             target.unlink()
-            target.write_text("different bytes\n", encoding="utf-8")
+            target.write_bytes(b"different bytes\n")
         return original_open(path, flags, *args, **kwargs)
 
     monkeypatch.setattr(os, "open", swap_regular_file)
@@ -249,7 +249,7 @@ def test_descriptor_read_translates_no_follow_loop_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("validated\n", encoding="utf-8")
+    target.write_bytes(b"validated\n")
     original_open = os.open
 
     def reject_target(path, flags, *args, **kwargs):
@@ -267,7 +267,7 @@ def test_portable_read_rejects_regular_file_swap_between_stat_and_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("validated\n", encoding="utf-8")
+    target.write_bytes(b"validated\n")
     original_open = os.open
     swapped = False
 
@@ -276,7 +276,7 @@ def test_portable_read_rejects_regular_file_swap_between_stat_and_open(
         if not swapped and Path(path) == target and not flags & os.O_CREAT:
             swapped = True
             target.unlink()
-            target.write_text("different bytes\n", encoding="utf-8")
+            target.write_bytes(b"different bytes\n")
         return original_open(path, flags, *args, **kwargs)
 
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -302,10 +302,10 @@ def test_portable_read_and_listing_return_only_regular_direct_children(
 ) -> None:
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     record = tmp_path / "record.json"
-    record.write_text("validated\n", encoding="utf-8")
+    record.write_bytes(b"validated\n")
     nested = tmp_path / "nested"
     nested.mkdir()
-    (nested / "nested.json").write_text("not direct\n", encoding="utf-8")
+    (nested / "nested.json").write_bytes(b"not direct\n")
     (tmp_path / "linked.json").symlink_to(record)
 
     assert read_text_no_follow(record) == "validated\n"
@@ -325,7 +325,7 @@ def test_portable_listing_rejects_ancestor_swap_during_enumeration(
     outside = tmp_path / "outside"
     outside.mkdir()
     foreign = outside / "alpha-0123456789abcdef0123456789abcdef.json"
-    foreign.write_text("foreign\n", encoding="utf-8")
+    foreign.write_bytes(b"foreign\n")
     original_scandir = os.scandir
 
     def swap_before_enumeration(path):
@@ -387,7 +387,7 @@ def test_descriptor_listing_ignores_entry_removed_before_metadata_read(
 
 def test_content_hash_rejects_record_identity_drift(tmp_path: Path) -> None:
     target = tmp_path / "record.json"
-    target.write_text("validated\n", encoding="utf-8")
+    target.write_bytes(b"validated\n")
     metadata = target.stat()
     wrong_identity = (metadata.st_dev, metadata.st_ino + 1)
 
@@ -557,7 +557,7 @@ def test_atomic_create_rejects_private_temporary_swap(
         directory_fd = kwargs.get("src_dir_fd")
         if directory_fd is None:
             Path(source).unlink()
-            Path(source).write_text("attacker bytes\n", encoding="utf-8")
+            Path(source).write_bytes(b"attacker bytes\n")
         else:
             os.unlink(source, dir_fd=directory_fd)
             descriptor = os.open(
@@ -676,7 +676,7 @@ def test_atomic_create_retries_private_temporary_name_collision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     bounded = sha256(b"record").hexdigest()[:16]
-    (tmp_path / f".{bounded}-collision.tmp").write_text("occupied", encoding="utf-8")
+    (tmp_path / f".{bounded}-collision.tmp").write_bytes(b"occupied")
     tokens = iter(("collision", "available", "cleanup"))
     monkeypatch.setattr(atomic_files_module.secrets, "token_hex", lambda _size: next(tokens))
 
@@ -746,7 +746,7 @@ def test_portable_create_refuses_existing_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "report.md"
-    target.write_text("owner bytes\n", encoding="utf-8")
+    target.write_bytes(b"owner bytes\n")
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
 
     with pytest.raises(FileExistsError, match="already exists"):
@@ -768,7 +768,7 @@ def test_portable_failed_create_preserves_foreign_target_replacing_publication(
     def replace_published_target(source, destination, *args, **kwargs):
         result = original_link(source, destination, *args, **kwargs)
         Path(destination).unlink()
-        Path(destination).write_text("foreign owner bytes\n", encoding="utf-8")
+        Path(destination).write_bytes(b"foreign owner bytes\n")
         return result
 
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -788,7 +788,7 @@ def test_portable_receipt_rollback_preserves_replacement(
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     receipt = atomic_create_text_with_receipt(target, "validated report\n")
     target.unlink()
-    target.write_text("owner replacement\n", encoding="utf-8")
+    target.write_bytes(b"owner replacement\n")
 
     with pytest.raises(UnsafeAtomicPath, match="changed before rollback"):
         rollback_created_file(receipt)
@@ -806,7 +806,7 @@ def test_receipt_rollback_preserves_in_place_foreign_edit(
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     receipt = atomic_create_text_with_receipt(target, "generated bytes\n")
-    target.write_text("foreign in-place edit\n", encoding="utf-8")
+    target.write_bytes(b"foreign in-place edit\n")
 
     with pytest.raises(UnsafeAtomicPath, match="changed before rollback"):
         rollback_created_file(receipt)
@@ -875,6 +875,8 @@ def test_directory_sync_unavailability_after_create_does_not_report_false_failur
 def test_interrupted_final_directory_sync_rolls_back_unreported_create(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
+    if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
+        pytest.skip("directory fsync interruption seam is unavailable")
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     if portable:
@@ -1025,8 +1027,8 @@ def test_quarantine_restore_preserves_existing_target(
 ) -> None:
     target = tmp_path / "report.md"
     quarantine = tmp_path / "report.rollback"
-    target.write_text("existing owner bytes\n", encoding="utf-8")
-    quarantine.write_text("quarantined bytes\n", encoding="utf-8")
+    target.write_bytes(b"existing owner bytes\n")
+    quarantine.write_bytes(b"quarantined bytes\n")
 
     if portable:
         atomic_files_module._restore_quarantined_path(quarantine, target)
@@ -1227,7 +1229,7 @@ def test_created_file_rollback_refuses_to_delete_replacement(
     target = tmp_path / "report.md"
     receipt = atomic_create_text_with_receipt(target, "generated bytes\n")
     target.unlink()
-    target.write_text("owner replacement\n", encoding="utf-8")
+    target.write_bytes(b"owner replacement\n")
 
     with pytest.raises(UnsafeAtomicPath, match="changed before rollback"):
         rollback_created_file(receipt)
@@ -1250,7 +1252,7 @@ def test_created_file_rollback_preserves_replacement_racing_the_removal(
             swapped = True
             if source_fd is None:
                 Path(source).unlink()
-                Path(source).write_text("owner replacement\n", encoding="utf-8")
+                Path(source).write_bytes(b"owner replacement\n")
             else:
                 os.unlink(source, dir_fd=source_fd)
                 descriptor = os.open(
@@ -1307,7 +1309,7 @@ def test_descriptor_replace_never_overwrites_foreign_file_published_by_race(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_rename = os.rename
 
     def swap_temporary(source, destination, *args, **kwargs):
@@ -1342,7 +1344,7 @@ def test_committed_replace_ignores_claim_cleanup_denial(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_unlink = os.unlink
 
     def deny_claim_cleanup(path, *args, **kwargs):
@@ -1367,7 +1369,7 @@ def test_committed_replace_ignores_backup_cleanup_interruption(
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     function_name = "_quarantine_and_remove_path" if portable else "_quarantine_and_remove_at"
     cleanup = getattr(atomic_files_module, function_name)
 
@@ -1452,7 +1454,7 @@ def test_claimed_replace_preserves_old_bytes_and_cleans_artifacts_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "alpha-record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
 
     original_rename = os.rename
 
@@ -1477,7 +1479,7 @@ def test_portable_claimed_replace_preserves_old_bytes_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "alpha-record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
 
     def fail_replace(*_args, **_kwargs):
         raise OSError("simulated portable replacement interruption")
@@ -1499,7 +1501,7 @@ def test_portable_claimed_replace_commits_and_cleans_artifacts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "alpha-record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
 
     with exclusive_path_claim(target) as claim:
@@ -1516,7 +1518,7 @@ def test_temporary_close_failure_happens_before_replacement_publication(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     original_close = os.close
@@ -1549,7 +1551,7 @@ def test_portable_replace_rejects_foreign_temporary_before_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "alpha-record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_backup = atomic_files_module._create_backup_path
     foreign_temporary: Path | None = None
 
@@ -1558,7 +1560,7 @@ def test_portable_replace_rejects_foreign_temporary_before_publication(
         backup = original_backup(path, identity)
         [temporary] = list(tmp_path.glob("*.tmp"))
         temporary.unlink()
-        temporary.write_text("foreign unvalidated bytes\n", encoding="utf-8")
+        temporary.write_bytes(b"foreign unvalidated bytes\n")
         foreign_temporary = temporary
         return backup
 
@@ -1580,8 +1582,8 @@ def test_portable_replace_rejects_foreign_temporary_before_publication(
 def test_claims_are_bound_to_their_exact_read_and_replace_target(tmp_path: Path) -> None:
     target = tmp_path / "record.json"
     neighbor = tmp_path / "neighbor.json"
-    target.write_text("valid\n", encoding="utf-8")
-    neighbor.write_text("neighbor\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
+    neighbor.write_bytes(b"neighbor\n")
 
     with exclusive_path_claim(target) as claim:
         with pytest.raises(UnsafeAtomicPath, match="does not match read target"):
@@ -1595,8 +1597,8 @@ def test_claims_are_bound_to_their_exact_read_and_replace_target(tmp_path: Path)
 def test_claim_rejects_record_replaced_after_acquisition(tmp_path: Path) -> None:
     target = tmp_path / "record.json"
     replacement = tmp_path / "replacement.json"
-    target.write_text("validated unresolved\n", encoding="utf-8")
-    replacement.write_text("foreign completed\n", encoding="utf-8")
+    target.write_bytes(b"validated unresolved\n")
+    replacement.write_bytes(b"foreign completed\n")
 
     with exclusive_path_claim(target) as claim:
         os.replace(replacement, target)
@@ -1613,8 +1615,8 @@ def test_portable_claim_rejects_record_replaced_after_acquisition(
 ) -> None:
     target = tmp_path / "record.json"
     replacement = tmp_path / "replacement.json"
-    target.write_text("validated unresolved\n", encoding="utf-8")
-    replacement.write_text("foreign completed\n", encoding="utf-8")
+    target.write_bytes(b"validated unresolved\n")
+    replacement.write_bytes(b"foreign completed\n")
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
 
     with exclusive_path_claim(target) as claim:
@@ -1634,14 +1636,14 @@ def test_replace_preserves_backup_when_record_changes_after_backup(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_write = atomic_files_module._write_all
 
     def swap_after_backup(descriptor: int, payload: bytes) -> None:
         original_write(descriptor, payload)
         if payload == b"new valid bytes\n":
             target.unlink()
-            target.write_text("foreign replacement\n", encoding="utf-8")
+            target.write_bytes(b"foreign replacement\n")
 
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -1665,7 +1667,7 @@ def test_claimed_replace_cleans_backup_when_temporary_allocation_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "alpha-record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
 
     def fail_temporary(*_args, **_kwargs):
         raise OSError("simulated temporary allocation failure")
@@ -1686,7 +1688,7 @@ def test_portable_claimed_replace_cleans_backup_when_temporary_allocation_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "alpha-record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
 
     def fail_temporary(*_args, **_kwargs):
         raise OSError("simulated temporary allocation failure")
@@ -1709,7 +1711,7 @@ def test_directory_sync_unavailability_after_replace_does_not_report_false_failu
 ) -> None:
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     target = tmp_path / "alpha-record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_fsync = os.fsync
     calls = 0
 
@@ -1731,7 +1733,7 @@ def test_directory_sync_unavailability_after_replace_does_not_report_false_failu
 
 def test_competing_mutation_claim_fails_without_removing_owner_claim(tmp_path: Path) -> None:
     target = tmp_path / "alpha-record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
 
     with (
         exclusive_path_claim(target),
@@ -1745,7 +1747,7 @@ def test_portable_competing_mutation_claim_fails_without_removing_owner_claim(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "alpha-record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
 
     with (
@@ -1779,7 +1781,7 @@ def test_claim_metadata_failure_preserves_ambiguous_claim_file(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     original_fstat = os.fstat
@@ -1813,7 +1815,7 @@ def test_claim_metadata_failure_never_deletes_recreated_foreign_claim(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     claim = tmp_path / f".{sha256(os.fsencode(target.name)).hexdigest()}.claim"
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -1849,7 +1851,7 @@ def test_claim_close_failure_does_not_override_cleanup(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     owner = exclusive_path_claim(target)
@@ -1883,6 +1885,8 @@ def test_claim_close_failure_does_not_override_cleanup(
 def test_committed_create_ignores_final_directory_close_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
+    if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
+        pytest.skip("directory descriptor close seam is unavailable")
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     parent_metadata = tmp_path.stat()
@@ -1913,7 +1917,7 @@ def test_committed_create_ignores_final_directory_close_failure(
 )
 def test_claim_cleanup_never_deletes_recreated_foreign_claim(tmp_path: Path) -> None:
     target = tmp_path / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     claim_name = f".{sha256(os.fsencode(target.name)).hexdigest()}.claim"
     owner = exclusive_path_claim(target)
     owner.__enter__()
@@ -1941,7 +1945,7 @@ def test_portable_replace_never_restores_through_swapped_parent(
     outside = tmp_path / "outside"
     outside.mkdir()
     target = safe / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_replace = os.replace
     calls = 0
 
@@ -1952,7 +1956,7 @@ def test_portable_replace_never_restores_through_swapped_parent(
             original_replace(source, destination, *args, **kwargs)
             safe.rename(moved)
             safe.symlink_to(outside, target_is_directory=True)
-            (outside / Path(destination).name).write_text("foreign target\n", encoding="utf-8")
+            (outside / Path(destination).name).write_bytes(b"foreign target\n")
             return None
         return original_replace(source, destination, *args, **kwargs)
 
@@ -1982,7 +1986,7 @@ def test_portable_claim_cleanup_never_deletes_foreign_swapped_path(
     outside = tmp_path / "outside"
     outside.mkdir()
     target = safe / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     claim_name = f".{sha256(os.fsencode(target.name)).hexdigest()}.claim"
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
 
@@ -1992,7 +1996,7 @@ def test_portable_claim_cleanup_never_deletes_foreign_swapped_path(
     ):
         safe.rename(moved)
         safe.symlink_to(outside, target_is_directory=True)
-        (outside / claim_name).write_text("foreign claim\n", encoding="utf-8")
+        (outside / claim_name).write_bytes(b"foreign claim\n")
 
     assert (outside / claim_name).read_text(encoding="utf-8") == "foreign claim\n"
     assert (moved / claim_name).exists()
@@ -2006,13 +2010,13 @@ def test_portable_claim_cleanup_preserves_recreated_foreign_claim(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     claim_name = f".{sha256(os.fsencode(target.name)).hexdigest()}.claim"
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     owner = exclusive_path_claim(target)
     owner.__enter__()
     (tmp_path / claim_name).unlink()
-    (tmp_path / claim_name).write_text("foreign claim\n", encoding="utf-8")
+    (tmp_path / claim_name).write_bytes(b"foreign claim\n")
 
     with pytest.raises(UnsafeAtomicPath, match="claim changed"):
         owner.__exit__(None, None, None)
@@ -2028,7 +2032,7 @@ def test_descriptor_replace_restores_old_bytes_after_post_publication_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_require = atomic_files_module._require_regular_at
     target_checks = 0
 
@@ -2057,7 +2061,7 @@ def test_portable_replace_restores_old_bytes_after_post_publication_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_require = atomic_files_module._require_regular_file
     target_checks = 0
 
@@ -2091,7 +2095,7 @@ def test_descriptor_replace_restores_old_bytes_when_rename_is_interrupted_after_
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_rename = os.rename
 
     def replace_then_interrupt(source, destination, *args, **kwargs):
@@ -2116,7 +2120,7 @@ def test_portable_replace_restores_old_bytes_when_replace_is_interrupted_after_s
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_replace = os.replace
 
     def replace_then_interrupt(source, destination, *args, **kwargs):
@@ -2145,7 +2149,7 @@ def test_failed_rollback_preserves_old_backup(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
         original_require = atomic_files_module._require_regular_file
@@ -2341,7 +2345,7 @@ def test_portable_create_cleanup_never_deletes_foreign_swapped_temporary(
         safe.rename(moved)
         safe.symlink_to(outside, target_is_directory=True)
         foreign_path = outside / Path(source).name
-        foreign_path.write_text("foreign bytes\n", encoding="utf-8")
+        foreign_path.write_bytes(b"foreign bytes\n")
         raise OSError("simulated publication interruption")
 
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -2394,13 +2398,13 @@ def test_portable_replace_rejects_ancestor_swap_after_claim(
     outside = tmp_path / "outside"
     outside.mkdir()
     target = safe / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_open = atomic_files_module._open_private_temporary
 
     def swap_parent(parent: Path, stem: str):
         safe.rename(moved)
         safe.symlink_to(outside, target_is_directory=True)
-        (outside / target.name).write_text("attacker bytes\n", encoding="utf-8")
+        (outside / target.name).write_bytes(b"attacker bytes\n")
         return original_open(parent, stem)
 
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -2429,7 +2433,7 @@ def test_portable_replace_cleanup_never_deletes_foreign_swapped_temporary(
     outside = tmp_path / "outside"
     outside.mkdir()
     target = safe / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     foreign_path: Path | None = None
 
     def swap_then_fail(source, destination, *args, **kwargs):
@@ -2437,8 +2441,8 @@ def test_portable_replace_cleanup_never_deletes_foreign_swapped_temporary(
         safe.rename(moved)
         safe.symlink_to(outside, target_is_directory=True)
         foreign_path = outside / Path(source).name
-        foreign_path.write_text("foreign bytes\n", encoding="utf-8")
-        (outside / Path(destination).name).write_text("foreign record\n", encoding="utf-8")
+        foreign_path.write_bytes(b"foreign bytes\n")
+        (outside / Path(destination).name).write_bytes(b"foreign record\n")
         raise OSError("simulated replacement interruption")
 
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -2458,7 +2462,7 @@ def test_portable_replace_cleanup_never_deletes_foreign_swapped_temporary(
 
 def test_read_rejects_symlink_target(tmp_path: Path) -> None:
     outside = tmp_path / "outside.json"
-    outside.write_text("outside\n", encoding="utf-8")
+    outside.write_bytes(b"outside\n")
     linked = tmp_path / "record.json"
     linked.symlink_to(outside)
 
@@ -2495,7 +2499,7 @@ def test_backup_allocators_fail_after_the_bounded_collision_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     metadata = target.stat()
     identity = (metadata.st_dev, metadata.st_ino)
 
@@ -2523,7 +2527,7 @@ def test_interrupted_backup_publication_cleans_owned_backup(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     original_link = os.link
 
     def publish_then_interrupt(source, destination, *args, **kwargs):
@@ -2553,7 +2557,7 @@ def test_backup_metadata_failure_cleans_owned_backup(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("old valid bytes\n", encoding="utf-8")
+    target.write_bytes(b"old valid bytes\n")
     failed = False
     if portable:
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -2604,7 +2608,7 @@ def test_backup_identity_drift_preserves_foreign_replacement(
     if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
         pytest.skip("descriptor-relative storage backend is unavailable")
     target = tmp_path / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     metadata = target.stat()
     identity = (metadata.st_dev, metadata.st_ino)
     original_link = os.link
@@ -2617,7 +2621,7 @@ def test_backup_identity_drift_preserves_foreign_replacement(
         if directory_fd is None:
             foreign_path = Path(destination)
             foreign_path.unlink()
-            foreign_path.write_text("foreign backup\n", encoding="utf-8")
+            foreign_path.write_bytes(b"foreign backup\n")
         else:
             foreign_path = tmp_path / str(destination)
             os.unlink(destination, dir_fd=directory_fd)
@@ -2654,7 +2658,7 @@ def test_quarantine_allocators_fail_after_the_bounded_collision_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "record.json"
-    target.write_text("valid\n", encoding="utf-8")
+    target.write_bytes(b"valid\n")
     identity = (target.stat().st_dev, target.stat().st_ino)
     monkeypatch.setattr(
         os,
