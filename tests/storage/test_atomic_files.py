@@ -1,7 +1,7 @@
 import errno
 import os
 import threading
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -38,6 +38,37 @@ def test_atomic_create_builds_missing_safe_directories(tmp_path: Path) -> None:
 
     assert atomic_create_text(target, "validated\n") == target
     assert target.read_text(encoding="utf-8") == "validated\n"
+
+
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
+def test_descriptor_create_rejects_parent_replacement_before_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "records"
+    moved_parent = tmp_path / "records-original"
+    parent.mkdir()
+    target = parent / "record.json"
+    original_claim = atomic_files_module._exclusive_path_claim
+
+    @contextmanager
+    def replace_parent_before_claim(path: Path, *, require_existing: bool):
+        parent.rename(moved_parent)
+        parent.mkdir()
+        with original_claim(path, require_existing=require_existing) as claim:
+            yield claim
+
+    monkeypatch.setattr(
+        atomic_files_module, "_exclusive_path_claim", replace_parent_before_claim
+    )
+
+    with pytest.raises(UnsafeAtomicPath, match="parent changed before create claim"):
+        atomic_create_text(target, "validated bytes\n")
+
+    assert list(parent.iterdir()) == []
+    assert list(moved_parent.iterdir()) == []
 
 
 @pytest.mark.skipif(

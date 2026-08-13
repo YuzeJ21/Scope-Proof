@@ -855,8 +855,10 @@ def _atomic_create_text_with_receipt_unclaimed(target: Path, text: str) -> Creat
                 finally:
                     descriptor = -1
                 claim_context = _exclusive_path_claim(target, require_existing=False)
-                claim_context.__enter__()
+                mutation_claim = claim_context.__enter__()
                 claim_acquired = True
+                if mutation_claim.identity != parent_identity:
+                    raise UnsafeAtomicPath("parent changed before create claim")
                 try:
                     os.link(
                         temporary,
@@ -971,8 +973,10 @@ def _atomic_create_text_with_receipt_unclaimed(target: Path, text: str) -> Creat
         finally:
             descriptor = -1
         claim_context = _exclusive_path_claim(target, require_existing=False)
-        claim_context.__enter__()
+        mutation_claim = claim_context.__enter__()
         claim_acquired = True
+        if mutation_claim.identity != parent_identity:
+            raise UnsafeAtomicPath("parent changed before create claim")
         try:
             _assert_portable_directory(portable_directory)
             _assert_directory_identity(parent, parent_identity)

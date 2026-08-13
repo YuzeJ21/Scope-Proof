@@ -17,9 +17,11 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
   descriptor-relative protections, while portable creates, outcome updates, and CLI reports use
   exclusive publication and process-safe mutation claims. Creates and updates now share the same
   target-name claim so an interrupted update rollback cannot overwrite a racing create. Rollback
-  removes only empty directory ancestors created for the failed write, while portable filesystems
-  without hard-link support fail closed explicitly. A hosted Windows package/CLI/storage lane
-  verifies the portable path without claiming a Windows desktop workflow or Stage 1 credit.
+  removes only empty directory ancestors created for the failed write, and create publication
+  rejects a parent-directory identity change between temporary setup and claim acquisition.
+  Portable filesystems without hard-link support fail closed explicitly. A hosted Windows
+  package/CLI/storage lane verifies the portable path without claiming a Windows desktop workflow
+  or Stage 1 credit.
 - Bound public GitHub file and commit pagination to the exact HTTPS API origin and expected
   repository endpoint, rejecting ambiguous, escaped, cyclic, or over-budget traversal before an
   optional session token can be forwarded. File and commit truncation remains ordered, explicit,
