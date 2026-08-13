@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from threading import Barrier
 
@@ -119,6 +120,39 @@ def test_descriptor_rehearsal_create_cleans_publication_when_link_fails_after_su
         JsonAlphaRehearsalStore(tmp_path).save(record)
 
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(
+    not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative rehearsal backend is unavailable",
+)
+def test_descriptor_rehearsal_create_rejects_parent_replacement_after_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "rehearsals"
+    moved_directory = tmp_path / "rehearsals-original"
+    directory.mkdir()
+    store = JsonAlphaRehearsalStore(directory)
+    original_open = store._open_directory
+    replaced = False
+
+    @contextmanager
+    def replace_parent_after_open(*, create: bool):
+        nonlocal replaced
+        with original_open(create=create) as directory_fd:
+            if not replaced:
+                directory.rename(moved_directory)
+                directory.mkdir()
+                replaced = True
+            yield directory_fd
+
+    monkeypatch.setattr(store, "_open_directory", replace_parent_after_open)
+
+    with pytest.raises(UnsafeAlphaRehearsalStore, match="directory changed"):
+        store.save(alpha_rehearsal())
+
+    assert list(directory.iterdir()) == []
+    assert list(moved_directory.iterdir()) == []
 
 
 @pytest.mark.skipif(
@@ -586,7 +620,7 @@ def test_concurrent_rehearsal_saves_create_exactly_once(tmp_path: Path) -> None:
     assert store.load(record.rehearsal_id) == record
 
 
-def test_rehearsal_save_stays_anchored_when_ancestor_is_swapped(
+def test_rehearsal_save_fails_closed_when_ancestor_is_swapped(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "save-root"
@@ -605,11 +639,11 @@ def test_rehearsal_save_stays_anchored_when_ancestor_is_swapped(
     record = alpha_rehearsal()
     store = SwappingWriteStore(directory)
 
-    returned_path = store.save(record)
+    with pytest.raises(UnsafeAlphaRehearsalStore, match=r"symbolic links|non-directories"):
+        store.save(record)
 
     anchored_directory = moved_root / "rehearsals"
-    assert returned_path == directory / f"{record.rehearsal_id}.json"
-    assert JsonAlphaRehearsalStore(anchored_directory).load(record.rehearsal_id) == record
+    assert list(anchored_directory.iterdir()) == []
     assert list(outside.rglob("*.json")) == []
 
 

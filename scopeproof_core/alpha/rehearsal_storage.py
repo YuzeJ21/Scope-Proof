@@ -129,6 +129,14 @@ class JsonAlphaRehearsalStore:
     def _target_name(self, rehearsal_id: str) -> str:
         return f"{self._validate_rehearsal_id(rehearsal_id)}.json"
 
+    def _require_current_directory_identity(self, expected: tuple[int, int]) -> None:
+        with self._open_directory(create=False) as directory_fd:
+            metadata = os.fstat(directory_fd)
+            if (metadata.st_dev, metadata.st_ino) != expected:
+                raise UnsafeAlphaRehearsalStore(
+                    "alpha-rehearsal directory changed during storage operation"
+                )
+
     def list_rehearsal_ids(self) -> list[str]:
         if not _DESCRIPTOR_BACKEND_SUPPORTED:
             try:
@@ -263,6 +271,8 @@ class JsonAlphaRehearsalStore:
         record: AlphaRehearsalRecord,
     ) -> None:
         serialized = (record.model_dump_json(indent=2) + "\n").encode("utf-8")
+        directory_metadata = os.fstat(directory_fd)
+        directory_identity = (directory_metadata.st_dev, directory_metadata.st_ino)
         temporary_name, temporary_fd, temporary_identity = self._open_random_temporary(
             directory_fd,
             target_name,
@@ -316,6 +326,7 @@ class JsonAlphaRehearsalStore:
                 raise UnsafeAlphaRehearsalStore(
                     "private rehearsal temporary changed before publication"
                 )
+            self._require_current_directory_identity(directory_identity)
             with suppress(OSError):
                 os.fsync(directory_fd)
             published = True

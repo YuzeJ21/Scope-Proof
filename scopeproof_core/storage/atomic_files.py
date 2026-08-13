@@ -1468,6 +1468,7 @@ def atomic_replace_text(
             replacement = _require_regular_at(directory_fd, target.name)
             if not _same_file(replacement, (expected.st_dev, expected.st_ino)):
                 raise UnsafeAtomicPath("private temporary file changed before replacement")
+            _assert_descriptor_directory_identity(target.parent, claim.identity)
             committed = True
             with suppress(OSError):
                 os.fsync(directory_fd)
