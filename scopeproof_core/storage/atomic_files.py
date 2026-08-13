@@ -1451,7 +1451,7 @@ def atomic_replace_text(
                         directory_fd, target.name
                     )
                 except (OSError, UnsafeAtomicPath):
-                    pass
+                    preserve_backup = True
                 else:
                     published = _same_file(interrupted_replacement, temporary_identity)
             if published and backup:
@@ -1560,7 +1560,7 @@ def atomic_replace_text(
             try:
                 interrupted_replacement = _require_regular_file(target)
             except (OSError, UnsafeAtomicPath):
-                pass
+                preserve_backup = True
             else:
                 published = _same_file(interrupted_replacement, temporary_identity)
         if published and backup is not None:

@@ -2919,6 +2919,83 @@ def test_backup_allocators_fail_after_the_bounded_collision_budget(
 
 
 @pytest.mark.parametrize("portable", [False, True])
+def test_unknown_replacement_publication_preserves_rollback_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    target = tmp_path / "record.json"
+    target.write_bytes(b"old valid bytes\n")
+    interrupted = False
+    probe_failed = False
+
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+        original_replace = os.replace
+        original_require = atomic_files_module._require_regular_file
+
+        def publish_then_interrupt(source, destination, *args, **kwargs):
+            nonlocal interrupted
+            result = original_replace(source, destination, *args, **kwargs)
+            if Path(source).suffix == ".tmp" and Path(destination) == target:
+                interrupted = True
+                raise OSError("simulated replacement interruption")
+            return result
+
+        def fail_first_publication_probe(path: Path):
+            nonlocal probe_failed
+            if interrupted and path == target and not probe_failed:
+                probe_failed = True
+                raise OSError("simulated publication status failure")
+            return original_require(path)
+
+        monkeypatch.setattr(os, "replace", publish_then_interrupt)
+        monkeypatch.setattr(
+            atomic_files_module,
+            "_require_regular_file",
+            fail_first_publication_probe,
+        )
+    else:
+        original_rename = os.rename
+        original_require_at = atomic_files_module._require_regular_at
+
+        def publish_then_interrupt(source, destination, *args, **kwargs):
+            nonlocal interrupted
+            result = original_rename(source, destination, *args, **kwargs)
+            if str(source).endswith(".tmp") and destination == target.name:
+                interrupted = True
+                raise OSError("simulated replacement interruption")
+            return result
+
+        def fail_first_publication_probe(directory_fd: int, name: str):
+            nonlocal probe_failed
+            if interrupted and name == target.name and not probe_failed:
+                probe_failed = True
+                raise OSError("simulated publication status failure")
+            return original_require_at(directory_fd, name)
+
+        monkeypatch.setattr(os, "rename", publish_then_interrupt)
+        monkeypatch.setattr(
+            atomic_files_module,
+            "_require_regular_at",
+            fail_first_publication_probe,
+        )
+
+    with (
+        pytest.raises(OSError, match="replacement interruption"),
+        exclusive_path_claim(target) as claim,
+    ):
+        atomic_replace_text(target, "new valid bytes\n", claim=claim)
+
+    rollback_paths = list(tmp_path.glob("*.rollback"))
+    assert interrupted is True
+    assert probe_failed is True
+    assert target.read_bytes() == b"new valid bytes\n"
+    assert len(rollback_paths) == 1
+    assert rollback_paths[0].read_bytes() == b"old valid bytes\n"
+
+
+@pytest.mark.parametrize("portable", [False, True])
 def test_interrupted_backup_publication_cleans_owned_backup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
 ) -> None:
