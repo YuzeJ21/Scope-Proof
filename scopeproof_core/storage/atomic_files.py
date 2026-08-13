@@ -409,6 +409,20 @@ def _matches_quarantine_name(candidate: str, original: str) -> bool:
     return len(token) == 32 and all(character in "0123456789abcdef" for character in token)
 
 
+def _is_quarantine_name(candidate: str) -> bool:
+    suffix = ".rollback"
+    if not candidate.startswith(".") or not candidate.endswith(suffix):
+        return False
+    body = candidate[1 : -len(suffix)]
+    prefix, separator, token = body.partition("-")
+    return (
+        separator == "-"
+        and len(prefix) == 16
+        and len(token) == 32
+        and all(character in "0123456789abcdef" for character in prefix + token)
+    )
+
+
 def _create_backup_at(
     directory_fd: int, target: str, expected: tuple[int, int]
 ) -> str:
@@ -975,6 +989,20 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
                     if owned:
                         rollback_names.append(candidate)
                         discovered = True
+            for candidate in candidates:
+                if candidate in rollback_names or not _is_quarantine_name(candidate):
+                    continue
+                try:
+                    metadata = _require_regular_at(directory_fd, candidate)
+                    owned = (
+                        (metadata.st_dev, metadata.st_ino) == receipt.identity
+                        and _sha256_regular_at(directory_fd, candidate, receipt.identity)
+                        == receipt.content_sha256
+                    )
+                except (OSError, UnsafeAtomicPath):
+                    owned = False
+                if owned:
+                    rollback_names.append(candidate)
             existing_names: list[str] = []
             for name in rollback_names:
                 try:
@@ -1039,6 +1067,20 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
             if owned:
                 expanded_paths.append(candidate)
                 discovered = True
+    for candidate in candidates:
+        if candidate in expanded_paths or not _is_quarantine_name(candidate.name):
+            continue
+        try:
+            metadata = _require_regular_file(candidate)
+            owned = (
+                (metadata.st_dev, metadata.st_ino) == receipt.identity
+                and _sha256_regular_path(candidate, receipt.identity)
+                == receipt.content_sha256
+            )
+        except (OSError, UnsafeAtomicPath):
+            owned = False
+        if owned:
+            expanded_paths.append(candidate)
     _assert_portable_directory(portable_directory)
     existing_paths: list[Path] = []
     for path in expanded_paths:
