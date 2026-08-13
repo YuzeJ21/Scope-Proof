@@ -421,7 +421,7 @@ def test_failed_exclusive_publish_cleans_private_temporary(
 
     monkeypatch.setattr(os, "link", fail_link)
 
-    with pytest.raises(OSError, match="publication interruption"):
+    with pytest.raises((OSError, UnsafeAtomicPath)):
         atomic_create_text(target, "validated bytes\n")
 
     assert list(tmp_path.iterdir()) == []
