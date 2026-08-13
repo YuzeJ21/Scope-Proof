@@ -950,23 +950,31 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
             if (parent_metadata.st_dev, parent_metadata.st_ino) != receipt.parent_identity:
                 raise UnsafeAtomicPath("app-owned directory changed before rollback")
             rollback_names = [path.name for path in rollback_paths]
-            for candidate in os.listdir(directory_fd):
-                if candidate in rollback_names or not any(
-                    _matches_quarantine_name(candidate, original)
-                    for original in tuple(rollback_names)
-                ):
-                    continue
-                try:
-                    metadata = _require_regular_at(directory_fd, candidate)
-                    owned = (
-                        (metadata.st_dev, metadata.st_ino) == receipt.identity
-                        and _sha256_regular_at(directory_fd, candidate, receipt.identity)
-                        == receipt.content_sha256
-                    )
-                except (OSError, UnsafeAtomicPath):
-                    owned = False
-                if owned:
-                    rollback_names.append(candidate)
+            candidates = os.listdir(directory_fd)
+            discovered = True
+            while discovered:
+                discovered = False
+                source_names = tuple(rollback_names)
+                for candidate in candidates:
+                    if candidate in rollback_names or not any(
+                        _matches_quarantine_name(candidate, original)
+                        for original in source_names
+                    ):
+                        continue
+                    try:
+                        metadata = _require_regular_at(directory_fd, candidate)
+                        owned = (
+                            (metadata.st_dev, metadata.st_ino) == receipt.identity
+                            and _sha256_regular_at(
+                                directory_fd, candidate, receipt.identity
+                            )
+                            == receipt.content_sha256
+                        )
+                    except (OSError, UnsafeAtomicPath):
+                        owned = False
+                    if owned:
+                        rollback_names.append(candidate)
+                        discovered = True
             existing_names: list[str] = []
             for name in rollback_names:
                 try:
@@ -1005,12 +1013,18 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
     )
     _assert_portable_directory(portable_directory)
     expanded_paths = list(rollback_paths)
-    source_names = tuple(path.name for path in rollback_paths)
+    candidates: list[Path] = []
     with os.scandir(target.parent) as entries:
         for entry in entries:
-            candidate = target.parent / entry.name
+            candidates.append(target.parent / entry.name)
+    discovered = True
+    while discovered:
+        discovered = False
+        source_names = tuple(path.name for path in expanded_paths)
+        for candidate in candidates:
             if candidate in expanded_paths or not any(
-                _matches_quarantine_name(entry.name, original) for original in source_names
+                _matches_quarantine_name(candidate.name, original)
+                for original in source_names
             ):
                 continue
             try:
@@ -1024,6 +1038,7 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
                 owned = False
             if owned:
                 expanded_paths.append(candidate)
+                discovered = True
     _assert_portable_directory(portable_directory)
     existing_paths: list[Path] = []
     for path in expanded_paths:
