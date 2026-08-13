@@ -787,6 +787,26 @@ def test_portable_create_classifies_filesystems_without_hard_links(
     assert not (tmp_path / "new").exists()
 
 
+def test_portable_create_cleans_created_directories_when_temporary_allocation_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+
+    def fail_temporary_allocation(*_args, **_kwargs):
+        raise OSError("simulated temporary allocation failure")
+
+    monkeypatch.setattr(
+        atomic_files_module,
+        "_open_private_temporary",
+        fail_temporary_allocation,
+    )
+
+    with pytest.raises(OSError, match="temporary allocation failure"):
+        atomic_create_text(tmp_path / "new" / "reports" / "report.md", "report\n")
+
+    assert not (tmp_path / "new").exists()
+
+
 def test_portable_create_refuses_existing_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

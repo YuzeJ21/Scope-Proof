@@ -903,15 +903,21 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             )
     portable_directory = _capture_safe_directory(target.parent, create=True)
     parent = portable_directory.path
-    parent_identity = _directory_identity(parent)
-    committed = False
     try:
-        _require_regular_file(target)
-    except FileNotFoundError:
-        pass
-    else:
-        raise FileExistsError(f"target already exists: {target}")
-    temporary, descriptor, temporary_identity = _open_private_temporary(parent, target.stem)
+        parent_identity = _directory_identity(parent)
+        try:
+            _require_regular_file(target)
+        except FileNotFoundError:
+            pass
+        else:
+            raise FileExistsError(f"target already exists: {target}")
+        temporary, descriptor, temporary_identity = _open_private_temporary(
+            parent, target.stem
+        )
+    except BaseException:
+        _remove_empty_created_directories(portable_directory.created_directories)
+        raise
+    committed = False
     published_identity: tuple[int, int] | None = None
     receipt_identity: tuple[int, int] | None = None
     orphaned_paths: list[Path] = []
