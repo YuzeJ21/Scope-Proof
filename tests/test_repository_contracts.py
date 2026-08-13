@@ -37,6 +37,7 @@ PR183_SOURCE_MERGE_SHA = "cd362a85a558645a0f56d6540f6bf035e5821809"
 PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
 PR184_RELEASE_MERGE_SHA = "448c42758ea139bf9203cbf1bb04b02b02ae412c"
 PR184_EXACT_MAIN_RUN_IDS = ("30854382641", "30854382413", "30854382659")
+POST_PR193_RESULTING_MAIN_SHA = "432371c4faec0b790f70fec32b4d3fc4d5132cfa"
 
 
 def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
@@ -1685,6 +1686,52 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
         "WCAG conformance",
     ):
         assert unsupported in platform
+
+
+def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+
+    for active_status in (roadmap, status):
+        normalized_status = " ".join(active_status.lower().split())
+        assert POST_PR193_RESULTING_MAIN_SHA in active_status
+        assert "PR #189" in active_status
+        assert "PR #190" in active_status
+        assert "PR #191" in active_status
+        assert "PR #192" in active_status
+        assert "PR #193" in active_status
+        for expected in (
+            "2,251 passed, 2 intentional skips, and 95.27% coverage",
+            "ci, codeql, pages, python 3.11, python 3.13, windows",
+            "installed-wheel, deterministic benchmark, and packaged-browser checks succeeded",
+            "engineering checks do not prove acceptance-criteria correctness",
+            "ci windows evidence is not a real windows desktop workflow",
+            "browser automation is not screen-reader or wcag-conformance evidence",
+            "reviewer identity remains asserted, not authenticated",
+            "github action remains opt-in and informational",
+            "scopeproof never executes target-repository code",
+            "filesystems without required hard-link behavior",
+            "ambiguous filesystem ownership must be preserved rather than deleted",
+            "`atomic_files.py` is large and transactionally complex",
+            "separate design, test-first decomposition, and owner approval",
+            "do not weaken identity-bound cleanup or atomicity",
+            "0/5 qualifying reviews",
+            "0/3 independent practitioners",
+            "0/3 public repositories",
+            "0/3 independently observed under-ten-minute completions",
+            "0/2 reuse-intent signals",
+            "stage 2 cannot begin until every stage 1 target is satisfied",
+            "stage 3 requires genuine repeated use and separate owner approval",
+            "stage 4 requires sustained evidence and separate owner approval",
+            "no engineering substitute can advance these counts",
+            "preparation is not outreach",
+            "inbound submissions are not recruited participants",
+            "observed completion evidence is not self-reported timing",
+            "qualifying reviews are not demos, tests, maintainers, bots, or repository activity",
+        ):
+            assert expected in normalized_status
 
 
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:

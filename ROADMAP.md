@@ -19,11 +19,14 @@ which provides the wheel, source archive, and checksum manifest.
 |---|---|
 | Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
 | Active source line | Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists |
+| Current resulting `main` | PR #193 merged at `432371c4faec0b790f70fec32b4d3fc4d5132cfa` (PR head `8bb407079a0ff7098d2fc18af3d75b216725df2e`, base `9426e8714ffd2c3742bb074ae26fc788f1049c63`) |
 | Verified product baseline | PR #184 release integration landed on `main` at `448c42758ea139bf9203cbf1bb04b02b02ae412c` |
 | Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
 | Release integration evidence | PR #184 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; exact-main CI, CodeQL, and Pages all succeeded, and `origin/main` matched at the 2026-08-08 branch-start snapshot |
 | Integration authority | PR #184 exact-main CI run `30854382641`, CodeQL run `30854382413`, and Pages run `30854382659` verify the release integration |
 | Historical source integration | PR #183 integrity/reviewer-loop source merge at `cd362a85a558645a0f56d6540f6bf035e5821809`; runs `30847416893`, `30847415556`, and `30847417705` remain historical source-integration evidence |
+| Fresh pre-merge local verification | 2,251 passed, 2 intentional skips, and 95.27% coverage |
+| Resulting-main engineering checks | CI, CodeQL, Pages, Python 3.11, Python 3.13, Windows, installed-wheel, deterministic benchmark, and packaged-browser checks succeeded |
 | Product validation | Publication state does not change Stage 1, which remains at zero; Stages 2–4 remain gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
@@ -36,6 +39,30 @@ PR #188 merged verified-public provenance enforcement at
 `077f9351283b319b82854ad1df95eac7ce614e21`. CLI lifecycle parity is implemented;
 verified-public provenance enforcement is implemented. These changes form the `0.2.4.dev0`
 development line and earn no Stage 1 credit.
+
+PR #189 established the post-release development identity; PR #190 preserved comparison
+relationship integrity; PR #191 remediated the GitPython dependency and security issue; PR #192
+bounded same-origin GitHub pagination; and PR #193 hardened cross-platform identity-bound alpha
+storage. PR #193 produced current `main` at
+`432371c4faec0b790f70fec32b4d3fc4d5132cfa`. These are engineering changes on `0.2.4.dev0`, not a
+new published release; v0.2.3 remains the published release and none earns Stage 1 credit.
+
+### Verification and evidence boundaries
+
+- Engineering checks do not prove acceptance-criteria correctness.
+- CI Windows evidence is not a real Windows desktop workflow.
+- Browser automation is not screen-reader or WCAG-conformance evidence.
+- Reviewer identity remains asserted, not authenticated.
+- The GitHub Action remains opt-in and informational.
+- ScopeProof never executes target-repository code.
+
+### Storage-maintenance boundary
+
+`atomic_files.py` is large and transactionally complex, and its existing regression coverage is
+strong. Portable storage may fail closed on filesystems without required hard-link behavior, and
+ambiguous filesystem ownership must be preserved rather than deleted. Future filesystem-behavior
+changes require a separate design, test-first decomposition, and owner approval; do not weaken
+identity-bound cleanup or atomicity to simplify the implementation.
 
 ## Stage 0 — Reviewer-first product reset
 
@@ -195,7 +222,7 @@ Current measured state:
 
 - 0/5 qualifying reviews.
 - 0/3 independent practitioners.
-- 0/3 represented public repositories.
+- 0/3 public repositories.
 - 0/3 independently observed under-ten-minute completions.
 - 0/2 reuse-intent signals.
 - Zero participant False Ready observations across zero participant reviews; this is not a
@@ -218,6 +245,22 @@ cases, technical smokes, release downloads, and GitHub activity do not count.
 The [concierge host checklist](docs/alpha/concierge-host-checklist.md) indexes the optional manual
 research path. It helps collect evidence but does not satisfy any gate by itself.
 
+### Owner activation checklist — separate authorization required
+
+This checklist is preparation only; it does not authorize outreach. If the owner separately
+authorizes genuine Stage 1 outreach, keep the following distinctions explicit:
+
+- Preparation is not outreach: prepare public, source-safe materials and qualification records
+  before contacting anyone, but do not contact, recruit, or message a participant without that
+  separate authorization.
+- Inbound submissions are not recruited participants: retain the source and authorization path for
+  each case and do not count an inbound lead as recruited use.
+- Observed completion evidence is not self-reported timing: independently observe the complete
+  review-to-inspectable-coverage-report interval before crediting the under-ten-minute count.
+- Qualifying reviews are not demos, tests, maintainers, bots, or repository activity: only the
+  documented non-owner, public-PR, source-owner-confirmed, exact-head, saved-review, validated-
+  outcome path can credit a count.
+
 ## Stage 2 — Commercial discovery
 
 Status: gated; do not begin commercial claims or productization until every Stage 1 condition is
@@ -225,6 +268,9 @@ met.
 
 Entry requires every Stage 1 condition. The current free, public-repository-only design-partner
 review remains research; no paid product or billing is active.
+
+Stage 2 cannot begin until every Stage 1 target is satisfied. No engineering substitute can
+advance these counts.
 
 All exit conditions are required before considering a separate Local Pro product decision:
 
@@ -253,6 +299,9 @@ Status: gated; requires Stages 1–2, genuine repeat use, and a separate owner d
 Entry requires every Stage 1 and Stage 2 condition plus a separate owner decision. The beta
 remains supervised and public-repository-only unless that decision explicitly changes the scope.
 
+Stage 3 requires genuine repeated use and separate owner approval. No engineering substitute can
+advance these counts.
+
 Exit conditions:
 
 - Repeat use occurs on a later PR without project-owner prompting.
@@ -271,6 +320,9 @@ Only recurring behavior can justify broader scope. Candidate directions include 
 requirements intake, better evidence explanations, and narrower collaboration handoffs. Private
 repositories, billing, accounts, generic code review, security scanning, automatic fixes, and paid
 LLM APIs require a separate owner decision and are not implied by beta progress.
+
+Stage 4 requires sustained evidence and separate owner approval. No engineering substitute can
+advance these counts.
 
 ## Honest stop and pivot rules
 
