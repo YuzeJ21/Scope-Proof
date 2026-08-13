@@ -106,6 +106,38 @@ def test_descriptor_create_rejects_parent_replacement_after_claim(
     not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
     reason="descriptor-relative storage backend is unavailable",
 )
+def test_descriptor_create_rejects_symlinked_ancestor_after_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ancestor = tmp_path / "safe"
+    parent = ancestor / "records"
+    moved_ancestor = tmp_path / "safe-original"
+    parent.mkdir(parents=True)
+    target = parent / "record.json"
+    original_claim = atomic_files_module._exclusive_path_claim
+
+    @contextmanager
+    def replace_ancestor_after_claim(path: Path, *, require_existing: bool):
+        with original_claim(path, require_existing=require_existing) as claim:
+            ancestor.rename(moved_ancestor)
+            ancestor.symlink_to(moved_ancestor, target_is_directory=True)
+            yield claim
+
+    monkeypatch.setattr(
+        atomic_files_module, "_exclusive_path_claim", replace_ancestor_after_claim
+    )
+
+    with pytest.raises(UnsafeAtomicPath, match=r"symbolic link|reparse point|non-directory"):
+        atomic_create_text(target, "validated bytes\n")
+
+    assert ancestor.is_symlink()
+    assert list((moved_ancestor / "records").iterdir()) == []
+
+
+@pytest.mark.skipif(
+    not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED,
+    reason="descriptor-relative storage backend is unavailable",
+)
 def test_descriptor_directory_metadata_failure_cleans_new_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

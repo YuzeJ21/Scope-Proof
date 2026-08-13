@@ -280,6 +280,15 @@ def _open_directory_descriptor(
             _remove_empty_created_directories(tuple(created))
 
 
+def _assert_descriptor_directory_identity(
+    directory: Path, expected: tuple[int, int]
+) -> None:
+    with _open_directory_descriptor(directory, create=False) as directory_fd:
+        metadata = os.fstat(directory_fd)
+        if not _same_file(metadata, expected):
+            raise UnsafeAtomicPath("app-owned directory changed during storage operation")
+
+
 def _require_regular_at(directory_fd: int, name: str) -> os.stat_result:
     metadata = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
     _raise_if_link_or_reparse(Path(name), metadata)
@@ -887,7 +896,7 @@ def _atomic_create_text_with_receipt_unclaimed(target: Path, text: str) -> Creat
                 published = _require_regular_at(directory_fd, target.name)
                 if (expected.st_dev, expected.st_ino) != (published.st_dev, published.st_ino):
                     raise UnsafeAtomicPath("private temporary file changed before publication")
-                _assert_directory_identity(target.parent, parent_identity)
+                _assert_descriptor_directory_identity(target.parent, parent_identity)
                 with suppress(OSError):
                     os.fsync(directory_fd)
                 receipt_identity = (published.st_dev, published.st_ino)
