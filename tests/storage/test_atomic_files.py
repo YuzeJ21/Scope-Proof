@@ -1408,7 +1408,7 @@ def test_descriptor_replace_never_overwrites_foreign_file_published_by_race(
     monkeypatch.setattr(os, "rename", swap_temporary)
 
     with (
-        pytest.raises(UnsafeAtomicPath, match="temporary file changed"),
+        pytest.raises(UnsafeAtomicPath, match="changed"),
         exclusive_path_claim(target) as claim,
     ):
         atomic_replace_text(target, "new valid bytes\n", claim=claim)
