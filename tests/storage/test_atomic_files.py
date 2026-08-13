@@ -224,6 +224,8 @@ def test_descriptor_read_rejects_regular_file_swap_between_stat_and_open(
 ) -> None:
     target = tmp_path / "record.json"
     target.write_bytes(b"validated\n")
+    replacement = tmp_path / "replacement.json"
+    replacement.write_bytes(b"different bytes\n")
     original_open = os.open
     swapped = False
 
@@ -231,8 +233,7 @@ def test_descriptor_read_rejects_regular_file_swap_between_stat_and_open(
         nonlocal swapped
         if not swapped and path == target.name and kwargs.get("dir_fd") is not None:
             swapped = True
-            target.unlink()
-            target.write_bytes(b"different bytes\n")
+            os.replace(replacement, target)
         return original_open(path, flags, *args, **kwargs)
 
     monkeypatch.setattr(os, "open", swap_regular_file)
@@ -250,6 +251,8 @@ def test_descriptor_read_translates_no_follow_loop_error(
 ) -> None:
     target = tmp_path / "record.json"
     target.write_bytes(b"validated\n")
+    replacement = tmp_path / "replacement.json"
+    replacement.write_bytes(b"different bytes\n")
     original_open = os.open
 
     def reject_target(path, flags, *args, **kwargs):
@@ -268,6 +271,8 @@ def test_portable_read_rejects_regular_file_swap_between_stat_and_open(
 ) -> None:
     target = tmp_path / "record.json"
     target.write_bytes(b"validated\n")
+    replacement = tmp_path / "replacement.json"
+    replacement.write_bytes(b"different bytes\n")
     original_open = os.open
     swapped = False
 
@@ -275,8 +280,7 @@ def test_portable_read_rejects_regular_file_swap_between_stat_and_open(
         nonlocal swapped
         if not swapped and Path(path) == target and not flags & os.O_CREAT:
             swapped = True
-            target.unlink()
-            target.write_bytes(b"different bytes\n")
+            os.replace(replacement, target)
         return original_open(path, flags, *args, **kwargs)
 
     monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
@@ -556,12 +560,13 @@ def test_atomic_create_rejects_private_temporary_swap(
     def swap_source_before_link(source, destination, **kwargs):
         directory_fd = kwargs.get("src_dir_fd")
         if directory_fd is None:
-            Path(source).unlink()
-            Path(source).write_bytes(b"attacker bytes\n")
+            replacement = Path(source).with_name(f"{Path(source).name}.foreign")
+            replacement.write_bytes(b"attacker bytes\n")
+            os.replace(replacement, source)
         else:
-            os.unlink(source, dir_fd=directory_fd)
+            replacement = f"{source}.foreign"
             descriptor = os.open(
-                source,
+                replacement,
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL,
                 0o600,
                 dir_fd=directory_fd,
@@ -570,6 +575,12 @@ def test_atomic_create_rejects_private_temporary_swap(
                 os.write(descriptor, b"attacker bytes\n")
             finally:
                 os.close(descriptor)
+            os.rename(
+                replacement,
+                source,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+            )
         return original_link(source, destination, **kwargs)
 
     monkeypatch.setattr(os, "link", swap_source_before_link)
@@ -1375,9 +1386,9 @@ def test_descriptor_replace_never_overwrites_foreign_file_published_by_race(
     def swap_temporary(source, destination, *args, **kwargs):
         source_fd = kwargs.get("src_dir_fd")
         if Path(source).suffix == ".tmp" and source_fd is not None:
-            os.unlink(source, dir_fd=source_fd)
+            replacement = f"{source}.foreign"
             descriptor = os.open(
-                source,
+                replacement,
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL,
                 0o600,
                 dir_fd=source_fd,
@@ -1386,12 +1397,18 @@ def test_descriptor_replace_never_overwrites_foreign_file_published_by_race(
                 os.write(descriptor, b"attacker bytes\n")
             finally:
                 os.close(descriptor)
+            os.rename(
+                replacement,
+                source,
+                src_dir_fd=source_fd,
+                dst_dir_fd=source_fd,
+            )
         return original_rename(source, destination, *args, **kwargs)
 
     monkeypatch.setattr(os, "rename", swap_temporary)
 
     with (
-        pytest.raises(UnsafeAtomicPath, match="replacement changed before rollback"),
+        pytest.raises(UnsafeAtomicPath, match="temporary file changed"),
         exclusive_path_claim(target) as claim,
     ):
         atomic_replace_text(target, "new valid bytes\n", claim=claim)
