@@ -8,7 +8,7 @@ import secrets
 import stat
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from pathlib import Path
 
@@ -44,7 +44,7 @@ class MutationClaim:
     target: Path
     parent: Path
     identity: tuple[int, int]
-    record_identity: tuple[int, int]
+    record_identity: tuple[int, int] | None
     directory_fd: int | None = None
     portable_ancestors: tuple[tuple[Path, tuple[int, int]], ...] = ()
 
@@ -449,13 +449,17 @@ def _open_private_temporary_at(
     raise FileExistsError("could not allocate an exclusive temporary file")
 
 
-def _write_all(descriptor: int, payload: bytes) -> None:
+def _write_complete(descriptor: int, payload: bytes) -> None:
     remaining = memoryview(payload)
     while remaining:
         written = os.write(descriptor, remaining)
         if written == 0:
             raise OSError("failed to write complete local record")
         remaining = remaining[written:]
+
+
+def _write_all(descriptor: int, payload: bytes) -> None:
+    _write_complete(descriptor, payload)
     os.fsync(descriptor)
 
 
@@ -813,7 +817,7 @@ def _fsync_directory(directory: Path) -> None:
             os.close(descriptor)
 
 
-def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileReceipt:
+def _atomic_create_text_with_receipt_unclaimed(target: Path, text: str) -> CreatedFileReceipt:
     """Publish UTF-8 text exactly once and return its rollback identity."""
 
     target = _absolute_path(target)
@@ -841,6 +845,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             published_identity: tuple[int, int] | None = None
             receipt_identity: tuple[int, int] | None = None
             orphaned_paths: list[Path] = []
+            claim_context = None
+            claim_acquired = False
             try:
                 _write_all(descriptor, payload)
                 expected = os.fstat(descriptor)
@@ -848,6 +854,9 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                     os.close(descriptor)
                 finally:
                     descriptor = -1
+                claim_context = _exclusive_path_claim(target, require_existing=False)
+                claim_context.__enter__()
+                claim_acquired = True
                 try:
                     os.link(
                         temporary,
@@ -882,38 +891,43 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
                 receipt_identity = (published.st_dev, published.st_ino)
                 committed = True
             finally:
-                if descriptor >= 0:
-                    os.close(descriptor)
-                publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
-                if not committed and published_identity is not None:
+                try:
+                    if descriptor >= 0:
+                        os.close(descriptor)
+                    publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
+                    if not committed and published_identity is not None:
+                        try:
+                            _quarantine_and_remove_at(
+                                directory_fd,
+                                target.name,
+                                published_identity,
+                                changed_message=(
+                                    "published file changed during failed create cleanup"
+                                ),
+                            )
+                        except FileNotFoundError:
+                            pass
+                        except (OSError, UnsafeAtomicPath) as error:
+                            publication_cleanup_error = error
                     try:
                         _quarantine_and_remove_at(
                             directory_fd,
-                            target.name,
-                            published_identity,
-                            changed_message=(
-                                "published file changed during failed create cleanup"
-                            ),
+                            temporary,
+                            temporary_identity,
+                            changed_message="private temporary file changed before cleanup",
                         )
                     except FileNotFoundError:
                         pass
-                    except (OSError, UnsafeAtomicPath) as error:
-                        publication_cleanup_error = error
-                try:
-                    _quarantine_and_remove_at(
-                        directory_fd,
-                        temporary,
-                        temporary_identity,
-                        changed_message="private temporary file changed before cleanup",
-                    )
-                except FileNotFoundError:
-                    pass
-                except BaseException:
-                    if not committed:
-                        raise
-                    orphaned_paths.append(target.parent / temporary)
-                if publication_cleanup_error is not None:
-                    raise publication_cleanup_error
+                    except BaseException:
+                        if not committed:
+                            raise
+                        orphaned_paths.append(target.parent / temporary)
+                    if publication_cleanup_error is not None:
+                        raise publication_cleanup_error
+                finally:
+                    if claim_acquired:
+                        assert claim_context is not None
+                        claim_context.__exit__(None, None, None)
             if receipt_identity is None:  # pragma: no cover - defensive invariant
                 raise RuntimeError("published file identity was not captured")
             return CreatedFileReceipt(
@@ -945,6 +959,8 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
     published_identity: tuple[int, int] | None = None
     receipt_identity: tuple[int, int] | None = None
     orphaned_paths: list[Path] = []
+    claim_context = None
+    claim_acquired = False
     try:
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
@@ -954,6 +970,9 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
             os.close(descriptor)
         finally:
             descriptor = -1
+        claim_context = _exclusive_path_claim(target, require_existing=False)
+        claim_context.__enter__()
+        claim_acquired = True
         try:
             _assert_portable_directory(portable_directory)
             _assert_directory_identity(parent, parent_identity)
@@ -983,40 +1002,45 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         receipt_identity = (published.st_dev, published.st_ino)
         committed = True
     finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-        publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
-        if not committed and published_identity is not None:
+        try:
+            if descriptor >= 0:
+                os.close(descriptor)
+            publication_cleanup_error: OSError | UnsafeAtomicPath | None = None
+            if not committed and published_identity is not None:
+                try:
+                    _quarantine_and_remove_path(
+                        target,
+                        published_identity,
+                        changed_message="published file changed during failed create cleanup",
+                    )
+                except FileNotFoundError:
+                    pass
+                except (OSError, UnsafeAtomicPath) as error:
+                    publication_cleanup_error = error
+            _assert_portable_directory(portable_directory)
+            _assert_directory_identity(parent, parent_identity)
             try:
                 _quarantine_and_remove_path(
-                    target,
-                    published_identity,
-                    changed_message="published file changed during failed create cleanup",
+                    temporary,
+                    temporary_identity,
+                    changed_message="private temporary file changed before cleanup",
                 )
             except FileNotFoundError:
                 pass
-            except (OSError, UnsafeAtomicPath) as error:
-                publication_cleanup_error = error
-        _assert_portable_directory(portable_directory)
-        _assert_directory_identity(parent, parent_identity)
-        try:
-            _quarantine_and_remove_path(
-                temporary,
-                temporary_identity,
-                changed_message="private temporary file changed before cleanup",
-            )
-        except FileNotFoundError:
-            pass
-        except BaseException:
+            except BaseException:
+                if not committed:
+                    raise
+                orphaned_paths.append(temporary)
+            if publication_cleanup_error is not None:
+                raise publication_cleanup_error
             if not committed:
-                raise
-            orphaned_paths.append(temporary)
-        if publication_cleanup_error is not None:
-            raise publication_cleanup_error
-        if not committed:
-            _remove_empty_created_directories(
-                portable_directory.created_directories
-            )
+                _remove_empty_created_directories(
+                    portable_directory.created_directories
+                )
+        finally:
+            if claim_acquired:
+                assert claim_context is not None
+                claim_context.__exit__(None, None, None)
     if receipt_identity is None:  # pragma: no cover - defensive invariant
         raise RuntimeError("published file identity was not captured")
     return CreatedFileReceipt(
@@ -1027,6 +1051,34 @@ def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileRecei
         portable_ancestors=portable_directory.ancestors,
         orphaned_paths=tuple(orphaned_paths),
         created_directories=portable_directory.created_directories,
+    )
+
+
+def atomic_create_text_with_receipt(target: Path, text: str) -> CreatedFileReceipt:
+    """Publish UTF-8 text once while excluding updates to the same destination."""
+
+    target = _absolute_path(target)
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
+    if _DESCRIPTOR_BACKEND_SUPPORTED:
+        descriptor_created: list[tuple[Path, tuple[int, int]]] = []
+        with _open_directory_descriptor(
+            target.parent,
+            create=True,
+            created_directories=descriptor_created,
+        ):
+            pass
+        created_directories = tuple(descriptor_created)
+    else:
+        portable_directory = _capture_safe_directory(target.parent, create=True)
+        created_directories = portable_directory.created_directories
+    try:
+        receipt = _atomic_create_text_with_receipt_unclaimed(target, text)
+    except BaseException:
+        _remove_empty_created_directories(created_directories)
+        raise
+    return replace(
+        receipt,
+        created_directories=created_directories + receipt.created_directories,
     )
 
 
@@ -1219,8 +1271,10 @@ def rollback_created_file(receipt: CreatedFileReceipt) -> None:
 
 
 @contextmanager
-def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
-    """Acquire a fail-closed, process-exclusive claim for one target mutation."""
+def _exclusive_path_claim(
+    target: Path, *, require_existing: bool
+) -> Iterator[MutationClaim]:
+    """Acquire one target-name claim, optionally requiring an existing record."""
 
     target = _absolute_path(target)
     if _DESCRIPTOR_BACKEND_SUPPORTED:
@@ -1246,11 +1300,17 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                 except BaseException:
                     raise
                 claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
-                record_metadata = _require_regular_at(directory_fd, target.name)
-                record_identity = (record_metadata.st_dev, record_metadata.st_ino)
+                try:
+                    record_metadata = _require_regular_at(directory_fd, target.name)
+                except FileNotFoundError:
+                    if require_existing:
+                        raise
+                    record_identity = None
+                else:
+                    record_identity = (record_metadata.st_dev, record_metadata.st_ino)
                 if not stat.S_ISREG(claim_metadata.st_mode):
                     raise UnsafeAtomicPath("mutation claim must be a regular local file")
-                _write_all(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
+                _write_complete(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
                 metadata = os.fstat(directory_fd)
                 yield MutationClaim(
                     target=target,
@@ -1290,11 +1350,17 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
         except BaseException:
             raise
         claim_identity = (claim_metadata.st_dev, claim_metadata.st_ino)
-        record_metadata = _require_regular_file(target)
-        record_identity = (record_metadata.st_dev, record_metadata.st_ino)
+        try:
+            record_metadata = _require_regular_file(target)
+        except FileNotFoundError:
+            if require_existing:
+                raise
+            record_identity = None
+        else:
+            record_identity = (record_metadata.st_dev, record_metadata.st_ino)
         if not stat.S_ISREG(claim_metadata.st_mode):
             raise UnsafeAtomicPath("mutation claim must be a regular local file")
-        _write_all(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
+        _write_complete(descriptor, f"pid={os.getpid()}\n".encode("ascii"))
         _assert_portable_directory(portable_directory)
         _assert_directory_identity(parent, parent_identity)
         yield MutationClaim(
@@ -1317,6 +1383,14 @@ def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
                     changed_message="mutation claim changed before cleanup",
                 )
         _fsync_directory(parent)
+
+
+@contextmanager
+def exclusive_path_claim(target: Path) -> Iterator[MutationClaim]:
+    """Acquire a fail-closed, process-exclusive claim for one existing target mutation."""
+
+    with _exclusive_path_claim(target, require_existing=True) as claim:
+        yield claim
 
 
 def atomic_replace_text(

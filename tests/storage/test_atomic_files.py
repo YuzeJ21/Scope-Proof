@@ -1,5 +1,6 @@
 import errno
 import os
+import threading
 from contextlib import suppress
 from dataclasses import replace
 from hashlib import sha256
@@ -120,6 +121,93 @@ def test_descriptor_parent_close_failure_cleans_new_directory_and_child_descript
         if created_descriptor is not None:
             with suppress(OSError):
                 original_close(created_descriptor)
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_create_cannot_publish_during_claimed_replacement_rollback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    target = tmp_path / "record.json"
+    target.write_bytes(b"prior valid bytes\n")
+    removed = threading.Event()
+    continue_rollback = threading.Event()
+    update_errors: list[BaseException] = []
+    interrupted = False
+
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+        original_replace = os.replace
+        original_cleanup_path = atomic_files_module._quarantine_and_remove_path
+
+        def interrupt_replacement(source, destination, *args, **kwargs):
+            nonlocal interrupted
+            result = original_replace(source, destination, *args, **kwargs)
+            if Path(source).suffix == ".tmp" and Path(destination) == target and not interrupted:
+                interrupted = True
+                raise OSError("simulated interrupted replacement")
+            return result
+
+        def pause_after_target_removal(path: Path, expected, **kwargs) -> None:
+            result = original_cleanup_path(path, expected, **kwargs)
+            if path == target:
+                removed.set()
+                if not continue_rollback.wait(5):
+                    raise RuntimeError("timed out waiting for competing create")
+            return result
+
+        monkeypatch.setattr(os, "replace", interrupt_replacement)
+        monkeypatch.setattr(
+            atomic_files_module, "_quarantine_and_remove_path", pause_after_target_removal
+        )
+    else:
+        original_rename = os.rename
+        original_cleanup_at = atomic_files_module._quarantine_and_remove_at
+
+        def interrupt_replacement(source, destination, *args, **kwargs):
+            nonlocal interrupted
+            result = original_rename(source, destination, *args, **kwargs)
+            if str(source).endswith(".tmp") and destination == target.name and not interrupted:
+                interrupted = True
+                raise OSError("simulated interrupted replacement")
+            return result
+
+        def pause_after_target_removal(directory_fd: int, name: str, expected, **kwargs) -> None:
+            result = original_cleanup_at(directory_fd, name, expected, **kwargs)
+            if name == target.name:
+                removed.set()
+                if not continue_rollback.wait(5):
+                    raise RuntimeError("timed out waiting for competing create")
+            return result
+
+        monkeypatch.setattr(os, "rename", interrupt_replacement)
+        monkeypatch.setattr(
+            atomic_files_module, "_quarantine_and_remove_at", pause_after_target_removal
+        )
+
+    def interrupting_update() -> None:
+        try:
+            with exclusive_path_claim(target) as claim:
+                atomic_replace_text(target, "replacement bytes\n", claim=claim)
+        except BaseException as error:
+            update_errors.append(error)
+
+    update_thread = threading.Thread(target=interrupting_update)
+    update_thread.start()
+    assert removed.wait(5)
+    try:
+        with pytest.raises(FileExistsError, match="another process is updating"):
+            atomic_create_text(target, "racing create bytes\n")
+    finally:
+        continue_rollback.set()
+        update_thread.join(5)
+
+    assert not update_thread.is_alive()
+    assert len(update_errors) == 1
+    assert str(update_errors[0]) == "simulated interrupted replacement"
+    assert target.read_bytes() == b"prior valid bytes\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [target.name]
 
 
 def test_atomic_create_rejects_parent_traversal_before_normalizing(
@@ -772,7 +860,7 @@ def test_atomic_create_retries_private_temporary_name_collision(
 ) -> None:
     bounded = sha256(b"record").hexdigest()[:16]
     (tmp_path / f".{bounded}-collision.tmp").write_bytes(b"occupied")
-    tokens = iter(("collision", "available", "cleanup"))
+    tokens = iter(("collision", "available", "cleanup", "claim-cleanup"))
     monkeypatch.setattr(atomic_files_module.secrets, "token_hex", lambda _size: next(tokens))
 
     target = atomic_create_text(tmp_path / "record.json", "validated\n")
@@ -1243,9 +1331,12 @@ def test_receipt_tracks_restored_temporary_and_retry_cleans_its_quarantine(
         monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
     target = tmp_path / "report.md"
     original_unlink = os.unlink
+    denied_count = 0
 
     def deny_quarantine_unlink(path, *args, **kwargs):
-        if str(path).endswith(".rollback"):
+        nonlocal denied_count
+        if str(path).endswith(".rollback") and denied_count < 2:
+            denied_count += 1
             raise PermissionError("simulated temporary quarantine unlink denial")
         return original_unlink(path, *args, **kwargs)
 
@@ -1273,14 +1364,20 @@ def test_receipt_tracks_temporary_when_cleanup_and_restore_both_fail(
     target = tmp_path / "report.md"
     original_link = os.link
     original_unlink = os.unlink
+    denied_unlink_once = False
+    denied_restore_once = False
 
     def deny_quarantine_unlink(path, *args, **kwargs):
-        if str(path).endswith(".rollback"):
+        nonlocal denied_unlink_once
+        if str(path).endswith(".rollback") and not denied_unlink_once:
+            denied_unlink_once = True
             raise PermissionError("simulated temporary quarantine unlink denial")
         return original_unlink(path, *args, **kwargs)
 
     def deny_quarantine_restore(source, destination, *args, **kwargs):
-        if str(source).endswith(".rollback"):
+        nonlocal denied_restore_once
+        if str(source).endswith(".rollback") and not denied_restore_once:
+            denied_restore_once = True
             raise PermissionError("simulated temporary restore denial")
         return original_link(source, destination, *args, **kwargs)
 
