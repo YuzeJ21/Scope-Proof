@@ -40,6 +40,10 @@ PR184_EXACT_MAIN_RUN_IDS = ("30854382641", "30854382413", "30854382659")
 POST_PR193_RESULTING_MAIN_SHA = "432371c4faec0b790f70fec32b4d3fc4d5132cfa"
 PR193_EXACT_HEAD_SHA = "8bb407079a0ff7098d2fc18af3d75b216725df2e"
 PR193_EXACT_BASE_SHA = "9426e8714ffd2c3742bb074ae26fc788f1049c63"
+PR193_RESULTING_MAIN_CI_RUN_ID = "31704668247"
+PR193_RESULTING_MAIN_CODEQL_RUN_ID = "31704666031"
+PR193_RESULTING_MAIN_PAGES_RUN_ID = "31704668164"
+GITHUB_ACTIONS_RUN_ROOT = "https://github.com/YuzeJ21/Scope-Proof/actions/runs"
 
 
 def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
@@ -1720,8 +1724,21 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
         "v0.2.3 GitHub Release with wheel, source archive, and checksum manifest"
     )
     assert roadmap_rows["Snapshot verification"] == (
-        f"Exact PR #193 tree `{POST_PR193_RESULTING_MAIN_SHA}`: 2,251 passed, "
-        "2 intentional skips, and 95.27% coverage"
+        f"Hosted resulting-main CI run [`{PR193_RESULTING_MAIN_CI_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_CI_RUN_ID}) "
+        f"at exact PR #193 tree `{POST_PR193_RESULTING_MAIN_SHA}` recorded 2,251 passed, "
+        "2 intentional skips, and 95.22% coverage"
+    )
+    assert roadmap_rows["Snapshot engineering checks"] == (
+        f"Resulting-main CI run [`{PR193_RESULTING_MAIN_CI_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_CI_RUN_ID}) "
+        "covers Python 3.11, Python 3.13, Windows, installed-wheel, deterministic benchmark, "
+        "and packaged-browser checks; "
+        f"CodeQL run [`{PR193_RESULTING_MAIN_CODEQL_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_CODEQL_RUN_ID}) "
+        f"and Pages run [`{PR193_RESULTING_MAIN_PAGES_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_PAGES_RUN_ID}) "
+        "also succeeded"
     )
 
     status_header = section(
@@ -1744,9 +1761,21 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
         in normalized_status_header
     )
     assert (
-        f"Snapshot verification for exact PR #193 tree `{POST_PR193_RESULTING_MAIN_SHA}`: "
-        "2,251 passed, 2 intentional skips, and 95.27% coverage."
+        f"Hosted resulting-main CI run [`{PR193_RESULTING_MAIN_CI_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_CI_RUN_ID}) "
+        f"at exact PR #193 tree `{POST_PR193_RESULTING_MAIN_SHA}` recorded 2,251 passed, "
+        "2 intentional skips, and 95.22% coverage."
     ) in normalized_status_header
+    for run_id in (
+        PR193_RESULTING_MAIN_CI_RUN_ID,
+        PR193_RESULTING_MAIN_CODEQL_RUN_ID,
+        PR193_RESULTING_MAIN_PAGES_RUN_ID,
+    ):
+        assert (
+            f"{GITHUB_ACTIONS_RUN_ROOT}/{run_id}" in status_header
+        )
+    assert "95.27% coverage" not in roadmap_header
+    assert "95.27% coverage" not in status_header
     assert "PR #184 release-integration checks" in status_header
     assert "not resulting-main PR #193 checks" in normalized_status_header
 

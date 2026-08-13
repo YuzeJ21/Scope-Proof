@@ -25,8 +25,8 @@ which provides the wheel, source archive, and checksum manifest.
 | Release integration evidence | PR #184 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; exact-main CI, CodeQL, and Pages all succeeded, and `origin/main` matched at the 2026-08-08 branch-start snapshot |
 | Integration authority | PR #184 exact-main CI run `30854382641`, CodeQL run `30854382413`, and Pages run `30854382659` verify the release integration |
 | Historical source integration | PR #183 integrity/reviewer-loop source merge at `cd362a85a558645a0f56d6540f6bf035e5821809`; runs `30847416893`, `30847415556`, and `30847417705` remain historical source-integration evidence |
-| Snapshot verification | Exact PR #193 tree `432371c4faec0b790f70fec32b4d3fc4d5132cfa`: 2,251 passed, 2 intentional skips, and 95.27% coverage |
-| Snapshot engineering checks | CI, CodeQL, Pages, Python 3.11, Python 3.13, Windows, installed-wheel, deterministic benchmark, and packaged-browser checks succeeded |
+| Snapshot verification | Hosted resulting-main CI run [`31704668247`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/31704668247) at exact PR #193 tree `432371c4faec0b790f70fec32b4d3fc4d5132cfa` recorded 2,251 passed, 2 intentional skips, and 95.22% coverage |
+| Snapshot engineering checks | Resulting-main CI run [`31704668247`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/31704668247) covers Python 3.11, Python 3.13, Windows, installed-wheel, deterministic benchmark, and packaged-browser checks; CodeQL run [`31704666031`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/31704666031) and Pages run [`31704668164`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/31704668164) also succeeded |
 | Product validation | Publication state does not change Stage 1, which remains at zero; Stages 2–4 remain gated |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
