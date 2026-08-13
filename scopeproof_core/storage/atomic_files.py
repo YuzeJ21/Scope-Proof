@@ -1020,8 +1020,14 @@ def _atomic_create_text_with_receipt_unclaimed(target: Path, text: str) -> Creat
                     pass
                 except (OSError, UnsafeAtomicPath) as error:
                     publication_cleanup_error = error
-            _assert_portable_directory(portable_directory)
-            _assert_directory_identity(parent, parent_identity)
+            if committed:
+                with suppress(OSError, KeyboardInterrupt):
+                    _assert_portable_directory(portable_directory)
+                with suppress(OSError, KeyboardInterrupt):
+                    _assert_directory_identity(parent, parent_identity)
+            else:
+                _assert_portable_directory(portable_directory)
+                _assert_directory_identity(parent, parent_identity)
             try:
                 _quarantine_and_remove_path(
                     temporary,
@@ -1351,6 +1357,7 @@ def _exclusive_path_claim(
     except FileExistsError:
         raise FileExistsError(f"another process is updating {target.name}") from None
     claim_identity = None
+    body_completed = False
     try:
         try:
             claim_metadata = os.fstat(descriptor)
@@ -1377,11 +1384,18 @@ def _exclusive_path_claim(
             record_identity=record_identity,
             portable_ancestors=portable_directory.ancestors,
         )
+        body_completed = True
     finally:
         with suppress(OSError, KeyboardInterrupt):
             os.close(descriptor)
-        _assert_portable_directory(portable_directory)
-        _assert_directory_identity(parent, parent_identity)
+        if body_completed:
+            with suppress(OSError, KeyboardInterrupt):
+                _assert_portable_directory(portable_directory)
+            with suppress(OSError, KeyboardInterrupt):
+                _assert_directory_identity(parent, parent_identity)
+        else:
+            _assert_portable_directory(portable_directory)
+            _assert_directory_identity(parent, parent_identity)
         if claim_identity is not None:
             with suppress(OSError, KeyboardInterrupt):
                 _quarantine_and_remove_path(

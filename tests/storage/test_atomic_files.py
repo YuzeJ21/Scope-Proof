@@ -1795,6 +1795,73 @@ def test_committed_create_ignores_claim_final_sync_interruption(
     assert target.read_bytes() == b"committed bytes\n"
 
 
+def test_portable_committed_create_ignores_claim_revalidation_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_directory_sync = atomic_files_module._fsync_directory
+    original_assert = atomic_files_module._assert_portable_directory
+    committed = False
+    interrupted = False
+
+    def mark_committed(directory: Path) -> None:
+        nonlocal committed
+        original_directory_sync(directory)
+        committed = True
+
+    def interrupt_post_commit_revalidation(directory) -> None:
+        nonlocal interrupted
+        if committed and not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("simulated post-commit claim revalidation interruption")
+        original_assert(directory)
+
+    monkeypatch.setattr(atomic_files_module, "_fsync_directory", mark_committed)
+    monkeypatch.setattr(
+        atomic_files_module,
+        "_assert_portable_directory",
+        interrupt_post_commit_revalidation,
+    )
+    target = tmp_path / "record.json"
+
+    assert atomic_create_text(target, "committed bytes\n") == target
+    assert interrupted is True
+    assert target.read_bytes() == b"committed bytes\n"
+    assert not list(tmp_path.glob("*.claim"))
+
+
+def test_portable_committed_replace_ignores_claim_revalidation_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    original_assert = atomic_files_module._assert_portable_directory
+    committed = False
+    interrupted = False
+
+    def interrupt_post_commit_revalidation(directory) -> None:
+        nonlocal interrupted
+        if committed and not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("simulated post-commit claim revalidation interruption")
+        original_assert(directory)
+
+    monkeypatch.setattr(
+        atomic_files_module,
+        "_assert_portable_directory",
+        interrupt_post_commit_revalidation,
+    )
+    target = tmp_path / "record.json"
+    target.write_bytes(b"old valid bytes\n")
+
+    with exclusive_path_claim(target) as claim:
+        assert atomic_replace_text(target, "committed bytes\n", claim=claim) == target
+        committed = True
+
+    assert interrupted is True
+    assert target.read_bytes() == b"committed bytes\n"
+    assert not list(tmp_path.glob("*.claim"))
+
+
 @pytest.mark.parametrize("portable", [False, True])
 def test_committed_replace_ignores_backup_cleanup_interruption(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
