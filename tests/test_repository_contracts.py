@@ -38,6 +38,8 @@ PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
 PR184_RELEASE_MERGE_SHA = "448c42758ea139bf9203cbf1bb04b02b02ae412c"
 PR184_EXACT_MAIN_RUN_IDS = ("30854382641", "30854382413", "30854382659")
 POST_PR193_RESULTING_MAIN_SHA = "432371c4faec0b790f70fec32b4d3fc4d5132cfa"
+PR193_EXACT_HEAD_SHA = "8bb407079a0ff7098d2fc18af3d75b216725df2e"
+PR193_EXACT_BASE_SHA = "9426e8714ffd2c3742bb074ae26fc788f1049c63"
 
 
 def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
@@ -1697,6 +1699,11 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
     for active_status in (roadmap, status):
         normalized_status = " ".join(active_status.lower().split())
         assert POST_PR193_RESULTING_MAIN_SHA in active_status
+        assert PR193_EXACT_HEAD_SHA in active_status
+        assert PR193_EXACT_BASE_SHA in active_status
+        assert DEVELOPMENT_VERSION in active_status
+        assert "ScopeProof v0.2.3 is published" in active_status
+        assert "Public install: v0.2.3 is available" in active_status
         assert "PR #189" in active_status
         assert "PR #190" in active_status
         assert "PR #191" in active_status
@@ -1732,6 +1739,9 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
             "qualifying reviews are not demos, tests, maintainers, bots, or repository activity",
         ):
             assert expected in normalized_status
+
+    assert "PR #184 release-integration checks" in status
+    assert "not resulting-main PR #193 checks" in " ".join(status.split())
 
 
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:
