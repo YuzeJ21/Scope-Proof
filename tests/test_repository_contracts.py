@@ -1886,6 +1886,14 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     status_stage_two = section(
         status, "### Stage 2 — commercial discovery", "### Stage 3"
     )
+    status_gap_ledger = section(status, "## Gap ledger", "## Stage roadmap")
+    status_gap_rows = {
+        cells[1].strip(): (cells[2].strip(), cells[3].strip())
+        for line in status_gap_ledger.splitlines()
+        if line.startswith("| ")
+        if len(cells := line.split("|")) == 5
+        if cells[1].strip() != "Gap"
+    }
     status_queue = section(status, "## Next executable queue", "## Final boundary")
     current_status = section(packet, "## Current status", "## Activation gate")
     activation_gate = section(
@@ -1921,6 +1929,11 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     )
     assert "../commercialization/stage2-readiness-packet.md" in status_stage_two
     assert "separate owner authorization" in status_stage_two
+    assert status_gap_rows["Stage 2"] == (
+        "Stage and owner gate",
+        "Every Stage 1 target passes and the owner separately authorizes Stage 2 before "
+        "repeat-use and commercial-discovery evidence is collected",
+    )
     assert "separate owner authorization" in status_queue
     normalized_discovery_guide = " ".join(discovery_guide.split())
     assert (
