@@ -70,8 +70,9 @@ elapsed time earn no Stage 1 or Stage 2 credit.
 
 ### 2. Post-use discovery guide
 
-The guide will be usable only after a participant completes a qualifying public Stage 1 review. It
-will ask, in order:
+The guide will remain dormant until every Stage 1 exit condition has genuine evidence and the owner
+separately authorizes Stage 2. One qualifying public review is necessary evidence but cannot
+activate the guide. After activation, it will ask, in order:
 
 1. What workflow would the participant otherwise have used?
 2. What attributable result, if any, did ScopeProof expose?

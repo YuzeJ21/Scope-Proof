@@ -26,8 +26,10 @@ demos, releases, downloads, issue activity, owner rehearsals, and elapsed time e
 
 ## Post-use discovery guide
 
-These questions remain dormant until a participant completes a qualifying public Stage 1 review,
-selects an outcome, and the record is validated at the exact reviewed head. Ask them in order:
+These questions remain dormant until every Stage 1 exit condition has genuine evidence and the
+owner separately authorizes Stage 2. A qualifying public review, participant-selected outcome, and
+validated exact-head record are necessary Stage 1 evidence, but one completed review cannot
+activate this guide. After activation, ask the questions in order:
 
 1. What workflow would you otherwise have used for this pull-request decision?
 2. What attributable result, if any, did ScopeProof expose?

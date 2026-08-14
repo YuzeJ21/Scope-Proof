@@ -1868,6 +1868,9 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
 
 def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"
     )
@@ -1877,9 +1880,19 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
 
     stage_one = section(roadmap, "## Stage 1 — Genuine public alpha", "## Stage 2")
     stage_two = section(roadmap, "## Stage 2 — Commercial discovery", "## Stage 3")
+    status_stage_one = section(
+        status, "### Stage 1 — genuine public alpha", "### Stage 2"
+    )
+    status_stage_two = section(
+        status, "### Stage 2 — commercial discovery", "### Stage 3"
+    )
+    status_queue = section(status, "## Next executable queue", "## Final boundary")
     current_status = section(packet, "## Current status", "## Activation gate")
     activation_gate = section(
         packet, "## Activation gate", "## Post-use discovery guide"
+    )
+    discovery_guide = section(
+        packet, "## Post-use discovery guide", "## Hypothesis ledger"
     )
 
     assert "waiting_for_inbound_public_alpha_submission" in stage_one
@@ -1901,6 +1914,19 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     assert "Every Stage 1 exit condition" in activation_gate
     assert "separate owner authorization" in activation_gate
     assert "docs/commercialization/stage2-readiness-packet.md" in stage_two
+    assert "Owner operating posture: Stage 1 is paused" in status_stage_one
+    assert (
+        "Stage 2 readiness materials only; Stage 2 has not begun"
+        in status_stage_two
+    )
+    assert "../commercialization/stage2-readiness-packet.md" in status_stage_two
+    assert "separate owner authorization" in status_stage_two
+    assert "separate owner authorization" in status_queue
+    normalized_discovery_guide = " ".join(discovery_guide.split())
+    assert (
+        "These questions remain dormant until every Stage 1 exit condition has genuine evidence "
+        "and the owner separately authorizes Stage 2."
+    ) in normalized_discovery_guide
     for heading in (
         "## Post-use discovery guide",
         "## Hypothesis ledger",
