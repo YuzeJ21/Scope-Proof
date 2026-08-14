@@ -21,9 +21,11 @@ price, or paid demand is currently claimed.
 ## Stage 2 activation gate
 
 Every Stage 1 exit target genuinely passes and the owner separately authorizes Stage 2 before this
-guide may be used. Until both conditions hold, every discovery or price question remains dormant;
-one genuine use, a completed review, prepared material, engineering work, or elapsed time is
-insufficient. This gate does not authorize outreach.
+guide may be used. Until both conditions hold, every Stage 2 commercial-discovery or price question
+remains dormant; one genuine use, a completed review, prepared material, engineering work, or
+elapsed time is insufficient. The separate Stage 1 outcome/public-feedback path may collect
+independently observed timing, decision impact, and voluntary reuse intent after a qualifying
+completed review. This gate does not authorize outreach.
 
 ## Qualifying case
 
@@ -45,7 +47,9 @@ participant-selected outcome are complete.
 ## Ordered 30-day queue
 
 After the Stage 2 activation gate passes, use this queue for qualifying public cases only. Before
-activation, no discovery, reuse, or price question may be asked.
+activation, no Stage 2 commercial-discovery or price question may be asked. The separate Stage 1
+outcome/public-feedback path remains separate and may collect independently observed timing,
+decision impact, and voluntary reuse-intent after a qualifying completed review.
 
 1. Accept only inbound cases that pass every public qualification requirement.
 2. Let the participant confirm the normalized criteria before analysis.
@@ -55,7 +59,8 @@ activation, no discovery, reuse, or price question may be asked.
 5. Record independently observed timing only when an independent observer category and a specific
    public evidence reference support it; otherwise record timing as `not observed`. Record the
    useful-gap category, decision impact, and friction after the review.
-6. Ask about reuse only after the participant has inspected the completed result.
+6. Ask the Stage 2 discovery reuse question only after the participant has inspected the completed
+   result. Stage 1 voluntary reuse intent is collected through the separate Stage 1 path.
 7. Offer the optional research-only price question only after the Stage 2 activation gate has
    passed and genuine product use is complete.
 8. Preserve negative, incomplete, ambiguous, and no-new-information outcomes without rewriting
@@ -154,5 +159,7 @@ Until the evidence gate passes and the owner makes a separate decision, do not b
 
 Remain at `waiting_for_inbound_public_alpha_submission` until a non-owner participant supplies all
 qualifying public inputs, completes the review at an exact head SHA, and selects the honest
-outcome. Do not poll, send outreach, or create a synthetic substitute while waiting; no discovery,
-reuse, or price questions may be asked.
+outcome. Do not poll, send outreach, or create a synthetic substitute while waiting; no Stage 2
+commercial-discovery or price questions may be asked. The Stage 1 public-feedback path remains
+allowed to collect independently observed timing, decision impact, and voluntary reuse intent after
+a qualifying completed review.

@@ -28,14 +28,16 @@ Report consent and quotation consent are independent. Both default to no. Add `-
 
 Do not claim repeat usage, customer value, market demand, or correctness from one outcome.
 
-## Optional public commercial-research handoff
+## Stage 1 public evidence handoff
 
 The validated local outcome remains the authoritative participant-selected result. After it is
 recorded, a participant may read the
-[30-day Design Partner Sprint](../commercialization/design-partner-sprint.md) and voluntarily use
-the [public feedback form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml)
-to report timing, decision impact, reuse intent, and an optional price-discussion response.
+[public feedback form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml)
+to record Stage 1 evidence: independently observed timing, decision impact, and voluntary reuse
+intent. Timing counts toward the Stage 1 under-ten-minute target only with an independent observer
+category and a specific public evidence reference; otherwise record it as `not observed`.
 
-That issue is not commercial validation by itself. No paid product or billing is active, and the
-research-only price question is not a purchase agreement or permission for sales contact. Never
-copy local notes, private information, or consent fields into the public issue.
+The [30-day Design Partner Sprint](../commercialization/design-partner-sprint.md) is the dormant
+Stage 2 guide. Stage 2 commercial-discovery and price research remain dormant until every Stage 1
+exit target genuinely passes and the owner separately authorizes Stage 2. That issue is not commercial validation by itself. No paid product or billing is active. Never copy local notes,
+private information, or consent fields into the public issue.

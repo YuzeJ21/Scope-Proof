@@ -1880,6 +1880,10 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     positioning = Path("docs/commercialization/market-positioning-hypotheses.md").read_text(
         encoding="utf-8"
     )
+    outcome_form = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+    feedback_form = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
 
     def section(document: str, start: str, end: str) -> str:
         remainder = document.split(start, maxsplit=1)[1]
@@ -1935,6 +1939,9 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     sprint_waiting = " ".join(section(sprint, "## Current waiting condition", "").split())
     positioning_boundary = " ".join(
         section(positioning, "## Commercial boundary", "").split()
+    )
+    outcome_handoff = " ".join(
+        section(outcome_form, "## Stage 1 public evidence handoff", "").split()
     )
 
     assert "waiting_for_inbound_public_alpha_submission" in stage_one
@@ -2006,13 +2013,57 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     assert "Every Stage 1 exit target genuinely passes" in sprint_activation_gate
     assert "separately authorizes Stage 2" in sprint_activation_gate
     assert "discovery or price question" in sprint_activation_gate
-    assert "no discovery, reuse, or price question may be asked" in sprint_queue
+    assert "no Stage 2 commercial-discovery or price question may be asked" in sprint_queue
+    assert "Stage 1 outcome/public-feedback path remains separate" in sprint_queue
+    assert "voluntary reuse-intent" in sprint_queue
     assert "genuine product use alone is insufficient" in sprint_price
     assert "every Stage 1 exit target genuinely passes" in sprint_price
-    assert "no discovery, reuse, or price questions" in sprint_waiting
+    assert "no Stage 2 commercial-discovery or price questions may be asked" in sprint_waiting
+    assert "Stage 1 public-feedback path remains allowed" in sprint_waiting
     assert "every Stage 1 exit target genuinely passes" in positioning_boundary
     assert "separately authorizes Stage 2" in positioning_boundary
     assert "Commercial discovery and price questions remain dormant" in positioning_boundary
+    assert "Stage 1 evidence" in outcome_handoff
+    assert "timing, decision impact, and voluntary reuse intent" in outcome_handoff
+    assert "Stage 2 commercial-discovery and price research remain dormant" in outcome_handoff
+    assert "every Stage 1 exit target genuinely passes" in outcome_handoff
+    assert "owner separately authorizes Stage 2" in outcome_handoff
+    assert "id: reuse_intent" in feedback_form
+    assert "id: timing_observation_status" in feedback_form
+    assert "id: timing_observer_category" in feedback_form
+    assert "id: timing_public_evidence_reference" in feedback_form
+    assert "id: design_partner_interest" not in feedback_form
+    assert "Optional design-partner price discussion" not in feedback_form
+    assert (
+        "self-reported time cannot count toward the Stage 1 under-ten-minute target"
+        in feedback_form
+    )
+
+    forbidden_activation_or_validation_claims = (
+        "Stage 1 is complete",
+        "Stage 1 passed",
+        "Stage 2 is active",
+        "validated price",
+        "willingness to pay is validated",
+    )
+    for protected_section in (
+        " ".join(current_status.split()),
+        " ".join(activation_gate.split()),
+        normalized_discovery_guide,
+        hypothesis_ledger,
+        evidence_template,
+        decision_rules,
+        boundaries,
+        sprint_activation_gate,
+        sprint_queue,
+        sprint_price,
+        sprint_waiting,
+        positioning_boundary,
+        outcome_handoff,
+        " ".join(feedback_form.split()),
+    ):
+        for forbidden_claim in forbidden_activation_or_validation_claims:
+            assert forbidden_claim not in protected_section
 
 
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:
@@ -2411,7 +2462,7 @@ def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
     assert "not revenue, orders, customers, paid demand, or willingness to pay" in roadmap
 
 
-def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
+def test_public_alpha_feedback_collects_stage_one_signals_without_price_research() -> None:
     template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(encoding="utf-8")
     for field_id in (
         "public_pr",
@@ -2421,10 +2472,12 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
         "source_owner",
         "outcome",
         "completion_time",
+        "timing_observation_status",
+        "timing_observer_category",
+        "timing_public_evidence_reference",
         "useful_gap_category",
         "decision_impact",
         "reuse_intent",
-        "design_partner_interest",
         "friction",
         "limitations",
         "safety",
@@ -2432,11 +2485,12 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
         assert f"id: {field_id}" in template
 
     for required_text in (
-        "USD 99 per team per month",
-        "USD 999 per team per year",
-        "research hypotheses only",
-        "not a purchase agreement",
-        "only after completing a genuine review",
+        "Stage 1 evidence",
+        "independently observed timing",
+        "self-reported time cannot count toward the Stage 1 under-ten-minute target",
+        "Stage 2 commercial-discovery and price research remain dormant",
+        "every Stage 1 exit target genuinely passes",
+        "owner separately authorizes Stage 2",
         "Prefer not to answer",
         "submission alone is not validation",
     ):
@@ -2451,6 +2505,8 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
         "payment",
         "purchase_commitment",
         "sales_contact",
+        "design_partner_interest",
+        "price_discussion",
     )
     assert all(f"id: {field_id}" not in template for field_id in forbidden_ids)
 
@@ -2479,7 +2535,7 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
         "Created material product friction",
     ]
     assert "Completed reviews only" in feedback
-    assert "required dropdown" in feedback
+    assert "Independent timing observer category" in feedback
     assert "Prefer not to answer" in feedback
 
     completed_signals = sprint.split(

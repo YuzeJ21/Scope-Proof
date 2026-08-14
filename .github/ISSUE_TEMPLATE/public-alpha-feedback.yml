@@ -15,10 +15,9 @@ body:
         Completed reviews only: if the review is incomplete, do not submit this feedback form.
         Stop or continue in Standard review without recording a completed alpha outcome.
 
-        The optional price question appears only after completing a genuine review.
-        USD 99 per team per month and USD 999 per team per year are research hypotheses only. A response is
-        voluntary, is not a purchase agreement, and does not grant permission for sales contact.
-        This submission alone is not validation.
+        This Stage 1 evidence form collects the outcome, independently observed timing, decision
+        impact, and voluntary reuse intent. It does not collect Stage 2 commercial-discovery or
+        price research. Stage 2 commercial-discovery and price research remain dormant until every Stage 1 exit target genuinely passes and the owner separately authorizes Stage 2. This submission alone is not validation.
   - type: input
     id: public_pr
     attributes:
@@ -75,11 +74,38 @@ body:
     id: completion_time
     attributes:
       label: Time to inspectable coverage report
-      description: Measure from entering the public PR to reaching an inspectable report.
+      description: Select a band only when an independent observer records it with a public reference; otherwise select Not observed; self-reported time cannot count toward the Stage 1 under-ten-minute target.
       options:
         - Under 5 minutes
         - 5 to 10 minutes
         - More than 10 minutes
+        - Not observed
+    validations:
+      required: true
+  - type: dropdown
+    id: timing_observation_status
+    attributes:
+      label: Independent-observation status
+      description: Select Independently observed only when an independent observer and specific public evidence reference support the timing; otherwise select Not observed.
+      options:
+        - Independently observed
+        - Not observed
+    validations:
+      required: true
+  - type: input
+    id: timing_observer_category
+    attributes:
+      label: Independent timing observer category
+      description: Give the independent observer category without a direct identifier, or enter not observed.
+      placeholder: Independent reviewer role, or not observed
+    validations:
+      required: true
+  - type: input
+    id: timing_public_evidence_reference
+    attributes:
+      label: Public timing evidence reference
+      description: Give the specific public evidence reference for the observed timing, or enter not observed.
+      placeholder: https://github.com/OWNER/REPOSITORY/issues/123#issuecomment-456, or not observed
     validations:
       required: true
   - type: dropdown
@@ -118,18 +144,6 @@ body:
       options:
         - "Yes, I intend to use ScopeProof on another PR"
         - "No"
-        - Unsure
-        - Prefer not to answer
-    validations:
-      required: true
-  - type: dropdown
-    id: design_partner_interest
-    attributes:
-      label: Optional design-partner price discussion
-      description: This required dropdown asks for an optional research response after product use; select Prefer not to answer to decline. It is not a purchase or contact request.
-      options:
-        - I would voluntarily discuss the team-price hypotheses
-        - Not now
         - Unsure
         - Prefer not to answer
     validations:
