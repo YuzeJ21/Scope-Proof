@@ -37,6 +37,13 @@ PR183_SOURCE_MERGE_SHA = "cd362a85a558645a0f56d6540f6bf035e5821809"
 PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
 PR184_RELEASE_MERGE_SHA = "448c42758ea139bf9203cbf1bb04b02b02ae412c"
 PR184_EXACT_MAIN_RUN_IDS = ("30854382641", "30854382413", "30854382659")
+POST_PR193_RESULTING_MAIN_SHA = "432371c4faec0b790f70fec32b4d3fc4d5132cfa"
+PR193_EXACT_HEAD_SHA = "8bb407079a0ff7098d2fc18af3d75b216725df2e"
+PR193_EXACT_BASE_SHA = "9426e8714ffd2c3742bb074ae26fc788f1049c63"
+PR193_RESULTING_MAIN_CI_RUN_ID = "31704668247"
+PR193_RESULTING_MAIN_CODEQL_RUN_ID = "31704666031"
+PR193_RESULTING_MAIN_PAGES_RUN_ID = "31704668164"
+GITHUB_ACTIONS_RUN_ROOT = "https://github.com/YuzeJ21/Scope-Proof/actions/runs"
 
 
 def test_r002_packaged_inputs_are_redacted_and_strict() -> None:
@@ -1685,6 +1692,178 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
         "WCAG conformance",
     ):
         assert unsupported in platform
+
+
+def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+
+    def section(document: str, start: str, end: str) -> str:
+        return document.split(start, maxsplit=1)[1].split(end, maxsplit=1)[0]
+
+    roadmap_header = section(roadmap, "## Current release and validation state", "## Stage 0")
+    roadmap_rows = {
+        cells[1].strip(): cells[2].strip()
+        for line in roadmap_header.splitlines()
+        if line.startswith("| ")
+        if len(cells := line.split("|")) == 4
+        if cells[1].strip() != "Area"
+    }
+    snapshot_row = roadmap_rows["Post-PR #193 resulting-main snapshot (2026-08-13)"]
+    assert snapshot_row == (
+        "PR #193 product-source baseline at "
+        f"`{POST_PR193_RESULTING_MAIN_SHA}` (PR head `{PR193_EXACT_HEAD_SHA}`, "
+        f"base `{PR193_EXACT_BASE_SHA}`)"
+    )
+    assert roadmap_rows["Active source line"] == (
+        "Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists"
+    )
+    assert roadmap_rows["Published install"] == (
+        "v0.2.3 GitHub Release with wheel, source archive, and checksum manifest"
+    )
+    assert roadmap_rows["Snapshot verification"] == (
+        f"Hosted resulting-main CI run [`{PR193_RESULTING_MAIN_CI_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_CI_RUN_ID}) "
+        f"at exact PR #193 tree `{POST_PR193_RESULTING_MAIN_SHA}` recorded 2,251 passed, "
+        "2 intentional skips, and 95.22% coverage"
+    )
+    assert roadmap_rows["Snapshot engineering checks"] == (
+        f"Resulting-main CI run [`{PR193_RESULTING_MAIN_CI_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_CI_RUN_ID}) "
+        "covers Python 3.11, Python 3.13, Windows, installed-wheel, deterministic benchmark, "
+        "and packaged-browser checks; "
+        f"CodeQL run [`{PR193_RESULTING_MAIN_CODEQL_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_CODEQL_RUN_ID}) "
+        f"and Pages run [`{PR193_RESULTING_MAIN_PAGES_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_PAGES_RUN_ID}) "
+        "also succeeded"
+    )
+
+    status_header = section(
+        status,
+        "# ScopeProof v0.2.3 status, gaps, and next stages",
+        "## Current evidence",
+    )
+    normalized_status_header = " ".join(status_header.split())
+    assert (
+        "Post-PR #193 resulting-main snapshot (2026-08-13): PR #193 product-source baseline at "
+        f"`{POST_PR193_RESULTING_MAIN_SHA}` (PR head `{PR193_EXACT_HEAD_SHA}`, "
+        f"base `{PR193_EXACT_BASE_SHA}`)"
+    ) in normalized_status_header
+    assert (
+        "Development version in this snapshot: unreleased `0.2.4.dev0`"
+        in normalized_status_header
+    )
+    assert (
+        "ScopeProof v0.2.3 is published. Public install: v0.2.3 is available"
+        in normalized_status_header
+    )
+    assert (
+        f"Hosted resulting-main CI run [`{PR193_RESULTING_MAIN_CI_RUN_ID}`]"
+        f"({GITHUB_ACTIONS_RUN_ROOT}/{PR193_RESULTING_MAIN_CI_RUN_ID}) "
+        f"at exact PR #193 tree `{POST_PR193_RESULTING_MAIN_SHA}` recorded 2,251 passed, "
+        "2 intentional skips, and 95.22% coverage."
+    ) in normalized_status_header
+    for run_id in (
+        PR193_RESULTING_MAIN_CI_RUN_ID,
+        PR193_RESULTING_MAIN_CODEQL_RUN_ID,
+        PR193_RESULTING_MAIN_PAGES_RUN_ID,
+    ):
+        assert (
+            f"{GITHUB_ACTIONS_RUN_ROOT}/{run_id}" in status_header
+        )
+    assert "95.27% coverage" not in roadmap_header
+    assert "95.27% coverage" not in status_header
+    assert "PR #184 release-integration checks" in status_header
+    assert "not resulting-main PR #193 checks" in normalized_status_header
+
+    for pr in ("PR #189", "PR #190", "PR #191", "PR #192", "PR #193"):
+        assert pr in roadmap_header
+        assert pr in status_header
+    for conflicting_declaration in (
+        "Current resulting `main`",
+        "current-source status bound",
+    ):
+        assert conflicting_declaration not in roadmap
+        assert conflicting_declaration not in status
+
+    stage_one_blocks = (
+        section(roadmap, "## Stage 1 — Genuine public alpha", "## Stage 2"),
+        section(status, "### Stage 1 — genuine public alpha", "### Stage 2"),
+    )
+    for stage_one in stage_one_blocks:
+        assert "waiting_for_inbound_public_alpha_submission" in stage_one
+        for count in (
+            "0/5 qualifying reviews",
+            "0/3 independent practitioners",
+            "0/3 public repositories",
+            "0/3 independently observed under-ten-minute completions",
+            "0/2 reuse-intent signals",
+        ):
+            assert count in stage_one
+
+        checklist = stage_one.split(
+            "Owner activation checklist — separate authorization required", maxsplit=1
+        )[1]
+        checklist_preamble = " ".join(
+            checklist.split("- Preparation is not outreach", 1)[0].split()
+        )
+        assert (
+            "preparation only; it does not authorize outreach. Current policy remains passive "
+            "and inbound-only absent separate owner authorization."
+        ) in checklist_preamble
+        for distinction in (
+            "Preparation is not outreach",
+            "Inbound submissions are not recruited participants",
+            "Observed completion evidence is not self-reported timing",
+            "Qualifying reviews are not demos, tests, maintainers, bots, or repository activity",
+        ):
+            assert distinction in checklist
+
+    for document, heading, next_heading, required in (
+        (
+            roadmap,
+            "## Stage 2 — Commercial discovery",
+            "## Stage 3",
+            "Stage 2 cannot begin until every Stage 1 target is satisfied.",
+        ),
+        (
+            status,
+            "### Stage 2 — commercial discovery",
+            "### Stage 3",
+            "Stage 2 cannot begin until every Stage 1 target is satisfied.",
+        ),
+        (
+            roadmap,
+            "## Stage 3 — Limited beta",
+            "## Stage 4",
+            "Stage 3 requires genuine repeated use and separate owner approval.",
+        ),
+        (
+            status,
+            "### Stage 3 — limited beta",
+            "### Stage 4",
+            "Stage 3 requires genuine repeated use and separate owner approval.",
+        ),
+        (
+            roadmap,
+            "## Stage 4 — Evidence-guided expansion decision",
+            "## Honest stop and pivot rules",
+            "Stage 4 requires sustained evidence and separate owner approval.",
+        ),
+        (
+            status,
+            "### Stage 4 — evidence-guided expansion",
+            "## Prioritized post-release decision candidates",
+            "Stage 4 requires sustained evidence and separate owner approval.",
+        ),
+        ):
+        stage = section(document, heading, next_heading)
+        normalized_stage = " ".join(stage.split())
+        assert required in normalized_stage
+        assert "No engineering substitute can advance these counts." in normalized_stage
 
 
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:
