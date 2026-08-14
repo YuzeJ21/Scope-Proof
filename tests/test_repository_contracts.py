@@ -1874,9 +1874,16 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"
     )
+    sprint = Path("docs/commercialization/design-partner-sprint.md").read_text(
+        encoding="utf-8"
+    )
+    positioning = Path("docs/commercialization/market-positioning-hypotheses.md").read_text(
+        encoding="utf-8"
+    )
 
     def section(document: str, start: str, end: str) -> str:
-        return document.split(start, maxsplit=1)[1].split(end, maxsplit=1)[0]
+        remainder = document.split(start, maxsplit=1)[1]
+        return remainder if not end else remainder.split(end, maxsplit=1)[0]
 
     stage_one = section(roadmap, "## Stage 1 — Genuine public alpha", "## Stage 2")
     stage_two = section(roadmap, "## Stage 2 — Commercial discovery", "## Stage 3")
@@ -1901,6 +1908,33 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     )
     discovery_guide = section(
         packet, "## Post-use discovery guide", "## Hypothesis ledger"
+    )
+    hypothesis_ledger = " ".join(
+        section(packet, "## Hypothesis ledger", "## Evidence-capture template").split()
+    )
+    evidence_template = " ".join(
+        section(packet, "## Evidence-capture template", "## Decision rules").split()
+    )
+    decision_rules = " ".join(
+        section(packet, "## Decision rules", "## Boundaries").split()
+    )
+    boundaries = " ".join(section(packet, "## Boundaries", "").split())
+    sprint_activation_gate = " ".join(
+        section(sprint, "## Stage 2 activation gate", "## Qualifying case").split()
+    )
+    sprint_queue = " ".join(
+        section(sprint, "## Ordered 30-day queue", "## Signals recorded").split()
+    )
+    sprint_price = " ".join(
+        section(
+            sprint,
+            "## Research-only price hypotheses",
+            "## Evidence that does not count",
+        ).split()
+    )
+    sprint_waiting = " ".join(section(sprint, "## Current waiting condition", "").split())
+    positioning_boundary = " ".join(
+        section(positioning, "## Commercial boundary", "").split()
     )
 
     assert "waiting_for_inbound_public_alpha_submission" in stage_one
@@ -1940,35 +1974,45 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
         "These questions remain dormant until every Stage 1 exit condition has genuine evidence "
         "and the owner separately authorizes Stage 2."
     ) in normalized_discovery_guide
-    for heading in (
-        "## Post-use discovery guide",
-        "## Hypothesis ledger",
-        "## Evidence-capture template",
-        "## Decision rules",
-        "## Boundaries",
-    ):
-        assert heading in packet
-    for required in (
-        "unknown",
-        "declined",
-        "not observed",
-        "USD 99 per team per month",
-        "USD 999 per team per year",
-        "research anchors only",
-        "Do not infer any signal from silence",
-        "No decision may be calculated while the qualifying denominator is zero",
-        "design-partner-sprint.md",
-        "market-positioning-hypotheses.md",
-    ):
-        assert required in packet
-    for forbidden_claim in (
-        "Stage 1 is complete",
-        "Stage 1 passed",
-        "Stage 2 is active",
-        "validated price",
-        "willingness to pay is validated",
-    ):
-        assert forbidden_claim not in packet
+    assert "each change requires attributable completed-use evidence" in hypothesis_ledger
+    assert "unknown" in hypothesis_ledger
+    assert "research anchors only" in hypothesis_ledger
+    assert "not active prices, offers, orders, invoices, purchase agreements" in hypothesis_ledger
+    assert "Independent-observation status and observer category" in evidence_template
+    assert "specific public evidence reference, or `not observed`" in evidence_template
+    assert (
+        "Self-reported completion time is `not observed` for the Stage 1 target"
+        in evidence_template
+    )
+    assert "Completed-review and validated-outcome references" in evidence_template
+    assert "Evidence source and status" in evidence_template
+    assert "Evaluation point: after each non-overlapping set of five qualifying" in decision_rules
+    assert "denominator is exactly five qualifying completed Stage 2 sessions" in decision_rules
+    assert "Precedence, highest first: Stop, Pivot, Narrow, Continue." in decision_rules
+    assert "fewer than 2 of 5" in decision_rules
+    assert "3 or more of 5" in decision_rules
+    assert "Default: hold" in decision_rules
+    assert (
+        "No decision may be calculated while the qualifying denominator is zero"
+        in decision_rules
+    )
+    assert "Do not infer any signal from silence" in boundaries
+    assert "does not resume Stage 1, activate Stage 2, authorize outreach" in boundaries
+    assert "contact or recruit a participant" in boundaries
+    assert "open a recruitment issue, post an announcement, start a recurring monitor" in boundaries
+    assert "private-repository support" in boundaries
+    assert "billing, checkout, subscription" in boundaries
+    assert "release, tag, or package publication" in boundaries
+    assert "Every Stage 1 exit target genuinely passes" in sprint_activation_gate
+    assert "separately authorizes Stage 2" in sprint_activation_gate
+    assert "discovery or price question" in sprint_activation_gate
+    assert "no discovery, reuse, or price question may be asked" in sprint_queue
+    assert "genuine product use alone is insufficient" in sprint_price
+    assert "every Stage 1 exit target genuinely passes" in sprint_price
+    assert "no discovery, reuse, or price questions" in sprint_waiting
+    assert "every Stage 1 exit target genuinely passes" in positioning_boundary
+    assert "separately authorizes Stage 2" in positioning_boundary
+    assert "Commercial discovery and price questions remain dormant" in positioning_boundary
 
 
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:

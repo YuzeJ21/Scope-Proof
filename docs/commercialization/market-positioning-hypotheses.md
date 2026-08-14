@@ -170,5 +170,5 @@ code review, security scanning, billing, or paid AI features.
 
 The existing USD 99 per team per month and USD 999 per team per year figures remain research-only
 price anchors in the design-partner sprint. They are not active prices, an offer for sale, or
-evidence of willingness to pay. Commercial discovery remains gated on genuine Stage 1 evidence and
-a separate owner decision.
+evidence of willingness to pay. Commercial discovery and price questions remain dormant until every
+Stage 1 exit target genuinely passes and the owner separately authorizes Stage 2.

@@ -1,12 +1,13 @@
 # ScopeProof 30-day Design Partner Sprint
 
-ScopeProof is testing whether independent reviewers get enough value from deterministic
-acceptance coverage to use it again and voluntarily discuss a possible team product. The current
-design-partner review is free, public-repository-only research. No paid product or billing is
-active.
+If Stage 2 is activated, ScopeProof will test whether independent reviewers get enough value from
+deterministic acceptance coverage to use it again and voluntarily discuss a possible team product.
+Any future design-partner review is free, public-repository-only research. No paid product or
+billing is active.
 
-The current external state is `waiting_for_inbound_public_alpha_submission`. This guide makes the
-next genuine case actionable; it does not create participant evidence by itself.
+The current external state is `waiting_for_inbound_public_alpha_submission`. This guide is dormant
+Stage 2 preparation; it does not create participant evidence or make a Stage 1 case actionable for
+discovery by itself.
 
 ## Current state
 
@@ -16,6 +17,13 @@ pull request, invent requirements, replace QA, or prove correctness.
 
 No qualifying completed participant case, repeat-use behavior, customer, revenue, validated
 price, or paid demand is currently claimed.
+
+## Stage 2 activation gate
+
+Every Stage 1 exit target genuinely passes and the owner separately authorizes Stage 2 before this
+guide may be used. Until both conditions hold, every discovery or price question remains dormant;
+one genuine use, a completed review, prepared material, engineering work, or elapsed time is
+insufficient. This gate does not authorize outreach.
 
 ## Qualifying case
 
@@ -36,14 +44,20 @@ participant-selected outcome are complete.
 
 ## Ordered 30-day queue
 
+After the Stage 2 activation gate passes, use this queue for qualifying public cases only. Before
+activation, no discovery, reuse, or price question may be asked.
+
 1. Accept only inbound cases that pass every public qualification requirement.
 2. Let the participant confirm the normalized criteria before analysis.
 3. Run the standard public PR → confirm criteria → review coverage → record decisions → export
    workflow without executing repository code.
 4. Bind the saved review to the exact head SHA and participant-selected outcome.
-5. Record timing, useful-gap category, decision impact, and friction after the review.
+5. Record independently observed timing only when an independent observer category and a specific
+   public evidence reference support it; otherwise record timing as `not observed`. Record the
+   useful-gap category, decision impact, and friction after the review.
 6. Ask about reuse only after the participant has inspected the completed result.
-7. Offer the optional research-only price question only after genuine product use.
+7. Offer the optional research-only price question only after the Stage 2 activation gate has
+   passed and genuine product use is complete.
 8. Preserve negative, incomplete, ambiguous, and no-new-information outcomes without rewriting
    them as success.
 9. Evaluate the evidence gates after five completed reviews; do not substitute elapsed time or
@@ -54,9 +68,13 @@ contact list, automate outreach, or add notification-only GitHub comments.
 
 ## Signals recorded only after a completed review
 
-Record the participant's explicit selection for:
+Record the participant's explicit selection for the non-timing fields below; record timing only
+with independent provenance:
 
-- completion time: under five minutes, five to ten minutes, or more than ten minutes;
+- completion time: under five minutes, five to ten minutes, or more than ten minutes, only when an
+  independent observer category and specific public evidence reference support it; otherwise
+  record `not observed`, and never credit self-reported time toward the Stage 1 under-ten-minute
+  target;
 - outcome: useful gap, already-known information, or product friction;
 - useful-gap category: missing implementation, weak or misleading evidence, missing test
   evidence, stale evidence after a new commit, unclear criteria, another attributable public
@@ -75,10 +93,11 @@ repositories, customer information, or confidential material.
 The two anchors are **USD 99 per team per month** and **USD 999 per team per year**. They are
 research hypotheses only, not active prices or an offer for sale.
 
-Discuss them only after a genuine participant completes a review. A response is voluntary, may be
-declined, and is not a purchase agreement, order, payment authorization, invoice request, or
-permission for sales contact. This sprint adds no checkout, subscription, billing, payment
-processor, commercial license, or license key.
+Discuss them only after every Stage 1 exit target genuinely passes, the owner separately authorizes
+Stage 2, and after a genuine participant completes a review; genuine product use alone is
+insufficient. A response is voluntary, may be declined, and is not a purchase agreement, order,
+payment authorization, invoice request, or permission for sales contact. This sprint adds no
+checkout, subscription, billing, payment processor, commercial license, or license key.
 
 ## Evidence that does not count
 
@@ -97,18 +116,10 @@ The following do not establish product or commercial validation:
 
 ## Continue, narrow, pivot, and stop gates
 
-Continue the public sprint while genuine participants find attributable gaps, understand the
-candidate-versus-decision boundary, and supply repeat-use intent without confirmed False Ready.
-
-Narrow the workflow if criteria confirmation or another single stage repeatedly consumes most of
-the session. Prioritize the observed stage instead of adding broad integrations.
-
-Pivot the positioning if reviewers consistently prefer a different job than acceptance coverage
-or cannot act on the resulting matrix.
-
-Stop rather than manufacture momentum if fewer than two of five completed sessions reveal a
-useful or decision-relevant result, nobody intends to bring another PR, or confirmed False Ready
-cannot remain zero.
+After activation, apply the deterministic [Stage 2 readiness packet decision
+rules](stage2-readiness-packet.md#decision-rules). This guide does not independently calculate a
+Continue, Narrow, Pivot, or Stop outcome. Missing, ambiguous, private, or inadequately proven
+evidence remains fail-closed and cannot justify continuation, scope change, or outreach.
 
 ## Local Pro decision gate
 
@@ -143,4 +154,5 @@ Until the evidence gate passes and the owner makes a separate decision, do not b
 
 Remain at `waiting_for_inbound_public_alpha_submission` until a non-owner participant supplies all
 qualifying public inputs, completes the review at an exact head SHA, and selects the honest
-outcome. Do not poll, send outreach, or create a synthetic substitute while waiting.
+outcome. Do not poll, send outreach, or create a synthetic substitute while waiting; no discovery,
+reuse, or price questions may be asked.

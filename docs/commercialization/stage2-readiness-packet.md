@@ -44,10 +44,10 @@ Do not ask for names, email addresses, employers, private repositories, confiden
 customer data, payment data, purchase authorization, or sales-contact permission. A participant
 may answer `declined`, and no positive or negative meaning may be inferred from that choice.
 
-The [30-day design-partner sprint](design-partner-sprint.md) remains the canonical future research
-workflow and stop-gate source. The
+The [30-day design-partner sprint](design-partner-sprint.md) restates this activation gate for its
+future research workflow. This packet owns deterministic decision evaluation. The
 [market-positioning hypotheses](market-positioning-hypotheses.md) remain hypotheses until genuine
-completed use supports, mixes, or disconfirms them.
+completed use supports, mixes, or disconfirms them; neither linked document can loosen this gate.
 
 ## Hypothesis ledger
 
@@ -63,7 +63,7 @@ Every hypothesis starts as `unknown`. The only allowed later states are `support
 | Attributable gaps or clearer changed-head decisions create recurring value | `unknown` | none |
 | Setup, criteria confirmation, public-only scope, unresolved output, or workflow cost is the dominant adoption risk | `unknown` | none |
 | A participant independently intends to reuse ScopeProof | `unknown` | none |
-| A participant voluntarily agrees to discuss the price hypothesis after use | `unknown` | none |
+| A participant voluntarily agrees to discuss the price hypothesis after Stage 2 activation | `unknown` | none |
 
 USD 99 per team per month and USD 999 per team per year are research anchors only. They are not
 active prices, offers, orders, invoices, purchase agreements, or payment requests.
@@ -79,8 +79,11 @@ answer as `declined`, and a measurement that did not occur as `not observed`.
 | Public case and exact reviewed head | Public case reference plus 40-character SHA | `unknown` |
 | Participant role category | Product, QA, engineering, or another attributable role category | `unknown` |
 | Source-owner confirmation | Public authority path for the confirmed criteria | `unknown` |
-| Completed review and outcome | Saved-review and validated-outcome references | `unknown` |
+| Completed-review and validated-outcome references | Public saved-review and validated-outcome references | `unknown` |
 | Completion-time band | Under five minutes, five to ten, over ten, or `not observed` | `not observed` |
+| Independent-observation status and observer category | `independently observed` plus an independent observer category, or `not observed` | `not observed` |
+| Completion-time evidence reference | A specific public evidence reference, or `not observed` | `not observed` |
+| Stage 1 timing-credit boundary | Self-reported completion time is `not observed` for the Stage 1 target | `not observed` |
 | Alternative workflow | Participant's explicit post-use response | `unknown` |
 | Attributable result | Useful gap, already-known information, friction, or no new information | `unknown` |
 | Decision impact | Changed, clarified, confirmed, no effect, or could not determine | `unknown` |
@@ -92,17 +95,37 @@ answer as `declined`, and a measurement that did not occur as `not observed`.
 
 ## Decision rules
 
-- **Continue** only while completed genuine use exposes attributable value, reviewers understand
-  the evidence boundary, and confirmed False Ready remains zero.
-- **Narrow** when one observed workflow stage repeatedly creates most material friction.
-- **Pivot** when participants consistently prefer a different job or existing alternatives are
-  sufficient.
-- **Stop** when fewer than two of five completed reviews are useful or decision-relevant, nobody
-  intends repeat use, or confirmed False Ready cannot remain zero.
+Evaluation point: after each non-overlapping set of five qualifying completed Stage 2 sessions.
+For a set to qualify, every session must have a public case and exact reviewed head, a
+completed-review and validated-outcome reference, and attributable participant evidence. The
+denominator is exactly five qualifying completed Stage 2 sessions. If any required evidence is
+missing, ambiguous, private, or self-reported where independent observation is required, the set
+does not qualify and no outcome is calculated.
+
+For a qualifying set, count a session as useful or decision-relevant only when its attributable
+completed-use evidence records either a useful gap or a changed, clarified, or confirmed decision.
+Count repeat-use intent only when the participant explicitly selects `Yes`; `unknown`, `declined`,
+silence, and `not observed` do not count. A confirmed False Ready is a participant-validated
+outcome that identifies an incorrect Ready verdict. A friction category, different-job preference,
+or sufficient existing alternative is repeated only when it is attributable completed-use evidence
+in 3 or more of 5 sessions.
+
+Precedence, highest first: Stop, Pivot, Narrow, Continue.
+
+1. **Stop** when confirmed False Ready is not zero, fewer than 2 of 5 sessions are useful or
+   decision-relevant, or zero of 5 participants explicitly select repeat-use intent `Yes`.
+2. **Pivot** when Stop does not apply and a different job is preferred or existing alternatives are
+   sufficient in 3 or more of 5 sessions.
+3. **Narrow** when neither Stop nor Pivot applies and one friction category occurs in 3 or more of
+   5 sessions.
+4. **Continue** when none of the higher-precedence outcomes applies, at least 2 of 5 sessions are
+   useful or decision-relevant, every participant explicitly records evidence-boundary
+   understanding as `Understood`, and confirmed False Ready is zero.
 
 No decision may be calculated while the qualifying denominator is zero. Activity metrics,
 prepared documents, owner opinions, silence, and elapsed time cannot supply a denominator or a
-signal.
+signal. Default: hold. A hold is fail-closed: do not continue, change scope, infer support, begin
+outreach, or treat the missing evidence as a favorable outcome.
 
 ## Boundaries
 
