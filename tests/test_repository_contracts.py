@@ -1901,6 +1901,35 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     assert "Every Stage 1 exit condition" in activation_gate
     assert "separate owner authorization" in activation_gate
     assert "docs/commercialization/stage2-readiness-packet.md" in stage_two
+    for heading in (
+        "## Post-use discovery guide",
+        "## Hypothesis ledger",
+        "## Evidence-capture template",
+        "## Decision rules",
+        "## Boundaries",
+    ):
+        assert heading in packet
+    for required in (
+        "unknown",
+        "declined",
+        "not observed",
+        "USD 99 per team per month",
+        "USD 999 per team per year",
+        "research anchors only",
+        "Do not infer any signal from silence",
+        "No decision may be calculated while the qualifying denominator is zero",
+        "design-partner-sprint.md",
+        "market-positioning-hypotheses.md",
+    ):
+        assert required in packet
+    for forbidden_claim in (
+        "Stage 1 is complete",
+        "Stage 1 passed",
+        "Stage 2 is active",
+        "validated price",
+        "willingness to pay is validated",
+    ):
+        assert forbidden_claim not in packet
 
 
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:
