@@ -1866,6 +1866,43 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
         assert "No engineering substitute can advance these counts." in normalized_stage
 
 
+def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+
+    def section(document: str, start: str, end: str) -> str:
+        return document.split(start, maxsplit=1)[1].split(end, maxsplit=1)[0]
+
+    stage_one = section(roadmap, "## Stage 1 — Genuine public alpha", "## Stage 2")
+    stage_two = section(roadmap, "## Stage 2 — Commercial discovery", "## Stage 3")
+    current_status = section(packet, "## Current status", "## Activation gate")
+    activation_gate = section(
+        packet, "## Activation gate", "## Post-use discovery guide"
+    )
+
+    assert "waiting_for_inbound_public_alpha_submission" in stage_one
+    assert "Owner operating posture: Stage 1 is paused" in stage_one
+    for count in (
+        "0/5 qualifying reviews",
+        "0/3 independent practitioners",
+        "0/3 public repositories",
+        "0/3 independently observed under-ten-minute completions",
+        "0/2 reuse-intent signals",
+    ):
+        assert count in stage_one
+        assert count in current_status
+    assert "not a validated False Ready rate" in stage_one
+    assert "Stage 2 readiness materials only; Stage 2 has not begun" in stage_two
+    assert "Stage 2 cannot begin until every Stage 1 target is satisfied." in stage_two
+    assert "separate owner authorization" in stage_two
+    assert "does not authorize outreach" in current_status
+    assert "Every Stage 1 exit condition" in activation_gate
+    assert "separate owner authorization" in activation_gate
+    assert "docs/commercialization/stage2-readiness-packet.md" in stage_two
+
+
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:
     historical_audits = (
         Path("docs/audits/exact-head-runtime-evidence/verification.md"),

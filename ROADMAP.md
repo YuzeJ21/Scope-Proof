@@ -219,6 +219,9 @@ Status: `waiting_for_inbound_public_alpha_submission`; Stage 1 remains zero.
 The Stage 0 engineering foundation is restored, but no genuine qualifying
 submission exists.
 
+Owner operating posture: Stage 1 is paused. Pausing changes no measured count, satisfies no exit
+condition, and does not authorize outreach or activate Stage 2.
+
 Current measured state:
 
 - 0/5 qualifying reviews.
@@ -226,8 +229,8 @@ Current measured state:
 - 0/3 public repositories.
 - 0/3 independently observed under-ten-minute completions.
 - 0/2 reuse-intent signals.
-- Zero participant False Ready observations across zero participant reviews; this is not a
-  validated False Ready rate.
+- Zero participant False Ready observations across zero participant reviews; this is
+  not a validated False Ready rate.
 
 All exit conditions are required:
 
@@ -268,11 +271,18 @@ Stage 1 outreach, keep the following distinctions explicit:
 Status: gated; do not begin commercial claims or productization until every Stage 1 condition is
 met.
 
+Owner operating posture: Stage 2 readiness materials only; Stage 2 has not begun. The
+[Stage 2 readiness packet](docs/commercialization/stage2-readiness-packet.md) prepares dormant
+post-use research materials and creates no stage credit.
+
 Entry requires every Stage 1 condition. The current free, public-repository-only design-partner
 review remains research; no paid product or billing is active.
 
 Stage 2 cannot begin until every Stage 1 target is satisfied. No engineering substitute can
 advance these counts.
+
+Stage 2 activation additionally requires separate owner authorization after every Stage 1 target
+is satisfied.
 
 All exit conditions are required before considering a separate Local Pro product decision:
 
