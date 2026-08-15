@@ -95,7 +95,8 @@ unavailable answer as `unknown`, a refused answer as `declined`, and an unobserv
 No optional-discovery decision may be calculated while the qualifying denominator is zero. If
 optional discovery is authorized later, create one canonical qualification record for each
 qualifying completed session. The record contains `qualified_at_utc`, `feedback_issue_number`, and
-an immutable digest or public reference for the evidence snapshot used at qualification.
+`evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
+mutable public reference does not qualify; keep any source URL only as non-authoritative context.
 
 Order qualification records by `(qualified_at_utc, feedback_issue_number) ascending` and allocate
 them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
@@ -104,10 +105,20 @@ correction requires a new qualification record and is assigned only to the next 
 there are fewer than five unassigned qualifying records, the next cohort remains on hold and no
 optional-discovery decision is calculated.
 
+Useful or decision-relevant is true only when the participant selects
+`Found a useful previously unknown gap`, `Changed my review decision`, or
+`Clarified my review decision`. `Confirmed an existing review decision` does not count; neither do
+already-known information, friction alone, no effect, an indeterminate decision, missing, or
+ambiguous responses.
+
+Affirmative repeat use is true only when the participant selects
+`Yes, I intend to use ScopeProof on another PR`. `No`, `Unsure`, `Prefer not to answer`, missing,
+and ambiguous responses do not count.
+
 Precedence, highest first: Stop, Pivot, Narrow, Continue.
 
 1. **Stop** for any confirmed False Ready, fewer than 2 of 5 useful or decision-relevant sessions,
-   or zero explicit repeat-use responses.
+   or zero explicit affirmative repeat-use responses.
 2. **Pivot** when Stop does not apply and 3 or more of 5 sessions prefer a different job or find
    existing alternatives sufficient.
 3. **Narrow** when neither higher rule applies and one friction category occurs in 3 or more of 5.

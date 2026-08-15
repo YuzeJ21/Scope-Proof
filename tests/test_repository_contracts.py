@@ -2458,7 +2458,7 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
     for required in (
         "qualified_at_utc",
         "feedback_issue_number",
-        "evidence snapshot",
+        "evidence_snapshot_sha256",
         "(qualified_at_utc, feedback_issue_number) ascending",
         "positions 1\u20135, 6\u201310",
         "Freeze a cohort when its fifth member is assigned",
@@ -2466,6 +2466,43 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
         "material correction requires a new qualification record",
         "fewer than five unassigned qualifying records",
         "no optional-discovery decision is calculated",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_qualification_binds_an_immutable_evidence_snapshot() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.split())
+
+    assert "evidence_snapshot_sha256" in normalized
+    assert "SHA-256 digest of the evidence snapshot used at qualification" in normalized
+    assert "A mutable public reference does not qualify" in normalized
+
+
+def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.replace("`", "").split())
+
+    for required in (
+        "Useful or decision-relevant is true only when",
+        "Found a useful previously unknown gap",
+        "Changed my review decision",
+        "Clarified my review decision",
+        "Confirmed an existing review decision does not count",
+        "Affirmative repeat use is true only when",
+        "Yes, I intend to use ScopeProof on another PR",
+        "No, Unsure, Prefer not to answer, missing, and ambiguous responses do not count",
+        "zero explicit affirmative repeat-use responses",
     ):
         assert required in normalized
 
