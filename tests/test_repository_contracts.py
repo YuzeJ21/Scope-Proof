@@ -2640,6 +2640,7 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
         "schema_version",
         "alpha_case_id",
         "review_id",
+        "saved_review_state_sha256",
         "public_pr_url",
         "reviewed_head_sha",
         "requirements_source_url",
@@ -2717,6 +2718,24 @@ def test_optional_discovery_snapshot_binds_the_exact_requirements_source() -> No
         "must exactly equal the saved review's validated criteria-source provenance",
         "A changed source revision or source-text digest changes the snapshot digest",
         "even when the requirements URL and normalized ordered criteria are unchanged",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_snapshot_binds_the_exact_saved_review_state() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "saved_review_state_sha256 is StrictStr matching ^[0-9a-f]{64}$",
+        "JsonReviewStore.state_fingerprint",
+        'sha256(validated_review_state(state).model_dump_json().encode("utf-8")).hexdigest()',
+        "hold the review store's mutation lock",
+        "must exactly equal a fresh fingerprint of the validated saved ReviewState",
+        "A later resolution, runtime-evidence, final-acceptance, or other saved-state transition",
+        "invalidates the qualification until it is revalidated",
     ):
         assert required in normalized
 

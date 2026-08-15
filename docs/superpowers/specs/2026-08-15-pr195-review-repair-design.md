@@ -88,6 +88,12 @@ provenance. The nullable revision and exact source-text digest are canonical fie
 the requirements source snapshot changes the evidence digest even when normalization produces the
 same ordered criteria.
 
+The snapshot also includes `saved_review_state_sha256`, calculated through the existing
+`JsonReviewStore.state_fingerprint` contract from the complete validated `ReviewState`. Future
+qualification holds the review mutation lock across load, fingerprint, snapshot validation, and
+atomic qualification persistence. Revalidation compares a fresh state fingerprint so lifecycle
+mutations under the same `review_id` invalidate stale qualification evidence.
+
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. An initially incomplete or mismatched submission uses the later atomic
 transition that first passes every qualification rule, never the submission, issue-creation, or

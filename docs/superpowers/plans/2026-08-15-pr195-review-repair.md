@@ -37,11 +37,15 @@
   field types and exact JSON representations, with every field required, no aliases or defaults,
   and no coercion or hidden URL/datetime normalization.
 - That snapshot includes `requirements_source_revision`, `requirements_source_text_sha256`,
-  `timing_public_evidence_content_sha256`, `confirmed_criteria_sha256`, the complete ordered
+  `saved_review_state_sha256`, `timing_public_evidence_content_sha256`,
+  `confirmed_criteria_sha256`, the complete ordered
   `checked_must_have_criterion_ids`, `participant_false_ready_attestation`, and
   `source_owner_false_ready_attestation`; requirements provenance must exactly match the saved
   review, the attestations use exact canonical `Literal` values, and semantic prose, derived enums,
   normalized criteria alone, and mutable URLs alone do not qualify.
+- The saved-review digest uses `JsonReviewStore.state_fingerprint` while the review mutation lock
+  is held across load, fingerprint, snapshot validation, and atomic qualification persistence; a
+  later lifecycle transition under the same review ID invalidates stale qualification evidence.
 - Timing content hashing follows the packet's bounded unauthenticated GitHub Issue API fetch and
   strict `TimingPublicEvidenceV1` canonical JSON projection; never hash raw HTTP bytes, HTML,
   headers, redirects, or transfer encoding.

@@ -130,7 +130,7 @@ this document alone; do not enable feedback matching.
 No optional-discovery decision may be calculated while the qualifying denominator is zero. If
 optional discovery is authorized later, create one canonical qualification record for each
 qualifying completed session. The record contains the immutable local `alpha_case_id` and
-`review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
+`review_id`, `saved_review_state_sha256`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
 `alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_number`, and
 `evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
 mutable public reference does not qualify; keep any other source URL only as non-authoritative
@@ -179,7 +179,7 @@ the model has no aliases and no defaults. Its exact strict field types and JSON 
   and must contain non-whitespace text; the exact validated string is serialized, while absence is
   JSON `null`. `requirements_source_text_sha256` is `StrictStr` matching `^[0-9a-f]{64}$`.
 - `reviewed_head_sha` is `StrictStr` matching `^[0-9a-f]{40}$`.
-  `requirements_source_text_sha256`, `confirmed_criteria_sha256`, and
+  `saved_review_state_sha256`, `requirements_source_text_sha256`, `confirmed_criteria_sha256`, and
   `timing_public_evidence_content_sha256` are `StrictStr` matching `^[0-9a-f]{64}$`.
 - `feedback_issue_number` is `StrictInt` from 1 through 2,147,483,647; Boolean values are rejected.
 - `qualified_at_utc` is `StrictStr` in exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ`. A field validator
@@ -213,6 +213,17 @@ review's validated criteria-source provenance and ordered confirmed-criteria dig
 source revision or source-text digest changes the snapshot digest, even when the requirements URL
 and normalized ordered criteria are unchanged. Missing or mismatched provenance keeps the record
 on hold.
+
+`saved_review_state_sha256` is `StrictStr` matching `^[0-9a-f]{64}$` and uses the existing
+`JsonReviewStore.state_fingerprint` contract exactly:
+`sha256(validated_review_state(state).model_dump_json().encode("utf-8")).hexdigest()`. The future
+qualification transition must hold the review store's mutation lock across loading the saved
+`ReviewState`, calculating this fingerprint, validating the complete evidence snapshot, and
+atomically persisting the qualification record. At qualification and every revalidation,
+`saved_review_state_sha256` must exactly equal a fresh fingerprint of the validated saved
+`ReviewState`. A later resolution, runtime-evidence, final-acceptance, or other saved-state
+transition changes that fingerprint and invalidates the qualification until it is revalidated;
+the same `review_id` never substitutes for state identity.
 
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. For an initially incomplete or mismatched submission, use the later atomic
