@@ -112,9 +112,11 @@ calculated.
 
 Useful or decision-relevant is true only when the participant selects
 `Found a useful previously unknown gap`, `Changed my review decision`, or
-`Clarified my review decision`. `Confirmed an existing review decision` does not count; neither do
-already-known information, friction alone, no effect, an indeterminate decision, missing, or
-ambiguous responses.
+`Clarified my review decision`. `Found a useful previously unknown gap` counts only when
+`useful_gap_category` is not `No new useful gap`. Any contradiction between `outcome` and
+`useful_gap_category` keeps the record on hold and is not counted. `Confirmed an existing review
+decision` does not count; neither do already-known information, friction alone, no effect, an
+indeterminate decision, missing, or ambiguous responses.
 
 Affirmative repeat use is true only when the participant selects
 `Yes, I intend to use ScopeProof on another PR`. `No`, `Unsure`, `Prefer not to answer`, missing,

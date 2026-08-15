@@ -95,7 +95,7 @@ body:
     id: useful_gap_category
     attributes:
       label: Useful-gap category
-      description: Select the closest attributable result, including no new useful gap.
+      description: Select the closest attributable result. If the review outcome says a useful previously unknown gap was found, do not select No new useful gap; contradictory selections are held as incomplete evidence.
       options:
         - Missing implementation evidence
         - Weak or misleading candidate evidence

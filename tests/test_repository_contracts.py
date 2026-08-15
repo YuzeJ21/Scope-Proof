@@ -2524,6 +2524,27 @@ def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -
         assert required in normalized
 
 
+def test_optional_discovery_holds_contradictory_useful_gap_inputs() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert (
+        "Found a useful previously unknown gap counts only when useful_gap_category is not "
+        "No new useful gap"
+        in normalized
+    )
+    assert (
+        "Any contradiction between outcome and useful_gap_category keeps the record on hold"
+        in normalized
+    )
+    assert (
+        normalized.index("Any contradiction between outcome and useful_gap_category")
+        < normalized.index("Precedence, highest first")
+    )
+
+
 def test_optional_discovery_continue_requires_every_member_to_understand_boundary() -> None:
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"
