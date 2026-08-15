@@ -135,6 +135,11 @@ conflicting acceptance evidence at that head; and `evidence_snapshot_sha256` bin
 confirmation record. Any missing condition classifies the record as `unknown`, never
 `not_confirmed`. A Ready gate by itself is not a False Ready observation.
 
+`participant_false_ready` is `not_confirmed` only when the exact-head final gate is not Ready, or a
+Ready result has both an explicit participant no-False-Ready statement and source-owner
+confirmation after checking every must-have criterion. `evidence_snapshot_sha256` binds that
+negative confirmation. Otherwise classify `unknown`.
+
 Continue requires all 5 of 5 `participant_false_ready` values to be `not_confirmed`. A `confirmed`
 value triggers Stop; `unknown` keeps the cohort on hold.
 
@@ -143,7 +148,10 @@ Narrow-positive friction category is one of `installation_or_setup`, `criteria_c
 `other_material_friction`. `none`, `unknown`, and `declined` do not count toward Narrow. Narrow
 requires the same Narrow-positive `friction_category` in at least 3 of 5 complete records.
 
-Before applying Stop, Pivot, Narrow, or Continue, all five records must have complete bounded
+Evaluate confirmed participant False Ready before the completeness precondition. Any `confirmed`
+record returns Stop immediately even when other cohort records are incomplete, `unknown`, or
+`declined`. If no record is `confirmed`, before applying the remaining Stop predicates, Pivot,
+Narrow, or Continue, all five records must have complete bounded
 decision inputs for outcome, decision impact, reuse response, alternative workflow,
 `friction_category`,
 evidence-boundary understanding, `participant_false_ready`, and `evidence_snapshot_sha256`. Any

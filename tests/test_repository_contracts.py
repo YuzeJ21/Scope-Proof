@@ -2617,8 +2617,8 @@ def test_optional_discovery_decisions_require_five_complete_records() -> None:
     ):
         assert field in normalized
     assert (
-        "before applying stop, pivot, narrow, or continue, all five records must have complete "
-        "bounded decision inputs"
+        "before applying the remaining stop predicates, pivot, narrow, or continue, all five "
+        "records must have complete bounded decision inputs"
         in normalized
     )
     assert (
@@ -2626,6 +2626,40 @@ def test_optional_discovery_decisions_require_five_complete_records() -> None:
         "on hold; do not evaluate stop"
         in normalized
     )
+
+
+def test_confirmed_false_ready_bypasses_the_completeness_hold() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert (
+        "Evaluate confirmed participant False Ready before the completeness precondition"
+        in normalized
+    )
+    assert (
+        "Any confirmed record returns Stop immediately even when other cohort records are "
+        "incomplete, unknown, or declined"
+        in normalized
+    )
+
+
+def test_not_confirmed_false_ready_has_an_affirmative_evidence_predicate() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "participant_false_ready is not_confirmed only when",
+        "the exact-head final gate is not Ready",
+        "or a Ready result has both an explicit participant no-False-Ready statement",
+        "and source-owner confirmation after checking every must-have criterion",
+        "evidence_snapshot_sha256 binds that negative confirmation",
+        "Otherwise classify unknown",
+    ):
+        assert required in normalized
 
 
 def test_optional_discovery_narrow_uses_bounded_friction_categories() -> None:
