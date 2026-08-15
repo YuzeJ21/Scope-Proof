@@ -130,7 +130,8 @@ this document alone; do not enable feedback matching.
 No optional-discovery decision may be calculated while the qualifying denominator is zero. If
 optional discovery is authorized later, create one canonical qualification record for each
 qualifying completed session. The record contains the immutable local `alpha_case_id` and
-`review_id`, `saved_review_state_sha256`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
+`review_id`, `saved_review_state_sha256`, `public_pr_url`, `reviewed_head_sha`,
+`requirements_source_url`,
 `alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_number`, and
 `evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
 mutable public reference does not qualify; keep any other source URL only as non-authoritative
@@ -139,7 +140,8 @@ context.
 The separately authorized runtime boundary must define a Pydantic model named
 `OptionalDiscoveryEvidenceSnapshotV1` with `extra="forbid"`. It contains exactly these fields and no
 others: `schema_version` fixed to `optional-discovery-evidence-snapshot-v1`, `alpha_case_id`,
-`review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
+`review_id`, `saved_review_state_sha256`, `public_pr_url`, `reviewed_head_sha`,
+`requirements_source_url`,
 `requirements_source_revision`, `requirements_source_text_sha256`, `alpha_case_issue_url`,
 `qualified_at_utc`, `feedback_issue_number`, `outcome`,
 `final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`,

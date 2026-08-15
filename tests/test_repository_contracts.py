@@ -2636,6 +2636,9 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
     )
     assert "OptionalDiscoveryEvidenceSnapshotV1" in normalized
     assert "contains exactly these fields and no others" in normalized
+    snapshot_fields = normalized.split(
+        "contains exactly these fields and no others:", maxsplit=1
+    )[1].split("evidence_snapshot_sha256 is not part of the snapshot payload", maxsplit=1)[0]
     for field in (
         "schema_version",
         "alpha_case_id",
@@ -2670,7 +2673,7 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
         "evidence_boundary_understanding",
         "participant_false_ready",
     ):
-        assert field in normalized
+        assert field in snapshot_fields
     assert "evidence_snapshot_sha256 is not part of the snapshot payload" in normalized
     assert "sort_keys=True" in normalized
     assert 'separators=(",", ":")' in normalized
