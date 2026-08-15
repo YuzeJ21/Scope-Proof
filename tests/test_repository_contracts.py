@@ -2446,6 +2446,30 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
     assert "cannot upgrade a Not independently observed selection" in template
 
 
+def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.split())
+
+    for required in (
+        "qualified_at_utc",
+        "feedback_issue_number",
+        "evidence snapshot",
+        "(qualified_at_utc, feedback_issue_number) ascending",
+        "positions 1–5, 6–10",
+        "Freeze a cohort when its fifth member is assigned",
+        "cannot reorder, replace, or repartition a frozen cohort",
+        "material correction requires a new qualification record",
+        "fewer than five unassigned qualifying records",
+        "no optional-discovery decision is calculated",
+    ):
+        assert required in normalized
+
+
 def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -> None:
     quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
     readme = Path("README.md").read_text(encoding="utf-8")

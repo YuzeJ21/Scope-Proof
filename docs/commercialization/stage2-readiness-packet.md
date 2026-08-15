@@ -93,8 +93,16 @@ unavailable answer as `unknown`, a refused answer as `declined`, and an unobserv
 ## Optional-discovery decision rules
 
 No optional-discovery decision may be calculated while the qualifying denominator is zero. If
-optional discovery is authorized later, evaluate only non-overlapping sets of five qualifying
-completed sessions with attributable evidence.
+optional discovery is authorized later, create one canonical qualification record for each
+qualifying completed session. The record contains `qualified_at_utc`, `feedback_issue_number`, and
+an immutable digest or public reference for the evidence snapshot used at qualification.
+
+Order qualification records by `(qualified_at_utc, feedback_issue_number) ascending` and allocate
+them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
+member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort. A material
+correction requires a new qualification record and is assigned only to the next open cohort. When
+there are fewer than five unassigned qualifying records, the next cohort remains on hold and no
+optional-discovery decision is calculated.
 
 Precedence, highest first: Stop, Pivot, Narrow, Continue.
 
