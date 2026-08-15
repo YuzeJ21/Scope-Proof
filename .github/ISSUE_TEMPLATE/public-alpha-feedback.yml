@@ -37,6 +37,22 @@ body:
     validations:
       required: true
   - type: input
+    id: alpha_case_id
+    attributes:
+      label: Local alpha case ID
+      description: Copy the generated alpha case ID bound to the validated local outcome.
+      placeholder: alpha-0123456789abcdef0123456789abcdef
+    validations:
+      required: true
+  - type: input
+    id: review_id
+    attributes:
+      label: Saved local review ID
+      description: Copy the saved review ID bound to the validated local outcome.
+      placeholder: review-123
+    validations:
+      required: true
+  - type: input
     id: reviewed_head_sha
     attributes:
       label: Reviewed head SHA
@@ -157,4 +173,6 @@ body:
         - label: I included no credentials, private data, customer information, or confidential material.
           required: true
         - label: I understand this issue counts only with a completed genuine review and participant-selected outcome.
+          required: true
+        - label: I understand ScopeProof is an evidence assistant, not a correctness oracle; implementation evidence is not test or runtime verification, and static candidates do not prove acceptance.
           required: true

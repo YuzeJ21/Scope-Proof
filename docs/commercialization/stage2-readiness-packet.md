@@ -108,7 +108,7 @@ or multiply selected value rather than normalizing it heuristically.
 | `reuse_response` | `yes`, `no`, `unsure`, `declined` | `Yes, I intend to use ScopeProof on another PR` -> `yes`; `No` -> `no`; `Unsure` -> `unsure`; `Prefer not to answer` -> `declined` |
 | `alternative_workflow` | `prefer_different_job`, `existing_alternative_sufficient`, `current_job_and_tool_gap`, `unknown`, `declined` | No current public-form field; require a separate explicit bounded selection |
 | `friction_category` | `installation_or_setup`, `criteria_confirmation`, `evidence_quality`, `runtime_verification`, `decision_or_export`, `comparison_or_rereview`, `other_material_friction`, `none`, `unknown`, `declined` | No direct public-form mapping. Free-text friction is non-authoritative context and cannot populate `friction_category`; require a separate explicit bounded selection |
-| `evidence_boundary_understanding` | `understood`, `misunderstood`, `unsure`, `declined` | The required checked public evidence-boundary statement maps to `understood`; do not infer any other value without a separate explicit bounded selection |
+| `evidence_boundary_understanding` | `understood`, `misunderstood`, `unsure`, `declined` | `I understand ScopeProof is an evidence assistant, not a correctness oracle; implementation evidence is not test or runtime verification, and static candidates do not prove acceptance.` -> `understood`; do not infer any other value without a separate explicit bounded selection |
 | `participant_false_ready` | `confirmed`, `not_confirmed`, `unknown` | Derive only through the evidence predicates below; never map a direct form label |
 
 ## Optional-discovery decision rules
@@ -122,9 +122,11 @@ records or calculate cohort decisions from this document alone.
 No optional-discovery decision may be calculated while the qualifying denominator is zero. If
 optional discovery is authorized later, create one canonical qualification record for each
 qualifying completed session. The record contains the immutable local `alpha_case_id` and
-`review_id`, `qualified_at_utc`, `feedback_issue_number`, and `evidence_snapshot_sha256`, the
-SHA-256 digest of the evidence snapshot used at qualification. A mutable public reference does not
-qualify; keep any source URL only as non-authoritative context.
+`review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
+`alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`, and
+`evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
+mutable public reference does not qualify; keep any other source URL only as non-authoritative
+context.
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. For an initially incomplete or mismatched submission, use the later atomic
 transition that first passes every qualification rule, never the submission, issue-creation, or
@@ -135,6 +137,10 @@ public feedback `outcome` matches it exactly after this fixed mapping:
 `showed_only_known_information` maps to `Produced only already-known information`, and
 `created_friction` maps to `Created material product friction`. A missing or different public value
 keeps the qualification record on hold and is not counted.
+The feedback issue's `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`,
+`requirements_source_url`, and `alpha_case_issue_number` must exactly match the validated local
+alpha case and saved review. Any identity, head, PR, source, or case-issue mismatch keeps the
+qualification record on hold and is not counted.
 
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
 appears in any qualification record. Order the remaining qualification records by
@@ -147,7 +153,8 @@ replace, or repartition a frozen cohort.
 Corrections annotate the original qualification record and do not create a new cohort member. The
 same completed session can appear in at most one cohort. Any post-freeze change to a canonical
 qualification or decision field invalidates the affected cohort. Canonical fields are
-`alpha_case_id`, `review_id`, `qualified_at_utc`, `feedback_issue_number`,
+`alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
+`alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`,
 `evidence_snapshot_sha256`, outcome,
 `useful_gap_category`, decision impact, reuse response, alternative workflow, `friction_category`,
 evidence-boundary understanding, and `participant_false_ready`. Non-authoritative context or typo

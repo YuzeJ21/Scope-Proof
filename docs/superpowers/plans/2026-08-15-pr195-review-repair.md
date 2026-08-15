@@ -19,6 +19,9 @@
 - Follow the packet's exact canonical enum and public-label mappings. Decision predicates evaluate
   canonical values, never display labels, and free-text friction cannot populate
   `friction_category`.
+- At qualification, every identity, head, PR, source, and case-issue field must match exactly
+  between the feedback issue and validated local record. The explicit evidence-boundary attestation
+  maps to `understood`; a generic eligibility checkbox does not.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
 - Preserve the unrelated untracked `.coverage 2` byte-for-byte and never stage it.

@@ -59,6 +59,11 @@ Every other decision field follows the packet's exact canonical enum and public-
 Decision predicates evaluate canonical values, never display labels, and free-text friction cannot
 populate `friction_category`.
 
+At qualification, every identity, head, PR, source, and case-issue field must match exactly between
+the feedback issue and the validated local alpha case and saved review. The explicit
+evidence-boundary attestation maps to `understood`; a generic completed-review eligibility checkbox
+does not.
+
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
 appears in any qualification record. This makes the existing one-session-only rule enforceable even
 when duplicate public feedback issues are submitted.

@@ -2514,6 +2514,11 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert canonical_predicates in normalized_plan
     assert "free-text friction cannot populate friction_category" in normalized_design
     assert "free-text friction cannot populate friction_category" in normalized_plan
+    exact_binding = "every identity, head, PR, source, and case-issue field must match exactly"
+    assert exact_binding in normalized_design
+    assert exact_binding in normalized_plan
+    assert "explicit evidence-boundary attestation maps to understood" in normalized_design
+    assert "explicit evidence-boundary attestation maps to understood" in normalized_plan
     for required in (
         "Reject a new qualification record before ordering",
         "same completed session can appear in at most one cohort",
@@ -2687,6 +2692,41 @@ def test_optional_discovery_decision_fields_have_canonical_enum_mappings() -> No
         assert mapping in normalized
     assert "Free-text friction is non-authoritative context" in normalized
     assert "cannot populate friction_category" in normalized
+
+
+def test_optional_feedback_binds_the_exact_local_review_and_attests_the_boundary() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for field_id in ("alpha_case_id", "review_id"):
+        block = template.split(f"id: {field_id}", maxsplit=1)[1].split(
+            "- type:", maxsplit=1
+        )[0]
+        assert "required: true" in block
+    attestation = (
+        "I understand ScopeProof is an evidence assistant, not a correctness oracle; "
+        "implementation evidence is not test or runtime verification, and static candidates "
+        "do not prove acceptance."
+    )
+    assert attestation in template
+    assert f"{attestation} -> understood" in normalized
+    for field in (
+        "alpha_case_id",
+        "review_id",
+        "public_pr_url",
+        "reviewed_head_sha",
+        "requirements_source_url",
+        "alpha_case_issue_number",
+    ):
+        assert field in normalized
+    assert "must exactly match the validated local alpha case and saved review" in normalized
+    assert "Any identity, head, PR, source, or case-issue mismatch" in normalized
+    assert "keeps the qualification record on hold and is not counted" in normalized
 
 
 def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:
