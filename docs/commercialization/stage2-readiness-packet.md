@@ -106,6 +106,10 @@ qualifying completed session. The record contains the immutable local `alpha_cas
 `review_id`, `qualified_at_utc`, `feedback_issue_number`, and `evidence_snapshot_sha256`, the
 SHA-256 digest of the evidence snapshot used at qualification. A mutable public reference does not
 qualify; keep any source URL only as non-authoritative context.
+`qualified_at_utc` is the UTC commit time of the first successful validated transition from not
+qualified to qualified. For an initially incomplete or mismatched submission, use the later atomic
+transition that first passes every qualification rule, never the submission, issue-creation, or
+draft-record time. Once assigned, `qualified_at_utc` is immutable.
 At qualification, derive canonical `outcome` from the validated local outcome record and verify the
 public feedback `outcome` matches it exactly after this fixed mapping:
 `found_useful_gap` maps to `Found a useful previously unknown gap`,
@@ -115,9 +119,12 @@ keeps the qualification record on hold and is not counted.
 
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
 appears in any qualification record. Order the remaining qualification records by
-`(qualified_at_utc, feedback_issue_number) ascending` and allocate
-them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
-member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort.
+`(qualified_at_utc, feedback_issue_number) ascending`. Do not assign partial cohort membership.
+When at least five eligible unassigned records exist, select the first five in canonical order,
+assign positions, and freeze the cohort atomically. Consecutive frozen cohorts occupy positions
+1–5, 6–10, and so on. A pre-freeze correction revalidates the record in the unassigned pool; an
+invalid record remains on hold and is not eligible for atomic selection. Later edits cannot reorder,
+replace, or repartition a frozen cohort.
 Corrections annotate the original qualification record and do not create a new cohort member. The
 same completed session can appear in at most one cohort. Any post-freeze change to a canonical
 qualification or decision field invalidates the affected cohort. Canonical fields are

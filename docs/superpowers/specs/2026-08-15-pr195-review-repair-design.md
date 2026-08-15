@@ -43,6 +43,11 @@ Each optional-discovery session receives a canonical qualification record contai
 - an `evidence_snapshot_sha256` field containing the SHA-256 digest of the evidence snapshot used
   for qualification.
 
+`qualified_at_utc` is the UTC commit time of the first successful validated transition from not
+qualified to qualified. An initially incomplete or mismatched submission uses the later atomic
+transition that first passes every qualification rule, never the submission, issue-creation, or
+draft-record time. Once assigned, `qualified_at_utc` is immutable.
+
 Any future qualification boundary must derive canonical `outcome` from the validated local outcome
 record and verify that the public feedback `outcome` matches it exactly. The fixed mapping is
 `found_useful_gap` maps to `Found a useful previously unknown gap`,
@@ -54,12 +59,14 @@ Reject a new qualification record before ordering if its `alpha_case_id` or `rev
 appears in any qualification record. This makes the existing one-session-only rule enforceable even
 when duplicate public feedback issues are submitted.
 
-Order qualifying sessions by `(qualified_at_utc, feedback_issue_number)` ascending. Allocate the
-ordered stream once into consecutive cohorts of five: positions 1–5, 6–10, and so on. Freeze a
-cohort when its fifth member is assigned. Later edits cannot reorder, replace, or repartition a
-frozen cohort. Corrections annotate the original qualification record and never create another
-cohort member. Any post-freeze change to a canonical qualification or decision field invalidates
-the affected cohort and keeps it on hold. A correction whose revalidated
+Order qualifying sessions by `(qualified_at_utc, feedback_issue_number)` ascending. Do not assign
+partial cohort membership. When five eligible unassigned records exist, select the first five in
+canonical order, assign positions, and freeze the cohort atomically. A pre-freeze correction
+revalidates the record in the unassigned pool; an invalid record remains on hold and is not eligible
+for selection. Later edits cannot reorder, replace, or repartition a frozen cohort. Corrections
+annotate the original qualification record and never create another cohort member. Any post-freeze
+change to a canonical qualification or decision field invalidates the affected cohort and keeps it
+on hold. A correction whose revalidated
 `participant_false_ready` becomes `confirmed` is exempt from this invalidation hold and returns
 Stop immediately, preserving the highest-precedence False Ready rule. Until five unassigned
 qualifying records exist, the next cohort remains on hold and no optional-discovery decision is

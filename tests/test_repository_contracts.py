@@ -2499,6 +2499,13 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert "review_id" in normalized_plan
     assert "confirmed-False-Ready invalidation exception" in normalized_plan
     assert "friction-outcome consistency" in normalized_plan
+    qualification_transition = (
+        "first successful validated transition from not qualified to qualified"
+    )
+    assert qualification_transition in normalized_design
+    assert qualification_transition in normalized_plan
+    assert "Do not assign partial cohort membership" in normalized_design
+    assert "Do not assign partial cohort membership" in normalized_plan
     for required in (
         "Reject a new qualification record before ordering",
         "same completed session can appear in at most one cohort",
@@ -2558,11 +2565,17 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
         "alpha_case_id",
         "review_id",
         "qualified_at_utc",
+        "first successful validated transition from not qualified to qualified",
+        "never the submission, issue-creation, or draft-record time",
+        "Once assigned, qualified_at_utc is immutable",
         "feedback_issue_number",
         "evidence_snapshot_sha256",
         "(qualified_at_utc, feedback_issue_number) ascending",
         "positions 1\u20135, 6\u201310",
-        "Freeze a cohort when its fifth member is assigned",
+        "Do not assign partial cohort membership",
+        "select the first five in canonical order, assign positions, and freeze the cohort "
+        "atomically",
+        "A pre-freeze correction revalidates the record in the unassigned pool",
         "cannot reorder, replace, or repartition a frozen cohort",
         "fewer than five unassigned qualifying records",
         "no optional-discovery decision is calculated",

@@ -130,7 +130,8 @@ git commit -m "docs: make optional timing evidence fail closed"
   (`alpha_case_id`, `review_id`, `qualified_at_utc`, `feedback_issue_number`),
   `evidence_snapshot_sha256`, duplicate-session rejection, consecutive five-record cohorts,
   immutable freeze, confirmed-False-Ready invalidation exception, friction-outcome consistency,
-  correction handling, and incomplete-cohort hold.
+  first successful validated transition from not qualified to qualified, correction handling, and
+  atomic cohort selection without partial membership, and incomplete-cohort hold.
 
 - [ ] **Step 1: Write the failing cohort contract**
 
@@ -149,11 +150,16 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
         "alpha_case_id",
         "review_id",
         "qualified_at_utc",
+        "first successful validated transition from not qualified to qualified",
+        "never the submission, issue-creation, or draft-record time",
+        "Once assigned, qualified_at_utc is immutable",
         "feedback_issue_number",
         "evidence_snapshot_sha256",
         "(qualified_at_utc, feedback_issue_number) ascending",
         "positions 1–5, 6–10",
-        "Freeze a cohort when its fifth member is assigned",
+        "Do not assign partial cohort membership",
+        "select the first five in canonical order, assign positions, and freeze the cohort atomically",
+        "A pre-freeze correction revalidates the record in the unassigned pool",
         "cannot reorder, replace, or repartition a frozen cohort",
         "Corrections annotate the original qualification record",
         "do not create a new cohort member",
@@ -182,7 +188,8 @@ Expected: FAIL because the packet says only “non-overlapping sets of five.”
 Replace the ambiguous batching sentence with the canonical qualification record, ascending tuple,
 duplicate-session rejection, consecutive positions, fifth-member freeze, non-repartition rule,
 original-record correction rule, confirmed-False-Ready invalidation exception, friction-outcome
-consistency, and incomplete-cohort hold from the confirmed design. Keep the existing
+consistency, the first successful validated transition from not qualified to qualified, and
+atomic cohort selection without partial membership from the confirmed design. Keep the existing
 Stop/Pivot/Narrow/Continue precedence and the statement that discovery rules do not control
 owner-led productization.
 
