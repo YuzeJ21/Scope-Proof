@@ -30,9 +30,14 @@
   `timing_public_evidence_url` input; free text cannot qualify observed timing.
 - The future `evidence_snapshot_sha256` hashes only a validated, exact-version
   `OptionalDiscoveryEvidenceSnapshotV1` canonicalized exactly as the authoritative packet states.
+- That snapshot uses `ConfigDict(extra="forbid", strict=True, frozen=True)` and the packet's strict
+  field types and exact JSON representations, with every field required, no aliases or defaults,
+  and no coercion or hidden URL/datetime normalization.
 - That snapshot includes `timing_public_evidence_content_sha256`, `confirmed_criteria_sha256`, the
   complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_statement`, and
   `source_owner_false_ready_confirmation`; derived enums and mutable URLs alone do not qualify.
+- A Ready negative attestation is evaluated only through the packet's complete `not_confirmed`
+  predicate; its null criterion ID is not an incomplete affirmative False Ready allegation.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
 - Preserve the unrelated untracked `.coverage 2` byte-for-byte and never stage it.
 
@@ -170,7 +175,8 @@ git commit -m "docs: make optional timing evidence fail closed"
   `evidence_snapshot_sha256`, duplicate-session rejection, consecutive five-record cohorts,
   immutable freeze, confirmed-False-Ready invalidation exception, friction-outcome consistency,
   first successful validated transition from not qualified to qualified, correction handling, and
-  atomic cohort selection without partial membership, and incomplete-cohort hold.
+  atomic cohort selection without partial membership, incomplete-cohort hold, strict snapshot
+  field types and exact JSON representations, and the Ready-negative classification boundary.
 
 - [ ] **Step 1: Write the failing cohort contract**
 

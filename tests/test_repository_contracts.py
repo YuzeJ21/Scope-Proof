@@ -2559,6 +2559,9 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
             "source_owner_false_ready_confirmation",
         ):
             assert snapshot_field in repair_document
+        assert 'ConfigDict(extra="forbid", strict=True, frozen=True)' in repair_document
+        assert "strict field types and exact JSON representations" in repair_document
+        assert "Ready negative attestation" in repair_document
     for required in (
         "Reject a new qualification record before ordering",
         "same completed session can appear in at most one cohort",
@@ -2644,6 +2647,30 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
     assert "allow_nan=False" in normalized
     assert 'encode("utf-8")' in normalized
     assert "sha256(canonical_bytes).hexdigest()" in normalized
+
+
+def test_optional_discovery_snapshot_has_strict_canonical_field_types() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        'ConfigDict(extra="forbid", strict=True, frozen=True)',
+        "Every field is required; the model has no aliases and no defaults",
+        'schema_version is Literal["optional-discovery-evidence-snapshot-v1"]',
+        "alpha_case_issue_number and feedback_issue_number are StrictInt",
+        "qualified_at_utc is StrictStr in exactly YYYY-MM-DDTHH:MM:SS.ffffffZ",
+        "source_owner_confirmed is StrictBool",
+        "checked_must_have_criterion_ids is a tuple of StrictStr values",
+        "participant_false_ready_criterion_id is StrictStr | None",
+        "enum-backed fields are Literal values from the canonical decision-value mapping",
+        "URLs remain StrictStr rather than a coercing or normalizing URL type",
+        "No Boolean, integer, datetime, URL, enum, list, or string coercion is allowed",
+        "JSON strings are the exact validated strings, integers are JSON numbers, the Boolean is",
+        "the tuple is one JSON array, and None is JSON null",
+    ):
+        assert required in normalized
 
 
 def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
@@ -3063,6 +3090,8 @@ def test_not_confirmed_false_ready_has_an_affirmative_evidence_predicate() -> No
         "Otherwise classify unknown",
         "For a Ready result, missing any other confirmed condition yields unknown",
         "A final gate that is not Ready is not_confirmed",
+        "A Ready negative attestation is evaluated only by the not_confirmed rule",
+        "is not a missing confirmed condition",
     ):
         assert required in normalized
 

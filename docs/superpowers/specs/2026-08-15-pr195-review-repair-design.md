@@ -55,10 +55,21 @@ excluded. Canonical bytes use sorted-key, compact, non-ASCII-escaping, finite-on
 UTF-8, exactly as the packet specifies, and the persisted digest is
 `sha256(canonical_bytes).hexdigest()`.
 
+The model must use `ConfigDict(extra="forbid", strict=True, frozen=True)` and the authoritative
+packet's strict field types and exact JSON representations. Every field is required with no aliases
+or defaults. IDs, hashes, timestamps, URLs, statements, and the nullable criterion ID use the
+packet's exact `StrictStr` bounds and patterns; issue numbers use bounded `StrictInt`; source-owner
+confirmation uses constrained `StrictBool`; checked must-have IDs use the bounded ordered tuple;
+and every decision field uses the exact canonical `Literal` set. No coercion or URL/datetime
+normalization may change the validated input or canonical bytes. Changing any type, bound, pattern,
+normalization, or representation requires a new snapshot schema version.
+
 The snapshot also binds `final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`, the
 complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_statement`,
 `participant_false_ready_criterion_id`, and `source_owner_false_ready_confirmation`. These are the
 validated inputs for `participant_false_ready`; the derived enum alone is insufficient.
+A Ready negative attestation follows only the packet's complete `not_confirmed` predicate; its
+intentionally null criterion ID is not treated as a missing affirmative-confirmation condition.
 
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. An initially incomplete or mismatched submission uses the later atomic

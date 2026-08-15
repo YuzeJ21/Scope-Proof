@@ -153,6 +153,48 @@ ensure_ascii=False, allow_nan=False).encode("utf-8")`; persist
 whitespace, Unicode escaping, non-finite numbers, or encoding is non-conforming and the record
 remains on hold.
 
+The V1 model uses `ConfigDict(extra="forbid", strict=True, frozen=True)`. Every field is required;
+the model has no aliases and no defaults. Its exact strict field types and JSON representations are:
+
+- `schema_version` is `Literal["optional-discovery-evidence-snapshot-v1"]`.
+- `alpha_case_id` is `StrictStr` matching `^alpha-[0-9a-f]{32}$`; `review_id` is `StrictStr`
+  matching `^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`.
+- `public_pr_url`, `requirements_source_url`, and `timing_public_evidence_url` are `StrictStr` with
+  length 1 through 2,048. URLs remain `StrictStr` rather than a coercing or normalizing URL type.
+  A field validator requires `public_pr_url` to match the canonical public GitHub pull-request
+  pattern, requires the two source URLs to pass the shared canonical public-HTTPS-source validator
+  without changing the input string, and permits the timing field's exact `Not observed` sentinel
+  only for the not-observed path. The validated exact string is serialized; redirects or URL
+  normalization cannot silently change it.
+- `reviewed_head_sha` is `StrictStr` matching `^[0-9a-f]{40}$`.
+  `confirmed_criteria_sha256` and `timing_public_evidence_content_sha256` are `StrictStr` matching
+  `^[0-9a-f]{64}$`.
+- `alpha_case_issue_number` and `feedback_issue_number` are `StrictInt` from 1 through
+  2,147,483,647; Boolean values are rejected.
+- `qualified_at_utc` is `StrictStr` in exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ`. A field validator
+  parses it as a real UTC instant and requires formatting that instant back to the same string, so
+  offsets, omitted or variable fractional seconds, and impossible dates are rejected.
+- `final_gate` is `Literal["ready", "conditional", "blocked", "needs_review"]`.
+  `source_owner_confirmed` is `StrictBool` constrained to `true`.
+- `checked_must_have_criterion_ids` is a tuple of `StrictStr` values, with zero through 256 unique
+  items in exact criterion order; every item has length 1 through 128 and matches
+  `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`. It serializes as one JSON array in tuple order.
+- `participant_false_ready_statement` and `source_owner_false_ready_confirmation` are `StrictStr`
+  with length 1 through 2,000 and preserve every code point exactly.
+  `participant_false_ready_criterion_id` is `StrictStr | None`; its string branch uses the same
+  criterion-ID constraints and its absent branch serializes only as JSON `null`.
+- The enum-backed fields are `Literal` values from the canonical decision-value mapping, with no
+  aliases: `outcome`, `timing_evidence`, `timing_observer_category`, `useful_gap_category`,
+  `decision_impact`, `reuse_response`, `alternative_workflow`, `friction_category`,
+  `evidence_boundary_understanding`, and `participant_false_ready`. Each field's `Literal` members
+  are exactly the canonical enum values in its mapping-table row.
+
+No Boolean, integer, datetime, URL, enum, list, or string coercion is allowed. JSON strings are the
+exact validated strings, integers are JSON numbers, the Boolean is JSON `true`, the tuple is one
+JSON array, and `None` is JSON `null`. These types plus the canonical dump recipe are the complete
+V1 byte contract; a future type, bound, pattern, normalization, or serialization change requires a
+new schema version.
+
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. For an initially incomplete or mismatched submission, use the later atomic
 transition that first passes every qualification rule, never the submission, issue-creation, or
@@ -229,8 +271,10 @@ Ready and bound to the exact reviewed head; the participant identifies a specifi
 criterion that should not have been Ready; the source owner confirms explicit missing or
 conflicting acceptance evidence at that head; and `evidence_snapshot_sha256` binds the complete
 confirmation record. For a Ready result, missing any other confirmed condition yields `unknown`,
-never `not_confirmed`. A final gate that is not Ready is `not_confirmed` under the rule below. A
-Ready gate by itself is not a False Ready observation.
+never `not_confirmed`, but this missing-condition rule applies only after an affirmative False Ready
+allegation. A Ready negative attestation is evaluated only by the `not_confirmed` rule below and is
+not a missing confirmed condition. A final gate that is not Ready is `not_confirmed` under the rule
+below. A Ready gate by itself is not a False Ready observation.
 
 For every False Ready classification, the snapshot binds `final_gate`,
 `confirmed_criteria_sha256`, `source_owner_confirmed`, `checked_must_have_criterion_ids`,
