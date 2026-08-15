@@ -2382,10 +2382,8 @@ def test_optional_external_feedback_collects_bounded_signals_without_price_resea
         "public_requirements_url",
         "source_owner",
         "outcome",
-        "completion_time",
-        "timing_observation_status",
-        "timing_observer_category",
-        "timing_public_evidence_reference",
+        "timing_evidence",
+        "timing_evidence_support",
         "useful_gap_category",
         "decision_impact",
         "reuse_intent",
@@ -2398,7 +2396,7 @@ def test_optional_external_feedback_collects_bounded_signals_without_price_resea
     for required_text in (
         "optional external feedback",
         "independently observed timing",
-        "self-reported time remains not observed",
+        "self-reported timing is not independently observed",
         "does not reopen Stage 1",
         "commercial discovery is separate",
         "customer validation",
@@ -2420,6 +2418,32 @@ def test_optional_external_feedback_collects_bounded_signals_without_price_resea
         "price_discussion",
     )
     assert all(f"id: {field_id}" not in template for field_id in forbidden_ids)
+
+
+def test_optional_external_feedback_timing_is_single_source_and_fail_closed() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "id: timing_evidence" in template
+    assert "id: timing_evidence_support" in template
+    for removed_id in (
+        "completion_time",
+        "timing_observation_status",
+        "timing_observer_category",
+        "timing_public_evidence_reference",
+    ):
+        assert f"id: {removed_id}" not in template
+    for option in (
+        "Not independently observed",
+        '"Independently observed: under 5 minutes"',
+        '"Independently observed: 5 to 10 minutes"',
+        '"Independently observed: more than 10 minutes"',
+    ):
+        assert f"- {option}" in template
+    assert "both an observer category and a specific public evidence reference" in template
+    assert "fails closed to not observed" in template
+    assert "cannot upgrade a Not independently observed selection" in template
 
 
 def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -> None:

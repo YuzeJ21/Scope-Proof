@@ -73,43 +73,24 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: completion_time
+    id: timing_evidence
     attributes:
-      label: Time to inspectable coverage report
-      description: Select a band only when an independent observer records it with a public reference; otherwise select Not observed; self-reported time remains not observed and creates no stage credit.
+      label: Independently observed timing evidence
+      description: Select one authoritative status and time band. Self-reported timing is not independently observed.
       options:
-        - Under 5 minutes
-        - 5 to 10 minutes
-        - More than 10 minutes
-        - Not observed
+        - Not independently observed
+        - "Independently observed: under 5 minutes"
+        - "Independently observed: 5 to 10 minutes"
+        - "Independently observed: more than 10 minutes"
     validations:
       required: true
-  - type: dropdown
-    id: timing_observation_status
+  - type: textarea
+    id: timing_evidence_support
     attributes:
-      label: Independent-observation status
-      description: Select Independently observed only when an independent observer and specific public evidence reference support the timing; otherwise select Not observed.
-      options:
-        - Independently observed
-        - Not observed
+      label: Independent timing support
+      description: For an observed selection, include both an observer category and a specific public evidence reference. Missing, ambiguous, private, or malformed support fails closed to not observed. Supporting text cannot upgrade a Not independently observed selection.
     validations:
-      required: true
-  - type: input
-    id: timing_observer_category
-    attributes:
-      label: Independent timing observer category
-      description: Give the independent observer category without a direct identifier, or enter not observed.
-      placeholder: Independent reviewer role, or not observed
-    validations:
-      required: true
-  - type: input
-    id: timing_public_evidence_reference
-    attributes:
-      label: Public timing evidence reference
-      description: Give the specific public evidence reference for the observed timing, or enter not observed.
-      placeholder: https://github.com/OWNER/REPOSITORY/issues/123#issuecomment-456, or not observed
-    validations:
-      required: true
+      required: false
   - type: dropdown
     id: useful_gap_category
     attributes:
