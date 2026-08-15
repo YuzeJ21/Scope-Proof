@@ -88,9 +88,9 @@ body:
     id: timing_evidence_support
     attributes:
       label: Independent timing support
-      description: For an observed selection, include both an observer category and a specific public evidence reference. Missing, ambiguous, private, or malformed support fails closed to not observed. Supporting text cannot upgrade a Not independently observed selection.
+      description: For an observed selection, include both an observer category and a specific public evidence reference. For Not independently observed, enter Not observed. Missing, ambiguous, private, or malformed support fails closed to not observed. Supporting text cannot upgrade a Not independently observed selection.
     validations:
-      required: false
+      required: true
   - type: dropdown
     id: useful_gap_category
     attributes:

@@ -2444,6 +2444,11 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
     assert "both an observer category and a specific public evidence reference" in template
     assert "fails closed to not observed" in template
     assert "cannot upgrade a Not independently observed selection" in template
+    support = template.split("id: timing_evidence_support", maxsplit=1)[1].split(
+        "- type:", maxsplit=1
+    )[0]
+    assert "required: true" in support
+    assert "enter Not observed" in support
 
 
 def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
@@ -2479,11 +2484,11 @@ def test_optional_discovery_corrections_never_count_a_session_twice() -> None:
     normalized = " ".join(rules.split())
 
     for required in (
-        "Material corrections annotate the original qualification record",
+        "Corrections annotate the original qualification record",
         "do not create a new cohort member",
         "The same completed session can appear in at most one cohort",
-        "Any material correction after cohort freeze invalidates the affected cohort",
-        "remains on hold whether the correction arrives before or after a decision",
+        "Any post-freeze change to a canonical qualification or decision field invalidates",
+        "Non-authoritative context or typo edits outside those fields do not",
         "do not calculate or recalculate a decision",
     ):
         assert required in normalized
@@ -2545,6 +2550,14 @@ def test_optional_discovery_holds_contradictory_useful_gap_inputs() -> None:
         normalized.index("Any contradiction between outcome and useful_gap_category")
         < normalized.index("Precedence, highest first")
     )
+    for required in (
+        "Found a useful previously unknown gap is valid only with one of the six concrete gap "
+        "categories",
+        "Produced only already-known information is valid only with No new useful gap",
+        "Created material product friction is valid only with No new useful gap",
+        "Every other outcome and useful_gap_category pair is contradictory",
+    ):
+        assert required in normalized
 
 
 def test_optional_discovery_continue_requires_every_member_to_understand_boundary() -> None:
@@ -2604,7 +2617,8 @@ def test_optional_discovery_false_ready_requires_participant_and_source_owner_ev
         "participant identifies a specific must-have criterion",
         "source owner confirms explicit missing or conflicting acceptance evidence",
         "evidence_snapshot_sha256 binds the complete confirmation record",
-        "Any missing condition classifies the record as unknown, never not_confirmed",
+        "For a Ready result, missing any other confirmed condition yields unknown, never "
+        "not_confirmed",
     ):
         assert required in normalized
 
@@ -2703,6 +2717,8 @@ def test_not_confirmed_false_ready_has_an_affirmative_evidence_predicate() -> No
         "and source-owner confirmation after checking every must-have criterion",
         "evidence_snapshot_sha256 binds that negative confirmation",
         "Otherwise classify unknown",
+        "For a Ready result, missing any other confirmed condition yields unknown",
+        "A final gate that is not Ready is not_confirmed",
     ):
         assert required in normalized
 

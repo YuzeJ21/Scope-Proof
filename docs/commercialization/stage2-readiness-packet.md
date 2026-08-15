@@ -103,11 +103,15 @@ mutable public reference does not qualify; keep any source URL only as non-autho
 Order qualification records by `(qualified_at_utc, feedback_issue_number) ascending` and allocate
 them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
 member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort. Material
-corrections annotate the original qualification record and do not create a new cohort member. The
-same completed session can appear in at most one cohort. Any material correction after cohort
-freeze invalidates the affected cohort, which remains on hold whether the correction arrives before
-or after a decision; do not calculate or recalculate a decision, and do not allocate the session
-again. When there are fewer than five unassigned
+Corrections annotate the original qualification record and do not create a new cohort member. The
+same completed session can appear in at most one cohort. Any post-freeze change to a canonical
+qualification or decision field invalidates the affected cohort. Canonical fields are
+`qualified_at_utc`, `feedback_issue_number`, `evidence_snapshot_sha256`, outcome,
+`useful_gap_category`, decision impact, reuse response, alternative workflow, `friction_category`,
+evidence-boundary understanding, and `participant_false_ready`. Non-authoritative context or typo
+edits outside those fields do not invalidate a cohort. An invalidated cohort remains on hold whether
+the correction arrives before or after a decision; do not calculate or recalculate a decision, and
+do not allocate the session again. When there are fewer than five unassigned
 qualifying records, the next cohort remains on hold and no optional-discovery decision is
 calculated.
 
@@ -115,7 +119,11 @@ Useful or decision-relevant is true only when the participant selects
 `Found a useful previously unknown gap`, `Changed my review decision`, or
 `Clarified my review decision`. `Found a useful previously unknown gap` counts only when
 `useful_gap_category` is not `No new useful gap`. Any contradiction between `outcome` and
-`useful_gap_category` keeps the record on hold and is not counted. `Confirmed an existing review
+`useful_gap_category` keeps the record on hold and is not counted. `Found a useful previously
+unknown gap` is valid only with one of the six concrete gap categories. `Produced only already-known
+information` is valid only with `No new useful gap`. `Created material product friction` is valid
+only with `No new useful gap`. Every other `outcome` and `useful_gap_category` pair is contradictory.
+`Confirmed an existing review
 decision` does not count; neither do already-known information, friction alone, no effect, an
 indeterminate decision, missing, or ambiguous responses.
 
@@ -135,8 +143,9 @@ Confirmed participant False Ready requires all of these conditions: the saved re
 Ready and bound to the exact reviewed head; the participant identifies a specific must-have
 criterion that should not have been Ready; the source owner confirms explicit missing or
 conflicting acceptance evidence at that head; and `evidence_snapshot_sha256` binds the complete
-confirmation record. Any missing condition classifies the record as `unknown`, never
-`not_confirmed`. A Ready gate by itself is not a False Ready observation.
+confirmation record. For a Ready result, missing any other confirmed condition yields `unknown`,
+never `not_confirmed`. A final gate that is not Ready is `not_confirmed` under the rule below. A
+Ready gate by itself is not a False Ready observation.
 
 `participant_false_ready` is `not_confirmed` only when the exact-head final gate is not Ready, or a
 Ready result has both an explicit participant no-False-Ready statement and source-owner
