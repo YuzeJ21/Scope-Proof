@@ -24,7 +24,8 @@
   maps to `understood`; a generic eligibility checkbox does not. Before feedback matching can be
   enabled, separately authorized implementation must extend the Pydantic-validated local
   `AlphaCaseRecord` to persist the full canonical `alpha_case_issue_url` during case initialization.
-  Its owner/repository must match the public PR and the complete URL must match the feedback issue.
+  It must belong to the configured `YuzeJ21/Scope-Proof` intake repository, while the reviewed PR
+  may belong to another public repository, and the complete URL must match the feedback issue.
   Legacy records without it remain ineligible; do not infer or backfill the association.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
 - Timing provenance uses required `timing_observer_category` and
@@ -39,6 +40,9 @@
   complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_attestation`, and
   `source_owner_false_ready_attestation`; the attestations use exact canonical `Literal` values,
   and semantic prose, derived enums, and mutable URLs alone do not qualify.
+- Timing content hashing follows the packet's bounded unauthenticated GitHub Issue API fetch and
+  strict `TimingPublicEvidenceV1` canonical JSON projection; never hash raw HTTP bytes, HTML,
+  headers, redirects, or transfer encoding.
 - A Ready negative attestation is evaluated only through the packet's complete `not_confirmed`
   predicate; its null criterion ID is not an incomplete affirmative False Ready allegation.
 - ScopeProof remains an evidence assistant and never executes target-repository code.

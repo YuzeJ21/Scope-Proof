@@ -38,7 +38,11 @@ publicly reachable HTTPS evidence URL. A not-observed timing selection requires 
 for both category and relationship plus the exact `Not observed` sentinel in the URL field. An
 observer category never proves distinctness. Every other combination remains on hold. Observed
 timing also requires `timing_public_evidence_content_sha256`, the digest of the exact fetched public
-evidence bytes; a mutable URL without that content digest does not qualify.
+evidence content. The authoritative packet's bounded, unauthenticated GitHub Issue API fetch must
+project the exact canonical issue URL, stable node ID, and unnormalized body into the strict
+`TimingPublicEvidenceV1` canonical JSON payload before hashing. Raw HTTP bytes, HTML wrappers,
+headers, redirects, and transfer encoding are never hashed; a mutable URL without the canonical
+projection digest does not qualify.
 
 ### Cohort allocation
 
@@ -98,8 +102,9 @@ does not. Before feedback matching can be enabled, separately authorized impleme
 the Pydantic-validated local `AlphaCaseRecord` to persist the full canonical
 `alpha_case_issue_url` during case
 initialization. Legacy records without it remain ineligible; do not infer or backfill the
-association. The issue URL's owner/repository must equal the public PR's owner/repository, and the
-complete URL—not only its issue number—must match between the feedback issue and local alpha case.
+association. The issue URL must belong to the configured `YuzeJ21/Scope-Proof` intake repository;
+the reviewed PR may belong to another public repository. The complete URL—not only its issue
+number—must match between the feedback issue and local alpha case.
 
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
 appears in any qualification record. This makes the existing one-session-only rule enforceable even

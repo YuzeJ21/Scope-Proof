@@ -2479,8 +2479,8 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
     assert "timing_public_evidence_url exactly Not observed" in normalized
     assert "Every other timing-provenance combination remains on hold" in normalized
     assert (
-        "timing_public_evidence_content_sha256 binds the exact fetched public evidence bytes"
-        in normalized
+        "timing_public_evidence_content_sha256 is the 64-character lowercase SHA-256 of those "
+        "canonical projection bytes" in normalized
     )
 
 
@@ -2921,8 +2921,32 @@ def test_optional_feedback_binds_the_full_case_issue_repository_identity() -> No
         "alpha_case_issue_url must be the exact canonical public GitHub issue URL"
         in normalized
     )
-    assert "owner/repository must equal public_pr_url's owner/repository" in normalized
+    assert "configured intake repository YuzeJ21/Scope-Proof" in normalized
+    assert "reviewed PR may belong to a different public repository" in normalized
     assert "the complete URL must exactly match the validated local alpha case" in normalized
+
+
+def test_timing_evidence_hashes_a_canonical_github_issue_projection() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "TimingPublicEvidenceV1",
+        "timing-public-evidence-v1",
+        "GET https://api.github.com/repos/{owner}/{repository}/issues/{number}",
+        "Accept: application/vnd.github+json",
+        "X-GitHub-Api-Version: 2022-11-28",
+        "unauthenticated request",
+        "never send a token",
+        "redirects disabled",
+        "256 KiB response-byte cap",
+        "schema_version, source_url, github_issue_node_id, and body",
+        "html_url exactly equals timing_public_evidence_url",
+        "Hash the canonical projection bytes, never raw HTTP response bytes",
+    ):
+        assert required in normalized
 
 
 def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:

@@ -168,11 +168,12 @@ the model has no aliases and no defaults. Its exact strict field types and JSON 
   rather than a coercing or normalizing URL type.
   A field validator requires `public_pr_url` to match the canonical public GitHub pull-request
   pattern. `alpha_case_issue_url` must be the exact canonical public GitHub issue URL
-  `https://github.com/{owner}/{repository}/issues/{positive_integer}`, and its owner/repository must
-  equal `public_pr_url`'s owner/repository. The two evidence-source URLs must pass the shared
-  canonical public-HTTPS-source validator without changing the input string, and the timing field's
-  exact `Not observed` sentinel is permitted only for the not-observed path. The validated exact
-  string is serialized; redirects or URL normalization cannot silently change it.
+  `https://github.com/YuzeJ21/Scope-Proof/issues/{positive_integer}` in the configured intake
+  repository `YuzeJ21/Scope-Proof`. The reviewed PR may belong to a different public repository.
+  The two evidence-source URLs must pass the shared canonical public-HTTPS-source validator without
+  changing the input string, and the timing field's exact `Not observed` sentinel is permitted only
+  for the not-observed path. The validated exact string is serialized; redirects or URL
+  normalization cannot silently change it.
 - `reviewed_head_sha` is `StrictStr` matching `^[0-9a-f]{40}$`.
   `confirmed_criteria_sha256` and `timing_public_evidence_content_sha256` are `StrictStr` matching
   `^[0-9a-f]{64}$`.
@@ -221,11 +222,27 @@ reachable. Not independently observed requires `timing_observer_category` `not_o
 criteria representative who is also the participant cannot qualify as an independent observer.
 Every other timing-provenance combination remains on hold and is not counted; no provenance field
 can upgrade a `not_observed` timing selection.
-For observed timing, `timing_public_evidence_content_sha256` binds the exact fetched public evidence
-bytes after a bounded public-only fetch that executes no target-repository code. It must be the
-64-character lowercase SHA-256 of those bytes. A mutable URL without this content digest does not
-qualify. A later revalidation that fetches different bytes invalidates the record. For not-observed
-timing, the field is the SHA-256 of the exact UTF-8 bytes `Not observed`.
+For observed timing, `timing_public_evidence_url` must be a canonical public GitHub issue URL. Fetch
+it only with `GET https://api.github.com/repos/{owner}/{repository}/issues/{number}`, an
+unauthenticated request that must never send a token. Send exactly
+`Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2022-11-28`; use a five-second
+timeout, redirects disabled, no retries or pagination, and a 256 KiB response-byte cap. Require a
+200 JSON object, require response `html_url` exactly equals `timing_public_evidence_url`, and reject
+a missing, null, empty, or over-65,536-code-point body.
+
+Validate a frozen `TimingPublicEvidenceV1` model with
+`ConfigDict(extra="forbid", strict=True, frozen=True)`. It contains exactly
+`schema_version`, `source_url`, `github_issue_node_id`, and `body`: `schema_version` is
+`Literal["timing-public-evidence-v1"]`; `source_url` is the exact validated canonical issue URL;
+`github_issue_node_id` is `StrictStr` matching `^[A-Za-z0-9_=-]{1,128}$` and equals the response
+`node_id`; and `body` is `StrictStr` with length 1 through 65,536 and equals the response body
+without trimming or normalization. Serialize this projection with the same sorted-key, compact,
+non-ASCII-escaping, finite-only canonical JSON recipe used above. The
+`timing_public_evidence_content_sha256` is the 64-character lowercase SHA-256 of those canonical
+projection bytes. Hash the canonical projection bytes, never raw HTTP response bytes, decoded HTML,
+headers, transfer encoding, or redirect output. A mutable URL without this content digest does not
+qualify. A later revalidation whose canonical projection digest changes invalidates the record. For
+not-observed timing, the field remains the SHA-256 of the exact UTF-8 bytes `Not observed`.
 The feedback issue's `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`,
 `requirements_source_url`, and `alpha_case_issue_url` must exactly match the validated local alpha
 case and saved review. For the case issue, the complete URL must exactly match the validated local
