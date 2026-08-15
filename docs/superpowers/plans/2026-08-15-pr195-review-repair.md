@@ -127,8 +127,9 @@ git commit -m "docs: make optional timing evidence fail closed"
 **Interfaces:**
 - Consumes: the authoritative Stage 2 packet as plain text; no qualification records.
 - Produces: a static contract for the canonical qualification tuple
-  `(qualified_at_utc, feedback_issue_number)`, `evidence_snapshot_sha256`, consecutive five-record
-  cohorts, immutable freeze, correction handling, and incomplete-cohort hold.
+  (`alpha_case_id`, `review_id`, `qualified_at_utc`, `feedback_issue_number`),
+  `evidence_snapshot_sha256`, duplicate-session rejection, consecutive five-record cohorts,
+  immutable freeze, correction handling, and incomplete-cohort hold.
 
 - [ ] **Step 1: Write the failing cohort contract**
 
@@ -144,6 +145,8 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
     )[0]
     normalized = " ".join(rules.split())
     for required in (
+        "alpha_case_id",
+        "review_id",
         "qualified_at_utc",
         "feedback_issue_number",
         "evidence_snapshot_sha256",
@@ -172,9 +175,10 @@ Expected: FAIL because the packet says only “non-overlapping sets of five.”
 - [ ] **Step 3: Implement the minimal packet repair**
 
 Replace the ambiguous batching sentence with the canonical qualification record, ascending tuple,
-consecutive positions, fifth-member freeze, non-repartition rule, original-record correction rule,
-and incomplete-cohort hold from the confirmed design. Keep the existing Stop/Pivot/Narrow/Continue
-precedence and the statement that discovery rules do not control owner-led productization.
+duplicate-session rejection, consecutive positions, fifth-member freeze, non-repartition rule,
+original-record correction rule, and incomplete-cohort hold from the confirmed design. Keep the
+existing Stop/Pivot/Narrow/Continue precedence and the statement that discovery rules do not
+control owner-led productization.
 
 - [ ] **Step 4: Run the focused cohort and Stage 2 contracts**
 

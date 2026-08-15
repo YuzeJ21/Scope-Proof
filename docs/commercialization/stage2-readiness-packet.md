@@ -102,9 +102,10 @@ records or calculate cohort decisions from this document alone.
 
 No optional-discovery decision may be calculated while the qualifying denominator is zero. If
 optional discovery is authorized later, create one canonical qualification record for each
-qualifying completed session. The record contains `qualified_at_utc`, `feedback_issue_number`, and
-`evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
-mutable public reference does not qualify; keep any source URL only as non-authoritative context.
+qualifying completed session. The record contains the immutable local `alpha_case_id` and
+`review_id`, `qualified_at_utc`, `feedback_issue_number`, and `evidence_snapshot_sha256`, the
+SHA-256 digest of the evidence snapshot used at qualification. A mutable public reference does not
+qualify; keep any source URL only as non-authoritative context.
 At qualification, derive canonical `outcome` from the validated local outcome record and verify the
 public feedback `outcome` matches it exactly after this fixed mapping:
 `found_useful_gap` maps to `Found a useful previously unknown gap`,
@@ -112,13 +113,16 @@ public feedback `outcome` matches it exactly after this fixed mapping:
 `created_friction` maps to `Created material product friction`. A missing or different public value
 keeps the qualification record on hold and is not counted.
 
-Order qualification records by `(qualified_at_utc, feedback_issue_number) ascending` and allocate
+Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
+appears in any qualification record. Order the remaining qualification records by
+`(qualified_at_utc, feedback_issue_number) ascending` and allocate
 them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
 member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort.
 Corrections annotate the original qualification record and do not create a new cohort member. The
 same completed session can appear in at most one cohort. Any post-freeze change to a canonical
 qualification or decision field invalidates the affected cohort. Canonical fields are
-`qualified_at_utc`, `feedback_issue_number`, `evidence_snapshot_sha256`, outcome,
+`alpha_case_id`, `review_id`, `qualified_at_utc`, `feedback_issue_number`,
+`evidence_snapshot_sha256`, outcome,
 `useful_gap_category`, decision impact, reuse response, alternative workflow, `friction_category`,
 evidence-boundary understanding, and `participant_false_ready`. Non-authoritative context or typo
 edits outside those fields do not invalidate a cohort. An invalidated cohort remains on hold whether

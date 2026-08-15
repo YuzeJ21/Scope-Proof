@@ -2472,6 +2472,8 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert "one required supporting-details field" in normalized_design
     assert "one optional supporting-details field" not in normalized_design
     assert "evidence_snapshot_sha256" in normalized_design
+    assert "alpha_case_id" in normalized_design
+    assert "review_id" in normalized_design
     assert "digest or immutable reference" not in normalized_design
     assert "derive canonical outcome from the validated local outcome record" in normalized_design
     assert "public feedback outcome matches it exactly" in normalized_design
@@ -2484,6 +2486,8 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert "Pydantic-validated qualification-record model" in normalized_plan
     assert "atomic validated storage boundary" in normalized_plan
     assert "evidence_snapshot_sha256" in normalized_plan
+    assert "alpha_case_id" in normalized_plan
+    assert "review_id" in normalized_plan
     assert (
         "Consumes: the authoritative Stage 2 packet as plain text; no qualification records."
         in normalized_plan
@@ -2530,9 +2534,11 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
     rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
         "## Boundaries", maxsplit=1
     )[0]
-    normalized = " ".join(rules.split())
+    normalized = " ".join(rules.replace("`", "").split())
 
     for required in (
+        "alpha_case_id",
+        "review_id",
         "qualified_at_utc",
         "feedback_issue_number",
         "evidence_snapshot_sha256",
@@ -2553,12 +2559,14 @@ def test_optional_discovery_corrections_never_count_a_session_twice() -> None:
     rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
         "## Boundaries", maxsplit=1
     )[0]
-    normalized = " ".join(rules.split())
+    normalized = " ".join(rules.replace("`", "").split())
 
     for required in (
         "Corrections annotate the original qualification record",
         "do not create a new cohort member",
         "The same completed session can appear in at most one cohort",
+        "Reject a new qualification record before ordering if its alpha_case_id or review_id "
+        "already appears in any qualification record",
         "Any post-freeze change to a canonical qualification or decision field invalidates",
         "Non-authoritative context or typo edits outside those fields do not",
         "do not calculate or recalculate a decision",

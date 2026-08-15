@@ -37,6 +37,7 @@ public evidence reference. Missing, ambiguous, private, or malformed support fai
 
 Each optional-discovery session receives a canonical qualification record containing:
 
+- the immutable local `alpha_case_id` and `review_id`;
 - the public feedback issue number;
 - the UTC timestamp when the session first satisfied every qualification rule; and
 - an `evidence_snapshot_sha256` field containing the SHA-256 digest of the evidence snapshot used
@@ -48,6 +49,10 @@ record and verify that the public feedback `outcome` matches it exactly. The fix
 `showed_only_known_information` maps to `Produced only already-known information`, and
 `created_friction` maps to `Created material product friction`. A missing or different public value
 keeps the record on hold and is not counted.
+
+Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
+appears in any qualification record. This makes the existing one-session-only rule enforceable even
+when duplicate public feedback issues are submitted.
 
 Order qualifying sessions by `(qualified_at_utc, feedback_issue_number)` ascending. Allocate the
 ordered stream once into consecutive cohorts of five: positions 1–5, 6–10, and so on. Freeze a
