@@ -49,8 +49,9 @@ feedback path remains separate and may record voluntary timing, decision impact,
 8. Preserve negative, incomplete, ambiguous, and no-new-information outcomes.
 9. Evaluate optional-discovery rules only with a qualifying denominator.
 
-Do not send email or direct messages, scrape profiles, build contact lists, automate outreach, or
-add notification-only GitHub comments.
+Without separate explicit owner authorization, do not send email or direct messages. After
+authorization, contact only within the exact bounded plan approved by the owner. Never scrape
+profiles, build contact lists, automate outreach, or add notification-only GitHub comments.
 
 ## Signals recorded only after a completed review
 

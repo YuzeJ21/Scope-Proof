@@ -3020,8 +3020,12 @@ def test_inbound_host_sequence_requires_separate_contact_authorization() -> None
     unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(
         encoding="utf-8"
     )
+    sprint = Path("docs/commercialization/design-partner-sprint.md").read_text(
+        encoding="utf-8"
+    )
     normalized = " ".join(checklist.split())
     normalized_unblocker = " ".join(unblocker.split())
+    normalized_sprint = " ".join(sprint.split())
     authorization = (
         "Before any reply, criteria return, supervised review, outcome request, or feedback "
         "request, record separate explicit owner authorization for participant contact."
@@ -3046,6 +3050,15 @@ def test_inbound_host_sequence_requires_separate_contact_authorization() -> None
         "If participant contact is authorized, follow only the bounded authorized sequence"
         in normalized
     )
+    assert (
+        "Without separate explicit owner authorization, do not send email or direct messages."
+        in normalized_sprint
+    )
+    assert (
+        "After authorization, contact only within the exact bounded plan approved by the owner."
+        in normalized_sprint
+    )
+    assert "Never scrape profiles, build contact lists, automate outreach" in normalized_sprint
 
 
 def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -> None:
