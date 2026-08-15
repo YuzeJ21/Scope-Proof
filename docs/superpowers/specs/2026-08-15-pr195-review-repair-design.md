@@ -95,9 +95,11 @@ At qualification, every identity, head, PR, source, and case-issue field must ma
 the feedback issue and the validated local alpha case and saved review. The explicit
 evidence-boundary attestation maps to `understood`; a generic completed-review eligibility checkbox
 does not. Before feedback matching can be enabled, separately authorized implementation must extend
-the Pydantic-validated local `AlphaCaseRecord` to persist `alpha_case_issue_number` during case
+the Pydantic-validated local `AlphaCaseRecord` to persist the full canonical
+`alpha_case_issue_url` during case
 initialization. Legacy records without it remain ineligible; do not infer or backfill the
-association.
+association. The issue URL's owner/repository must equal the public PR's owner/repository, and the
+complete URL—not only its issue number—must match between the feedback issue and local alpha case.
 
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
 appears in any qualification record. This makes the existing one-session-only rule enforceable even

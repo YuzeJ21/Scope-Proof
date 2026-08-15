@@ -23,8 +23,9 @@
   between the feedback issue and validated local record. The explicit evidence-boundary attestation
   maps to `understood`; a generic eligibility checkbox does not. Before feedback matching can be
   enabled, separately authorized implementation must extend the Pydantic-validated local
-  `AlphaCaseRecord` to persist `alpha_case_issue_number` during case initialization. Legacy records
-  without it remain ineligible; do not infer or backfill the association.
+  `AlphaCaseRecord` to persist the full canonical `alpha_case_issue_url` during case initialization.
+  Its owner/repository must match the public PR and the complete URL must match the feedback issue.
+  Legacy records without it remain ineligible; do not infer or backfill the association.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
 - Timing provenance uses required `timing_observer_category` and
   `timing_observer_relationship` dropdowns plus one required `timing_public_evidence_url` input;

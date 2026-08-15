@@ -122,7 +122,7 @@ Optional discovery remains operationally inactive. Separate owner authorization 
 not sufficient to use these rules. Before any qualification record is persisted or any cohort
 decision is calculated, implement a Pydantic-validated qualification-record model and an atomic
 validated storage boundary with regression coverage. That work must first extend the
-Pydantic-validated local `AlphaCaseRecord` to persist `alpha_case_issue_number` during case
+Pydantic-validated local `AlphaCaseRecord` to persist `alpha_case_issue_url` during case
 initialization. Legacy records without that identity remain ineligible. Do not infer or backfill the
 association. Until that boundary exists, do not persist records or calculate cohort decisions from
 this document alone; do not enable feedback matching.
@@ -131,7 +131,7 @@ No optional-discovery decision may be calculated while the qualifying denominato
 optional discovery is authorized later, create one canonical qualification record for each
 qualifying completed session. The record contains the immutable local `alpha_case_id` and
 `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
-`alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`, and
+`alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_number`, and
 `evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
 mutable public reference does not qualify; keep any other source URL only as non-authoritative
 context.
@@ -140,7 +140,7 @@ The separately authorized runtime boundary must define a Pydantic model named
 `OptionalDiscoveryEvidenceSnapshotV1` with `extra="forbid"`. It contains exactly these fields and no
 others: `schema_version` fixed to `optional-discovery-evidence-snapshot-v1`, `alpha_case_id`,
 `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
-`alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`, `outcome`,
+`alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_number`, `outcome`,
 `final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`,
 `checked_must_have_criterion_ids`, `participant_false_ready_attestation`,
 `participant_false_ready_criterion_id`, `source_owner_false_ready_attestation`,
@@ -163,18 +163,20 @@ the model has no aliases and no defaults. Its exact strict field types and JSON 
 - `schema_version` is `Literal["optional-discovery-evidence-snapshot-v1"]`.
 - `alpha_case_id` is `StrictStr` matching `^alpha-[0-9a-f]{32}$`; `review_id` is `StrictStr`
   matching `^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`.
-- `public_pr_url`, `requirements_source_url`, and `timing_public_evidence_url` are `StrictStr` with
-  length 1 through 2,048. URLs remain `StrictStr` rather than a coercing or normalizing URL type.
+- `public_pr_url`, `alpha_case_issue_url`, `requirements_source_url`, and
+  `timing_public_evidence_url` are `StrictStr` with length 1 through 2,048. URLs remain `StrictStr`
+  rather than a coercing or normalizing URL type.
   A field validator requires `public_pr_url` to match the canonical public GitHub pull-request
-  pattern, requires the two source URLs to pass the shared canonical public-HTTPS-source validator
-  without changing the input string, and permits the timing field's exact `Not observed` sentinel
-  only for the not-observed path. The validated exact string is serialized; redirects or URL
-  normalization cannot silently change it.
+  pattern. `alpha_case_issue_url` must be the exact canonical public GitHub issue URL
+  `https://github.com/{owner}/{repository}/issues/{positive_integer}`, and its owner/repository must
+  equal `public_pr_url`'s owner/repository. The two evidence-source URLs must pass the shared
+  canonical public-HTTPS-source validator without changing the input string, and the timing field's
+  exact `Not observed` sentinel is permitted only for the not-observed path. The validated exact
+  string is serialized; redirects or URL normalization cannot silently change it.
 - `reviewed_head_sha` is `StrictStr` matching `^[0-9a-f]{40}$`.
   `confirmed_criteria_sha256` and `timing_public_evidence_content_sha256` are `StrictStr` matching
   `^[0-9a-f]{64}$`.
-- `alpha_case_issue_number` and `feedback_issue_number` are `StrictInt` from 1 through
-  2,147,483,647; Boolean values are rejected.
+- `feedback_issue_number` is `StrictInt` from 1 through 2,147,483,647; Boolean values are rejected.
 - `qualified_at_utc` is `StrictStr` in exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ`. A field validator
   parses it as a real UTC instant and requires formatting that instant back to the same string, so
   offsets, omitted or variable fractional seconds, and impossible dates are rejected.
@@ -225,9 +227,10 @@ bytes after a bounded public-only fetch that executes no target-repository code.
 qualify. A later revalidation that fetches different bytes invalidates the record. For not-observed
 timing, the field is the SHA-256 of the exact UTF-8 bytes `Not observed`.
 The feedback issue's `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`,
-`requirements_source_url`, and `alpha_case_issue_number` must exactly match the validated local
-alpha case and saved review. Any identity, head, PR, source, or case-issue mismatch keeps the
-qualification record on hold and is not counted.
+`requirements_source_url`, and `alpha_case_issue_url` must exactly match the validated local alpha
+case and saved review. For the case issue, the complete URL must exactly match the validated local
+alpha case; a numeric issue match alone never qualifies. Any identity, head, PR, source, or
+case-issue mismatch keeps the qualification record on hold and is not counted.
 
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
 appears in any qualification record. Order the remaining qualification records by
@@ -241,7 +244,7 @@ Corrections annotate the original qualification record and do not create a new c
 same completed session can appear in at most one cohort. Any post-freeze change to a canonical
 qualification or decision field invalidates the affected cohort. Canonical fields are
 `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
-`alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`,
+`alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_number`,
 `evidence_snapshot_sha256`, outcome, timing evidence, timing observer category, timing observer
 relationship, timing public evidence URL,
 `useful_gap_category`, decision impact, reuse response, alternative workflow, `friction_category`,

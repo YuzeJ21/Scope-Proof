@@ -2643,7 +2643,7 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
         "public_pr_url",
         "reviewed_head_sha",
         "requirements_source_url",
-        "alpha_case_issue_number",
+        "alpha_case_issue_url",
         "qualified_at_utc",
         "feedback_issue_number",
         "final_gate",
@@ -2687,7 +2687,7 @@ def test_optional_discovery_snapshot_has_strict_canonical_field_types() -> None:
         'ConfigDict(extra="forbid", strict=True, frozen=True)',
         "Every field is required; the model has no aliases and no defaults",
         'schema_version is Literal["optional-discovery-evidence-snapshot-v1"]',
-        "alpha_case_issue_number and feedback_issue_number are StrictInt",
+        "feedback_issue_number is StrictInt",
         "qualified_at_utc is StrictStr in exactly YYYY-MM-DDTHH:MM:SS.ffffffZ",
         "source_owner_confirmed is StrictBool",
         "checked_must_have_criterion_ids is a tuple of StrictStr values",
@@ -2858,7 +2858,7 @@ def test_optional_feedback_binds_the_exact_local_review_and_attests_the_boundary
         "public_pr_url",
         "reviewed_head_sha",
         "requirements_source_url",
-        "alpha_case_issue_number",
+        "alpha_case_issue_url",
     ):
         assert field in normalized
     assert "must exactly match the validated local alpha case and saved review" in normalized
@@ -2891,7 +2891,7 @@ def test_optional_feedback_respects_github_text_limits_and_requires_local_case_i
     normalized = " ".join(packet.replace("`", "").split())
     assert (
         "extend the Pydantic-validated local AlphaCaseRecord to persist "
-        "alpha_case_issue_number" in normalized
+        "alpha_case_issue_url" in normalized
     )
     assert "Legacy records without that identity remain ineligible" in normalized
     assert "Do not infer or backfill the association" in normalized
@@ -2902,8 +2902,27 @@ def test_optional_feedback_respects_github_text_limits_and_requires_local_case_i
         repair_document = " ".join(
             Path(path).read_text(encoding="utf-8").replace("`", "").split()
         )
-        assert "AlphaCaseRecord to persist alpha_case_issue_number" in repair_document
+        assert (
+            "AlphaCaseRecord to persist the full canonical alpha_case_issue_url"
+            in repair_document
+        )
         assert "do not infer or backfill" in repair_document
+
+
+def test_optional_feedback_binds_the_full_case_issue_repository_identity() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "alpha_case_issue_url" in normalized
+    assert "alpha_case_issue_number" not in normalized
+    assert (
+        "alpha_case_issue_url must be the exact canonical public GitHub issue URL"
+        in normalized
+    )
+    assert "owner/repository must equal public_pr_url's owner/repository" in normalized
+    assert "the complete URL must exactly match the validated local alpha case" in normalized
 
 
 def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:
