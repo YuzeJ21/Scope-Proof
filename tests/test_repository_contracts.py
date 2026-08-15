@@ -2460,7 +2460,7 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
         "feedback_issue_number",
         "evidence snapshot",
         "(qualified_at_utc, feedback_issue_number) ascending",
-        "positions 1–5, 6–10",
+        "positions 1\u20135, 6\u201310",
         "Freeze a cohort when its fifth member is assigned",
         "cannot reorder, replace, or repartition a frozen cohort",
         "material correction requires a new qualification record",
@@ -2494,7 +2494,8 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
         "Created material product friction",
     ]
     assert "Completed reviews only" in feedback
-    assert "Independent timing observer category" in feedback
+    assert "Independently observed timing evidence" in feedback
+    assert "Independent timing support" in feedback
     assert "Prefer not to answer" in feedback
 
     completed_signals = sprint.split(
