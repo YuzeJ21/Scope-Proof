@@ -14,9 +14,11 @@ The inbound-only public-alpha case form may remain available for voluntary publi
 
 https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 
-An inbound issue is not a customer, validated use case, or stage result. Do not manually contact
-participants. Do not create recurring
-monitors, reminders, comments, or outreach merely because no submission exists.
+An inbound issue is not a customer, validated use case, or stage result. Without separate explicit
+owner authorization, do not manually contact participants. After authorization, contact only
+within the exact bounded plan approved by the owner; it does not authorize additional outreach.
+Do not create recurring monitors, reminders, comments, or outreach merely because no submission
+exists.
 
 ## Preserved boundaries
 

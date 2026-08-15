@@ -38,7 +38,8 @@ commercial-research evidence and stop gates. It does not authorize outreach or c
       authorization, do not reply or initiate a hosted sequence; leave the inbound path
       self-service.
 - [ ] If voluntary feedback arrives, verify that the inbound public-alpha case is appropriate. Do
-      not manually contact participants or store outreach records in the repository.
+      not store outreach records in the repository. If participant contact is authorized, follow
+      only the bounded authorized sequence; otherwise do not manually contact participants.
 - [ ] Apply every [public-PR qualification check](public-pr-qualification-checklist.md).
 - [ ] Normalize criteria with the [acceptance-criteria confirmation template](acceptance-criteria-confirmation-template.md), then return them to the source owner for confirmation before analysis.
 - [ ] Follow the [ten-minute participant quickstart](participant-quickstart.md), including `scopeproof alpha init` before the review.

@@ -2238,7 +2238,10 @@ def test_inbound_alpha_case_submission_path_is_public_safe_and_owner_passive() -
     assert "Use LinkedIn DM only" not in site
     assert "inbound-only" in unblocker
     assert issue_url in unblocker
-    assert "Do not manually contact participants" in " ".join(unblocker.split())
+    assert (
+        "Without separate explicit owner authorization, do not manually contact participants"
+        in " ".join(unblocker.split())
+    )
     assert "Submit a public alpha case" in checklist
     assert issue_url in checklist
 
@@ -2890,7 +2893,11 @@ def test_optional_discovery_narrow_uses_bounded_friction_categories() -> None:
 
 def test_inbound_host_sequence_requires_separate_contact_authorization() -> None:
     checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
+    unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(
+        encoding="utf-8"
+    )
     normalized = " ".join(checklist.split())
+    normalized_unblocker = " ".join(unblocker.split())
     authorization = (
         "Before any reply, criteria return, supervised review, outcome request, or feedback "
         "request, record separate explicit owner authorization for participant contact."
@@ -2903,6 +2910,18 @@ def test_inbound_host_sequence_requires_separate_contact_authorization() -> None
     assert authorization in normalized
     assert self_service in normalized
     assert normalized.index(authorization) < normalized.index("If voluntary feedback arrives")
+    assert (
+        "Without separate explicit owner authorization, do not manually contact participants."
+        in normalized_unblocker
+    )
+    assert (
+        "After authorization, contact only within the exact bounded plan"
+        in normalized_unblocker
+    )
+    assert (
+        "If participant contact is authorized, follow only the bounded authorized sequence"
+        in normalized
+    )
 
 
 def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -> None:
