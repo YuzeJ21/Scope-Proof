@@ -1,298 +1,255 @@
-# Stage 2 Readiness Packet Implementation Plan
+# Owner-Led Stage 2 Productization Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Prepare one authoritative Stage 2 readiness packet while keeping Stage 1 paused at zero and Stage 2 explicitly not started.
+**Goal:** Revise PR #195 so Stage 1 is truthfully closed as not pursued and owner-led Stage 2 productization is active without customer-validation claims.
 
-**Architecture:** This is a docs-and-contracts slice. `ROADMAP.md` owns the current measured state and owner operating posture; a new commercialization packet indexes dormant post-use discovery materials; a section-scoped repository contract prevents similar wording elsewhere from masking a stale authoritative stage block.
+**Architecture:** Keep stage truth in the roadmap, release-status audit, and Stage 2 packet. Align public feedback and commercialization surfaces to one optional external-discovery lane, and enforce the model with section-scoped repository contracts before changing prose.
 
-**Tech Stack:** Markdown, Python 3.12, pytest repository contracts, Ruff, existing deterministic ScopeProof benchmarks.
+**Tech Stack:** Markdown, YAML issue templates, Python 3.12, pytest repository contracts, Ruff, existing deterministic ScopeProof benchmarks.
 
 ## Global Constraints
 
-- ScopeProof is an evidence assistant, not a correctness oracle.
-- Stage 1 remains `waiting_for_inbound_public_alpha_submission` at 0/5 reviews, 0/3 practitioners, 0/3 repositories, 0/3 independently observed under-ten-minute completions, and 0/2 reuse-intent signals.
-- Owner operating posture is Stage 1 paused; Stage 2 readiness materials only; Stage 2 not activated.
-- Stage 2 requires every Stage 1 exit condition plus separate owner authorization.
-- No outreach, participant contact, recurring monitor, recruitment issue, announcement, commercial claim, pricing offer, release, tag, or package publication is authorized.
-- Do not add product code, forms, databases, accounts, billing, private-repository support, hosted processing, integrations, generic code review, security scanning, automatic fixes, or paid APIs.
-- Preserve the untracked root `.coverage 2` exactly; never stage, modify, delete, rename, move, or package it.
-- Static candidates remain distinct from runtime verification; persisted/exported product objects remain Pydantic-validated; gates remain deterministic and fail closed.
+- Stage 1 status is `closed_not_pursued_by_owner`; every historical measurement remains exactly zero.
+- Stage 1 is not passed, completed, waived, validated, or replaced by engineering evidence.
+- Stage 2 status is `owner_led_productization_active`; this task authorizes strategy documentation, not feature implementation or release action.
+- External product or commercial discovery is optional, separate, non-validating, and inactive by default.
+- Do not contact participants, conduct outreach, merge, release, tag, publish packages, retune R-002, or generate R-003.
+- Preserve `.coverage 2` exactly and never stage, modify, delete, rename, move, or package it.
+- Preserve confirmed criteria, typed evidence levels, Pydantic validation, deterministic fail-closed gates, non-mutating failures, and non-execution of target code.
 - False Ready remains more harmful than False Blocked.
 
 ---
 
-## File structure
-
-- Create `docs/commercialization/stage2-readiness-packet.md`: sole operational index for dormant future Stage 2 discovery materials.
-- Modify `ROADMAP.md`: record the paused owner posture in the authoritative Stage 1 and Stage 2 sections and link the packet without changing measured counts or gates.
-- Modify `tests/test_repository_contracts.py`: add section-scoped contracts for the authoritative roadmap blocks and packet boundaries.
-
-### Task 1: Lock the paused Stage 1 and not-started Stage 2 status
-
-**Files:**
-- Modify: `tests/test_repository_contracts.py` after `test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate`
-- Create: `docs/commercialization/stage2-readiness-packet.md`
-- Modify: `ROADMAP.md` Stage 1 and Stage 2 sections
-
-**Interfaces:**
-- Consumes: current `ROADMAP.md` Stage 1, Stage 2, and Stage 3 headings.
-- Produces: packet headings `# ScopeProof Stage 2 Readiness Packet`, `## Current status`, and `## Activation gate`; contract `test_stage_two_readiness_packet_preserves_paused_stage_one_gate`.
-
-- [ ] **Step 1: Write the failing section-scoped repository contract**
-
-Add this test after the existing authoritative Stage 1 contract:
-
-```python
-def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
-    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
-    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
-        encoding="utf-8"
-    )
-
-    def section(document: str, start: str, end: str) -> str:
-        return document.split(start, maxsplit=1)[1].split(end, maxsplit=1)[0]
-
-    stage_one = section(roadmap, "## Stage 1 — Genuine public alpha", "## Stage 2")
-    stage_two = section(roadmap, "## Stage 2 — Commercial discovery", "## Stage 3")
-    current_status = section(packet, "## Current status", "## Activation gate")
-    activation_gate = section(packet, "## Activation gate", "## Post-use discovery guide")
-
-    assert "waiting_for_inbound_public_alpha_submission" in stage_one
-    assert "Owner operating posture: Stage 1 is paused" in stage_one
-    for count in (
-        "0/5 qualifying reviews",
-        "0/3 independent practitioners",
-        "0/3 public repositories",
-        "0/3 independently observed under-ten-minute completions",
-        "0/2 reuse-intent signals",
-    ):
-        assert count in stage_one
-        assert count in current_status
-    assert "not a validated False Ready rate" in stage_one
-    assert "Stage 2 readiness materials only; Stage 2 has not begun" in stage_two
-    assert "Stage 2 cannot begin until every Stage 1 target is satisfied." in stage_two
-    assert "separate owner authorization" in stage_two
-    assert "does not authorize outreach" in current_status
-    assert "Every Stage 1 exit condition" in activation_gate
-    assert "separate owner authorization" in activation_gate
-    assert "docs/commercialization/stage2-readiness-packet.md" in stage_two
-```
-
-- [ ] **Step 2: Run the focused test and verify the red state**
-
-```bash
-uv run python -m pytest -q \
-  tests/test_repository_contracts.py::test_stage_two_readiness_packet_preserves_paused_stage_one_gate
-```
-
-Expected: FAIL because the packet does not exist.
-
-- [ ] **Step 3: Add the minimum packet status and activation sections**
-
-Create the packet with this opening:
-
-```markdown
-# ScopeProof Stage 2 Readiness Packet
-
-This packet prepares dormant post-use research materials. It does not activate Stage 2, authorize
-outreach, or create product-validation or commercial evidence.
-
-## Current status
-
-Measured product-validation state: `waiting_for_inbound_public_alpha_submission`.
-
-Owner operating posture: Stage 1 is paused. Stage 2 readiness materials only; Stage 2 has not
-begun. This preparation does not authorize outreach.
-
-- 0/5 qualifying reviews.
-- 0/3 independent practitioners.
-- 0/3 public repositories.
-- 0/3 independently observed under-ten-minute completions.
-- 0/2 reuse-intent signals.
-- Zero participant False Ready observations across zero participant reviews is not a validated
-  False Ready rate.
-
-## Activation gate
-
-Every Stage 1 exit condition must have genuine evidence before Stage 2 can be considered. Stage 2
-also requires separate owner authorization after those conditions pass. Prepared materials, tests,
-demos, releases, downloads, issue activity, owner rehearsals, and elapsed time earn no stage credit.
-
-## Post-use discovery guide
-```
-
-- [ ] **Step 4: Update the authoritative roadmap sections minimally**
-
-Add to Stage 1:
-
-```markdown
-Owner operating posture: Stage 1 is paused. Pausing changes no measured count, satisfies no exit
-condition, and does not authorize outreach or activate Stage 2.
-```
-
-Add to Stage 2:
-
-```markdown
-Owner operating posture: Stage 2 readiness materials only; Stage 2 has not begun. The
-[Stage 2 readiness packet](docs/commercialization/stage2-readiness-packet.md) prepares dormant
-post-use research materials and creates no stage credit.
-
-Stage 2 activation additionally requires separate owner authorization after every Stage 1 target
-is satisfied.
-```
-
-- [ ] **Step 5: Run the focused and existing authoritative-stage tests**
-
-```bash
-uv run python -m pytest -q \
-  tests/test_repository_contracts.py::test_stage_two_readiness_packet_preserves_paused_stage_one_gate \
-  tests/test_repository_contracts.py::test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate
-```
-
-Expected: 2 passed.
-
-- [ ] **Step 6: Commit the first slice**
-
-```bash
-git add -- ROADMAP.md docs/commercialization/stage2-readiness-packet.md \
-  tests/test_repository_contracts.py
-git commit -m "docs: record paused Stage 1 readiness gate"
-```
-
-### Task 2: Complete the dormant discovery materials and evidence rules
+### Task 1: Lock the new stage semantics
 
 **Files:**
 - Modify: `tests/test_repository_contracts.py`
+- Modify: `ROADMAP.md`
+- Modify: `docs/releases/v0.2.3-status-and-next-stages.md`
 - Modify: `docs/commercialization/stage2-readiness-packet.md`
 
 **Interfaces:**
-- Consumes: Task 1 status/activation sections and existing design-partner/positioning documents.
-- Produces: Post-use guide, hypothesis ledger, evidence template, decision rules, and boundaries.
+- Consumes: current Stage 1/2 headings and the release-status gap ledger.
+- Produces: section-scoped contract `test_owner_led_stage_two_strategy_preserves_zero_external_evidence`.
 
-- [ ] **Step 1: Extend the contract with failing content assertions**
+- [ ] **Step 1: Write the failing stage contract**
 
-Append:
+Replace the paused-stage readiness test with a test that extracts the authoritative Stage 1 and
+Stage 2 sections from both documents and the status/scope/discovery sections from the packet. Use
+literal expectations:
 
 ```python
-    for heading in (
-        "## Post-use discovery guide",
-        "## Hypothesis ledger",
-        "## Evidence-capture template",
-        "## Decision rules",
-        "## Boundaries",
-    ):
-        assert heading in packet
-    for required in (
-        "unknown",
-        "declined",
-        "not observed",
-        "USD 99 per team per month",
-        "USD 999 per team per year",
-        "research anchors only",
-        "Do not infer any signal from silence",
-        "No decision may be calculated while the qualifying denominator is zero",
-        "design-partner-sprint.md",
-        "market-positioning-hypotheses.md",
-    ):
-        assert required in packet
-    for forbidden_claim in (
-        "Stage 1 is complete",
-        "Stage 1 passed",
-        "Stage 2 is active",
-        "validated price",
-        "willingness to pay is validated",
-    ):
-        assert forbidden_claim not in packet
+assert "closed_not_pursued_by_owner" in stage_one
+assert "owner_led_productization_active" in stage_two
+assert "Stage 1 did not pass" in stage_one
+assert "owner-led productization" in stage_two
+assert "External commercial discovery is optional and separate" in stage_two
+for count in (
+    "0/5 qualifying reviews",
+    "0/3 independent practitioners",
+    "0/3 public repositories",
+    "0/3 independently observed under-ten-minute completions",
+    "0/2 reuse-intent signals",
+):
+    assert count in stage_one
+    assert count in packet_status
+for claim in (
+    "Stage 1 passed",
+    "Stage 1 is complete",
+    "customer validation achieved",
+    "validated demand",
+    "validated price",
+    "willingness to pay is validated",
+):
+    assert claim not in protected_current_sections
 ```
 
-- [ ] **Step 2: Run the focused test and verify the red state**
+- [ ] **Step 2: Verify the red state**
 
-Run the focused command from Task 1.
-
-Expected: FAIL on the first missing heading or boundary phrase.
-
-- [ ] **Step 3: Complete the readiness packet**
-
-Add:
-
-- seven ordered post-use questions for alternative workflow, attributable result, decision impact,
-  friction, evidence-boundary understanding, reuse, and optional price discussion;
-- a Markdown ledger with `unknown`, `supported`, `mixed`, and `disconfirmed` states;
-- a blank Markdown evidence template for case/head, role, source-owner path, outcome, observed timing,
-  alternative, result, impact, friction, understanding, reuse, optional price response, and source;
-- Continue, Narrow, Pivot, and Stop rules;
-- links to `design-partner-sprint.md` and `market-positioning-hypotheses.md`; and
-- prohibitions on outreach, contact/private/payment data, inferred signals, and fictional records.
-
-- [ ] **Step 4: Run focused and repository-contract verification**
+Run:
 
 ```bash
-uv run python -m pytest -q \
-  tests/test_repository_contracts.py::test_stage_two_readiness_packet_preserves_paused_stage_one_gate
+uv run python -m pytest -q tests/test_repository_contracts.py::test_owner_led_stage_two_strategy_preserves_zero_external_evidence
+```
+
+Expected: FAIL because the old documents still contain `waiting_for_inbound_public_alpha_submission`
+and keep Stage 2 dormant.
+
+- [ ] **Step 3: Rewrite the authoritative stage sections**
+
+Use this status model in all three files:
+
+```markdown
+Stage 1 status: `closed_not_pursued_by_owner`.
+Stage 1 did not pass. The owner chose not to pursue it, and every recorded count remains zero.
+
+Stage 2 status: `owner_led_productization_active`.
+The owner authorized productization without claiming customer validation.
+External commercial discovery is optional and separate from owner-led productization.
+```
+
+Retain the exact five zero counts and the zero-participant False Ready denominator limitation.
+Enumerate allowed owner-led engineering/product work and separately gated release, outreach,
+participant-contact, R-002, R-003, billing, account, private-repository, hosted-processing,
+generic-review, security-scanning, automatic-fix, and paid-API actions.
+
+- [ ] **Step 4: Verify the green state**
+
+Run the focused stage test and the surrounding authoritative-document tests. Expected: all pass.
+
+- [ ] **Step 5: Commit the stage model**
+
+Stage only the four named files and commit:
+
+```bash
+git commit -m "docs: adopt owner-led Stage 2 strategy"
+```
+
+### Task 2: Align public and optional-discovery materials
+
+**Files:**
+- Modify: `README.md`
+- Modify: `site/index.html`
+- Modify: `.github/ISSUE_TEMPLATE/public-alpha-feedback.yml`
+- Modify: `docs/alpha/outcome-form.md`
+- Modify: `docs/alpha/participant-quickstart.md`
+- Modify: `docs/alpha/concierge-host-checklist.md`
+- Modify: `docs/alpha/participant-evidence-unblocker.md`
+- Modify: `docs/commercialization/design-partner-sprint.md`
+- Modify: `docs/commercialization/market-positioning-hypotheses.md`
+- Modify: `CHANGELOG.md`
+- Modify: `tests/test_repository_contracts.py`
+
+**Interfaces:**
+- Consumes: Task 1 statuses.
+- Produces: one optional external-feedback lane with no pricing field and no customer-validation implication.
+
+- [ ] **Step 1: Write failing public-surface expectations**
+
+Update the public feedback and positioning tests to require these observable boundaries:
+
+```python
+for surface in (readme_product_status, site_alpha, quickstart_handoff, outcome_handoff):
+    assert "optional" in surface.lower()
+    assert "customer validation" in surface.lower()
+assert "id: price_discussion" not in feedback_form
+assert "id: design_partner_interest" not in feedback_form
+assert "This optional feedback does not reopen Stage 1" in feedback_form
+assert "commercial discovery is separate" in feedback_form.lower()
+assert "pricing question is optional research after product use" not in public_surfaces
+```
+
+Add section-scoped negative guards against the former current statuses:
+
+```python
+for current_surface in current_surfaces:
+    assert "waiting_for_inbound_public_alpha_submission" not in current_surface
+    assert "every Stage 1 exit target genuinely passes" not in current_surface
+    assert "Stage 2 has not begun" not in current_surface
+```
+
+- [ ] **Step 2: Verify the red state**
+
+Run the focused public-alpha, public-positioning, and owner-led stage tests. Expected: failures on
+the old pricing promise, old waiting status, and old Stage 1 dependency.
+
+- [ ] **Step 3: Align each current-facing surface**
+
+Apply these exact rules:
+
+- README and site: owner-led Stage 2 is active; optional external discovery is separate; no paid
+  product or billing exists; no customer validation is claimed.
+- Feedback template: retain outcome/timing/impact/reuse fields, remove Stage 1 credit language,
+  keep price and design-partner fields absent, and state that submission neither reopens Stage 1
+  nor validates a customer or market.
+- Outcome, quickstart, checklist, and unblocker: treat public-alpha naming as a legacy channel name;
+  voluntary feedback is optional and not required for Stage 2 productization.
+- Design-partner sprint: make it a dormant optional research protocol that requires a separate
+  owner authorization before use, but no Stage 1 target.
+- Market-positioning hypotheses: preserve all hypotheses as unvalidated and mark discovery
+  optional.
+- Changelog: record the owner strategy decision under Unreleased without presenting it as product
+  validation.
+
+- [ ] **Step 4: Verify the public surface and repository contracts**
+
+Run:
+
+```bash
 uv run python -m pytest -q tests/test_repository_contracts.py
 uv run ruff check tests/test_repository_contracts.py
 git diff --check
 ```
 
-Expected: all pass.
+Expected: every repository contract passes, Ruff reports no findings, and the diff check exits 0.
 
-- [ ] **Step 5: Commit the completed packet**
+- [ ] **Step 5: Commit the aligned surfaces**
+
+Stage only the named Task 2 files and commit:
 
 ```bash
-git add -- docs/commercialization/stage2-readiness-packet.md \
-  tests/test_repository_contracts.py
-git commit -m "docs: complete Stage 2 readiness materials"
+git commit -m "docs: separate optional discovery from productization"
 ```
 
-### Task 3: Run broad verification and review
+### Task 3: Verify, review, and publish the revised PR head
 
 **Files:**
-- Verify only unless a confirmed in-scope defect needs a test-first repair.
+- Verify only unless a confirmed defect requires a test-first repair.
 
 **Interfaces:**
-- Consumes: committed packet and contract.
-- Produces: current-head verification evidence and clean review disposition.
+- Consumes: completed strategy and aligned surfaces.
+- Produces: reviewed exact-head evidence and a ready-for-owner-review PR.
 
-- [ ] **Step 1: Run complete verification**
+- [ ] **Step 1: Run local verification**
 
 ```bash
 uv run ruff check .
-uv run python -m pytest \
-  --cov=scopeproof_core \
-  --cov=apps \
-  --cov-report=term-missing:skip-covered \
-  --cov-fail-under=95 \
-  -q
+uv run python -m pytest --cov=scopeproof_core --cov=apps --cov-report=term-missing:skip-covered --cov-fail-under=95 -q
 uv run python -m pytest -q tests/test_repository_contracts.py
 uv run scopeproof benchmark
 uv run scopeproof comparison-benchmark
-git diff --check main...HEAD
+git diff --check origin/main...HEAD
 ```
 
-Expected: Ruff, suite, at least 95 percent coverage, contracts, benchmarks, and diff pass; benchmark
-mismatches, must-have False Ready, false blockers, and unexecuted categories remain zero; comparison
-reports `does_not_advance_stage_1: true`.
+Expected: Ruff and tests pass; combined coverage is at least 95 percent; the acceptance benchmark
+has zero mismatches, zero must-have False Ready outcomes, zero false blockers, and no unexecuted
+categories; the comparison benchmark has zero mismatches.
 
-- [ ] **Step 2: Audit commits and preserved state**
+- [ ] **Step 2: Audit and preserve local state**
 
 ```bash
-git log --oneline main..HEAD
-git diff --stat main...HEAD
 git status --short --branch
-shasum -a 256 ".coverage 2"
+git diff --stat origin/main...HEAD
+git log --oneline origin/main..HEAD
+stat -f '%N|%z|%m|%i' '.coverage 2'
+shasum -a 256 '.coverage 2'
 ```
 
-Expected: only approved documents and the focused contract changed; `.coverage 2` remains untracked
-with SHA-256 `b392e4579f77b2dfd1ca904f1569e01dc887f79af9573e66534c85d7cb0e97fb`.
+Expected: `.coverage 2` remains the only untracked file with SHA-256
+`b392e4579f77b2dfd1ca904f1569e01dc887f79af9573e66534c85d7cb0e97fb`, size 53248,
+mtime 1784162591, and inode 184803784.
 
-- [ ] **Step 3: Obtain independent read-only review**
+- [ ] **Step 3: Push and update PR #195**
 
-Review for whole-document presence-only tests, wording that implies Stage 1 completion or Stage 2
-activation, inferred commercial signals, and accidental outreach authorization. Require zero
-unresolved Critical or Important findings; repair confirmed findings test-first.
+Push `codex/stage2-readiness-packet`. Change the PR title to
+`docs: adopt owner-led Stage 2 productization`. The body must record both exact statuses, five zero
+counts, the optional external-discovery boundary, local verification, and the no-merge/no-release
+boundary. Keep the PR draft during review.
 
-- [ ] **Step 4: Stop at publication gate**
+- [ ] **Step 4: Obtain independent review**
 
-Do not push, open a pull request, merge, release, tag, publish, or begin outreach without separate
-owner authorization after review of the completed branch.
+Review the exact pushed head for stale Stage 1 dependencies, Stage 2 activation contradictions,
+pricing-form mismatch, whole-document presence-only contracts, and customer-validation overclaims.
+Resolve every actionable Critical or Important finding test-first and repeat affected verification.
+
+- [ ] **Step 5: Make the reviewed PR ready and monitor checks**
+
+Mark the PR ready only after independent review reports zero unresolved Critical or Important
+findings. Monitor every exact-head check until terminal. Repair only confirmed in-scope failures on
+the same branch.
+
+- [ ] **Step 6: Stop at the owner merge decision**
+
+Confirm the PR is current with `origin/main`, clean, mergeable, reviewed, and green or truthfully
+classified. Do not merge.
