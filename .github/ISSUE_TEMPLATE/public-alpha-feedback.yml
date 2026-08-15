@@ -112,6 +112,16 @@ body:
         - Independent observer
     validations:
       required: true
+  - type: dropdown
+    id: timing_observer_relationship
+    attributes:
+      label: Timing observer relationship
+      description: For observed timing, confirm the observer was not the participant. Otherwise select Not independently observed.
+      options:
+        - Not independently observed
+        - Observer was not the participant
+    validations:
+      required: true
   - type: input
     id: timing_public_evidence_url
     attributes:

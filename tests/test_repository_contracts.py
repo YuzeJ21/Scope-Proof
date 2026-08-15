@@ -2387,6 +2387,7 @@ def test_optional_external_feedback_collects_bounded_signals_without_price_resea
         "outcome",
         "timing_evidence",
         "timing_observer_category",
+        "timing_observer_relationship",
         "timing_public_evidence_url",
         "useful_gap_category",
         "decision_impact",
@@ -2422,6 +2423,7 @@ def test_optional_external_feedback_collects_bounded_signals_without_price_resea
         "price_discussion",
     )
     assert all(f"id: {field_id}" not in template for field_id in forbidden_ids)
+    assert template.count("        - Clarified my review decision") == 1
 
 
 def test_optional_external_feedback_timing_is_single_source_and_fail_closed() -> None:
@@ -2431,6 +2433,7 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
 
     assert "id: timing_evidence" in template
     assert "id: timing_observer_category" in template
+    assert "id: timing_observer_relationship" in template
     assert "id: timing_public_evidence_url" in template
     for removed_id in (
         "completion_time",
@@ -2468,19 +2471,37 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
         encoding="utf-8"
     )
     normalized = " ".join(packet.replace("`", "").split())
-    assert (
-        "Observed timing requires a non-not_observed timing_observer_category and a valid "
-        "public HTTPS timing_public_evidence_url" in normalized
-    )
-    assert (
-        "Not independently observed requires timing_observer_category not_observed and "
-        "timing_public_evidence_url exactly Not observed" in normalized
-    )
+    assert "Observed timing requires a non-not_observed timing_observer_category" in normalized
+    assert "timing_observer_relationship distinct_from_participant" in normalized
+    assert "and a valid public HTTPS timing_public_evidence_url" in normalized
+    assert "Not independently observed requires timing_observer_category not_observed" in normalized
+    assert "timing_observer_relationship not_observed" in normalized
+    assert "timing_public_evidence_url exactly Not observed" in normalized
     assert "Every other timing-provenance combination remains on hold" in normalized
     assert (
         "timing_public_evidence_content_sha256 binds the exact fetched public evidence bytes"
         in normalized
     )
+
+
+def test_optional_discovery_timing_requires_a_distinct_observer_relationship() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    relationship = template.split(
+        "id: timing_observer_relationship", maxsplit=1
+    )[1].split("- type:", maxsplit=1)[0]
+    assert "- Not independently observed" in relationship
+    assert "- Observer was not the participant" in relationship
+    assert "required: true" in relationship
+    assert "timing_observer_relationship distinct_from_participant" in normalized
+    assert "timing_observer_relationship not_observed" in normalized
+    assert "Never infer observer distinctness from an observer category" in normalized
 
 
 def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
@@ -2505,10 +2526,11 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert "material correction requires a new qualification record" not in combined
     assert "assigned only to the next open cohort" not in combined
     assert (
-        "one required timing_observer_category dropdown and one required "
-        "timing_public_evidence_url input" in combined
+        "one required timing_observer_category dropdown, one required "
+        "timing_observer_relationship dropdown, and one required timing_public_evidence_url input"
+        in combined
     )
-    assert "two required structured timing-provenance fields" in normalized_design
+    assert "three required structured timing-provenance fields" in normalized_design
     assert "evidence_snapshot_sha256" in normalized_design
     assert "alpha_case_id" in normalized_design
     assert "review_id" in normalized_design
@@ -2555,8 +2577,9 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
             "timing_public_evidence_content_sha256",
             "confirmed_criteria_sha256",
             "checked_must_have_criterion_ids",
-            "participant_false_ready_statement",
-            "source_owner_false_ready_confirmation",
+            "participant_false_ready_attestation",
+            "source_owner_false_ready_attestation",
+            "timing_observer_relationship",
         ):
             assert snapshot_field in repair_document
         assert 'ConfigDict(extra="forbid", strict=True, frozen=True)' in repair_document
@@ -2583,7 +2606,11 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
         "Independently observed: more than 10 minutes",
     ):
         assert f"        '\"{option}\"'," in timing_contract
-    for timing_field in ("timing_observer_category", "timing_public_evidence_url"):
+    for timing_field in (
+        "timing_observer_category",
+        "timing_observer_relationship",
+        "timing_public_evidence_url",
+    ):
         assert "required: false" not in plan.split(
             f"id: {timing_field}", maxsplit=1
         )[1].split("```", maxsplit=1)[0]
@@ -2623,12 +2650,13 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
         "confirmed_criteria_sha256",
         "source_owner_confirmed",
         "checked_must_have_criterion_ids",
-        "participant_false_ready_statement",
+        "participant_false_ready_attestation",
         "participant_false_ready_criterion_id",
-        "source_owner_false_ready_confirmation",
+        "source_owner_false_ready_attestation",
         "outcome",
         "timing_evidence",
         "timing_observer_category",
+        "timing_observer_relationship",
         "timing_public_evidence_url",
         "timing_public_evidence_content_sha256",
         "useful_gap_category",
@@ -2664,6 +2692,8 @@ def test_optional_discovery_snapshot_has_strict_canonical_field_types() -> None:
         "source_owner_confirmed is StrictBool",
         "checked_must_have_criterion_ids is a tuple of StrictStr values",
         "participant_false_ready_criterion_id is StrictStr | None",
+        "participant_false_ready_attestation and source_owner_false_ready_attestation use the "
+        "exact canonical Literal sets",
         "enum-backed fields are Literal values from the canonical decision-value mapping",
         "URLs remain StrictStr rather than a coercing or normalizing URL type",
         "No Boolean, integer, datetime, URL, enum, list, or string coercion is allowed",
@@ -2979,16 +3009,42 @@ def test_optional_discovery_false_ready_requires_participant_and_source_owner_ev
         "confirmed, not_confirmed, or unknown",
         "Confirmed participant False Ready requires all of",
         "saved review final gate is Ready and bound to the exact reviewed head",
-        "participant identifies a specific must-have criterion",
-        "source owner confirms explicit missing or conflicting acceptance evidence",
+        "participant_false_ready_attestation is exactly "
+        "affirmed_specific_must_have_should_not_be_ready",
+        "participant identifies one specific checked must-have criterion",
+        "source_owner_false_ready_attestation is exactly "
+        "confirmed_missing_or_conflicting_acceptance_evidence",
         "evidence_snapshot_sha256 binds the complete confirmation record",
         "snapshot binds final_gate, confirmed_criteria_sha256, source_owner_confirmed",
-        "checked_must_have_criterion_ids, participant_false_ready_statement",
-        "participant_false_ready_criterion_id, and source_owner_false_ready_confirmation",
+        "checked_must_have_criterion_ids, participant_false_ready_attestation",
+        "participant_false_ready_criterion_id, and source_owner_false_ready_attestation",
         "For a Ready result, missing any other confirmed condition yields unknown, never "
         "not_confirmed",
     ):
         assert required in normalized
+
+
+def test_false_ready_uses_exact_attestation_enums_not_semantic_text() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "participant_false_ready_attestation",
+        "source_owner_false_ready_attestation",
+        "affirmed_specific_must_have_should_not_be_ready",
+        "affirmed_no_false_ready_after_complete_must_have_check",
+        "confirmed_missing_or_conflicting_acceptance_evidence",
+        "confirmed_no_missing_or_conflicting_evidence_after_complete_must_have_check",
+        "not_applicable_final_gate_not_ready",
+        "No semantic interpretation of prose may affect participant_false_ready",
+        "Free-text notes are non-authoritative context",
+        "excluded from the snapshot payload",
+    ):
+        assert required in normalized
+    assert "participant_false_ready_statement" not in normalized
+    assert "source_owner_false_ready_confirmation" not in normalized
 
 
 def test_optional_discovery_unknown_false_ready_blocks_continue() -> None:
@@ -3083,8 +3139,8 @@ def test_not_confirmed_false_ready_has_an_affirmative_evidence_predicate() -> No
     for required in (
         "participant_false_ready is not_confirmed only when",
         "the exact-head final gate is not Ready",
-        "or a Ready result has both an explicit participant no-False-Ready statement",
-        "and source-owner confirmation after checking every must-have criterion",
+        "or a Ready result has both exact negative participant/source-owner attestations",
+        "after checking every must-have criterion",
         "evidence_snapshot_sha256 binds that negative confirmation",
         "checked_must_have_criterion_ids must equal the complete ordered must-have set",
         "Otherwise classify unknown",

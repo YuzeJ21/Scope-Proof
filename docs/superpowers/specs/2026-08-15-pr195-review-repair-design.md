@@ -28,15 +28,17 @@ required dropdown whose mutually exclusive values combine both facts:
 - Independently observed: 5 to 10 minutes; and
 - Independently observed: more than 10 minutes.
 
-Replace free-text timing support with two required structured timing-provenance fields: one required
-`timing_observer_category` dropdown and one required `timing_public_evidence_url` input. The
+Replace free-text timing support with three required structured timing-provenance fields: one
+required `timing_observer_category` dropdown, one required `timing_observer_relationship`
+dropdown, and one required `timing_public_evidence_url` input. The
 observer dropdown has only `Not independently observed`, `Source owner`, `Directly authorized
 criteria representative`, and `Independent observer`. Observed timing is usable only with a
-non-not-observed observer category and a validated, publicly reachable HTTPS evidence URL. A
-not-observed timing selection requires the not-observed observer category and the exact `Not
-observed` sentinel in the URL field. Every other combination remains on hold. Observed timing also
-requires `timing_public_evidence_content_sha256`, the digest of the exact fetched public evidence
-bytes; a mutable URL without that content digest does not qualify.
+non-not-observed observer category, relationship `distinct_from_participant`, and a validated,
+publicly reachable HTTPS evidence URL. A not-observed timing selection requires not-observed values
+for both category and relationship plus the exact `Not observed` sentinel in the URL field. An
+observer category never proves distinctness. Every other combination remains on hold. Observed
+timing also requires `timing_public_evidence_content_sha256`, the digest of the exact fetched public
+evidence bytes; a mutable URL without that content digest does not qualify.
 
 ### Cohort allocation
 
@@ -65,11 +67,13 @@ normalization may change the validated input or canonical bytes. Changing any ty
 normalization, or representation requires a new snapshot schema version.
 
 The snapshot also binds `final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`, the
-complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_statement`,
-`participant_false_ready_criterion_id`, and `source_owner_false_ready_confirmation`. These are the
-validated inputs for `participant_false_ready`; the derived enum alone is insufficient.
-A Ready negative attestation follows only the packet's complete `not_confirmed` predicate; its
-intentionally null criterion ID is not treated as a missing affirmative-confirmation condition.
+complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_attestation`,
+`participant_false_ready_criterion_id`, and `source_owner_false_ready_attestation`. The two
+attestation fields use only the packet's exact canonical `Literal` values; semantic prose is
+non-authoritative and excluded from the snapshot. These are the validated inputs for
+`participant_false_ready`; the derived enum alone is insufficient. A Ready negative attestation
+follows only the packet's complete exact-enum `not_confirmed` predicate; its intentionally null
+criterion ID is not treated as a missing affirmative-confirmation condition.
 
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. An initially incomplete or mismatched submission uses the later atomic

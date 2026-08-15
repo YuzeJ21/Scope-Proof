@@ -81,7 +81,7 @@ unavailable answer as `unknown`, a refused answer as `declined`, and an unobserv
 | Public case and exact reviewed head | Public reference plus 40-character SHA | `unknown` |
 | Participant role category | Attributable role category without a direct identifier | `unknown` |
 | Completed-review and validated-outcome references | Public references | `unknown` |
-| Completion-time evidence | Independent observer category plus public evidence reference | `not observed` |
+| Completion-time evidence | Independent observer category, distinct-observer relationship, and public evidence reference | `not observed` |
 | Self-reported completion time | Self-reported completion time remains `not observed` | `not observed` |
 | Alternative workflow | One of `prefer_different_job`, `existing_alternative_sufficient`, `current_job_and_tool_gap`, `unknown`, or `declined` | `unknown` |
 | `outcome` | One of `found_useful_gap`, `showed_only_known_information`, or `created_friction` | `unknown` |
@@ -105,12 +105,15 @@ or multiply selected value rather than normalizing it heuristically.
 | `outcome` | `found_useful_gap`, `showed_only_known_information`, `created_friction` | `Found a useful previously unknown gap` -> `found_useful_gap`; `Produced only already-known information` -> `showed_only_known_information`; `Created material product friction` -> `created_friction` |
 | `timing_evidence` | `not_observed`, `observed_under_5m`, `observed_5_to_10m`, `observed_over_10m` | `Not independently observed` -> `not_observed`; `Independently observed: under 5 minutes` -> `observed_under_5m`; `Independently observed: 5 to 10 minutes` -> `observed_5_to_10m`; `Independently observed: more than 10 minutes` -> `observed_over_10m` |
 | `timing_observer_category` | `not_observed`, `source_owner`, `authorized_criteria_representative`, `independent_observer` | `Not independently observed` -> `not_observed`; `Source owner` -> `source_owner`; `Directly authorized criteria representative` -> `authorized_criteria_representative`; `Independent observer` -> `independent_observer` |
+| `timing_observer_relationship` | `not_observed`, `distinct_from_participant` | `Not independently observed` -> `not_observed`; `Observer was not the participant` -> `distinct_from_participant` |
 | `useful_gap_category` | `missing_implementation_evidence`, `weak_or_misleading_candidate_evidence`, `missing_test_evidence`, `stale_evidence_after_new_commit`, `unclear_acceptance_criteria`, `another_attributable_public_finding`, `no_new_useful_gap` | `Missing implementation evidence` -> `missing_implementation_evidence`; `Weak or misleading candidate evidence` -> `weak_or_misleading_candidate_evidence`; `Missing test evidence` -> `missing_test_evidence`; `Stale evidence after a new commit` -> `stale_evidence_after_new_commit`; `Unclear acceptance criteria` -> `unclear_acceptance_criteria`; `Another attributable public finding` -> `another_attributable_public_finding`; `No new useful gap` -> `no_new_useful_gap` |
 | `decision_impact` | `changed`, `clarified`, `confirmed_existing`, `no_effect`, `indeterminate` | `Changed my review decision` -> `changed`; `Clarified my review decision` -> `clarified`; `Confirmed an existing review decision` -> `confirmed_existing`; `Had no effect on my review decision` -> `no_effect`; `Could not determine a decision` -> `indeterminate` |
 | `reuse_response` | `yes`, `no`, `unsure`, `declined` | `Yes, I intend to use ScopeProof on another PR` -> `yes`; `No` -> `no`; `Unsure` -> `unsure`; `Prefer not to answer` -> `declined` |
 | `alternative_workflow` | `prefer_different_job`, `existing_alternative_sufficient`, `current_job_and_tool_gap`, `unknown`, `declined` | No current public-form field; require a separate explicit bounded selection |
 | `friction_category` | `installation_or_setup`, `criteria_confirmation`, `evidence_quality`, `runtime_verification`, `decision_or_export`, `comparison_or_rereview`, `other_material_friction`, `none`, `unknown`, `declined` | No direct public-form mapping. Free-text friction is non-authoritative context and cannot populate `friction_category`; require a separate explicit bounded selection |
 | `evidence_boundary_understanding` | `understood`, `misunderstood`, `unsure`, `declined` | `I understand ScopeProof is an evidence assistant, not a correctness oracle; static or implementation evidence does not prove test or runtime verification.` -> `understood`; do not infer any other value without a separate explicit bounded selection |
+| `participant_false_ready_attestation` | `affirmed_specific_must_have_should_not_be_ready`, `affirmed_no_false_ready_after_complete_must_have_check`, `not_applicable_final_gate_not_ready` | No current public-form field; require a separate exact bounded selection and never derive it from prose |
+| `source_owner_false_ready_attestation` | `confirmed_missing_or_conflicting_acceptance_evidence`, `confirmed_no_missing_or_conflicting_evidence_after_complete_must_have_check`, `not_applicable_final_gate_not_ready` | No current public-form field; require a separate exact bounded selection and never derive it from prose |
 | `participant_false_ready` | `confirmed`, `not_confirmed`, `unknown` | Derive only through the evidence predicates below; never map a direct form label |
 
 ## Optional-discovery decision rules
@@ -139,9 +142,10 @@ others: `schema_version` fixed to `optional-discovery-evidence-snapshot-v1`, `al
 `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
 `alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`, `outcome`,
 `final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`,
-`checked_must_have_criterion_ids`, `participant_false_ready_statement`,
-`participant_false_ready_criterion_id`, `source_owner_false_ready_confirmation`,
-`timing_evidence`, `timing_observer_category`, `timing_public_evidence_url`,
+`checked_must_have_criterion_ids`, `participant_false_ready_attestation`,
+`participant_false_ready_criterion_id`, `source_owner_false_ready_attestation`,
+`timing_evidence`, `timing_observer_category`, `timing_observer_relationship`,
+`timing_public_evidence_url`,
 `timing_public_evidence_content_sha256`,
 `useful_gap_category`, `decision_impact`, `reuse_response`, `alternative_workflow`,
 `friction_category`, `evidence_boundary_understanding`, and `participant_false_ready`.
@@ -179,12 +183,13 @@ the model has no aliases and no defaults. Its exact strict field types and JSON 
 - `checked_must_have_criterion_ids` is a tuple of `StrictStr` values, with zero through 256 unique
   items in exact criterion order; every item has length 1 through 128 and matches
   `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`. It serializes as one JSON array in tuple order.
-- `participant_false_ready_statement` and `source_owner_false_ready_confirmation` are `StrictStr`
-  with length 1 through 2,000 and preserve every code point exactly.
+- `participant_false_ready_attestation` and `source_owner_false_ready_attestation` use the exact
+  canonical `Literal` sets in their mapping-table rows.
   `participant_false_ready_criterion_id` is `StrictStr | None`; its string branch uses the same
   criterion-ID constraints and its absent branch serializes only as JSON `null`.
 - The enum-backed fields are `Literal` values from the canonical decision-value mapping, with no
-  aliases: `outcome`, `timing_evidence`, `timing_observer_category`, `useful_gap_category`,
+  aliases: `outcome`, `timing_evidence`, `timing_observer_category`,
+  `timing_observer_relationship`, `useful_gap_category`,
   `decision_impact`, `reuse_response`, `alternative_workflow`, `friction_category`,
   `evidence_boundary_understanding`, and `participant_false_ready`. Each field's `Literal` members
   are exactly the canonical enum values in its mapping-table row.
@@ -205,11 +210,15 @@ public feedback `outcome` matches it exactly after this fixed mapping:
 `showed_only_known_information` maps to `Produced only already-known information`, and
 `created_friction` maps to `Created material product friction`. A missing or different public value
 keeps the qualification record on hold and is not counted.
-Observed timing requires a non-`not_observed` `timing_observer_category` and a valid public HTTPS
+Observed timing requires a non-`not_observed` `timing_observer_category`,
+`timing_observer_relationship` `distinct_from_participant`, and a valid public HTTPS
 `timing_public_evidence_url` that passes the same canonical public-source validation and is publicly
-reachable. Not independently observed requires `timing_observer_category` `not_observed` and
-`timing_public_evidence_url` exactly `Not observed`. Every other timing-provenance combination
-remains on hold and is not counted; neither field can upgrade a `not_observed` timing selection.
+reachable. Not independently observed requires `timing_observer_category` `not_observed`,
+`timing_observer_relationship` `not_observed`, and `timing_public_evidence_url` exactly
+`Not observed`. Never infer observer distinctness from an observer category: a source owner or
+criteria representative who is also the participant cannot qualify as an independent observer.
+Every other timing-provenance combination remains on hold and is not counted; no provenance field
+can upgrade a `not_observed` timing selection.
 For observed timing, `timing_public_evidence_content_sha256` binds the exact fetched public evidence
 bytes after a bounded public-only fetch that executes no target-repository code. It must be the
 64-character lowercase SHA-256 of those bytes. A mutable URL without this content digest does not
@@ -233,8 +242,8 @@ same completed session can appear in at most one cohort. Any post-freeze change 
 qualification or decision field invalidates the affected cohort. Canonical fields are
 `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
 `alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`,
-`evidence_snapshot_sha256`, outcome, timing evidence, timing observer category, timing public
-evidence URL,
+`evidence_snapshot_sha256`, outcome, timing evidence, timing observer category, timing observer
+relationship, timing public evidence URL,
 `useful_gap_category`, decision impact, reuse response, alternative workflow, `friction_category`,
 evidence-boundary understanding, and `participant_false_ready`. Non-authoritative context or typo
 edits outside those fields do not invalidate a cohort. An invalidated cohort remains on hold whether
@@ -267,34 +276,38 @@ Pivot-positive is true only for `prefer_different_job` or `existing_alternative_
 toward Pivot. Pivot requires at least 3 of 5 Pivot-positive records after Stop does not apply.
 
 Confirmed participant False Ready requires all of these conditions: the saved review final gate is
-Ready and bound to the exact reviewed head; the participant identifies a specific must-have
-criterion that should not have been Ready; the source owner confirms explicit missing or
-conflicting acceptance evidence at that head; and `evidence_snapshot_sha256` binds the complete
-confirmation record. For a Ready result, missing any other confirmed condition yields `unknown`,
-never `not_confirmed`, but this missing-condition rule applies only after an affirmative False Ready
-allegation. A Ready negative attestation is evaluated only by the `not_confirmed` rule below and is
-not a missing confirmed condition. A final gate that is not Ready is `not_confirmed` under the rule
-below. A Ready gate by itself is not a False Ready observation.
+Ready and bound to the exact reviewed head; `participant_false_ready_attestation` is exactly
+`affirmed_specific_must_have_should_not_be_ready`; the participant identifies one specific checked
+must-have criterion; `source_owner_false_ready_attestation` is exactly
+`confirmed_missing_or_conflicting_acceptance_evidence`; and `evidence_snapshot_sha256` binds the
+complete confirmation record. For a Ready result, missing any other confirmed condition yields
+`unknown`, never `not_confirmed`, but this missing-condition rule applies only after the affirmative
+participant attestation. A Ready negative attestation is evaluated only by the `not_confirmed` rule
+below and is not a missing confirmed condition. A final gate that is not Ready is `not_confirmed`
+under the rule below. A Ready gate by itself is not a False Ready observation.
 
 For every False Ready classification, the snapshot binds `final_gate`,
 `confirmed_criteria_sha256`, `source_owner_confirmed`, `checked_must_have_criterion_ids`,
-`participant_false_ready_statement`, `participant_false_ready_criterion_id`, and
-`source_owner_false_ready_confirmation`. `confirmed_criteria_sha256` must equal the validated digest
+`participant_false_ready_attestation`, `participant_false_ready_criterion_id`, and
+`source_owner_false_ready_attestation`. `confirmed_criteria_sha256` must equal the validated digest
 of the exact ordered confirmed-criterion snapshot. `source_owner_confirmed` must be `true`.
 `checked_must_have_criterion_ids` must equal the complete ordered must-have set from that snapshot.
-For `confirmed`, the participant statement is bounded nonempty text, the criterion ID names one
-checked must-have criterion, and the source-owner confirmation is bounded nonempty text describing
-the missing or conflicting evidence. For a Ready `not_confirmed` result, the participant statement
-explicitly says no False Ready was observed after checking the complete must-have set, the criterion
-ID is `null`, and the source-owner confirmation explicitly confirms that checked set. For a
-non-Ready final gate, both statements use the exact sentinel `Not applicable: final gate not Ready`
-and the criterion ID is `null`. Any missing, mismatched, empty, or contradictory attestation yields
-`unknown`.
+For `confirmed`, use the exact affirmative participant/source-owner attestations above and require
+the criterion ID to name one checked must-have criterion. For a Ready `not_confirmed` result, the
+participant attestation is exactly `affirmed_no_false_ready_after_complete_must_have_check`, the
+criterion ID is `null`, and the source-owner attestation is exactly
+`confirmed_no_missing_or_conflicting_evidence_after_complete_must_have_check`. For a non-Ready final
+gate, both attestations are exactly `not_applicable_final_gate_not_ready` and the criterion ID is
+`null`. Any missing, mismatched, or contradictory attestation yields `unknown`.
+
+No semantic interpretation of prose may affect `participant_false_ready`. Free-text notes are
+non-authoritative context, are excluded from the snapshot payload, and cannot populate or override
+either attestation enum, the criterion ID, or the derived classification.
 
 `participant_false_ready` is `not_confirmed` only when the exact-head final gate is not Ready, or a
-Ready result has both an explicit participant no-False-Ready statement and source-owner
-confirmation after checking every must-have criterion. `evidence_snapshot_sha256` binds that
-negative confirmation. Otherwise classify `unknown`.
+Ready result has both exact negative participant/source-owner attestations after checking every
+must-have criterion. `evidence_snapshot_sha256` binds that negative confirmation. Otherwise
+classify `unknown`.
 
 Continue requires all 5 of 5 `participant_false_ready` values to be `not_confirmed`. A `confirmed`
 value triggers Stop; `unknown` keeps the cohort on hold.

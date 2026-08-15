@@ -26,16 +26,18 @@
   `AlphaCaseRecord` to persist `alpha_case_issue_number` during case initialization. Legacy records
   without it remain ineligible; do not infer or backfill the association.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
-- Timing provenance uses one required `timing_observer_category` dropdown and one required
-  `timing_public_evidence_url` input; free text cannot qualify observed timing.
+- Timing provenance uses required `timing_observer_category` and
+  `timing_observer_relationship` dropdowns plus one required `timing_public_evidence_url` input;
+  free text and observer category alone cannot qualify independently observed timing.
 - The future `evidence_snapshot_sha256` hashes only a validated, exact-version
   `OptionalDiscoveryEvidenceSnapshotV1` canonicalized exactly as the authoritative packet states.
 - That snapshot uses `ConfigDict(extra="forbid", strict=True, frozen=True)` and the packet's strict
   field types and exact JSON representations, with every field required, no aliases or defaults,
   and no coercion or hidden URL/datetime normalization.
 - That snapshot includes `timing_public_evidence_content_sha256`, `confirmed_criteria_sha256`, the
-  complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_statement`, and
-  `source_owner_false_ready_confirmation`; derived enums and mutable URLs alone do not qualify.
+  complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_attestation`, and
+  `source_owner_false_ready_attestation`; the attestations use exact canonical `Literal` values,
+  and semantic prose, derived enums, and mutable URLs alone do not qualify.
 - A Ready negative attestation is evaluated only through the packet's complete `not_confirmed`
   predicate; its null criterion ID is not an incomplete affirmative False Ready allegation.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
@@ -52,7 +54,8 @@
 **Interfaces:**
 - Consumes: the public feedback Issue Form as plain YAML text.
 - Produces: one authoritative `timing_evidence` dropdown, one required
-  `timing_observer_category` dropdown and one required `timing_public_evidence_url` input.
+  `timing_observer_category` dropdown, one required `timing_observer_relationship` dropdown, and
+  one required `timing_public_evidence_url` input.
 
 - [ ] **Step 1: Write the failing timing contract**
 
@@ -65,6 +68,7 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
     )
     assert "id: timing_evidence" in template
     assert "id: timing_observer_category" in template
+    assert "id: timing_observer_relationship" in template
     assert "id: timing_public_evidence_url" in template
     for removed_id in (
         "completion_time",
@@ -86,6 +90,11 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
     assert "- Source owner" in observer
     assert "- Directly authorized criteria representative" in observer
     assert "- Independent observer" in observer
+    relationship = template.split("id: timing_observer_relationship", maxsplit=1)[1].split(
+        "- type:", maxsplit=1
+    )[0]
+    assert "- Not independently observed" in relationship
+    assert "- Observer was not the participant" in relationship
     public_evidence = template.split("id: timing_public_evidence_url", maxsplit=1)[1].split(
         "- type:", maxsplit=1
     )[0]
@@ -133,6 +142,16 @@ In `.github/ISSUE_TEMPLATE/public-alpha-feedback.yml`, use:
         - Source owner
         - Directly authorized criteria representative
         - Independent observer
+    validations:
+      required: true
+  - type: dropdown
+    id: timing_observer_relationship
+    attributes:
+      label: Timing observer relationship
+      description: For observed timing, confirm the observer was not the participant. Otherwise select Not independently observed.
+      options:
+        - Not independently observed
+        - Observer was not the participant
     validations:
       required: true
   - type: input
