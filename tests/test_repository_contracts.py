@@ -2466,6 +2466,10 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
         "def test_optional_external_feedback_timing_is_single_source_and_fail_closed()",
         maxsplit=1,
     )[1].split("Update the existing bounded-signals contract", maxsplit=1)[0]
+    cohort_contract = plan.split(
+        "def test_optional_discovery_cohorts_are_ordered_once_and_frozen()",
+        maxsplit=1,
+    )[1].split("Step 2: Run the cohort contract", maxsplit=1)[0]
     assert "material correction requires a new qualification record" not in combined
     assert "assigned only to the next open cohort" not in combined
     assert "one required timing_evidence_support field" in combined
@@ -2474,6 +2478,11 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert "evidence_snapshot_sha256" in normalized_design
     assert "alpha_case_id" in normalized_design
     assert "review_id" in normalized_design
+    assert "revalidated participant_false_ready becomes confirmed" in normalized_design
+    assert (
+        "Created material product friction requires one Narrow-positive friction_category"
+        in normalized_design
+    )
     assert "digest or immutable reference" not in normalized_design
     assert "derive canonical outcome from the validated local outcome record" in normalized_design
     assert "public feedback outcome matches it exactly" in normalized_design
@@ -2488,6 +2497,15 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert "evidence_snapshot_sha256" in normalized_plan
     assert "alpha_case_id" in normalized_plan
     assert "review_id" in normalized_plan
+    assert "confirmed-False-Ready invalidation exception" in normalized_plan
+    assert "friction-outcome consistency" in normalized_plan
+    for required in (
+        "Reject a new qualification record before ordering",
+        "same completed session can appear in at most one cohort",
+        "revalidated participant_false_ready becomes confirmed",
+        "Created material product friction requires one Narrow-positive friction_category",
+    ):
+        assert required in cohort_contract
     assert (
         "Consumes: the authoritative Stage 2 packet as plain text; no qualification records."
         in normalized_plan
@@ -2801,6 +2819,8 @@ def test_confirmed_false_ready_bypasses_the_completeness_hold() -> None:
         "incomplete, unknown, or declined"
         in normalized
     )
+    assert "revalidated participant_false_ready becomes confirmed" in normalized
+    assert "exempt from this invalidation hold and returns Stop immediately" in normalized
 
 
 def test_not_confirmed_false_ready_has_an_affirmative_evidence_predicate() -> None:
@@ -2848,6 +2868,11 @@ def test_optional_discovery_narrow_uses_bounded_friction_categories() -> None:
         in normalized
     )
     assert "none, unknown, and declined do not count toward Narrow" in normalized
+    assert (
+        "Created material product friction requires one Narrow-positive friction_category"
+        in normalized
+    )
+    assert "none is contradictory and keeps the record on hold" in normalized
 
 
 def test_inbound_host_sequence_requires_separate_contact_authorization() -> None:

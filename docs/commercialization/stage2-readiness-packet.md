@@ -127,7 +127,9 @@ qualification or decision field invalidates the affected cohort. Canonical field
 evidence-boundary understanding, and `participant_false_ready`. Non-authoritative context or typo
 edits outside those fields do not invalidate a cohort. An invalidated cohort remains on hold whether
 the correction arrives before or after a decision; do not calculate or recalculate a decision, and
-do not allocate the session again. When there are fewer than five unassigned
+do not allocate the session again. A correction whose revalidated `participant_false_ready`
+becomes `confirmed` is exempt from this invalidation hold and returns Stop immediately, even when
+`evidence_snapshot_sha256` changes to bind the confirmation. When there are fewer than five unassigned
 qualifying records, the next cohort remains on hold and no optional-discovery decision is
 calculated.
 
@@ -175,6 +177,9 @@ Narrow-positive friction category is one of `installation_or_setup`, `criteria_c
 `evidence_quality`, `runtime_verification`, `decision_or_export`, `comparison_or_rereview`, or
 `other_material_friction`. `none`, `unknown`, and `declined` do not count toward Narrow. Narrow
 requires the same Narrow-positive `friction_category` in at least 3 of 5 complete records.
+`Created material product friction` requires one Narrow-positive `friction_category`; `none` is
+contradictory and keeps the record on hold. `unknown` and `declined` remain incomplete under the
+completeness rule.
 
 Evaluate confirmed participant False Ready before the completeness precondition. Any `confirmed`
 record returns Stop immediately even when other cohort records are incomplete, `unknown`, or

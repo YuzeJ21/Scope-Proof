@@ -59,8 +59,15 @@ ordered stream once into consecutive cohorts of five: positions 1–5, 6–10, a
 cohort when its fifth member is assigned. Later edits cannot reorder, replace, or repartition a
 frozen cohort. Corrections annotate the original qualification record and never create another
 cohort member. Any post-freeze change to a canonical qualification or decision field invalidates
-the affected cohort and keeps it on hold. Until five unassigned qualifying records exist, the next
-cohort remains on hold and no optional-discovery decision is calculated.
+the affected cohort and keeps it on hold. A correction whose revalidated
+`participant_false_ready` becomes `confirmed` is exempt from this invalidation hold and returns
+Stop immediately, preserving the highest-precedence False Ready rule. Until five unassigned
+qualifying records exist, the next cohort remains on hold and no optional-discovery decision is
+calculated.
+
+`Created material product friction` requires one Narrow-positive `friction_category`; `none` is
+contradictory and keeps the record on hold. This prevents a complete-looking friction outcome from
+reaching Continue without a bounded material-friction category.
 
 ## Alternatives considered
 
