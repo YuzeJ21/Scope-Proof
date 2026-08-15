@@ -136,7 +136,7 @@ def test_r002_engineering_result_is_linked_without_advancing_product_stages() ->
     assert development_link in environment
     assert "R-002 is engineering evidence only" in roadmap
     assert "contribute zero genuine Alpha reviews" in roadmap
-    assert "Stages 2\u20134 remain gated" in roadmap
+    assert "owner-led engineering work but not customer" in " ".join(roadmap.split())
 
 
 def test_r002_module_commands_are_packaged_but_not_live_ci() -> None:
@@ -1483,18 +1483,18 @@ def test_readme_documents_all_export_formats() -> None:
     assert "Markdown, JSON, CSV, and HTML exports" in readme
 
 
-def test_roadmap_uses_evidence_gated_beta_stages() -> None:
+def test_roadmap_preserves_closed_stage_one_and_owner_led_later_gates() -> None:
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
 
     assert "Five completed reviews" in roadmap
     assert "three independent practitioners" in roadmap
     assert "three public repositories" in roadmap
-    assert "waiting_for_inbound_public_alpha_submission" in roadmap
+    assert "closed_not_pursued_by_owner" in roadmap
     assert "source-owner-confirmed criteria" in roadmap
     assert "genuine public pull request" in roadmap
     assert "Software license decision" in roadmap
     assert "Do not create synthetic validation" in roadmap
-    assert "No recurring monitor" in roadmap
+    assert "Do not create recurring external-evidence monitors" in roadmap
 
 
 def test_changelog_points_to_authoritative_release_history() -> None:
@@ -1607,7 +1607,8 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
         assert "publication alignment is underway" not in active_status
         assert "publication alignment is completed" not in active_status
         assert "Stage 1" in active_status
-        assert "remains at zero" in active_status
+        assert "closed_not_pursued_by_owner" in active_status
+        assert "zero" in active_status
 
     assert "current local ingestion and reviewer-loop evidence" not in roadmap
     assert "current candidate's missing-patch" not in status_page
@@ -1794,7 +1795,8 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
         section(status, "### Stage 1 — genuine public alpha", "### Stage 2"),
     )
     for stage_one in stage_one_blocks:
-        assert "waiting_for_inbound_public_alpha_submission" in stage_one
+        assert "closed_not_pursued_by_owner" in stage_one
+        assert "Stage 1 did not pass" in stage_one
         for count in (
             "0/5 qualifying reviews",
             "0/3 independent practitioners",
@@ -1804,16 +1806,8 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
         ):
             assert count in stage_one
 
-        checklist = stage_one.split(
-            "Owner activation checklist — separate authorization required", maxsplit=1
-        )[1]
-        checklist_preamble = " ".join(
-            checklist.split("- Preparation is not outreach", 1)[0].split()
-        )
-        assert (
-            "preparation only; it does not authorize outreach. Current policy remains passive "
-            "and inbound-only absent separate owner authorization."
-        ) in checklist_preamble
+        checklist = stage_one.split("Archived external-evidence distinctions", maxsplit=1)[1]
+        assert "optional external research is separately authorized" in checklist
         for distinction in (
             "Preparation is not outreach",
             "Inbound submissions are not recruited participants",
@@ -1825,48 +1819,51 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
     for document, heading, next_heading, required in (
         (
             roadmap,
-            "## Stage 2 — Commercial discovery",
+            "## Stage 2 — Owner-led productization",
             "## Stage 3",
-            "Stage 2 cannot begin until every Stage 1 target is satisfied.",
+            "External commercial discovery is optional and separate",
         ),
         (
             status,
-            "### Stage 2 — commercial discovery",
+            "### Stage 2 — owner-led productization",
             "### Stage 3",
-            "Stage 2 cannot begin until every Stage 1 target is satisfied.",
+            "External commercial discovery is optional and separate",
         ),
         (
             roadmap,
             "## Stage 3 — Limited beta",
             "## Stage 4",
-            "Stage 3 requires genuine repeated use and separate owner approval.",
+            "Stage 3 may define a bounded release candidate or beta",
         ),
         (
             status,
             "### Stage 3 — limited beta",
             "### Stage 4",
-            "Stage 3 requires genuine repeated use and separate owner approval.",
+            "A future bounded release candidate or beta requires a new owner-authorized plan.",
         ),
         (
             roadmap,
             "## Stage 4 — Evidence-guided expansion decision",
             "## Honest stop and pivot rules",
-            "Stage 4 requires sustained evidence and separate owner approval.",
+            "Stage 4 requires a named constraint",
         ),
         (
             status,
             "### Stage 4 — evidence-guided expansion",
             "## Prioritized post-release decision candidates",
-            "Stage 4 requires sustained evidence and separate owner approval.",
+            "Missing external evidence remains missing",
         ),
         ):
         stage = section(document, heading, next_heading)
         normalized_stage = " ".join(stage.split())
         assert required in normalized_stage
-        assert "No engineering substitute can advance these counts." in normalized_stage
+        assert (
+            "customer" in normalized_stage.lower()
+            or "external evidence" in normalized_stage.lower()
+        )
 
 
-def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
+def test_owner_led_stage_two_strategy_preserves_zero_external_evidence() -> None:
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
     status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
         encoding="utf-8"
@@ -1874,78 +1871,62 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"
     )
-    sprint = Path("docs/commercialization/design-partner-sprint.md").read_text(
-        encoding="utf-8"
-    )
-    positioning = Path("docs/commercialization/market-positioning-hypotheses.md").read_text(
-        encoding="utf-8"
-    )
-    outcome_form = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
-    feedback_form = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
-        encoding="utf-8"
-    )
+    market_comparison = Path(
+        "docs/commercialization/market-comparison-2026-07-26.md"
+    ).read_text(encoding="utf-8")
 
     def section(document: str, start: str, end: str) -> str:
         remainder = document.split(start, maxsplit=1)[1]
         return remainder if not end else remainder.split(end, maxsplit=1)[0]
 
-    stage_one = section(roadmap, "## Stage 1 — Genuine public alpha", "## Stage 2")
-    stage_two = section(roadmap, "## Stage 2 — Commercial discovery", "## Stage 3")
-    status_stage_one = section(
-        status, "### Stage 1 — genuine public alpha", "### Stage 2"
+    stage_blocks = (
+        section(roadmap, "## Stage 1 — Genuine public alpha", "## Stage 2"),
+        section(status, "### Stage 1 — genuine public alpha", "### Stage 2"),
     )
-    status_stage_two = section(
-        status, "### Stage 2 — commercial discovery", "### Stage 3"
+    productization_blocks = (
+        section(roadmap, "## Stage 2 — Owner-led productization", "## Stage 3"),
+        section(status, "### Stage 2 — owner-led productization", "### Stage 3"),
     )
-    status_gap_ledger = section(status, "## Gap ledger", "## Stage roadmap")
-    status_gap_rows = {
-        cells[1].strip(): (cells[2].strip(), cells[3].strip())
-        for line in status_gap_ledger.splitlines()
-        if line.startswith("| ")
-        if len(cells := line.split("|")) == 5
-        if cells[1].strip() != "Gap"
-    }
-    status_queue = section(status, "## Next executable queue", "## Final boundary")
-    current_status = section(packet, "## Current status", "## Activation gate")
-    activation_gate = section(
-        packet, "## Activation gate", "## Post-use discovery guide"
+    packet_status = section(packet, "## Current status", "## Owner-led productization scope")
+    packet_scope = section(
+        packet, "## Owner-led productization scope", "## Optional external discovery"
     )
-    discovery_guide = section(
-        packet, "## Post-use discovery guide", "## Hypothesis ledger"
+    optional_discovery = section(
+        packet, "## Optional external discovery", "## Hypothesis ledger"
     )
-    hypothesis_ledger = " ".join(
-        section(packet, "## Hypothesis ledger", "## Evidence-capture template").split()
-    )
-    evidence_template = " ".join(
-        section(packet, "## Evidence-capture template", "## Decision rules").split()
-    )
-    decision_rules = " ".join(
-        section(packet, "## Decision rules", "## Boundaries").split()
-    )
-    boundaries = " ".join(section(packet, "## Boundaries", "").split())
-    sprint_activation_gate = " ".join(
-        section(sprint, "## Stage 2 activation gate", "## Qualifying case").split()
-    )
-    sprint_queue = " ".join(
-        section(sprint, "## Ordered 30-day queue", "## Signals recorded").split()
-    )
-    sprint_price = " ".join(
-        section(
-            sprint,
-            "## Research-only price hypotheses",
-            "## Evidence that does not count",
-        ).split()
-    )
-    sprint_waiting = " ".join(section(sprint, "## Current waiting condition", "").split())
-    positioning_boundary = " ".join(
-        section(positioning, "## Commercial boundary", "").split()
-    )
-    outcome_handoff = " ".join(
-        section(outcome_form, "## Stage 1 public evidence handoff", "").split()
+    current_headers = "\n".join(
+        (
+            section(roadmap, "# ScopeProof Roadmap", "## Stage 0"),
+            section(
+                status,
+                "# ScopeProof v0.2.3 status, gaps, and next stages",
+                "## Current evidence",
+            ),
+            section(market_comparison, "## Stage implications", ""),
+        )
     )
 
-    assert "waiting_for_inbound_public_alpha_submission" in stage_one
-    assert "Owner operating posture: Stage 1 is paused" in stage_one
+    for stage_one in stage_blocks:
+        normalized_stage_one = " ".join(stage_one.split())
+        assert "closed_not_pursued_by_owner" in normalized_stage_one
+        assert "Stage 1 did not pass" in normalized_stage_one
+        for count in (
+            "0/5 qualifying reviews",
+            "0/3 independent practitioners",
+            "0/3 public repositories",
+            "0/3 independently observed under-ten-minute completions",
+            "0/2 reuse-intent signals",
+        ):
+            assert count in normalized_stage_one
+        assert "not a validated False Ready rate" in normalized_stage_one
+
+    for stage_two in productization_blocks:
+        normalized_stage_two = " ".join(stage_two.split())
+        assert "owner_led_productization_active" in normalized_stage_two
+        assert "owner-led productization" in normalized_stage_two
+        assert "External commercial discovery is optional and separate" in normalized_stage_two
+        assert "does not claim customer validation" in normalized_stage_two
+
     for count in (
         "0/5 qualifying reviews",
         "0/3 independent practitioners",
@@ -1953,117 +1934,33 @@ def test_stage_two_readiness_packet_preserves_paused_stage_one_gate() -> None:
         "0/3 independently observed under-ten-minute completions",
         "0/2 reuse-intent signals",
     ):
-        assert count in stage_one
-        assert count in current_status
-    assert "not a validated False Ready rate" in stage_one
-    assert "Stage 2 readiness materials only; Stage 2 has not begun" in stage_two
-    assert "Stage 2 cannot begin until every Stage 1 target is satisfied." in stage_two
-    assert "separate owner authorization" in stage_two
-    assert "does not authorize outreach" in current_status
-    assert "Every Stage 1 exit condition" in activation_gate
-    assert "separate owner authorization" in activation_gate
-    assert "docs/commercialization/stage2-readiness-packet.md" in stage_two
-    assert "Owner operating posture: Stage 1 is paused" in status_stage_one
-    assert (
-        "Stage 2 readiness materials only; Stage 2 has not begun"
-        in status_stage_two
-    )
-    assert "../commercialization/stage2-readiness-packet.md" in status_stage_two
-    assert "separate owner authorization" in status_stage_two
-    assert status_gap_rows["Stage 2"] == (
-        "Stage and owner gate",
-        "Every Stage 1 target passes and the owner separately authorizes Stage 2 before "
-        "repeat-use and commercial-discovery evidence is collected",
-    )
-    assert "separate owner authorization" in status_queue
-    normalized_discovery_guide = " ".join(discovery_guide.split())
-    assert (
-        "These questions remain dormant until every Stage 1 exit condition has genuine evidence "
-        "and the owner separately authorizes Stage 2."
-    ) in normalized_discovery_guide
-    assert "each change requires attributable completed-use evidence" in hypothesis_ledger
-    assert "unknown" in hypothesis_ledger
-    assert "research anchors only" in hypothesis_ledger
-    assert "not active prices, offers, orders, invoices, purchase agreements" in hypothesis_ledger
-    assert "Independent-observation status and observer category" in evidence_template
-    assert "specific public evidence reference, or `not observed`" in evidence_template
-    assert (
-        "Self-reported completion time is `not observed` for the Stage 1 target"
-        in evidence_template
-    )
-    assert "Completed-review and validated-outcome references" in evidence_template
-    assert "Evidence source and status" in evidence_template
-    assert "Evaluation point: after each non-overlapping set of five qualifying" in decision_rules
-    assert "denominator is exactly five qualifying completed Stage 2 sessions" in decision_rules
-    assert "Precedence, highest first: Stop, Pivot, Narrow, Continue." in decision_rules
-    assert "fewer than 2 of 5" in decision_rules
-    assert "3 or more of 5" in decision_rules
-    assert "Default: hold" in decision_rules
-    assert (
-        "No decision may be calculated while the qualifying denominator is zero"
-        in decision_rules
-    )
-    assert "Do not infer any signal from silence" in boundaries
-    assert "does not resume Stage 1, activate Stage 2, authorize outreach" in boundaries
-    assert "contact or recruit a participant" in boundaries
-    assert "open a recruitment issue, post an announcement, start a recurring monitor" in boundaries
-    assert "private-repository support" in boundaries
-    assert "billing, checkout, subscription" in boundaries
-    assert "release, tag, or package publication" in boundaries
-    assert "Every Stage 1 exit target genuinely passes" in sprint_activation_gate
-    assert "separately authorizes Stage 2" in sprint_activation_gate
-    assert "discovery or price question" in sprint_activation_gate
-    assert "no Stage 2 commercial-discovery or price question may be asked" in sprint_queue
-    assert "Stage 1 outcome/public-feedback path remains separate" in sprint_queue
-    assert "voluntary reuse-intent" in sprint_queue
-    assert "genuine product use alone is insufficient" in sprint_price
-    assert "every Stage 1 exit target genuinely passes" in sprint_price
-    assert "no Stage 2 commercial-discovery or price questions may be asked" in sprint_waiting
-    assert "Stage 1 public-feedback path remains allowed" in sprint_waiting
-    assert "every Stage 1 exit target genuinely passes" in positioning_boundary
-    assert "separately authorizes Stage 2" in positioning_boundary
-    assert "Commercial discovery and price questions remain dormant" in positioning_boundary
-    assert "Stage 1 evidence" in outcome_handoff
-    assert "timing, decision impact, and voluntary reuse intent" in outcome_handoff
-    assert "Stage 2 commercial-discovery and price research remain dormant" in outcome_handoff
-    assert "every Stage 1 exit target genuinely passes" in outcome_handoff
-    assert "owner separately authorizes Stage 2" in outcome_handoff
-    assert "id: reuse_intent" in feedback_form
-    assert "id: timing_observation_status" in feedback_form
-    assert "id: timing_observer_category" in feedback_form
-    assert "id: timing_public_evidence_reference" in feedback_form
-    assert "id: design_partner_interest" not in feedback_form
-    assert "Optional design-partner price discussion" not in feedback_form
-    assert (
-        "self-reported time cannot count toward the Stage 1 under-ten-minute target"
-        in feedback_form
-    )
+        assert count in packet_status
+    assert "does not authorize outreach" in packet_status
+    normalized_packet_scope = " ".join(packet_scope.split())
+    normalized_optional_discovery = " ".join(optional_discovery.split())
+    assert "product and workflow clarity" in normalized_packet_scope
+    assert "deterministic evidence quality" in normalized_packet_scope
+    assert "release, tag, or package publication" in normalized_packet_scope
+    assert "External commercial discovery is optional and separate" in normalized_optional_discovery
+    assert "separate owner authorization" in normalized_optional_discovery
 
-    forbidden_activation_or_validation_claims = (
-        "Stage 1 is complete",
+    protected_current_sections = "\n".join(
+        (*stage_blocks, *productization_blocks, packet_status, packet_scope, optional_discovery)
+    )
+    for forbidden_claim in (
         "Stage 1 passed",
-        "Stage 2 is active",
+        "Stage 1 is complete",
+        "customer validation achieved",
+        "validated demand",
         "validated price",
         "willingness to pay is validated",
-    )
-    for protected_section in (
-        " ".join(current_status.split()),
-        " ".join(activation_gate.split()),
-        normalized_discovery_guide,
-        hypothesis_ledger,
-        evidence_template,
-        decision_rules,
-        boundaries,
-        sprint_activation_gate,
-        sprint_queue,
-        sprint_price,
-        sprint_waiting,
-        positioning_boundary,
-        outcome_handoff,
-        " ".join(feedback_form.split()),
+        "Stages 2\u20134 remain gated",
+        "Stage 1 waits",
+        "Stage 1 remains at zero until",
+        "Stage 2 commercial discovery cannot claim willingness to pay before Stage 1",
     ):
-        for forbidden_claim in forbidden_activation_or_validation_claims:
-            assert forbidden_claim not in protected_section
+        assert forbidden_claim not in protected_current_sections
+        assert forbidden_claim not in current_headers
 
 
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:
@@ -2253,7 +2150,8 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     assert "scopeproof benchmark" in quickstart
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in quickstart
     assert "setup evidence only" in quickstart
-    assert "does not advance Stage 1" in quickstart
+    assert "Stage 1 is closed as not pursued" in quickstart
+    assert "creates no external-evidence credit" in quickstart
     assert "releases/download/v0.2.2/" not in quickstart
     assert "scopeproof-0.2.2" not in quickstart
     assert "Alpha feedback session" in quickstart
@@ -2278,24 +2176,18 @@ def test_participant_evidence_unblocker_prevents_empty_monitoring_loops() -> Non
     checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
 
     assert "[participant evidence unblocker](participant-evidence-unblocker.md)" in checklist
-    assert "waiting_for_inbound_public_alpha_submission" in unblocker
-    assert "public PR URL" in unblocker
-    assert "public HTTPS requirements source" in unblocker
-    assert "explicit authority to confirm criteria" in unblocker
-    assert (
-        "explicit confirmation that no private or confidential information is included" in unblocker
-    )
-    assert "Do not start another overnight monitor" in unblocker
-    assert "/goal Run ScopeProof's first genuine public-alpha case" in unblocker
+    assert "closed_not_pursued_by_owner" in unblocker
+    assert "Stage 1 did not pass" in unblocker
+    assert "must not be used to restart it automatically" in unblocker
+    assert "Do not create recurring" in unblocker
     for forbidden in (
-        "paid OpenAI/LLM API",
+        "private source",
         "billing",
-        "automated outreach",
-        "scraping",
-        "synthetic validation",
-        "invented evidence",
-        "fork testing",
-        "GitHub issue comment",
+        "outreach",
+        "scrape profiles",
+        "invent a participant",
+        "willingness-to-pay result",
+        "notification-only GitHub",
     ):
         assert forbidden in unblocker
 
@@ -2331,7 +2223,7 @@ def test_inbound_alpha_case_submission_path_is_public_safe_and_owner_passive() -
     assert "Use LinkedIn DM only" not in site
     assert "inbound-only" in unblocker
     assert issue_url in unblocker
-    assert "Do not manually contact participants" in unblocker
+    assert "Do not manually contact participants" in " ".join(unblocker.split())
     assert "Submit a public alpha case" in checklist
     assert issue_url in checklist
 
@@ -2426,12 +2318,14 @@ def test_public_site_desktop_hero_keeps_actions_and_safety_boundary_above_the_fo
     assert "clamp(2.35rem, 12vw, 3.5rem)" in mobile_css
 
 
-def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
+def test_optional_commercial_discovery_is_separate_and_evidence_gated() -> None:
     guide_path = Path("docs/commercialization/design-partner-sprint.md")
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    normalized_roadmap = " ".join(roadmap.split())
 
     assert guide_path.is_file()
     guide = guide_path.read_text(encoding="utf-8")
+    normalized_guide = " ".join(guide.split())
     for required in (
         "30-day Design Partner Sprint",
         "free",
@@ -2440,10 +2334,13 @@ def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
         "research hypotheses only",
         "not a purchase agreement",
         "after a genuine participant completes a review",
-        "waiting_for_inbound_public_alpha_submission",
+        "closed_not_pursued_by_owner",
+        "optional",
+        "separate owner authorization",
+        "not customer validation",
         "Local Pro",
     ):
-        assert required in guide
+        assert required in normalized_guide
     for non_evidence in (
         "stars",
         "views",
@@ -2453,16 +2350,15 @@ def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
         "synthetic cases",
         "owner-authored examples",
     ):
-        assert non_evidence in guide
+        assert non_evidence in normalized_guide
 
-    assert "## Stage 2 — Commercial discovery" in roadmap
-    assert "two independent completed participants" in roadmap
-    assert "voluntarily agree to discuss the team-price hypothesis" in roadmap
-    assert "Local Pro remains deferred" in roadmap
-    assert "not revenue, orders, customers, paid demand, or willingness to pay" in roadmap
+    assert "## Stage 2 — Owner-led productization" in roadmap
+    assert "External commercial discovery is optional and separate" in normalized_roadmap
+    assert "does not claim customer validation" in normalized_roadmap
+    assert "does not authorize a merge, release, tag, package publication" in normalized_roadmap
 
 
-def test_public_alpha_feedback_collects_stage_one_signals_without_price_research() -> None:
+def test_optional_external_feedback_collects_bounded_signals_without_price_research() -> None:
     template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(encoding="utf-8")
     for field_id in (
         "public_pr",
@@ -2485,16 +2381,16 @@ def test_public_alpha_feedback_collects_stage_one_signals_without_price_research
         assert f"id: {field_id}" in template
 
     for required_text in (
-        "Stage 1 evidence",
+        "optional external feedback",
         "independently observed timing",
-        "self-reported time cannot count toward the Stage 1 under-ten-minute target",
-        "Stage 2 commercial-discovery and price research remain dormant",
-        "every Stage 1 exit target genuinely passes",
-        "owner separately authorizes Stage 2",
+        "self-reported time remains not observed",
+        "does not reopen Stage 1",
+        "commercial discovery is separate",
+        "customer validation",
         "Prefer not to answer",
         "submission alone is not validation",
     ):
-        assert required_text in template
+        assert required_text.lower() in template.lower()
 
     forbidden_ids = (
         "name",
@@ -2545,15 +2441,19 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
     assert "incomplete review" not in completed_signals
 
 
-def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() -> None:
+def test_public_alpha_mobile_navigation_and_closed_stage_state_are_truthful() -> None:
     site = Path("site/index.html").read_text(encoding="utf-8")
     css = Path("site/styles.css").read_text(encoding="utf-8")
-    active_docs = (
-        Path("ROADMAP.md"),
-        Path("CHANGELOG.md"),
-        Path("docs/alpha/participant-evidence-unblocker.md"),
-        Path("docs/alpha/concierge-host-checklist.md"),
-        Path("docs/commercialization/design-partner-sprint.md"),
+    current_sections = (
+        Path("ROADMAP.md").read_text(encoding="utf-8").split(
+            "## Stage 1 — Genuine public alpha", maxsplit=1
+        )[1],
+        Path("CHANGELOG.md").read_text(encoding="utf-8").split(
+            "## Unreleased", maxsplit=1
+        )[1].split("## 0.2.3", maxsplit=1)[0],
+        Path("docs/alpha/participant-evidence-unblocker.md").read_text(encoding="utf-8"),
+        Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8"),
+        Path("docs/commercialization/design-partner-sprint.md").read_text(encoding="utf-8"),
     )
 
     mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
@@ -2563,10 +2463,9 @@ def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() 
     assert "flex-direction: column" in mobile_css
     assert ".brand { white-space: nowrap;" in mobile_css
     assert "nav { display: flex;" in mobile_css
-    for path in active_docs:
-        content = path.read_text(encoding="utf-8")
-        assert "waiting_for_inbound_public_alpha_submission" in content
-        assert "waiting_for_external_participant_evidence" not in content
+    for current_section in current_sections:
+        assert "closed_not_pursued_by_owner" in current_section
+        assert "waiting_for_inbound_public_alpha_submission" not in current_section
 
 
 def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -> None:
@@ -2592,7 +2491,7 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     for required in (
         "free design-partner review",
         "No paid product or billing is active",
-        "pricing question is optional research after product use",
+        "External commercial discovery is optional and separate",
         "public-repository-only",
         "acceptance-coverage assistant",
         "not an AI code reviewer",
@@ -2603,6 +2502,7 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
         "validated pricing",
         "paid plan is available",
         "proven commercial demand",
+        "pricing question is optional research after product use",
     ):
         assert unsupported_claim not in public_surfaces
 
@@ -2668,13 +2568,10 @@ def test_r001_public_engineering_research_record_is_hash_bound_and_stage_safe() 
     ):
         assert skipped_check in after
     assert "skipped and provide no runtime proof" in after
-    assert "waiting_for_inbound_public_alpha_submission" in roadmap
-    assert "Entry requires every Stage 1 condition." in roadmap
-    assert (
-        "Entry requires every Stage 1 and Stage 2 condition plus a separate owner decision."
-        in roadmap
-    )
-    assert "Only recurring behavior can justify broader scope." in roadmap
+    assert "closed_not_pursued_by_owner" in roadmap
+    assert "Stage 1 did not pass" in roadmap
+    assert "owner_led_productization_active" in roadmap
+    assert "Stage 4 requires a named constraint" in roadmap
     assert "r001-microsoft-hve-core" in readme
     assert "R-001" in changelog
 

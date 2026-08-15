@@ -1,7 +1,7 @@
 name: Public-alpha review feedback
-description: Share a bounded voluntary outcome after reviewing a genuine public pull request.
+description: Share optional bounded external feedback after reviewing a genuine public pull request.
 title: "[Public alpha]: "
-labels: ["external-validation", "dogfood"]
+labels: ["dogfood"]
 body:
   - type: markdown
     attributes:
@@ -15,9 +15,11 @@ body:
         Completed reviews only: if the review is incomplete, do not submit this feedback form.
         Stop or continue in Standard review without recording a completed alpha outcome.
 
-        This Stage 1 evidence form collects the outcome, independently observed timing, decision
-        impact, and voluntary reuse intent. It does not collect Stage 2 commercial-discovery or
-        price research. Stage 2 commercial-discovery and price research remain dormant until every Stage 1 exit target genuinely passes and the owner separately authorizes Stage 2. This submission alone is not validation.
+        This optional external feedback form collects the outcome, independently observed timing,
+        decision impact, and voluntary reuse intent. It does not reopen Stage 1, which the owner
+        closed as not pursued with every count at zero. Commercial discovery is separate and this
+        form collects no price research. A submission alone is not validation and does not establish
+        customer validation, demand, adoption, repeat use, or willingness to pay.
   - type: input
     id: public_pr
     attributes:
@@ -74,7 +76,7 @@ body:
     id: completion_time
     attributes:
       label: Time to inspectable coverage report
-      description: Select a band only when an independent observer records it with a public reference; otherwise select Not observed; self-reported time cannot count toward the Stage 1 under-ten-minute target.
+      description: Select a band only when an independent observer records it with a public reference; otherwise select Not observed; self-reported time remains not observed and creates no stage credit.
       options:
         - Under 5 minutes
         - 5 to 10 minutes

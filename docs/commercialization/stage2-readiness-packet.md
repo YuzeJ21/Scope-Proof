@@ -1,15 +1,12 @@
-# ScopeProof Stage 2 Readiness Packet
+# ScopeProof Owner-Led Stage 2 Productization Packet
 
-This packet prepares dormant post-use research materials. It does not activate Stage 2, authorize
-outreach, or create product-validation or commercial evidence.
+This packet defines the owner-led productization lane. It is not a customer-validation record,
+does not authorize outreach, and does not change the evidence attached to any product claim.
 
 ## Current status
 
-Measured product-validation state: `waiting_for_inbound_public_alpha_submission`.
-
-Owner operating posture: Stage 1 is paused. Stage 2 readiness materials only; Stage 2 has not
-begun. This preparation does not authorize outreach.
-
+- Stage 1: `closed_not_pursued_by_owner`.
+- Stage 2: `owner_led_productization_active`.
 - 0/5 qualifying reviews.
 - 0/3 independent practitioners.
 - 0/3 public repositories.
@@ -18,126 +15,109 @@ begun. This preparation does not authorize outreach.
 - Zero participant False Ready observations across zero participant reviews is not a validated
   False Ready rate.
 
-## Activation gate
+Stage 1 did not pass. The owner chose not to pursue it. Stage 2 begins through explicit owner
+authorization without claiming customer validation. This packet does not authorize outreach or
+participant contact.
 
-Every Stage 1 exit condition must have genuine evidence before Stage 2 can be considered. Stage 2
-also requires separate owner authorization after those conditions pass. Prepared materials, tests,
-demos, releases, downloads, issue activity, owner rehearsals, and elapsed time earn no stage credit.
+## Owner-led productization scope
 
-## Post-use discovery guide
+Stage 2 may improve:
 
-These questions remain dormant until every Stage 1 exit condition has genuine evidence and the
-owner separately authorizes Stage 2. A qualifying public review, participant-selected outcome, and
-validated exact-head record are necessary Stage 1 evidence, but one completed review cannot
-activate this guide. After activation, ask the questions in order:
+- product and workflow clarity;
+- deterministic evidence quality and fail-closed lifecycle integrity;
+- packaging, installation, compatibility, accessibility engineering, and release readiness;
+- documentation and public official-source research; and
+- separately scoped, non-executing evidence adapters with typed provenance.
 
-1. What workflow would you otherwise have used for this pull-request decision?
-2. What attributable result, if any, did ScopeProof expose?
-3. Did the result change, clarify, confirm, or have no effect on a decision?
-4. Which workflow step created the most material friction?
-5. Was the distinction between candidate evidence, runtime verification, and correctness clear?
-6. Would you independently bring another public pull request through this workflow?
-7. After this completed use, would you voluntarily discuss the research-only team-price
-   hypothesis?
+Every result remains bounded to its actual evidence. Tests and CI are engineering evidence, not
+target-repository runtime proof, accessibility conformance, customer use, demand, or adoption.
 
-Do not ask for names, email addresses, employers, private repositories, confidential requirements,
-customer data, payment data, purchase authorization, or sales-contact permission. A participant
-may answer `declined`, and no positive or negative meaning may be inferred from that choice.
+This stage does not authorize outreach, participant contact, a merge, release, tag, or package
+publication, R-002 retuning, R-003 generation, billing, accounts, private-repository support,
+hosted source processing, generic code review, security scanning, automatic fixes, or paid APIs.
+Each requires its own owner decision where applicable.
 
-The [30-day design-partner sprint](design-partner-sprint.md) restates this activation gate for its
-future research workflow. This packet owns deterministic decision evaluation. The
+## Optional external discovery
+
+External commercial discovery is optional and separate from owner-led productization. It is not a
+Stage 2 entry or exit gate and does not run by default. Outreach, recruitment, participant contact,
+or price research requires separate owner authorization.
+
+Passive voluntary feedback may remain available. A response can inform later owner decisions only
+when it is attributable to genuine completed use. It does not reopen Stage 1, create stage credit,
+or retroactively turn engineering work into customer evidence.
+
+The [30-day design-partner sprint](design-partner-sprint.md) is the optional research protocol. The
 [market-positioning hypotheses](market-positioning-hypotheses.md) remain hypotheses until genuine
-completed use supports, mixes, or disconfirms them; neither linked document can loosen this gate.
+evidence supports, mixes, or disconfirms them.
 
 ## Hypothesis ledger
 
-Every hypothesis starts as `unknown`. The only allowed later states are `supported`, `mixed`, and
-`disconfirmed`, and each change requires attributable completed-use evidence.
+Every hypothesis starts as `unknown`. Optional external research may later record `supported`,
+`mixed`, or `disconfirmed` only with attributable completed-use evidence.
 
 | Hypothesis | Initial state | Evidence source |
 |---|---|---|
 | Primary user is a product manager, QA practitioner, or engineer | `unknown` | none |
 | Likely buyer is in QA, engineering, product operations, or product leadership | `unknown` | none |
 | The job is pre-merge acceptance-evidence review at an immutable head | `unknown` | none |
-| Manual checklists, spreadsheets, lifecycle suites, test management, or code review are insufficient alternatives | `unknown` | none |
 | Attributable gaps or clearer changed-head decisions create recurring value | `unknown` | none |
-| Setup, criteria confirmation, public-only scope, unresolved output, or workflow cost is the dominant adoption risk | `unknown` | none |
 | A participant independently intends to reuse ScopeProof | `unknown` | none |
-| A participant voluntarily agrees to discuss the price hypothesis after Stage 2 activation | `unknown` | none |
+| A participant voluntarily agrees to discuss a price hypothesis | `unknown` | none |
 
-USD 99 per team per month and USD 999 per team per year are research anchors only. They are not
-active prices, offers, orders, invoices, purchase agreements, or payment requests.
+USD 99 per team per month and USD 999 per team per year remain research anchors only. They are not
+active prices, offers, orders, invoices, purchase agreements, payment requests, or evidence of
+willingness to pay.
 
 ## Evidence-capture template
 
-This blank Markdown template is not connected to product storage and is not a participant record.
-Do not fill it before genuine completed use. Keep an unavailable answer as `unknown`, a refused
-answer as `declined`, and a measurement that did not occur as `not observed`.
+This blank template is not product storage and is not a participant record. Use it only after
+optional external discovery is separately authorized and genuine completed use exists. Keep an
+unavailable answer as `unknown`, a refused answer as `declined`, and an unobserved measurement as
+`not observed`.
 
 | Field | Allowed value or evidence requirement | Template value |
 |---|---|---|
-| Public case and exact reviewed head | Public case reference plus 40-character SHA | `unknown` |
-| Participant role category | Product, QA, engineering, or another attributable role category | `unknown` |
-| Source-owner confirmation | Public authority path for the confirmed criteria | `unknown` |
-| Completed-review and validated-outcome references | Public saved-review and validated-outcome references | `unknown` |
-| Completion-time band | Under five minutes, five to ten, over ten, or `not observed` | `not observed` |
-| Independent-observation status and observer category | `independently observed` plus an independent observer category, or `not observed` | `not observed` |
-| Completion-time evidence reference | A specific public evidence reference, or `not observed` | `not observed` |
-| Stage 1 timing-credit boundary | Self-reported completion time is `not observed` for the Stage 1 target | `not observed` |
+| Public case and exact reviewed head | Public reference plus 40-character SHA | `unknown` |
+| Participant role category | Attributable role category without a direct identifier | `unknown` |
+| Completed-review and validated-outcome references | Public references | `unknown` |
+| Completion-time evidence | Independent observer category plus public evidence reference | `not observed` |
+| Self-reported completion time | Self-reported completion time remains `not observed` | `not observed` |
 | Alternative workflow | Participant's explicit post-use response | `unknown` |
-| Attributable result | Useful gap, already-known information, friction, or no new information | `unknown` |
-| Decision impact | Changed, clarified, confirmed, no effect, or could not determine | `unknown` |
-| Largest friction | Source, criteria, coverage, decision, export, integration, or another attributable category | `unknown` |
+| Attributable result and decision impact | Explicit post-use response | `unknown` |
 | Evidence-boundary understanding | Understood, misunderstood, unsure, or `declined` | `unknown` |
 | Reuse response | Yes, no, unsure, or `declined` | `unknown` |
 | Optional price-discussion response | Yes, no, unsure, or `declined` | `unknown` |
-| Evidence source and status | Public reference plus `unknown`, `declined`, or `not observed` when applicable | `unknown` |
+| Evidence source and status | Public reference plus explicit status | `unknown` |
 
-## Decision rules
+## Optional-discovery decision rules
 
-Evaluation point: after each non-overlapping set of five qualifying completed Stage 2 sessions.
-For a set to qualify, every session must have a public case and exact reviewed head, a
-completed-review and validated-outcome reference, and attributable participant evidence. The
-denominator is exactly five qualifying completed Stage 2 sessions. If any required evidence is
-missing, ambiguous, private, or self-reported where independent observation is required, the set
-does not qualify and no outcome is calculated.
-
-For a qualifying set, count a session as useful or decision-relevant only when its attributable
-completed-use evidence records either a useful gap or a changed, clarified, or confirmed decision.
-Count repeat-use intent only when the participant explicitly selects `Yes`; `unknown`, `declined`,
-silence, and `not observed` do not count. A confirmed False Ready is a participant-validated
-outcome that identifies an incorrect Ready verdict. A friction category, different-job preference,
-or sufficient existing alternative is repeated only when it is attributable completed-use evidence
-in 3 or more of 5 sessions.
+No customer, product, or commercial decision may be calculated while the qualifying denominator
+is zero. If optional discovery is authorized later, evaluate only non-overlapping sets of five
+qualifying completed sessions with attributable evidence.
 
 Precedence, highest first: Stop, Pivot, Narrow, Continue.
 
-1. **Stop** when confirmed False Ready is not zero, fewer than 2 of 5 sessions are useful or
-   decision-relevant, or zero of 5 participants explicitly select repeat-use intent `Yes`.
-2. **Pivot** when Stop does not apply and a different job is preferred or existing alternatives are
-   sufficient in 3 or more of 5 sessions.
-3. **Narrow** when neither Stop nor Pivot applies and one friction category occurs in 3 or more of
-   5 sessions.
-4. **Continue** when none of the higher-precedence outcomes applies, at least 2 of 5 sessions are
-   useful or decision-relevant, every participant explicitly records evidence-boundary
-   understanding as `Understood`, and confirmed False Ready is zero.
+1. **Stop** for any confirmed False Ready, fewer than 2 of 5 useful or decision-relevant sessions,
+   or zero explicit repeat-use responses.
+2. **Pivot** when Stop does not apply and 3 or more of 5 sessions prefer a different job or find
+   existing alternatives sufficient.
+3. **Narrow** when neither higher rule applies and one friction category occurs in 3 or more of 5.
+4. **Continue discovery** only when none of the higher rules applies, at least 2 of 5 sessions are
+   useful or decision-relevant, the evidence boundary is understood, and confirmed False Ready is
+   zero.
 
-No decision may be calculated while the qualifying denominator is zero. Activity metrics,
-prepared documents, owner opinions, silence, and elapsed time cannot supply a denominator or a
-signal. Default: hold. A hold is fail-closed: do not continue, change scope, infer support, begin
-outreach, or treat the missing evidence as a favorable outcome.
+These optional-discovery rules do not control owner-led productization. Missing evidence defaults
+to hold for discovery and cannot be interpreted as support.
 
 ## Boundaries
 
 Do not infer any signal from silence. `Unknown`, `declined`, `not observed`, incomplete, ambiguous,
-and negative outcomes remain visible and are never rewritten as support.
+and negative outcomes remain visible.
 
-This packet does not resume Stage 1, activate Stage 2, authorize outreach, contact or recruit a
-participant, open a recruitment issue, post an announcement, start a recurring monitor, collect
-external evidence, or establish a customer, buyer, demand, adoption, repeat use, commercial value,
-or pricing evidence.
-
-It adds no form, database, account, billing, checkout, subscription, private-repository support,
-hosted source processing, integration, generic code review, security scanner, automatic fix, paid
-API, release, tag, or package publication. A separate owner decision cannot replace the genuine
-evidence required by the activation gate.
+This packet does not reopen Stage 1 and does not establish customer validation, a validated user or
+buyer, demand, adoption, repeat use, commercial value, willingness to pay, or validated pricing.
+It authorizes no external contact, recruitment issue, announcement, recurring monitor, private
+data collection, form automation, database, account, billing, checkout, subscription, private-
+repository support, hosted processing, integration, generic code review, scanner, automatic fix,
+release, tag, or package publication.

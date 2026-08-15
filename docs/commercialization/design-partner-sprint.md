@@ -1,108 +1,80 @@
 # ScopeProof 30-day Design Partner Sprint
 
-If Stage 2 is activated, ScopeProof will test whether independent reviewers get enough value from
-deterministic acceptance coverage to use it again and voluntarily discuss a possible team product.
-Any future design-partner review is free, public-repository-only research. No paid product or
-billing is active.
+This is an optional external-discovery protocol. It is free and public-repository-only. It is not
+required for owner-led Stage 2 productization, not customer validation, and not active by default.
+No paid product or billing is active.
 
-The current external state is `waiting_for_inbound_public_alpha_submission`. This guide is dormant
-Stage 2 preparation; it does not create participant evidence or make a Stage 1 case actionable for
-discovery by itself.
+Stage 1 is `closed_not_pursued_by_owner`; it did not pass and all recorded counts remain zero.
+Stage 2 is `owner_led_productization_active`. Neither status supplies a participant, customer,
+demand, adoption, repeat-use, price, or paid-demand signal.
 
-## Current state
+ScopeProof v0.2.3 can run the documented local public-PR workflow. That implemented capability is
+engineering evidence, not proof of product value.
 
-ScopeProof v0.2.3 can turn source-owner-confirmed acceptance criteria and one genuine public
-GitHub pull request into an inspectable requirement-to-evidence review. It does not execute the
-pull request, invent requirements, replace QA, or prove correctness.
+## Optional discovery activation gate
 
-No qualifying completed participant case, repeat-use behavior, customer, revenue, validated
-price, or paid demand is currently claimed.
-
-## Stage 2 activation gate
-
-Every Stage 1 exit target genuinely passes and the owner separately authorizes Stage 2 before this
-guide may be used. Until both conditions hold, every Stage 2 commercial-discovery or price question
-remains dormant; one genuine use, a completed review, prepared material, engineering work, or
-elapsed time is insufficient. The separate Stage 1 outcome/public-feedback path may collect
-independently observed timing, decision impact, and voluntary reuse intent after a qualifying
-completed review. This gate does not authorize outreach.
+The owner must separately authorize external discovery before this guide may be used. Stage 1 is
+not a prerequisite and is not reopened. Separate owner authorization for productization does not
+authorize outreach, recruitment, participant contact, or a discovery or price question.
 
 ## Qualifying case
 
-A case enters the sprint only when all of these are explicit and public:
+If optional discovery is authorized, a case qualifies only with:
 
 - a genuine public GitHub pull-request URL;
 - a public HTTPS requirements source;
-- authority from the source owner or a directly authorized criteria confirmer;
-- confirmation that no private code, customer data, credentials, private links, or confidential
-  requirements are included;
-- one confirmed criterion per independently judgeable behavior;
-- a participant who will inspect the result and select their own outcome.
+- explicit source-owner or directly authorized criteria confirmation;
+- confirmation that no private code, credentials, customer data, or confidential requirements are
+  included;
+- one confirmed criterion per independently judgeable behavior; and
+- a participant who inspects the result and selects their own outcome.
 
-Submit the candidate through the
-[inbound public-alpha case form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml).
-A submission is only an intake candidate. It is not validation until a genuine review and a
-participant-selected outcome are complete.
+A case is not customer validation merely because it qualifies. Record only what happened.
 
 ## Ordered 30-day queue
 
-After the Stage 2 activation gate passes, use this queue for qualifying public cases only. Before
-activation, no Stage 2 commercial-discovery or price question may be asked. The separate Stage 1
-outcome/public-feedback path remains separate and may collect independently observed timing,
-decision impact, and voluntary reuse-intent after a qualifying completed review.
+After separate owner authorization, use this queue for qualifying public cases only. Before that
+authorization, no commercial-discovery or price question may be asked. The Optional public-
+feedback path remains separate and may record voluntary timing, decision impact, and reuse intent.
 
-1. Accept only inbound cases that pass every public qualification requirement.
-2. Let the participant confirm the normalized criteria before analysis.
-3. Run the standard public PR → confirm criteria → review coverage → record decisions → export
-   workflow without executing repository code.
+1. Accept only cases that pass every public qualification requirement.
+2. Let the participant confirm normalized criteria before analysis.
+3. Run public PR → confirm criteria → review coverage → record decisions → export without executing
+   repository code.
 4. Bind the saved review to the exact head SHA and participant-selected outcome.
-5. Record independently observed timing only when an independent observer category and a specific
-   public evidence reference support it; otherwise record timing as `not observed`. Record the
-   useful-gap category, decision impact, and friction after the review.
-6. Ask the Stage 2 discovery reuse question only after the participant has inspected the completed
-   result. Stage 1 voluntary reuse intent is collected through the separate Stage 1 path.
-7. Offer the optional research-only price question only after the Stage 2 activation gate has
-   passed and genuine product use is complete.
-8. Preserve negative, incomplete, ambiguous, and no-new-information outcomes without rewriting
-   them as success.
-9. Evaluate the evidence gates after five completed reviews; do not substitute elapsed time or
-   repository activity.
+5. Record independently observed timing only with an observer category and public evidence
+   reference; otherwise record `not observed`.
+6. Ask discovery questions only after the participant inspects the completed result.
+7. Offer a research-only price question only after genuine completed use.
+8. Preserve negative, incomplete, ambiguous, and no-new-information outcomes.
+9. Evaluate optional-discovery rules only with a qualifying denominator.
 
-The owner path stays passive. Do not send email or direct messages, scrape profiles, build a
-contact list, automate outreach, or add notification-only GitHub comments.
+Do not send email or direct messages, scrape profiles, build contact lists, automate outreach, or
+add notification-only GitHub comments.
 
 ## Signals recorded only after a completed review
 
-Record the participant's explicit selection for the non-timing fields below; record timing only
-with independent provenance:
+- completion time, only with independent provenance;
+- participant-selected outcome and useful-gap category;
+- decision impact;
+- largest material friction;
+- evidence-boundary understanding;
+- reuse intent; and
+- optional willingness to discuss a research-only price hypothesis.
 
-- completion time: under five minutes, five to ten minutes, or more than ten minutes, only when an
-  independent observer category and specific public evidence reference support it; otherwise
-  record `not observed`, and never credit self-reported time toward the Stage 1 under-ten-minute
-  target;
-- outcome: useful gap, already-known information, or product friction;
-- useful-gap category: missing implementation, weak or misleading evidence, missing test
-  evidence, stale evidence after a new commit, unclear criteria, another attributable public
-  finding, or no new useful gap;
-- decision impact: changed, clarified, confirmed an existing decision, had no effect, or could not
-  be determined;
-- reuse intent: yes, no, unsure, or prefer not to answer;
-- optional design-partner discussion: yes, no, unsure, or prefer not to answer.
-
-Do not infer any signal from silence. The public feedback form must not collect names, email
-addresses, LinkedIn profiles, employers, payment information, sales-contact permission, private
-repositories, customer information, or confidential material.
+Do not infer any signal from silence. Keep names, email addresses, LinkedIn profiles, employers,
+payment information, sales-contact permission, private repositories, and confidential material out
+of the record.
 
 ## Research-only price hypotheses
 
 The two anchors are **USD 99 per team per month** and **USD 999 per team per year**. They are
 research hypotheses only, not active prices or an offer for sale.
 
-Discuss them only after every Stage 1 exit target genuinely passes, the owner separately authorizes
-Stage 2, and after a genuine participant completes a review; genuine product use alone is
-insufficient. A response is voluntary, may be declined, and is not a purchase agreement, order,
-payment authorization, invoice request, or permission for sales contact. This sprint adds no
-checkout, subscription, billing, payment processor, commercial license, or license key.
+Discuss them only when the owner separately authorizes external discovery and after a genuine
+participant completes a review; genuine product use alone is insufficient. A response is
+voluntary, may be declined, and is not a purchase agreement, order, payment authorization, invoice
+request, customer record, or permission for sales contact.
 
 ## Evidence that does not count
 
@@ -115,51 +87,31 @@ The following do not establish product or commercial validation:
 - constructed demos;
 - synthetic cases;
 - owner-authored examples;
-- technical smokes, CI results, or release activity;
-- a pricing opinion collected before product use;
-- an owner-authored or inferred outcome.
+- technical smokes, CI results, release activity, or owner-led productization; and
+- a pricing opinion collected before product use.
 
 ## Continue, narrow, pivot, and stop gates
 
-After activation, apply the deterministic [Stage 2 readiness packet decision
-rules](stage2-readiness-packet.md#decision-rules). This guide does not independently calculate a
-Continue, Narrow, Pivot, or Stop outcome. Missing, ambiguous, private, or inadequately proven
-evidence remains fail-closed and cannot justify continuation, scope change, or outreach.
+Apply the optional-discovery rules in the
+[Stage 2 productization packet](stage2-readiness-packet.md#optional-discovery-decision-rules).
+Missing, ambiguous, private, or inadequately proven evidence defaults to hold. These rules do not
+gate owner-led productization.
 
 ## Local Pro decision gate
 
-Local Pro remains deferred. Consider a separate product decision only after every genuine-alpha
-gate in the public roadmap passes and:
-
-- at least two independent completed participants explicitly intend to use ScopeProof on another
-  PR;
-- at least two independent completed participants voluntarily agree to discuss the team-price
-  hypothesis;
-- the useful result affects review before approval, review after a new commit, or an
-  acceptance/release decision;
-- zero confirmed False Ready outcomes remain;
-- every misleading candidate and material friction point remains recorded.
-
-These signals are research evidence. They are not revenue, orders, customers, paid demand, or
-willingness to pay.
+Local Pro remains a separate owner decision. Optional external evidence may inform that decision,
+but zero external evidence cannot be interpreted as support. No customer, revenue, validated price,
+paid demand, willingness to pay, or commercial sale is currently claimed.
 
 ## Deferred capabilities
 
-Until the evidence gate passes and the owner makes a separate decision, do not build:
-
-- local private-repository ingestion;
-- a commercial license or EULA;
-- billing, payment processing, checkout, invoices, subscriptions, or license keys;
-- hosted source processing;
-- accounts, teams, permissions, or shared storage;
-- Jira, Linear, or other requirements integrations;
-- SSO, audit logs, self-hosting, SLAs, or enterprise procurement features.
+This guide does not authorize private-repository ingestion, a commercial license, billing,
+checkout, subscriptions, hosted processing, accounts, teams, permissions, integrations, SSO,
+audit logs, self-hosting, SLAs, or enterprise procurement features.
 
 ## Current waiting condition
 
-Remain at `waiting_for_inbound_public_alpha_submission` until a non-owner participant supplies all
-qualifying public inputs, completes the review at an exact head SHA, and selects the honest
-outcome. Do not poll, send outreach, or create a synthetic substitute while waiting; no Stage 2
-commercial-discovery or price questions may be asked. The Stage 1 public-feedback path remains
-allowed to collect independently observed timing, decision impact, and voluntary reuse intent after
-a qualifying completed review.
+Optional discovery remains inactive until the owner separately authorizes external discovery. No
+commercial-discovery or price questions may be asked before then. The Optional public-feedback
+path remains available for voluntary completed-use feedback, but it does not reopen Stage 1,
+validate a customer, or gate owner-led Stage 2 productization.
