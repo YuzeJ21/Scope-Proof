@@ -122,11 +122,16 @@ body:
         - Observer was not the participant
     validations:
       required: true
+  - type: markdown
+    attributes:
+      value: |
+        Observed timing qualifies only with a public GitHub issue whose body is the byte-identical canonical TimingEvidenceAttestationV1 JSON defined in the [Stage 2 packet](https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/commercialization/stage2-readiness-packet.md).
+        Create that issue before submitting. A normal web page or prose issue remains on hold. For timing not independently observed, enter `Not observed` below.
   - type: input
     id: timing_public_evidence_url
     attributes:
       label: Public timing evidence URL
-      description: Enter a public HTTPS URL for observed timing; otherwise enter exactly Not observed.
+      description: Enter the qualifying public GitHub issue URL described above; otherwise enter exactly Not observed.
       placeholder: https://github.com/OWNER/REPOSITORY/issues/123 or Not observed
     validations:
       required: true

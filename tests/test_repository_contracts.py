@@ -2463,9 +2463,19 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
     public_evidence = template.split("id: timing_public_evidence_url", maxsplit=1)[1].split(
         "- type:", maxsplit=1
     )[0]
-    assert "public HTTPS URL" in public_evidence
+    assert "qualifying public GitHub issue URL described above" in public_evidence
     assert "enter exactly Not observed" in public_evidence
     assert "required: true" in public_evidence
+    timing_guidance = template.split(
+        "id: timing_observer_relationship", maxsplit=1
+    )[1].split("id: timing_public_evidence_url", maxsplit=1)[0]
+    for required in (
+        "Observed timing qualifies only with a public GitHub issue",
+        "byte-identical canonical TimingEvidenceAttestationV1 JSON",
+        "A normal web page or prose issue remains on hold",
+        "docs/commercialization/stage2-readiness-packet.md",
+    ):
+        assert required in timing_guidance
 
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"
