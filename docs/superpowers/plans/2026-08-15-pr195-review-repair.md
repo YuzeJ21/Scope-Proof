@@ -13,6 +13,9 @@
 - Stage 1 remains `closed_not_pursued_by_owner` with all five external-evidence measurements at zero.
 - Stage 2 remains `owner_led_productization_active` without customer-validation claims.
 - External discovery remains optional, inactive by default, and separately owner-authorized.
+- Authorization alone cannot activate optional-discovery persistence or calculation. First
+  implement a Pydantic-validated qualification-record model and an atomic validated storage
+  boundary with regression coverage.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
 - Preserve the unrelated untracked `.coverage 2` byte-for-byte and never stage it.
@@ -122,8 +125,10 @@ git commit -m "docs: make optional timing evidence fail closed"
 - Modify: `docs/commercialization/stage2-readiness-packet.md`
 
 **Interfaces:**
-- Consumes: optional qualifying-session records only after separate discovery authorization.
-- Produces: canonical qualification tuple `(qualified_at_utc, feedback_issue_number)`, consecutive five-record cohorts, immutable freeze, correction handling, and incomplete-cohort hold.
+- Consumes: the authoritative Stage 2 packet as plain text; no qualification records.
+- Produces: a static contract for the canonical qualification tuple
+  `(qualified_at_utc, feedback_issue_number)`, `evidence_snapshot_sha256`, consecutive five-record
+  cohorts, immutable freeze, correction handling, and incomplete-cohort hold.
 
 - [ ] **Step 1: Write the failing cohort contract**
 
@@ -141,7 +146,7 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
     for required in (
         "qualified_at_utc",
         "feedback_issue_number",
-        "evidence snapshot",
+        "evidence_snapshot_sha256",
         "(qualified_at_utc, feedback_issue_number) ascending",
         "positions 1–5, 6–10",
         "Freeze a cohort when its fifth member is assigned",

@@ -39,7 +39,15 @@ Each optional-discovery session receives a canonical qualification record contai
 
 - the public feedback issue number;
 - the UTC timestamp when the session first satisfied every qualification rule; and
-- a digest or immutable reference for the evidence snapshot used for qualification.
+- an `evidence_snapshot_sha256` field containing the SHA-256 digest of the evidence snapshot used
+  for qualification.
+
+Any future qualification boundary must derive canonical `outcome` from the validated local outcome
+record and verify that the public feedback `outcome` matches it exactly. The fixed mapping is
+`found_useful_gap` maps to `Found a useful previously unknown gap`,
+`showed_only_known_information` maps to `Produced only already-known information`, and
+`created_friction` maps to `Created material product friction`. A missing or different public value
+keeps the record on hold and is not counted.
 
 Order qualifying sessions by `(qualified_at_utc, feedback_issue_number)` ascending. Allocate the
 ordered stream once into consecutive cohorts of five: positions 1–5, 6–10, and so on. Freeze a

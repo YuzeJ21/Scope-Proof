@@ -2471,6 +2471,27 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert "one required timing_evidence_support field" in combined
     assert "one required supporting-details field" in normalized_design
     assert "one optional supporting-details field" not in normalized_design
+    assert "evidence_snapshot_sha256" in normalized_design
+    assert "digest or immutable reference" not in normalized_design
+    assert "derive canonical outcome from the validated local outcome record" in normalized_design
+    assert "public feedback outcome matches it exactly" in normalized_design
+    for local_value, public_value in (
+        ("found_useful_gap", "Found a useful previously unknown gap"),
+        ("showed_only_known_information", "Produced only already-known information"),
+        ("created_friction", "Created material product friction"),
+    ):
+        assert f"{local_value} maps to {public_value}" in normalized_design
+    assert "Pydantic-validated qualification-record model" in normalized_plan
+    assert "atomic validated storage boundary" in normalized_plan
+    assert "evidence_snapshot_sha256" in normalized_plan
+    assert (
+        "Consumes: the authoritative Stage 2 packet as plain text; no qualification records."
+        in normalized_plan
+    )
+    assert (
+        "optional qualifying-session records only after separate discovery authorization"
+        not in normalized_plan
+    )
     for option in (
         "Independently observed: under 5 minutes",
         "Independently observed: 5 to 10 minutes",
@@ -2557,6 +2578,25 @@ def test_optional_discovery_qualification_binds_an_immutable_evidence_snapshot()
     assert "evidence_snapshot_sha256" in normalized
     assert "SHA-256 digest of the evidence snapshot used at qualification" in normalized
     assert "A mutable public reference does not qualify" in normalized
+
+
+def test_optional_discovery_outcome_matches_the_validated_local_record() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    outcome_form = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "validated local outcome remains the authoritative" in outcome_form
+    assert "derive canonical outcome from the validated local outcome record" in normalized
+    assert "public feedback outcome matches it exactly" in normalized
+    assert "keeps the qualification record on hold and is not counted" in normalized
+    for local_value, public_value in (
+        ("found_useful_gap", "Found a useful previously unknown gap"),
+        ("showed_only_known_information", "Produced only already-known information"),
+        ("created_friction", "Created material product friction"),
+    ):
+        assert f"{local_value} maps to {public_value}" in normalized
 
 
 def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:

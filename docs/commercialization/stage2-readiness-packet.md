@@ -105,6 +105,12 @@ optional discovery is authorized later, create one canonical qualification recor
 qualifying completed session. The record contains `qualified_at_utc`, `feedback_issue_number`, and
 `evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
 mutable public reference does not qualify; keep any source URL only as non-authoritative context.
+At qualification, derive canonical `outcome` from the validated local outcome record and verify the
+public feedback `outcome` matches it exactly after this fixed mapping:
+`found_useful_gap` maps to `Found a useful previously unknown gap`,
+`showed_only_known_information` maps to `Produced only already-known information`, and
+`created_friction` maps to `Created material product friction`. A missing or different public value
+keeps the qualification record on hold and is not counted.
 
 Order qualification records by `(qualified_at_utc, feedback_issue_number) ascending` and allocate
 them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
