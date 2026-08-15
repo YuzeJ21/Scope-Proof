@@ -11,6 +11,14 @@ its linked release entry for the exact published source and assets.
 
 Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 release.
 
+### Product strategy
+
+- Closed Stage 1 as `closed_not_pursued_by_owner` with all five external-evidence measurements
+  still at zero; Stage 1 did not pass and no customer validation is claimed.
+- Activated owner-led Stage 2 productization as `owner_led_productization_active`. External product
+  or commercial discovery is optional and separate, and requires its own owner authorization before
+  outreach or participant contact.
+
 ### Post-release engineering
 
 - Added a cross-platform, fail-closed alpha-storage boundary: POSIX rehearsal persistence keeps its

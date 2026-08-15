@@ -145,15 +145,14 @@ criterion is supported at this exact head.”
 
 ## Stage implications
 
-- Stage 0 engineering maturity can continue internally.
-- Stage 1 remains at zero until a qualifying non-owner public-alpha review
-  occurs.
-- Stage 2 commercial discovery cannot claim willingness to pay before Stage 1
-  evidence exists.
-- Stage 3 controlled beta requires independent repeat use, including real
-  changed-head re-review.
-- Stage 4 expansion is evidence-gated; competitor breadth is not a reason to
-  copy features.
+- Stage 0 engineering evidence remains historical product foundation.
+- Stage 1 is `closed_not_pursued_by_owner` with every external-evidence measurement at zero; it did
+  not pass and no customer validation is claimed.
+- Stage 2 is `owner_led_productization_active`. External commercial discovery is optional and
+  separate, and the existing comparison does not establish willingness to pay.
+- Stage 3 remains a separate owner decision for a bounded release candidate or beta.
+- Stage 4 remains a separate owner and evidence gate; competitor breadth is not a reason to copy
+  features.
 
 The best near-term positioning is therefore: **“Inspect acceptance coverage at
 an exact public PR head without confusing candidate code, CI, runtime proof, or

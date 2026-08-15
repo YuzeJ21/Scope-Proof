@@ -1,8 +1,9 @@
 # Concierge public-alpha host checklist
 
-This is the repository owner's operational index for one supervised ScopeProof trial. It does not
-replace the linked participant instructions or create validation evidence. Use public information
-only. Never retain credentials, private source, customer data, or confidential requirements.
+This is the repository owner's optional operational index for one supervised ScopeProof trial.
+Stage 1 is `closed_not_pursued_by_owner`; using this checklist does not reopen it or create
+validation evidence. Use public information only. Never retain credentials, private source,
+customer data, or confidential requirements.
 
 ## Stage status reference
 
@@ -19,21 +20,26 @@ only. Never retain credentials, private source, customer data, or confidential r
 Do not fill this repository file with a person or case. Persist only a qualified case through the
 existing Pydantic-validated `scopeproof alpha` commands after the required confirmations.
 
-If repeated maintenance goals end at `waiting_for_inbound_public_alpha_submission`, use the
-[participant evidence unblocker](participant-evidence-unblocker.md) instead of starting another
-overnight monitor.
+The [participant evidence unblocker](participant-evidence-unblocker.md) is archived guidance for
+the former Stage 1 strategy. Do not start an external-evidence monitor merely to manufacture
+activity.
 
 Submit a public alpha case through the inbound-only issue form:
 https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 
-The [30-day Design Partner Sprint](../commercialization/design-partner-sprint.md) defines the
+The [30-day Design Partner Sprint](../commercialization/design-partner-sprint.md) defines optional
 commercial-research evidence and stop gates. It does not authorize outreach or create evidence.
 
 ## Host sequence
 
 - [ ] Install and verify the current release using the [README quickstart](../../README.md#quickstart).
-- [ ] Wait for an inbound public-alpha case submission. Do not manually contact participants or
-      store outreach records in the repository.
+- [ ] Before any reply, criteria return, supervised review, outcome request, or feedback request,
+      record separate explicit owner authorization for participant contact. Without that
+      authorization, do not reply or initiate a hosted sequence; leave the inbound path
+      self-service.
+- [ ] If voluntary feedback arrives, verify that the inbound public-alpha case is appropriate. Do
+      not store outreach records in the repository. If participant contact is authorized, follow
+      only the bounded authorized sequence; otherwise do not manually contact participants.
 - [ ] Apply every [public-PR qualification check](public-pr-qualification-checklist.md).
 - [ ] Normalize criteria with the [acceptance-criteria confirmation template](acceptance-criteria-confirmation-template.md), then return them to the source owner for confirmation before analysis.
 - [ ] Follow the [ten-minute participant quickstart](participant-quickstart.md), including `scopeproof alpha init` before the review.
@@ -51,5 +57,5 @@ commercial-research evidence and stop gates. It does not authorize outreach or c
 
 - Stop on private source, confidential material, missing criteria authority, decline, or withdrawal.
 - A public PR without source-owner-confirmed criteria may be a technical smoke only.
-- Installation, replies, and technical smokes do not close the roadmap's external validation gate.
+- Installation, replies, and technical smokes do not create customer validation or reopen Stage 1.
 - Preserve incomplete and negative outcomes without rewriting them as successes.

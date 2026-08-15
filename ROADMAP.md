@@ -4,9 +4,9 @@ ScopeProof v0.2 is a reviewer-first public alpha. The deterministic engine, loca
 exports, benchmark, packaging, and protected CI are engineering evidence only. They do not prove
 runtime correctness, adoption, or beta readiness.
 
-This roadmap advances on genuine use evidence, not elapsed time, releases, stars, downloads, or
-automated activity. The current external state is
-`waiting_for_inbound_public_alpha_submission`.
+This roadmap separates owner-led productization from external validation. Stage 1 is
+`closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
+`owner_led_productization_active`; this owner decision does not create customer validation.
 
 ## Current release and validation state
 
@@ -27,10 +27,11 @@ which provides the wheel, source archive, and checksum manifest.
 | Historical source integration | PR #183 integrity/reviewer-loop source merge at `cd362a85a558645a0f56d6540f6bf035e5821809`; runs `30847416893`, `30847415556`, and `30847417705` remain historical source-integration evidence |
 | Snapshot verification | Hosted resulting-main CI run [`31704668247`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/31704668247) at exact PR #193 tree `432371c4faec0b790f70fec32b4d3fc4d5132cfa` recorded 2,251 passed, 2 intentional skips, and 95.22% coverage |
 | Snapshot engineering checks | Resulting-main CI run [`31704668247`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/31704668247) covers Python 3.11, Python 3.13, Windows, installed-wheel, deterministic benchmark, and packaged-browser checks; CodeQL run [`31704666031`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/31704666031) and Pages run [`31704668164`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/31704668164) also succeeded |
-| Product validation | Publication state does not change Stage 1, which remains at zero; Stages 2–4 remain gated |
+| Product validation | Stage 1 closed as not pursued with every count at zero; owner-led Stage 2 is active without customer-validation claims |
 
 Verify live GitHub and current release records before relying on publication state. Engineering
-milestones can proceed while Stage 1 waits, but they do not advance product-validation stages.
+milestones may proceed through owner-led Stage 2, but they remain engineering evidence rather than
+customer validation.
 
 After the v0.2.3 release, PR #185 merged core-backed CLI lifecycle parity and packaged Chromium
 proof at `30177733ef312ced22e6a2e57e3df6fdb1e92507`; PR #187 merged Python 3.13 plus bounded
@@ -137,7 +138,8 @@ advances Stage 1, which remains at zero.
 
 These cases, repositories, outcomes, and timing contribute zero genuine Alpha reviews,
 participants, repositories, timing observations, False Ready rate evidence, or reuse signals.
-R-002 is engineering evidence only. Stages 2–4 remain gated.
+R-002 is engineering evidence only. It contributes to owner-led engineering work but not customer
+validation or optional external-discovery evidence.
 
 ## Current engineering track — v0.2.3 Evidence Quality
 
@@ -215,9 +217,12 @@ The merged PR #183 ingestion and reviewer-loop source evidence is recorded in th
 
 ## Stage 1 — Genuine public alpha
 
-Status: `waiting_for_inbound_public_alpha_submission`; Stage 1 remains zero.
-The Stage 0 engineering foundation is restored, but no genuine qualifying
-submission exists.
+Status: `closed_not_pursued_by_owner`.
+
+Stage 1 did not pass. On 2026-08-14, the owner chose not to pursue the external public-alpha
+program. Closure changes no measured count, satisfies none of the former exit conditions, and
+creates no customer, adoption, usability, timing, reuse, demand, pricing, or willingness-to-pay
+evidence.
 
 Current measured state:
 
@@ -226,10 +231,10 @@ Current measured state:
 - 0/3 public repositories.
 - 0/3 independently observed under-ten-minute completions.
 - 0/2 reuse-intent signals.
-- Zero participant False Ready observations across zero participant reviews; this is not a
-  validated False Ready rate.
+- Zero participant False Ready observations across zero participant reviews; this is
+  not a validated False Ready rate.
 
-All exit conditions are required:
+Former exit conditions, preserved as unmet historical targets:
 
 - [ ] Five completed reviews on genuine public pull requests.
 - [ ] At least three independent practitioners across product, QA, or engineering roles.
@@ -243,14 +248,12 @@ Only source-owner-confirmed criteria from public requirements, a genuine public 
 review, and a validated local outcome record count. Constructed demos, owner-authored synthetic
 cases, technical smokes, release downloads, and GitHub activity do not count.
 
-The [concierge host checklist](docs/alpha/concierge-host-checklist.md) indexes the optional manual
-research path. It helps collect evidence but does not satisfy any gate by itself.
+The [concierge host checklist](docs/alpha/concierge-host-checklist.md) remains available only for
+optional voluntary external feedback. Using it does not reopen Stage 1 or create stage credit.
 
-### Owner activation checklist — separate authorization required
+### Archived external-evidence distinctions
 
-This checklist is preparation only; it does not authorize outreach. Current policy remains passive
-and inbound-only absent separate owner authorization. If the owner separately authorizes genuine
-Stage 1 outreach, keep the following distinctions explicit:
+These distinctions remain binding if optional external research is separately authorized:
 
 - Preparation is not outreach: prepare public, source-safe materials and qualification records
   before contacting anyone, but do not contact, recruit, or message a participant without that
@@ -263,46 +266,36 @@ Stage 1 outreach, keep the following distinctions explicit:
   documented non-owner, public-PR, source-owner-confirmed, exact-head, saved-review, validated-
   outcome path can credit a count.
 
-## Stage 2 — Commercial discovery
+## Stage 2 — Owner-led productization
 
-Status: gated; do not begin commercial claims or productization until every Stage 1 condition is
-met.
+Status: `owner_led_productization_active`.
 
-Entry requires every Stage 1 condition. The current free, public-repository-only design-partner
-review remains research; no paid product or billing is active.
+The owner authorized owner-led productization on 2026-08-14. This status does not claim customer
+validation. Work may improve product and workflow clarity, deterministic evidence quality,
+fail-closed lifecycle integrity, packaging, installation, compatibility, accessibility
+engineering, documentation, public official-source research, and release readiness.
 
-Stage 2 cannot begin until every Stage 1 target is satisfied. No engineering substitute can
-advance these counts.
+The [Stage 2 productization packet](docs/commercialization/stage2-readiness-packet.md) is the
+operating boundary. External commercial discovery is optional and separate from owner-led
+productization. It is not required to continue Stage 2 and needs separate owner authorization
+before outreach or participant contact.
 
-All exit conditions are required before considering a separate Local Pro product decision:
+Stage 2 does not authorize a merge, release, tag, package publication, outreach, participant
+contact, R-002 retuning, R-003 generation, billing, accounts, private-repository support, hosted
+source processing, generic code review, security scanning, automatic fixes, or paid APIs.
 
-- At least two independent completed participants explicitly intend to use ScopeProof on another
-  PR.
-- At least two independent completed participants voluntarily agree to discuss the team-price hypothesis
-  after genuine product use.
-- A useful result occurs before approval, after a new commit, or during an acceptance or release
-  decision.
-- Zero confirmed False Ready outcomes remain.
-- All misleading candidates and material friction remain recorded.
-
-These signals are not revenue, orders, customers, paid demand, or willingness to pay.
-Local Pro remains deferred, including private-repository ingestion, commercial licensing, billing, hosted source
-processing, accounts, integrations, and enterprise capabilities. See the
-[30-day Design Partner Sprint](docs/commercialization/design-partner-sprint.md) for the canonical
-research workflow and stop gates. The
-[market-positioning hypotheses](docs/commercialization/market-positioning-hypotheses.md) record the
-current adjacent alternatives, likely-user and likely-buyer hypotheses, adoption risks, and trust
-requirements. Genuine completed reviews are required to validate or reject them.
+The [30-day Design Partner Sprint](docs/commercialization/design-partner-sprint.md) is an optional
+research protocol, not a productization gate. The
+[market-positioning hypotheses](docs/commercialization/market-positioning-hypotheses.md) remain
+unvalidated hypotheses unless genuine attributable evidence is later collected.
 
 ## Stage 3 — Limited beta
 
-Status: gated; requires Stages 1–2, genuine repeat use, and a separate owner decision.
+Status: gated by a separate owner decision after Stage 2 engineering evidence is reviewed.
 
-Entry requires every Stage 1 and Stage 2 condition plus a separate owner decision. The beta
-remains supervised and public-repository-only unless that decision explicitly changes the scope.
-
-Stage 3 requires genuine repeated use and separate owner approval. No engineering substitute can
-advance these counts.
+Stage 3 may define a bounded release candidate or beta only through a new owner-authorized plan.
+Owner-led productization cannot be presented as customer validation, and no release, tag, or
+publication is implied by Stage 2 progress.
 
 Exit conditions:
 
@@ -316,23 +309,23 @@ Exit conditions:
 
 ## Stage 4 — Evidence-guided expansion decision
 
-Status: gated; only repeated genuine behavior may justify expansion.
+Status: gated by a separate owner decision and evidence appropriate to the proposed expansion.
 
 Only recurring behavior can justify broader scope. Candidate directions include clearer
 requirements intake, better evidence explanations, and narrower collaboration handoffs. Private
 repositories, billing, accounts, generic code review, security scanning, automatic fixes, and paid
 LLM APIs require a separate owner decision and are not implied by beta progress.
 
-Stage 4 requires sustained evidence and separate owner approval. No engineering substitute can
-advance these counts.
+Stage 4 requires a named constraint, evidence appropriate to that constraint, and separate owner
+approval. Missing external evidence remains missing; engineering work does not turn into customer
+evidence.
 
 ## Honest stop and pivot rules
 
 - Do not create synthetic validation, invented users, or constructed outcomes.
-- No recurring monitor should run when no new external evidence exists; record the waiting state
-  once and continue independent maintenance.
+- Do not create recurring external-evidence monitors merely to manufacture activity.
 - Do not execute pull-request code or promote implementation evidence to test or runtime proof.
 - Do not weaken deterministic gates to improve apparent completion.
 - Do not broaden the evaluation-only use policy without a new explicit owner decision.
-- If repeated genuine sessions show no useful gap or no reuse intent, narrow or stop the product
-  rather than substituting release polish for demand.
+- If optional genuine sessions occur, preserve negative and incomplete results without rewriting
+  them as productization success.

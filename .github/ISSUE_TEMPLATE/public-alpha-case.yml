@@ -1,7 +1,7 @@
 name: Public-alpha case submission
 description: Submit a genuine public PR candidate for a supervised ScopeProof alpha review.
 title: "[Alpha case]: "
-labels: ["external-validation", "dogfood"]
+labels: ["dogfood"]
 body:
   - type: markdown
     attributes:
@@ -10,8 +10,9 @@ body:
         source-owner-confirmed acceptance criteria. Do not include tokens, credentials,
         private code, customer data, private links, confidential requirements, or secrets.
 
-        A submission is a candidate for review, not validation by itself. A case counts only
-        after the documented ScopeProof review and participant outcome are completed.
+        A submission is optional intake, not validation. After the documented ScopeProof review
+        and participant outcome are complete, it may become attributable completed-use evidence.
+        It does not establish customer, product, or commercial validation by itself.
   - type: input
     id: public_pr_url
     attributes:
@@ -70,5 +71,5 @@ body:
           required: true
         - label: This is not a constructed demo, synthetic validation, or invented evidence.
           required: true
-        - label: I understand this submission is not validation until the documented review and participant outcome are completed.
+        - label: I understand a completed review and outcome remain attributable use evidence and do not establish customer, product, or commercial validation by themselves.
           required: true

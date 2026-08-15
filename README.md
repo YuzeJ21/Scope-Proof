@@ -6,8 +6,8 @@ ScopeProof is a reviewer-controlled acceptance-coverage assistant for public Git
 It maps each confirmed criterion to inspectable implementation or test candidates, makes missing
 evidence visible, records attributable human decisions, and exports a reproducible review. The
 primary workflow has a product target of reaching an inspectable coverage report in under five
-minutes. That target has not yet been independently observed and is separate from the Stage 1
-under-ten-minute completed-review gate.
+minutes. That target has not yet been independently observed. The former Stage 1 under-ten-minute
+target closed unmet when the owner chose not to pursue Stage 1.
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
@@ -106,8 +106,8 @@ merged the release integration at
 to that release baseline. At the 2026-08-08 branch-start snapshot, `origin/main`
 also resolved to that commit. Exact-main CI run `30854382641`, CodeQL run
 `30854382413`, and Pages run `30854382659` succeeded. The release and those
-checks are engineering evidence only and do not advance Stage 1, which remains
-at zero. The
+checks are engineering evidence only. Stage 1 later closed as not pursued with every external-
+evidence count still at zero. The
 [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
 records the product-tree engineering evidence and remaining gaps.
 
@@ -115,7 +115,8 @@ The repository's current source line is the unreleased development version `0.2.
 not a replacement release asset. Post-v0.2.3 engineering merged CLI lifecycle commands, strict
 saved-record validation, installed Chromium coverage, Python 3.13 and bounded keyboard/focus
 evidence, and verified-public provenance enforcement. Those changes remain engineering evidence
-only. The public install continues to be the immutable v0.2.3 release, and Stage 1 remains zero.
+only. The public install continues to be the immutable v0.2.3 release, and Stage 1 remains closed
+as not pursued with every count at zero.
 
 GitHub exposes visible check runs but does not reliably expose every repository's required-check
 policy to anonymous clients. ScopeProof therefore labels this value **Observed CI state** and counts
@@ -135,7 +136,7 @@ they do not establish correctness, customer validation, or Stage 1 progress.
 
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
-for the implemented feature ledger, current gaps, and evidence-gated Stage 1–4 roadmap.
+for the implemented feature ledger, current gaps, and owner-led Stage 2 roadmap.
 
 ```bash
 python3 -m venv .venv
@@ -462,14 +463,13 @@ read-only private-repository boundary. It does not claim private support exists.
 
 ## Product status
 
-This is a public-repository alpha for validating the requirement-to-evidence workflow. The next
-product decision must be based on repeat use with real pull requests and confirmed gaps found
-before merge—not release activity or vanity metrics.
+This is a public-repository product under owner-led productization. That operating strategy does
+not establish customer validation, demand, adoption, repeat use, or willingness to pay.
 
-The [public roadmap](ROADMAP.md) defines the evidence-gated path from engineering-complete public
-alpha to limited beta. The [changelog](CHANGELOG.md) summarizes the active development line and
-links to authoritative published release notes. Neither document substitutes for genuine public-PR
-use or human acceptance.
+The [public roadmap](ROADMAP.md) defines the closed Stage 1 record, active owner-led Stage 2 scope,
+and separate owner gates for later stages. The [changelog](CHANGELOG.md) summarizes the active
+development line and links to authoritative published release notes. Neither document turns
+engineering work into customer evidence or human acceptance.
 
 Standard reviews create no research record. To volunteer genuine feedback, submit the inbound
 public-alpha case form before starting locally:
@@ -481,9 +481,11 @@ Then explicitly enable the **Alpha feedback session** and follow the
 Qualification and consent stay local and off by
 default; the constructed demo never counts as participant validation.
 
-ScopeProof is an acceptance-coverage assistant, not an AI code reviewer. The optional
-**free design-partner review** is public-repository-only. No paid product or billing is active, and
-a pricing question is optional research after product use—not a purchase requirement. The
+ScopeProof is an acceptance-coverage assistant, not an AI code reviewer. Stage 1 is closed as not
+pursued (`closed_not_pursued_by_owner`); owner-led Stage 2 productization is active without
+claiming customer validation. The optional **free design-partner review** is public-repository-only. No paid product
+or billing is active. External commercial discovery is optional and separate from productization;
+the public feedback form contains no pricing question. The
 [30-day commercial-validation guide](docs/commercialization/design-partner-sprint.md) defines the
 inbound workflow, evidence gates, stop rules, and capabilities that remain deferred. The
 [market-positioning research](docs/commercialization/market-positioning-hypotheses.md) compares

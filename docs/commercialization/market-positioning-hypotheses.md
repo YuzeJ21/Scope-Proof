@@ -4,8 +4,9 @@ Last researched: 2026-07-20
 
 This document is market research, not customer or market validation. It separates current public
 facts from hypotheses that still require genuine use. ScopeProof has no qualifying completed
-participant case, repeat-use evidence, customer, revenue, validated buyer, or validated price. The
-current external state is `waiting_for_inbound_public_alpha_submission`.
+participant case, repeat-use evidence, customer, revenue, validated buyer, or validated price.
+Stage 1 is `closed_not_pursued_by_owner`; Stage 2 owner-led productization does not change these
+zero-evidence facts.
 
 ## Implemented ScopeProof workflow
 
@@ -145,11 +146,12 @@ orchestrate releases, or provide full lifecycle traceability. The current produc
 repository support, hosted source processing, accounts, teams, enterprise controls, billing, or
 paid API dependency.
 
-## Evidence needed to validate or reject the hypotheses
+## Optional evidence that could validate or reject the hypotheses
 
-The next evidence is not another release, benchmark case, star, download, or owner rehearsal. It is
-a genuine completed public-alpha review with source-owner-confirmed criteria, an exact reviewed
-head SHA, a saved review, and a participant-selected outcome.
+External validation is not required for owner-led productization. If the owner separately
+authorizes external discovery, relevant evidence would be a genuine completed public-alpha review
+with source-owner-confirmed criteria, an exact reviewed head SHA, a saved review, and a participant-
+selected outcome—not another release, benchmark case, star, download, or owner rehearsal.
 
 Across five completed reviews, record:
 
@@ -168,7 +170,8 @@ code review, security scanning, billing, or paid AI features.
 
 ## Commercial boundary
 
-The existing USD 99 per team per month and USD 999 per team per year figures remain research-only
-price anchors in the design-partner sprint. They are not active prices, an offer for sale, or
-evidence of willingness to pay. Commercial discovery remains gated on genuine Stage 1 evidence and
-a separate owner decision.
+External commercial discovery is optional and separate from owner-led productization. The existing
+USD 99 per team per month and USD 999 per team per year figures remain research-only price anchors
+in the design-partner sprint. They are not active prices, an offer for sale, evidence of willingness
+to pay, or customer validation. The owner must separately authorize external discovery before any
+commercial or price question is asked.

@@ -136,7 +136,7 @@ def test_r002_engineering_result_is_linked_without_advancing_product_stages() ->
     assert development_link in environment
     assert "R-002 is engineering evidence only" in roadmap
     assert "contribute zero genuine Alpha reviews" in roadmap
-    assert "Stages 2\u20134 remain gated" in roadmap
+    assert "owner-led engineering work but not customer" in " ".join(roadmap.split())
 
 
 def test_r002_module_commands_are_packaged_but_not_live_ci() -> None:
@@ -1483,18 +1483,18 @@ def test_readme_documents_all_export_formats() -> None:
     assert "Markdown, JSON, CSV, and HTML exports" in readme
 
 
-def test_roadmap_uses_evidence_gated_beta_stages() -> None:
+def test_roadmap_preserves_closed_stage_one_and_owner_led_later_gates() -> None:
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
 
     assert "Five completed reviews" in roadmap
     assert "three independent practitioners" in roadmap
     assert "three public repositories" in roadmap
-    assert "waiting_for_inbound_public_alpha_submission" in roadmap
+    assert "closed_not_pursued_by_owner" in roadmap
     assert "source-owner-confirmed criteria" in roadmap
     assert "genuine public pull request" in roadmap
     assert "Software license decision" in roadmap
     assert "Do not create synthetic validation" in roadmap
-    assert "No recurring monitor" in roadmap
+    assert "Do not create recurring external-evidence monitors" in roadmap
 
 
 def test_changelog_points_to_authoritative_release_history() -> None:
@@ -1607,7 +1607,8 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
         assert "publication alignment is underway" not in active_status
         assert "publication alignment is completed" not in active_status
         assert "Stage 1" in active_status
-        assert "remains at zero" in active_status
+        assert "closed_not_pursued_by_owner" in active_status
+        assert "zero" in active_status
 
     assert "current local ingestion and reviewer-loop evidence" not in roadmap
     assert "current candidate's missing-patch" not in status_page
@@ -1794,7 +1795,8 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
         section(status, "### Stage 1 — genuine public alpha", "### Stage 2"),
     )
     for stage_one in stage_one_blocks:
-        assert "waiting_for_inbound_public_alpha_submission" in stage_one
+        assert "closed_not_pursued_by_owner" in stage_one
+        assert "Stage 1 did not pass" in stage_one
         for count in (
             "0/5 qualifying reviews",
             "0/3 independent practitioners",
@@ -1804,16 +1806,8 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
         ):
             assert count in stage_one
 
-        checklist = stage_one.split(
-            "Owner activation checklist — separate authorization required", maxsplit=1
-        )[1]
-        checklist_preamble = " ".join(
-            checklist.split("- Preparation is not outreach", 1)[0].split()
-        )
-        assert (
-            "preparation only; it does not authorize outreach. Current policy remains passive "
-            "and inbound-only absent separate owner authorization."
-        ) in checklist_preamble
+        checklist = stage_one.split("Archived external-evidence distinctions", maxsplit=1)[1]
+        assert "optional external research is separately authorized" in checklist
         for distinction in (
             "Preparation is not outreach",
             "Inbound submissions are not recruited participants",
@@ -1825,45 +1819,157 @@ def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -
     for document, heading, next_heading, required in (
         (
             roadmap,
-            "## Stage 2 — Commercial discovery",
+            "## Stage 2 — Owner-led productization",
             "## Stage 3",
-            "Stage 2 cannot begin until every Stage 1 target is satisfied.",
+            "External commercial discovery is optional and separate",
         ),
         (
             status,
-            "### Stage 2 — commercial discovery",
+            "### Stage 2 — owner-led productization",
             "### Stage 3",
-            "Stage 2 cannot begin until every Stage 1 target is satisfied.",
+            "External commercial discovery is optional and separate",
         ),
         (
             roadmap,
             "## Stage 3 — Limited beta",
             "## Stage 4",
-            "Stage 3 requires genuine repeated use and separate owner approval.",
+            "Stage 3 may define a bounded release candidate or beta",
         ),
         (
             status,
             "### Stage 3 — limited beta",
             "### Stage 4",
-            "Stage 3 requires genuine repeated use and separate owner approval.",
+            "A future bounded release candidate or beta requires a new owner-authorized plan.",
         ),
         (
             roadmap,
             "## Stage 4 — Evidence-guided expansion decision",
             "## Honest stop and pivot rules",
-            "Stage 4 requires sustained evidence and separate owner approval.",
+            "Stage 4 requires a named constraint",
         ),
         (
             status,
             "### Stage 4 — evidence-guided expansion",
             "## Prioritized post-release decision candidates",
-            "Stage 4 requires sustained evidence and separate owner approval.",
+            "Missing external evidence remains missing",
         ),
         ):
         stage = section(document, heading, next_heading)
         normalized_stage = " ".join(stage.split())
         assert required in normalized_stage
-        assert "No engineering substitute can advance these counts." in normalized_stage
+        assert (
+            "customer" in normalized_stage.lower()
+            or "external evidence" in normalized_stage.lower()
+        )
+
+
+def test_owner_led_stage_two_strategy_preserves_zero_external_evidence() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    market_comparison = Path(
+        "docs/commercialization/market-comparison-2026-07-26.md"
+    ).read_text(encoding="utf-8")
+
+    def section(document: str, start: str, end: str) -> str:
+        remainder = document.split(start, maxsplit=1)[1]
+        return remainder if not end else remainder.split(end, maxsplit=1)[0]
+
+    stage_blocks = (
+        section(roadmap, "## Stage 1 — Genuine public alpha", "## Stage 2"),
+        section(status, "### Stage 1 — genuine public alpha", "### Stage 2"),
+    )
+    productization_blocks = (
+        section(roadmap, "## Stage 2 — Owner-led productization", "## Stage 3"),
+        section(status, "### Stage 2 — owner-led productization", "### Stage 3"),
+    )
+    packet_status = section(packet, "## Current status", "## Owner-led productization scope")
+    packet_scope = section(
+        packet, "## Owner-led productization scope", "## Optional external discovery"
+    )
+    optional_discovery = section(
+        packet, "## Optional external discovery", "## Hypothesis ledger"
+    )
+    optional_discovery_rules = section(
+        packet, "## Optional-discovery decision rules", "## Boundaries"
+    )
+    current_headers = "\n".join(
+        (
+            section(roadmap, "# ScopeProof Roadmap", "## Stage 0"),
+            section(
+                status,
+                "# ScopeProof v0.2.3 status, gaps, and next stages",
+                "## Current evidence",
+            ),
+            section(market_comparison, "## Stage implications", ""),
+        )
+    )
+
+    for stage_one in stage_blocks:
+        normalized_stage_one = " ".join(stage_one.split())
+        assert "closed_not_pursued_by_owner" in normalized_stage_one
+        assert "Stage 1 did not pass" in normalized_stage_one
+        for count in (
+            "0/5 qualifying reviews",
+            "0/3 independent practitioners",
+            "0/3 public repositories",
+            "0/3 independently observed under-ten-minute completions",
+            "0/2 reuse-intent signals",
+        ):
+            assert count in normalized_stage_one
+        assert "not a validated False Ready rate" in normalized_stage_one
+
+    for stage_two in productization_blocks:
+        normalized_stage_two = " ".join(stage_two.split())
+        assert "owner_led_productization_active" in normalized_stage_two
+        assert "owner-led productization" in normalized_stage_two
+        assert "External commercial discovery is optional and separate" in normalized_stage_two
+        assert "does not claim customer validation" in normalized_stage_two
+
+    for count in (
+        "0/5 qualifying reviews",
+        "0/3 independent practitioners",
+        "0/3 public repositories",
+        "0/3 independently observed under-ten-minute completions",
+        "0/2 reuse-intent signals",
+    ):
+        assert count in packet_status
+    assert "does not authorize outreach" in packet_status
+    normalized_packet_scope = " ".join(packet_scope.split())
+    normalized_optional_discovery = " ".join(optional_discovery.split())
+    assert "product and workflow clarity" in normalized_packet_scope
+    assert "deterministic evidence quality" in normalized_packet_scope
+    assert "release, tag, or package publication" in normalized_packet_scope
+    assert "External commercial discovery is optional and separate" in normalized_optional_discovery
+    assert "separate owner authorization" in normalized_optional_discovery
+    normalized_discovery_rules = " ".join(optional_discovery_rules.split())
+    assert (
+        "No optional-discovery decision may be calculated while the qualifying denominator is zero"
+        in normalized_discovery_rules
+    )
+    assert "No customer, product, or commercial decision" not in normalized_discovery_rules
+
+    protected_current_sections = "\n".join(
+        (*stage_blocks, *productization_blocks, packet_status, packet_scope, optional_discovery)
+    )
+    for forbidden_claim in (
+        "Stage 1 passed",
+        "Stage 1 is complete",
+        "customer validation achieved",
+        "validated demand",
+        "validated price",
+        "willingness to pay is validated",
+        "Stages 2\u20134 remain gated",
+        "Stage 1 waits",
+        "Stage 1 remains at zero until",
+        "Stage 2 commercial discovery cannot claim willingness to pay before Stage 1",
+    ):
+        assert forbidden_claim not in protected_current_sections
+        assert forbidden_claim not in current_headers
 
 
 def test_superseded_audits_preserve_historical_results_and_link_current_status() -> None:
@@ -2053,7 +2159,8 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     assert "scopeproof benchmark" in quickstart
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in quickstart
     assert "setup evidence only" in quickstart
-    assert "does not advance Stage 1" in quickstart
+    assert "Stage 1 is closed as not pursued" in quickstart
+    assert "creates no external-evidence credit" in quickstart
     assert "releases/download/v0.2.2/" not in quickstart
     assert "scopeproof-0.2.2" not in quickstart
     assert "Alpha feedback session" in quickstart
@@ -2078,24 +2185,18 @@ def test_participant_evidence_unblocker_prevents_empty_monitoring_loops() -> Non
     checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
 
     assert "[participant evidence unblocker](participant-evidence-unblocker.md)" in checklist
-    assert "waiting_for_inbound_public_alpha_submission" in unblocker
-    assert "public PR URL" in unblocker
-    assert "public HTTPS requirements source" in unblocker
-    assert "explicit authority to confirm criteria" in unblocker
-    assert (
-        "explicit confirmation that no private or confidential information is included" in unblocker
-    )
-    assert "Do not start another overnight monitor" in unblocker
-    assert "/goal Run ScopeProof's first genuine public-alpha case" in unblocker
+    assert "closed_not_pursued_by_owner" in unblocker
+    assert "Stage 1 did not pass" in unblocker
+    assert "must not be used to restart it automatically" in unblocker
+    assert "Do not create recurring" in unblocker
     for forbidden in (
-        "paid OpenAI/LLM API",
+        "private source",
         "billing",
-        "automated outreach",
-        "scraping",
-        "synthetic validation",
-        "invented evidence",
-        "fork testing",
-        "GitHub issue comment",
+        "outreach",
+        "scrape profiles",
+        "invent a participant",
+        "willingness-to-pay result",
+        "notification-only GitHub",
     ):
         assert forbidden in unblocker
 
@@ -2117,6 +2218,12 @@ def test_inbound_alpha_case_submission_path_is_public_safe_and_owner_passive() -
     assert "participant_role" in template
     assert "source-owner-confirmed acceptance criteria" in template
     assert "not a constructed demo, synthetic validation, or invented evidence" in template
+    assert 'labels: ["dogfood"]' in template
+    assert "attributable completed-use evidence" in template
+    assert "does not establish customer, product, or commercial validation by itself" in template
+    assert "external-validation" not in template
+    assert "not validation until" not in template
+    assert "case counts only" not in template
     for forbidden in (
         "tokens",
         "credentials",
@@ -2131,7 +2238,10 @@ def test_inbound_alpha_case_submission_path_is_public_safe_and_owner_passive() -
     assert "Use LinkedIn DM only" not in site
     assert "inbound-only" in unblocker
     assert issue_url in unblocker
-    assert "Do not manually contact participants" in unblocker
+    assert (
+        "Without separate explicit owner authorization, do not manually contact participants"
+        in " ".join(unblocker.split())
+    )
     assert "Submit a public alpha case" in checklist
     assert issue_url in checklist
 
@@ -2226,12 +2336,14 @@ def test_public_site_desktop_hero_keeps_actions_and_safety_boundary_above_the_fo
     assert "clamp(2.35rem, 12vw, 3.5rem)" in mobile_css
 
 
-def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
+def test_optional_commercial_discovery_is_separate_and_evidence_gated() -> None:
     guide_path = Path("docs/commercialization/design-partner-sprint.md")
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    normalized_roadmap = " ".join(roadmap.split())
 
     assert guide_path.is_file()
     guide = guide_path.read_text(encoding="utf-8")
+    normalized_guide = " ".join(guide.split())
     for required in (
         "30-day Design Partner Sprint",
         "free",
@@ -2240,10 +2352,13 @@ def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
         "research hypotheses only",
         "not a purchase agreement",
         "after a genuine participant completes a review",
-        "waiting_for_inbound_public_alpha_submission",
+        "closed_not_pursued_by_owner",
+        "optional",
+        "separate owner authorization",
+        "not customer validation",
         "Local Pro",
     ):
-        assert required in guide
+        assert required in normalized_guide
     for non_evidence in (
         "stars",
         "views",
@@ -2253,16 +2368,15 @@ def test_commercial_validation_guide_and_roadmap_are_evidence_gated() -> None:
         "synthetic cases",
         "owner-authored examples",
     ):
-        assert non_evidence in guide
+        assert non_evidence in normalized_guide
 
-    assert "## Stage 2 — Commercial discovery" in roadmap
-    assert "two independent completed participants" in roadmap
-    assert "voluntarily agree to discuss the team-price hypothesis" in roadmap
-    assert "Local Pro remains deferred" in roadmap
-    assert "not revenue, orders, customers, paid demand, or willingness to pay" in roadmap
+    assert "## Stage 2 — Owner-led productization" in roadmap
+    assert "External commercial discovery is optional and separate" in normalized_roadmap
+    assert "does not claim customer validation" in normalized_roadmap
+    assert "does not authorize a merge, release, tag, package publication" in normalized_roadmap
 
 
-def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
+def test_optional_external_feedback_collects_bounded_signals_without_price_research() -> None:
     template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(encoding="utf-8")
     for field_id in (
         "public_pr",
@@ -2271,11 +2385,13 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
         "public_requirements_url",
         "source_owner",
         "outcome",
-        "completion_time",
+        "timing_evidence",
+        "timing_observer_category",
+        "timing_observer_relationship",
+        "timing_public_evidence_url",
         "useful_gap_category",
         "decision_impact",
         "reuse_intent",
-        "design_partner_interest",
         "friction",
         "limitations",
         "safety",
@@ -2283,15 +2399,16 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
         assert f"id: {field_id}" in template
 
     for required_text in (
-        "USD 99 per team per month",
-        "USD 999 per team per year",
-        "research hypotheses only",
-        "not a purchase agreement",
-        "only after completing a genuine review",
+        "optional external feedback",
+        "independently observed timing",
+        "self-reported timing is not independently observed",
+        "does not reopen Stage 1",
+        "commercial discovery is separate",
+        "customer validation",
         "Prefer not to answer",
         "submission alone is not validation",
     ):
-        assert required_text in template
+        assert required_text.lower() in template.lower()
 
     forbidden_ids = (
         "name",
@@ -2302,8 +2419,989 @@ def test_public_alpha_feedback_collects_bounded_commercial_signals() -> None:
         "payment",
         "purchase_commitment",
         "sales_contact",
+        "design_partner_interest",
+        "price_discussion",
     )
     assert all(f"id: {field_id}" not in template for field_id in forbidden_ids)
+    assert template.count("        - Clarified my review decision") == 1
+
+
+def test_optional_external_feedback_timing_is_single_source_and_fail_closed() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "id: timing_evidence" in template
+    assert "id: timing_observer_category" in template
+    assert "id: timing_observer_relationship" in template
+    assert "id: timing_public_evidence_url" in template
+    for removed_id in (
+        "completion_time",
+        "timing_observation_status",
+        "timing_evidence_support",
+        "timing_public_evidence_reference",
+    ):
+        assert f"id: {removed_id}" not in template
+    for option in (
+        "Not independently observed",
+        '"Independently observed: under 5 minutes"',
+        '"Independently observed: 5 to 10 minutes"',
+        '"Independently observed: more than 10 minutes"',
+    ):
+        assert f"- {option}" in template
+    observer = template.split("id: timing_observer_category", maxsplit=1)[1].split(
+        "- type:", maxsplit=1
+    )[0]
+    for option in (
+        "Not independently observed",
+        "Source owner",
+        "Directly authorized criteria representative",
+        "Independent observer",
+    ):
+        assert f"- {option}" in observer
+    assert "required: true" in observer
+    public_evidence = template.split("id: timing_public_evidence_url", maxsplit=1)[1].split(
+        "- type:", maxsplit=1
+    )[0]
+    assert "qualifying public GitHub issue URL described above" in public_evidence
+    assert "enter exactly Not observed" in public_evidence
+    assert "required: true" in public_evidence
+    timing_guidance = template.split(
+        "id: timing_observer_relationship", maxsplit=1
+    )[1].split("id: timing_public_evidence_url", maxsplit=1)[0]
+    for required in (
+        "Observed timing qualifies only with a public GitHub issue",
+        "byte-identical canonical TimingEvidenceAttestationV1 JSON",
+        "A normal web page or prose issue remains on hold",
+        "docs/commercialization/stage2-readiness-packet.md",
+    ):
+        assert required in timing_guidance
+
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+    assert "Observed timing requires a non-not_observed timing_observer_category" in normalized
+    assert "timing_observer_relationship distinct_from_participant" in normalized
+    assert "and a valid public HTTPS timing_public_evidence_url" in normalized
+    assert "Not independently observed requires timing_observer_category not_observed" in normalized
+    assert "timing_observer_relationship not_observed" in normalized
+    assert "timing_public_evidence_url exactly Not observed" in normalized
+    assert "Every other timing-provenance combination remains on hold" in normalized
+    assert (
+        "timing_public_evidence_content_sha256 is the 64-character lowercase SHA-256 of those "
+        "canonical projection bytes" in normalized
+    )
+
+
+def test_optional_discovery_timing_requires_a_distinct_observer_relationship() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    relationship = template.split(
+        "id: timing_observer_relationship", maxsplit=1
+    )[1].split("- type:", maxsplit=1)[0]
+    assert "- Not independently observed" in relationship
+    assert "- Observer was not the participant" in relationship
+    assert "required: true" in relationship
+    assert "timing_observer_relationship distinct_from_participant" in normalized
+    assert "timing_observer_relationship not_observed" in normalized
+    assert "Never infer observer distinctness from an observer category" in normalized
+
+
+def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
+    design = Path(
+        "docs/superpowers/specs/2026-08-15-pr195-review-repair-design.md"
+    ).read_text(encoding="utf-8")
+    plan = Path(
+        "docs/superpowers/plans/2026-08-15-pr195-review-repair.md"
+    ).read_text(encoding="utf-8")
+
+    combined = " ".join((design + "\n" + plan).replace("`", "").split())
+    normalized_design = " ".join(design.replace("`", "").split())
+    normalized_plan = " ".join(plan.replace("`", "").split())
+    timing_contract = plan.split(
+        "def test_optional_external_feedback_timing_is_single_source_and_fail_closed()",
+        maxsplit=1,
+    )[1].split("Update the existing bounded-signals contract", maxsplit=1)[0]
+    cohort_contract = plan.split(
+        "def test_optional_discovery_cohorts_are_ordered_once_and_frozen()",
+        maxsplit=1,
+    )[1].split("Step 2: Run the cohort contract", maxsplit=1)[0]
+    assert "material correction requires a new qualification record" not in combined
+    assert "assigned only to the next open cohort" not in combined
+    assert (
+        "one required timing_observer_category dropdown, one required "
+        "timing_observer_relationship dropdown, and one required timing_public_evidence_url input"
+        in combined
+    )
+    assert "three required structured timing-provenance fields" in normalized_design
+    assert "evidence_snapshot_sha256" in normalized_design
+    assert "alpha_case_id" in normalized_design
+    assert "review_id" in normalized_design
+    assert "revalidated participant_false_ready becomes confirmed" in normalized_design
+    assert (
+        "Created material product friction requires one Narrow-positive friction_category"
+        in normalized_design
+    )
+    assert "digest or immutable reference" not in normalized_design
+    assert "derive canonical outcome from the validated local outcome record" in normalized_design
+    assert "public feedback outcome matches it exactly" in normalized_design
+    for local_value, public_value in (
+        ("found_useful_gap", "Found a useful previously unknown gap"),
+        ("showed_only_known_information", "Produced only already-known information"),
+        ("created_friction", "Created material product friction"),
+    ):
+        assert f"{local_value} maps to {public_value}" in normalized_design
+    assert "Pydantic-validated qualification-record model" in normalized_plan
+    assert "atomic validated storage boundary" in normalized_plan
+    assert "evidence_snapshot_sha256" in normalized_plan
+    assert "alpha_case_id" in normalized_plan
+    assert "review_id" in normalized_plan
+    assert "confirmed-False-Ready invalidation exception" in normalized_plan
+    assert "friction-outcome consistency" in normalized_plan
+    qualification_transition = (
+        "first successful validated transition from not qualified to qualified"
+    )
+    assert qualification_transition in normalized_design
+    assert qualification_transition in normalized_plan
+    assert "Do not assign partial cohort membership" in normalized_design
+    assert "Do not assign partial cohort membership" in normalized_plan
+    canonical_predicates = "Decision predicates evaluate canonical values, never display labels"
+    assert canonical_predicates in normalized_design
+    assert canonical_predicates in normalized_plan
+    assert "free-text friction cannot populate friction_category" in normalized_design
+    assert "free-text friction cannot populate friction_category" in normalized_plan
+    exact_binding = "every identity, head, PR, source, and case-issue field must match exactly"
+    assert exact_binding in normalized_design
+    assert exact_binding in normalized_plan
+    assert "explicit evidence-boundary attestation maps to understood" in normalized_design
+    assert "explicit evidence-boundary attestation maps to understood" in normalized_plan
+    for repair_document in (normalized_design, normalized_plan):
+        for snapshot_field in (
+            "timing_public_evidence_content_sha256",
+            "confirmed_criteria_sha256",
+            "checked_must_have_criterion_ids",
+            "participant_false_ready_attestation",
+            "source_owner_false_ready_attestation",
+            "timing_observer_relationship",
+        ):
+            assert snapshot_field in repair_document
+        assert 'ConfigDict(extra="forbid", strict=True, frozen=True)' in repair_document
+        assert "strict field types and exact JSON representations" in repair_document
+        assert "Ready negative attestation" in repair_document
+    for required in (
+        "Reject a new qualification record before ordering",
+        "same completed session can appear in at most one cohort",
+        "revalidated participant_false_ready becomes confirmed",
+        "Created material product friction requires one Narrow-positive friction_category",
+    ):
+        assert required in cohort_contract
+    assert (
+        "Consumes: the authoritative Stage 2 packet as plain text; no qualification records."
+        in normalized_plan
+    )
+    assert (
+        "optional qualifying-session records only after separate discovery authorization"
+        not in normalized_plan
+    )
+    for option in (
+        "Independently observed: under 5 minutes",
+        "Independently observed: 5 to 10 minutes",
+        "Independently observed: more than 10 minutes",
+    ):
+        assert f"        '\"{option}\"'," in timing_contract
+    for timing_field in (
+        "timing_observer_category",
+        "timing_observer_relationship",
+        "timing_public_evidence_url",
+    ):
+        assert "required: false" not in plan.split(
+            f"id: {timing_field}", maxsplit=1
+        )[1].split("```", maxsplit=1)[0]
+    assert "Task 3: Verify, publish, review, and stop at owner handoff" in plan
+    assert "Produces: a reviewed, green owner handoff." in normalized_plan
+    assert "Produces: a reviewed, green merge" not in normalized_plan
+    assert "Stop at the separate owner merge decision" in plan
+    assert "Do not merge from this reusable plan" in plan
+
+
+def test_optional_discovery_records_require_a_runtime_validation_boundary_before_use() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "Optional discovery remains operationally inactive" in normalized
+    assert "Pydantic-validated qualification-record model" in normalized
+    assert "atomic validated storage boundary" in normalized
+    assert (
+        "do not persist records or calculate cohort decisions from this document alone"
+        in normalized
+    )
+    assert "OptionalDiscoveryEvidenceSnapshotV1" in normalized
+    assert "contains exactly these fields and no others" in normalized
+    snapshot_fields = normalized.split(
+        "contains exactly these fields and no others:", maxsplit=1
+    )[1].split("evidence_snapshot_sha256 is not part of the snapshot payload", maxsplit=1)[0]
+    for field in (
+        "schema_version",
+        "alpha_case_id",
+        "review_id",
+        "saved_review_state_sha256",
+        "public_pr_url",
+        "reviewed_head_sha",
+        "requirements_source_url",
+        "requirements_source_revision",
+        "requirements_source_text_sha256",
+        "alpha_case_issue_url",
+        "qualified_at_utc",
+        "feedback_issue_url",
+        "feedback_issue_number",
+        "final_gate",
+        "confirmed_criteria_sha256",
+        "source_owner_confirmed",
+        "checked_must_have_criterion_ids",
+        "participant_false_ready_attestation",
+        "participant_false_ready_criterion_id",
+        "source_owner_false_ready_attestation",
+        "outcome",
+        "timing_evidence",
+        "timing_observer_category",
+        "timing_observer_relationship",
+        "timing_public_evidence_url",
+        "timing_public_evidence_content_sha256",
+        "useful_gap_category",
+        "decision_impact",
+        "reuse_response",
+        "alternative_workflow",
+        "friction_category",
+        "evidence_boundary_understanding",
+        "participant_false_ready",
+    ):
+        assert field in snapshot_fields
+    assert "evidence_snapshot_sha256 is not part of the snapshot payload" in normalized
+    assert "sort_keys=True" in normalized
+    assert 'separators=(",", ":")' in normalized
+    assert "ensure_ascii=False" in normalized
+    assert "allow_nan=False" in normalized
+    assert 'encode("utf-8")' in normalized
+    assert "sha256(canonical_bytes).hexdigest()" in normalized
+
+
+def test_optional_discovery_snapshot_has_strict_canonical_field_types() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        'ConfigDict(extra="forbid", strict=True, frozen=True)',
+        "Every field is required; the model has no aliases and no defaults",
+        'schema_version is Literal["optional-discovery-evidence-snapshot-v1"]',
+        "feedback_issue_number is StrictInt",
+        "qualified_at_utc is StrictStr in exactly YYYY-MM-DDTHH:MM:SS.ffffffZ",
+        "source_owner_confirmed is StrictBool",
+        "checked_must_have_criterion_ids is a tuple of StrictStr values",
+        "participant_false_ready_criterion_id is StrictStr | None",
+        "participant_false_ready_attestation and source_owner_false_ready_attestation use the "
+        "exact canonical Literal sets",
+        "enum-backed fields are Literal values from the canonical decision-value mapping",
+        "URLs remain StrictStr rather than a coercing or normalizing URL type",
+        "No Boolean, integer, datetime, URL, enum, list, or string coercion is allowed",
+        "JSON strings are the exact validated strings, integers are JSON numbers, the Boolean is",
+        "the tuple is one JSON array, and None is JSON null",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_snapshot_binds_the_exact_requirements_source() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "requirements_source_revision is StrictStr | None",
+        "requirements_source_text_sha256 is StrictStr matching ^[0-9a-f]{64}$",
+        "must exactly equal the saved review's validated criteria-source provenance",
+        "A changed source revision or source-text digest changes the snapshot digest",
+        "even when the requirements URL and normalized ordered criteria are unchanged",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_snapshot_binds_the_exact_saved_review_state() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "saved_review_state_sha256 is StrictStr matching ^[0-9a-f]{64}$",
+        "JsonReviewStore.state_fingerprint",
+        'sha256(validated_review_state(state).model_dump_json().encode("utf-8")).hexdigest()',
+        "hold the review store's mutation lock",
+        "must exactly equal a fresh fingerprint of the validated saved ReviewState",
+        "A later resolution, runtime-evidence, final-acceptance, or other saved-state transition",
+        "invalidates the qualification until it is revalidated",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_snapshot_gate_matches_the_saved_review() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "final_gate must exactly equal state.bundle.gate.verdict.value",
+        "same locked validated ReviewState used for saved_review_state_sha256",
+        "A missing active bundle or any gate mismatch keeps the record on hold",
+        "Public feedback cannot populate or override final_gate",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.replace("`", "").split())
+
+    for required in (
+        "alpha_case_id",
+        "review_id",
+        "qualified_at_utc",
+        "first successful validated transition from not qualified to qualified",
+        "never the submission, issue-creation, or draft-record time",
+        "Once assigned, qualified_at_utc is immutable",
+        "feedback_issue_number",
+        "evidence_snapshot_sha256",
+        "(qualified_at_utc, feedback_issue_number) ascending",
+        "positions 1\u20135, 6\u201310",
+        "Do not assign partial cohort membership",
+        "select the first five in canonical order, assign positions, and freeze the cohort "
+        "atomically",
+        "A pre-freeze correction revalidates the record in the unassigned pool",
+        "cannot reorder, replace, or repartition a frozen cohort",
+        "fewer than five unassigned qualifying records",
+        "no optional-discovery cohort decision is calculated",
+    ):
+        assert required in normalized
+
+
+def test_confirmed_false_ready_stops_before_the_cohort_minimum() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.replace("`", "").split())
+
+    for required in (
+        "Evaluate confirmed participant False Ready before the five-record cohort minimum",
+        "one through four eligible unassigned records",
+        "returns a global Stop immediately",
+        "No partial cohort is formed",
+        "This safety Stop is not a cohort decision",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_corrections_never_count_a_session_twice() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.replace("`", "").split())
+
+    for required in (
+        "Corrections annotate the original qualification record",
+        "do not create a new cohort member",
+        "The same completed session can appear in at most one cohort",
+        "Reject a new qualification record before ordering if its alpha_case_id or review_id "
+        "already appears in any qualification record",
+        "Any post-freeze change to a canonical qualification or decision field invalidates",
+        "Non-authoritative context or typo edits outside those fields do not",
+        "do not calculate or recalculate a decision",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_qualification_binds_an_immutable_evidence_snapshot() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.split())
+
+    assert "evidence_snapshot_sha256" in normalized
+    assert "SHA-256 digest of the evidence snapshot used at qualification" in normalized
+    assert "A mutable public reference does not qualify" in normalized
+
+
+def test_optional_discovery_outcome_matches_the_validated_local_record() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    outcome_form = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "validated local outcome remains the authoritative" in outcome_form
+    assert "derive canonical outcome from the validated local outcome record" in normalized
+    assert "public feedback outcome matches it exactly" in normalized
+    assert "keeps the qualification record on hold and is not counted" in normalized
+    for local_value, public_value in (
+        ("found_useful_gap", "Found a useful previously unknown gap"),
+        ("showed_only_known_information", "Produced only already-known information"),
+        ("created_friction", "Created material product friction"),
+    ):
+        assert f"{local_value} maps to {public_value}" in normalized
+
+
+def test_optional_discovery_decision_fields_have_canonical_enum_mappings() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "Persist only the canonical enum value" in normalized
+    assert "Decision predicates evaluate canonical values, never display labels" in normalized
+    for field in (
+        "outcome",
+        "useful_gap_category",
+        "decision_impact",
+        "reuse_response",
+        "alternative_workflow",
+        "friction_category",
+        "evidence_boundary_understanding",
+        "participant_false_ready",
+    ):
+        assert f"| {field} |" in normalized
+    for mapping in (
+        "Found a useful previously unknown gap -> found_useful_gap",
+        "Produced only already-known information -> showed_only_known_information",
+        "Created material product friction -> created_friction",
+        "Missing implementation evidence -> missing_implementation_evidence",
+        "Weak or misleading candidate evidence -> weak_or_misleading_candidate_evidence",
+        "Missing test evidence -> missing_test_evidence",
+        "Stale evidence after a new commit -> stale_evidence_after_new_commit",
+        "Unclear acceptance criteria -> unclear_acceptance_criteria",
+        "Another attributable public finding -> another_attributable_public_finding",
+        "No new useful gap -> no_new_useful_gap",
+        "Changed my review decision -> changed",
+        "Clarified my review decision -> clarified",
+        "Confirmed an existing review decision -> confirmed_existing",
+        "Had no effect on my review decision -> no_effect",
+        "Could not determine a decision -> indeterminate",
+        "Yes, I intend to use ScopeProof on another PR -> yes",
+        "Prefer not to answer -> declined",
+    ):
+        assert mapping in normalized
+    assert "Free-text friction is non-authoritative context" in normalized
+    assert "cannot populate friction_category" in normalized
+
+
+def test_optional_feedback_binds_the_exact_local_review_and_attests_the_boundary() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for field_id in ("alpha_case_id", "review_id"):
+        block = template.split(f"id: {field_id}", maxsplit=1)[1].split(
+            "- type:", maxsplit=1
+        )[0]
+        assert "required: true" in block
+    attestation = (
+        "I understand ScopeProof is an evidence assistant, not a correctness oracle; static or "
+        "implementation evidence does not prove test or runtime verification."
+    )
+    assert attestation in template
+    assert f"{attestation} -> understood" in normalized
+    for field in (
+        "alpha_case_id",
+        "review_id",
+        "public_pr_url",
+        "reviewed_head_sha",
+        "requirements_source_url",
+        "alpha_case_issue_url",
+    ):
+        assert field in normalized
+    assert "must exactly match the validated local alpha case and saved review" in normalized
+    assert "Any identity, head, PR, source, or case-issue mismatch" in normalized
+    assert "keeps the qualification record on hold and is not counted" in normalized
+
+
+def test_optional_feedback_respects_github_text_limits_and_requires_local_case_issue_identity(
+) -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    limits = {"description": 200, "label": 160}
+    for line_number, line in enumerate(template.splitlines(), start=1):
+        match = re.match(r"^\s*(?:-\s+)?(description|label):\s+(.+)$", line)
+        if match is None:
+            continue
+        field, value = match.groups()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        assert len(value) <= limits[field], (
+            f"Issue Form {field} on line {line_number} exceeds GitHub's "
+            f"{limits[field]}-character limit"
+        )
+
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+    assert (
+        "extend the Pydantic-validated local AlphaCaseRecord to persist "
+        "alpha_case_issue_url" in normalized
+    )
+    assert "Legacy records without that identity remain ineligible" in normalized
+    assert "Do not infer or backfill the association" in normalized
+    for path in (
+        "docs/superpowers/specs/2026-08-15-pr195-review-repair-design.md",
+        "docs/superpowers/plans/2026-08-15-pr195-review-repair.md",
+    ):
+        repair_document = " ".join(
+            Path(path).read_text(encoding="utf-8").replace("`", "").split()
+        )
+        assert (
+            "AlphaCaseRecord to persist the full canonical alpha_case_issue_url"
+            in repair_document
+        )
+        assert "do not infer or backfill" in repair_document
+
+
+def test_optional_feedback_binds_the_full_case_issue_repository_identity() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "alpha_case_issue_url" in normalized
+    assert "alpha_case_issue_number" not in normalized
+    assert (
+        "alpha_case_issue_url must be the exact canonical public GitHub issue URL"
+        in normalized
+    )
+    assert "configured intake repository YuzeJ21/Scope-Proof" in normalized
+    assert "reviewed PR may belong to a different public repository" in normalized
+    assert "the complete URL must exactly match the validated local alpha case" in normalized
+
+
+def test_optional_feedback_issue_identity_binds_repository_and_number() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "feedback_issue_url" in normalized
+    assert (
+        "feedback_issue_url must be the exact canonical public GitHub issue URL"
+        in normalized
+    )
+    assert "configured feedback repository YuzeJ21/Scope-Proof" in normalized
+    assert "must exactly equal the validated ingested issue html_url" in normalized
+    assert (
+        "feedback_issue_number must equal the positive integer final path segment"
+        in normalized
+    )
+    assert "copied, forked, or off-repository feedback issue remains on hold" in normalized
+    assert (
+        "feedback_issue_url already appears in any qualification record" in normalized
+    )
+
+
+def test_timing_evidence_hashes_a_canonical_github_issue_projection() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "TimingPublicEvidenceV1",
+        "timing-public-evidence-v1",
+        "GET https://api.github.com/repos/{owner}/{repository}/issues/{number}",
+        "Accept: application/vnd.github+json",
+        "X-GitHub-Api-Version: 2022-11-28",
+        "unauthenticated request",
+        "never send a token",
+        "redirects disabled",
+        "256 KiB response-byte cap",
+        "schema_version, source_url, github_issue_node_id, and body",
+        "html_url exactly equals timing_public_evidence_url",
+        "Hash the canonical projection bytes, never raw HTTP response bytes",
+    ):
+        assert required in normalized
+
+
+def test_observed_timing_attestation_binds_the_exact_session_and_band() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "TimingEvidenceAttestationV1",
+        "timing-evidence-attestation-v1",
+        "alpha_case_id, review_id, public_pr_url, reviewed_head_sha, timing_evidence",
+        "timing_observer_category, timing_observer_relationship, observer_attestation, and "
+        "source_owner_attestation",
+        "observed_this_exact_session_and_selected_band_is_accurate",
+        "confirmed_observer_and_timing_for_this_exact_session",
+        "must exactly match the validated local alpha case, saved review, and feedback selection",
+        "canonical reserialization must equal the issue body byte-for-byte",
+        "Arbitrary prose, extra fields, a different session, head, observer relationship, or time "
+        "band keeps the record on hold",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.replace("`", "").split())
+
+    for required in (
+        "Useful or decision-relevant is true only when",
+        "canonical outcome is found_useful_gap",
+        "canonical decision_impact is changed or clarified",
+        "confirmed_existing does not count",
+        "Affirmative repeat use is true only when",
+        "canonical reuse_response is yes",
+        "Canonical no, unsure, declined, missing, and ambiguous responses do not count",
+        "zero explicit affirmative repeat-use responses",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_holds_contradictory_useful_gap_inputs() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert (
+        "found_useful_gap counts only when useful_gap_category is not no_new_useful_gap"
+        in normalized
+    )
+    assert (
+        "Any contradiction between outcome and useful_gap_category keeps the record on hold"
+        in normalized
+    )
+    assert (
+        normalized.index("Any contradiction between outcome and useful_gap_category")
+        < normalized.index("Precedence, highest first")
+    )
+    for required in (
+        "found_useful_gap is valid only with one of the six concrete gap-category enums",
+        "showed_only_known_information is valid only with no_new_useful_gap",
+        "created_friction is valid only with no_new_useful_gap",
+        "Every other outcome and useful_gap_category pair is contradictory",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_continue_requires_every_member_to_understand_boundary() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.replace("`", "").split())
+
+    assert "all 5 of 5 members explicitly understood the evidence boundary" in normalized
+    assert (
+        "misunderstood, unsure, declined, missing, and ambiguous values keep the cohort on hold"
+        in normalized
+    )
+
+
+def test_optional_discovery_pivot_uses_bounded_authorized_inputs() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for value in (
+        "prefer_different_job",
+        "existing_alternative_sufficient",
+        "current_job_and_tool_gap",
+        "unknown",
+        "declined",
+    ):
+        assert value in normalized
+    assert (
+        "Pivot-positive is true only for prefer_different_job or "
+        "existing_alternative_sufficient"
+        in normalized
+    )
+    assert "Pivot requires at least 3 of 5 Pivot-positive records" in normalized
+    assert (
+        "current_job_and_tool_gap, unknown, declined, missing, and ambiguous responses do not "
+        "count toward Pivot"
+        in normalized
+    )
+
+
+def test_optional_discovery_false_ready_requires_participant_and_source_owner_evidence() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "participant_false_ready",
+        "confirmed, not_confirmed, or unknown",
+        "Confirmed participant False Ready requires all of",
+        "saved review final gate is Ready and bound to the exact reviewed head",
+        "participant_false_ready_attestation is exactly "
+        "affirmed_specific_must_have_should_not_be_ready",
+        "participant identifies one specific checked must-have criterion",
+        "source_owner_false_ready_attestation is exactly "
+        "confirmed_missing_or_conflicting_acceptance_evidence",
+        "evidence_snapshot_sha256 binds the complete confirmation record",
+        "snapshot binds final_gate, confirmed_criteria_sha256, source_owner_confirmed",
+        "checked_must_have_criterion_ids, participant_false_ready_attestation",
+        "participant_false_ready_criterion_id, and source_owner_false_ready_attestation",
+        "For a Ready result, missing any other confirmed condition yields unknown, never "
+        "not_confirmed",
+    ):
+        assert required in normalized
+
+
+def test_false_ready_uses_exact_attestation_enums_not_semantic_text() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "participant_false_ready_attestation",
+        "source_owner_false_ready_attestation",
+        "affirmed_specific_must_have_should_not_be_ready",
+        "affirmed_no_false_ready_after_complete_must_have_check",
+        "confirmed_missing_or_conflicting_acceptance_evidence",
+        "confirmed_no_missing_or_conflicting_evidence_after_complete_must_have_check",
+        "not_applicable_final_gate_not_ready",
+        "No semantic interpretation of prose may affect participant_false_ready",
+        "Free-text notes are non-authoritative context",
+        "excluded from the snapshot payload",
+    ):
+        assert required in normalized
+    assert "participant_false_ready_statement" not in normalized
+    assert "source_owner_false_ready_confirmation" not in normalized
+
+
+def test_optional_discovery_unknown_false_ready_blocks_continue() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert (
+        "Continue requires all 5 of 5 participant_false_ready values to be not_confirmed"
+        in normalized
+    )
+    assert "A confirmed value triggers Stop; unknown keeps the cohort on hold" in normalized
+
+
+def test_optional_discovery_decisions_require_five_complete_records() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split()).lower()
+
+    for field in (
+        "outcome",
+        "useful_gap_category",
+        "decision impact",
+        "reuse response",
+        "alternative workflow",
+        "friction_category",
+        "evidence-boundary understanding",
+        "participant_false_ready",
+        "evidence_snapshot_sha256",
+    ):
+        assert field in normalized
+    assert (
+        "decision inputs for outcome, useful_gap_category, decision impact"
+        in normalized
+    )
+    assert (
+        "before applying the remaining stop predicates, pivot, narrow, or continue, all five "
+        "records must have complete bounded decision inputs"
+        in normalized
+    )
+    assert (
+        "any missing, ambiguous, unknown, or declined required decision input keeps the cohort "
+        "on hold; do not evaluate stop"
+        in normalized
+    )
+
+
+def test_optional_discovery_non_understanding_holds_all_non_false_ready_decisions() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert (
+        "All five evidence-boundary understanding values must be understood before evaluating "
+        "any non-False-Ready Stop predicate, Pivot, Narrow, or Continue"
+        in normalized
+    )
+    assert (
+        "misunderstood, unsure, declined, missing, and ambiguous values keep the cohort on hold"
+        in normalized
+    )
+
+
+def test_confirmed_false_ready_bypasses_the_completeness_hold() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert (
+        "Evaluate confirmed participant False Ready before the completeness precondition"
+        in normalized
+    )
+    assert (
+        "Any confirmed record returns Stop immediately even when other cohort records are "
+        "incomplete, unknown, or declined"
+        in normalized
+    )
+    assert "revalidated participant_false_ready becomes confirmed" in normalized
+    assert "exempt from this invalidation hold and returns Stop immediately" in normalized
+
+
+def test_not_confirmed_false_ready_has_an_affirmative_evidence_predicate() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "participant_false_ready is not_confirmed only when",
+        "the exact-head final gate is not Ready",
+        "or a Ready result has both exact negative participant/source-owner attestations",
+        "after checking every must-have criterion",
+        "evidence_snapshot_sha256 binds that negative confirmation",
+        "checked_must_have_criterion_ids must equal the complete ordered must-have set",
+        "Otherwise classify unknown",
+        "For a Ready result, missing any other confirmed condition yields unknown",
+        "A final gate that is not Ready is not_confirmed",
+        "A Ready negative attestation is evaluated only by the not_confirmed rule",
+        "is not a missing confirmed condition",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_narrow_uses_bounded_friction_categories() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for value in (
+        "installation_or_setup",
+        "criteria_confirmation",
+        "evidence_quality",
+        "runtime_verification",
+        "decision_or_export",
+        "comparison_or_rereview",
+        "other_material_friction",
+        "none",
+        "unknown",
+        "declined",
+    ):
+        assert value in normalized
+    assert "Narrow-positive friction category is one of" in normalized
+    assert (
+        "Narrow requires the same Narrow-positive friction_category in at least 3 of 5 complete "
+        "records"
+        in normalized
+    )
+    assert "none, unknown, and declined do not count toward Narrow" in normalized
+    assert (
+        "Created material product friction requires one Narrow-positive friction_category"
+        in normalized
+    )
+    assert "none is contradictory and keeps the record on hold" in normalized
+
+
+def test_inbound_host_sequence_requires_separate_contact_authorization() -> None:
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
+    unblocker = Path("docs/alpha/participant-evidence-unblocker.md").read_text(
+        encoding="utf-8"
+    )
+    sprint = Path("docs/commercialization/design-partner-sprint.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(checklist.split())
+    normalized_unblocker = " ".join(unblocker.split())
+    normalized_sprint = " ".join(sprint.split())
+    authorization = (
+        "Before any reply, criteria return, supervised review, outcome request, or feedback "
+        "request, record separate explicit owner authorization for participant contact."
+    )
+    self_service = (
+        "Without that authorization, do not reply or initiate a hosted sequence; leave the "
+        "inbound path self-service."
+    )
+
+    assert authorization in normalized
+    assert self_service in normalized
+    assert normalized.index(authorization) < normalized.index("If voluntary feedback arrives")
+    assert (
+        "Without separate explicit owner authorization, do not manually contact participants."
+        in normalized_unblocker
+    )
+    assert (
+        "After authorization, contact only within the exact bounded plan"
+        in normalized_unblocker
+    )
+    assert (
+        "If participant contact is authorized, follow only the bounded authorized sequence"
+        in normalized
+    )
+    assert (
+        "Without separate explicit owner authorization, do not send email or direct messages."
+        in normalized_sprint
+    )
+    assert (
+        "After authorization, contact only within the exact bounded plan approved by the owner."
+        in normalized_sprint
+    )
+    assert "Never scrape profiles, build contact lists, automate outreach" in normalized_sprint
 
 
 def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -> None:
@@ -2330,7 +3428,9 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
         "Created material product friction",
     ]
     assert "Completed reviews only" in feedback
-    assert "required dropdown" in feedback
+    assert "Independently observed timing evidence" in feedback
+    assert "Timing observer category" in feedback
+    assert "Public timing evidence URL" in feedback
     assert "Prefer not to answer" in feedback
 
     completed_signals = sprint.split(
@@ -2340,15 +3440,19 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
     assert "incomplete review" not in completed_signals
 
 
-def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() -> None:
+def test_public_alpha_mobile_navigation_and_closed_stage_state_are_truthful() -> None:
     site = Path("site/index.html").read_text(encoding="utf-8")
     css = Path("site/styles.css").read_text(encoding="utf-8")
-    active_docs = (
-        Path("ROADMAP.md"),
-        Path("CHANGELOG.md"),
-        Path("docs/alpha/participant-evidence-unblocker.md"),
-        Path("docs/alpha/concierge-host-checklist.md"),
-        Path("docs/commercialization/design-partner-sprint.md"),
+    current_sections = (
+        Path("ROADMAP.md").read_text(encoding="utf-8").split(
+            "## Stage 1 — Genuine public alpha", maxsplit=1
+        )[1],
+        Path("CHANGELOG.md").read_text(encoding="utf-8").split(
+            "## Unreleased", maxsplit=1
+        )[1].split("## 0.2.3", maxsplit=1)[0],
+        Path("docs/alpha/participant-evidence-unblocker.md").read_text(encoding="utf-8"),
+        Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8"),
+        Path("docs/commercialization/design-partner-sprint.md").read_text(encoding="utf-8"),
     )
 
     mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
@@ -2358,10 +3462,9 @@ def test_public_alpha_mobile_navigation_and_active_waiting_state_are_truthful() 
     assert "flex-direction: column" in mobile_css
     assert ".brand { white-space: nowrap;" in mobile_css
     assert "nav { display: flex;" in mobile_css
-    for path in active_docs:
-        content = path.read_text(encoding="utf-8")
-        assert "waiting_for_inbound_public_alpha_submission" in content
-        assert "waiting_for_external_participant_evidence" not in content
+    for current_section in current_sections:
+        assert "closed_not_pursued_by_owner" in current_section
+        assert "waiting_for_inbound_public_alpha_submission" not in current_section
 
 
 def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -> None:
@@ -2370,7 +3473,12 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
     outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
     checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
-    public_surfaces = "\n".join((readme, site))
+    readme_status = readme.split("## Product status", maxsplit=1)[1].split(
+        "## GitHub Action advanced preview", maxsplit=1
+    )[0]
+    site_alpha = site.split('<section id="alpha"', maxsplit=1)[1].split(
+        "</section>", maxsplit=1
+    )[0]
 
     guide = "docs/commercialization/design-partner-sprint.md"
     feedback_url = (
@@ -2384,22 +3492,31 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     assert "../commercialization/design-partner-sprint.md" in outcome
     assert "../commercialization/design-partner-sprint.md" in checklist
 
-    for required in (
-        "free design-partner review",
-        "No paid product or billing is active",
-        "pricing question is optional research after product use",
-        "public-repository-only",
-        "acceptance-coverage assistant",
-        "not an AI code reviewer",
-    ):
-        assert required in public_surfaces
-    for unsupported_claim in (
-        "ScopeProof customers",
-        "validated pricing",
-        "paid plan is available",
-        "proven commercial demand",
-    ):
-        assert unsupported_claim not in public_surfaces
+    for public_surface in (readme_status, site_alpha):
+        normalized_surface = " ".join(public_surface.split()).lower()
+        for required in (
+            "free design-partner review",
+            "no paid product or billing is active",
+            "external commercial discovery is optional and separate",
+            "public-repository-only",
+            "acceptance-coverage assistant",
+            "not an ai code reviewer",
+            "stage 1 is closed as not pursued",
+            "owner-led stage 2 productization is active without claiming customer validation",
+            "public feedback form contains no pricing question",
+        ):
+            assert required in normalized_surface
+        for unsupported_claim in (
+            "scopeproof customers",
+            "validated pricing",
+            "paid plan is available",
+            "proven commercial demand",
+            "pricing question is optional research after product use",
+            "validating the requirement-to-evidence workflow",
+            "next product decision must be based on repeat use",
+            "evidence-gated path from engineering-complete public alpha to limited beta",
+        ):
+            assert unsupported_claim not in normalized_surface
 
     assert "Incomplete reviews do not become completed feedback outcomes" in site
     assert "participant-selected outcome" in quickstart
@@ -2463,13 +3580,10 @@ def test_r001_public_engineering_research_record_is_hash_bound_and_stage_safe() 
     ):
         assert skipped_check in after
     assert "skipped and provide no runtime proof" in after
-    assert "waiting_for_inbound_public_alpha_submission" in roadmap
-    assert "Entry requires every Stage 1 condition." in roadmap
-    assert (
-        "Entry requires every Stage 1 and Stage 2 condition plus a separate owner decision."
-        in roadmap
-    )
-    assert "Only recurring behavior can justify broader scope." in roadmap
+    assert "closed_not_pursued_by_owner" in roadmap
+    assert "Stage 1 did not pass" in roadmap
+    assert "owner_led_productization_active" in roadmap
+    assert "Stage 4 requires a named constraint" in roadmap
     assert "r001-microsoft-hve-core" in readme
     assert "R-001" in changelog
 

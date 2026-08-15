@@ -28,8 +28,9 @@ scopeproof benchmark
 scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
-Installation and benchmark success are setup evidence only. This setup does not advance Stage 1.
-They do not establish correctness, customer validation, or target-repository runtime verification.
+Installation and benchmark success are setup evidence only. Stage 1 is closed as not pursued, and
+this setup creates no external-evidence credit. It does not establish correctness, customer
+validation, or target-repository runtime verification.
 
 ## Ten-minute path
 
@@ -58,7 +59,7 @@ They do not establish correctness, customer validation, or target-repository run
 If the PR, criteria authority, public source, or confidentiality boundary cannot be confirmed, stop
 the alpha session. A constructed demo or technical smoke is not participant validation.
 
-## Optional post-review commercial research
+## Optional post-review external feedback
 
 After saving the review and recording the participant-selected outcome, read the
 [30-day Design Partner Sprint](../commercialization/design-partner-sprint.md). A completed
@@ -68,7 +69,7 @@ participant may voluntarily submit the bounded
 The feedback form records one completed-review outcome: a useful previously unknown gap,
 already-known information, or material product friction, plus timing, decision impact, and reuse
 intent. If the review is incomplete, do not use the completed-feedback form; stop or continue the
-local Standard review without claiming an alpha outcome. Its pricing question is optional research
-after product use. No paid product or billing is active, a response is not a purchase agreement,
-and declining the question does not affect the review. A form submission without a completed
-genuine review does not count as product or commercial validation.
+local Standard review without claiming an alpha outcome. The form contains no pricing question.
+External commercial discovery is optional and separate from owner-led Stage 2 productization and
+requires its own owner authorization. No paid product or billing is active. A form submission does
+not reopen Stage 1 and does not count as customer, product, or commercial validation.

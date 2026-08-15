@@ -1,7 +1,7 @@
 name: Public-alpha review feedback
-description: Share a bounded voluntary outcome after reviewing a genuine public pull request.
+description: Share optional bounded external feedback after reviewing a genuine public pull request.
 title: "[Public alpha]: "
-labels: ["external-validation", "dogfood"]
+labels: ["dogfood"]
 body:
   - type: markdown
     attributes:
@@ -15,10 +15,11 @@ body:
         Completed reviews only: if the review is incomplete, do not submit this feedback form.
         Stop or continue in Standard review without recording a completed alpha outcome.
 
-        The optional price question appears only after completing a genuine review.
-        USD 99 per team per month and USD 999 per team per year are research hypotheses only. A response is
-        voluntary, is not a purchase agreement, and does not grant permission for sales contact.
-        This submission alone is not validation.
+        This optional external feedback form collects the outcome, independently observed timing,
+        decision impact, and voluntary reuse intent. It does not reopen Stage 1, which the owner
+        closed as not pursued with every count at zero. Commercial discovery is separate and this
+        form collects no price research. A submission alone is not validation and does not establish
+        customer validation, demand, adoption, repeat use, or willingness to pay.
   - type: input
     id: public_pr
     attributes:
@@ -33,6 +34,22 @@ body:
       label: Related public-alpha case issue
       description: Link the inbound case issue that qualified this review.
       placeholder: https://github.com/YuzeJ21/Scope-Proof/issues/123
+    validations:
+      required: true
+  - type: input
+    id: alpha_case_id
+    attributes:
+      label: Local alpha case ID
+      description: Copy the generated alpha case ID bound to the validated local outcome.
+      placeholder: alpha-0123456789abcdef0123456789abcdef
+    validations:
+      required: true
+  - type: input
+    id: review_id
+    attributes:
+      label: Saved local review ID
+      description: Copy the saved review ID bound to the validated local outcome.
+      placeholder: review-123
     validations:
       required: true
   - type: input
@@ -72,21 +89,57 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: completion_time
+    id: timing_evidence
     attributes:
-      label: Time to inspectable coverage report
-      description: Measure from entering the public PR to reaching an inspectable report.
+      label: Independently observed timing evidence
+      description: Select one authoritative status and time band. Self-reported timing is not independently observed.
       options:
-        - Under 5 minutes
-        - 5 to 10 minutes
-        - More than 10 minutes
+        - Not independently observed
+        - "Independently observed: under 5 minutes"
+        - "Independently observed: 5 to 10 minutes"
+        - "Independently observed: more than 10 minutes"
+    validations:
+      required: true
+  - type: dropdown
+    id: timing_observer_category
+    attributes:
+      label: Timing observer category
+      description: Select the attributable observer category, or Not independently observed.
+      options:
+        - Not independently observed
+        - Source owner
+        - Directly authorized criteria representative
+        - Independent observer
+    validations:
+      required: true
+  - type: dropdown
+    id: timing_observer_relationship
+    attributes:
+      label: Timing observer relationship
+      description: For observed timing, confirm the observer was not the participant. Otherwise select Not independently observed.
+      options:
+        - Not independently observed
+        - Observer was not the participant
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        Observed timing qualifies only with a public GitHub issue whose body is the byte-identical canonical TimingEvidenceAttestationV1 JSON defined in the [Stage 2 packet](https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/commercialization/stage2-readiness-packet.md).
+        Create that issue before submitting. A normal web page or prose issue remains on hold. For timing not independently observed, enter `Not observed` below.
+  - type: input
+    id: timing_public_evidence_url
+    attributes:
+      label: Public timing evidence URL
+      description: Enter the qualifying public GitHub issue URL described above; otherwise enter exactly Not observed.
+      placeholder: https://github.com/OWNER/REPOSITORY/issues/123 or Not observed
     validations:
       required: true
   - type: dropdown
     id: useful_gap_category
     attributes:
       label: Useful-gap category
-      description: Select the closest attributable result, including no new useful gap.
+      description: Select the closest attributable result. If the review outcome says a useful previously unknown gap was found, do not select No new useful gap; contradictory selections are held as incomplete evidence.
       options:
         - Missing implementation evidence
         - Weak or misleading candidate evidence
@@ -122,18 +175,6 @@ body:
         - Prefer not to answer
     validations:
       required: true
-  - type: dropdown
-    id: design_partner_interest
-    attributes:
-      label: Optional design-partner price discussion
-      description: This required dropdown asks for an optional research response after product use; select Prefer not to answer to decline. It is not a purchase or contact request.
-      options:
-        - I would voluntarily discuss the team-price hypotheses
-        - Not now
-        - Unsure
-        - Prefer not to answer
-    validations:
-      required: true
   - type: textarea
     id: friction
     attributes:
@@ -160,4 +201,6 @@ body:
         - label: I included no credentials, private data, customer information, or confidential material.
           required: true
         - label: I understand this issue counts only with a completed genuine review and participant-selected outcome.
+          required: true
+        - label: I understand ScopeProof is an evidence assistant, not a correctness oracle; static or implementation evidence does not prove test or runtime verification.
           required: true
