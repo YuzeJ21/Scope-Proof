@@ -2586,6 +2586,76 @@ def test_optional_discovery_false_ready_requires_participant_and_source_owner_ev
         assert required in normalized
 
 
+def test_optional_discovery_unknown_false_ready_blocks_continue() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert (
+        "Continue requires all 5 of 5 participant_false_ready values to be not_confirmed"
+        in normalized
+    )
+    assert "A confirmed value triggers Stop; unknown keeps the cohort on hold" in normalized
+
+
+def test_optional_discovery_decisions_require_five_complete_records() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split()).lower()
+
+    for field in (
+        "outcome",
+        "decision impact",
+        "reuse response",
+        "alternative workflow",
+        "friction_category",
+        "evidence-boundary understanding",
+        "participant_false_ready",
+        "evidence_snapshot_sha256",
+    ):
+        assert field in normalized
+    assert (
+        "before applying stop, pivot, narrow, or continue, all five records must have complete "
+        "bounded decision inputs"
+        in normalized
+    )
+    assert (
+        "any missing, ambiguous, unknown, or declined required decision input keeps the cohort "
+        "on hold; do not evaluate stop"
+        in normalized
+    )
+
+
+def test_optional_discovery_narrow_uses_bounded_friction_categories() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for value in (
+        "installation_or_setup",
+        "criteria_confirmation",
+        "evidence_quality",
+        "runtime_verification",
+        "decision_or_export",
+        "comparison_or_rereview",
+        "other_material_friction",
+        "none",
+        "unknown",
+        "declined",
+    ):
+        assert value in normalized
+    assert "Narrow-positive friction category is one of" in normalized
+    assert (
+        "Narrow requires the same Narrow-positive friction_category in at least 3 of 5 complete "
+        "records"
+        in normalized
+    )
+    assert "none, unknown, and declined do not count toward Narrow" in normalized
+
+
 def test_inbound_host_sequence_requires_separate_contact_authorization() -> None:
     checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
     normalized = " ".join(checklist.split())

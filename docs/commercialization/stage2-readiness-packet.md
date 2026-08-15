@@ -85,6 +85,7 @@ unavailable answer as `unknown`, a refused answer as `declined`, and an unobserv
 | Self-reported completion time | Self-reported completion time remains `not observed` | `not observed` |
 | Alternative workflow | One of `prefer_different_job`, `existing_alternative_sufficient`, `current_job_and_tool_gap`, `unknown`, or `declined` | `unknown` |
 | Attributable result and decision impact | Explicit post-use response | `unknown` |
+| `friction_category` | One of `installation_or_setup`, `criteria_confirmation`, `evidence_quality`, `runtime_verification`, `decision_or_export`, `comparison_or_rereview`, `other_material_friction`, `none`, `unknown`, or `declined` | `unknown` |
 | Evidence-boundary understanding | Understood, misunderstood, unsure, or `declined` | `unknown` |
 | Reuse response | Yes, no, unsure, or `declined` | `unknown` |
 | `participant_false_ready` | `confirmed`, `not_confirmed`, or `unknown` under the evidence rule below | `unknown` |
@@ -134,15 +135,31 @@ conflicting acceptance evidence at that head; and `evidence_snapshot_sha256` bin
 confirmation record. Any missing condition classifies the record as `unknown`, never
 `not_confirmed`. A Ready gate by itself is not a False Ready observation.
 
+Continue requires all 5 of 5 `participant_false_ready` values to be `not_confirmed`. A `confirmed`
+value triggers Stop; `unknown` keeps the cohort on hold.
+
+Narrow-positive friction category is one of `installation_or_setup`, `criteria_confirmation`,
+`evidence_quality`, `runtime_verification`, `decision_or_export`, `comparison_or_rereview`, or
+`other_material_friction`. `none`, `unknown`, and `declined` do not count toward Narrow. Narrow
+requires the same Narrow-positive `friction_category` in at least 3 of 5 complete records.
+
+Before applying Stop, Pivot, Narrow, or Continue, all five records must have complete bounded
+decision inputs for outcome, decision impact, reuse response, alternative workflow,
+`friction_category`,
+evidence-boundary understanding, `participant_false_ready`, and `evidence_snapshot_sha256`. Any
+missing, ambiguous, `unknown`, or `declined` required decision input keeps the cohort on hold; do
+not evaluate Stop or any lower-precedence decision.
+
 Precedence, highest first: Stop, Pivot, Narrow, Continue.
 
 1. **Stop** for any confirmed False Ready, fewer than 2 of 5 useful or decision-relevant sessions,
    or zero explicit affirmative repeat-use responses.
 2. **Pivot** when Stop does not apply and at least 3 of 5 records are Pivot-positive.
-3. **Narrow** when neither higher rule applies and one friction category occurs in 3 or more of 5.
+3. **Narrow** when neither higher rule applies and the same Narrow-positive `friction_category`
+   occurs in at least 3 of 5 complete records.
 4. **Continue discovery** only when none of the higher rules applies, at least 2 of 5 sessions are
    useful or decision-relevant, all 5 of 5 members explicitly understood the evidence boundary,
-   and confirmed False Ready is zero.
+   and all 5 of 5 `participant_false_ready` values are `not_confirmed`.
 
 These optional-discovery rules do not control owner-led productization. Missing evidence defaults
 to hold for discovery and cannot be interpreted as support.
