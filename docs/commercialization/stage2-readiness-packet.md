@@ -138,7 +138,11 @@ The separately authorized runtime boundary must define a Pydantic model named
 others: `schema_version` fixed to `optional-discovery-evidence-snapshot-v1`, `alpha_case_id`,
 `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
 `alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`, `outcome`,
+`final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`,
+`checked_must_have_criterion_ids`, `participant_false_ready_statement`,
+`participant_false_ready_criterion_id`, `source_owner_false_ready_confirmation`,
 `timing_evidence`, `timing_observer_category`, `timing_public_evidence_url`,
+`timing_public_evidence_content_sha256`,
 `useful_gap_category`, `decision_impact`, `reuse_response`, `alternative_workflow`,
 `friction_category`, `evidence_boundary_understanding`, and `participant_false_ready`.
 `evidence_snapshot_sha256` is not part of the snapshot payload and cannot hash itself. Validate the
@@ -164,6 +168,11 @@ Observed timing requires a non-`not_observed` `timing_observer_category` and a v
 reachable. Not independently observed requires `timing_observer_category` `not_observed` and
 `timing_public_evidence_url` exactly `Not observed`. Every other timing-provenance combination
 remains on hold and is not counted; neither field can upgrade a `not_observed` timing selection.
+For observed timing, `timing_public_evidence_content_sha256` binds the exact fetched public evidence
+bytes after a bounded public-only fetch that executes no target-repository code. It must be the
+64-character lowercase SHA-256 of those bytes. A mutable URL without this content digest does not
+qualify. A later revalidation that fetches different bytes invalidates the record. For not-observed
+timing, the field is the SHA-256 of the exact UTF-8 bytes `Not observed`.
 The feedback issue's `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`,
 `requirements_source_url`, and `alpha_case_issue_number` must exactly match the validated local
 alpha case and saved review. Any identity, head, PR, source, or case-issue mismatch keeps the
@@ -222,6 +231,21 @@ conflicting acceptance evidence at that head; and `evidence_snapshot_sha256` bin
 confirmation record. For a Ready result, missing any other confirmed condition yields `unknown`,
 never `not_confirmed`. A final gate that is not Ready is `not_confirmed` under the rule below. A
 Ready gate by itself is not a False Ready observation.
+
+For every False Ready classification, the snapshot binds `final_gate`,
+`confirmed_criteria_sha256`, `source_owner_confirmed`, `checked_must_have_criterion_ids`,
+`participant_false_ready_statement`, `participant_false_ready_criterion_id`, and
+`source_owner_false_ready_confirmation`. `confirmed_criteria_sha256` must equal the validated digest
+of the exact ordered confirmed-criterion snapshot. `source_owner_confirmed` must be `true`.
+`checked_must_have_criterion_ids` must equal the complete ordered must-have set from that snapshot.
+For `confirmed`, the participant statement is bounded nonempty text, the criterion ID names one
+checked must-have criterion, and the source-owner confirmation is bounded nonempty text describing
+the missing or conflicting evidence. For a Ready `not_confirmed` result, the participant statement
+explicitly says no False Ready was observed after checking the complete must-have set, the criterion
+ID is `null`, and the source-owner confirmation explicitly confirms that checked set. For a
+non-Ready final gate, both statements use the exact sentinel `Not applicable: final gate not Ready`
+and the criterion ID is `null`. Any missing, mismatched, empty, or contradictory attestation yields
+`unknown`.
 
 `participant_false_ready` is `not_confirmed` only when the exact-head final gate is not Ready, or a
 Ready result has both an explicit participant no-False-Ready statement and source-owner

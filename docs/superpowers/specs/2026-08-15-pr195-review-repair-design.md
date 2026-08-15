@@ -34,7 +34,9 @@ observer dropdown has only `Not independently observed`, `Source owner`, `Direct
 criteria representative`, and `Independent observer`. Observed timing is usable only with a
 non-not-observed observer category and a validated, publicly reachable HTTPS evidence URL. A
 not-observed timing selection requires the not-observed observer category and the exact `Not
-observed` sentinel in the URL field. Every other combination remains on hold.
+observed` sentinel in the URL field. Every other combination remains on hold. Observed timing also
+requires `timing_public_evidence_content_sha256`, the digest of the exact fetched public evidence
+bytes; a mutable URL without that content digest does not qualify.
 
 ### Cohort allocation
 
@@ -52,6 +54,11 @@ payload `OptionalDiscoveryEvidenceSnapshotV1` with `extra="forbid"`. Its field s
 excluded. Canonical bytes use sorted-key, compact, non-ASCII-escaping, finite-only JSON encoded as
 UTF-8, exactly as the packet specifies, and the persisted digest is
 `sha256(canonical_bytes).hexdigest()`.
+
+The snapshot also binds `final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`, the
+complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_statement`,
+`participant_false_ready_criterion_id`, and `source_owner_false_ready_confirmation`. These are the
+validated inputs for `participant_false_ready`; the derived enum alone is insufficient.
 
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. An initially incomplete or mismatched submission uses the later atomic

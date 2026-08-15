@@ -30,6 +30,9 @@
   `timing_public_evidence_url` input; free text cannot qualify observed timing.
 - The future `evidence_snapshot_sha256` hashes only a validated, exact-version
   `OptionalDiscoveryEvidenceSnapshotV1` canonicalized exactly as the authoritative packet states.
+- That snapshot includes `timing_public_evidence_content_sha256`, `confirmed_criteria_sha256`, the
+  complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_statement`, and
+  `source_owner_false_ready_confirmation`; derived enums and mutable URLs alone do not qualify.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
 - Preserve the unrelated untracked `.coverage 2` byte-for-byte and never stage it.
 

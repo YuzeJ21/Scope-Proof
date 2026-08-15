@@ -2477,6 +2477,10 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
         "timing_public_evidence_url exactly Not observed" in normalized
     )
     assert "Every other timing-provenance combination remains on hold" in normalized
+    assert (
+        "timing_public_evidence_content_sha256 binds the exact fetched public evidence bytes"
+        in normalized
+    )
 
 
 def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
@@ -2546,6 +2550,15 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert exact_binding in normalized_plan
     assert "explicit evidence-boundary attestation maps to understood" in normalized_design
     assert "explicit evidence-boundary attestation maps to understood" in normalized_plan
+    for repair_document in (normalized_design, normalized_plan):
+        for snapshot_field in (
+            "timing_public_evidence_content_sha256",
+            "confirmed_criteria_sha256",
+            "checked_must_have_criterion_ids",
+            "participant_false_ready_statement",
+            "source_owner_false_ready_confirmation",
+        ):
+            assert snapshot_field in repair_document
     for required in (
         "Reject a new qualification record before ordering",
         "same completed session can appear in at most one cohort",
@@ -2603,10 +2616,18 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
         "alpha_case_issue_number",
         "qualified_at_utc",
         "feedback_issue_number",
+        "final_gate",
+        "confirmed_criteria_sha256",
+        "source_owner_confirmed",
+        "checked_must_have_criterion_ids",
+        "participant_false_ready_statement",
+        "participant_false_ready_criterion_id",
+        "source_owner_false_ready_confirmation",
         "outcome",
         "timing_evidence",
         "timing_observer_category",
         "timing_public_evidence_url",
+        "timing_public_evidence_content_sha256",
         "useful_gap_category",
         "decision_impact",
         "reuse_response",
@@ -2934,6 +2955,9 @@ def test_optional_discovery_false_ready_requires_participant_and_source_owner_ev
         "participant identifies a specific must-have criterion",
         "source owner confirms explicit missing or conflicting acceptance evidence",
         "evidence_snapshot_sha256 binds the complete confirmation record",
+        "snapshot binds final_gate, confirmed_criteria_sha256, source_owner_confirmed",
+        "checked_must_have_criterion_ids, participant_false_ready_statement",
+        "participant_false_ready_criterion_id, and source_owner_false_ready_confirmation",
         "For a Ready result, missing any other confirmed condition yields unknown, never "
         "not_confirmed",
     ):
@@ -3035,6 +3059,7 @@ def test_not_confirmed_false_ready_has_an_affirmative_evidence_predicate() -> No
         "or a Ready result has both an explicit participant no-False-Ready statement",
         "and source-owner confirmation after checking every must-have criterion",
         "evidence_snapshot_sha256 binds that negative confirmation",
+        "checked_must_have_criterion_ids must equal the complete ordered must-have set",
         "Otherwise classify unknown",
         "For a Ready result, missing any other confirmed condition yields unknown",
         "A final gate that is not Ready is not_confirmed",
