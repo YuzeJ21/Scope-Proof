@@ -217,13 +217,13 @@ Resolve only the two review threads whose findings are satisfied. Wait for every
 head check and review to become terminal. Repair any newly confirmed in-scope Critical or Important
 finding test-first and repeat verification.
 
-- [ ] **Step 4: Merge and verify resulting main**
+- [ ] **Step 4: Stop at the separate owner merge decision**
 
-When the PR is open, current, clean, mergeable, reviewed, and green, merge using the established
-repository merge method. Fetch `origin`, prove the merge contains the exact repair head, switch to
-`main`, fast-forward safely, and verify local `main == origin/main` without modifying `.coverage 2`.
+When the PR is open, current, clean, mergeable, reviewed, and green, hand it back to the owner for a
+separate merge decision. Do not merge from this reusable plan. A later explicit owner authorization
+may direct a separate execution to merge and verify resulting `main`.
 
 - [ ] **Step 5: Report the handoff**
 
-Report the PR URL, merge method, merge SHA, merged head, resulting `main` SHA/tree, check conclusions,
-local verification, preserved `.coverage 2` proof, and remaining separately owner-gated actions.
+Report the PR URL, exact head/base, check conclusions, local verification, preserved `.coverage 2`
+proof, the owner merge decision required, and remaining separately owner-gated actions.

@@ -2466,6 +2466,23 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert "required: false" not in plan.split(
         "id: timing_evidence_support", maxsplit=1
     )[1].split("```", maxsplit=1)[0]
+    assert "Stop at the separate owner merge decision" in plan
+    assert "Do not merge from this reusable plan" in plan
+
+
+def test_optional_discovery_records_require_a_runtime_validation_boundary_before_use() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.split())
+
+    assert "Optional discovery remains operationally inactive" in normalized
+    assert "Pydantic-validated qualification-record model" in normalized
+    assert "atomic validated storage boundary" in normalized
+    assert (
+        "do not persist records or calculate cohort decisions from this document alone"
+        in normalized
+    )
 
 
 def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:

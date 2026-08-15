@@ -94,6 +94,12 @@ unavailable answer as `unknown`, a refused answer as `declined`, and an unobserv
 
 ## Optional-discovery decision rules
 
+Optional discovery remains operationally inactive. Separate owner authorization is necessary but
+not sufficient to use these rules. Before any qualification record is persisted or any cohort
+decision is calculated, implement a Pydantic-validated qualification-record model and an atomic
+validated storage boundary with regression coverage. Until that boundary exists, do not persist
+records or calculate cohort decisions from this document alone.
+
 No optional-discovery decision may be calculated while the qualifying denominator is zero. If
 optional discovery is authorized later, create one canonical qualification record for each
 qualifying completed session. The record contains `qualified_at_utc`, `feedback_issue_number`, and
@@ -102,7 +108,7 @@ mutable public reference does not qualify; keep any source URL only as non-autho
 
 Order qualification records by `(qualified_at_utc, feedback_issue_number) ascending` and allocate
 them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
-member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort. Material
+member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort.
 Corrections annotate the original qualification record and do not create a new cohort member. The
 same completed session can appear in at most one cohort. Any post-freeze change to a canonical
 qualification or decision field invalidates the affected cohort. Canonical fields are
