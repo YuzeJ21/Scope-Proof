@@ -122,9 +122,9 @@ Affirmative repeat use is true only when the participant selects
 `Yes, I intend to use ScopeProof on another PR`. `No`, `Unsure`, `Prefer not to answer`, missing,
 and ambiguous responses do not count.
 
-Continue requires all 5 of 5 cohort members to select `understood` for evidence-boundary
-understanding. `misunderstood`, `unsure`, `declined`, missing, and ambiguous responses keep the
-cohort on hold.
+All five evidence-boundary understanding values must be `understood` before evaluating any
+non-False-Ready Stop predicate, Pivot, Narrow, or Continue. `misunderstood`, `unsure`, `declined`,
+missing, and ambiguous values keep the cohort on hold.
 
 Pivot-positive is true only for `prefer_different_job` or `existing_alternative_sufficient`.
 `current_job_and_tool_gap`, `unknown`, `declined`, missing, and ambiguous responses do not count
@@ -153,9 +153,8 @@ requires the same Narrow-positive `friction_category` in at least 3 of 5 complet
 Evaluate confirmed participant False Ready before the completeness precondition. Any `confirmed`
 record returns Stop immediately even when other cohort records are incomplete, `unknown`, or
 `declined`. If no record is `confirmed`, before applying the remaining Stop predicates, Pivot,
-Narrow, or Continue, all five records must have complete bounded
-decision inputs for outcome, decision impact, reuse response, alternative workflow,
-`friction_category`,
+Narrow, or Continue, all five records must have complete bounded decision inputs for outcome,
+`useful_gap_category`, decision impact, reuse response, alternative workflow, `friction_category`,
 evidence-boundary understanding, `participant_false_ready`, and `evidence_snapshot_sha256`. Any
 missing, ambiguous, `unknown`, or `declined` required decision input keeps the cohort on hold; do
 not evaluate Stop or any lower-precedence decision.

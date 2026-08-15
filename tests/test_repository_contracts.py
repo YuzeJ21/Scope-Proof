@@ -2554,9 +2554,9 @@ def test_optional_discovery_continue_requires_every_member_to_understand_boundar
     )[0]
     normalized = " ".join(rules.replace("`", "").split())
 
-    assert "Continue requires all 5 of 5 cohort members to select understood" in normalized
+    assert "all 5 of 5 members explicitly understood the evidence boundary" in normalized
     assert (
-        "misunderstood, unsure, declined, missing, and ambiguous responses keep the cohort on hold"
+        "misunderstood, unsure, declined, missing, and ambiguous values keep the cohort on hold"
         in normalized
     )
 
@@ -2628,6 +2628,7 @@ def test_optional_discovery_decisions_require_five_complete_records() -> None:
 
     for field in (
         "outcome",
+        "useful_gap_category",
         "decision impact",
         "reuse response",
         "alternative workflow",
@@ -2638,6 +2639,10 @@ def test_optional_discovery_decisions_require_five_complete_records() -> None:
     ):
         assert field in normalized
     assert (
+        "decision inputs for outcome, useful_gap_category, decision impact"
+        in normalized
+    )
+    assert (
         "before applying the remaining stop predicates, pivot, narrow, or continue, all five "
         "records must have complete bounded decision inputs"
         in normalized
@@ -2645,6 +2650,23 @@ def test_optional_discovery_decisions_require_five_complete_records() -> None:
     assert (
         "any missing, ambiguous, unknown, or declined required decision input keeps the cohort "
         "on hold; do not evaluate stop"
+        in normalized
+    )
+
+
+def test_optional_discovery_non_understanding_holds_all_non_false_ready_decisions() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert (
+        "All five evidence-boundary understanding values must be understood before evaluating "
+        "any non-False-Ready Stop predicate, Pivot, Narrow, or Continue"
+        in normalized
+    )
+    assert (
+        "misunderstood, unsure, declined, missing, and ambiguous values keep the cohort on hold"
         in normalized
     )
 
