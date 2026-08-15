@@ -33,6 +33,10 @@ commercial-research evidence and stop gates. It does not authorize outreach or c
 ## Host sequence
 
 - [ ] Install and verify the current release using the [README quickstart](../../README.md#quickstart).
+- [ ] Before any reply, criteria return, supervised review, outcome request, or feedback request,
+      record separate explicit owner authorization for participant contact. Without that
+      authorization, do not reply or initiate a hosted sequence; leave the inbound path
+      self-service.
 - [ ] If voluntary feedback arrives, verify that the inbound public-alpha case is appropriate. Do
       not manually contact participants or store outreach records in the repository.
 - [ ] Apply every [public-PR qualification check](public-pr-qualification-checklist.md).

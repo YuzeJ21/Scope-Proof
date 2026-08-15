@@ -2463,9 +2463,26 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
         "positions 1\u20135, 6\u201310",
         "Freeze a cohort when its fifth member is assigned",
         "cannot reorder, replace, or repartition a frozen cohort",
-        "material correction requires a new qualification record",
         "fewer than five unassigned qualifying records",
         "no optional-discovery decision is calculated",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_corrections_never_count_a_session_twice() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.split())
+
+    for required in (
+        "Material corrections annotate the original qualification record",
+        "do not create a new cohort member",
+        "The same completed session can appear in at most one cohort",
+        "the affected frozen cohort becomes invalid and remains on hold",
     ):
         assert required in normalized
 
@@ -2505,6 +2522,85 @@ def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -
         "zero explicit affirmative repeat-use responses",
     ):
         assert required in normalized
+
+
+def test_optional_discovery_continue_requires_every_member_to_understand_boundary() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.replace("`", "").split())
+
+    assert "Continue requires all 5 of 5 cohort members to select understood" in normalized
+    assert (
+        "misunderstood, unsure, declined, missing, and ambiguous responses keep the cohort on hold"
+        in normalized
+    )
+
+
+def test_optional_discovery_pivot_uses_bounded_authorized_inputs() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for value in (
+        "prefer_different_job",
+        "existing_alternative_sufficient",
+        "current_job_and_tool_gap",
+        "unknown",
+        "declined",
+    ):
+        assert value in normalized
+    assert (
+        "Pivot-positive is true only for prefer_different_job or "
+        "existing_alternative_sufficient"
+        in normalized
+    )
+    assert "Pivot requires at least 3 of 5 Pivot-positive records" in normalized
+    assert (
+        "current_job_and_tool_gap, unknown, declined, missing, and ambiguous responses do not "
+        "count toward Pivot"
+        in normalized
+    )
+
+
+def test_optional_discovery_false_ready_requires_participant_and_source_owner_evidence() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "participant_false_ready",
+        "confirmed, not_confirmed, or unknown",
+        "Confirmed participant False Ready requires all of",
+        "saved review final gate is Ready and bound to the exact reviewed head",
+        "participant identifies a specific must-have criterion",
+        "source owner confirms explicit missing or conflicting acceptance evidence",
+        "evidence_snapshot_sha256 binds the complete confirmation record",
+        "Any missing condition classifies the record as unknown, never not_confirmed",
+    ):
+        assert required in normalized
+
+
+def test_inbound_host_sequence_requires_separate_contact_authorization() -> None:
+    checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
+    normalized = " ".join(checklist.split())
+    authorization = (
+        "Before any reply, criteria return, supervised review, outcome request, or feedback "
+        "request, record separate explicit owner authorization for participant contact."
+    )
+    self_service = (
+        "Without that authorization, do not reply or initiate a hosted sequence; leave the "
+        "inbound path self-service."
+    )
+
+    assert authorization in normalized
+    assert self_service in normalized
+    assert normalized.index(authorization) < normalized.index("If voluntary feedback arrives")
 
 
 def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -> None:

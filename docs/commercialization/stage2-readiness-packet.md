@@ -83,10 +83,11 @@ unavailable answer as `unknown`, a refused answer as `declined`, and an unobserv
 | Completed-review and validated-outcome references | Public references | `unknown` |
 | Completion-time evidence | Independent observer category plus public evidence reference | `not observed` |
 | Self-reported completion time | Self-reported completion time remains `not observed` | `not observed` |
-| Alternative workflow | Participant's explicit post-use response | `unknown` |
+| Alternative workflow | One of `prefer_different_job`, `existing_alternative_sufficient`, `current_job_and_tool_gap`, `unknown`, or `declined` | `unknown` |
 | Attributable result and decision impact | Explicit post-use response | `unknown` |
 | Evidence-boundary understanding | Understood, misunderstood, unsure, or `declined` | `unknown` |
 | Reuse response | Yes, no, unsure, or `declined` | `unknown` |
+| `participant_false_ready` | `confirmed`, `not_confirmed`, or `unknown` under the evidence rule below | `unknown` |
 | Optional price-discussion response | Yes, no, unsure, or `declined` | `unknown` |
 | Evidence source and status | Public reference plus explicit status | `unknown` |
 
@@ -100,10 +101,13 @@ mutable public reference does not qualify; keep any source URL only as non-autho
 
 Order qualification records by `(qualified_at_utc, feedback_issue_number) ascending` and allocate
 them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
-member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort. A material
-correction requires a new qualification record and is assigned only to the next open cohort. When
-there are fewer than five unassigned qualifying records, the next cohort remains on hold and no
-optional-discovery decision is calculated.
+member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort. Material
+corrections annotate the original qualification record and do not create a new cohort member. The
+same completed session can appear in at most one cohort. If a material correction changes evidence
+used by a completed decision, the affected frozen cohort becomes invalid and remains on hold; do
+not recalculate it or allocate the session again. When there are fewer than five unassigned
+qualifying records, the next cohort remains on hold and no optional-discovery decision is
+calculated.
 
 Useful or decision-relevant is true only when the participant selects
 `Found a useful previously unknown gap`, `Changed my review decision`, or
@@ -115,16 +119,30 @@ Affirmative repeat use is true only when the participant selects
 `Yes, I intend to use ScopeProof on another PR`. `No`, `Unsure`, `Prefer not to answer`, missing,
 and ambiguous responses do not count.
 
+Continue requires all 5 of 5 cohort members to select `understood` for evidence-boundary
+understanding. `misunderstood`, `unsure`, `declined`, missing, and ambiguous responses keep the
+cohort on hold.
+
+Pivot-positive is true only for `prefer_different_job` or `existing_alternative_sufficient`.
+`current_job_and_tool_gap`, `unknown`, `declined`, missing, and ambiguous responses do not count
+toward Pivot. Pivot requires at least 3 of 5 Pivot-positive records after Stop does not apply.
+
+Confirmed participant False Ready requires all of these conditions: the saved review final gate is
+Ready and bound to the exact reviewed head; the participant identifies a specific must-have
+criterion that should not have been Ready; the source owner confirms explicit missing or
+conflicting acceptance evidence at that head; and `evidence_snapshot_sha256` binds the complete
+confirmation record. Any missing condition classifies the record as `unknown`, never
+`not_confirmed`. A Ready gate by itself is not a False Ready observation.
+
 Precedence, highest first: Stop, Pivot, Narrow, Continue.
 
 1. **Stop** for any confirmed False Ready, fewer than 2 of 5 useful or decision-relevant sessions,
    or zero explicit affirmative repeat-use responses.
-2. **Pivot** when Stop does not apply and 3 or more of 5 sessions prefer a different job or find
-   existing alternatives sufficient.
+2. **Pivot** when Stop does not apply and at least 3 of 5 records are Pivot-positive.
 3. **Narrow** when neither higher rule applies and one friction category occurs in 3 or more of 5.
 4. **Continue discovery** only when none of the higher rules applies, at least 2 of 5 sessions are
-   useful or decision-relevant, the evidence boundary is understood, and confirmed False Ready is
-   zero.
+   useful or decision-relevant, all 5 of 5 members explicitly understood the evidence boundary,
+   and confirmed False Ready is zero.
 
 These optional-discovery rules do not control owner-led productization. Missing evidence defaults
 to hold for discovery and cannot be interpreted as support.
