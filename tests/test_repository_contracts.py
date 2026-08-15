@@ -1894,6 +1894,9 @@ def test_owner_led_stage_two_strategy_preserves_zero_external_evidence() -> None
     optional_discovery = section(
         packet, "## Optional external discovery", "## Hypothesis ledger"
     )
+    optional_discovery_rules = section(
+        packet, "## Optional-discovery decision rules", "## Boundaries"
+    )
     current_headers = "\n".join(
         (
             section(roadmap, "# ScopeProof Roadmap", "## Stage 0"),
@@ -1943,6 +1946,12 @@ def test_owner_led_stage_two_strategy_preserves_zero_external_evidence() -> None
     assert "release, tag, or package publication" in normalized_packet_scope
     assert "External commercial discovery is optional and separate" in normalized_optional_discovery
     assert "separate owner authorization" in normalized_optional_discovery
+    normalized_discovery_rules = " ".join(optional_discovery_rules.split())
+    assert (
+        "No optional-discovery decision may be calculated while the qualifying denominator is zero"
+        in normalized_discovery_rules
+    )
+    assert "No customer, product, or commercial decision" not in normalized_discovery_rules
 
     protected_current_sections = "\n".join(
         (*stage_blocks, *productization_blocks, packet_status, packet_scope, optional_discovery)
@@ -2209,6 +2218,12 @@ def test_inbound_alpha_case_submission_path_is_public_safe_and_owner_passive() -
     assert "participant_role" in template
     assert "source-owner-confirmed acceptance criteria" in template
     assert "not a constructed demo, synthetic validation, or invented evidence" in template
+    assert 'labels: ["dogfood"]' in template
+    assert "attributable completed-use evidence" in template
+    assert "does not establish customer, product, or commercial validation by itself" in template
+    assert "external-validation" not in template
+    assert "not validation until" not in template
+    assert "case counts only" not in template
     for forbidden in (
         "tokens",
         "credentials",
@@ -2474,7 +2489,12 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
     outcome = Path("docs/alpha/outcome-form.md").read_text(encoding="utf-8")
     checklist = Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8")
-    public_surfaces = "\n".join((readme, site))
+    readme_status = readme.split("## Product status", maxsplit=1)[1].split(
+        "## GitHub Action advanced preview", maxsplit=1
+    )[0]
+    site_alpha = site.split('<section id="alpha"', maxsplit=1)[1].split(
+        "</section>", maxsplit=1
+    )[0]
 
     guide = "docs/commercialization/design-partner-sprint.md"
     feedback_url = (
@@ -2488,23 +2508,31 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     assert "../commercialization/design-partner-sprint.md" in outcome
     assert "../commercialization/design-partner-sprint.md" in checklist
 
-    for required in (
-        "free design-partner review",
-        "No paid product or billing is active",
-        "External commercial discovery is optional and separate",
-        "public-repository-only",
-        "acceptance-coverage assistant",
-        "not an AI code reviewer",
-    ):
-        assert required in public_surfaces
-    for unsupported_claim in (
-        "ScopeProof customers",
-        "validated pricing",
-        "paid plan is available",
-        "proven commercial demand",
-        "pricing question is optional research after product use",
-    ):
-        assert unsupported_claim not in public_surfaces
+    for public_surface in (readme_status, site_alpha):
+        normalized_surface = " ".join(public_surface.split()).lower()
+        for required in (
+            "free design-partner review",
+            "no paid product or billing is active",
+            "external commercial discovery is optional and separate",
+            "public-repository-only",
+            "acceptance-coverage assistant",
+            "not an ai code reviewer",
+            "stage 1 is closed as not pursued",
+            "owner-led stage 2 productization is active without claiming customer validation",
+            "public feedback form contains no pricing question",
+        ):
+            assert required in normalized_surface
+        for unsupported_claim in (
+            "scopeproof customers",
+            "validated pricing",
+            "paid plan is available",
+            "proven commercial demand",
+            "pricing question is optional research after product use",
+            "validating the requirement-to-evidence workflow",
+            "next product decision must be based on repeat use",
+            "evidence-gated path from engineering-complete public alpha to limited beta",
+        ):
+            assert unsupported_claim not in normalized_surface
 
     assert "Incomplete reviews do not become completed feedback outcomes" in site
     assert "participant-selected outcome" in quickstart

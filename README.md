@@ -463,14 +463,13 @@ read-only private-repository boundary. It does not claim private support exists.
 
 ## Product status
 
-This is a public-repository alpha for validating the requirement-to-evidence workflow. The next
-product decision must be based on repeat use with real pull requests and confirmed gaps found
-before merge—not release activity or vanity metrics.
+This is a public-repository product under owner-led productization. That operating strategy does
+not establish customer validation, demand, adoption, repeat use, or willingness to pay.
 
-The [public roadmap](ROADMAP.md) defines the evidence-gated path from engineering-complete public
-alpha to limited beta. The [changelog](CHANGELOG.md) summarizes the active development line and
-links to authoritative published release notes. Neither document substitutes for genuine public-PR
-use or human acceptance.
+The [public roadmap](ROADMAP.md) defines the closed Stage 1 record, active owner-led Stage 2 scope,
+and separate owner gates for later stages. The [changelog](CHANGELOG.md) summarizes the active
+development line and links to authoritative published release notes. Neither document turns
+engineering work into customer evidence or human acceptance.
 
 Standard reviews create no research record. To volunteer genuine feedback, submit the inbound
 public-alpha case form before starting locally:
@@ -482,9 +481,9 @@ Then explicitly enable the **Alpha feedback session** and follow the
 Qualification and consent stay local and off by
 default; the constructed demo never counts as participant validation.
 
-ScopeProof is an acceptance-coverage assistant, not an AI code reviewer. Stage 1 is
-`closed_not_pursued_by_owner`; owner-led Stage 2 productization is active without claiming customer
-validation. The optional **free design-partner review** is public-repository-only. No paid product
+ScopeProof is an acceptance-coverage assistant, not an AI code reviewer. Stage 1 is closed as not
+pursued (`closed_not_pursued_by_owner`); owner-led Stage 2 productization is active without
+claiming customer validation. The optional **free design-partner review** is public-repository-only. No paid product
 or billing is active. External commercial discovery is optional and separate from productization;
 the public feedback form contains no pricing question. The
 [30-day commercial-validation guide](docs/commercialization/design-partner-sprint.md) defines the

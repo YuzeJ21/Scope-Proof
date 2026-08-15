@@ -92,9 +92,9 @@ unavailable answer as `unknown`, a refused answer as `declined`, and an unobserv
 
 ## Optional-discovery decision rules
 
-No customer, product, or commercial decision may be calculated while the qualifying denominator
-is zero. If optional discovery is authorized later, evaluate only non-overlapping sets of five
-qualifying completed sessions with attributable evidence.
+No optional-discovery decision may be calculated while the qualifying denominator is zero. If
+optional discovery is authorized later, evaluate only non-overlapping sets of five qualifying
+completed sessions with attributable evidence.
 
 Precedence, highest first: Stop, Pivot, Narrow, Continue.
 
