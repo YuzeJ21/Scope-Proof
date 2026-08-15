@@ -2753,6 +2753,21 @@ def test_optional_discovery_snapshot_binds_the_exact_saved_review_state() -> Non
         assert required in normalized
 
 
+def test_optional_discovery_snapshot_gate_matches_the_saved_review() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "final_gate must exactly equal state.bundle.gate.verdict.value",
+        "same locked validated ReviewState used for saved_review_state_sha256",
+        "A missing active bundle or any gate mismatch keeps the record on hold",
+        "Public feedback cannot populate or override final_gate",
+    ):
+        assert required in normalized
+
+
 def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"
@@ -2779,7 +2794,26 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
         "A pre-freeze correction revalidates the record in the unassigned pool",
         "cannot reorder, replace, or repartition a frozen cohort",
         "fewer than five unassigned qualifying records",
-        "no optional-discovery decision is calculated",
+        "no optional-discovery cohort decision is calculated",
+    ):
+        assert required in normalized
+
+
+def test_confirmed_false_ready_stops_before_the_cohort_minimum() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    rules = packet.split("## Optional-discovery decision rules", maxsplit=1)[1].split(
+        "## Boundaries", maxsplit=1
+    )[0]
+    normalized = " ".join(rules.replace("`", "").split())
+
+    for required in (
+        "Evaluate confirmed participant False Ready before the five-record cohort minimum",
+        "one through four eligible unassigned records",
+        "returns a global Stop immediately",
+        "No partial cohort is formed",
+        "This safety Stop is not a cohort decision",
     ):
         assert required in normalized
 

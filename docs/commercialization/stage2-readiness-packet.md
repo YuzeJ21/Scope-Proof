@@ -227,6 +227,12 @@ atomically persisting the qualification record. At qualification and every reval
 transition changes that fingerprint and invalidates the qualification until it is revalidated;
 the same `review_id` never substitutes for state identity.
 
+At qualification and every revalidation, `final_gate` must exactly equal
+`state.bundle.gate.verdict.value` from the same locked validated `ReviewState` used for
+`saved_review_state_sha256`. A missing active bundle or any gate mismatch keeps the record on hold.
+Public feedback cannot populate or override `final_gate`; it is derived only from that exact saved
+review state.
+
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. For an initially incomplete or mismatched submission, use the later atomic
 transition that first passes every qualification rule, never the submission, issue-creation, or
@@ -299,6 +305,12 @@ case-issue mismatch keeps the qualification record on hold and is not counted.
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
 appears in any qualification record. Order the remaining qualification records by
 `(qualified_at_utc, feedback_issue_number) ascending`. Do not assign partial cohort membership.
+Evaluate confirmed participant False Ready before the five-record cohort minimum. If any fully
+qualified and freshly revalidated record is `confirmed`, including among one through four eligible
+unassigned records, it returns a global Stop immediately before cohort selection or any lower
+precedence predicate. No partial cohort is formed. This safety Stop is not a cohort decision; it is
+the explicit exception to the minimum-size hold and ends optional discovery until the owner resolves
+the signal.
 When at least five eligible unassigned records exist, select the first five in canonical order,
 assign positions, and freeze the cohort atomically. Consecutive frozen cohorts occupy positions
 1–5, 6–10, and so on. A pre-freeze correction revalidates the record in the unassigned pool; an
@@ -317,9 +329,9 @@ edits outside those fields do not invalidate a cohort. An invalidated cohort rem
 the correction arrives before or after a decision; do not calculate or recalculate a decision, and
 do not allocate the session again. A correction whose revalidated `participant_false_ready`
 becomes `confirmed` is exempt from this invalidation hold and returns Stop immediately, even when
-`evidence_snapshot_sha256` changes to bind the confirmation. When there are fewer than five unassigned
-qualifying records, the next cohort remains on hold and no optional-discovery decision is
-calculated.
+`evidence_snapshot_sha256` changes to bind the confirmation. When there are fewer than five
+unassigned qualifying records and no pre-cohort confirmed False Ready, the next cohort remains on
+hold and no optional-discovery cohort decision is calculated.
 
 Useful or decision-relevant is true only when canonical `outcome` is `found_useful_gap` or canonical
 `decision_impact` is `changed` or `clarified`. `found_useful_gap` counts only when

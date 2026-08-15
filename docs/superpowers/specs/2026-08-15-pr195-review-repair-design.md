@@ -93,6 +93,8 @@ The snapshot also includes `saved_review_state_sha256`, calculated through the e
 qualification holds the review mutation lock across load, fingerprint, snapshot validation, and
 atomic qualification persistence. Revalidation compares a fresh state fingerprint so lifecycle
 mutations under the same `review_id` invalidate stale qualification evidence.
+The snapshot `final_gate` must equal the active bundle gate verdict from that same locked validated
+state; a missing bundle or mismatch remains on hold and public feedback cannot supply the gate.
 
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. An initially incomplete or mismatched submission uses the later atomic
@@ -137,6 +139,11 @@ on hold. A correction whose revalidated
 Stop immediately, preserving the highest-precedence False Ready rule. Until five unassigned
 qualifying records exist, the next cohort remains on hold and no optional-discovery decision is
 calculated.
+
+The confirmed False Ready predicate is evaluated per fully qualified, freshly revalidated record
+before the cohort minimum. A confirmed record among one through four eligible unassigned records
+returns a global Stop immediately without forming a partial cohort or evaluating lower-precedence
+predicates. This safety exception is not a cohort decision.
 
 `Created material product friction` requires one Narrow-positive `friction_category`; `none` is
 contradictory and keeps the record on hold. This prevents a complete-looking friction outcome from

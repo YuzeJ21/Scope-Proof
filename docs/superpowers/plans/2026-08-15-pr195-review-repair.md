@@ -46,6 +46,10 @@
 - The saved-review digest uses `JsonReviewStore.state_fingerprint` while the review mutation lock
   is held across load, fingerprint, snapshot validation, and atomic qualification persistence; a
   later lifecycle transition under the same review ID invalidates stale qualification evidence.
+- `final_gate` must equal the active bundle gate verdict from the same locked saved review; a
+  missing bundle, mismatch, or public-form gate value remains on hold.
+- Evaluate a fully qualified, revalidated confirmed False Ready before the five-record cohort
+  minimum and return a global Stop immediately without forming a partial cohort.
 - Timing content hashing follows the packet's bounded unauthenticated GitHub Issue API fetch and
   strict `TimingPublicEvidenceV1` canonical JSON projection; never hash raw HTTP bytes, HTML,
   headers, redirects, or transfer encoding.
