@@ -241,8 +241,31 @@ non-ASCII-escaping, finite-only canonical JSON recipe used above. The
 `timing_public_evidence_content_sha256` is the 64-character lowercase SHA-256 of those canonical
 projection bytes. Hash the canonical projection bytes, never raw HTTP response bytes, decoded HTML,
 headers, transfer encoding, or redirect output. A mutable URL without this content digest does not
-qualify. A later revalidation whose canonical projection digest changes invalidates the record. For
-not-observed timing, the field remains the SHA-256 of the exact UTF-8 bytes `Not observed`.
+qualify.
+
+For observed timing, the exact `body` must itself be the canonical JSON serialization of a strict,
+frozen `TimingEvidenceAttestationV1` with `extra="forbid"`. It contains exactly
+`schema_version`, `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`,
+`timing_evidence`, `timing_observer_category`, `timing_observer_relationship`,
+`observer_attestation`, and `source_owner_attestation`. `schema_version` is
+`Literal["timing-evidence-attestation-v1"]`; the identity, PR, and head fields use the exact V1
+snapshot types; `timing_evidence` is one of the three observed timing Literals;
+`timing_observer_category` is one of the three non-`not_observed` category Literals;
+`timing_observer_relationship` is `Literal["distinct_from_participant"]`;
+`observer_attestation` is
+`Literal["observed_this_exact_session_and_selected_band_is_accurate"]`; and
+`source_owner_attestation` is
+`Literal["confirmed_observer_and_timing_for_this_exact_session"]`.
+
+Every attestation identity and timing field must exactly match the validated local alpha case,
+saved review, and feedback selection. Parse with strict validation, serialize with the same
+canonical JSON recipe, and require that canonical reserialization must equal the issue body
+byte-for-byte as UTF-8 with no trailing newline. Arbitrary prose, extra fields, a different session,
+head, observer relationship, or time band keeps the record on hold. The attestations are asserted,
+not authenticated, and cannot establish product correctness or customer validation. A later
+revalidation whose canonical projection digest changes invalidates the record. For not-observed
+timing, the field remains the SHA-256 of the exact UTF-8 bytes `Not observed` and no timing
+attestation issue is used.
 The feedback issue's `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`,
 `requirements_source_url`, and `alpha_case_issue_url` must exactly match the validated local alpha
 case and saved review. For the case issue, the complete URL must exactly match the validated local

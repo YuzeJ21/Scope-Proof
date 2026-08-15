@@ -2949,6 +2949,28 @@ def test_timing_evidence_hashes_a_canonical_github_issue_projection() -> None:
         assert required in normalized
 
 
+def test_observed_timing_attestation_binds_the_exact_session_and_band() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "TimingEvidenceAttestationV1",
+        "timing-evidence-attestation-v1",
+        "alpha_case_id, review_id, public_pr_url, reviewed_head_sha, timing_evidence",
+        "timing_observer_category, timing_observer_relationship, observer_attestation, and "
+        "source_owner_attestation",
+        "observed_this_exact_session_and_selected_band_is_accurate",
+        "confirmed_observer_and_timing_for_this_exact_session",
+        "must exactly match the validated local alpha case, saved review, and feedback selection",
+        "canonical reserialization must equal the issue body byte-for-byte",
+        "Arbitrary prose, extra fields, a different session, head, observer relationship, or time "
+        "band keeps the record on hold",
+    ):
+        assert required in normalized
+
+
 def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"

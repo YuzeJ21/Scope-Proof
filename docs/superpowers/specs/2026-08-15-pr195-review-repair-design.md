@@ -42,7 +42,10 @@ evidence content. The authoritative packet's bounded, unauthenticated GitHub Iss
 project the exact canonical issue URL, stable node ID, and unnormalized body into the strict
 `TimingPublicEvidenceV1` canonical JSON payload before hashing. Raw HTTP bytes, HTML wrappers,
 headers, redirects, and transfer encoding are never hashed; a mutable URL without the canonical
-projection digest does not qualify.
+projection digest does not qualify. The projected issue body must be the byte-identical canonical
+JSON serialization of the packet's strict `TimingEvidenceAttestationV1`, binding the exact alpha
+case, review, PR/head, observed band, observer category, distinct-observer relationship, and exact
+observer/source-owner attestations. Arbitrary prose or any mismatch remains on hold.
 
 ### Cohort allocation
 

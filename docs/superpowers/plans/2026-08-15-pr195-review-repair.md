@@ -43,6 +43,10 @@
 - Timing content hashing follows the packet's bounded unauthenticated GitHub Issue API fetch and
   strict `TimingPublicEvidenceV1` canonical JSON projection; never hash raw HTTP bytes, HTML,
   headers, redirects, or transfer encoding.
+- Observed timing also requires the issue body to be the byte-identical canonical JSON form of the
+  strict `TimingEvidenceAttestationV1`, bound to the exact alpha case, saved review, PR/head,
+  observed band, observer category, distinct-observer relationship, and exact bounded
+  observer/source-owner attestations. Arbitrary prose or any mismatch remains on hold.
 - A Ready negative attestation is evaluated only through the packet's complete `not_confirmed`
   predicate; its null criterion ID is not an incomplete affirmative False Ready allegation.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
