@@ -84,13 +84,32 @@ unavailable answer as `unknown`, a refused answer as `declined`, and an unobserv
 | Completion-time evidence | Independent observer category plus public evidence reference | `not observed` |
 | Self-reported completion time | Self-reported completion time remains `not observed` | `not observed` |
 | Alternative workflow | One of `prefer_different_job`, `existing_alternative_sufficient`, `current_job_and_tool_gap`, `unknown`, or `declined` | `unknown` |
-| Attributable result and decision impact | Explicit post-use response | `unknown` |
+| `outcome` | One of `found_useful_gap`, `showed_only_known_information`, or `created_friction` | `unknown` |
+| `useful_gap_category` | One of the seven canonical values below | `unknown` |
+| `decision_impact` | One of `changed`, `clarified`, `confirmed_existing`, `no_effect`, or `indeterminate` | `unknown` |
 | `friction_category` | One of `installation_or_setup`, `criteria_confirmation`, `evidence_quality`, `runtime_verification`, `decision_or_export`, `comparison_or_rereview`, `other_material_friction`, `none`, `unknown`, or `declined` | `unknown` |
-| Evidence-boundary understanding | Understood, misunderstood, unsure, or `declined` | `unknown` |
-| Reuse response | Yes, no, unsure, or `declined` | `unknown` |
+| `evidence_boundary_understanding` | One of `understood`, `misunderstood`, `unsure`, or `declined` | `unknown` |
+| `reuse_response` | One of `yes`, `no`, `unsure`, or `declined` | `unknown` |
 | `participant_false_ready` | `confirmed`, `not_confirmed`, or `unknown` under the evidence rule below | `unknown` |
 | Optional price-discussion response | Yes, no, unsure, or `declined` | `unknown` |
 | Evidence source and status | Public reference plus explicit status | `unknown` |
+
+## Canonical decision-value mapping
+
+Persist only the canonical enum value in a future validated qualification record. Decision
+predicates evaluate canonical values, never display labels. Reject an unmapped, missing, ambiguous,
+or multiply selected value rather than normalizing it heuristically.
+
+| Field | Canonical enum values | Exact public/input mapping |
+|---|---|---|
+| `outcome` | `found_useful_gap`, `showed_only_known_information`, `created_friction` | `Found a useful previously unknown gap` -> `found_useful_gap`; `Produced only already-known information` -> `showed_only_known_information`; `Created material product friction` -> `created_friction` |
+| `useful_gap_category` | `missing_implementation_evidence`, `weak_or_misleading_candidate_evidence`, `missing_test_evidence`, `stale_evidence_after_new_commit`, `unclear_acceptance_criteria`, `another_attributable_public_finding`, `no_new_useful_gap` | `Missing implementation evidence` -> `missing_implementation_evidence`; `Weak or misleading candidate evidence` -> `weak_or_misleading_candidate_evidence`; `Missing test evidence` -> `missing_test_evidence`; `Stale evidence after a new commit` -> `stale_evidence_after_new_commit`; `Unclear acceptance criteria` -> `unclear_acceptance_criteria`; `Another attributable public finding` -> `another_attributable_public_finding`; `No new useful gap` -> `no_new_useful_gap` |
+| `decision_impact` | `changed`, `clarified`, `confirmed_existing`, `no_effect`, `indeterminate` | `Changed my review decision` -> `changed`; `Clarified my review decision` -> `clarified`; `Confirmed an existing review decision` -> `confirmed_existing`; `Had no effect on my review decision` -> `no_effect`; `Could not determine a decision` -> `indeterminate` |
+| `reuse_response` | `yes`, `no`, `unsure`, `declined` | `Yes, I intend to use ScopeProof on another PR` -> `yes`; `No` -> `no`; `Unsure` -> `unsure`; `Prefer not to answer` -> `declined` |
+| `alternative_workflow` | `prefer_different_job`, `existing_alternative_sufficient`, `current_job_and_tool_gap`, `unknown`, `declined` | No current public-form field; require a separate explicit bounded selection |
+| `friction_category` | `installation_or_setup`, `criteria_confirmation`, `evidence_quality`, `runtime_verification`, `decision_or_export`, `comparison_or_rereview`, `other_material_friction`, `none`, `unknown`, `declined` | No direct public-form mapping. Free-text friction is non-authoritative context and cannot populate `friction_category`; require a separate explicit bounded selection |
+| `evidence_boundary_understanding` | `understood`, `misunderstood`, `unsure`, `declined` | The required checked public evidence-boundary statement maps to `understood`; do not infer any other value without a separate explicit bounded selection |
+| `participant_false_ready` | `confirmed`, `not_confirmed`, `unknown` | Derive only through the evidence predicates below; never map a direct form label |
 
 ## Optional-discovery decision rules
 
@@ -140,21 +159,18 @@ becomes `confirmed` is exempt from this invalidation hold and returns Stop immed
 qualifying records, the next cohort remains on hold and no optional-discovery decision is
 calculated.
 
-Useful or decision-relevant is true only when the participant selects
-`Found a useful previously unknown gap`, `Changed my review decision`, or
-`Clarified my review decision`. `Found a useful previously unknown gap` counts only when
-`useful_gap_category` is not `No new useful gap`. Any contradiction between `outcome` and
-`useful_gap_category` keeps the record on hold and is not counted. `Found a useful previously
-unknown gap` is valid only with one of the six concrete gap categories. `Produced only already-known
-information` is valid only with `No new useful gap`. `Created material product friction` is valid
-only with `No new useful gap`. Every other `outcome` and `useful_gap_category` pair is contradictory.
-`Confirmed an existing review
-decision` does not count; neither do already-known information, friction alone, no effect, an
-indeterminate decision, missing, or ambiguous responses.
+Useful or decision-relevant is true only when canonical `outcome` is `found_useful_gap` or canonical
+`decision_impact` is `changed` or `clarified`. `found_useful_gap` counts only when
+`useful_gap_category` is not `no_new_useful_gap`. Any contradiction between `outcome` and
+`useful_gap_category` keeps the record on hold and is not counted. `found_useful_gap` is valid only
+with one of the six concrete gap-category enums. `showed_only_known_information` is valid only with
+`no_new_useful_gap`. `created_friction` is valid only with `no_new_useful_gap`. Every other
+`outcome` and `useful_gap_category` pair is contradictory. `confirmed_existing` does not count;
+neither do already-known information, friction alone, `no_effect`, `indeterminate`, missing, or
+ambiguous responses.
 
-Affirmative repeat use is true only when the participant selects
-`Yes, I intend to use ScopeProof on another PR`. `No`, `Unsure`, `Prefer not to answer`, missing,
-and ambiguous responses do not count.
+Affirmative repeat use is true only when canonical `reuse_response` is `yes`. Canonical `no`,
+`unsure`, `declined`, missing, and ambiguous responses do not count.
 
 All five evidence-boundary understanding values must be `understood` before evaluating any
 non-False-Ready Stop predicate, Pivot, Narrow, or Continue. `misunderstood`, `unsure`, `declined`,

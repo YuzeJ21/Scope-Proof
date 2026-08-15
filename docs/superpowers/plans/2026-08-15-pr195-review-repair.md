@@ -16,6 +16,9 @@
 - Authorization alone cannot activate optional-discovery persistence or calculation. First
   implement a Pydantic-validated qualification-record model and an atomic validated storage
   boundary with regression coverage.
+- Follow the packet's exact canonical enum and public-label mappings. Decision predicates evaluate
+  canonical values, never display labels, and free-text friction cannot populate
+  `friction_category`.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
 - Preserve the unrelated untracked `.coverage 2` byte-for-byte and never stage it.

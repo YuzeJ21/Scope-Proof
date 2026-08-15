@@ -2509,6 +2509,11 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     assert qualification_transition in normalized_plan
     assert "Do not assign partial cohort membership" in normalized_design
     assert "Do not assign partial cohort membership" in normalized_plan
+    canonical_predicates = "Decision predicates evaluate canonical values, never display labels"
+    assert canonical_predicates in normalized_design
+    assert canonical_predicates in normalized_plan
+    assert "free-text friction cannot populate friction_category" in normalized_design
+    assert "free-text friction cannot populate friction_category" in normalized_plan
     for required in (
         "Reject a new qualification record before ordering",
         "same completed session can appear in at most one cohort",
@@ -2641,6 +2646,49 @@ def test_optional_discovery_outcome_matches_the_validated_local_record() -> None
         assert f"{local_value} maps to {public_value}" in normalized
 
 
+def test_optional_discovery_decision_fields_have_canonical_enum_mappings() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "Persist only the canonical enum value" in normalized
+    assert "Decision predicates evaluate canonical values, never display labels" in normalized
+    for field in (
+        "outcome",
+        "useful_gap_category",
+        "decision_impact",
+        "reuse_response",
+        "alternative_workflow",
+        "friction_category",
+        "evidence_boundary_understanding",
+        "participant_false_ready",
+    ):
+        assert f"| {field} |" in normalized
+    for mapping in (
+        "Found a useful previously unknown gap -> found_useful_gap",
+        "Produced only already-known information -> showed_only_known_information",
+        "Created material product friction -> created_friction",
+        "Missing implementation evidence -> missing_implementation_evidence",
+        "Weak or misleading candidate evidence -> weak_or_misleading_candidate_evidence",
+        "Missing test evidence -> missing_test_evidence",
+        "Stale evidence after a new commit -> stale_evidence_after_new_commit",
+        "Unclear acceptance criteria -> unclear_acceptance_criteria",
+        "Another attributable public finding -> another_attributable_public_finding",
+        "No new useful gap -> no_new_useful_gap",
+        "Changed my review decision -> changed",
+        "Clarified my review decision -> clarified",
+        "Confirmed an existing review decision -> confirmed_existing",
+        "Had no effect on my review decision -> no_effect",
+        "Could not determine a decision -> indeterminate",
+        "Yes, I intend to use ScopeProof on another PR -> yes",
+        "Prefer not to answer -> declined",
+    ):
+        assert mapping in normalized
+    assert "Free-text friction is non-authoritative context" in normalized
+    assert "cannot populate friction_category" in normalized
+
+
 def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"
@@ -2652,13 +2700,12 @@ def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -
 
     for required in (
         "Useful or decision-relevant is true only when",
-        "Found a useful previously unknown gap",
-        "Changed my review decision",
-        "Clarified my review decision",
-        "Confirmed an existing review decision does not count",
+        "canonical outcome is found_useful_gap",
+        "canonical decision_impact is changed or clarified",
+        "confirmed_existing does not count",
         "Affirmative repeat use is true only when",
-        "Yes, I intend to use ScopeProof on another PR",
-        "No, Unsure, Prefer not to answer, missing, and ambiguous responses do not count",
+        "canonical reuse_response is yes",
+        "Canonical no, unsure, declined, missing, and ambiguous responses do not count",
         "zero explicit affirmative repeat-use responses",
     ):
         assert required in normalized
@@ -2671,8 +2718,7 @@ def test_optional_discovery_holds_contradictory_useful_gap_inputs() -> None:
     normalized = " ".join(packet.replace("`", "").split())
 
     assert (
-        "Found a useful previously unknown gap counts only when useful_gap_category is not "
-        "No new useful gap"
+        "found_useful_gap counts only when useful_gap_category is not no_new_useful_gap"
         in normalized
     )
     assert (
@@ -2684,10 +2730,9 @@ def test_optional_discovery_holds_contradictory_useful_gap_inputs() -> None:
         < normalized.index("Precedence, highest first")
     )
     for required in (
-        "Found a useful previously unknown gap is valid only with one of the six concrete gap "
-        "categories",
-        "Produced only already-known information is valid only with No new useful gap",
-        "Created material product friction is valid only with No new useful gap",
+        "found_useful_gap is valid only with one of the six concrete gap-category enums",
+        "showed_only_known_information is valid only with no_new_useful_gap",
+        "created_friction is valid only with no_new_useful_gap",
         "Every other outcome and useful_gap_category pair is contradictory",
     ):
         assert required in normalized

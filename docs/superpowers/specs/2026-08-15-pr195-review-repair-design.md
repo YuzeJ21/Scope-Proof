@@ -55,6 +55,10 @@ record and verify that the public feedback `outcome` matches it exactly. The fix
 `created_friction` maps to `Created material product friction`. A missing or different public value
 keeps the record on hold and is not counted.
 
+Every other decision field follows the packet's exact canonical enum and public-label mapping.
+Decision predicates evaluate canonical values, never display labels, and free-text friction cannot
+populate `friction_category`.
+
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
 appears in any qualification record. This makes the existing one-session-only rule enforceable even
 when duplicate public feedback issues are submitted.
