@@ -140,7 +140,8 @@ The separately authorized runtime boundary must define a Pydantic model named
 `OptionalDiscoveryEvidenceSnapshotV1` with `extra="forbid"`. It contains exactly these fields and no
 others: `schema_version` fixed to `optional-discovery-evidence-snapshot-v1`, `alpha_case_id`,
 `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
-`alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_number`, `outcome`,
+`requirements_source_revision`, `requirements_source_text_sha256`, `alpha_case_issue_url`,
+`qualified_at_utc`, `feedback_issue_number`, `outcome`,
 `final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`,
 `checked_must_have_criterion_ids`, `participant_false_ready_attestation`,
 `participant_false_ready_criterion_id`, `source_owner_false_ready_attestation`,
@@ -174,9 +175,12 @@ the model has no aliases and no defaults. Its exact strict field types and JSON 
   changing the input string, and the timing field's exact `Not observed` sentinel is permitted only
   for the not-observed path. The validated exact string is serialized; redirects or URL
   normalization cannot silently change it.
+- `requirements_source_revision` is `StrictStr | None`. A non-null value has length 1 through 512
+  and must contain non-whitespace text; the exact validated string is serialized, while absence is
+  JSON `null`. `requirements_source_text_sha256` is `StrictStr` matching `^[0-9a-f]{64}$`.
 - `reviewed_head_sha` is `StrictStr` matching `^[0-9a-f]{40}$`.
-  `confirmed_criteria_sha256` and `timing_public_evidence_content_sha256` are `StrictStr` matching
-  `^[0-9a-f]{64}$`.
+  `requirements_source_text_sha256`, `confirmed_criteria_sha256`, and
+  `timing_public_evidence_content_sha256` are `StrictStr` matching `^[0-9a-f]{64}$`.
 - `feedback_issue_number` is `StrictInt` from 1 through 2,147,483,647; Boolean values are rejected.
 - `qualified_at_utc` is `StrictStr` in exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ`. A field validator
   parses it as a real UTC instant and requires formatting that instant back to the same string, so
@@ -202,6 +206,13 @@ exact validated strings, integers are JSON numbers, the Boolean is JSON `true`, 
 JSON array, and `None` is JSON `null`. These types plus the canonical dump recipe are the complete
 V1 byte contract; a future type, bound, pattern, normalization, or serialization change requires a
 new schema version.
+
+`requirements_source_url`, `requirements_source_revision`,
+`requirements_source_text_sha256`, and `confirmed_criteria_sha256` must exactly equal the saved
+review's validated criteria-source provenance and ordered confirmed-criteria digest. A changed
+source revision or source-text digest changes the snapshot digest, even when the requirements URL
+and normalized ordered criteria are unchanged. Missing or mismatched provenance keeps the record
+on hold.
 
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. For an initially incomplete or mismatched submission, use the later atomic

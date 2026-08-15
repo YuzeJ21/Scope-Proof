@@ -36,10 +36,12 @@
 - That snapshot uses `ConfigDict(extra="forbid", strict=True, frozen=True)` and the packet's strict
   field types and exact JSON representations, with every field required, no aliases or defaults,
   and no coercion or hidden URL/datetime normalization.
-- That snapshot includes `timing_public_evidence_content_sha256`, `confirmed_criteria_sha256`, the
-  complete ordered `checked_must_have_criterion_ids`, `participant_false_ready_attestation`, and
-  `source_owner_false_ready_attestation`; the attestations use exact canonical `Literal` values,
-  and semantic prose, derived enums, and mutable URLs alone do not qualify.
+- That snapshot includes `requirements_source_revision`, `requirements_source_text_sha256`,
+  `timing_public_evidence_content_sha256`, `confirmed_criteria_sha256`, the complete ordered
+  `checked_must_have_criterion_ids`, `participant_false_ready_attestation`, and
+  `source_owner_false_ready_attestation`; requirements provenance must exactly match the saved
+  review, the attestations use exact canonical `Literal` values, and semantic prose, derived enums,
+  normalized criteria alone, and mutable URLs alone do not qualify.
 - Timing content hashing follows the packet's bounded unauthenticated GitHub Issue API fetch and
   strict `TimingPublicEvidenceV1` canonical JSON projection; never hash raw HTTP bytes, HTML,
   headers, redirects, or transfer encoding.

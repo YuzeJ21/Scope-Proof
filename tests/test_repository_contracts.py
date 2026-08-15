@@ -2643,6 +2643,8 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
         "public_pr_url",
         "reviewed_head_sha",
         "requirements_source_url",
+        "requirements_source_revision",
+        "requirements_source_text_sha256",
         "alpha_case_issue_url",
         "qualified_at_utc",
         "feedback_issue_number",
@@ -2699,6 +2701,22 @@ def test_optional_discovery_snapshot_has_strict_canonical_field_types() -> None:
         "No Boolean, integer, datetime, URL, enum, list, or string coercion is allowed",
         "JSON strings are the exact validated strings, integers are JSON numbers, the Boolean is",
         "the tuple is one JSON array, and None is JSON null",
+    ):
+        assert required in normalized
+
+
+def test_optional_discovery_snapshot_binds_the_exact_requirements_source() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    for required in (
+        "requirements_source_revision is StrictStr | None",
+        "requirements_source_text_sha256 is StrictStr matching ^[0-9a-f]{64}$",
+        "must exactly equal the saved review's validated criteria-source provenance",
+        "A changed source revision or source-text digest changes the snapshot digest",
+        "even when the requirements URL and normalized ordered criteria are unchanged",
     ):
         assert required in normalized
 

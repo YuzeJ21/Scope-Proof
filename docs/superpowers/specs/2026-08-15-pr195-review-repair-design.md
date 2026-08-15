@@ -82,6 +82,12 @@ non-authoritative and excluded from the snapshot. These are the validated inputs
 follows only the packet's complete exact-enum `not_confirmed` predicate; its intentionally null
 criterion ID is not treated as a missing affirmative-confirmation condition.
 
+The snapshot separately binds `requirements_source_url`, `requirements_source_revision`, and
+`requirements_source_text_sha256` to the saved review's exact validated criteria-source
+provenance. The nullable revision and exact source-text digest are canonical fields, so changing
+the requirements source snapshot changes the evidence digest even when normalization produces the
+same ordered criteria.
+
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. An initially incomplete or mismatched submission uses the later atomic
 transition that first passes every qualification rule, never the submission, issue-creation, or
