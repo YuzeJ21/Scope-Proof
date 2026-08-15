@@ -2709,9 +2709,8 @@ def test_optional_feedback_binds_the_exact_local_review_and_attests_the_boundary
         )[0]
         assert "required: true" in block
     attestation = (
-        "I understand ScopeProof is an evidence assistant, not a correctness oracle; "
-        "implementation evidence is not test or runtime verification, and static candidates "
-        "do not prove acceptance."
+        "I understand ScopeProof is an evidence assistant, not a correctness oracle; static or "
+        "implementation evidence does not prove test or runtime verification."
     )
     assert attestation in template
     assert f"{attestation} -> understood" in normalized
@@ -2727,6 +2726,46 @@ def test_optional_feedback_binds_the_exact_local_review_and_attests_the_boundary
     assert "must exactly match the validated local alpha case and saved review" in normalized
     assert "Any identity, head, PR, source, or case-issue mismatch" in normalized
     assert "keeps the qualification record on hold and is not counted" in normalized
+
+
+def test_optional_feedback_respects_github_text_limits_and_requires_local_case_issue_identity(
+) -> None:
+    template = Path(".github/ISSUE_TEMPLATE/public-alpha-feedback.yml").read_text(
+        encoding="utf-8"
+    )
+    limits = {"description": 200, "label": 160}
+    for line_number, line in enumerate(template.splitlines(), start=1):
+        match = re.match(r"^\s*(?:-\s+)?(description|label):\s+(.+)$", line)
+        if match is None:
+            continue
+        field, value = match.groups()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        assert len(value) <= limits[field], (
+            f"Issue Form {field} on line {line_number} exceeds GitHub's "
+            f"{limits[field]}-character limit"
+        )
+
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+    assert (
+        "extend the Pydantic-validated local AlphaCaseRecord to persist "
+        "alpha_case_issue_number" in normalized
+    )
+    assert "Legacy records without that identity remain ineligible" in normalized
+    assert "Do not infer or backfill the association" in normalized
+    for path in (
+        "docs/superpowers/specs/2026-08-15-pr195-review-repair-design.md",
+        "docs/superpowers/plans/2026-08-15-pr195-review-repair.md",
+    ):
+        repair_document = " ".join(
+            Path(path).read_text(encoding="utf-8").replace("`", "").split()
+        )
+        assert "AlphaCaseRecord to persist alpha_case_issue_number" in repair_document
+        assert "do not infer or backfill" in repair_document
 
 
 def test_optional_discovery_decision_predicates_are_explicit_and_fail_closed() -> None:

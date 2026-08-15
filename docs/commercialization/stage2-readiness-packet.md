@@ -108,7 +108,7 @@ or multiply selected value rather than normalizing it heuristically.
 | `reuse_response` | `yes`, `no`, `unsure`, `declined` | `Yes, I intend to use ScopeProof on another PR` -> `yes`; `No` -> `no`; `Unsure` -> `unsure`; `Prefer not to answer` -> `declined` |
 | `alternative_workflow` | `prefer_different_job`, `existing_alternative_sufficient`, `current_job_and_tool_gap`, `unknown`, `declined` | No current public-form field; require a separate explicit bounded selection |
 | `friction_category` | `installation_or_setup`, `criteria_confirmation`, `evidence_quality`, `runtime_verification`, `decision_or_export`, `comparison_or_rereview`, `other_material_friction`, `none`, `unknown`, `declined` | No direct public-form mapping. Free-text friction is non-authoritative context and cannot populate `friction_category`; require a separate explicit bounded selection |
-| `evidence_boundary_understanding` | `understood`, `misunderstood`, `unsure`, `declined` | `I understand ScopeProof is an evidence assistant, not a correctness oracle; implementation evidence is not test or runtime verification, and static candidates do not prove acceptance.` -> `understood`; do not infer any other value without a separate explicit bounded selection |
+| `evidence_boundary_understanding` | `understood`, `misunderstood`, `unsure`, `declined` | `I understand ScopeProof is an evidence assistant, not a correctness oracle; static or implementation evidence does not prove test or runtime verification.` -> `understood`; do not infer any other value without a separate explicit bounded selection |
 | `participant_false_ready` | `confirmed`, `not_confirmed`, `unknown` | Derive only through the evidence predicates below; never map a direct form label |
 
 ## Optional-discovery decision rules
@@ -116,8 +116,11 @@ or multiply selected value rather than normalizing it heuristically.
 Optional discovery remains operationally inactive. Separate owner authorization is necessary but
 not sufficient to use these rules. Before any qualification record is persisted or any cohort
 decision is calculated, implement a Pydantic-validated qualification-record model and an atomic
-validated storage boundary with regression coverage. Until that boundary exists, do not persist
-records or calculate cohort decisions from this document alone.
+validated storage boundary with regression coverage. That work must first extend the
+Pydantic-validated local `AlphaCaseRecord` to persist `alpha_case_issue_number` during case
+initialization. Legacy records without that identity remain ineligible. Do not infer or backfill the
+association. Until that boundary exists, do not persist records or calculate cohort decisions from
+this document alone; do not enable feedback matching.
 
 No optional-discovery decision may be calculated while the qualifying denominator is zero. If
 optional discovery is authorized later, create one canonical qualification record for each

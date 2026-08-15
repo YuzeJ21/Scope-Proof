@@ -21,7 +21,10 @@
   `friction_category`.
 - At qualification, every identity, head, PR, source, and case-issue field must match exactly
   between the feedback issue and validated local record. The explicit evidence-boundary attestation
-  maps to `understood`; a generic eligibility checkbox does not.
+  maps to `understood`; a generic eligibility checkbox does not. Before feedback matching can be
+  enabled, separately authorized implementation must extend the Pydantic-validated local
+  `AlphaCaseRecord` to persist `alpha_case_issue_number` during case initialization. Legacy records
+  without it remain ineligible; do not infer or backfill the association.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
 - Preserve the unrelated untracked `.coverage 2` byte-for-byte and never stage it.

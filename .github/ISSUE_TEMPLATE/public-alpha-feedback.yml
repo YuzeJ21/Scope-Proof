@@ -104,7 +104,7 @@ body:
     id: timing_evidence_support
     attributes:
       label: Independent timing support
-      description: For an observed selection, include both an observer category and a specific public evidence reference. For Not independently observed, enter Not observed. Missing, ambiguous, private, or malformed support fails closed to not observed. Supporting text cannot upgrade a Not independently observed selection.
+      description: "Observed: both an observer category and a specific public evidence reference. Else enter Not observed. This fails closed to not observed and cannot upgrade a Not independently observed selection."
     validations:
       required: true
   - type: dropdown
@@ -174,5 +174,5 @@ body:
           required: true
         - label: I understand this issue counts only with a completed genuine review and participant-selected outcome.
           required: true
-        - label: I understand ScopeProof is an evidence assistant, not a correctness oracle; implementation evidence is not test or runtime verification, and static candidates do not prove acceptance.
+        - label: I understand ScopeProof is an evidence assistant, not a correctness oracle; static or implementation evidence does not prove test or runtime verification.
           required: true
