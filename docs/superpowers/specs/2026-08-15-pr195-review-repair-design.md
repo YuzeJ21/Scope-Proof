@@ -52,7 +52,7 @@ observer/source-owner attestations. Arbitrary prose or any mismatch remains on h
 Each optional-discovery session receives a canonical qualification record containing:
 
 - the immutable local `alpha_case_id` and `review_id`;
-- the public feedback issue number;
+- the full canonical public feedback issue URL and its matching issue number;
 - the UTC timestamp when the session first satisfied every qualification rule; and
 - an `evidence_snapshot_sha256` field containing the SHA-256 digest of the evidence snapshot used
   for qualification.
@@ -122,10 +122,14 @@ initialization. Legacy records without it remain ineligible; do not infer or bac
 association. The issue URL must belong to the configured `YuzeJ21/Scope-Proof` intake repository;
 the reviewed PR may belong to another public repository. The complete URL—not only its issue
 number—must match between the feedback issue and local alpha case.
+The qualification snapshot also stores the full canonical `feedback_issue_url`. It must belong to
+the configured `YuzeJ21/Scope-Proof` feedback repository, exactly equal the validated ingested
+issue `html_url`, and end with the positive integer stored as `feedback_issue_number`. A copied,
+forked, or off-repository feedback issue remains on hold even if its number or form fields match.
 
-Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
-appears in any qualification record. This makes the existing one-session-only rule enforceable even
-when duplicate public feedback issues are submitted.
+Reject a new qualification record before ordering if its `alpha_case_id`, `review_id`, or
+`feedback_issue_url` already appears in any qualification record. This makes the existing
+one-session-only and one-feedback-issue-only rules enforceable.
 
 Order qualifying sessions by `(qualified_at_utc, feedback_issue_number)` ascending. Do not assign
 partial cohort membership. When five eligible unassigned records exist, select the first five in

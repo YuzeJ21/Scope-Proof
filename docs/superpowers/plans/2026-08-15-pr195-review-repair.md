@@ -27,6 +27,10 @@
   It must belong to the configured `YuzeJ21/Scope-Proof` intake repository, while the reviewed PR
   may belong to another public repository, and the complete URL must match the feedback issue.
   Legacy records without it remain ineligible; do not infer or backfill the association.
+- Persist the full canonical `feedback_issue_url` in the snapshot. It must belong to the configured
+  `YuzeJ21/Scope-Proof` feedback repository, exactly equal the validated ingested issue `html_url`,
+  and have a positive integer final path segment equal to `feedback_issue_number`. Copied, forked,
+  off-repository, mismatched, or duplicate feedback issue identities remain on hold.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
 - Timing provenance uses required `timing_observer_category` and
   `timing_observer_relationship` dropdowns plus one required `timing_public_evidence_url` input;
@@ -209,7 +213,8 @@ git commit -m "docs: make optional timing evidence fail closed"
 **Interfaces:**
 - Consumes: the authoritative Stage 2 packet as plain text; no qualification records.
 - Produces: a static contract for the canonical qualification tuple
-  (`alpha_case_id`, `review_id`, `qualified_at_utc`, `feedback_issue_number`),
+  (`alpha_case_id`, `review_id`, `qualified_at_utc`, `feedback_issue_url`,
+  `feedback_issue_number`),
   `evidence_snapshot_sha256`, duplicate-session rejection, consecutive five-record cohorts,
   immutable freeze, confirmed-False-Ready invalidation exception, friction-outcome consistency,
   first successful validated transition from not qualified to qualified, correction handling, and

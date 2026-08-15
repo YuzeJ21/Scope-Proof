@@ -2661,6 +2661,7 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
         "requirements_source_text_sha256",
         "alpha_case_issue_url",
         "qualified_at_utc",
+        "feedback_issue_url",
         "feedback_issue_number",
         "final_gate",
         "confirmed_criteria_sha256",
@@ -3008,6 +3009,29 @@ def test_optional_feedback_binds_the_full_case_issue_repository_identity() -> No
     assert "configured intake repository YuzeJ21/Scope-Proof" in normalized
     assert "reviewed PR may belong to a different public repository" in normalized
     assert "the complete URL must exactly match the validated local alpha case" in normalized
+
+
+def test_optional_feedback_issue_identity_binds_repository_and_number() -> None:
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+
+    assert "feedback_issue_url" in normalized
+    assert (
+        "feedback_issue_url must be the exact canonical public GitHub issue URL"
+        in normalized
+    )
+    assert "configured feedback repository YuzeJ21/Scope-Proof" in normalized
+    assert "must exactly equal the validated ingested issue html_url" in normalized
+    assert (
+        "feedback_issue_number must equal the positive integer final path segment"
+        in normalized
+    )
+    assert "copied, forked, or off-repository feedback issue remains on hold" in normalized
+    assert (
+        "feedback_issue_url already appears in any qualification record" in normalized
+    )
 
 
 def test_timing_evidence_hashes_a_canonical_github_issue_projection() -> None:

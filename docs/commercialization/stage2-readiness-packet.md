@@ -132,7 +132,7 @@ optional discovery is authorized later, create one canonical qualification recor
 qualifying completed session. The record contains the immutable local `alpha_case_id` and
 `review_id`, `saved_review_state_sha256`, `public_pr_url`, `reviewed_head_sha`,
 `requirements_source_url`,
-`alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_number`, and
+`alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_url`, `feedback_issue_number`, and
 `evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
 mutable public reference does not qualify; keep any other source URL only as non-authoritative
 context.
@@ -143,7 +143,7 @@ others: `schema_version` fixed to `optional-discovery-evidence-snapshot-v1`, `al
 `review_id`, `saved_review_state_sha256`, `public_pr_url`, `reviewed_head_sha`,
 `requirements_source_url`,
 `requirements_source_revision`, `requirements_source_text_sha256`, `alpha_case_issue_url`,
-`qualified_at_utc`, `feedback_issue_number`, `outcome`,
+`qualified_at_utc`, `feedback_issue_url`, `feedback_issue_number`, `outcome`,
 `final_gate`, `confirmed_criteria_sha256`, `source_owner_confirmed`,
 `checked_must_have_criterion_ids`, `participant_false_ready_attestation`,
 `participant_false_ready_criterion_id`, `source_owner_false_ready_attestation`,
@@ -166,13 +166,17 @@ the model has no aliases and no defaults. Its exact strict field types and JSON 
 - `schema_version` is `Literal["optional-discovery-evidence-snapshot-v1"]`.
 - `alpha_case_id` is `StrictStr` matching `^alpha-[0-9a-f]{32}$`; `review_id` is `StrictStr`
   matching `^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`.
-- `public_pr_url`, `alpha_case_issue_url`, `requirements_source_url`, and
+- `public_pr_url`, `alpha_case_issue_url`, `feedback_issue_url`, `requirements_source_url`, and
   `timing_public_evidence_url` are `StrictStr` with length 1 through 2,048. URLs remain `StrictStr`
   rather than a coercing or normalizing URL type.
   A field validator requires `public_pr_url` to match the canonical public GitHub pull-request
   pattern. `alpha_case_issue_url` must be the exact canonical public GitHub issue URL
   `https://github.com/YuzeJ21/Scope-Proof/issues/{positive_integer}` in the configured intake
   repository `YuzeJ21/Scope-Proof`. The reviewed PR may belong to a different public repository.
+  `feedback_issue_url` must be the exact canonical public GitHub issue URL
+  `https://github.com/YuzeJ21/Scope-Proof/issues/{positive_integer}` in the configured feedback
+  repository `YuzeJ21/Scope-Proof`. It must exactly equal the validated ingested issue `html_url`,
+  without redirects or normalization.
   The two evidence-source URLs must pass the shared canonical public-HTTPS-source validator without
   changing the input string, and the timing field's exact `Not observed` sentinel is permitted only
   for the not-observed path. The validated exact string is serialized; redirects or URL
@@ -184,6 +188,7 @@ the model has no aliases and no defaults. Its exact strict field types and JSON 
   `saved_review_state_sha256`, `requirements_source_text_sha256`, `confirmed_criteria_sha256`, and
   `timing_public_evidence_content_sha256` are `StrictStr` matching `^[0-9a-f]{64}$`.
 - `feedback_issue_number` is `StrictInt` from 1 through 2,147,483,647; Boolean values are rejected.
+  It must equal the positive integer final path segment of `feedback_issue_url`.
 - `qualified_at_utc` is `StrictStr` in exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ`. A field validator
   parses it as a real UTC instant and requires formatting that instant back to the same string, so
   offsets, omitted or variable fractional seconds, and impossible dates are rejected.
@@ -301,9 +306,14 @@ The feedback issue's `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_he
 case and saved review. For the case issue, the complete URL must exactly match the validated local
 alpha case; a numeric issue match alone never qualifies. Any identity, head, PR, source, or
 case-issue mismatch keeps the qualification record on hold and is not counted.
+The snapshot's `feedback_issue_url` must exactly equal the validated ingested issue `html_url` in
+the configured feedback repository `YuzeJ21/Scope-Proof`, and `feedback_issue_number` must equal the
+positive integer final path segment of that exact URL. A copied, forked, or off-repository feedback
+issue remains on hold even when its issue number or form fields match.
 
 Reject a new qualification record before ordering if its `alpha_case_id` or `review_id` already
-appears in any qualification record. Order the remaining qualification records by
+appears in any qualification record, or if its `feedback_issue_url` already appears in any
+qualification record. Order the remaining qualification records by
 `(qualified_at_utc, feedback_issue_number) ascending`. Do not assign partial cohort membership.
 Evaluate confirmed participant False Ready before the five-record cohort minimum. If any fully
 qualified and freshly revalidated record is `confirmed`, including among one through four eligible
@@ -320,7 +330,7 @@ Corrections annotate the original qualification record and do not create a new c
 same completed session can appear in at most one cohort. Any post-freeze change to a canonical
 qualification or decision field invalidates the affected cohort. Canonical fields are
 `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
-`alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_number`,
+`alpha_case_issue_url`, `qualified_at_utc`, `feedback_issue_url`, `feedback_issue_number`,
 `evidence_snapshot_sha256`, outcome, timing evidence, timing observer category, timing observer
 relationship, timing public evidence URL,
 `useful_gap_category`, decision impact, reuse response, alternative workflow, `friction_category`,
