@@ -2482,7 +2482,9 @@ def test_optional_discovery_corrections_never_count_a_session_twice() -> None:
         "Material corrections annotate the original qualification record",
         "do not create a new cohort member",
         "The same completed session can appear in at most one cohort",
-        "the affected frozen cohort becomes invalid and remains on hold",
+        "Any material correction after cohort freeze invalidates the affected cohort",
+        "remains on hold whether the correction arrives before or after a decision",
+        "do not calculate or recalculate a decision",
     ):
         assert required in normalized
 

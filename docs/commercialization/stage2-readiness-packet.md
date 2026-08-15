@@ -104,9 +104,10 @@ Order qualification records by `(qualified_at_utc, feedback_issue_number) ascend
 them once to consecutive cohorts at positions 1–5, 6–10, and so on. Freeze a cohort when its fifth
 member is assigned. Later edits cannot reorder, replace, or repartition a frozen cohort. Material
 corrections annotate the original qualification record and do not create a new cohort member. The
-same completed session can appear in at most one cohort. If a material correction changes evidence
-used by a completed decision, the affected frozen cohort becomes invalid and remains on hold; do
-not recalculate it or allocate the session again. When there are fewer than five unassigned
+same completed session can appear in at most one cohort. Any material correction after cohort
+freeze invalidates the affected cohort, which remains on hold whether the correction arrives before
+or after a decision; do not calculate or recalculate a decision, and do not allocate the session
+again. When there are fewer than five unassigned
 qualifying records, the next cohort remains on hold and no optional-discovery decision is
 calculated.
 
