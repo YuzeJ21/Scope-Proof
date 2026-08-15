@@ -2386,7 +2386,8 @@ def test_optional_external_feedback_collects_bounded_signals_without_price_resea
         "source_owner",
         "outcome",
         "timing_evidence",
-        "timing_evidence_support",
+        "timing_observer_category",
+        "timing_public_evidence_url",
         "useful_gap_category",
         "decision_impact",
         "reuse_intent",
@@ -2429,11 +2430,12 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
     )
 
     assert "id: timing_evidence" in template
-    assert "id: timing_evidence_support" in template
+    assert "id: timing_observer_category" in template
+    assert "id: timing_public_evidence_url" in template
     for removed_id in (
         "completion_time",
         "timing_observation_status",
-        "timing_observer_category",
+        "timing_evidence_support",
         "timing_public_evidence_reference",
     ):
         assert f"id: {removed_id}" not in template
@@ -2444,14 +2446,37 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
         '"Independently observed: more than 10 minutes"',
     ):
         assert f"- {option}" in template
-    assert "both an observer category and a specific public evidence reference" in template
-    assert "fails closed to not observed" in template
-    assert "cannot upgrade a Not independently observed selection" in template
-    support = template.split("id: timing_evidence_support", maxsplit=1)[1].split(
+    observer = template.split("id: timing_observer_category", maxsplit=1)[1].split(
         "- type:", maxsplit=1
     )[0]
-    assert "required: true" in support
-    assert "enter Not observed" in support
+    for option in (
+        "Not independently observed",
+        "Source owner",
+        "Directly authorized criteria representative",
+        "Independent observer",
+    ):
+        assert f"- {option}" in observer
+    assert "required: true" in observer
+    public_evidence = template.split("id: timing_public_evidence_url", maxsplit=1)[1].split(
+        "- type:", maxsplit=1
+    )[0]
+    assert "public HTTPS URL" in public_evidence
+    assert "enter exactly Not observed" in public_evidence
+    assert "required: true" in public_evidence
+
+    packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(packet.replace("`", "").split())
+    assert (
+        "Observed timing requires a non-not_observed timing_observer_category and a valid "
+        "public HTTPS timing_public_evidence_url" in normalized
+    )
+    assert (
+        "Not independently observed requires timing_observer_category not_observed and "
+        "timing_public_evidence_url exactly Not observed" in normalized
+    )
+    assert "Every other timing-provenance combination remains on hold" in normalized
 
 
 def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
@@ -2475,9 +2500,11 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     )[1].split("Step 2: Run the cohort contract", maxsplit=1)[0]
     assert "material correction requires a new qualification record" not in combined
     assert "assigned only to the next open cohort" not in combined
-    assert "one required timing_evidence_support field" in combined
-    assert "one required supporting-details field" in normalized_design
-    assert "one optional supporting-details field" not in normalized_design
+    assert (
+        "one required timing_observer_category dropdown and one required "
+        "timing_public_evidence_url input" in combined
+    )
+    assert "two required structured timing-provenance fields" in normalized_design
     assert "evidence_snapshot_sha256" in normalized_design
     assert "alpha_case_id" in normalized_design
     assert "review_id" in normalized_design
@@ -2540,9 +2567,10 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
         "Independently observed: more than 10 minutes",
     ):
         assert f"        '\"{option}\"'," in timing_contract
-    assert "required: false" not in plan.split(
-        "id: timing_evidence_support", maxsplit=1
-    )[1].split("```", maxsplit=1)[0]
+    for timing_field in ("timing_observer_category", "timing_public_evidence_url"):
+        assert "required: false" not in plan.split(
+            f"id: {timing_field}", maxsplit=1
+        )[1].split("```", maxsplit=1)[0]
     assert "Task 3: Verify, publish, review, and stop at owner handoff" in plan
     assert "Produces: a reviewed, green owner handoff." in normalized_plan
     assert "Produces: a reviewed, green merge" not in normalized_plan
@@ -2554,7 +2582,7 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"
     )
-    normalized = " ".join(packet.split())
+    normalized = " ".join(packet.replace("`", "").split())
 
     assert "Optional discovery remains operationally inactive" in normalized
     assert "Pydantic-validated qualification-record model" in normalized
@@ -2563,6 +2591,38 @@ def test_optional_discovery_records_require_a_runtime_validation_boundary_before
         "do not persist records or calculate cohort decisions from this document alone"
         in normalized
     )
+    assert "OptionalDiscoveryEvidenceSnapshotV1" in normalized
+    assert "contains exactly these fields and no others" in normalized
+    for field in (
+        "schema_version",
+        "alpha_case_id",
+        "review_id",
+        "public_pr_url",
+        "reviewed_head_sha",
+        "requirements_source_url",
+        "alpha_case_issue_number",
+        "qualified_at_utc",
+        "feedback_issue_number",
+        "outcome",
+        "timing_evidence",
+        "timing_observer_category",
+        "timing_public_evidence_url",
+        "useful_gap_category",
+        "decision_impact",
+        "reuse_response",
+        "alternative_workflow",
+        "friction_category",
+        "evidence_boundary_understanding",
+        "participant_false_ready",
+    ):
+        assert field in normalized
+    assert "evidence_snapshot_sha256 is not part of the snapshot payload" in normalized
+    assert "sort_keys=True" in normalized
+    assert 'separators=(",", ":")' in normalized
+    assert "ensure_ascii=False" in normalized
+    assert "allow_nan=False" in normalized
+    assert 'encode("utf-8")' in normalized
+    assert "sha256(canonical_bytes).hexdigest()" in normalized
 
 
 def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
@@ -3086,7 +3146,8 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
     ]
     assert "Completed reviews only" in feedback
     assert "Independently observed timing evidence" in feedback
-    assert "Independent timing support" in feedback
+    assert "Timing observer category" in feedback
+    assert "Public timing evidence URL" in feedback
     assert "Prefer not to answer" in feedback
 
     completed_signals = sprint.split(

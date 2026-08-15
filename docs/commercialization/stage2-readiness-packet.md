@@ -103,6 +103,8 @@ or multiply selected value rather than normalizing it heuristically.
 | Field | Canonical enum values | Exact public/input mapping |
 |---|---|---|
 | `outcome` | `found_useful_gap`, `showed_only_known_information`, `created_friction` | `Found a useful previously unknown gap` -> `found_useful_gap`; `Produced only already-known information` -> `showed_only_known_information`; `Created material product friction` -> `created_friction` |
+| `timing_evidence` | `not_observed`, `observed_under_5m`, `observed_5_to_10m`, `observed_over_10m` | `Not independently observed` -> `not_observed`; `Independently observed: under 5 minutes` -> `observed_under_5m`; `Independently observed: 5 to 10 minutes` -> `observed_5_to_10m`; `Independently observed: more than 10 minutes` -> `observed_over_10m` |
+| `timing_observer_category` | `not_observed`, `source_owner`, `authorized_criteria_representative`, `independent_observer` | `Not independently observed` -> `not_observed`; `Source owner` -> `source_owner`; `Directly authorized criteria representative` -> `authorized_criteria_representative`; `Independent observer` -> `independent_observer` |
 | `useful_gap_category` | `missing_implementation_evidence`, `weak_or_misleading_candidate_evidence`, `missing_test_evidence`, `stale_evidence_after_new_commit`, `unclear_acceptance_criteria`, `another_attributable_public_finding`, `no_new_useful_gap` | `Missing implementation evidence` -> `missing_implementation_evidence`; `Weak or misleading candidate evidence` -> `weak_or_misleading_candidate_evidence`; `Missing test evidence` -> `missing_test_evidence`; `Stale evidence after a new commit` -> `stale_evidence_after_new_commit`; `Unclear acceptance criteria` -> `unclear_acceptance_criteria`; `Another attributable public finding` -> `another_attributable_public_finding`; `No new useful gap` -> `no_new_useful_gap` |
 | `decision_impact` | `changed`, `clarified`, `confirmed_existing`, `no_effect`, `indeterminate` | `Changed my review decision` -> `changed`; `Clarified my review decision` -> `clarified`; `Confirmed an existing review decision` -> `confirmed_existing`; `Had no effect on my review decision` -> `no_effect`; `Could not determine a decision` -> `indeterminate` |
 | `reuse_response` | `yes`, `no`, `unsure`, `declined` | `Yes, I intend to use ScopeProof on another PR` -> `yes`; `No` -> `no`; `Unsure` -> `unsure`; `Prefer not to answer` -> `declined` |
@@ -130,6 +132,23 @@ qualifying completed session. The record contains the immutable local `alpha_cas
 `evidence_snapshot_sha256`, the SHA-256 digest of the evidence snapshot used at qualification. A
 mutable public reference does not qualify; keep any other source URL only as non-authoritative
 context.
+
+The separately authorized runtime boundary must define a Pydantic model named
+`OptionalDiscoveryEvidenceSnapshotV1` with `extra="forbid"`. It contains exactly these fields and no
+others: `schema_version` fixed to `optional-discovery-evidence-snapshot-v1`, `alpha_case_id`,
+`review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
+`alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`, `outcome`,
+`timing_evidence`, `timing_observer_category`, `timing_public_evidence_url`,
+`useful_gap_category`, `decision_impact`, `reuse_response`, `alternative_workflow`,
+`friction_category`, `evidence_boundary_understanding`, and `participant_false_ready`.
+`evidence_snapshot_sha256` is not part of the snapshot payload and cannot hash itself. Validate the
+snapshot first, then calculate `canonical_bytes` exactly as
+`json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":"),
+ensure_ascii=False, allow_nan=False).encode("utf-8")`; persist
+`sha256(canonical_bytes).hexdigest()`. Any writer using different fields, schema version, ordering,
+whitespace, Unicode escaping, non-finite numbers, or encoding is non-conforming and the record
+remains on hold.
+
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. For an initially incomplete or mismatched submission, use the later atomic
 transition that first passes every qualification rule, never the submission, issue-creation, or
@@ -140,6 +159,11 @@ public feedback `outcome` matches it exactly after this fixed mapping:
 `showed_only_known_information` maps to `Produced only already-known information`, and
 `created_friction` maps to `Created material product friction`. A missing or different public value
 keeps the qualification record on hold and is not counted.
+Observed timing requires a non-`not_observed` `timing_observer_category` and a valid public HTTPS
+`timing_public_evidence_url` that passes the same canonical public-source validation and is publicly
+reachable. Not independently observed requires `timing_observer_category` `not_observed` and
+`timing_public_evidence_url` exactly `Not observed`. Every other timing-provenance combination
+remains on hold and is not counted; neither field can upgrade a `not_observed` timing selection.
 The feedback issue's `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`,
 `requirements_source_url`, and `alpha_case_issue_number` must exactly match the validated local
 alpha case and saved review. Any identity, head, PR, source, or case-issue mismatch keeps the
@@ -158,7 +182,8 @@ same completed session can appear in at most one cohort. Any post-freeze change 
 qualification or decision field invalidates the affected cohort. Canonical fields are
 `alpha_case_id`, `review_id`, `public_pr_url`, `reviewed_head_sha`, `requirements_source_url`,
 `alpha_case_issue_number`, `qualified_at_utc`, `feedback_issue_number`,
-`evidence_snapshot_sha256`, outcome,
+`evidence_snapshot_sha256`, outcome, timing evidence, timing observer category, timing public
+evidence URL,
 `useful_gap_category`, decision impact, reuse response, alternative workflow, `friction_category`,
 evidence-boundary understanding, and `participant_false_ready`. Non-authoritative context or typo
 edits outside those fields do not invalidate a cohort. An invalidated cohort remains on hold whether

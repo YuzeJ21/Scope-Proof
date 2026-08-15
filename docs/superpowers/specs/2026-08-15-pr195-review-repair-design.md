@@ -28,10 +28,13 @@ required dropdown whose mutually exclusive values combine both facts:
 - Independently observed: 5 to 10 minutes; and
 - Independently observed: more than 10 minutes.
 
-Replace the two required observer-detail inputs with one required supporting-details field. An
-observed selection is usable only when the field includes both an observer category and a specific
-public evidence reference. Missing, ambiguous, private, or malformed support fails closed to
-`not observed`. A support field cannot upgrade a `Not independently observed` selection.
+Replace free-text timing support with two required structured timing-provenance fields: one required
+`timing_observer_category` dropdown and one required `timing_public_evidence_url` input. The
+observer dropdown has only `Not independently observed`, `Source owner`, `Directly authorized
+criteria representative`, and `Independent observer`. Observed timing is usable only with a
+non-not-observed observer category and a validated, publicly reachable HTTPS evidence URL. A
+not-observed timing selection requires the not-observed observer category and the exact `Not
+observed` sentinel in the URL field. Every other combination remains on hold.
 
 ### Cohort allocation
 
@@ -42,6 +45,13 @@ Each optional-discovery session receives a canonical qualification record contai
 - the UTC timestamp when the session first satisfied every qualification rule; and
 - an `evidence_snapshot_sha256` field containing the SHA-256 digest of the evidence snapshot used
   for qualification.
+
+Before hashing, separately authorized implementation must validate the exact versioned Pydantic
+payload `OptionalDiscoveryEvidenceSnapshotV1` with `extra="forbid"`. Its field set and
+`schema_version` are exactly those declared in the authoritative packet; the digest field is
+excluded. Canonical bytes use sorted-key, compact, non-ASCII-escaping, finite-only JSON encoded as
+UTF-8, exactly as the packet specifies, and the persisted digest is
+`sha256(canonical_bytes).hexdigest()`.
 
 `qualified_at_utc` is the UTC commit time of the first successful validated transition from not
 qualified to qualified. An initially incomplete or mismatched submission uses the later atomic
@@ -100,8 +110,8 @@ reaching Continue without a bounded material-friction category.
 ## Test-first verification
 
 Add focused repository-contract assertions before changing either authoritative surface. The
-timing regression must fail while independent time-band and observation-status fields remain and
-must require the combined dropdown plus fail-closed support rule. The cohort regression must fail
+timing regression must fail while provenance is free text and must require the combined timing
+dropdown plus the two structured, fail-closed provenance fields. The cohort regression must fail
 while ordering and freezing are unspecified and must require the canonical tuple, consecutive
 five-record batching, immutable freeze, correction handling, and incomplete-cohort hold.
 

@@ -100,11 +100,24 @@ body:
         - "Independently observed: more than 10 minutes"
     validations:
       required: true
-  - type: textarea
-    id: timing_evidence_support
+  - type: dropdown
+    id: timing_observer_category
     attributes:
-      label: Independent timing support
-      description: "Observed: both an observer category and a specific public evidence reference. Else enter Not observed. This fails closed to not observed and cannot upgrade a Not independently observed selection."
+      label: Timing observer category
+      description: Select the attributable observer category, or Not independently observed.
+      options:
+        - Not independently observed
+        - Source owner
+        - Directly authorized criteria representative
+        - Independent observer
+    validations:
+      required: true
+  - type: input
+    id: timing_public_evidence_url
+    attributes:
+      label: Public timing evidence URL
+      description: Enter a public HTTPS URL for observed timing; otherwise enter exactly Not observed.
+      placeholder: https://github.com/OWNER/REPOSITORY/issues/123 or Not observed
     validations:
       required: true
   - type: dropdown

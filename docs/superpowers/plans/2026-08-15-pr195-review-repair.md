@@ -26,6 +26,10 @@
   `AlphaCaseRecord` to persist `alpha_case_issue_number` during case initialization. Legacy records
   without it remain ineligible; do not infer or backfill the association.
 - Missing, ambiguous, private, malformed, or self-reported timing fails closed to `not observed`.
+- Timing provenance uses one required `timing_observer_category` dropdown and one required
+  `timing_public_evidence_url` input; free text cannot qualify observed timing.
+- The future `evidence_snapshot_sha256` hashes only a validated, exact-version
+  `OptionalDiscoveryEvidenceSnapshotV1` canonicalized exactly as the authoritative packet states.
 - ScopeProof remains an evidence assistant and never executes target-repository code.
 - Preserve the unrelated untracked `.coverage 2` byte-for-byte and never stage it.
 
@@ -39,8 +43,8 @@
 
 **Interfaces:**
 - Consumes: the public feedback Issue Form as plain YAML text.
-- Produces: one authoritative `timing_evidence` dropdown and one required
-  `timing_evidence_support` field.
+- Produces: one authoritative `timing_evidence` dropdown, one required
+  `timing_observer_category` dropdown and one required `timing_public_evidence_url` input.
 
 - [ ] **Step 1: Write the failing timing contract**
 
@@ -52,11 +56,12 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
         encoding="utf-8"
     )
     assert "id: timing_evidence" in template
-    assert "id: timing_evidence_support" in template
+    assert "id: timing_observer_category" in template
+    assert "id: timing_public_evidence_url" in template
     for removed_id in (
         "completion_time",
         "timing_observation_status",
-        "timing_observer_category",
+        "timing_evidence_support",
         "timing_public_evidence_reference",
     ):
         assert f"id: {removed_id}" not in template
@@ -67,12 +72,21 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
         '"Independently observed: more than 10 minutes"',
     ):
         assert f"- {option}" in template
-    assert "both an observer category and a specific public evidence reference" in template
-    assert "fails closed to not observed" in template
-    assert "cannot upgrade a Not independently observed selection" in template
+    observer = template.split("id: timing_observer_category", maxsplit=1)[1].split(
+        "- type:", maxsplit=1
+    )[0]
+    assert "- Source owner" in observer
+    assert "- Directly authorized criteria representative" in observer
+    assert "- Independent observer" in observer
+    public_evidence = template.split("id: timing_public_evidence_url", maxsplit=1)[1].split(
+        "- type:", maxsplit=1
+    )[0]
+    assert "public HTTPS URL" in public_evidence
+    assert "enter exactly Not observed" in public_evidence
 ```
 
-Update the existing bounded-signals contract to require the two new IDs and reject the four old IDs.
+Update the existing bounded-signals contract to require the three timing IDs and reject the retired
+free-text support ID.
 
 - [ ] **Step 2: Run the timing contract and verify RED**
 
@@ -86,7 +100,7 @@ Expected: FAIL because `timing_evidence` is absent and the four contradictory fi
 
 - [ ] **Step 3: Implement the minimal Issue Form repair**
 
-In `.github/ISSUE_TEMPLATE/public-alpha-feedback.yml`, replace the four old timing fields with:
+In `.github/ISSUE_TEMPLATE/public-alpha-feedback.yml`, use:
 
 ```yaml
   - type: dropdown
@@ -101,11 +115,24 @@ In `.github/ISSUE_TEMPLATE/public-alpha-feedback.yml`, replace the four old timi
         - "Independently observed: more than 10 minutes"
     validations:
       required: true
-  - type: textarea
-    id: timing_evidence_support
+  - type: dropdown
+    id: timing_observer_category
     attributes:
-      label: Independent timing support
-      description: For an observed selection, include both an observer category and a specific public evidence reference. For Not independently observed, enter Not observed. Missing, ambiguous, private, or malformed support fails closed to not observed. Supporting text cannot upgrade a Not independently observed selection.
+      label: Timing observer category
+      description: Select the attributable observer category, or Not independently observed.
+      options:
+        - Not independently observed
+        - Source owner
+        - Directly authorized criteria representative
+        - Independent observer
+    validations:
+      required: true
+  - type: input
+    id: timing_public_evidence_url
+    attributes:
+      label: Public timing evidence URL
+      description: Enter a public HTTPS URL for observed timing; otherwise enter exactly Not observed.
+      placeholder: https://github.com/OWNER/REPOSITORY/issues/123 or Not observed
     validations:
       required: true
 ```
