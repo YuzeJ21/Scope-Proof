@@ -2462,11 +2462,21 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     combined = " ".join((design + "\n" + plan).replace("`", "").split())
     normalized_design = " ".join(design.replace("`", "").split())
     normalized_plan = " ".join(plan.replace("`", "").split())
+    timing_contract = plan.split(
+        "def test_optional_external_feedback_timing_is_single_source_and_fail_closed()",
+        maxsplit=1,
+    )[1].split("Update the existing bounded-signals contract", maxsplit=1)[0]
     assert "material correction requires a new qualification record" not in combined
     assert "assigned only to the next open cohort" not in combined
     assert "one required timing_evidence_support field" in combined
     assert "one required supporting-details field" in normalized_design
     assert "one optional supporting-details field" not in normalized_design
+    for option in (
+        "Independently observed: under 5 minutes",
+        "Independently observed: 5 to 10 minutes",
+        "Independently observed: more than 10 minutes",
+    ):
+        assert f"        '\"{option}\"'," in timing_contract
     assert "required: false" not in plan.split(
         "id: timing_evidence_support", maxsplit=1
     )[1].split("```", maxsplit=1)[0]

@@ -50,9 +50,9 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
         assert f"id: {removed_id}" not in template
     for option in (
         "Not independently observed",
-        "Independently observed: under 5 minutes",
-        "Independently observed: 5 to 10 minutes",
-        "Independently observed: more than 10 minutes",
+        '"Independently observed: under 5 minutes"',
+        '"Independently observed: 5 to 10 minutes"',
+        '"Independently observed: more than 10 minutes"',
     ):
         assert f"- {option}" in template
     assert "both an observer category and a specific public evidence reference" in template
