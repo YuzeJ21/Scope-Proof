@@ -44,9 +44,10 @@ Each optional-discovery session receives a canonical qualification record contai
 Order qualifying sessions by `(qualified_at_utc, feedback_issue_number)` ascending. Allocate the
 ordered stream once into consecutive cohorts of five: positions 1–5, 6–10, and so on. Freeze a
 cohort when its fifth member is assigned. Later edits cannot reorder, replace, or repartition a
-frozen cohort; a material correction requires a new qualification record and is assigned only to
-the next open cohort. Until five unassigned qualifying records exist, the next cohort remains on
-hold and no optional-discovery decision is calculated.
+frozen cohort. Corrections annotate the original qualification record and never create another
+cohort member. Any post-freeze change to a canonical qualification or decision field invalidates
+the affected cohort and keeps it on hold. Until five unassigned qualifying records exist, the next
+cohort remains on hold and no optional-discovery decision is calculated.
 
 ## Alternatives considered
 

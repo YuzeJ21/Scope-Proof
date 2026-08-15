@@ -2451,6 +2451,23 @@ def test_optional_external_feedback_timing_is_single_source_and_fail_closed() ->
     assert "enter Not observed" in support
 
 
+def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
+    design = Path(
+        "docs/superpowers/specs/2026-08-15-pr195-review-repair-design.md"
+    ).read_text(encoding="utf-8")
+    plan = Path(
+        "docs/superpowers/plans/2026-08-15-pr195-review-repair.md"
+    ).read_text(encoding="utf-8")
+
+    combined = " ".join((design + "\n" + plan).replace("`", "").split())
+    assert "material correction requires a new qualification record" not in combined
+    assert "assigned only to the next open cohort" not in combined
+    assert "one required timing_evidence_support field" in combined
+    assert "required: false" not in plan.split(
+        "id: timing_evidence_support", maxsplit=1
+    )[1].split("```", maxsplit=1)[0]
+
+
 def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
     packet = Path("docs/commercialization/stage2-readiness-packet.md").read_text(
         encoding="utf-8"

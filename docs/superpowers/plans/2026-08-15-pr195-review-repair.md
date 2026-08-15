@@ -27,7 +27,8 @@
 
 **Interfaces:**
 - Consumes: the public feedback Issue Form as plain YAML text.
-- Produces: one authoritative `timing_evidence` dropdown and one optional `timing_evidence_support` field.
+- Produces: one authoritative `timing_evidence` dropdown and one required
+  `timing_evidence_support` field.
 
 - [ ] **Step 1: Write the failing timing contract**
 
@@ -92,9 +93,9 @@ In `.github/ISSUE_TEMPLATE/public-alpha-feedback.yml`, replace the four old timi
     id: timing_evidence_support
     attributes:
       label: Independent timing support
-      description: For an observed selection, include both an observer category and a specific public evidence reference. Missing, ambiguous, private, or malformed support fails closed to not observed. Supporting text cannot upgrade a Not independently observed selection.
+      description: For an observed selection, include both an observer category and a specific public evidence reference. For Not independently observed, enter Not observed. Missing, ambiguous, private, or malformed support fails closed to not observed. Supporting text cannot upgrade a Not independently observed selection.
     validations:
-      required: false
+      required: true
 ```
 
 - [ ] **Step 4: Run the timing contracts and verify GREEN**
@@ -145,7 +146,8 @@ def test_optional_discovery_cohorts_are_ordered_once_and_frozen() -> None:
         "positions 1–5, 6–10",
         "Freeze a cohort when its fifth member is assigned",
         "cannot reorder, replace, or repartition a frozen cohort",
-        "material correction requires a new qualification record",
+        "Corrections annotate the original qualification record",
+        "do not create a new cohort member",
         "fewer than five unassigned qualifying records",
         "no optional-discovery decision is calculated",
     ):
@@ -165,8 +167,8 @@ Expected: FAIL because the packet says only “non-overlapping sets of five.”
 - [ ] **Step 3: Implement the minimal packet repair**
 
 Replace the ambiguous batching sentence with the canonical qualification record, ascending tuple,
-consecutive positions, fifth-member freeze, non-repartition rule, new-record correction rule, and
-incomplete-cohort hold from the confirmed design. Keep the existing Stop/Pivot/Narrow/Continue
+consecutive positions, fifth-member freeze, non-repartition rule, original-record correction rule,
+and incomplete-cohort hold from the confirmed design. Keep the existing Stop/Pivot/Narrow/Continue
 precedence and the statement that discovery rules do not control owner-led productization.
 
 - [ ] **Step 4: Run the focused cohort and Stage 2 contracts**
