@@ -188,7 +188,7 @@ git add tests/test_repository_contracts.py docs/commercialization/stage2-readine
 git commit -m "docs: freeze optional discovery cohorts"
 ```
 
-### Task 3: Verify, publish, review, and merge
+### Task 3: Verify, publish, review, and stop at owner handoff
 
 **Files:**
 - Verify: `.github/ISSUE_TEMPLATE/public-alpha-feedback.yml`
@@ -198,7 +198,7 @@ git commit -m "docs: freeze optional discovery cohorts"
 
 **Interfaces:**
 - Consumes: the two green repair commits and exact PR #195 GitHub state.
-- Produces: a reviewed, green merge followed by synchronized local `main`.
+- Produces: a reviewed, green owner handoff.
 
 - [ ] **Step 1: Run exact-head local verification**
 

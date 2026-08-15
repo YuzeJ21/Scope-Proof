@@ -28,7 +28,7 @@ required dropdown whose mutually exclusive values combine both facts:
 - Independently observed: 5 to 10 minutes; and
 - Independently observed: more than 10 minutes.
 
-Replace the two required observer-detail inputs with one optional supporting-details field. An
+Replace the two required observer-detail inputs with one required supporting-details field. An
 observed selection is usable only when the field includes both an observer category and a specific
 public evidence reference. Missing, ambiguous, private, or malformed support fails closed to
 `not observed`. A support field cannot upgrade a `Not independently observed` selection.

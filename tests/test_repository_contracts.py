@@ -2460,12 +2460,19 @@ def test_pr195_repair_documents_preserve_final_discovery_invariants() -> None:
     ).read_text(encoding="utf-8")
 
     combined = " ".join((design + "\n" + plan).replace("`", "").split())
+    normalized_design = " ".join(design.replace("`", "").split())
+    normalized_plan = " ".join(plan.replace("`", "").split())
     assert "material correction requires a new qualification record" not in combined
     assert "assigned only to the next open cohort" not in combined
     assert "one required timing_evidence_support field" in combined
+    assert "one required supporting-details field" in normalized_design
+    assert "one optional supporting-details field" not in normalized_design
     assert "required: false" not in plan.split(
         "id: timing_evidence_support", maxsplit=1
     )[1].split("```", maxsplit=1)[0]
+    assert "Task 3: Verify, publish, review, and stop at owner handoff" in plan
+    assert "Produces: a reviewed, green owner handoff." in normalized_plan
+    assert "Produces: a reviewed, green merge" not in normalized_plan
     assert "Stop at the separate owner merge decision" in plan
     assert "Do not merge from this reusable plan" in plan
 
