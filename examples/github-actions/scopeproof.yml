@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install ScopeProof
-        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@d553791cba83d9f756b2adce22bd814872b73ea2"
+        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@88bb0cf7b0e2990edc70a84d94a7b390652294b9"
       - name: Review public PR evidence (informational)
         continue-on-error: true
         env:

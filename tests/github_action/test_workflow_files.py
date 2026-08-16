@@ -73,7 +73,7 @@ def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "d553791cba83d9f756b2adce22bd814872b73ea2"
+    reviewed_revision = "88bb0cf7b0e2990edc70a84d94a7b390652294b9"
 
     assert "pip install scopeproof" not in example
     assert (
@@ -122,6 +122,28 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
         capture_output=True,
         text=True,
     ).stdout
+    runner_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:scopeproof_core/github_action_runner.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    publisher_at_pin = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{pinned_revision}:scopeproof_core/github_action_publisher.py",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    planner_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:scopeproof_core/github_action.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
     assert re.search(
         r'review\.add_argument\(\s*"--confirmation",\s*required=True', cli_at_pin
@@ -132,6 +154,9 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
     assert "validate_criteria_source_confirmation" in confirmation_at_pin
     assert "class ReviewInputOrigin" in models_at_pin
     assert "LIVE_PUBLIC_GITHUB" in alpha_service_at_pin
+    assert 'parser.add_argument("--publish-check"' in runner_at_pin
+    assert "def publish_check(" in publisher_at_pin
+    assert "class CheckRunPlan" in planner_at_pin
 
 
 def test_ci_checkouts_include_history_for_source_pin_contract() -> None:
@@ -297,3 +322,31 @@ def test_action_guidance_requires_fresh_applicability_review_after_byte_changes(
         assert "remove `scopeproof-review`" in document
         assert "review the new confirmed text for applicability" in document
         assert "reapply the label" in document
+
+
+def test_action_guidance_defines_exact_head_neutral_check_lifecycle() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    guide = Path("docs/github-action.md").read_text(encoding="utf-8")
+    runbook = Path("docs/github-action-external-validation.md").read_text(
+        encoding="utf-8"
+    )
+    combined = " ".join((readme, guide, runbook))
+    normalized_guide = " ".join(guide.split())
+
+    for required in (
+        "ScopeProof evidence summary (informational)",
+        "same-head",
+        "new head",
+        "neutral",
+        "criteria-source",
+        "fork",
+        "missing token",
+        "stale head",
+        "not a required branch-protection check",
+        "asserted, not authenticated",
+    ):
+        assert required.lower() in combined.lower()
+    assert "same-head rerun updates" in normalized_guide
+    assert "new head creates" in normalized_guide
+    assert "Legacy comment APIs remain backward compatible" in normalized_guide
+    assert "workflow does not invoke them" in normalized_guide

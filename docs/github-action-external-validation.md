@@ -32,7 +32,9 @@ that no external fork-run claim is being made.
    operator requirement; the workflow checks current state but does not enforce
    or reconstruct label history.
 7. Do not add personal access tokens. The workflow uses GitHub's short-lived
-   `github.token` only for its scoped, non-fork comment step.
+   `github.token` only for its scoped, non-fork Check step. A fork or missing
+   token produces no write. A stale head or GitHub identity mismatch fails
+   closed before mutation.
 
 ## Capture record
 
@@ -42,7 +44,11 @@ Create a local `action-validation.md` outside the demo repository if desired:
 repository: owner/demo-repository
 requirements commit: <base SHA>
 non-fork run URL: <pending>
+check run URL: <pending>
+check name: ScopeProof evidence summary (informational)
+check conclusion: neutral
 rerun URL: <pending>
+new-head run URL: <pending>
 fork_status: excluded
 validated by: <name or role>
 validated at: <timestamp>
@@ -58,47 +64,60 @@ limitations: public demo only; no customer validation claimed
 3. Have the repository owner confirm the checked-in requirements apply to this
    PR, then apply `scopeproof-review`.
 4. Wait for **ScopeProof evidence review** to finish.
-5. Preserve its run URL and the ScopeProof comment URL. Keep the
+5. Preserve its run URL and the ScopeProof Check URL. Keep the
    `scopeproof-review` label on the PR for the same-head rerun and subsequent
    head synchronization.
-6. Verify the summary and comment verdict match the CLI review result for the
+6. Verify the summary and Check title match the CLI review result for the
    same PR head SHA.
-7. Verify the comment ends with `<!-- scopeproof:<head SHA> -->`.
+7. Verify the Check is named `ScopeProof evidence summary (informational)`, has
+   conclusion `neutral`, and records the confirmed criteria-source provenance.
 
-Expected: an informational GitHub check and one ScopeProof comment. This does
-not prove the requirement is correct, runtime behavior, or customer value.
+Expected: one neutral informational GitHub Check for the exact head. This does
+not prove the requirement is correct, runtime behavior, accessibility, demand,
+adoption, or customer value. Reviewer and source-owner identities are asserted,
+not authenticated. The Check is not a required branch-protection check.
 
 ## Test 2 — same-head rerun
 
 1. With `scopeproof-review` still applied, re-run the ScopeProof job without
    changing the PR head SHA.
 2. Preserve the rerun URL.
-3. Verify the existing ScopeProof comment is updated rather than a second
-   marker-matched comment being created.
+3. Verify the same-head rerun updates the existing exact-identity Check rather
+   than creating a duplicate.
 
-Expected: one marker comment for that head SHA.
+Expected: one Check identity for that head SHA.
+
+## Test 3 — new head history
+
+1. Push another safe change to the same-repository PR while keeping the
+   confirmed requirements and `scopeproof-review` label applicable.
+2. Wait for the workflow and preserve its run URL.
+3. Verify the new head creates a new exact-head Check identity and does not
+   rewrite the previous head's Check history.
+
+Expected: one separately auditable neutral Check identity per observed head.
 
 ## What to return to ScopeProof
 
-Only return public run URLs, PR URL/head SHA, copied summary text, the number
-of ScopeProof comments before/after rerun, and any sanitized error. Do not send
+Only return public run URLs, PR URL/head SHA, copied summary text, Check URL and
+name, neutral conclusion, same-head identity count, and any sanitized error. Do not send
 tokens, private repository links, or customer source code. ScopeProof can then
 add a public, human-labeled regression fixture only if the source and expected
 outcome are suitable.
 
 ## Optional local record validation
 
-After the owner has collected real evidence for both tests, save it as JSON with
-the fields listed in the capture record plus `non_fork_comment_count`,
-`scopeproof_comment_marker`, and `rerun_comment_count`.
-Copy the exact `<!-- scopeproof:<head SHA> -->` marker from the non-fork
-comment. Validate its shape locally:
+The legacy `validate-action-evidence` schema records the earlier comment-based
+preview and remains readable for backward compatibility. It does not validate
+this Check lifecycle. Preserve current Check observations as the local text
+capture above until a separately designed Pydantic record exists; do not force
+Check evidence into legacy comment fields or infer hosted evidence locally.
+
+Legacy records may still be validated locally with:
 
 ```bash
 scopeproof validate-action-evidence action-validation.json
 ```
 
-The command checks that the rerun uses the same head SHA and did not increase
-the ScopeProof-comment count. With `fork_status: excluded`, it records the
-single-account limitation without requiring or accepting fork-run details. It
-does not contact GitHub or independently prove the submitted URLs are real.
+The command checks only the legacy record contract. It does not contact GitHub,
+validate a current Check Run, or independently prove submitted URLs are real.

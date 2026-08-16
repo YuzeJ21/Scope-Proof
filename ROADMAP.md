@@ -55,7 +55,13 @@ new published release; v0.2.3 remains the published release and none earns Stage
 - CI Windows evidence is not a real Windows desktop workflow.
 - Browser automation is not screen-reader or WCAG-conformance evidence.
 - Reviewer identity remains asserted, not authenticated.
-- The GitHub Action remains opt-in and informational.
+- The GitHub Action remains opt-in and informational. Its neutral-only
+  `ScopeProof evidence summary (informational)` is exact-head and criteria-source bound, is not a
+  required branch-protection check, and does not create customer validation. It does not prove
+  correctness, does not prove runtime behavior, does not prove accessibility, and does not prove
+  demand or adoption. Stage 1 remains at 0/5 qualifying reviews, 0/3 independent practitioners,
+  0/3 public repositories, 0/3 independently observed under-ten-minute completions, and 0/2
+  reuse-intent signals.
 - ScopeProof never executes target-repository code.
 
 ### Storage-maintenance boundary

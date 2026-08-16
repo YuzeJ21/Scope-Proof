@@ -10,25 +10,40 @@ ScopeProof includes a repository-local workflow starter at
 
 It is deliberately a **safe preview**, not an enforcement integration:
 
-- It runs on `pull_request_target` so GitHub uses the trusted base-branch
-  workflow definition. It checks out the immutable base SHA only and never
-  checks out or executes the pull request head.
+- It runs on the unprivileged `pull_request` event, checks out the immutable
+  base SHA with persisted credentials disabled, and never checks out or
+  executes the pull request head.
 - It needs a checked-in `.scopeproof/requirements.txt` plus
   `.scopeproof/requirements-confirmation.json`. The confirmation records the
   source URI and optional revision, exact SHA-256 of the requirements text,
   SHA-256 of the ordered normalized criteria, who confirmed them, and when. If
   either file is missing or either digest differs, the step summary says
-  **Needs Review** and cannot say Ready or publish a comment.
+  **Needs Review** and cannot say Ready or publish a Check.
 - It uses the event's head-repository fork flag to create a non-mutating plan.
   Fork PRs receive no write plan.
 - For a labeled, non-fork PR with checked-in confirmed requirements, it may
-  create or update one informational comment using GitHub's short-lived
-  `github.token`. The pure planner supplies create/update/skip decisions and a
-  head-SHA marker; fork, missing-requirements, and missing-token paths make no
-  write request.
+  create or update the `ScopeProof evidence summary (informational)` Check
+  using GitHub's short-lived `github.token`. The Check is bound to the exact
+  repository, PR number, head SHA, and criteria-source provenance. A same-head
+  rerun updates the exact trusted identity without a duplicate; a new head
+  creates a new auditable Check identity. Fork and missing token paths make no
+  write request. A stale head, duplicate trusted identity, malformed response,
+  or GitHub identity mismatch fails closed before mutation.
+- Every published Check has a `neutral` conclusion. **Ready**, **Blocked**, and
+  **Needs Review** are informational titles, never GitHub pass/fail conclusions.
+  The Check is not a required branch-protection check, and this workflow does
+  not modify branch protection.
+- Legacy comment APIs remain backward compatible for existing callers, but the
+  workflow does not invoke them.
 - `SCOPEPROOF_REQUIRED_CHECK=false` is a documented non-blocking default. Do
-  not make it a required check until confirmed dogfood reviews show that the
-  requirements source and evidence rules fit the repository.
+  not promote this Check into branch protection without a separate owner
+  decision and genuine evidence.
+
+ScopeProof is an evidence assistant, not a correctness oracle. Candidate implementation and test
+matches are not runtime verification; runtime evidence must be externally supplied. Missing
+evidence and unresolved human decisions remain missing and unresolved. Reviewer and source-owner
+identities are asserted, not authenticated. A Check run does not prove correctness, runtime
+behavior, accessibility, demand, adoption, or customer validation and creates no Stage 1 credit.
 
 ## Per-PR requirements applicability
 
@@ -55,18 +70,18 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`d553791cba83d9f756b2adce22bd814872b73ea2`, the immutable source-candidate commit
-containing the exact-head integrity rules and typed criteria-source confirmation
-used by this workflow, including malformed-input fail-closed gates and live-source-bound alpha
-records. It remains a source-candidate installation; it is not a published v0.2.3 release. Review
+`88bb0cf7b0e2990edc70a84d94a7b390652294b9`, the immutable source-candidate commit
+containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
+bounded same-origin publisher, and unprivileged base-SHA-only workflow used by this example. It
+remains a source-candidate installation; it is not a published v0.2.3 release. Review
 and update that pin deliberately when adopting a newer public release; do not replace it with an
 unpinned package or branch reference.
 
-This trigger is intentionally privileged only for its narrowly scoped comment
-permission. Do not add a pull-request-head checkout, `git fetch`, `gh pr
+The workflow grants Check write access only for same-repository publication; GitHub downgrades
+fork pull-request tokens and the workflow skips the write path. Do not add a pull-request-head
+checkout, `git fetch`, `gh pr
 checkout`, downloaded artifact execution, cache writes, or arbitrary PR text in
-shell commands. GitHub's guidance warns that those changes would defeat the
-trusted-base isolation.
+shell commands. Those changes would defeat the base-SHA isolation.
 
 ## Local fixture check
 
@@ -80,7 +95,9 @@ python -m scopeproof_core.github_action_runner \
 ```
 
 The JSON output includes the trusted event context, human-readable summary, and
-the proposed comment action. It contains no token and does not mutate GitHub.
+the backward-compatible comment plan. It contains no token and does not mutate GitHub. The live
+workflow separately uses `--requirements`, `--confirmation`, and `--publish-check` to construct a
+validated criteria-bound Check plan.
 
 ## Requirements confirmation record
 
