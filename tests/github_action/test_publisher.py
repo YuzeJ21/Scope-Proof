@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
+from scopeproof_core.demo import build_demo_review
 from scopeproof_core.github_action import (
     CHECK_NAME,
     CheckMode,
@@ -17,7 +18,9 @@ from scopeproof_core.github_action_publisher import (
     publish_check,
     publish_comment,
 )
+from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import CriteriaSourceProvenance
+from scopeproof_core.storage.json_store import JsonReviewStore
 
 HEAD_SHA = "2" * 40
 OTHER_SHA = "3" * 40
@@ -281,6 +284,26 @@ def test_sixth_check_page_is_rejected_before_mutation() -> None:
 
     assert len(requests) == 6
     assert all(request.method == "GET" for request in requests)
+
+
+def test_publication_failure_does_not_mutate_validated_saved_review(
+    tmp_path,
+) -> None:
+    store = JsonReviewStore(tmp_path / "reviews")
+    state = new_review_state(build_demo_review())
+    store.save(state)
+    record_path = tmp_path / "reviews" / f"{state.review.review_id}.json"
+    before_bytes = record_path.read_bytes()
+    before_fingerprint = store.state_fingerprint(store.load(state.review.review_id))
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"message": "temporarily unavailable"})
+
+    with pytest.raises(GitHubCheckPublicationError):
+        publish_check(check_context(), "blocked", "Report", "secret", httpx.MockTransport(handler))
+
+    assert record_path.read_bytes() == before_bytes
+    assert store.state_fingerprint(store.load(state.review.review_id)) == before_fingerprint
 
 
 def test_fork_context_makes_no_http_requests() -> None:

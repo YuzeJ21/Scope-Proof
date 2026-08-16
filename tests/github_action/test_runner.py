@@ -1,12 +1,172 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from scopeproof_core.github_action import CommentMode
-from scopeproof_core.github_action_runner import build_event_plan, main, publish_event_comment
+from scopeproof_core.criteria.confirmation import (
+    canonical_criteria_sha256,
+    source_text_sha256,
+)
+from scopeproof_core.github_action import CheckMode, CommentMode
+from scopeproof_core.github_action_runner import (
+    build_check_context,
+    build_event_plan,
+    main,
+    publish_event_check,
+    publish_event_comment,
+)
+from scopeproof_core.schemas.models import Criterion
 
 HEAD_SHA = "2" * 40
+
+
+def write_event(tmp_path: Path, *, fork: bool = False) -> Path:
+    event_path = tmp_path / "event.json"
+    event_path.write_text(
+        json.dumps(
+            {
+                "repository": {"full_name": "acme/widget"},
+                "pull_request": {
+                    "number": 42,
+                    "head": {"sha": HEAD_SHA, "repo": {"fork": fork}},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return event_path
+
+
+def write_confirmed_requirements(tmp_path: Path) -> tuple[Path, Path]:
+    requirements = tmp_path / "requirements.txt"
+    source_text = "Export the filtered list.\n"
+    requirements.write_text(source_text, encoding="utf-8")
+    confirmation = tmp_path / "requirements-confirmation.json"
+    confirmation.write_text(
+        json.dumps(
+            {
+                "source_uri": (
+                    f"https://github.com/acme/widget/blob/{'1' * 40}/.scopeproof/requirements.txt"
+                ),
+                "source_revision": "1" * 40,
+                "source_text_sha256": source_text_sha256(source_text),
+                "normalized_criteria_sha256": canonical_criteria_sha256(
+                    [Criterion(criterion_id="AC-01", text="Export the filtered list.")]
+                ),
+                "confirmed_by": "Requirements owner",
+                "confirmed_at": datetime(2026, 8, 16, 12, 0, tzinfo=UTC).isoformat(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return requirements, confirmation
+
+
+def test_check_context_validates_exact_requirements_bytes_and_provenance(
+    tmp_path: Path,
+) -> None:
+    event_path = write_event(tmp_path)
+    requirements, confirmation = write_confirmed_requirements(tmp_path)
+
+    context = build_check_context(event_path, requirements, confirmation)
+
+    assert context.repository == "acme/widget"
+    assert context.head_sha == HEAD_SHA
+    assert context.criteria_source.source_text_sha256 == source_text_sha256(
+        requirements.read_text(encoding="utf-8")
+    )
+    assert context.criteria_source.confirmed_by == "Requirements owner"
+
+
+def test_check_context_rejects_stale_confirmation_instead_of_trusting_boolean(
+    tmp_path: Path,
+) -> None:
+    event_path = write_event(tmp_path)
+    requirements, confirmation = write_confirmed_requirements(tmp_path)
+    requirements.write_text("Changed requirements.\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="does not match"):
+        build_check_context(event_path, requirements, confirmation)
+
+
+def test_check_runner_routes_validated_context_and_provenance_to_publisher(
+    tmp_path: Path,
+) -> None:
+    event_path = write_event(tmp_path)
+    requirements, confirmation = write_confirmed_requirements(tmp_path)
+    calls = []
+
+    def publisher(context, verdict, content, token):
+        calls.append((context, verdict, content, token))
+        return type("Result", (), {"mode": CheckMode.CREATE})()
+
+    mode = publish_event_check(
+        event_path,
+        requirements,
+        confirmation,
+        "blocked",
+        "Evidence report",
+        "token",
+        publisher,
+    )
+
+    assert mode is CheckMode.CREATE
+    assert calls[0][0].criteria_source.confirmed_by == "Requirements owner"
+    assert calls[0][1:] == ("blocked", "Evidence report", "token")
+
+
+@pytest.mark.parametrize(("fork", "token"), [(True, "token"), (False, None)])
+def test_check_runner_skips_fork_or_missing_token_without_publication(
+    tmp_path: Path, fork: bool, token: str | None
+) -> None:
+    event_path = write_event(tmp_path, fork=fork)
+    requirements, confirmation = write_confirmed_requirements(tmp_path)
+
+    def unexpected(*args):
+        raise AssertionError(f"publisher must not be called: {args}")
+
+    assert (
+        publish_event_check(
+            event_path,
+            requirements,
+            confirmation,
+            "blocked",
+            "Report",
+            token,
+            unexpected,
+        )
+        is CheckMode.SKIP
+    )
+
+
+def test_main_check_path_requires_exact_confirmation_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    event_path = write_event(tmp_path)
+    requirements, confirmation = write_confirmed_requirements(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "")
+
+    assert (
+        main(
+            [
+                "--event-path",
+                str(event_path),
+                "--requirements",
+                str(requirements),
+                "--confirmation",
+                str(confirmation),
+                "--publish-check",
+                "--verdict",
+                "blocked",
+            ]
+        )
+        == 0
+    )
+    assert '"check_mode": "skip"' in capsys.readouterr().out
+
+    with pytest.raises(SystemExit):
+        main(["--event-path", str(event_path), "--publish-check"])
 
 
 def test_build_event_plan_is_fork_safe_and_needs_review_without_requirements(
@@ -70,8 +230,7 @@ def test_runner_publishes_only_with_a_token_and_nonfork_context(tmp_path: Path) 
         return type("Result", (), {"mode": CommentMode.CREATE})()
 
     assert (
-        publish_event_comment(event_path, True, "Summary", "token", publisher)
-        is CommentMode.CREATE
+        publish_event_comment(event_path, True, "Summary", "token", publisher) is CommentMode.CREATE
     )
     assert calls[0][0].repository == "acme/widget"
     assert publish_event_comment(event_path, True, "Summary", None, publisher) is CommentMode.SKIP
@@ -91,15 +250,18 @@ def test_runner_uses_exported_report_file_as_summary_content(tmp_path: Path, cap
     report_path = tmp_path / "report.md"
     report_path.write_text("# ScopeProof Acceptance Review\n\nEvidence details", encoding="utf-8")
 
-    assert main(
-        [
-            "--event-path",
-            str(event_path),
-            "--requirements-confirmed",
-            "--content-file",
-            str(report_path),
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "--event-path",
+                str(event_path),
+                "--requirements-confirmed",
+                "--content-file",
+                str(report_path),
+            ]
+        )
+        == 0
+    )
 
     assert "Evidence details" in capsys.readouterr().out
 

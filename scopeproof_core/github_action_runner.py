@@ -9,16 +9,21 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
 from scopeproof_core.github_action import (
+    CheckMode,
+    CheckRunContext,
+    CheckRunPlan,
     CommentMode,
     CommentPlan,
     EventContext,
     plan_comment,
     render_check_summary,
 )
-from scopeproof_core.github_action_publisher import publish_comment
+from scopeproof_core.github_action_publisher import publish_check, publish_comment
 
 Publisher = Callable[[EventContext, str, str], CommentPlan]
+CheckPublisher = Callable[[CheckRunContext, str, str, str], CheckRunPlan]
 MAX_ACTION_SUMMARY_CHARS = 60_000
 _TRUNCATION_NOTICE = (
     "\n\n> ScopeProof summary truncated; use the workflow artifact/log for full details."
@@ -58,6 +63,27 @@ def build_event_plan(
     }
 
 
+def build_check_context(
+    event_path: Path,
+    requirements_path: Path,
+    confirmation_path: Path,
+) -> CheckRunContext:
+    """Bind an exact event identity to validated criteria-source bytes."""
+
+    event = _event_context(event_path, requirements_confirmed=True)
+    criteria_source = validate_requirements_confirmation(
+        requirements_path,
+        confirmation_path,
+    )
+    return CheckRunContext(
+        repository=event.repository,
+        pr_number=event.pr_number,
+        head_sha=event.head_sha,
+        is_fork=event.is_fork,
+        criteria_source=criteria_source,
+    )
+
+
 def publish_event_comment(
     event_path: Path,
     requirements_confirmed: bool,
@@ -73,6 +99,23 @@ def publish_event_comment(
     return publisher(context, summary, token).mode
 
 
+def publish_event_check(
+    event_path: Path,
+    requirements_path: Path,
+    confirmation_path: Path,
+    verdict: str,
+    content: str,
+    token: str | None,
+    publisher: CheckPublisher = publish_check,
+) -> CheckMode:
+    """Publish only after exact requirements confirmation and event validation."""
+
+    context = build_check_context(event_path, requirements_path, confirmation_path)
+    if context.is_fork or not token:
+        return CheckMode.SKIP
+    return publisher(context, verdict, content, token).mode
+
+
 def main(argv: list[str] | None = None) -> int:
     """Emit a plan to stdout and GitHub's step summary, if available."""
 
@@ -80,6 +123,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event-path", type=Path, required=True)
     parser.add_argument("--requirements-confirmed", action="store_true")
     parser.add_argument("--publish-comment", action="store_true")
+    parser.add_argument("--requirements", type=Path)
+    parser.add_argument("--confirmation", type=Path)
+    parser.add_argument("--publish-check", action="store_true")
     parser.add_argument("--verdict", default="needs_review")
     parser.add_argument("--content", default="Evidence report is available in the workflow logs.")
     parser.add_argument("--content-file", type=Path)
@@ -104,6 +150,18 @@ def main(argv: list[str] | None = None) -> int:
             os.environ.get("GITHUB_TOKEN"),
         )
         print(json.dumps({"comment_mode": mode}, sort_keys=True))
+    if args.publish_check:
+        if args.requirements is None or args.confirmation is None:
+            parser.error("--publish-check requires --requirements and --confirmation")
+        mode = publish_event_check(
+            args.event_path,
+            args.requirements,
+            args.confirmation,
+            args.verdict,
+            content,
+            os.environ.get("GITHUB_TOKEN"),
+        )
+        print(json.dumps({"check_mode": mode}, sort_keys=True))
     return 0
 
 
