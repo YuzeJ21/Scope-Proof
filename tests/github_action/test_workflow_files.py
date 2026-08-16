@@ -8,11 +8,12 @@ from scopeproof_core.criteria.confirmation import validate_requirements_confirma
 def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> None:
     workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
 
-    assert "pull_request_target:" in workflow
+    assert "pull_request:" in workflow
+    assert "pull_request_target:" not in workflow
     assert "contents: read" in workflow
-    assert "pull-requests: write" in workflow
+    assert "pull-requests: read" in workflow
+    assert "checks: write" in workflow
     assert "SCOPEPROOF_REQUIRED_CHECK: false" in workflow
-    assert "pull_request:" not in workflow
     assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
     assert "persist-credentials: false" in workflow
     assert "pull_request.head.sha" not in workflow
@@ -165,20 +166,22 @@ def test_public_action_guidance_matches_the_trusted_base_workflow() -> None:
 
     assert "never uses `pull_request_target`" not in readme
     assert "workflow uses the trusted base definition" in privacy
-    assert "pull_request_target:" in example
+    assert "pull_request:" in example
+    assert "pull_request_target:" not in example
     assert "ref: ${{ github.event.pull_request.base.sha }}" in example
     assert "persist-credentials: false" in example
     assert "requirements-confirmation.json" in example
-    assert "checks: write" not in example
+    assert "checks: write" in example
     assert "actions/upload-artifact@" in example
-    assert "Emit fork-safe ScopeProof summary and comment plan" in example
+    assert "Emit fork-safe ScopeProof summary plan" in example
     assert "Fork pull requests never receive a write request." in example
 
 
 def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
 
-    assert "--publish-comment\n          fi" not in workflow
+    assert "--publish-comment" not in workflow
+    assert "--publish-check" in workflow
     assert "scopeproof review --pr" in workflow
     assert "scopeproof export \"$review_id\"" in workflow
     assert "validate-requirements-confirmation" in workflow
@@ -189,6 +192,32 @@ def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     assert "if-no-files-found: ignore" in workflow
     assert "--verdict \"$SCOPEPROOF_VERDICT\"" in workflow
     assert 'echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"' in workflow
+
+
+def test_workflows_publish_only_exact_file_bound_neutral_checks() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+        publish = workflow.split(
+            "Publish exact-head informational Check", maxsplit=1
+        )[1].split("- name: Publication boundary", maxsplit=1)[0]
+
+        assert "--requirements .scopeproof/requirements.txt" in publish
+        assert "--confirmation .scopeproof/requirements-confirmation.json" in publish
+        assert '--verdict "$SCOPEPROOF_VERDICT"' in publish
+        assert '--content-file "$RUNNER_TEMP/scopeproof-report.md"' in publish
+        assert "--publish-check" in publish
+        assert "--publish-comment" not in workflow
+        assert "pull_request_target" not in workflow
+        assert "pull_request.head.sha" not in workflow
+        assert "gh pr checkout" not in workflow
+        assert "git fetch" not in workflow
+        assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
+        assert "persist-credentials: false" in workflow
+        assert "checks: write" in workflow
+        assert "pull-requests: read" in workflow
 
 
 def test_all_third_party_actions_are_pinned_to_immutable_commit_shas() -> None:
