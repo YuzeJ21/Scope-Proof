@@ -1,10 +1,298 @@
-"""Narrow GitHub REST adapter for a pre-approved ScopeProof comment plan."""
+"""Narrow GitHub REST adapters for pre-approved ScopeProof publication plans."""
 
 from __future__ import annotations
 
-import httpx
+from typing import Literal
 
-from scopeproof_core.github_action import CommentPlan, EventContext, plan_comment
+import httpx
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from scopeproof_core.github_action import (
+    CHECK_NAME,
+    CheckMode,
+    CheckRunContext,
+    CheckRunOutput,
+    CheckRunPlan,
+    CommentPlan,
+    EventContext,
+    ExistingCheckRun,
+    plan_check,
+    plan_comment,
+    render_informational_check,
+)
+
+_API_BASE_URL = "https://api.github.com"
+_MAX_CHECK_PAGES = 5
+_PER_PAGE = 100
+
+
+class GitHubCheckPublicationError(RuntimeError):
+    """A sanitized, fail-closed GitHub Check publication failure."""
+
+
+class _RepositoryResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    full_name: str = Field(pattern=r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$")
+    fork: bool | None = None
+
+
+class _PullHeadResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    repo: _RepositoryResponse
+
+
+class _PullBaseResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    repo: _RepositoryResponse
+
+
+class _PullResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    url: str = Field(min_length=1, max_length=500)
+    html_url: str = Field(min_length=1, max_length=500)
+    number: int = Field(gt=0)
+    state: Literal["open", "closed"]
+    head: _PullHeadResponse
+    base: _PullBaseResponse
+
+
+class _CheckAppResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    slug: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$")
+
+
+class _CheckRunResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    id: int = Field(gt=0)
+    url: str = Field(min_length=1, max_length=500)
+    name: str = Field(min_length=1, max_length=100)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    external_id: str = Field(min_length=1, max_length=255)
+    app: _CheckAppResponse
+
+
+class _CheckListResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    total_count: int = Field(ge=0)
+    check_runs: list[_CheckRunResponse] = Field(max_length=_PER_PAGE)
+
+
+class _CheckOutputRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    title: str = Field(min_length=1, max_length=255)
+    summary: str = Field(min_length=1, max_length=65_535)
+    text: str = Field(min_length=1, max_length=65_535)
+
+
+class _CreateCheckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    name: Literal[CHECK_NAME]
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    external_id: str = Field(min_length=1, max_length=255)
+    status: Literal["completed"]
+    conclusion: Literal["neutral"]
+    output: _CheckOutputRequest
+
+
+class _UpdateCheckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    name: Literal[CHECK_NAME]
+    external_id: str = Field(min_length=1, max_length=255)
+    status: Literal["completed"]
+    conclusion: Literal["neutral"]
+    output: _CheckOutputRequest
+
+
+def _skipped_check_plan(
+    context: CheckRunContext, verdict: str, content: str, reason: str
+) -> CheckRunPlan:
+    """Return a fully validated non-mutating plan."""
+
+    output = render_informational_check(context, verdict, content)
+    planned = plan_check(context, [], verdict, content)
+    return CheckRunPlan(
+        mode=CheckMode.SKIP,
+        reason=reason,
+        name=planned.name,
+        external_id=planned.external_id,
+        head_sha=planned.head_sha,
+        conclusion="neutral",
+        output=output,
+    )
+
+
+def _validate_live_pull(context: CheckRunContext, pull: _PullResponse) -> None:
+    """Require the live public PR to match every trusted immutable identity."""
+
+    expected_api_url = f"{_API_BASE_URL}/repos/{context.repository}/pulls/{context.pr_number}"
+    expected_html_url = f"https://github.com/{context.repository}/pull/{context.pr_number}"
+    if (
+        pull.number != context.pr_number
+        or pull.state != "open"
+        or pull.url != expected_api_url
+        or pull.html_url != expected_html_url
+        or pull.head.sha != context.head_sha
+        or pull.head.repo.full_name != context.repository
+        or pull.head.repo.fork is not False
+        or pull.base.repo.full_name != context.repository
+    ):
+        raise GitHubCheckPublicationError("live pull request identity mismatch")
+
+
+def _validated_existing_check(
+    context: CheckRunContext, response: _CheckRunResponse
+) -> ExistingCheckRun:
+    """Validate the repository-scoped URL before exposing a check to the planner."""
+
+    expected_url = f"{_API_BASE_URL}/repos/{context.repository}/check-runs/{response.id}"
+    if response.url != expected_url:
+        raise GitHubCheckPublicationError("check run URL identity mismatch")
+    return ExistingCheckRun(
+        check_run_id=response.id,
+        name=response.name,
+        head_sha=response.head_sha,
+        external_id=response.external_id,
+        app_slug=response.app.slug,
+    )
+
+
+def _read_existing_checks(client: httpx.Client, context: CheckRunContext) -> list[ExistingCheckRun]:
+    """Read at most five locally constructed pages without following Link URLs."""
+
+    existing: list[ExistingCheckRun] = []
+    seen_ids: set[int] = set()
+    expected_total: int | None = None
+    for page_number in range(1, _MAX_CHECK_PAGES + 1):
+        response = client.get(
+            f"/repos/{context.repository}/commits/{context.head_sha}/check-runs",
+            params={"filter": "all", "per_page": _PER_PAGE, "page": page_number},
+        )
+        response.raise_for_status()
+        page = _CheckListResponse.model_validate(response.json())
+        if expected_total is None:
+            expected_total = page.total_count
+        elif page.total_count != expected_total:
+            raise GitHubCheckPublicationError("check run total changed during pagination")
+        for item in page.check_runs:
+            if item.id in seen_ids:
+                raise GitHubCheckPublicationError("repeated check run across pages")
+            seen_ids.add(item.id)
+            existing.append(_validated_existing_check(context, item))
+        if len(existing) >= page.total_count:
+            return existing
+        if len(page.check_runs) < _PER_PAGE:
+            raise GitHubCheckPublicationError("incomplete check run pagination")
+    raise GitHubCheckPublicationError("check run page budget exceeded")
+
+
+def _request_output(output: CheckRunOutput) -> _CheckOutputRequest:
+    return _CheckOutputRequest.model_validate(output.model_dump(mode="python"))
+
+
+def _validate_write_response(
+    context: CheckRunContext,
+    plan: CheckRunPlan,
+    response: httpx.Response,
+) -> None:
+    """Require GitHub to echo the exact published identity."""
+
+    response.raise_for_status()
+    created = _CheckRunResponse.model_validate(response.json())
+    _validated_existing_check(context, created)
+    if (
+        created.name != plan.name
+        or created.head_sha != plan.head_sha
+        or created.external_id != plan.external_id
+        or created.app.slug != "github-actions"
+        or (plan.mode is CheckMode.UPDATE and created.id != plan.check_run_id)
+    ):
+        raise GitHubCheckPublicationError("published check run identity mismatch")
+
+
+def publish_check(
+    context: CheckRunContext,
+    verdict: str,
+    content: str,
+    token: str,
+    transport: httpx.BaseTransport | None = None,
+) -> CheckRunPlan:
+    """Validate the live PR, plan one exact-head Check, and write at most once."""
+
+    if context.is_fork:
+        return _skipped_check_plan(context, verdict, content, "fork_pull_request")
+    checked_token = token.strip()
+    if not checked_token:
+        return _skipped_check_plan(context, verdict, content, "missing_token")
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {checked_token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        with httpx.Client(
+            base_url=_API_BASE_URL,
+            headers=headers,
+            transport=transport,
+            timeout=15.0,
+            follow_redirects=False,
+        ) as client:
+            pull_response = client.get(f"/repos/{context.repository}/pulls/{context.pr_number}")
+            pull_response.raise_for_status()
+            pull = _PullResponse.model_validate(pull_response.json())
+            _validate_live_pull(context, pull)
+
+            existing = _read_existing_checks(client, context)
+            try:
+                plan = plan_check(context, existing, verdict, content)
+            except ValueError as exc:
+                if str(exc) == "multiple trusted exact-head checks":
+                    raise GitHubCheckPublicationError(str(exc)) from exc
+                raise
+            if plan.mode is CheckMode.CREATE:
+                request = _CreateCheckRequest(
+                    name=plan.name,
+                    head_sha=plan.head_sha,
+                    external_id=plan.external_id,
+                    status="completed",
+                    conclusion="neutral",
+                    output=_request_output(plan.output),
+                )
+                write_response = client.post(
+                    f"/repos/{context.repository}/check-runs",
+                    json=request.model_dump(mode="json"),
+                )
+            elif plan.mode is CheckMode.UPDATE:
+                request = _UpdateCheckRequest(
+                    name=plan.name,
+                    external_id=plan.external_id,
+                    status="completed",
+                    conclusion="neutral",
+                    output=_request_output(plan.output),
+                )
+                write_response = client.patch(
+                    f"/repos/{context.repository}/check-runs/{plan.check_run_id}",
+                    json=request.model_dump(mode="json"),
+                )
+            else:
+                return plan
+            _validate_write_response(context, plan, write_response)
+            return plan
+    except GitHubCheckPublicationError:
+        raise
+    except (httpx.HTTPError, ValidationError, ValueError) as exc:
+        raise GitHubCheckPublicationError("GitHub Check publication failed closed") from exc
 
 
 def publish_comment(
