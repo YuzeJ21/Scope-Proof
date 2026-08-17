@@ -82,7 +82,7 @@ class _CheckRunResponse(BaseModel):
     url: str = Field(min_length=1, max_length=500)
     name: str = Field(min_length=1, max_length=100)
     head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
-    external_id: str = Field(min_length=1, max_length=255)
+    external_id: str | None = Field(default=None, max_length=255)
     app: _CheckAppResponse
 
 
@@ -179,12 +179,14 @@ def _validate_live_pull(
 
 def _validated_existing_check(
     context: CheckRunContext | EventContext, response: _CheckRunResponse
-) -> ExistingCheckRun:
+) -> ExistingCheckRun | None:
     """Validate the repository-scoped URL before exposing a check to the planner."""
 
     expected_url = f"{_API_BASE_URL}/repos/{context.repository}/check-runs/{response.id}"
     if response.url != expected_url:
         raise GitHubCheckPublicationError("check run URL identity mismatch")
+    if not response.external_id:
+        return None
     return ExistingCheckRun(
         check_run_id=response.id,
         name=response.name,
@@ -222,8 +224,10 @@ def _read_existing_checks(
             if item.id in seen_ids:
                 raise GitHubCheckPublicationError("repeated check run across pages")
             seen_ids.add(item.id)
-            existing.append(_validated_existing_check(context, item))
-        if len(existing) >= page.total_count:
+            validated = _validated_existing_check(context, item)
+            if validated is not None:
+                existing.append(validated)
+        if len(seen_ids) >= page.total_count:
             return existing
         if len(page.check_runs) < _PER_PAGE:
             raise GitHubCheckPublicationError("incomplete check run pagination")
@@ -243,9 +247,10 @@ def _validate_write_response(
 
     response.raise_for_status()
     created = _CheckRunResponse.model_validate(response.json())
-    _validated_existing_check(context, created)
+    validated = _validated_existing_check(context, created)
     if (
-        created.name != plan.name
+        validated is None
+        or created.name != plan.name
         or created.head_sha != plan.head_sha
         or created.external_id != plan.external_id
         or created.app.slug != "github-actions"
@@ -297,9 +302,7 @@ def publish_check_withdrawal(
             timeout=15.0,
             follow_redirects=False,
         ) as client:
-            pull_response = client.get(
-                f"/repos/{context.repository}/pulls/{context.pr_number}"
-            )
+            pull_response = client.get(f"/repos/{context.repository}/pulls/{context.pr_number}")
             pull_response.raise_for_status()
             pull = _PullResponse.model_validate(pull_response.json())
             _validate_live_pull(context, pull, applicability_label_expected=False)

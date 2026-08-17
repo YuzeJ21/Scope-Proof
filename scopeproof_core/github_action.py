@@ -183,7 +183,15 @@ def render_informational_check(
         "## Evidence report\n\n"
     )
     report = content.strip() or "No evidence report was produced."
-    text = f"{provenance}{report}"[:_MAX_CHECK_TEXT_CHARS]
+    text = f"{provenance}{report}"
+    if len(text) > _MAX_CHECK_TEXT_CHARS:
+        title = "ScopeProof — Needs Review (informational)"
+        text = (
+            f"{provenance}"
+            "The evidence report was not published because it exceeds the GitHub "
+            "Check output limit. No criterion verdict from the omitted report is "
+            "displayed. Review the validated ScopeProof artifact directly."
+        )
     return CheckRunOutput(title=title, summary=summary, text=text)
 
 

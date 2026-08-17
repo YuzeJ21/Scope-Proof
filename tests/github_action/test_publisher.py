@@ -176,9 +176,7 @@ def test_fork_hosted_repository_same_repository_pr_can_publish() -> None:
             return httpx.Response(200, json=check_list())
         return httpx.Response(201, json=check_response(check_run_id=8))
 
-    plan = publish_check(
-        check_context(), "ready", "Report", "secret", httpx.MockTransport(handler)
-    )
+    plan = publish_check(check_context(), "ready", "Report", "secret", httpx.MockTransport(handler))
 
     assert plan.mode is CheckMode.CREATE
     assert [request.method for request in requests] == ["GET", "GET", "POST"]
@@ -295,6 +293,30 @@ def test_changed_or_foreign_check_posts_new_exact_head_check(existing: dict) -> 
         assert payload["head_sha"] == HEAD_SHA
         assert payload["name"] == CHECK_NAME
         assert payload["conclusion"] == "neutral"
+        return httpx.Response(201, json=check_response(check_run_id=8))
+
+    plan = publish_check(
+        check_context(), "blocked", "Report", "secret", httpx.MockTransport(handler)
+    )
+
+    assert plan.mode is CheckMode.CREATE
+    assert [request.method for request in requests] == ["GET", "GET", "POST"]
+
+
+@pytest.mark.parametrize("external_id", [None, ""])
+def test_foreign_same_name_check_without_external_id_is_ignored(
+    external_id: str | None,
+) -> None:
+    requests: list[httpx.Request] = []
+    foreign = check_response(app_slug="foreign-app")
+    foreign["external_id"] = external_id
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response())
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list(foreign))
         return httpx.Response(201, json=check_response(check_run_id=8))
 
     plan = publish_check(

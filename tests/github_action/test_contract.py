@@ -155,6 +155,18 @@ def test_conditional_verdict_has_an_exact_informational_title() -> None:
     assert output.title == "ScopeProof — Conditional (informational)"
 
 
+def test_oversized_report_is_omitted_and_display_fails_closed() -> None:
+    unique_tail = "criterion-tail-evidence"
+
+    output = render_informational_check(check_context(), "ready", f"{'x' * 65_535}{unique_tail}")
+
+    assert output.title == "ScopeProof — Needs Review (informational)"
+    assert "not published because it exceeds" in output.text
+    assert "No criterion verdict from the omitted report is displayed" in output.text
+    assert unique_tail not in output.text
+    assert len(output.text) <= 65_535
+
+
 @pytest.mark.parametrize(
     ("model", "payload"),
     [
