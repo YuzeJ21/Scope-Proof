@@ -57,13 +57,17 @@ def check_context(*, fork: bool = False) -> CheckRunContext:
 
 
 def pull_response(
-    *, head_sha: str = HEAD_SHA, fork: bool = False, applicability_label: bool = True
+    *,
+    head_sha: str = HEAD_SHA,
+    fork: bool = False,
+    applicability_label: bool = True,
+    state: str = "open",
 ) -> dict:
     return {
         "url": "https://api.github.com/repos/acme/widget/pulls/42",
         "html_url": "https://github.com/acme/widget/pull/42",
         "number": 42,
-        "state": "open",
+        "state": state,
         "head": {
             "sha": head_sha,
             "repo": {
@@ -198,7 +202,7 @@ def test_label_withdrawal_updates_only_existing_exact_head_check() -> None:
         payload = json.loads(request.content)
         assert payload["conclusion"] == "neutral"
         assert payload["output"]["title"] == "ScopeProof — Needs Review (informational)"
-        assert "label was removed" in payload["output"]["text"]
+        assert "label was removed" in payload["output"]["summary"]
         assert "Confirmed criteria source" in payload["output"]["text"]
         return httpx.Response(200, json=check_response())
 
@@ -206,6 +210,53 @@ def test_label_withdrawal_updates_only_existing_exact_head_check() -> None:
 
     assert plan.mode is CheckMode.UPDATE
     assert plan.reason == "applicability_label_removed"
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+
+
+def test_closed_pull_label_withdrawal_updates_exact_head_check() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(
+                200,
+                json=pull_response(applicability_label=False, state="closed"),
+            )
+        if request.method == "GET" and request.url.path.endswith("/check-runs/7"):
+            return httpx.Response(200, json=check_detail_response())
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list(check_response()))
+        return httpx.Response(200, json=check_response())
+
+    plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
+
+    assert plan.mode is CheckMode.UPDATE
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+
+
+def test_withdrawal_preserves_maximum_length_prior_report_without_truncation() -> None:
+    requests: list[httpx.Request] = []
+    prior_text = "x" * 65_535
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response(applicability_label=False))
+        if request.method == "GET" and request.url.path.endswith("/check-runs/7"):
+            detail = check_detail_response()
+            detail["output"]["text"] = prior_text
+            return httpx.Response(200, json=detail)
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list(check_response()))
+        payload = json.loads(request.content)
+        assert payload["output"]["text"] == prior_text
+        assert "label was removed" in payload["output"]["summary"]
+        return httpx.Response(200, json=check_response())
+
+    plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
+
+    assert plan.output.text == prior_text
     assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
 
 

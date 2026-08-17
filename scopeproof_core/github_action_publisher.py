@@ -157,6 +157,7 @@ def _validate_live_pull(
     pull: _PullResponse,
     *,
     applicability_label_expected: bool,
+    require_open: bool,
 ) -> None:
     """Require the live public PR to match every trusted immutable identity."""
 
@@ -164,7 +165,7 @@ def _validate_live_pull(
     expected_html_url = f"https://github.com/{context.repository}/pull/{context.pr_number}"
     if (
         pull.number != context.pr_number
-        or pull.state != "open"
+        or (require_open and pull.state != "open")
         or pull.url != expected_api_url
         or pull.html_url != expected_html_url
         or pull.head.sha != context.head_sha
@@ -305,7 +306,12 @@ def publish_check_withdrawal(
             pull_response = client.get(f"/repos/{context.repository}/pulls/{context.pr_number}")
             pull_response.raise_for_status()
             pull = _PullResponse.model_validate(pull_response.json())
-            _validate_live_pull(context, pull, applicability_label_expected=False)
+            _validate_live_pull(
+                context,
+                pull,
+                applicability_label_expected=False,
+                require_open=False,
+            )
 
             expected_external_id = check_external_id(context)
             matches = [
@@ -331,18 +337,17 @@ def publish_check_withdrawal(
             if validated_detail != existing:
                 raise GitHubCheckPublicationError("check run detail identity mismatch")
 
-            notice = (
-                "## Applicability withdrawn\n\n"
+            withdrawal_summary = (
                 "The `scopeproof-review` label was removed for this exact pull-request "
-                "head. The prior evidence is retained below for audit only; applicability "
-                "and any Ready display are revoked.\n\n"
+                "head. Applicability and any Ready display are revoked."
             )
-            prior_text = detail.output.text
-            text = prior_text if prior_text.startswith(notice) else notice + prior_text
+            summary = f"{withdrawal_summary} {detail.output.summary}"
+            if len(summary) > 65_535:
+                summary = withdrawal_summary
             output = CheckRunOutput(
                 title="ScopeProof — Needs Review (informational)",
-                summary=detail.output.summary,
-                text=text[:65_535],
+                summary=summary,
+                text=detail.output.text,
             )
             plan = CheckRunPlan(
                 mode=CheckMode.UPDATE,
@@ -403,7 +408,12 @@ def publish_check(
             pull_response = client.get(f"/repos/{context.repository}/pulls/{context.pr_number}")
             pull_response.raise_for_status()
             pull = _PullResponse.model_validate(pull_response.json())
-            _validate_live_pull(context, pull, applicability_label_expected=True)
+            _validate_live_pull(
+                context,
+                pull,
+                applicability_label_expected=True,
+                require_open=True,
+            )
 
             existing = _read_existing_checks(client, context)
             try:
