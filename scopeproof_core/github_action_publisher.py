@@ -56,6 +56,7 @@ class _PullHeadResponse(BaseModel):
 class _PullBaseResponse(BaseModel):
     model_config = ConfigDict(extra="ignore", strict=True)
 
+    sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     repo: _RepositoryResponse
 
 
@@ -177,6 +178,7 @@ def _validate_live_pull(
         or pull.url != expected_api_url
         or pull.html_url != expected_html_url
         or pull.head.sha != context.head_sha
+        or pull.base.sha != context.base_sha
         or pull.head.repo.full_name != context.repository
         or pull.base.repo.full_name != context.repository
     ):

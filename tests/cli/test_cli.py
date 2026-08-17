@@ -255,6 +255,7 @@ def test_fixture_review_saves_validated_local_record(tmp_path: Path, capsys) -> 
     )
     record = next((tmp_path / "reviews").glob("*.json"))
     state = JsonReviewStore(tmp_path / "reviews").load(record.stem)
+    assert metadata["base_sha"] == state.review.base_sha
     assert state.review.tool_version == __version__
     assert state.bundle is not None
     assert state.review.criteria_source_provenance is not None

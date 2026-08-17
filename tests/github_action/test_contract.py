@@ -22,6 +22,7 @@ from scopeproof_core.schemas.models import CriteriaSourceProvenance
 
 HEAD_SHA = "2" * 40
 OTHER_SHA = "3" * 40
+BASE_SHA = "1" * 40
 SOURCE_TEXT_SHA = "4" * 64
 CRITERIA_SHA = "5" * 64
 
@@ -30,6 +31,7 @@ def context(*, fork: bool = False) -> EventContext:
     return EventContext(
         repository="acme/widget",
         pr_number=42,
+        base_sha=BASE_SHA,
         head_sha=HEAD_SHA,
         is_fork=fork,
         requirements_confirmed=True,
@@ -51,6 +53,7 @@ def check_context(*, fork: bool = False, head_sha: str = HEAD_SHA) -> CheckRunCo
     return CheckRunContext(
         repository="acme/widget",
         pr_number=42,
+        base_sha=BASE_SHA,
         head_sha=head_sha,
         is_fork=fork,
         criteria_source=criteria_source(),
@@ -173,6 +176,7 @@ def test_oversized_report_is_omitted_and_display_fails_closed() -> None:
         (CheckRunContext, {"repository": "ac me/widget"}),
         (CheckRunContext, {"pr_number": 0}),
         (CheckRunContext, {"head_sha": "not-a-sha"}),
+        (CheckRunContext, {"base_sha": "not-a-sha"}),
         (ExistingCheckRun, {"check_run_id": 0}),
         (ExistingCheckRun, {"external_id": ""}),
         (ExistingCheckRun, {"app_slug": ""}),
@@ -255,6 +259,7 @@ def test_unconfirmed_requirements_cannot_emit_ready_check_summary() -> None:
     unconfirmed = EventContext(
         repository="acme/widget",
         pr_number=42,
+        base_sha=BASE_SHA,
         head_sha=HEAD_SHA,
         is_fork=False,
         requirements_confirmed=False,
@@ -274,6 +279,7 @@ def test_event_context_rejects_invalid_head_sha_shape(invalid_sha: str) -> None:
         EventContext(
             repository="acme/widget",
             pr_number=42,
+            base_sha=BASE_SHA,
             head_sha=invalid_sha,
             is_fork=False,
             requirements_confirmed=True,
@@ -303,6 +309,7 @@ def test_event_context_rejects_noncanonical_repository_identity(
         EventContext(
             repository=invalid_repository,
             pr_number=42,
+            base_sha=BASE_SHA,
             head_sha=HEAD_SHA,
             is_fork=False,
             requirements_confirmed=True,
@@ -315,6 +322,7 @@ def test_event_context_preserves_supported_repository_identity_exactly() -> None
     event = EventContext(
         repository=repository,
         pr_number=42,
+        base_sha=BASE_SHA,
         head_sha=HEAD_SHA,
         is_fork=False,
         requirements_confirmed=True,

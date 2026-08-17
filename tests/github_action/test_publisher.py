@@ -26,12 +26,14 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 
 HEAD_SHA = "2" * 40
 OTHER_SHA = "3" * 40
+BASE_SHA = "1" * 40
 
 
 def context(*, fork: bool = False) -> EventContext:
     return EventContext(
         repository="acme/widget",
         pr_number=42,
+        base_sha=BASE_SHA,
         head_sha=HEAD_SHA,
         is_fork=fork,
         requirements_confirmed=True,
@@ -42,6 +44,7 @@ def check_context(*, fork: bool = False) -> CheckRunContext:
     return CheckRunContext(
         repository="acme/widget",
         pr_number=42,
+        base_sha=BASE_SHA,
         head_sha=HEAD_SHA,
         is_fork=fork,
         criteria_source=CriteriaSourceProvenance(
@@ -63,6 +66,7 @@ def pull_response(
     fork: bool = False,
     applicability_label: bool = True,
     state: str = "open",
+    base_sha: str = BASE_SHA,
 ) -> dict:
     return {
         "url": "https://api.github.com/repos/acme/widget/pulls/42",
@@ -76,7 +80,7 @@ def pull_response(
                 "fork": fork,
             },
         },
-        "base": {"repo": {"full_name": "acme/widget"}},
+        "base": {"sha": base_sha, "repo": {"full_name": "acme/widget"}},
         "labels": ([{"name": "scopeproof-review"}] if applicability_label else []),
     }
 
@@ -438,6 +442,7 @@ def test_foreign_same_name_check_without_external_id_is_ignored(
         (("url",), "https://api.github.com/repos/acme/widget/pulls/99"),
         (("html_url",), "https://github.com/acme/widget/pull/99"),
         (("head", "sha"), OTHER_SHA),
+        (("base", "sha"), OTHER_SHA),
         (("head", "repo", "full_name"), "acme/other"),
         (("base", "repo", "full_name"), "acme/other"),
     ],

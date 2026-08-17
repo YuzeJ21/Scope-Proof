@@ -306,12 +306,15 @@ def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
     assert 'scopeproof export "$review_id"' in workflow
     assert "validate-requirements-confirmation" in workflow
     assert "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" in workflow
+    assert "--validate-result" in workflow
     assert '--content-file "$RUNNER_TEMP/scopeproof-report.md"' in workflow
     assert "actions/upload-artifact@" in workflow
     assert "scopeproof-report.md" in workflow
     assert "if-no-files-found: ignore" in workflow
     assert '--verdict "$SCOPEPROOF_VERDICT"' in workflow
     assert 'echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"' in workflow
+    assert workflow.index("--validate-result") < workflow.index('print("SCOPEPROOF_VERDICT="')
+    assert workflow.index("--validate-result") < workflow.index('scopeproof export "$review_id"')
 
 
 def test_workflows_publish_only_exact_file_bound_neutral_checks() -> None:

@@ -7,7 +7,9 @@ import json
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.criteria.confirmation import validate_requirements_confirmation
 from scopeproof_core.github_action import (
@@ -36,6 +38,17 @@ _TRUNCATION_NOTICE = (
 )
 
 
+class ReviewResultIdentity(BaseModel):
+    """Validated identity subset emitted by the ScopeProof review command."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, strict=True)
+
+    review_id: str = Field(min_length=1, max_length=255)
+    verdict: Literal["ready", "conditional", "blocked", "needs_review"]
+    base_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
 def _event_context(event_path: Path, requirements_confirmed: bool) -> EventContext:
     payload = json.loads(event_path.read_text(encoding="utf-8"))
     pull_request = payload["pull_request"]
@@ -44,6 +57,7 @@ def _event_context(event_path: Path, requirements_confirmed: bool) -> EventConte
     return EventContext(
         repository=repository,
         pr_number=pull_request["number"],
+        base_sha=pull_request["base"]["sha"],
         head_sha=head["sha"],
         is_fork=head["repo"]["full_name"] != repository,
         requirements_confirmed=requirements_confirmed,
@@ -85,6 +99,7 @@ def build_check_context(
     return CheckRunContext(
         repository=event.repository,
         pr_number=event.pr_number,
+        base_sha=event.base_sha,
         head_sha=event.head_sha,
         is_fork=event.is_fork,
         criteria_source=criteria_source,
@@ -121,6 +136,16 @@ def publish_event_check(
     if context.is_fork or not token:
         return CheckMode.SKIP
     return publisher(context, verdict, content, token).mode
+
+
+def validate_review_result_identity(event_path: Path, result_path: Path) -> ReviewResultIdentity:
+    """Require review output to match the immutable event base and head."""
+
+    context = _event_context(event_path, requirements_confirmed=True)
+    result = ReviewResultIdentity.model_validate_json(result_path.read_text(encoding="utf-8"))
+    if result.base_sha != context.base_sha or result.head_sha != context.head_sha:
+        raise ValueError("review result identity mismatch")
+    return result
 
 
 def publish_event_check_withdrawal(
@@ -161,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--publish-check", action="store_true")
     parser.add_argument("--withdraw-check", action="store_true")
     parser.add_argument("--invalidate-check", action="store_true")
+    parser.add_argument("--validate-result", type=Path)
     parser.add_argument("--verdict", default="needs_review")
     parser.add_argument("--content", default="Evidence report is available in the workflow logs.")
     parser.add_argument("--content-file", type=Path)
@@ -168,6 +194,12 @@ def main(argv: list[str] | None = None) -> int:
     check_modes = sum((args.publish_check, args.withdraw_check, args.invalidate_check))
     if check_modes > 1:
         parser.error("Check publication modes are mutually exclusive")
+    if args.validate_result is not None:
+        if check_modes:
+            parser.error("--validate-result cannot publish a Check")
+        result = validate_review_result_identity(args.event_path, args.validate_result)
+        print(result.model_dump_json())
+        return 0
     content = args.content_file.read_text(encoding="utf-8") if args.content_file else args.content
 
     plan = build_event_plan(

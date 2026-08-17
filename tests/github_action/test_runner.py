@@ -17,10 +17,12 @@ from scopeproof_core.github_action_runner import (
     publish_event_check_unavailability,
     publish_event_check_withdrawal,
     publish_event_comment,
+    validate_review_result_identity,
 )
 from scopeproof_core.schemas.models import Criterion
 
 HEAD_SHA = "2" * 40
+BASE_SHA = "1" * 40
 
 
 def write_event(tmp_path: Path, *, fork: bool = False) -> Path:
@@ -31,6 +33,7 @@ def write_event(tmp_path: Path, *, fork: bool = False) -> Path:
                 "repository": {"full_name": "acme/widget"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": HEAD_SHA,
                         "repo": {
@@ -56,6 +59,7 @@ def test_event_classifies_cross_repository_identity_not_repository_fork_flag(
                 "repository": {"full_name": "acme/widget"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": HEAD_SHA,
                         "repo": {"fork": True, "full_name": "acme/widget"},
@@ -109,6 +113,7 @@ def test_check_context_validates_exact_requirements_bytes_and_provenance(
     context = build_check_context(event_path, requirements, confirmation)
 
     assert context.repository == "acme/widget"
+    assert context.base_sha == BASE_SHA
     assert context.head_sha == HEAD_SHA
     assert context.criteria_source.source_text_sha256 == source_text_sha256(
         requirements.read_text(encoding="utf-8")
@@ -151,6 +156,46 @@ def test_check_runner_routes_validated_context_and_provenance_to_publisher(
     assert mode is CheckMode.CREATE
     assert calls[0][0].criteria_source.confirmed_by == "Requirements owner"
     assert calls[0][1:] == ("blocked", "Evidence report", "token")
+
+
+@pytest.mark.parametrize(("field", "value"), [("head_sha", "3" * 40), ("base_sha", "4" * 40)])
+def test_review_result_identity_rejects_mixed_snapshot(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    event_path = write_event(tmp_path)
+    result_path = tmp_path / "result.json"
+    result = {
+        "review_id": "review-1",
+        "verdict": "ready",
+        "base_sha": BASE_SHA,
+        "head_sha": HEAD_SHA,
+    }
+    result[field] = value
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="identity mismatch"):
+        validate_review_result_identity(event_path, result_path)
+
+
+def test_review_result_identity_returns_validated_metadata(tmp_path: Path) -> None:
+    event_path = write_event(tmp_path)
+    result_path = tmp_path / "result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "review_id": "review-1",
+                "verdict": "blocked",
+                "base_sha": BASE_SHA,
+                "head_sha": HEAD_SHA,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_review_result_identity(event_path, result_path)
+
+    assert result.review_id == "review-1"
+    assert result.verdict == "blocked"
 
 
 @pytest.mark.parametrize(("fork", "token"), [(True, "token"), (False, None)])
@@ -292,6 +337,7 @@ def test_build_event_plan_is_fork_safe_and_needs_review_without_requirements(
                 "repository": {"full_name": "acme/widget"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": HEAD_SHA,
                         "repo": {"fork": True, "full_name": "acme/fork"},
@@ -317,6 +363,7 @@ def test_confirmed_requirements_preserve_the_core_gate_verdict_in_summary(tmp_pa
                 "repository": {"full_name": "acme/widget"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": HEAD_SHA,
                         "repo": {"fork": False, "full_name": "acme/widget"},
@@ -342,6 +389,7 @@ def test_runner_publishes_only_with_a_token_and_nonfork_context(tmp_path: Path) 
                 "repository": {"full_name": "acme/widget"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": HEAD_SHA,
                         "repo": {"fork": False, "full_name": "acme/widget"},
@@ -372,6 +420,7 @@ def test_runner_uses_exported_report_file_as_summary_content(tmp_path: Path, cap
                 "repository": {"full_name": "acme/widget"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": HEAD_SHA,
                         "repo": {"fork": False, "full_name": "acme/widget"},
@@ -408,6 +457,7 @@ def test_action_summary_marks_large_report_as_truncated(tmp_path: Path) -> None:
                 "repository": {"full_name": "acme/widget"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": HEAD_SHA,
                         "repo": {"fork": False, "full_name": "acme/widget"},
@@ -434,6 +484,7 @@ def test_build_event_plan_rejects_invalid_head_sha_before_planning(tmp_path: Pat
                 "repository": {"full_name": "acme/widget"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": "not-a-sha",
                         "repo": {"fork": False, "full_name": "acme/widget"},
@@ -458,6 +509,7 @@ def test_build_event_plan_rejects_noncanonical_repository_before_planning(
                 "repository": {"full_name": "ac me/de mo"},
                 "pull_request": {
                     "number": 42,
+                    "base": {"sha": BASE_SHA},
                     "head": {
                         "sha": HEAD_SHA,
                         "repo": {"fork": False, "full_name": "ac me/de mo"},
