@@ -506,8 +506,9 @@ separate operator decision to adopt it. It requires checked-in, hash-confirmed r
 never checks out or executes pull-request head code. For a maintainer-labeled same-repository PR,
 it may publish the neutral-only `ScopeProof evidence summary (informational)` Check bound to the
 exact PR head and confirmed criteria-source snapshot. A same-head rerun updates that identity; a
-new head creates a new auditable Check identity. Fork or missing token paths do not write, and a
-stale head or malformed GitHub response fails closed. The Check is not a required
+new head creates a new auditable Check identity. Removing the opt-in label updates an existing
+trusted exact-head identity to neutral Needs Review while retaining prior evidence for audit. Fork
+or missing token paths do not write, and a stale head or malformed GitHub response fails closed. The Check is not a required
 branch-protection check. It is not part of first use and does not replace the reviewer-controlled
 workflow. Reviewer and source-owner identities remain asserted, not authenticated. This
 engineering surface does not prove correctness, runtime behavior, accessibility, demand, adoption,

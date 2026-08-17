@@ -54,12 +54,16 @@ confirm that the checked-in requirements apply to this PR, then apply `scopeproo
 The requirements-confirmation record binds the approved requirements bytes. The label separately
 confirms their applicability to the current PR. Without the label, the review job is skipped: the PR
 is not reviewed, not Ready. Keeping the label on the PR allows `synchronize` and `reopened` events to
-review later heads under the same checked-in requirements.
+review later heads under the same checked-in requirements. Removing the label triggers a separate
+base-SHA-only withdrawal job: an existing trusted exact-head Check is updated to neutral Needs
+Review, its prior criteria-bound evidence is retained for audit, and no replacement Check is created
+when no exact identity exists.
 
 If the checked-in confirmed requirements bytes change, maintainers must remove
 `scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label
 before another ScopeProof review. This is an operator requirement: the workflow checks the current
-label and confirmation record, but does not enforce or reconstruct label history.
+label and confirmation record and revokes the current exact-head display on label removal, but it
+does not reconstruct older label history.
 
 The workflow's public-PR evidence command is informational and
 `continue-on-error`; GitHub API limits, temporary network failures, or an
@@ -70,10 +74,10 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`bad9f38cccba28fb9f29c94c1759221c801b857a`, the immutable source-candidate commit
+`8061b0c830b6301d3e6e8f54d047b003c402b60c`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
-bounded exact-name publisher, same-head concurrency, fail-closed report export, and unprivileged
-base-SHA-only workflow used by this example. It remains a source-candidate installation; it is
+bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
+withdrawal, and unprivileged base-SHA-only workflow used by this example. It remains a source-candidate installation; it is
 not a published v0.2.3 release. Review and update that pin deliberately when adopting a newer
 public release; do not replace it with an unpinned package or branch reference.
 

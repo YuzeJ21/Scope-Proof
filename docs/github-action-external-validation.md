@@ -29,8 +29,8 @@ that no external fork-run claim is being made.
 6. If the checked-in confirmed requirements bytes change, maintainers must
    remove `scopeproof-review`, review the new confirmed text for applicability
    to the PR, and reapply the label before another ScopeProof review. This is an
-   operator requirement; the workflow checks current state but does not enforce
-   or reconstruct label history.
+   operator requirement; removing the label revokes the current exact-head
+   Ready display, but the workflow does not reconstruct older label history.
 7. Do not add personal access tokens. The workflow uses GitHub's short-lived
    `github.token` only for its scoped, non-fork Check step. A fork or missing
    token produces no write. A stale head or GitHub identity mismatch fails
@@ -71,6 +71,9 @@ limitations: public demo only; no customer validation claimed
    same PR head SHA.
 7. Verify the Check is named `ScopeProof evidence summary (informational)`, has
    conclusion `neutral`, and records the confirmed criteria-source provenance.
+8. Remove `scopeproof-review`. Verify the separate withdrawal job updates that
+   exact-head Check to neutral **Needs Review**, retains its prior evidence for
+   audit, and does not execute another PR analysis.
 
 Expected: one neutral informational GitHub Check for the exact head. This does
 not prove the requirement is correct, runtime behavior, accessibility, demand,

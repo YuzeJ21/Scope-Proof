@@ -131,7 +131,7 @@ def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
     example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "bad9f38cccba28fb9f29c94c1759221c801b857a"
+    reviewed_revision = "8061b0c830b6301d3e6e8f54d047b003c402b60c"
 
     assert "pip install scopeproof" not in example
     assert (
@@ -226,6 +226,8 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
     assert "concurrency:" in workflow_at_pin
     assert "scopeproof-report.tmp.md" in workflow_at_pin
     assert 'scopeproof-report.md"; then' in workflow_at_pin
+    assert "types: [opened, reopened, synchronize, labeled, unlabeled]" in workflow_at_pin
+    assert "--withdraw-check" in workflow_at_pin
 
 
 def test_ci_checkouts_include_history_for_source_pin_contract() -> None:
