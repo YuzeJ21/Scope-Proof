@@ -160,9 +160,12 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
     examples = (
         Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8"),
         Path("examples/github-actions/scopeproof-withdraw.yml").read_text(encoding="utf-8"),
+        Path("examples/github-actions/scopeproof-base-advance.yml").read_text(
+            encoding="utf-8"
+        ),
     )
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "fd9308a6e94800f84bcdc41260f527fc030e0e94"
+    reviewed_revision = "2330e17f70bd2ba273f7eab0eea95066aae487d8"
 
     for example in examples:
         assert "pip install scopeproof" not in example

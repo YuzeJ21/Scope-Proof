@@ -1377,19 +1377,31 @@ def test_launch_matrix_keeps_action_as_an_advanced_preview() -> None:
 
 
 def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> None:
-    example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+    examples = [
+        Path(path).read_text(encoding="utf-8")
+        for path in (
+            "examples/github-actions/scopeproof.yml",
+            "examples/github-actions/scopeproof-withdraw.yml",
+            "examples/github-actions/scopeproof-base-advance.yml",
+        )
+    ]
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    expected_pin = "fd9308a6e94800f84bcdc41260f527fc030e0e94"
+    expected_pin = "2330e17f70bd2ba273f7eab0eea95066aae487d8"
 
-    install = re.search(
-        r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
-        example,
-    )
+    installs = [
+        re.search(
+            r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
+            example,
+        )
+        for example in examples
+    ]
 
-    assert install is not None
-    assert install.group(1) == expected_pin
-    assert f"`{install.group(1)}`" in guide
+    assert all(install is not None for install in installs)
+    assert {install.group(1) for install in installs if install is not None} == {
+        expected_pin
+    }
+    assert f"`{expected_pin}`" in guide
     assert "`d553791cba83d9f756b2adce22bd814872b73ea2`" in changelog
     assert "source-candidate installation" in guide
     assert "not a published v0.2.3 release" in guide

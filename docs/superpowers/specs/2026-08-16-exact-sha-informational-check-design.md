@@ -84,6 +84,12 @@ and live head to match the event, and the workflow validates both identities in 
 output before retaining its verdict or exporting its report. A base-advance or force-push race
 therefore fails closed instead of combining criteria, analysis, and publication from different
 snapshots.
+Default-base pushes run a separate trusted workflow because GitHub emits no pull-request
+`synchronize` event for a base-only advance. The bounded publisher enumerates at most five pages of
+open PRs targeting the pushed default branch, filters to labeled same-repository PRs, revalidates
+each live identity, and revokes only an existing exact-head display. It performs no analysis and
+never checks out a pull-request head. Automatic revocation of non-default target branches remains
+unsupported.
 
 It then reads only
 `/repos/{repository}/commits/{head_sha}/check-runs` with the exact informational check name,

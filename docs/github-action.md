@@ -6,7 +6,8 @@ it is not part of first use or evidence of product validation.
 
 ScopeProof includes a repository-local workflow starter at
 `.github/workflows/scopeproof.yml`, an isolated withdrawal workflow at
-`.github/workflows/scopeproof-withdraw.yml`, and matching copyable examples under
+`.github/workflows/scopeproof-withdraw.yml`, a default-base revocation workflow at
+`.github/workflows/scopeproof-base-advance.yml`, and matching copyable examples under
 `examples/github-actions/`.
 
 It is deliberately a **safe preview**, not an enforcement integration:
@@ -19,6 +20,9 @@ It is deliberately a **safe preview**, not an enforcement integration:
   activity for conflicted PRs. That workflow runs only for the exact unlabeled
   event, checks out only the immutable base SHA, performs no analysis, and
   invokes the bounded withdrawal publisher with constant command text.
+- Default-base pushes use a separate trusted workflow that revokes stale
+  exact-head displays on affected open, labeled, same-repository PRs without
+  checking out or executing any pull-request head.
 - It needs a checked-in `.scopeproof/requirements.txt` plus
   `.scopeproof/requirements-confirmation.json`. The confirmation records the
   source URI and optional revision, exact SHA-256 of the requirements text,
@@ -81,6 +85,13 @@ head must still match immediately before publication. The review command emits b
 and the workflow validates them against the event before it accepts a verdict or exports a report;
 mixed-snapshot results fail before publication.
 
+Because GitHub does not emit a pull-request `synchronize` event when only the default target branch
+advances, the companion `scopeproof-base-advance.yml` runs on trusted default-branch pushes. It
+enumerates open PRs targeting the new default-base SHA, limits work to labeled same-repository PRs,
+and updates only an existing trusted exact-head Check to neutral Needs Review. It never analyzes a
+PR or checks out its head. Non-default target branches are not covered by this automatic revocation
+workflow.
+
 If the checked-in confirmed requirements bytes change, maintainers must remove
 `scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label
 before another ScopeProof review. This is an operator requirement: the workflow checks the current
@@ -96,7 +107,7 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`fd9308a6e94800f84bcdc41260f527fc030e0e94`, the immutable source-candidate commit
+`2330e17f70bd2ba273f7eab0eea95066aae487d8`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
 withdrawal for conflicted PRs, repository-identity fork classification, and isolated base-SHA-only
