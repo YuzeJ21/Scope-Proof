@@ -70,12 +70,12 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`88bb0cf7b0e2990edc70a84d94a7b390652294b9`, the immutable source-candidate commit
+`92f5c5a5767135f5df6596c25327a0c8da010605`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
-bounded same-origin publisher, and unprivileged base-SHA-only workflow used by this example. It
-remains a source-candidate installation; it is not a published v0.2.3 release. Review
-and update that pin deliberately when adopting a newer public release; do not replace it with an
-unpinned package or branch reference.
+bounded exact-name publisher, same-head concurrency, fail-closed report export, and unprivileged
+base-SHA-only workflow used by this example. It remains a source-candidate installation; it is
+not a published v0.2.3 release. Review and update that pin deliberately when adopting a newer
+public release; do not replace it with an unpinned package or branch reference.
 
 The workflow grants Check write access only for same-repository publication; GitHub downgrades
 fork pull-request tokens and the workflow skips the write path. Do not add a pull-request-head
