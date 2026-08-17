@@ -63,9 +63,12 @@ confirms their applicability to the current PR. Without the label, the review jo
 is not reviewed, not Ready. Keeping the label on the PR allows `synchronize` and `reopened` events to
 review later heads under the same checked-in requirements. Removing the label triggers a separate
 base-SHA-only withdrawal job: an existing trusted exact-head Check is updated to neutral Needs
-Review, its prior criteria-bound evidence is retained for audit, and no replacement Check is created
-when no exact identity exists. The publisher revalidates the live label state immediately before
-either analysis publication or withdrawal, so delayed runs cannot restore stale applicability.
+Review, its prior criteria-bound evidence is retained byte-for-byte for audit, and no replacement
+Check is created when no exact identity exists. Withdrawal permits an otherwise identity-matched
+closed or merged PR because label applicability can still be revoked after closure; new analysis
+publication still requires an open PR. The publisher revalidates the live label state immediately
+before either analysis publication or withdrawal, so delayed runs cannot restore stale
+applicability.
 
 If the checked-in confirmed requirements bytes change, maintainers must remove
 `scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label
@@ -82,7 +85,7 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`294b7d94c6e36dc7357fba86ac344b75feb45ba8`, the immutable source-candidate commit
+`b0f500405c2f90377989e1869c78356de1971ca2`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
 withdrawal for conflicted PRs, repository-identity fork classification, and isolated base-SHA-only

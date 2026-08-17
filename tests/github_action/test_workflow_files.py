@@ -148,7 +148,7 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
         ),
     )
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "294b7d94c6e36dc7357fba86ac344b75feb45ba8"
+    reviewed_revision = "b0f500405c2f90377989e1869c78356de1971ca2"
 
     for example in examples:
         assert "pip install scopeproof" not in example

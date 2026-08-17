@@ -71,8 +71,11 @@ Add `publish_check` beside the existing backward-compatible comment publisher. I
 retries. It never follows a server-provided pagination URL.
 
 Before any write, it fetches `/repos/{repository}/pulls/{pr_number}` and Pydantic-validates the
-response. The live PR must be open, non-fork, belong to the exact repository, and expose the exact
-event head SHA. A mismatch is stale or foreign and fails before mutation.
+response. Analysis publication requires the live PR to be open. Withdrawal permits an
+identity-matched closed or merged PR so a removed applicability label cannot leave a stale Ready
+display. Both paths require the exact repository and event head SHA; a mismatch is stale or foreign
+and fails before mutation. Withdrawal keeps the validated prior detail text byte-for-byte and puts
+the revocation notice in the bounded summary, so it cannot truncate retained criterion evidence.
 
 It then reads only
 `/repos/{repository}/commits/{head_sha}/check-runs` with the exact informational check name,
