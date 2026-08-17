@@ -33,6 +33,10 @@ _UNAVAILABILITY_NOTICE = (
     "The checked-in requirements confirmation is unavailable or does not match for this "
     "exact pull-request head. Any prior Ready display is revoked."
 )
+_BASE_ADVANCE_NOTICE = (
+    "The target base branch advanced for this open pull request. The prior snapshot is stale, "
+    "so any Ready display is revoked until a new exact-base review completes."
+)
 
 
 class GitHubCheckPublicationError(RuntimeError):
@@ -57,6 +61,7 @@ class _PullBaseResponse(BaseModel):
     model_config = ConfigDict(extra="ignore", strict=True)
 
     sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    ref: str = Field(min_length=1, max_length=255)
     repo: _RepositoryResponse
 
 
@@ -141,6 +146,17 @@ class _UpdateCheckRequest(BaseModel):
     status: Literal["completed"]
     conclusion: Literal["neutral"]
     output: _CheckOutputRequest
+
+
+class BaseAdvanceInvalidationResult(BaseModel):
+    """Validated aggregate result for one trusted default-branch push."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    reason: str = Field(min_length=1, max_length=100)
+    updated_count: int = Field(ge=0, le=500)
+    skipped_count: int = Field(ge=0, le=500)
+    plans: list[CheckRunPlan] = Field(max_length=500)
 
 
 def _skipped_check_plan(
@@ -291,7 +307,7 @@ def _needs_review_output(detail: _CheckRunDetailResponse, notice: str) -> CheckR
     """Preserve validated detail and make state-transition summaries canonical."""
 
     base_summary = detail.output.summary
-    prior_notices = (_WITHDRAWAL_NOTICE, _UNAVAILABILITY_NOTICE)
+    prior_notices = (_WITHDRAWAL_NOTICE, _UNAVAILABILITY_NOTICE, _BASE_ADVANCE_NOTICE)
     changed = True
     while changed:
         changed = False
@@ -443,6 +459,127 @@ def publish_check_unavailability(
         reason="requirements_confirmation_unavailable",
         notice=_UNAVAILABILITY_NOTICE,
     )
+
+
+def publish_check_base_advance(
+    context: EventContext,
+    token: str,
+    transport: httpx.BaseTransport | None = None,
+) -> CheckRunPlan:
+    """Revoke one existing exact-head display after its target base advances."""
+
+    return _publish_existing_check_needs_review(
+        context,
+        token,
+        transport,
+        applicability_label_expected=True,
+        require_open=True,
+        reason="target_base_advanced",
+        notice=_BASE_ADVANCE_NOTICE,
+    )
+
+
+def publish_base_advance_invalidations(
+    *,
+    repository: str,
+    base_ref: str,
+    after_sha: str,
+    token: str,
+    transport: httpx.BaseTransport | None = None,
+) -> BaseAdvanceInvalidationResult:
+    """Revoke stale Checks on same-repository labeled PRs targeting one pushed base."""
+
+    identity = EventContext(
+        repository=repository,
+        pr_number=1,
+        base_sha=after_sha,
+        head_sha=after_sha,
+        is_fork=False,
+        requirements_confirmed=False,
+    )
+    checked_ref = base_ref.strip()
+    if not checked_ref or len(checked_ref) > 255:
+        raise ValueError("invalid base ref")
+    checked_token = token.strip()
+    if not checked_token:
+        return BaseAdvanceInvalidationResult(
+            reason="missing_token",
+            updated_count=0,
+            skipped_count=0,
+            plans=[],
+        )
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {checked_token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    pulls: list[_PullResponse] = []
+    seen_numbers: set[int] = set()
+    try:
+        with httpx.Client(
+            base_url=_API_BASE_URL,
+            headers=headers,
+            transport=transport,
+            timeout=15.0,
+            follow_redirects=False,
+        ) as client:
+            for page_number in range(1, _MAX_CHECK_PAGES + 1):
+                response = client.get(
+                    f"/repos/{identity.repository}/pulls",
+                    params={
+                        "state": "open",
+                        "base": checked_ref,
+                        "per_page": _PER_PAGE,
+                        "page": page_number,
+                    },
+                )
+                response.raise_for_status()
+                raw_page = response.json()
+                if not isinstance(raw_page, list) or len(raw_page) > _PER_PAGE:
+                    raise GitHubCheckPublicationError("malformed pull request page")
+                page = [_PullResponse.model_validate(item) for item in raw_page]
+                for pull in page:
+                    if pull.number in seen_numbers:
+                        raise GitHubCheckPublicationError("repeated pull request across pages")
+                    seen_numbers.add(pull.number)
+                    pulls.append(pull)
+                if len(page) < _PER_PAGE:
+                    break
+            else:
+                raise GitHubCheckPublicationError("pull request page budget exceeded")
+
+        plans: list[CheckRunPlan] = []
+        for pull in sorted(pulls, key=lambda item: item.number):
+            label_present = any(label.name == "scopeproof-review" for label in pull.labels)
+            if not label_present or pull.head.repo.full_name != identity.repository:
+                continue
+            if (
+                pull.state != "open"
+                or pull.base.ref != checked_ref
+                or pull.base.sha != identity.base_sha
+                or pull.base.repo.full_name != identity.repository
+            ):
+                raise GitHubCheckPublicationError("base advance pull identity mismatch")
+            context = EventContext(
+                repository=identity.repository,
+                pr_number=pull.number,
+                base_sha=identity.base_sha,
+                head_sha=pull.head.sha,
+                is_fork=False,
+                requirements_confirmed=False,
+            )
+            plans.append(publish_check_base_advance(context, checked_token, transport))
+        return BaseAdvanceInvalidationResult(
+            reason="default_base_advanced",
+            updated_count=sum(plan.mode is CheckMode.UPDATE for plan in plans),
+            skipped_count=sum(plan.mode is CheckMode.SKIP for plan in plans),
+            plans=plans,
+        )
+    except GitHubCheckPublicationError:
+        raise
+    except (httpx.HTTPError, ValidationError, ValueError) as exc:
+        raise GitHubCheckPublicationError("GitHub base-advance invalidation failed closed") from exc
 
 
 def publish_check(

@@ -13,6 +13,7 @@ from scopeproof_core.github_action_runner import (
     build_check_context,
     build_event_plan,
     main,
+    publish_base_advance,
     publish_event_check,
     publish_event_check_unavailability,
     publish_event_check_withdrawal,
@@ -325,6 +326,36 @@ def test_main_unavailability_path_needs_no_requirements_files(
 
     assert main(["--event-path", str(event_path), "--invalidate-check"]) == 0
     assert '"check_unavailability_mode": "skip"' in capsys.readouterr().out
+
+
+def test_base_advance_runner_routes_validated_identity() -> None:
+    calls = []
+
+    def publisher(**kwargs):
+        calls.append(kwargs)
+        return type(
+            "Result",
+            (),
+            {"model_dump": lambda self, mode: {"updated_count": 1}},
+        )()
+
+    result = publish_base_advance(
+        repository="acme/widget",
+        base_ref="main",
+        after_sha=BASE_SHA,
+        token="token",
+        publisher=publisher,
+    )
+
+    assert result == {"updated_count": 1}
+    assert calls == [
+        {
+            "repository": "acme/widget",
+            "base_ref": "main",
+            "after_sha": BASE_SHA,
+            "token": "token",
+        }
+    ]
 
 
 def test_build_event_plan_is_fork_safe_and_needs_review_without_requirements(

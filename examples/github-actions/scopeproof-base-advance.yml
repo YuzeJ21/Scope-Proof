@@ -1,0 +1,43 @@
+name: ScopeProof base advance
+
+on:
+  push:
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+concurrency:
+  group: scopeproof-base-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  invalidate:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    name: Revoke stale ScopeProof checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+      - name: Install ScopeProof
+        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@fd9308a6e94800f84bcdc41260f527fc030e0e94"
+      - name: Revoke stale exact-head displays
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.event.repository.default_branch }}
+        run: |
+          python -m scopeproof_core.github_action_runner \
+            --invalidate-base-advance \
+            --repository "$GITHUB_REPOSITORY" \
+            --base-ref "$BASE_REF" \
+            --after-sha "$GITHUB_SHA"
+      - name: Boundary
+        run: |
+          echo "Only existing exact-head informational Checks can be updated."
+          echo "No pull-request head or target-repository code is checked out or executed."

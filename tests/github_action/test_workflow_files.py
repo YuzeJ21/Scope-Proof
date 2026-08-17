@@ -59,6 +59,25 @@ def test_workflows_withdraw_exact_head_check_when_opt_in_label_is_removed() -> N
         assert "ref: ${{ github.event.pull_request.base.sha }}" in withdrawal
         assert "persist-credentials: false" in withdrawal
 
+
+def test_default_base_advance_workflows_revoke_without_pr_head_execution() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof-base-advance.yml"),
+        Path("examples/github-actions/scopeproof-base-advance.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+        assert "push:" in workflow
+        assert "github.event.repository.default_branch" in workflow
+        assert "checks: write" in workflow
+        assert "pull-requests: read" in workflow
+        assert "ref: ${{ github.sha }}" in workflow
+        assert "persist-credentials: false" in workflow
+        assert "--invalidate-base-advance" in workflow
+        assert '--repository "$GITHUB_REPOSITORY"' in workflow
+        assert '--after-sha "$GITHUB_SHA"' in workflow
+        assert "pull_request_target" not in workflow
+        assert "pull_request.head" not in workflow
+
     for path in (
         Path(".github/workflows/scopeproof.yml"),
         Path("examples/github-actions/scopeproof.yml"),

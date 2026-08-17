@@ -23,6 +23,8 @@ from scopeproof_core.github_action import (
     render_check_summary,
 )
 from scopeproof_core.github_action_publisher import (
+    BaseAdvanceInvalidationResult,
+    publish_base_advance_invalidations,
     publish_check,
     publish_check_unavailability,
     publish_check_withdrawal,
@@ -32,6 +34,7 @@ from scopeproof_core.github_action_publisher import (
 Publisher = Callable[[EventContext, str, str], CommentPlan]
 CheckPublisher = Callable[[CheckRunContext, str, str, str], CheckRunPlan]
 WithdrawalPublisher = Callable[[EventContext, str], CheckRunPlan]
+BaseAdvancePublisher = Callable[..., BaseAdvanceInvalidationResult]
 MAX_ACTION_SUMMARY_CHARS = 60_000
 _TRUNCATION_NOTICE = (
     "\n\n> ScopeProof summary truncated; use the workflow artifact/log for full details."
@@ -174,11 +177,30 @@ def publish_event_check_unavailability(
     return publisher(context, token).mode
 
 
+def publish_base_advance(
+    *,
+    repository: str,
+    base_ref: str,
+    after_sha: str,
+    token: str | None,
+    publisher: BaseAdvancePublisher = publish_base_advance_invalidations,
+) -> dict[str, Any]:
+    """Invalidate stale exact-head Checks after a trusted default-base push."""
+
+    result = publisher(
+        repository=repository,
+        base_ref=base_ref,
+        after_sha=after_sha,
+        token=token or "",
+    )
+    return result.model_dump(mode="json")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Emit a plan to stdout and GitHub's step summary, if available."""
 
     parser = argparse.ArgumentParser(description="Plan a safe ScopeProof GitHub Action run")
-    parser.add_argument("--event-path", type=Path, required=True)
+    parser.add_argument("--event-path", type=Path)
     parser.add_argument("--requirements-confirmed", action="store_true")
     parser.add_argument("--publish-comment", action="store_true")
     parser.add_argument("--requirements", type=Path)
@@ -187,13 +209,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--withdraw-check", action="store_true")
     parser.add_argument("--invalidate-check", action="store_true")
     parser.add_argument("--validate-result", type=Path)
+    parser.add_argument("--invalidate-base-advance", action="store_true")
+    parser.add_argument("--repository")
+    parser.add_argument("--base-ref")
+    parser.add_argument("--after-sha")
     parser.add_argument("--verdict", default="needs_review")
     parser.add_argument("--content", default="Evidence report is available in the workflow logs.")
     parser.add_argument("--content-file", type=Path)
     args = parser.parse_args(argv)
-    check_modes = sum((args.publish_check, args.withdraw_check, args.invalidate_check))
+    check_modes = sum(
+        (
+            args.publish_check,
+            args.withdraw_check,
+            args.invalidate_check,
+            args.invalidate_base_advance,
+        )
+    )
     if check_modes > 1:
         parser.error("Check publication modes are mutually exclusive")
+    if args.invalidate_base_advance:
+        if not args.repository or not args.base_ref or not args.after_sha:
+            parser.error(
+                "--invalidate-base-advance requires --repository, --base-ref, and --after-sha"
+            )
+        result = publish_base_advance(
+            repository=args.repository,
+            base_ref=args.base_ref,
+            after_sha=args.after_sha,
+            token=os.environ.get("GITHUB_TOKEN"),
+        )
+        print(json.dumps({"base_advance": result}, sort_keys=True))
+        return 0
+    if args.event_path is None:
+        parser.error("--event-path is required")
     if args.validate_result is not None:
         if check_modes:
             parser.error("--validate-result cannot publish a Check")

@@ -15,6 +15,7 @@ from scopeproof_core.github_action import (
 )
 from scopeproof_core.github_action_publisher import (
     GitHubCheckPublicationError,
+    publish_base_advance_invalidations,
     publish_check,
     publish_check_unavailability,
     publish_check_withdrawal,
@@ -67,6 +68,7 @@ def pull_response(
     applicability_label: bool = True,
     state: str = "open",
     base_sha: str = BASE_SHA,
+    base_ref: str = "main",
 ) -> dict:
     return {
         "url": "https://api.github.com/repos/acme/widget/pulls/42",
@@ -80,7 +82,11 @@ def pull_response(
                 "fork": fork,
             },
         },
-        "base": {"sha": base_sha, "repo": {"full_name": "acme/widget"}},
+        "base": {
+            "sha": base_sha,
+            "ref": base_ref,
+            "repo": {"full_name": "acme/widget"},
+        },
         "labels": ([{"name": "scopeproof-review"}] if applicability_label else []),
     }
 
@@ -314,6 +320,53 @@ def test_missing_confirmation_revokes_existing_ready_display() -> None:
     assert plan.mode is CheckMode.UPDATE
     assert plan.reason == "requirements_confirmation_unavailable"
     assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+
+
+def test_default_base_advance_revokes_existing_labeled_exact_head_check() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/repos/acme/widget/pulls" and "state" in request.url.params:
+            return httpx.Response(200, json=[pull_response()])
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response())
+        if request.method == "GET" and request.url.path.endswith("/check-runs/7"):
+            return httpx.Response(200, json=check_detail_response())
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list(check_response()))
+        payload = json.loads(request.content)
+        assert payload["output"]["title"] == "ScopeProof — Needs Review (informational)"
+        assert "target base branch advanced" in payload["output"]["summary"]
+        return httpx.Response(200, json=check_response())
+
+    result = publish_base_advance_invalidations(
+        repository="acme/widget",
+        base_ref="main",
+        after_sha=BASE_SHA,
+        token="secret",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert result.updated_count == 1
+    assert result.skipped_count == 0
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "GET", "PATCH"]
+
+
+def test_base_advance_without_token_is_non_mutating() -> None:
+    def unexpected(_: httpx.Request) -> httpx.Response:
+        raise AssertionError("missing-token base advance must not call GitHub")
+
+    result = publish_base_advance_invalidations(
+        repository="acme/widget",
+        base_ref="main",
+        after_sha=BASE_SHA,
+        token="",
+        transport=httpx.MockTransport(unexpected),
+    )
+
+    assert result.reason == "missing_token"
+    assert result.updated_count == 0
 
 
 def test_label_withdrawal_without_exact_check_makes_no_write() -> None:
