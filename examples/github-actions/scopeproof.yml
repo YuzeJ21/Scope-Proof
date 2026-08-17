@@ -13,6 +13,10 @@ env:
   # Keep this informational until confirmed dogfood validates the contract.
   SCOPEPROOF_REQUIRED_CHECK: false
 
+concurrency:
+  group: scopeproof-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+
 jobs:
   review:
     if: contains(github.event.pull_request.labels.*.name, 'scopeproof-review')
@@ -46,7 +50,12 @@ jobs:
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
             python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
             review_id=$(python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
-            scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.md"
+            if scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.tmp.md" && [ -s "$RUNNER_TEMP/scopeproof-report.tmp.md" ]; then
+              mv "$RUNNER_TEMP/scopeproof-report.tmp.md" "$RUNNER_TEMP/scopeproof-report.md"
+            else
+              echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
+              exit 1
+            fi
           fi
       - name: Upload ScopeProof report artifact
         if: always()
@@ -59,7 +68,7 @@ jobs:
       - name: Emit fork-safe ScopeProof summary plan
         run: |
           content_args=()
-          if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
+          if [ -s "$RUNNER_TEMP/scopeproof-report.md" ]; then
             content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
           fi
           if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" = "true" ]; then
@@ -82,7 +91,7 @@ jobs:
             exit 0
           fi
           content_args=(--content "No validated ScopeProof report was produced; evidence remains unavailable.")
-          if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
+          if [ -s "$RUNNER_TEMP/scopeproof-report.md" ]; then
             content_args=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
           fi
           python -m scopeproof_core.github_action_runner \

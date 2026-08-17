@@ -176,7 +176,12 @@ def _read_existing_checks(client: httpx.Client, context: CheckRunContext) -> lis
     for page_number in range(1, _MAX_CHECK_PAGES + 1):
         response = client.get(
             f"/repos/{context.repository}/commits/{context.head_sha}/check-runs",
-            params={"filter": "all", "per_page": _PER_PAGE, "page": page_number},
+            params={
+                "check_name": CHECK_NAME,
+                "filter": "all",
+                "per_page": _PER_PAGE,
+                "page": page_number,
+            },
         )
         response.raise_for_status()
         page = _CheckListResponse.model_validate(response.json())

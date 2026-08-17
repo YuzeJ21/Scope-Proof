@@ -7,6 +7,9 @@ from scopeproof_core.criteria.confirmation import validate_requirements_confirma
 
 def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> None:
     workflow = Path(".github/workflows/scopeproof.yml").read_text(encoding="utf-8")
+    checkout = workflow.split("- uses: actions/checkout@", maxsplit=1)[1].split(
+        "- uses: actions/setup-python@", maxsplit=1
+    )[0]
 
     assert "pull_request:" in workflow
     assert "pull_request_target:" not in workflow
@@ -16,9 +19,45 @@ def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> N
     assert "SCOPEPROOF_REQUIRED_CHECK: false" in workflow
     assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
     assert "persist-credentials: false" in workflow
-    assert "pull_request.head.sha" not in workflow
+    assert "pull_request.head.sha" not in checkout
     assert "gh pr checkout" not in workflow
     assert "git fetch" not in workflow
+
+
+def test_workflows_serialize_same_pull_request_head_publication() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+
+        assert "concurrency:" in workflow
+        assert (
+            "group: scopeproof-${{ github.repository }}-"
+            "${{ github.event.pull_request.number }}-"
+            "${{ github.event.pull_request.head.sha }}"
+        ) in workflow
+        assert "cancel-in-progress: false" in workflow
+
+
+def test_failed_or_empty_export_cannot_publish_a_ready_report() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+
+        assert (
+            'scopeproof-report.tmp.md" && '
+            '[ -s "$RUNNER_TEMP/scopeproof-report.tmp.md" ]'
+        ) in workflow
+        assert (
+            'mv "$RUNNER_TEMP/scopeproof-report.tmp.md" '
+            '"$RUNNER_TEMP/scopeproof-report.md"'
+        ) in workflow
+        assert 'echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"' in workflow
+        assert workflow.count('if [ -s "$RUNNER_TEMP/scopeproof-report.md" ]; then') == 2
+        assert 'if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then' not in workflow
 
 
 def test_repository_action_workflow_uses_the_locked_environment() -> None:
@@ -225,6 +264,9 @@ def test_workflows_publish_only_exact_file_bound_neutral_checks() -> None:
         Path("examples/github-actions/scopeproof.yml"),
     ):
         workflow = path.read_text(encoding="utf-8")
+        checkout = workflow.split("- uses: actions/checkout@", maxsplit=1)[1].split(
+            "- uses: actions/setup-python@", maxsplit=1
+        )[0]
         publish = workflow.split(
             "Publish exact-head informational Check", maxsplit=1
         )[1].split("- name: Publication boundary", maxsplit=1)[0]
@@ -236,7 +278,7 @@ def test_workflows_publish_only_exact_file_bound_neutral_checks() -> None:
         assert "--publish-check" in publish
         assert "--publish-comment" not in workflow
         assert "pull_request_target" not in workflow
-        assert "pull_request.head.sha" not in workflow
+        assert "pull_request.head.sha" not in checkout
         assert "gh pr checkout" not in workflow
         assert "git fetch" not in workflow
         assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow

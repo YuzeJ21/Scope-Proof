@@ -126,6 +126,7 @@ def test_exact_trusted_check_is_patched_with_neutral_validated_payload() -> None
         if request.url.path.endswith("/pulls/42"):
             return httpx.Response(200, json=pull_response())
         if request.method == "GET":
+            assert request.url.params["check_name"] == CHECK_NAME
             return httpx.Response(200, json=check_list(check_response()))
         assert request.method == "PATCH"
         assert request.url.path.endswith("/check-runs/7")
