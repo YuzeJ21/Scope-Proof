@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
+import scopeproof_core.github_action_publisher as publisher_module
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.github_action import (
     CHECK_NAME,
@@ -69,11 +70,12 @@ def pull_response(
     state: str = "open",
     base_sha: str = BASE_SHA,
     base_ref: str = "main",
+    pr_number: int = 42,
 ) -> dict:
     return {
-        "url": "https://api.github.com/repos/acme/widget/pulls/42",
-        "html_url": "https://github.com/acme/widget/pull/42",
-        "number": 42,
+        "url": f"https://api.github.com/repos/acme/widget/pulls/{pr_number}",
+        "html_url": f"https://github.com/acme/widget/pull/{pr_number}",
+        "number": pr_number,
         "state": state,
         "head": {
             "sha": head_sha,
@@ -367,6 +369,131 @@ def test_base_advance_without_token_is_non_mutating() -> None:
 
     assert result.reason == "missing_token"
     assert result.updated_count == 0
+
+
+def test_base_advance_accepts_exactly_five_full_pages_with_empty_sentinel() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        per_page = int(request.url.params["per_page"])
+        page = int(request.url.params["page"])
+        if per_page == 1:
+            assert page == 501
+            return httpx.Response(200, json=[])
+        start = (page - 1) * 100 + 1
+        return httpx.Response(
+            200,
+            json=[
+                pull_response(pr_number=number, applicability_label=False)
+                for number in range(start, start + 100)
+            ],
+        )
+
+    result = publish_base_advance_invalidations(
+        repository="acme/widget",
+        base_ref="main",
+        after_sha=BASE_SHA,
+        token="secret",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert result.updated_count == 0
+    assert len(requests) == 6
+
+
+def test_base_advance_rejects_nonempty_overflow_sentinel_before_writes() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        per_page = int(request.url.params["per_page"])
+        page = int(request.url.params["page"])
+        if per_page == 1:
+            return httpx.Response(
+                200,
+                json=[pull_response(pr_number=501, applicability_label=False)],
+            )
+        start = (page - 1) * 100 + 1
+        return httpx.Response(
+            200,
+            json=[
+                pull_response(pr_number=number, applicability_label=False)
+                for number in range(start, start + 100)
+            ],
+        )
+
+    with pytest.raises(GitHubCheckPublicationError, match="page budget"):
+        publish_base_advance_invalidations(
+            repository="acme/widget",
+            base_ref="main",
+            after_sha=BASE_SHA,
+            token="secret",
+            transport=httpx.MockTransport(handler),
+        )
+
+    assert len(requests) == 6
+    assert all(request.method == "GET" for request in requests)
+
+
+def test_base_advance_skips_deleted_fork_before_processing_same_repo_pr() -> None:
+    requests: list[httpx.Request] = []
+    deleted_fork = pull_response(pr_number=41)
+    deleted_fork["head"]["repo"] = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/repos/acme/widget/pulls" and "state" in request.url.params:
+            return httpx.Response(200, json=[deleted_fork, pull_response()])
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response())
+        if request.method == "GET" and request.url.path.endswith("/check-runs/7"):
+            return httpx.Response(200, json=check_detail_response())
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list(check_response()))
+        return httpx.Response(200, json=check_response())
+
+    result = publish_base_advance_invalidations(
+        repository="acme/widget",
+        base_ref="main",
+        after_sha=BASE_SHA,
+        token="secret",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert result.updated_count == 1
+    assert all("pulls/41" not in str(request.url) for request in requests[1:])
+
+
+def test_base_advance_continues_after_individual_pr_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempted: list[int] = []
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[pull_response(pr_number=41), pull_response(pr_number=42)],
+        )
+
+    def fake_publish(context, token, transport):
+        attempted.append(context.pr_number)
+        if context.pr_number == 41:
+            raise GitHubCheckPublicationError("first PR failed")
+        return type("Plan", (), {"mode": CheckMode.UPDATE})()
+
+    monkeypatch.setattr(publisher_module, "publish_check_base_advance", fake_publish)
+
+    with pytest.raises(GitHubCheckPublicationError, match="41"):
+        publish_base_advance_invalidations(
+            repository="acme/widget",
+            base_ref="main",
+            after_sha=BASE_SHA,
+            token="secret",
+            transport=httpx.MockTransport(handler),
+        )
+
+    assert attempted == [41, 42]
 
 
 def test_label_withdrawal_without_exact_check_makes_no_write() -> None:

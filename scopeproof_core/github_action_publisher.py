@@ -54,7 +54,7 @@ class _PullHeadResponse(BaseModel):
     model_config = ConfigDict(extra="ignore", strict=True)
 
     sha: str = Field(pattern=r"^[0-9a-f]{40}$")
-    repo: _RepositoryResponse
+    repo: _RepositoryResponse | None
 
 
 class _PullBaseResponse(BaseModel):
@@ -195,6 +195,7 @@ def _validate_live_pull(
         or pull.html_url != expected_html_url
         or pull.head.sha != context.head_sha
         or pull.base.sha != context.base_sha
+        or pull.head.repo is None
         or pull.head.repo.full_name != context.repository
         or pull.base.repo.full_name != context.repository
     ):
@@ -524,6 +525,7 @@ def publish_base_advance_invalidations(
             timeout=15.0,
             follow_redirects=False,
         ) as client:
+            last_page_was_full = False
             for page_number in range(1, _MAX_CHECK_PAGES + 1):
                 response = client.get(
                     f"/repos/{identity.repository}/pulls",
@@ -544,15 +546,35 @@ def publish_base_advance_invalidations(
                         raise GitHubCheckPublicationError("repeated pull request across pages")
                     seen_numbers.add(pull.number)
                     pulls.append(pull)
+                last_page_was_full = len(page) == _PER_PAGE
                 if len(page) < _PER_PAGE:
                     break
-            else:
-                raise GitHubCheckPublicationError("pull request page budget exceeded")
+            if last_page_was_full:
+                sentinel_response = client.get(
+                    f"/repos/{identity.repository}/pulls",
+                    params={
+                        "state": "open",
+                        "base": checked_ref,
+                        "per_page": 1,
+                        "page": (_MAX_CHECK_PAGES * _PER_PAGE) + 1,
+                    },
+                )
+                sentinel_response.raise_for_status()
+                sentinel = sentinel_response.json()
+                if not isinstance(sentinel, list) or len(sentinel) > 1:
+                    raise GitHubCheckPublicationError("malformed pull request overflow sentinel")
+                if sentinel:
+                    raise GitHubCheckPublicationError("pull request page budget exceeded")
 
         plans: list[CheckRunPlan] = []
+        failed_pr_numbers: list[int] = []
         for pull in sorted(pulls, key=lambda item: item.number):
             label_present = any(label.name == "scopeproof-review" for label in pull.labels)
-            if not label_present or pull.head.repo.full_name != identity.repository:
+            if (
+                not label_present
+                or pull.head.repo is None
+                or pull.head.repo.full_name != identity.repository
+            ):
                 continue
             if (
                 pull.state != "open"
@@ -569,7 +591,13 @@ def publish_base_advance_invalidations(
                 is_fork=False,
                 requirements_confirmed=False,
             )
-            plans.append(publish_check_base_advance(context, checked_token, transport))
+            try:
+                plans.append(publish_check_base_advance(context, checked_token, transport))
+            except GitHubCheckPublicationError:
+                failed_pr_numbers.append(pull.number)
+        if failed_pr_numbers:
+            joined = ",".join(str(number) for number in failed_pr_numbers)
+            raise GitHubCheckPublicationError(f"base advance invalidation failed for PRs: {joined}")
         return BaseAdvanceInvalidationResult(
             reason="default_base_advanced",
             updated_count=sum(plan.mode is CheckMode.UPDATE for plan in plans),
