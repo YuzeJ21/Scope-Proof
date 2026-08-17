@@ -87,10 +87,14 @@ mixed-snapshot results fail before publication.
 
 Because GitHub does not emit a pull-request `synchronize` event when only the default target branch
 advances, the companion `scopeproof-base-advance.yml` runs on trusted default-branch pushes. It
-enumerates open PRs targeting the new default-base SHA, limits work to labeled same-repository PRs,
-and updates only an existing trusted exact-head Check to neutral Needs Review. It never analyzes a
-PR or checks out its head. Non-default target branches are not covered by this automatic revocation
-workflow.
+enumerates up to 500 open PRs targeting the new default-base SHA, then makes one bounded overflow
+sentinel request before any write. Exactly 500 PRs remain valid when that sentinel is empty; a
+nonempty sentinel fails closed. Deleted-fork records are skipped, and work remains limited to
+labeled same-repository PRs. Each eligible PR is attempted independently so one failed revocation
+does not prevent later revocations; any failed PR numbers produce a final nonzero result. The
+publisher updates only an existing trusted exact-head Check to neutral Needs Review. It never
+analyzes a PR or checks out its head. Non-default target branches are not covered by this automatic
+revocation workflow.
 
 If the checked-in confirmed requirements bytes change, maintainers must remove
 `scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label
@@ -107,7 +111,7 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`2330e17f70bd2ba273f7eab0eea95066aae487d8`, the immutable source-candidate commit
+`57ded8d0ec20fcaf6a011f4fede0131ad35bff23`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
 withdrawal for conflicted PRs, repository-identity fork classification, and isolated base-SHA-only
