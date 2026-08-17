@@ -70,7 +70,7 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`92f5c5a5767135f5df6596c25327a0c8da010605`, the immutable source-candidate commit
+`bad9f38cccba28fb9f29c94c1759221c801b857a`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, and unprivileged
 base-SHA-only workflow used by this example. It remains a source-candidate installation; it is
