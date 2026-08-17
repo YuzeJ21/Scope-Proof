@@ -25,6 +25,14 @@ from scopeproof_core.github_action import (
 _API_BASE_URL = "https://api.github.com"
 _MAX_CHECK_PAGES = 5
 _PER_PAGE = 100
+_WITHDRAWAL_NOTICE = (
+    "The `scopeproof-review` label was removed for this exact pull-request head. "
+    "Applicability and any Ready display are revoked."
+)
+_UNAVAILABILITY_NOTICE = (
+    "The checked-in requirements confirmation is unavailable or does not match for this "
+    "exact pull-request head. Any prior Ready display is revoked."
+)
 
 
 class GitHubCheckPublicationError(RuntimeError):
@@ -260,7 +268,7 @@ def _validate_write_response(
         raise GitHubCheckPublicationError("published check run identity mismatch")
 
 
-def _withdrawal_skip_plan(context: EventContext, reason: str) -> CheckRunPlan:
+def _existing_check_skip_plan(context: EventContext, reason: str) -> CheckRunPlan:
     """Return a validated no-write plan for an inapplicable exact-head Check."""
 
     return CheckRunPlan(
@@ -272,23 +280,56 @@ def _withdrawal_skip_plan(context: EventContext, reason: str) -> CheckRunPlan:
         output=CheckRunOutput(
             title="ScopeProof — Needs Review (informational)",
             summary="ScopeProof applicability is not confirmed for this exact pull-request head.",
-            text="No trusted exact-head ScopeProof Check was available to withdraw.",
+            text="No trusted exact-head ScopeProof Check was available to update.",
         ),
     )
 
 
-def publish_check_withdrawal(
+def _needs_review_output(detail: _CheckRunDetailResponse, notice: str) -> CheckRunOutput:
+    """Preserve validated detail and make state-transition summaries canonical."""
+
+    base_summary = detail.output.summary
+    prior_notices = (_WITHDRAWAL_NOTICE, _UNAVAILABILITY_NOTICE)
+    changed = True
+    while changed:
+        changed = False
+        for prior_notice in prior_notices:
+            if base_summary == prior_notice:
+                base_summary = ""
+                changed = True
+                break
+            prefix = f"{prior_notice} "
+            if base_summary.startswith(prefix):
+                base_summary = base_summary[len(prefix) :]
+                changed = True
+                break
+    summary = f"{notice} {base_summary}" if base_summary else notice
+    if len(summary) > 65_535:
+        summary = notice
+    return CheckRunOutput(
+        title="ScopeProof — Needs Review (informational)",
+        summary=summary,
+        text=detail.output.text,
+    )
+
+
+def _publish_existing_check_needs_review(
     context: EventContext,
     token: str,
-    transport: httpx.BaseTransport | None = None,
+    transport: httpx.BaseTransport | None,
+    *,
+    applicability_label_expected: bool,
+    require_open: bool,
+    reason: str,
+    notice: str,
 ) -> CheckRunPlan:
-    """Withdraw applicability from one existing trusted exact-head Check."""
+    """Update only one existing trusted exact-head Check to Needs Review."""
 
     if context.is_fork:
-        return _withdrawal_skip_plan(context, "fork_pull_request")
+        return _existing_check_skip_plan(context, "fork_pull_request")
     checked_token = token.strip()
     if not checked_token:
-        return _withdrawal_skip_plan(context, "missing_token")
+        return _existing_check_skip_plan(context, "missing_token")
 
     headers = {
         "Accept": "application/vnd.github+json",
@@ -309,8 +350,8 @@ def publish_check_withdrawal(
             _validate_live_pull(
                 context,
                 pull,
-                applicability_label_expected=False,
-                require_open=False,
+                applicability_label_expected=applicability_label_expected,
+                require_open=require_open,
             )
 
             expected_external_id = check_external_id(context)
@@ -325,7 +366,7 @@ def publish_check_withdrawal(
             if len(matches) > 1:
                 raise GitHubCheckPublicationError("multiple trusted exact-head checks")
             if not matches:
-                return _withdrawal_skip_plan(context, "no_exact_head_check")
+                return _existing_check_skip_plan(context, "no_exact_head_check")
 
             existing = matches[0]
             detail_response = client.get(
@@ -337,21 +378,10 @@ def publish_check_withdrawal(
             if validated_detail != existing:
                 raise GitHubCheckPublicationError("check run detail identity mismatch")
 
-            withdrawal_summary = (
-                "The `scopeproof-review` label was removed for this exact pull-request "
-                "head. Applicability and any Ready display are revoked."
-            )
-            summary = f"{withdrawal_summary} {detail.output.summary}"
-            if len(summary) > 65_535:
-                summary = withdrawal_summary
-            output = CheckRunOutput(
-                title="ScopeProof — Needs Review (informational)",
-                summary=summary,
-                text=detail.output.text,
-            )
+            output = _needs_review_output(detail, notice)
             plan = CheckRunPlan(
                 mode=CheckMode.UPDATE,
-                reason="applicability_label_removed",
+                reason=reason,
                 external_id=expected_external_id,
                 head_sha=context.head_sha,
                 conclusion="neutral",
@@ -374,7 +404,43 @@ def publish_check_withdrawal(
     except GitHubCheckPublicationError:
         raise
     except (httpx.HTTPError, ValidationError, ValueError) as exc:
-        raise GitHubCheckPublicationError("GitHub Check withdrawal failed closed") from exc
+        raise GitHubCheckPublicationError("GitHub Check update failed closed") from exc
+
+
+def publish_check_withdrawal(
+    context: EventContext,
+    token: str,
+    transport: httpx.BaseTransport | None = None,
+) -> CheckRunPlan:
+    """Withdraw applicability from one existing trusted exact-head Check."""
+
+    return _publish_existing_check_needs_review(
+        context,
+        token,
+        transport,
+        applicability_label_expected=False,
+        require_open=False,
+        reason="applicability_label_removed",
+        notice=_WITHDRAWAL_NOTICE,
+    )
+
+
+def publish_check_unavailability(
+    context: EventContext,
+    token: str,
+    transport: httpx.BaseTransport | None = None,
+) -> CheckRunPlan:
+    """Revoke an existing display when exact criteria confirmation is unavailable."""
+
+    return _publish_existing_check_needs_review(
+        context,
+        token,
+        transport,
+        applicability_label_expected=True,
+        require_open=True,
+        reason="requirements_confirmation_unavailable",
+        notice=_UNAVAILABILITY_NOTICE,
+    )
 
 
 def publish_check(

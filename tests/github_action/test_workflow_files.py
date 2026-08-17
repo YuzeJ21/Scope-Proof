@@ -108,13 +108,10 @@ def test_trusted_base_workflows_pass_validated_confirmation_into_review() -> Non
     ):
         workflow = path.read_text(encoding="utf-8")
         review_command = workflow.split("scopeproof review --pr", maxsplit=1)[1].split(
-            "> \"$RUNNER_TEMP/scopeproof-result.json\"", maxsplit=1
+            '> "$RUNNER_TEMP/scopeproof-result.json"', maxsplit=1
         )[0]
         assert "--requirements .scopeproof/requirements.txt" in review_command
-        assert (
-            "--confirmation .scopeproof/requirements-confirmation.json"
-            in review_command
-        )
+        assert "--confirmation .scopeproof/requirements-confirmation.json" in review_command
         assert workflow.index("validate-requirements-confirmation") < workflow.index(
             "scopeproof review --pr"
         )
@@ -143,9 +140,7 @@ def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
     examples = (
         Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8"),
-        Path("examples/github-actions/scopeproof-withdraw.yml").read_text(
-            encoding="utf-8"
-        ),
+        Path("examples/github-actions/scopeproof-withdraw.yml").read_text(encoding="utf-8"),
     )
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
     reviewed_revision = "b0f500405c2f90377989e1869c78356de1971ca2"
@@ -153,16 +148,13 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
     for example in examples:
         assert "pip install scopeproof" not in example
         assert (
-            "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@"
-            f"{reviewed_revision}"
+            f"scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@{reviewed_revision}"
         ) in example
     assert reviewed_revision in guide
 
 
 def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
-    example = Path("examples/github-actions/scopeproof.yml").read_text(
-        encoding="utf-8"
-    )
+    example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
     install = re.search(
         r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
         example,
@@ -237,9 +229,7 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
         text=True,
     ).stdout
 
-    assert re.search(
-        r'review\.add_argument\(\s*"--confirmation",\s*required=True', cli_at_pin
-    )
+    assert re.search(r'review\.add_argument\(\s*"--confirmation",\s*required=True', cli_at_pin)
     assert "validate_requirements_confirmation" in cli_at_pin
     assert "prepare-requirements-confirmation" in cli_at_pin
     assert "CriteriaSourceProvenance.model_validate_json" in confirmation_at_pin
@@ -264,12 +254,12 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
 
 def test_ci_checkouts_include_history_for_source_pin_contract() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    python_313_compatibility = workflow.split(
-        "  compatibility-python-313:", maxsplit=1
-    )[1].split("\n  compatibility-windows:", maxsplit=1)[0]
-    windows_compatibility = workflow.split(
-        "  compatibility-windows:", maxsplit=1
-    )[1].split("\n  locked-environment:", maxsplit=1)[0]
+    python_313_compatibility = workflow.split("  compatibility-python-313:", maxsplit=1)[1].split(
+        "\n  compatibility-windows:", maxsplit=1
+    )[0]
+    windows_compatibility = workflow.split("  compatibility-windows:", maxsplit=1)[1].split(
+        "\n  locked-environment:", maxsplit=1
+    )[0]
 
     assert workflow.count("fetch-depth: 0") == 5
     assert "fetch-depth: 0" in python_313_compatibility
@@ -310,15 +300,16 @@ def test_publish_step_has_no_orphaned_shell_branch_terminator() -> None:
 
     assert "--publish-comment" not in workflow
     assert "--publish-check" in workflow
+    assert "--invalidate-check" in workflow
     assert "scopeproof review --pr" in workflow
-    assert "scopeproof export \"$review_id\"" in workflow
+    assert 'scopeproof export "$review_id"' in workflow
     assert "validate-requirements-confirmation" in workflow
     assert "SCOPEPROOF_REQUIREMENTS_CONFIRMED=true" in workflow
-    assert "--content-file \"$RUNNER_TEMP/scopeproof-report.md\"" in workflow
+    assert '--content-file "$RUNNER_TEMP/scopeproof-report.md"' in workflow
     assert "actions/upload-artifact@" in workflow
     assert "scopeproof-report.md" in workflow
     assert "if-no-files-found: ignore" in workflow
-    assert "--verdict \"$SCOPEPROOF_VERDICT\"" in workflow
+    assert '--verdict "$SCOPEPROOF_VERDICT"' in workflow
     assert 'echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"' in workflow
 
 
@@ -331,15 +322,18 @@ def test_workflows_publish_only_exact_file_bound_neutral_checks() -> None:
         checkout = workflow.split("- uses: actions/checkout@", maxsplit=1)[1].split(
             "- uses: actions/setup-python@", maxsplit=1
         )[0]
-        publish = workflow.split(
-            "Publish exact-head informational Check", maxsplit=1
-        )[1].split("- name: Publication boundary", maxsplit=1)[0]
+        publish = workflow.split("Publish exact-head informational Check", maxsplit=1)[1].split(
+            "- name: Publication boundary", maxsplit=1
+        )[0]
 
         assert "--requirements .scopeproof/requirements.txt" in publish
         assert "--confirmation .scopeproof/requirements-confirmation.json" in publish
         assert '--verdict "$SCOPEPROOF_VERDICT"' in publish
         assert '--content-file "$RUNNER_TEMP/scopeproof-report.md"' in publish
         assert "--publish-check" in publish
+        assert "--invalidate-check" in publish
+        assert 'if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" = "true" ]; then' in publish
+        assert "requirements confirmation is unavailable or does not match" not in publish
         assert "--publish-comment" not in workflow
         assert "pull_request_target" not in workflow
         assert "pull_request.head.sha" not in checkout
@@ -435,9 +429,7 @@ def test_action_guidance_requires_fresh_applicability_review_after_byte_changes(
 def test_action_guidance_defines_exact_head_neutral_check_lifecycle() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    runbook = Path("docs/github-action-external-validation.md").read_text(
-        encoding="utf-8"
-    )
+    runbook = Path("docs/github-action-external-validation.md").read_text(encoding="utf-8")
     combined = " ".join((readme, guide, runbook))
     normalized_guide = " ".join(guide.split())
 

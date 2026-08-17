@@ -16,6 +16,7 @@ from scopeproof_core.github_action import (
 from scopeproof_core.github_action_publisher import (
     GitHubCheckPublicationError,
     publish_check,
+    publish_check_unavailability,
     publish_check_withdrawal,
     publish_comment,
 )
@@ -257,6 +258,57 @@ def test_withdrawal_preserves_maximum_length_prior_report_without_truncation() -
     plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
 
     assert plan.output.text == prior_text
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+
+
+def test_withdrawal_rerun_keeps_canonical_summary() -> None:
+    requests: list[httpx.Request] = []
+    withdrawn = (
+        "The `scopeproof-review` label was removed for this exact pull-request head. "
+        "Applicability and any Ready display are revoked. ScopeProof evidence boundary"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response(applicability_label=False))
+        if request.method == "GET" and request.url.path.endswith("/check-runs/7"):
+            detail = check_detail_response()
+            detail["output"]["summary"] = withdrawn
+            return httpx.Response(200, json=detail)
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list(check_response()))
+        payload = json.loads(request.content)
+        assert payload["output"]["summary"] == withdrawn
+        return httpx.Response(200, json=check_response())
+
+    plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
+
+    assert plan.output.summary == withdrawn
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+
+
+def test_missing_confirmation_revokes_existing_ready_display() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response(applicability_label=True))
+        if request.method == "GET" and request.url.path.endswith("/check-runs/7"):
+            return httpx.Response(200, json=check_detail_response())
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list(check_response()))
+        payload = json.loads(request.content)
+        assert payload["output"]["title"] == "ScopeProof — Needs Review (informational)"
+        assert "confirmation is unavailable" in payload["output"]["summary"]
+        assert "Confirmed criteria source" in payload["output"]["text"]
+        return httpx.Response(200, json=check_response())
+
+    plan = publish_check_unavailability(context(), "secret", httpx.MockTransport(handler))
+
+    assert plan.mode is CheckMode.UPDATE
+    assert plan.reason == "requirements_confirmation_unavailable"
     assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
 
 

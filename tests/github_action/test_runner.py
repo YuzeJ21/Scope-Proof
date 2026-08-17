@@ -14,6 +14,7 @@ from scopeproof_core.github_action_runner import (
     build_event_plan,
     main,
     publish_event_check,
+    publish_event_check_unavailability,
     publish_event_check_withdrawal,
     publish_event_comment,
 )
@@ -193,6 +194,23 @@ def test_withdrawal_runner_routes_exact_event_without_requirements(
     assert calls[0][1] == "token"
 
 
+def test_unavailability_runner_routes_exact_event_without_requirements(
+    tmp_path: Path,
+) -> None:
+    event_path = write_event(tmp_path)
+    calls = []
+
+    def publisher(context, token):
+        calls.append((context, token))
+        return type("Result", (), {"mode": CheckMode.UPDATE})()
+
+    mode = publish_event_check_unavailability(event_path, "token", publisher)
+
+    assert mode is CheckMode.UPDATE
+    assert calls[0][0].head_sha == HEAD_SHA
+    assert calls[0][1] == "token"
+
+
 @pytest.mark.parametrize(("fork", "token"), [(True, "token"), (False, None)])
 def test_withdrawal_runner_skips_fork_or_missing_token(
     tmp_path: Path, fork: bool, token: str | None
@@ -252,6 +270,16 @@ def test_main_withdrawal_path_needs_no_requirements_files(
                 "--withdraw-check",
             ]
         )
+
+
+def test_main_unavailability_path_needs_no_requirements_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    event_path = write_event(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "")
+
+    assert main(["--event-path", str(event_path), "--invalidate-check"]) == 0
+    assert '"check_unavailability_mode": "skip"' in capsys.readouterr().out
 
 
 def test_build_event_plan_is_fork_safe_and_needs_review_without_requirements(
