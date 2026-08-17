@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install ScopeProof
-        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@8061b0c830b6301d3e6e8f54d047b003c402b60c"
+        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@fc5fd1c3ac9b549a1270dd6d62d1bcfc0c1e5418"
       - name: Review public PR evidence (informational)
         continue-on-error: true
         env:
@@ -120,7 +120,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install ScopeProof
-        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@8061b0c830b6301d3e6e8f54d047b003c402b60c"
+        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@fc5fd1c3ac9b549a1270dd6d62d1bcfc0c1e5418"
       - name: Withdraw exact-head informational Check
         env:
           GITHUB_TOKEN: ${{ github.token }}

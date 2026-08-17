@@ -57,7 +57,8 @@ is not reviewed, not Ready. Keeping the label on the PR allows `synchronize` and
 review later heads under the same checked-in requirements. Removing the label triggers a separate
 base-SHA-only withdrawal job: an existing trusted exact-head Check is updated to neutral Needs
 Review, its prior criteria-bound evidence is retained for audit, and no replacement Check is created
-when no exact identity exists.
+when no exact identity exists. The publisher revalidates the live label state immediately before
+either analysis publication or withdrawal, so delayed runs cannot restore stale applicability.
 
 If the checked-in confirmed requirements bytes change, maintainers must remove
 `scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label
@@ -74,7 +75,7 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`8061b0c830b6301d3e6e8f54d047b003c402b60c`, the immutable source-candidate commit
+`fc5fd1c3ac9b549a1270dd6d62d1bcfc0c1e5418`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
 withdrawal, and unprivileged base-SHA-only workflow used by this example. It remains a source-candidate installation; it is
