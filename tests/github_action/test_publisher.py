@@ -16,6 +16,7 @@ from scopeproof_core.github_action import (
 from scopeproof_core.github_action_publisher import (
     GitHubCheckPublicationError,
     publish_check,
+    publish_check_withdrawal,
     publish_comment,
 )
 from scopeproof_core.reviews.lifecycle import new_review_state
@@ -97,6 +98,20 @@ def check_list(*checks: dict, total_count: int | None = None) -> dict:
     }
 
 
+def check_detail_response(**overrides) -> dict:
+    response = check_response()
+    response["output"] = {
+        "title": "ScopeProof — Ready (informational)",
+        "summary": "ScopeProof evidence boundary",
+        "text": (
+            "## Confirmed criteria source\n\n- Revision: 111\n\n"
+            "## Evidence report\n\nReady evidence"
+        ),
+    }
+    response.update(overrides)
+    return response
+
+
 def assert_safe_request(request: httpx.Request) -> None:
     assert str(request.url).startswith("https://api.github.com/repos/acme/widget/")
     assert request.headers["authorization"] == "Bearer secret"
@@ -115,6 +130,8 @@ def test_check_fork_and_empty_token_make_no_http_requests() -> None:
         is CheckMode.SKIP
     )
     assert publish_check(check_context(), "ready", "Report", "", transport).mode is CheckMode.SKIP
+    assert publish_check_withdrawal(context(fork=True), "secret", transport).mode is CheckMode.SKIP
+    assert publish_check_withdrawal(context(), "", transport).mode is CheckMode.SKIP
 
 
 def test_exact_trusted_check_is_patched_with_neutral_validated_payload() -> None:
@@ -143,6 +160,67 @@ def test_exact_trusted_check_is_patched_with_neutral_validated_payload() -> None
 
     assert plan.mode is CheckMode.UPDATE
     assert [request.method for request in requests] == ["GET", "GET", "PATCH"]
+
+
+def test_label_withdrawal_updates_only_existing_exact_head_check() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert_safe_request(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response())
+        if request.method == "GET" and request.url.path.endswith("/commits") is False:
+            if request.url.path.endswith("/check-runs/7"):
+                return httpx.Response(200, json=check_detail_response())
+            return httpx.Response(200, json=check_list(check_response()))
+        assert request.method == "PATCH"
+        payload = json.loads(request.content)
+        assert payload["conclusion"] == "neutral"
+        assert payload["output"]["title"] == "ScopeProof — Needs Review (informational)"
+        assert "label was removed" in payload["output"]["text"]
+        assert "Confirmed criteria source" in payload["output"]["text"]
+        return httpx.Response(200, json=check_response())
+
+    plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
+
+    assert plan.mode is CheckMode.UPDATE
+    assert plan.reason == "applicability_label_removed"
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+
+
+def test_label_withdrawal_without_exact_check_makes_no_write() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response())
+        return httpx.Response(200, json=check_list())
+
+    plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
+
+    assert plan.mode is CheckMode.SKIP
+    assert plan.reason == "no_exact_head_check"
+    assert [request.method for request in requests] == ["GET", "GET"]
+
+
+def test_label_withdrawal_duplicate_exact_checks_fails_before_mutation() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response())
+        return httpx.Response(
+            200,
+            json=check_list(check_response(), check_response(check_run_id=8)),
+        )
+
+    with pytest.raises(GitHubCheckPublicationError, match="multiple trusted"):
+        publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
+
+    assert [request.method for request in requests] == ["GET", "GET"]
 
 
 @pytest.mark.parametrize(

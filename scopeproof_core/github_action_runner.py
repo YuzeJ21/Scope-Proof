@@ -20,10 +20,15 @@ from scopeproof_core.github_action import (
     plan_comment,
     render_check_summary,
 )
-from scopeproof_core.github_action_publisher import publish_check, publish_comment
+from scopeproof_core.github_action_publisher import (
+    publish_check,
+    publish_check_withdrawal,
+    publish_comment,
+)
 
 Publisher = Callable[[EventContext, str, str], CommentPlan]
 CheckPublisher = Callable[[CheckRunContext, str, str, str], CheckRunPlan]
+WithdrawalPublisher = Callable[[EventContext, str], CheckRunPlan]
 MAX_ACTION_SUMMARY_CHARS = 60_000
 _TRUNCATION_NOTICE = (
     "\n\n> ScopeProof summary truncated; use the workflow artifact/log for full details."
@@ -116,6 +121,19 @@ def publish_event_check(
     return publisher(context, verdict, content, token).mode
 
 
+def publish_event_check_withdrawal(
+    event_path: Path,
+    token: str | None,
+    publisher: WithdrawalPublisher = publish_check_withdrawal,
+) -> CheckMode:
+    """Withdraw only an existing same-repository exact-head Check."""
+
+    context = _event_context(event_path, requirements_confirmed=False)
+    if context.is_fork or not token:
+        return CheckMode.SKIP
+    return publisher(context, token).mode
+
+
 def main(argv: list[str] | None = None) -> int:
     """Emit a plan to stdout and GitHub's step summary, if available."""
 
@@ -126,10 +144,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--requirements", type=Path)
     parser.add_argument("--confirmation", type=Path)
     parser.add_argument("--publish-check", action="store_true")
+    parser.add_argument("--withdraw-check", action="store_true")
     parser.add_argument("--verdict", default="needs_review")
     parser.add_argument("--content", default="Evidence report is available in the workflow logs.")
     parser.add_argument("--content-file", type=Path)
     args = parser.parse_args(argv)
+    if args.publish_check and args.withdraw_check:
+        parser.error("--publish-check and --withdraw-check are mutually exclusive")
     content = args.content_file.read_text(encoding="utf-8") if args.content_file else args.content
 
     plan = build_event_plan(
@@ -162,6 +183,12 @@ def main(argv: list[str] | None = None) -> int:
             os.environ.get("GITHUB_TOKEN"),
         )
         print(json.dumps({"check_mode": mode}, sort_keys=True))
+    if args.withdraw_check:
+        mode = publish_event_check_withdrawal(
+            args.event_path,
+            os.environ.get("GITHUB_TOKEN"),
+        )
+        print(json.dumps({"check_withdrawal_mode": mode}, sort_keys=True))
     return 0
 
 

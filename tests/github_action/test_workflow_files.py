@@ -40,6 +40,24 @@ def test_workflows_serialize_same_pull_request_head_publication() -> None:
         assert "cancel-in-progress: false" in workflow
 
 
+def test_workflows_withdraw_exact_head_check_when_opt_in_label_is_removed() -> None:
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+
+        assert "types: [opened, reopened, synchronize, labeled, unlabeled]" in workflow
+        withdrawal = workflow.split("  withdraw:", maxsplit=1)[1]
+        assert "github.event.action == 'unlabeled'" in withdrawal
+        assert "github.event.label.name == 'scopeproof-review'" in withdrawal
+        assert "--withdraw-check" in withdrawal
+        assert "--publish-check" not in withdrawal
+        assert "scopeproof review --pr" not in withdrawal
+        assert "ref: ${{ github.event.pull_request.base.sha }}" in withdrawal
+        assert "persist-credentials: false" in withdrawal
+
+
 def test_failed_or_empty_export_cannot_publish_a_ready_report() -> None:
     for path in (
         Path(".github/workflows/scopeproof.yml"),
@@ -338,7 +356,7 @@ def test_action_requires_explicit_per_pr_requirements_applicability() -> None:
         Path("examples/github-actions/scopeproof.yml"),
     ):
         workflow = path.read_text(encoding="utf-8")
-        assert "types: [opened, reopened, synchronize, labeled]" in workflow
+        assert "types: [opened, reopened, synchronize, labeled, unlabeled]" in workflow
         assert re.search(
             r"(?m)^jobs:\n"
             r"  review:\n"

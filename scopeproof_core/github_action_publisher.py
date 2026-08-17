@@ -16,6 +16,7 @@ from scopeproof_core.github_action import (
     CommentPlan,
     EventContext,
     ExistingCheckRun,
+    check_external_id,
     plan_check,
     plan_comment,
     render_informational_check,
@@ -78,6 +79,18 @@ class _CheckRunResponse(BaseModel):
     app: _CheckAppResponse
 
 
+class _CheckOutputResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    title: str = Field(min_length=1, max_length=255)
+    summary: str = Field(min_length=1, max_length=65_535)
+    text: str = Field(min_length=1, max_length=65_535)
+
+
+class _CheckRunDetailResponse(_CheckRunResponse):
+    output: _CheckOutputResponse
+
+
 class _CheckListResponse(BaseModel):
     model_config = ConfigDict(extra="ignore", strict=True)
 
@@ -132,7 +145,9 @@ def _skipped_check_plan(
     )
 
 
-def _validate_live_pull(context: CheckRunContext, pull: _PullResponse) -> None:
+def _validate_live_pull(
+    context: CheckRunContext | EventContext, pull: _PullResponse
+) -> None:
     """Require the live public PR to match every trusted immutable identity."""
 
     expected_api_url = f"{_API_BASE_URL}/repos/{context.repository}/pulls/{context.pr_number}"
@@ -151,7 +166,7 @@ def _validate_live_pull(context: CheckRunContext, pull: _PullResponse) -> None:
 
 
 def _validated_existing_check(
-    context: CheckRunContext, response: _CheckRunResponse
+    context: CheckRunContext | EventContext, response: _CheckRunResponse
 ) -> ExistingCheckRun:
     """Validate the repository-scoped URL before exposing a check to the planner."""
 
@@ -167,7 +182,9 @@ def _validated_existing_check(
     )
 
 
-def _read_existing_checks(client: httpx.Client, context: CheckRunContext) -> list[ExistingCheckRun]:
+def _read_existing_checks(
+    client: httpx.Client, context: CheckRunContext | EventContext
+) -> list[ExistingCheckRun]:
     """Read at most five locally constructed pages without following Link URLs."""
 
     existing: list[ExistingCheckRun] = []
@@ -206,7 +223,7 @@ def _request_output(output: CheckRunOutput) -> _CheckOutputRequest:
 
 
 def _validate_write_response(
-    context: CheckRunContext,
+    context: CheckRunContext | EventContext,
     plan: CheckRunPlan,
     response: httpx.Response,
 ) -> None:
@@ -223,6 +240,121 @@ def _validate_write_response(
         or (plan.mode is CheckMode.UPDATE and created.id != plan.check_run_id)
     ):
         raise GitHubCheckPublicationError("published check run identity mismatch")
+
+
+def _withdrawal_skip_plan(context: EventContext, reason: str) -> CheckRunPlan:
+    """Return a validated no-write plan for an inapplicable exact-head Check."""
+
+    return CheckRunPlan(
+        mode=CheckMode.SKIP,
+        reason=reason,
+        external_id=check_external_id(context),
+        head_sha=context.head_sha,
+        conclusion="neutral",
+        output=CheckRunOutput(
+            title="ScopeProof — Needs Review (informational)",
+            summary="ScopeProof applicability is not confirmed for this exact pull-request head.",
+            text="No trusted exact-head ScopeProof Check was available to withdraw.",
+        ),
+    )
+
+
+def publish_check_withdrawal(
+    context: EventContext,
+    token: str,
+    transport: httpx.BaseTransport | None = None,
+) -> CheckRunPlan:
+    """Withdraw applicability from one existing trusted exact-head Check."""
+
+    if context.is_fork:
+        return _withdrawal_skip_plan(context, "fork_pull_request")
+    checked_token = token.strip()
+    if not checked_token:
+        return _withdrawal_skip_plan(context, "missing_token")
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {checked_token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        with httpx.Client(
+            base_url=_API_BASE_URL,
+            headers=headers,
+            transport=transport,
+            timeout=15.0,
+            follow_redirects=False,
+        ) as client:
+            pull_response = client.get(
+                f"/repos/{context.repository}/pulls/{context.pr_number}"
+            )
+            pull_response.raise_for_status()
+            pull = _PullResponse.model_validate(pull_response.json())
+            _validate_live_pull(context, pull)
+
+            expected_external_id = check_external_id(context)
+            matches = [
+                check
+                for check in _read_existing_checks(client, context)
+                if check.name == CHECK_NAME
+                and check.head_sha == context.head_sha
+                and check.external_id == expected_external_id
+                and check.app_slug == "github-actions"
+            ]
+            if len(matches) > 1:
+                raise GitHubCheckPublicationError("multiple trusted exact-head checks")
+            if not matches:
+                return _withdrawal_skip_plan(context, "no_exact_head_check")
+
+            existing = matches[0]
+            detail_response = client.get(
+                f"/repos/{context.repository}/check-runs/{existing.check_run_id}"
+            )
+            detail_response.raise_for_status()
+            detail = _CheckRunDetailResponse.model_validate(detail_response.json())
+            validated_detail = _validated_existing_check(context, detail)
+            if validated_detail != existing:
+                raise GitHubCheckPublicationError("check run detail identity mismatch")
+
+            notice = (
+                "## Applicability withdrawn\n\n"
+                "The `scopeproof-review` label was removed for this exact pull-request "
+                "head. The prior evidence is retained below for audit only; applicability "
+                "and any Ready display are revoked.\n\n"
+            )
+            prior_text = detail.output.text
+            text = prior_text if prior_text.startswith(notice) else notice + prior_text
+            output = CheckRunOutput(
+                title="ScopeProof — Needs Review (informational)",
+                summary=detail.output.summary,
+                text=text[:65_535],
+            )
+            plan = CheckRunPlan(
+                mode=CheckMode.UPDATE,
+                reason="applicability_label_removed",
+                external_id=expected_external_id,
+                head_sha=context.head_sha,
+                conclusion="neutral",
+                output=output,
+                check_run_id=existing.check_run_id,
+            )
+            request = _UpdateCheckRequest(
+                name=plan.name,
+                external_id=plan.external_id,
+                status="completed",
+                conclusion="neutral",
+                output=_request_output(plan.output),
+            )
+            write_response = client.patch(
+                f"/repos/{context.repository}/check-runs/{plan.check_run_id}",
+                json=request.model_dump(mode="json"),
+            )
+            _validate_write_response(context, plan, write_response)
+            return plan
+    except GitHubCheckPublicationError:
+        raise
+    except (httpx.HTTPError, ValidationError, ValueError) as exc:
+        raise GitHubCheckPublicationError("GitHub Check withdrawal failed closed") from exc
 
 
 def publish_check(

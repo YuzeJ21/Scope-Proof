@@ -138,7 +138,7 @@ def comment_marker(head_sha: str) -> str:
     return f"<!-- scopeproof:{head_sha} -->"
 
 
-def check_external_id(context: CheckRunContext) -> str:
+def check_external_id(context: CheckRunContext | EventContext) -> str:
     """Return the stable identity for one repository, PR, and immutable head."""
 
     return (

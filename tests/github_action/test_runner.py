@@ -14,6 +14,7 @@ from scopeproof_core.github_action_runner import (
     build_event_plan,
     main,
     publish_event_check,
+    publish_event_check_withdrawal,
     publish_event_comment,
 )
 from scopeproof_core.schemas.models import Criterion
@@ -140,6 +141,35 @@ def test_check_runner_skips_fork_or_missing_token_without_publication(
     )
 
 
+def test_withdrawal_runner_routes_exact_event_without_requirements(
+    tmp_path: Path,
+) -> None:
+    event_path = write_event(tmp_path)
+    calls = []
+
+    def publisher(context, token):
+        calls.append((context, token))
+        return type("Result", (), {"mode": CheckMode.UPDATE})()
+
+    mode = publish_event_check_withdrawal(event_path, "token", publisher)
+
+    assert mode is CheckMode.UPDATE
+    assert calls[0][0].head_sha == HEAD_SHA
+    assert calls[0][1] == "token"
+
+
+@pytest.mark.parametrize(("fork", "token"), [(True, "token"), (False, None)])
+def test_withdrawal_runner_skips_fork_or_missing_token(
+    tmp_path: Path, fork: bool, token: str | None
+) -> None:
+    event_path = write_event(tmp_path, fork=fork)
+
+    def unexpected(*args):
+        raise AssertionError(f"withdrawal publisher must not be called: {args}")
+
+    assert publish_event_check_withdrawal(event_path, token, unexpected) is CheckMode.SKIP
+
+
 def test_main_check_path_requires_exact_confirmation_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
@@ -167,6 +197,26 @@ def test_main_check_path_requires_exact_confirmation_files(
 
     with pytest.raises(SystemExit):
         main(["--event-path", str(event_path), "--publish-check"])
+
+
+def test_main_withdrawal_path_needs_no_requirements_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    event_path = write_event(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "")
+
+    assert main(["--event-path", str(event_path), "--withdraw-check"]) == 0
+    assert '"check_withdrawal_mode": "skip"' in capsys.readouterr().out
+
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--event-path",
+                str(event_path),
+                "--publish-check",
+                "--withdraw-check",
+            ]
+        )
 
 
 def test_build_event_plan_is_fork_safe_and_needs_review_without_requirements(
