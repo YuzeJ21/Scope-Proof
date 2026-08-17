@@ -58,9 +58,11 @@ states that:
 
 The validated criteria-source URI, revision or `Not provided`, source-text SHA-256, and ordered
 normalized-criteria SHA-256 are rendered into the detail text. The report follows these fixed
-boundaries and is truncated to the GitHub Check output limit without removing the boundary or
-provenance section. The conclusion remains `neutral` for Ready, Conditional, Blocked, Needs Review,
-and error-adjacent report content. No conclusion means correctness or acceptance.
+boundaries when it fits the GitHub Check output limit. If the full report would exceed that limit,
+the report is omitted rather than sliced, the title becomes Needs Review, and the detail explicitly
+states that no criterion verdict from the omitted report is displayed. The conclusion remains
+`neutral` for Ready, Conditional, Blocked, Needs Review, and error-adjacent report content. No
+conclusion means correctness or acceptance.
 
 ### GitHub transport
 
