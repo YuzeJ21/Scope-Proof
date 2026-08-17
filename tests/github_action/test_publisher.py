@@ -165,6 +165,25 @@ def test_exact_trusted_check_is_patched_with_neutral_validated_payload() -> None
     assert [request.method for request in requests] == ["GET", "GET", "PATCH"]
 
 
+def test_fork_hosted_repository_same_repository_pr_can_publish() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            return httpx.Response(200, json=pull_response(fork=True))
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list())
+        return httpx.Response(201, json=check_response(check_run_id=8))
+
+    plan = publish_check(
+        check_context(), "ready", "Report", "secret", httpx.MockTransport(handler)
+    )
+
+    assert plan.mode is CheckMode.CREATE
+    assert [request.method for request in requests] == ["GET", "GET", "POST"]
+
+
 def test_label_withdrawal_updates_only_existing_exact_head_check() -> None:
     requests: list[httpx.Request] = []
 
@@ -295,7 +314,6 @@ def test_changed_or_foreign_check_posts_new_exact_head_check(existing: dict) -> 
         (("html_url",), "https://github.com/acme/widget/pull/99"),
         (("head", "sha"), OTHER_SHA),
         (("head", "repo", "full_name"), "acme/other"),
-        (("head", "repo", "fork"), True),
         (("base", "repo", "full_name"), "acme/other"),
     ],
 )

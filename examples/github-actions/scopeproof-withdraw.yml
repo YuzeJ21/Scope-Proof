@@ -1,0 +1,38 @@
+name: ScopeProof withdrawal
+
+on:
+  pull_request_target:
+    types: [unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+concurrency:
+  group: scopeproof-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+
+jobs:
+  withdraw:
+    if: github.event.action == 'unlabeled' && github.event.label.name == 'scopeproof-review' && github.event.pull_request.head.repo.full_name == github.repository
+    name: Withdraw ScopeProof applicability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+      - name: Install ScopeProof
+        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@fc5fd1c3ac9b549a1270dd6d62d1bcfc0c1e5418"
+      - name: Withdraw exact-head informational Check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m scopeproof_core.github_action_runner \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --withdraw-check \
+            --content "The scopeproof-review label was removed; applicability is withdrawn."

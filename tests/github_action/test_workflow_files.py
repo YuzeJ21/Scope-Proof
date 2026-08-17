@@ -42,20 +42,32 @@ def test_workflows_serialize_same_pull_request_head_publication() -> None:
 
 def test_workflows_withdraw_exact_head_check_when_opt_in_label_is_removed() -> None:
     for path in (
-        Path(".github/workflows/scopeproof.yml"),
-        Path("examples/github-actions/scopeproof.yml"),
+        Path(".github/workflows/scopeproof-withdraw.yml"),
+        Path("examples/github-actions/scopeproof-withdraw.yml"),
     ):
         workflow = path.read_text(encoding="utf-8")
 
-        assert "types: [opened, reopened, synchronize, labeled, unlabeled]" in workflow
-        withdrawal = workflow.split("  withdraw:", maxsplit=1)[1]
+        assert "pull_request_target:" in workflow
+        assert "types: [unlabeled]" in workflow
+        withdrawal = workflow.split("jobs:\n  withdraw:", maxsplit=1)[1]
         assert "github.event.action == 'unlabeled'" in withdrawal
         assert "github.event.label.name == 'scopeproof-review'" in withdrawal
+        assert "github.event.pull_request.head.repo.full_name == github.repository" in withdrawal
         assert "--withdraw-check" in withdrawal
         assert "--publish-check" not in withdrawal
         assert "scopeproof review --pr" not in withdrawal
         assert "ref: ${{ github.event.pull_request.base.sha }}" in withdrawal
         assert "persist-credentials: false" in withdrawal
+
+    for path in (
+        Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+        assert "pull_request_target:" not in workflow
+        assert "  withdraw:" not in workflow
+        assert "pull_request.head.repo.fork" not in workflow
+        assert "github.event.pull_request.head.repo.full_name == github.repository" in workflow
 
 
 def test_failed_or_empty_export_cannot_publish_a_ready_report() -> None:
@@ -324,7 +336,9 @@ def test_all_third_party_actions_are_pinned_to_immutable_commit_shas() -> None:
     workflow_paths = (
         Path(".github/workflows/ci.yml"),
         Path(".github/workflows/scopeproof.yml"),
+        Path(".github/workflows/scopeproof-withdraw.yml"),
         Path("examples/github-actions/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof-withdraw.yml"),
     )
 
     for path in workflow_paths:
@@ -359,7 +373,7 @@ def test_action_requires_explicit_per_pr_requirements_applicability() -> None:
         Path("examples/github-actions/scopeproof.yml"),
     ):
         workflow = path.read_text(encoding="utf-8")
-        assert "types: [opened, reopened, synchronize, labeled, unlabeled]" in workflow
+        assert "types: [opened, reopened, synchronize, labeled]" in workflow
         assert re.search(
             r"(?m)^jobs:\n"
             r"  review:\n"

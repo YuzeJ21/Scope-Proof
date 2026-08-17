@@ -169,7 +169,6 @@ def _validate_live_pull(
         or pull.html_url != expected_html_url
         or pull.head.sha != context.head_sha
         or pull.head.repo.full_name != context.repository
-        or pull.head.repo.fork is not False
         or pull.base.repo.full_name != context.repository
     ):
         raise GitHubCheckPublicationError("live pull request identity mismatch")

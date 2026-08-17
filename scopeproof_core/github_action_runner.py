@@ -39,11 +39,12 @@ def _event_context(event_path: Path, requirements_confirmed: bool) -> EventConte
     payload = json.loads(event_path.read_text(encoding="utf-8"))
     pull_request = payload["pull_request"]
     head = pull_request["head"]
+    repository = payload["repository"]["full_name"]
     return EventContext(
-        repository=payload["repository"]["full_name"],
+        repository=repository,
         pr_number=pull_request["number"],
         head_sha=head["sha"],
-        is_fork=bool(head.get("repo", {}).get("fork", False)),
+        is_fork=head["repo"]["full_name"] != repository,
         requirements_confirmed=requirements_confirmed,
     )
 
