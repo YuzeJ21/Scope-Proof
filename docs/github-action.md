@@ -76,6 +76,11 @@ Check to neutral Needs Review, preserves the prior validated detail, and creates
 no prior exact identity exists. Repeated revocation runs canonicalize the summary and converge
 rather than appending duplicate notices.
 
+Every write also binds the event's immutable base SHA as well as its head SHA. The live PR base and
+head must still match immediately before publication. The review command emits both identities,
+and the workflow validates them against the event before it accepts a verdict or exports a report;
+mixed-snapshot results fail before publication.
+
 If the checked-in confirmed requirements bytes change, maintainers must remove
 `scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label
 before another ScopeProof review. This is an operator requirement: the workflow checks the current
@@ -91,7 +96,7 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`638414a6f6ea359cff1a794f9c9aeccd1b892de8`, the immutable source-candidate commit
+`fd9308a6e94800f84bcdc41260f527fc030e0e94`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
 withdrawal for conflicted PRs, repository-identity fork classification, and isolated base-SHA-only

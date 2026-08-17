@@ -79,6 +79,11 @@ the revocation notice in the bounded summary, so it cannot truncate retained cri
 The same existing-Check-only path revokes a prior display when checked-in criteria confirmation is
 missing or mismatched while the opt-in label remains present. State-transition notices are
 canonicalized before each write, so reruns converge and never grow the summary.
+The event context also carries the immutable base SHA. The publisher requires both the live base
+and live head to match the event, and the workflow validates both identities in review-command
+output before retaining its verdict or exporting its report. A base-advance or force-push race
+therefore fails closed instead of combining criteria, analysis, and publication from different
+snapshots.
 
 It then reads only
 `/repos/{repository}/commits/{head_sha}/check-runs` with the exact informational check name,
