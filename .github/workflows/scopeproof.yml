@@ -52,8 +52,10 @@ jobs:
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
             python -m uv run --frozen python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
             review_id=$(python -m uv run --frozen python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
-            if python -m uv run --frozen scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.tmp.md" && [ -s "$RUNNER_TEMP/scopeproof-report.tmp.md" ]; then
-              mv "$RUNNER_TEMP/scopeproof-report.tmp.md" "$RUNNER_TEMP/scopeproof-report.md"
+            if python -m uv run --frozen scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.tmp.md" &&
+              [ -s "$RUNNER_TEMP/scopeproof-report.tmp.md" ] &&
+              mv "$RUNNER_TEMP/scopeproof-report.tmp.md" "$RUNNER_TEMP/scopeproof-report.md"; then
+              :
             else
               echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
               exit 1

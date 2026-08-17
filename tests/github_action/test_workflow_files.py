@@ -48,12 +48,13 @@ def test_failed_or_empty_export_cannot_publish_a_ready_report() -> None:
         workflow = path.read_text(encoding="utf-8")
 
         assert (
-            'scopeproof-report.tmp.md" && '
-            '[ -s "$RUNNER_TEMP/scopeproof-report.tmp.md" ]'
+            'scopeproof-report.tmp.md" &&\n'
+            '              [ -s "$RUNNER_TEMP/scopeproof-report.tmp.md" ]'
         ) in workflow
         assert (
-            'mv "$RUNNER_TEMP/scopeproof-report.tmp.md" '
-            '"$RUNNER_TEMP/scopeproof-report.md"'
+            '[ -s "$RUNNER_TEMP/scopeproof-report.tmp.md" ] &&\n'
+            '              mv "$RUNNER_TEMP/scopeproof-report.tmp.md" '
+            '"$RUNNER_TEMP/scopeproof-report.md"; then'
         ) in workflow
         assert 'echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"' in workflow
         assert workflow.count('if [ -s "$RUNNER_TEMP/scopeproof-report.md" ]; then') == 2

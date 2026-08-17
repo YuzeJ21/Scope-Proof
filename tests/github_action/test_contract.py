@@ -149,6 +149,12 @@ def test_unknown_verdict_fails_closed_to_needs_review_title() -> None:
     assert output.title == "ScopeProof — Needs Review (informational)"
 
 
+def test_conditional_verdict_has_an_exact_informational_title() -> None:
+    output = render_informational_check(check_context(), "conditional", "Report")
+
+    assert output.title == "ScopeProof — Conditional (informational)"
+
+
 @pytest.mark.parametrize(
     ("model", "payload"),
     [

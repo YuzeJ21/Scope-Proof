@@ -151,6 +151,7 @@ def _informational_verdict(verdict: str) -> str:
 
     return {
         "ready": "Ready",
+        "conditional": "Conditional",
         "blocked": "Blocked",
         "needs_review": "Needs Review",
     }.get(verdict, "Needs Review")
