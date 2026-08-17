@@ -143,7 +143,7 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
         Path("examples/github-actions/scopeproof-withdraw.yml").read_text(encoding="utf-8"),
     )
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "b0f500405c2f90377989e1869c78356de1971ca2"
+    reviewed_revision = "638414a6f6ea359cff1a794f9c9aeccd1b892de8"
 
     for example in examples:
         assert "pip install scopeproof" not in example
@@ -237,6 +237,7 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
     assert "class ReviewInputOrigin" in models_at_pin
     assert "LIVE_PUBLIC_GITHUB" in alpha_service_at_pin
     assert 'parser.add_argument("--publish-check"' in runner_at_pin
+    assert 'parser.add_argument("--invalidate-check"' in runner_at_pin
     assert "def publish_check(" in publisher_at_pin
     assert '"check_name": CHECK_NAME' in publisher_at_pin
     assert "class CheckRunPlan" in planner_at_pin

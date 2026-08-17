@@ -76,6 +76,9 @@ identity-matched closed or merged PR so a removed applicability label cannot lea
 display. Both paths require the exact repository and event head SHA; a mismatch is stale or foreign
 and fails before mutation. Withdrawal keeps the validated prior detail text byte-for-byte and puts
 the revocation notice in the bounded summary, so it cannot truncate retained criterion evidence.
+The same existing-Check-only path revokes a prior display when checked-in criteria confirmation is
+missing or mismatched while the opt-in label remains present. State-transition notices are
+canonicalized before each write, so reruns converge and never grow the summary.
 
 It then reads only
 `/repos/{repository}/commits/{head_sha}/check-runs` with the exact informational check name,

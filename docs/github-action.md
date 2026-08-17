@@ -70,6 +70,12 @@ publication still requires an open PR. The publisher revalidates the live label 
 before either analysis publication or withdrawal, so delayed runs cannot restore stale
 applicability.
 
+If the checked-in requirements or confirmation are missing or no longer match, the workflow does
+not leave a prior same-head Ready display in place. It updates only an existing trusted exact-head
+Check to neutral Needs Review, preserves the prior validated detail, and creates no new Check when
+no prior exact identity exists. Repeated revocation runs canonicalize the summary and converge
+rather than appending duplicate notices.
+
 If the checked-in confirmed requirements bytes change, maintainers must remove
 `scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label
 before another ScopeProof review. This is an operator requirement: the workflow checks the current
@@ -85,7 +91,7 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`b0f500405c2f90377989e1869c78356de1971ca2`, the immutable source-candidate commit
+`638414a6f6ea359cff1a794f9c9aeccd1b892de8`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
 withdrawal for conflicted PRs, repository-identity fork classification, and isolated base-SHA-only
