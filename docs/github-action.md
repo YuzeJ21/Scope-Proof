@@ -5,23 +5,30 @@ non-blocking integration preview for repository maintainers who make a separate 
 it is not part of first use or evidence of product validation.
 
 ScopeProof includes a repository-local workflow starter at
-`.github/workflows/scopeproof.yml` and a copyable example at
-`examples/github-actions/scopeproof.yml`.
+`.github/workflows/scopeproof.yml`, an isolated withdrawal workflow at
+`.github/workflows/scopeproof-withdraw.yml`, and matching copyable examples under
+`examples/github-actions/`.
 
 It is deliberately a **safe preview**, not an enforcement integration:
 
 - It runs on the unprivileged `pull_request` event, checks out the immutable
   base SHA with persisted credentials disabled, and never checks out or
   executes the pull request head.
+- Label removal is handled separately by a minimal trusted-base
+  `pull_request_target` workflow because GitHub does not deliver `pull_request`
+  activity for conflicted PRs. That workflow runs only for the exact unlabeled
+  event, checks out only the immutable base SHA, performs no analysis, and
+  invokes the bounded withdrawal publisher with constant command text.
 - It needs a checked-in `.scopeproof/requirements.txt` plus
   `.scopeproof/requirements-confirmation.json`. The confirmation records the
   source URI and optional revision, exact SHA-256 of the requirements text,
   SHA-256 of the ordered normalized criteria, who confirmed them, and when. If
   either file is missing or either digest differs, the step summary says
   **Needs Review** and cannot say Ready or publish a Check.
-- It uses the event's head-repository fork flag to create a non-mutating plan.
-  Fork PRs receive no write plan.
-- For a labeled, non-fork PR with checked-in confirmed requirements, it may
+- It compares the head repository identity with the target repository identity.
+  Cross-repository PRs receive no write plan; same-repository PRs remain eligible
+  even when the target repository is itself a fork.
+- For a labeled, same-repository PR with checked-in confirmed requirements, it may
   create or update the `ScopeProof evidence summary (informational)` Check
   using GitHub's short-lived `github.token`. The Check is bound to the exact
   repository, PR number, head SHA, and criteria-source provenance. A same-head
@@ -75,10 +82,11 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`fc5fd1c3ac9b549a1270dd6d62d1bcfc0c1e5418`, the immutable source-candidate commit
+`171a2e22eeb5a83565fa746a72f496df00e7b4cb`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
-withdrawal, and unprivileged base-SHA-only workflow used by this example. It remains a source-candidate installation; it is
+withdrawal for conflicted PRs, repository-identity fork classification, and isolated base-SHA-only
+workflows used by these examples. It remains a source-candidate installation; it is
 not a published v0.2.3 release. Review and update that pin deliberately when adopting a newer
 public release; do not replace it with an unpinned package or branch reference.
 

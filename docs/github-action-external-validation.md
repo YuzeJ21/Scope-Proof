@@ -18,9 +18,10 @@ that no external fork-run claim is being made.
    `.scopeproof/requirements.txt` on the base branch with one confirmed
    criterion per line, and add the hash-bound confirmation record described in
    [the Action guide](github-action.md#requirements-confirmation-record).
-3. Commit the workflow and requirements to the base branch before opening the
-   test PR. The workflow deliberately runs from the trusted base definition and
-   checks out the base SHA, never the PR head.
+3. Commit both workflows and the requirements to the base branch before opening
+   the test PR. Analysis uses `pull_request`; the isolated withdrawal workflow
+   uses `pull_request_target` only so label removal is delivered for conflicted
+   PRs. Both check out the base SHA and never the PR head.
 4. Confirm the workflow remains informational:
    `SCOPEPROOF_REQUIRED_CHECK: false`.
 5. Create the exact `scopeproof-review` repository label. A repository owner
@@ -74,6 +75,8 @@ limitations: public demo only; no customer validation claimed
 8. Remove `scopeproof-review`. Verify the separate withdrawal job updates that
    exact-head Check to neutral **Needs Review**, retains its prior evidence for
    audit, and does not execute another PR analysis.
+9. Repeat label removal on a deliberately conflicted same-repository PR and
+   verify the trusted-base withdrawal job still reaches the same neutral result.
 
 Expected: one neutral informational GitHub Check for the exact head. This does
 not prove the requirement is correct, runtime behavior, accessibility, demand,

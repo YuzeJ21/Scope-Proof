@@ -141,15 +141,21 @@ def test_repository_confirmation_is_a_valid_typed_source_snapshot() -> None:
 
 
 def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None:
-    example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+    examples = (
+        Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8"),
+        Path("examples/github-actions/scopeproof-withdraw.yml").read_text(
+            encoding="utf-8"
+        ),
+    )
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "fc5fd1c3ac9b549a1270dd6d62d1bcfc0c1e5418"
+    reviewed_revision = "171a2e22eeb5a83565fa746a72f496df00e7b4cb"
 
-    assert "pip install scopeproof" not in example
-    assert (
-        "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@"
-        f"{reviewed_revision}"
-    ) in example
+    for example in examples:
+        assert "pip install scopeproof" not in example
+        assert (
+            "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@"
+            f"{reviewed_revision}"
+        ) in example
     assert reviewed_revision in guide
 
 
@@ -220,6 +226,16 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
         capture_output=True,
         text=True,
     ).stdout
+    withdrawal_workflow_at_pin = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{pinned_revision}:.github/workflows/scopeproof-withdraw.yml",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
     assert re.search(
         r'review\.add_argument\(\s*"--confirmation",\s*required=True', cli_at_pin
@@ -238,8 +254,11 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
     assert "concurrency:" in workflow_at_pin
     assert "scopeproof-report.tmp.md" in workflow_at_pin
     assert 'scopeproof-report.md"; then' in workflow_at_pin
-    assert "types: [opened, reopened, synchronize, labeled, unlabeled]" in workflow_at_pin
-    assert "--withdraw-check" in workflow_at_pin
+    assert "pull_request_target:" not in workflow_at_pin
+    assert "head.repo.full_name == github.repository" in workflow_at_pin
+    assert "pull_request_target:" in withdrawal_workflow_at_pin
+    assert "types: [unlabeled]" in withdrawal_workflow_at_pin
+    assert "--withdraw-check" in withdrawal_workflow_at_pin
     assert "applicability_label_expected" in publisher_at_pin
 
 
