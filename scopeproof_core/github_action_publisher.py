@@ -51,6 +51,12 @@ class _PullBaseResponse(BaseModel):
     repo: _RepositoryResponse
 
 
+class _PullLabelResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    name: str = Field(min_length=1, max_length=100)
+
+
 class _PullResponse(BaseModel):
     model_config = ConfigDict(extra="ignore", strict=True)
 
@@ -60,6 +66,7 @@ class _PullResponse(BaseModel):
     state: Literal["open", "closed"]
     head: _PullHeadResponse
     base: _PullBaseResponse
+    labels: list[_PullLabelResponse] = Field(max_length=100)
 
 
 class _CheckAppResponse(BaseModel):
@@ -146,7 +153,10 @@ def _skipped_check_plan(
 
 
 def _validate_live_pull(
-    context: CheckRunContext | EventContext, pull: _PullResponse
+    context: CheckRunContext | EventContext,
+    pull: _PullResponse,
+    *,
+    applicability_label_expected: bool,
 ) -> None:
     """Require the live public PR to match every trusted immutable identity."""
 
@@ -163,6 +173,9 @@ def _validate_live_pull(
         or pull.base.repo.full_name != context.repository
     ):
         raise GitHubCheckPublicationError("live pull request identity mismatch")
+    label_is_present = any(label.name == "scopeproof-review" for label in pull.labels)
+    if label_is_present is not applicability_label_expected:
+        raise GitHubCheckPublicationError("live applicability label mismatch")
 
 
 def _validated_existing_check(
@@ -290,7 +303,7 @@ def publish_check_withdrawal(
             )
             pull_response.raise_for_status()
             pull = _PullResponse.model_validate(pull_response.json())
-            _validate_live_pull(context, pull)
+            _validate_live_pull(context, pull, applicability_label_expected=False)
 
             expected_external_id = check_external_id(context)
             matches = [
@@ -388,7 +401,7 @@ def publish_check(
             pull_response = client.get(f"/repos/{context.repository}/pulls/{context.pr_number}")
             pull_response.raise_for_status()
             pull = _PullResponse.model_validate(pull_response.json())
-            _validate_live_pull(context, pull)
+            _validate_live_pull(context, pull, applicability_label_expected=True)
 
             existing = _read_existing_checks(client, context)
             try:

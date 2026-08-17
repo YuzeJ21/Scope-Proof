@@ -56,7 +56,9 @@ def check_context(*, fork: bool = False) -> CheckRunContext:
     )
 
 
-def pull_response(*, head_sha: str = HEAD_SHA, fork: bool = False) -> dict:
+def pull_response(
+    *, head_sha: str = HEAD_SHA, fork: bool = False, applicability_label: bool = True
+) -> dict:
     return {
         "url": "https://api.github.com/repos/acme/widget/pulls/42",
         "html_url": "https://github.com/acme/widget/pull/42",
@@ -70,6 +72,7 @@ def pull_response(*, head_sha: str = HEAD_SHA, fork: bool = False) -> dict:
             },
         },
         "base": {"repo": {"full_name": "acme/widget"}},
+        "labels": ([{"name": "scopeproof-review"}] if applicability_label else []),
     }
 
 
@@ -169,7 +172,7 @@ def test_label_withdrawal_updates_only_existing_exact_head_check() -> None:
         requests.append(request)
         assert_safe_request(request)
         if request.url.path.endswith("/pulls/42"):
-            return httpx.Response(200, json=pull_response())
+            return httpx.Response(200, json=pull_response(applicability_label=False))
         if request.method == "GET" and request.url.path.endswith("/commits") is False:
             if request.url.path.endswith("/check-runs/7"):
                 return httpx.Response(200, json=check_detail_response())
@@ -195,7 +198,7 @@ def test_label_withdrawal_without_exact_check_makes_no_write() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.url.path.endswith("/pulls/42"):
-            return httpx.Response(200, json=pull_response())
+            return httpx.Response(200, json=pull_response(applicability_label=False))
         return httpx.Response(200, json=check_list())
 
     plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
@@ -205,13 +208,39 @@ def test_label_withdrawal_without_exact_check_makes_no_write() -> None:
     assert [request.method for request in requests] == ["GET", "GET"]
 
 
+def test_live_applicability_label_is_revalidated_before_publication() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=pull_response(applicability_label=False))
+
+    with pytest.raises(GitHubCheckPublicationError, match="applicability label mismatch"):
+        publish_check(check_context(), "ready", "Report", "secret", httpx.MockTransport(handler))
+
+    assert [request.method for request in requests] == ["GET"]
+
+
+def test_withdrawal_rejects_reapplied_live_applicability_label() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=pull_response(applicability_label=True))
+
+    with pytest.raises(GitHubCheckPublicationError, match="applicability label mismatch"):
+        publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
+
+    assert [request.method for request in requests] == ["GET"]
+
+
 def test_label_withdrawal_duplicate_exact_checks_fails_before_mutation() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.url.path.endswith("/pulls/42"):
-            return httpx.Response(200, json=pull_response())
+            return httpx.Response(200, json=pull_response(applicability_label=False))
         return httpx.Response(
             200,
             json=check_list(check_response(), check_response(check_run_id=8)),
