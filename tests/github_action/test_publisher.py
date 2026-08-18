@@ -179,7 +179,7 @@ def test_exact_trusted_check_is_patched_with_neutral_validated_payload() -> None
     plan = publish_check(check_context(), "ready", "Report", "secret", httpx.MockTransport(handler))
 
     assert plan.mode is CheckMode.UPDATE
-    assert [request.method for request in requests] == ["GET", "GET", "PATCH"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
 
 
 def test_fork_hosted_repository_same_repository_pr_can_publish() -> None:
@@ -196,7 +196,7 @@ def test_fork_hosted_repository_same_repository_pr_can_publish() -> None:
     plan = publish_check(check_context(), "ready", "Report", "secret", httpx.MockTransport(handler))
 
     assert plan.mode is CheckMode.CREATE
-    assert [request.method for request in requests] == ["GET", "GET", "POST"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST"]
 
 
 def test_label_withdrawal_updates_only_existing_exact_head_check() -> None:
@@ -223,7 +223,7 @@ def test_label_withdrawal_updates_only_existing_exact_head_check() -> None:
 
     assert plan.mode is CheckMode.UPDATE
     assert plan.reason == "applicability_label_removed"
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "GET", "PATCH"]
 
 
 def test_closed_pull_label_withdrawal_updates_exact_head_check() -> None:
@@ -245,7 +245,7 @@ def test_closed_pull_label_withdrawal_updates_exact_head_check() -> None:
     plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
 
     assert plan.mode is CheckMode.UPDATE
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "GET", "PATCH"]
 
 
 def test_withdrawal_preserves_maximum_length_prior_report_without_truncation() -> None:
@@ -270,7 +270,7 @@ def test_withdrawal_preserves_maximum_length_prior_report_without_truncation() -
     plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
 
     assert plan.output.text == prior_text
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "GET", "PATCH"]
 
 
 def test_withdrawal_rerun_keeps_canonical_summary() -> None:
@@ -297,7 +297,7 @@ def test_withdrawal_rerun_keeps_canonical_summary() -> None:
     plan = publish_check_withdrawal(context(), "secret", httpx.MockTransport(handler))
 
     assert plan.output.summary == withdrawn
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "GET", "PATCH"]
 
 
 def test_missing_confirmation_revokes_existing_ready_display() -> None:
@@ -321,7 +321,7 @@ def test_missing_confirmation_revokes_existing_ready_display() -> None:
 
     assert plan.mode is CheckMode.UPDATE
     assert plan.reason == "requirements_confirmation_unavailable"
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "GET", "PATCH"]
 
 
 def test_default_base_advance_revokes_existing_labeled_exact_head_check() -> None:
@@ -352,7 +352,14 @@ def test_default_base_advance_revokes_existing_labeled_exact_head_check() -> Non
 
     assert result.updated_count == 1
     assert result.skipped_count == 0
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "GET", "PATCH"]
+    assert [request.method for request in requests] == [
+        "GET",
+        "GET",
+        "GET",
+        "GET",
+        "GET",
+        "PATCH",
+    ]
 
 
 def test_base_advance_without_token_is_non_mutating() -> None:
@@ -371,22 +378,22 @@ def test_base_advance_without_token_is_non_mutating() -> None:
     assert result.updated_count == 0
 
 
-def test_base_advance_accepts_exactly_two_full_pages_with_empty_sentinel() -> None:
+def test_base_advance_accepts_exactly_110_pulls_with_empty_page_three_sentinel() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         per_page = int(request.url.params["per_page"])
         page = int(request.url.params["page"])
-        if per_page == 1:
-            assert page == 201
+        assert per_page == 55
+        if page == 3:
             return httpx.Response(200, json=[])
-        start = (page - 1) * 100 + 1
+        start = (page - 1) * 55 + 1
         return httpx.Response(
             200,
             json=[
                 pull_response(pr_number=number, applicability_label=False)
-                for number in range(start, start + 100)
+                for number in range(start, start + 55)
             ],
         )
 
@@ -409,18 +416,18 @@ def test_base_advance_rejects_nonempty_overflow_sentinel_before_writes() -> None
         requests.append(request)
         per_page = int(request.url.params["per_page"])
         page = int(request.url.params["page"])
-        if per_page == 1:
-            assert page == 201
+        assert per_page == 55
+        if page == 3:
             return httpx.Response(
                 200,
-                json=[pull_response(pr_number=201, applicability_label=False)],
+                json=[pull_response(pr_number=111, applicability_label=False)],
             )
-        start = (page - 1) * 100 + 1
+        start = (page - 1) * 55 + 1
         return httpx.Response(
             200,
             json=[
                 pull_response(pr_number=number, applicability_label=False)
-                for number in range(start, start + 100)
+                for number in range(start, start + 55)
             ],
         )
 
@@ -437,7 +444,7 @@ def test_base_advance_rejects_nonempty_overflow_sentinel_before_writes() -> None
     assert all(request.method == "GET" for request in requests)
 
 
-def test_base_advance_worst_case_stays_within_actions_token_budget() -> None:
+def test_base_advance_deep_check_pagination_stays_within_actions_token_budget() -> None:
     requests: list[httpx.Request] = []
 
     def pr_head_sha(pr_number: int) -> str:
@@ -459,14 +466,15 @@ def test_base_advance_worst_case_stays_within_actions_token_budget() -> None:
         if path == "/repos/acme/widget/pulls" and "state" in request.url.params:
             per_page = int(request.url.params["per_page"])
             page = int(request.url.params["page"])
-            if per_page == 1:
+            assert per_page == 55
+            if page == 3:
                 return httpx.Response(200, json=[])
-            start = (page - 1) * 100 + 1
+            start = (page - 1) * 55 + 1
             return httpx.Response(
                 200,
                 json=[
                     pull_response(pr_number=number, head_sha=pr_head_sha(number))
-                    for number in range(start, start + 100)
+                    for number in range(start, start + 55)
                 ],
             )
         if "/pulls/" in path:
@@ -481,12 +489,27 @@ def test_base_advance_worst_case_stays_within_actions_token_budget() -> None:
         if "/commits/" in path:
             head_sha = path.split("/commits/", 1)[1].split("/", 1)[0]
             pr_number = int(head_sha, 16)
-            existing = check_response(
-                check_run_id=pr_number,
-                head_sha=head_sha,
-                external_id=check_external_id(pr_context(pr_number)),
-            )
-            return httpx.Response(200, json=check_list(existing))
+            page = int(request.url.params["page"])
+            start = pr_number * 1_000 + (page - 1) * 100
+            if page < 5:
+                checks = [
+                    check_response(
+                        check_run_id=start + index + 1,
+                        head_sha=head_sha,
+                        external_id=f"foreign:{start + index + 1}",
+                        app_slug="foreign-app",
+                    )
+                    for index in range(100)
+                ]
+            else:
+                checks = [
+                    check_response(
+                        check_run_id=pr_number,
+                        head_sha=head_sha,
+                        external_id=check_external_id(pr_context(pr_number)),
+                    )
+                ]
+            return httpx.Response(200, json=check_list(*checks, total_count=401))
         pr_number = int(path.rsplit("/", 1)[-1])
         existing = check_response(
             check_run_id=pr_number,
@@ -505,9 +528,37 @@ def test_base_advance_worst_case_stays_within_actions_token_budget() -> None:
         transport=httpx.MockTransport(handler),
     )
 
-    assert result.updated_count == 200
-    assert len(requests) == 803
+    assert result.updated_count == 110
+    assert len(requests) == 993
     assert len(requests) < 1_000
+
+
+def test_publish_revalidates_live_base_immediately_before_write() -> None:
+    requests: list[httpx.Request] = []
+    pull_reads = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal pull_reads
+        requests.append(request)
+        if request.url.path.endswith("/pulls/42"):
+            pull_reads += 1
+            if pull_reads == 1:
+                return httpx.Response(200, json=pull_response())
+            return httpx.Response(200, json=pull_response(base_sha=OTHER_SHA))
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list())
+        raise AssertionError("stale base must fail before Check mutation")
+
+    with pytest.raises(GitHubCheckPublicationError, match="identity mismatch"):
+        publish_check(
+            check_context(),
+            "ready",
+            "Report",
+            "secret",
+            httpx.MockTransport(handler),
+        )
+
+    assert [request.method for request in requests] == ["GET", "GET", "GET"]
 
 
 def test_base_advance_skips_deleted_fork_before_processing_same_repo_pr() -> None:
@@ -661,7 +712,7 @@ def test_changed_or_foreign_check_posts_new_exact_head_check(existing: dict) -> 
     )
 
     assert plan.mode is CheckMode.CREATE
-    assert [request.method for request in requests] == ["GET", "GET", "POST"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST"]
 
 
 @pytest.mark.parametrize("external_id", [None, ""])
@@ -685,7 +736,7 @@ def test_foreign_same_name_check_without_external_id_is_ignored(
     )
 
     assert plan.mode is CheckMode.CREATE
-    assert [request.method for request in requests] == ["GET", "GET", "POST"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST"]
 
 
 @pytest.mark.parametrize(

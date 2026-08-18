@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 scopeproof = "scopeproof_core.cli:main"
+scopeproof-github-action = "scopeproof_core.github_action_runner:main"
 scopeproof-web = "apps.web.launcher:main"
 
 [project.optional-dependencies]

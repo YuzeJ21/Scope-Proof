@@ -25,6 +25,7 @@ from scopeproof_core.github_action import (
 _API_BASE_URL = "https://api.github.com"
 _MAX_CHECK_PAGES = 5
 _MAX_BASE_ADVANCE_PULL_PAGES = 2
+_BASE_ADVANCE_PULLS_PER_PAGE = 55
 _PER_PAGE = 100
 _WITHDRAWAL_NOTICE = (
     "The `scopeproof-review` label was removed for this exact pull-request head. "
@@ -157,14 +158,14 @@ class BaseAdvanceInvalidationResult(BaseModel):
     reason: str = Field(min_length=1, max_length=100)
     updated_count: int = Field(
         ge=0,
-        le=_MAX_BASE_ADVANCE_PULL_PAGES * _PER_PAGE,
+        le=_MAX_BASE_ADVANCE_PULL_PAGES * _BASE_ADVANCE_PULLS_PER_PAGE,
     )
     skipped_count: int = Field(
         ge=0,
-        le=_MAX_BASE_ADVANCE_PULL_PAGES * _PER_PAGE,
+        le=_MAX_BASE_ADVANCE_PULL_PAGES * _BASE_ADVANCE_PULLS_PER_PAGE,
     )
     plans: list[CheckRunPlan] = Field(
-        max_length=_MAX_BASE_ADVANCE_PULL_PAGES * _PER_PAGE,
+        max_length=_MAX_BASE_ADVANCE_PULL_PAGES * _BASE_ADVANCE_PULLS_PER_PAGE,
     )
 
 
@@ -423,6 +424,17 @@ def _publish_existing_check_needs_review(
                 conclusion="neutral",
                 output=_request_output(plan.output),
             )
+            prewrite_pull_response = client.get(
+                f"/repos/{context.repository}/pulls/{context.pr_number}"
+            )
+            prewrite_pull_response.raise_for_status()
+            prewrite_pull = _PullResponse.model_validate(prewrite_pull_response.json())
+            _validate_live_pull(
+                context,
+                prewrite_pull,
+                applicability_label_expected=applicability_label_expected,
+                require_open=require_open,
+            )
             write_response = client.patch(
                 f"/repos/{context.repository}/check-runs/{plan.check_run_id}",
                 json=request.model_dump(mode="json"),
@@ -541,13 +553,16 @@ def publish_base_advance_invalidations(
                     params={
                         "state": "open",
                         "base": checked_ref,
-                        "per_page": _PER_PAGE,
+                        "per_page": _BASE_ADVANCE_PULLS_PER_PAGE,
                         "page": page_number,
                     },
                 )
                 response.raise_for_status()
                 raw_page = response.json()
-                if not isinstance(raw_page, list) or len(raw_page) > _PER_PAGE:
+                if (
+                    not isinstance(raw_page, list)
+                    or len(raw_page) > _BASE_ADVANCE_PULLS_PER_PAGE
+                ):
                     raise GitHubCheckPublicationError("malformed pull request page")
                 page = [_PullResponse.model_validate(item) for item in raw_page]
                 for pull in page:
@@ -555,8 +570,8 @@ def publish_base_advance_invalidations(
                         raise GitHubCheckPublicationError("repeated pull request across pages")
                     seen_numbers.add(pull.number)
                     pulls.append(pull)
-                last_page_was_full = len(page) == _PER_PAGE
-                if len(page) < _PER_PAGE:
+                last_page_was_full = len(page) == _BASE_ADVANCE_PULLS_PER_PAGE
+                if len(page) < _BASE_ADVANCE_PULLS_PER_PAGE:
                     break
             if last_page_was_full:
                 sentinel_response = client.get(
@@ -564,13 +579,16 @@ def publish_base_advance_invalidations(
                     params={
                         "state": "open",
                         "base": checked_ref,
-                        "per_page": 1,
-                        "page": (_MAX_BASE_ADVANCE_PULL_PAGES * _PER_PAGE) + 1,
+                        "per_page": _BASE_ADVANCE_PULLS_PER_PAGE,
+                        "page": _MAX_BASE_ADVANCE_PULL_PAGES + 1,
                     },
                 )
                 sentinel_response.raise_for_status()
                 sentinel = sentinel_response.json()
-                if not isinstance(sentinel, list) or len(sentinel) > 1:
+                if (
+                    not isinstance(sentinel, list)
+                    or len(sentinel) > _BASE_ADVANCE_PULLS_PER_PAGE
+                ):
                     raise GitHubCheckPublicationError("malformed pull request overflow sentinel")
                 if sentinel:
                     raise GitHubCheckPublicationError("pull request page budget exceeded")
@@ -673,10 +691,6 @@ def publish_check(
                     conclusion="neutral",
                     output=_request_output(plan.output),
                 )
-                write_response = client.post(
-                    f"/repos/{context.repository}/check-runs",
-                    json=request.model_dump(mode="json"),
-                )
             elif plan.mode is CheckMode.UPDATE:
                 request = _UpdateCheckRequest(
                     name=plan.name,
@@ -685,12 +699,29 @@ def publish_check(
                     conclusion="neutral",
                     output=_request_output(plan.output),
                 )
+            else:
+                return plan
+            prewrite_pull_response = client.get(
+                f"/repos/{context.repository}/pulls/{context.pr_number}"
+            )
+            prewrite_pull_response.raise_for_status()
+            prewrite_pull = _PullResponse.model_validate(prewrite_pull_response.json())
+            _validate_live_pull(
+                context,
+                prewrite_pull,
+                applicability_label_expected=True,
+                require_open=True,
+            )
+            if plan.mode is CheckMode.CREATE:
+                write_response = client.post(
+                    f"/repos/{context.repository}/check-runs",
+                    json=request.model_dump(mode="json"),
+                )
+            else:
                 write_response = client.patch(
                     f"/repos/{context.repository}/check-runs/{plan.check_run_id}",
                     json=request.model_dump(mode="json"),
                 )
-            else:
-                return plan
             _validate_write_response(context, plan, write_response)
             return plan
     except GitHubCheckPublicationError:
