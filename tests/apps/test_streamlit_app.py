@@ -3934,6 +3934,9 @@ def test_evidence_matrix_reports_empty_filter_results() -> None:
 
     assert evidence_matrix_criterion_ids(app) == []
     assert "No criteria match the current filters." in [item.value for item in app.info]
+    markdown = [item.value for item in app.markdown]
+    assert "[Review AC-01](#review-ac-01)" in markdown
+    assert "#### Review AC-01" in markdown
 
 
 def test_evidence_matrix_renders_as_reachable_cards_without_grid_tools() -> None:

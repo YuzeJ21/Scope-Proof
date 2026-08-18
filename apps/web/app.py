@@ -2115,11 +2115,13 @@ else:
             "Review candidate evidence and record an explicit human decision for each item."
         )
         for criterion_id in unresolved_ids:
+            st.markdown(f"[Review {criterion_id}](#review-{criterion_id.lower()})")
+        for criterion_id in unresolved_ids:
             criterion = next(
                 item for item in bundle.criteria if item.criterion_id == criterion_id
             )
             with st.container(border=True):
-                st.markdown(f"**{criterion_id}**")
+                st.markdown(f"#### Review {criterion_id}")
                 st.text(criterion.text)
                 evidence_status = evidence_status_text(
                     coverage_by_id[criterion_id].evidence_status
@@ -2132,9 +2134,6 @@ else:
                     "separate from static implementation or test candidates."
                 )
                 st.text(finding_by_id[criterion_id].recommended_action)
-                st.markdown(
-                    f"[Review {criterion_id}](#review-{criterion_id.lower()})"
-                )
     else:
         st.success("A current human decision is recorded for every active criterion.")
     st.caption(
@@ -2216,7 +2215,7 @@ else:
         )
         for row in matrix:
             with st.container(border=True):
-                st.markdown(f"#### Review {row['Criterion']}")
+                st.markdown(f"#### Evidence for {row['Criterion']}")
                 st.markdown(f"**Criterion:** {row['Criterion']}")
                 st.caption("Requirement")
                 st.text(row["Requirement"])
