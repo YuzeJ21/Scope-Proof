@@ -81,19 +81,24 @@ no prior exact identity exists. Repeated revocation runs canonicalize the summar
 rather than appending duplicate notices.
 
 Every write also binds the event's immutable base SHA as well as its head SHA. The live PR base and
-head must still match in a second live read immediately before publication. All analysis,
-withdrawal, unavailability, and base-advance writers share one repository-wide concurrency group,
-so a delayed stale-base publication cannot overtake a completed invalidation. The review command
+head must still match in a second live read immediately before publication. Analysis runs only
+coalesce redundant events for the same repository, PR, and exact head. Revocation writers are not
+placed in a GitHub concurrency group, because GitHub may replace an older pending run even when
+`cancel-in-progress` is false. After an analysis write, the publisher reads the live PR once more;
+if identity or applicability changed, it immediately neutralizes the exact Check it just wrote and
+fails closed. The review command
 emits both identities, and the workflow validates them against the event before it accepts a
 verdict or exports a report; mixed-snapshot results fail before publication.
 
 Because GitHub does not emit a pull-request `synchronize` event when only the default target branch
 advances, the companion `scopeproof-base-advance.yml` runs on trusted default-branch pushes. It
-enumerates up to 110 open PRs in two 55-item pages targeting the new default-base SHA, then makes
-one bounded third-page sentinel request before any write. Exactly 110 PRs remain valid when that
-sentinel is empty; a nonempty sentinel fails closed. The 110-PR bound includes two live-identity
+uses GitHub's fixed GraphQL endpoint to enumerate only open PRs carrying `scopeproof-review` and
+targeting the pushed default branch, with at most two 55-item pages. GraphQL `pageInfo` accepts
+exactly 110 eligible PRs when the second page is terminal and fails closed before any write when
+more eligible PRs exist. Unlabeled or differently targeted open PRs do not consume this bound. The
+110-PR bound includes two live-identity
 reads, up to five Check-list pages, one Check-detail read, and one write per eligible PR. The
-worst-case path is therefore 993 REST requests, below the standard 1,000-request-per-repository
+worst-case path is therefore 992 GitHub API requests, below the standard 1,000-request-per-repository
 hourly limit for an Actions
 `GITHUB_TOKEN`. Deleted-fork records are skipped, and work remains limited to labeled
 same-repository PRs. Each eligible PR is attempted independently so one failed revocation does not
@@ -117,12 +122,12 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`e4a9e2f6230ea2e6cd40de861a930b2e4e99785e`, the immutable source-candidate commit
+`50058cffd28fb3d4b9bf6da97d05f77ab4dcb509`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
-bounded exact-name publisher, repository-wide writer serialization, immediate pre-write live
-identity revalidation, fail-closed report export, label-removal
+bounded exact-name publisher, same-head analysis coalescing, ungrouped revocation writers,
+immediate pre-write and compensating post-write live identity revalidation, fail-closed report export, label-removal
 withdrawal for conflicted PRs, repository-identity fork classification, and isolated base-SHA-only
-workflows with the 110-PR, 993-request token-budget bound used by these examples. The copyable
+workflows with the eligible 110-PR, 992-request token-budget bound used by these examples. The copyable
 workflows invoke the installed `scopeproof-github-action` entry point; the base-advance workflow
 does not check out target-repository files. It remains a
 source-candidate installation; it is

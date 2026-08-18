@@ -80,19 +80,22 @@ the revocation notice in the bounded summary, so it cannot truncate retained cri
 The same existing-Check-only path revokes a prior display when checked-in criteria confirmation is
 missing or mismatched while the opt-in label remains present. State-transition notices are
 canonicalized before each write, so reruns converge and never grow the summary.
-The event context also carries the immutable base SHA. The publisher requires both live reads of
-the base and head to match the event, and all Check writers share one repository-wide concurrency
-group. The workflow validates both identities in review-command
+The event context also carries the immutable base SHA. The publisher requires both pre-write live
+reads of the base and head to match the event. Analysis runs coalesce only redundant same-PR,
+same-head events; revocation workflows do not use GitHub concurrency because a newer event can
+replace an older pending run. After analysis writes, the publisher revalidates identity and
+applicability and compensates a stale race by neutralizing the exact Check it just wrote. The
+workflow validates both identities in review-command
 output before retaining its verdict or exporting its report. A base-advance or force-push race
 therefore fails closed instead of combining criteria, analysis, and publication from different
 snapshots.
 Default-base pushes run a separate trusted workflow because GitHub emits no pull-request
-`synchronize` event for a base-only advance. The bounded publisher enumerates at most two full
-55-item pages of open PRs targeting the pushed default branch and, only when both are full, makes
-a third-page sentinel request before any write. An empty sentinel accepts exactly 110 PRs; a
-nonempty sentinel fails closed. Each eligible path budgets two live pull reads, at most five
-Check-list reads, one detail read, and one write. With the three collection requests, the
-worst-case path is 993 REST requests,
+`synchronize` event for a base-only advance. The bounded publisher queries GitHub's fixed GraphQL
+endpoint for only open, labeled PRs targeting the pushed default branch, in at most two 55-item
+pages. A terminal second page accepts exactly 110 eligible PRs; `pageInfo` indicating more fails
+closed before any write. Unlabeled and differently targeted open PRs do not consume the cap. Each
+eligible path budgets two live pull reads, at most five Check-list reads, one detail read, and one
+write. With the two collection requests, the worst-case path is 992 GitHub API requests,
 below the standard 1,000-request-per-repository hourly limit for an Actions `GITHUB_TOKEN`. It
 filters out deleted-fork records and other non-same-repository PRs, revalidates each eligible live
 identity, and revokes only an existing exact-head display. Individual PR failures are collected

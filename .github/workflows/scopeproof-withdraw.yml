@@ -9,10 +9,6 @@ permissions:
   pull-requests: read
   checks: write
 
-concurrency:
-  group: scopeproof-check-writer-${{ github.repository }}
-  cancel-in-progress: false
-
 jobs:
   withdraw:
     if: github.event.action == 'unlabeled' && github.event.label.name == 'scopeproof-review' && github.event.pull_request.head.repo.full_name == github.repository

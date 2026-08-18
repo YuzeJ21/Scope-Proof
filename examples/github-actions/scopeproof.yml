@@ -14,7 +14,7 @@ env:
   SCOPEPROOF_REQUIRED_CHECK: false
 
 concurrency:
-  group: scopeproof-check-writer-${{ github.repository }}
+  group: scopeproof-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install ScopeProof
-        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@e4a9e2f6230ea2e6cd40de861a930b2e4e99785e"
+        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@50058cffd28fb3d4b9bf6da97d05f77ab4dcb509"
       - name: Review public PR evidence (informational)
         continue-on-error: true
         env:

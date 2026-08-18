@@ -24,20 +24,32 @@ def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> N
     assert "git fetch" not in workflow
 
 
-def test_all_check_writers_share_one_repository_wide_concurrency_group() -> None:
+def test_analysis_coalesces_only_redundant_same_head_runs() -> None:
     for path in (
         Path(".github/workflows/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+
+        assert "concurrency:" in workflow
+        assert (
+            "group: scopeproof-${{ github.repository }}-"
+            "${{ github.event.pull_request.number }}-"
+            "${{ github.event.pull_request.head.sha }}"
+        ) in workflow
+        assert "cancel-in-progress: false" in workflow
+
+
+def test_revocation_workflows_never_drop_a_pending_writer() -> None:
+    for path in (
         Path(".github/workflows/scopeproof-withdraw.yml"),
         Path(".github/workflows/scopeproof-base-advance.yml"),
-        Path("examples/github-actions/scopeproof.yml"),
         Path("examples/github-actions/scopeproof-withdraw.yml"),
         Path("examples/github-actions/scopeproof-base-advance.yml"),
     ):
         workflow = path.read_text(encoding="utf-8")
 
-        assert "concurrency:" in workflow
-        assert "group: scopeproof-check-writer-${{ github.repository }}" in workflow
-        assert "cancel-in-progress: false" in workflow
+        assert "concurrency:" not in workflow
 
 
 def test_workflows_withdraw_exact_head_check_when_opt_in_label_is_removed() -> None:
@@ -176,7 +188,7 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
         ),
     )
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "e4a9e2f6230ea2e6cd40de861a930b2e4e99785e"
+    reviewed_revision = "50058cffd28fb3d4b9bf6da97d05f77ab4dcb509"
 
     for example in examples:
         assert "pip install scopeproof" not in example
@@ -304,6 +316,8 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
     assert 'parser.add_argument("--invalidate-check"' in runner_at_pin
     assert 'parser.add_argument("--validate-result"' in runner_at_pin
     assert "def publish_check(" in publisher_at_pin
+    assert 'client.post(\n                    "/graphql"' in publisher_at_pin
+    assert "_compensate_stale_publication" in publisher_at_pin
     assert '"check_name": CHECK_NAME' in publisher_at_pin
     assert "class CheckRunPlan" in planner_at_pin
     assert '"conditional": "Conditional"' in planner_at_pin

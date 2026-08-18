@@ -1387,7 +1387,7 @@ def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> 
     ]
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    expected_pin = "e4a9e2f6230ea2e6cd40de861a930b2e4e99785e"
+    expected_pin = "50058cffd28fb3d4b9bf6da97d05f77ab4dcb509"
 
     installs = [
         re.search(
