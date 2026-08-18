@@ -1149,11 +1149,18 @@ if pr_url.strip():
 fetch_action_placeholder = st.empty()
 alpha_feedback_mode = bool(st.session_state.get("alpha_feedback_mode", False))
 
-with st.expander("Try ScopeProof", expanded=False):
+with st.container(border=True):
+    st.markdown("**Deliberately constructed demonstration**")
+    st.caption(
+        "A visible practice-data path. Any saved record remains constructed-demo-tagged and "
+        "segregated from genuine review claims. It is not a public PR, customer case, production "
+        "result, or validation claim."
+    )
     if st.button(
         "Load deliberately constructed demo",
         key="load_demo",
         disabled=replacement_blocked or alpha_feedback_mode,
+        use_container_width=True,
     ):
         labels = load_demo_labels()
         snapshot = load_demo_snapshot()
@@ -1179,13 +1186,42 @@ with st.expander("Try ScopeProof", expanded=False):
         _reset_analysis()
         st.rerun()
 
-with st.expander("Alpha feedback session (optional)", expanded=False):
+with st.expander("Advanced source options", expanded=False):
+    github_token = st.text_input(
+        "Optional GitHub token",
+        type="password",
+        help=(
+            "Used only in this session to increase free GitHub rate limits. "
+            "Never exported or saved."
+        ),
+        key="github_token",
+    )
+    candidate_paths_text = st.text_area(
+        "Bounded unchanged candidate paths (optional)",
+        key="candidate_paths",
+        help=(
+            "One explicit repository-relative file path per line. ScopeProof does not "
+            "infer paths or scan the repository."
+        ),
+    )
+    candidate_paths = list(
+        dict.fromkeys(
+            line.strip() for line in candidate_paths_text.splitlines() if line.strip()
+        )
+    )
+    st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
+
+requirements_source_url = ""
+with st.expander("Research and historical options", expanded=False):
+    st.caption(
+        "Stage 1 is closed and external feedback is not required for owner-led Stage 2. "
+        "This optional research path is separate from the standard product workflow."
+    )
     alpha_feedback_mode = st.checkbox(
         "Collect local alpha feedback for this review",
         value=False,
         key="alpha_feedback_mode",
     )
-
     if alpha_feedback_mode:
         st.caption(
             "Qualification is session-only. Confirm a genuine public case before fetching; "
@@ -1209,6 +1245,7 @@ with st.expander("Alpha feedback session (optional)", expanded=False):
             "This review contains no confidential information, secrets, or private links",
             key="no_confidential_information",
         )
+
 alpha_qualification_ready = True
 alpha_qualification_input: AlphaQualificationInput | None = None
 alpha_qualification: AlphaQualification | None = None
@@ -1252,30 +1289,6 @@ if alpha_feedback_mode:
 else:
     st.caption("Standard review mode does not create participant research records.")
 
-with st.expander("Advanced source options", expanded=False):
-    github_token = st.text_input(
-        "Optional GitHub token",
-        type="password",
-        help=(
-            "Used only in this session to increase free GitHub rate limits. "
-            "Never exported or saved."
-        ),
-        key="github_token",
-    )
-    candidate_paths_text = st.text_area(
-        "Bounded unchanged candidate paths (optional)",
-        key="candidate_paths",
-        help=(
-            "One explicit repository-relative file path per line. ScopeProof does not "
-            "infer paths or scan the repository."
-        ),
-    )
-    candidate_paths = list(
-        dict.fromkeys(
-            line.strip() for line in candidate_paths_text.splitlines() if line.strip()
-        )
-    )
-    st.caption("At most eight explicit UTF-8 text files are fetched at the PR head SHA.")
 reopened_review = st.session_state["review_state"]
 fetch_action_label = (
     "Check current head"
@@ -1696,8 +1709,12 @@ else:
             for message in warnings_by_criterion[criterion_id]:
                 st.warning(message)
 
+    st.caption(
+        "Typing or pressing Enter only stages draft changes. Use the explicit action below "
+        "to apply edits and bind the confirmed criteria snapshot."
+    )
     confirm_clicked = confirm_action_placeholder.button(
-        "Confirm criteria",
+        "Apply edits and confirm criteria",
         key="confirm_criteria",
         disabled=(
             bool(blank_criterion_ids)
@@ -2070,11 +2087,6 @@ else:
             if comparison.ruleset_version_changed
             else "Ruleset unchanged between reviews."
         )
-    st.caption(
-        "Evidence status describes deterministic candidates, not correctness. Evidence types "
-        "keep implementation, test, and externally recorded runtime observations separate."
-    )
-    _render_ci_observation_summary(bundle)
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
     diagnostic_by_id = {
         diagnostic.criterion_id: diagnostic
@@ -2086,6 +2098,53 @@ else:
     coverage_by_id = {
         row.criterion_id: row for row in criterion_coverage_rows(bundle)
     }
+    blocking_criteria = set(bundle.gate.blocking_criteria)
+    unresolved_ids = [
+        criterion.criterion_id
+        for criterion in bundle.criteria
+        if criterion.criterion_id not in resolution_by_id
+    ]
+    recorded_decisions = len(bundle.criteria) - len(unresolved_ids)
+    st.markdown("### Decision progress")
+    st.caption(
+        f"Decisions recorded: {recorded_decisions} of {len(bundle.criteria)}."
+    )
+    if unresolved_ids:
+        st.markdown("### Unresolved criteria queue")
+        st.caption(
+            "Review candidate evidence and record an explicit human decision for each item."
+        )
+        for criterion_id in unresolved_ids:
+            criterion = next(
+                item for item in bundle.criteria if item.criterion_id == criterion_id
+            )
+            with st.container(border=True):
+                st.markdown(f"**{criterion_id}**")
+                st.text(criterion.text)
+                evidence_status = evidence_status_text(
+                    coverage_by_id[criterion_id].evidence_status
+                )
+                st.caption(
+                    f"Candidate evidence: {evidence_status}"
+                )
+                st.caption(
+                    "Observed runtime evidence and the human acceptance decision remain "
+                    "separate from static implementation or test candidates."
+                )
+                st.text(finding_by_id[criterion_id].recommended_action)
+                if st.button(
+                    f"Review {criterion_id}",
+                    key=f"review_unresolved_{criterion_id}",
+                ):
+                    st.session_state["selected_criterion"] = criterion_id
+                    st.rerun()
+    else:
+        st.success("A current human decision is recorded for every active criterion.")
+    st.caption(
+        "Evidence status describes deterministic candidates, not correctness. Evidence types "
+        "keep implementation, test, and externally recorded runtime observations separate."
+    )
+    _render_ci_observation_summary(bundle)
     evidence_strength_counts = {
         EvidenceStatus.STRONG_CANDIDATE: 0,
         EvidenceStatus.WEAK_CANDIDATE: 0,
@@ -2125,7 +2184,6 @@ else:
             format_func=lambda item: item.value,
             key="evidence_level_filter",
         )
-    blocking_criteria = set(bundle.gate.blocking_criteria)
     matrix = []
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
@@ -2183,22 +2241,6 @@ else:
                 ):
                     st.session_state["selected_criterion"] = row["Criterion"]
                     st.rerun()
-
-    unresolved_ids = [
-        criterion.criterion_id
-        for criterion in bundle.criteria
-        if criterion.criterion_id not in resolution_by_id
-    ]
-    if unresolved_ids:
-        st.markdown("### Unresolved criteria queue")
-        st.caption(
-            "Review candidate evidence and record an explicit human decision for each item."
-        )
-        for criterion_id in unresolved_ids:
-            st.markdown(
-                f"- **{criterion_id}** — "
-                f"{finding_by_id[criterion_id].recommended_action}"
-            )
 
     st.header("4 · Criterion Detail")
     criterion_ids = [criterion.criterion_id for criterion in bundle.criteria]
@@ -2819,6 +2861,21 @@ else:
             st.markdown("### What to do next")
             for message in guidance:
                 st.text(message)
+        if unresolved_ids:
+            if st.button(
+                "Review next unresolved criterion",
+                key="review_next_unresolved_summary",
+                use_container_width=True,
+            ):
+                st.session_state["selected_criterion"] = unresolved_ids[0]
+                st.rerun()
+        elif not final_acceptance_recorded:
+            st.markdown(
+                "[Record final acceptance after reviewing every criterion]"
+                "(#final-review-acceptance)"
+            )
+        else:
+            st.caption("Save the validated review locally or download an export below.")
         st.caption(
             f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
             "results are reproducible from the exported review"
