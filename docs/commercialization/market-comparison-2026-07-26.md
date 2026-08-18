@@ -1,6 +1,7 @@
 # ScopeProof market comparison and product adjustment
 
-Date: 2026-07-28
+Date: 2026-07-26
+Last refreshed: 2026-08-17
 Status: current product and competitor-documentation audit
 Boundary: competitor capabilities below are vendor-advertised unless explicitly
 labelled as a ScopeProof implementation fact. This document is not customer or
@@ -33,14 +34,15 @@ criterion is supported at this exact head.”
 
 | Category and products | Vendor-advertised job | Overlap with ScopeProof | ScopeProof distinction today |
 | --- | --- | --- | --- |
-| AI PR review — CodeRabbit, Qodo, GitHub Copilot code review | Find bugs or rule violations, summarize changes, suggest fixes, and automate or repeat reviews in the PR workflow. | PR context, changed-code inspection, review guidance, re-review. | ScopeProof does not generate general review comments or fixes. It starts from reviewer-confirmed criteria, exposes deterministic candidate lines, and leaves acceptance unresolved until a human decides. |
+| AI PR review — GitHub Copilot, CodeRabbit, Qodo, Graphite | Find bugs or rule violations, summarize changes, suggest fixes, and automate or repeat reviews in the PR workflow. | PR context, changed-code inspection, review guidance, re-review. | ScopeProof does not generate general review comments or fixes. It starts from reviewer-confirmed criteria, exposes deterministic candidate lines at an exact public PR head, and leaves acceptance unresolved until a human decides. |
 | Static analysis — SonarQube | Analyze issues introduced on new code and report a pass/fail quality gate to the repository platform. | Changed-code analysis, status/gate vocabulary, merge-time use. | ScopeProof does not scan for generic quality or security issues. Its gate is tied to criterion evidence, observed CI, runtime records, and current human decisions. |
 | Test management and requirements traceability — Qase, TestRail | Link requirements to test cases and results; show covered/uncovered requirements and stale test results. | Requirement-to-test coverage, missing-coverage visibility, snapshots or reports. | ScopeProof works at a single public PR head, includes implementation candidates, and keeps linked/static candidates distinct from executed runtime verification. It is not a test repository or execution manager. |
 | Work tracking — Azure Boards and GitHub controls | Link work items, PRs, commits, builds, reviews, and required status checks to provide traceability and merge controls. | Requirement/source linkage, PR identity, CI state, policy enforcement. | ScopeProof inspects criterion-level evidence inside the PR rather than treating an item link, template, approval, or passing check as proof that each criterion is covered. |
 
 ## Official evidence used
 
-- [CodeRabbit documentation](https://docs.coderabbit.ai/) advertises
+- [CodeRabbit pull-request review documentation](https://docs.coderabbit.ai/overview/pull-request-review)
+  advertises
   context-aware PR reviews, bug detection, standards enforcement, suggested
   fixes, and IDE/CLI/PR surfaces.
 - [CodeRabbit linked-issue validation](https://docs.coderabbit.ai/issues/pr-validation)
@@ -61,6 +63,10 @@ criterion is supported at this exact head.”
 - [GitHub Copilot code review documentation](https://docs.github.com/en/copilot/concepts/agents/code-review)
   describes AI-generated PR feedback and suggested fixes; it also states the
   feature is available on paid Copilot plans and consumes AI credits.
+- [Graphite AI review documentation](https://graphite.com/docs/ai-reviews) describes automated PR
+  findings and suggested fixes in Graphite's review workflow.
+- [Graphite code review documentation](https://graphite.com/docs/code-review) describes its pull
+  request review, inbox, and merge workflow.
 - [GitHub status-check documentation](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks)
   describes pending, passing, and failing checks attached to commits.
 - [SonarQube pull-request analysis documentation](https://docs.sonarsource.com/sonarqube-server/2026.1/analyzing-source-code/pull-request-analysis/introduction)
@@ -156,5 +162,6 @@ criterion is supported at this exact head.”
 
 The best near-term positioning is therefore: **“Inspect acceptance coverage at
 an exact public PR head without confusing candidate code, CI, runtime proof, or
-human acceptance.”** It should remain a positioning hypothesis until genuine
-users demonstrate that this job is important and repeated.
+human acceptance.”** This is a positioning hypothesis, not customer or market validation. It
+should remain a hypothesis unless genuine users later demonstrate that this job is important and
+repeated.

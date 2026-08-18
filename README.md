@@ -137,6 +137,8 @@ they do not establish correctness, customer validation, or Stage 1 progress.
 See the
 [v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
 for the implemented feature ledger, current gaps, and owner-led Stage 2 roadmap.
+The [documentation map](docs/README.md) separates current operating documents from historical
+evidence snapshots.
 
 ```bash
 python3 -m venv .venv
