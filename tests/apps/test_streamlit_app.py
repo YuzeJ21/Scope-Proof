@@ -2282,6 +2282,13 @@ def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> 
     markdown = [item.value for item in app.markdown]
     assert "[Review AC-01](#review-ac-01)" in markdown
     assert "#### Review AC-01" in markdown
+    assert app.button(key="inspect_queue_AC-02").label == (
+        "Open AC-02 decision controls"
+    )
+
+    app = app.button(key="inspect_queue_AC-02").click().run()
+
+    assert app.selectbox(key="selected_criterion").value == "AC-02"
 
 
 def test_summary_offers_direct_next_unresolved_action() -> None:

@@ -2134,6 +2134,11 @@ else:
                     "separate from static implementation or test candidates."
                 )
                 st.text(finding_by_id[criterion_id].recommended_action)
+                if st.button(
+                    f"Open {criterion_id} decision controls",
+                    key=f"inspect_queue_{criterion_id}",
+                ):
+                    st.session_state["selected_criterion"] = criterion_id
     else:
         st.success("A current human decision is recorded for every active criterion.")
     st.caption(
