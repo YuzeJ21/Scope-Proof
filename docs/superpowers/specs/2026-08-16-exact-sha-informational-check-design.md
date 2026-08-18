@@ -70,7 +70,8 @@ Add `publish_check` beside the existing backward-compatible comment publisher. I
 `httpx.Client` with fixed `https://api.github.com` base URL, 15-second timeout, no redirects, and no
 retries. It never follows a server-provided pagination URL.
 
-Before any write, it fetches `/repos/{repository}/pulls/{pr_number}` and Pydantic-validates the
+Before planning and again immediately before any write, it fetches
+`/repos/{repository}/pulls/{pr_number}` and Pydantic-validates the
 response. Analysis publication requires the live PR to be open. Withdrawal permits an
 identity-matched closed or merged PR so a removed applicability label cannot leave a stale Ready
 display. Both paths require the exact repository and event head SHA; a mismatch is stale or foreign
@@ -79,16 +80,19 @@ the revocation notice in the bounded summary, so it cannot truncate retained cri
 The same existing-Check-only path revokes a prior display when checked-in criteria confirmation is
 missing or mismatched while the opt-in label remains present. State-transition notices are
 canonicalized before each write, so reruns converge and never grow the summary.
-The event context also carries the immutable base SHA. The publisher requires both the live base
-and live head to match the event, and the workflow validates both identities in review-command
+The event context also carries the immutable base SHA. The publisher requires both live reads of
+the base and head to match the event, and all Check writers share one repository-wide concurrency
+group. The workflow validates both identities in review-command
 output before retaining its verdict or exporting its report. A base-advance or force-push race
 therefore fails closed instead of combining criteria, analysis, and publication from different
 snapshots.
 Default-base pushes run a separate trusted workflow because GitHub emits no pull-request
 `synchronize` event for a base-only advance. The bounded publisher enumerates at most two full
-100-item pages of open PRs targeting the pushed default branch and, only when both are full, makes
-a one-item request for the 201st record before any write. An empty sentinel accepts exactly 200
-PRs; a nonempty sentinel fails closed. This keeps the worst-case eligible path at 803 REST requests,
+55-item pages of open PRs targeting the pushed default branch and, only when both are full, makes
+a third-page sentinel request before any write. An empty sentinel accepts exactly 110 PRs; a
+nonempty sentinel fails closed. Each eligible path budgets two live pull reads, at most five
+Check-list reads, one detail read, and one write. With the three collection requests, the
+worst-case path is 993 REST requests,
 below the standard 1,000-request-per-repository hourly limit for an Actions `GITHUB_TOKEN`. It
 filters out deleted-fork records and other non-same-repository PRs, revalidates each eligible live
 identity, and revokes only an existing exact-head display. Individual PR failures are collected

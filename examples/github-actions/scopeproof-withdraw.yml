@@ -10,7 +10,7 @@ permissions:
   checks: write
 
 concurrency:
-  group: scopeproof-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  group: scopeproof-check-writer-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -27,12 +27,12 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install ScopeProof
-        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@39fdf85a3f61667e20863de2f72dfe290a6785c1"
+        run: pip install "scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@e4a9e2f6230ea2e6cd40de861a930b2e4e99785e"
       - name: Withdraw exact-head informational Check
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python -m scopeproof_core.github_action_runner \
+          scopeproof-github-action \
             --event-path "$GITHUB_EVENT_PATH" \
             --withdraw-check \
             --content "The scopeproof-review label was removed; applicability is withdrawn."

@@ -9,7 +9,7 @@ permissions:
   checks: write
 
 concurrency:
-  group: scopeproof-base-${{ github.repository }}-${{ github.ref }}
+  group: scopeproof-check-writer-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           BASE_REF: ${{ github.event.repository.default_branch }}
         run: |
-          python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+          python -m uv run --frozen scopeproof-github-action \
             --invalidate-base-advance \
             --repository "$GITHUB_REPOSITORY" \
             --base-ref "$BASE_REF" \

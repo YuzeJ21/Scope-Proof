@@ -21,6 +21,11 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
+- Serialized every informational Check writer at repository scope, revalidated the live pull
+  request immediately before mutation, and tightened default-base invalidation to at most 110
+  eligible pull requests. Even with five Check-list pages per head, the worst-case path is bounded
+  to 993 REST requests. Copyable workflows now invoke a pinned installed entry point, and the
+  base-advance example does not check out or import target-repository code.
 - Added a cross-platform, fail-closed alpha-storage boundary: POSIX rehearsal persistence keeps its
   descriptor-relative protections, while portable creates, outcome updates, and CLI reports use
   exclusive publication and process-safe mutation claims. Creates and updates now share the same

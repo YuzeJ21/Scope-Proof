@@ -24,19 +24,19 @@ def test_action_workflow_uses_minimal_permissions_and_nonblocking_default() -> N
     assert "git fetch" not in workflow
 
 
-def test_workflows_serialize_same_pull_request_head_publication() -> None:
+def test_all_check_writers_share_one_repository_wide_concurrency_group() -> None:
     for path in (
         Path(".github/workflows/scopeproof.yml"),
+        Path(".github/workflows/scopeproof-withdraw.yml"),
+        Path(".github/workflows/scopeproof-base-advance.yml"),
         Path("examples/github-actions/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof-withdraw.yml"),
+        Path("examples/github-actions/scopeproof-base-advance.yml"),
     ):
         workflow = path.read_text(encoding="utf-8")
 
         assert "concurrency:" in workflow
-        assert (
-            "group: scopeproof-${{ github.repository }}-"
-            "${{ github.event.pull_request.number }}-"
-            "${{ github.event.pull_request.head.sha }}"
-        ) in workflow
+        assert "group: scopeproof-check-writer-${{ github.repository }}" in workflow
         assert "cancel-in-progress: false" in workflow
 
 
@@ -70,13 +70,24 @@ def test_default_base_advance_workflows_revoke_without_pr_head_execution() -> No
         assert "github.event.repository.default_branch" in workflow
         assert "checks: write" in workflow
         assert "pull-requests: read" in workflow
-        assert "ref: ${{ github.sha }}" in workflow
-        assert "persist-credentials: false" in workflow
         assert "--invalidate-base-advance" in workflow
         assert '--repository "$GITHUB_REPOSITORY"' in workflow
         assert '--after-sha "$GITHUB_SHA"' in workflow
         assert "pull_request_target" not in workflow
         assert "pull_request.head" not in workflow
+
+    repository_workflow = Path(".github/workflows/scopeproof-base-advance.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "ref: ${{ github.sha }}" in repository_workflow
+    assert "persist-credentials: false" in repository_workflow
+
+    copyable = Path("examples/github-actions/scopeproof-base-advance.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "actions/checkout@" not in copyable
+    assert "scopeproof-github-action" in copyable
+    assert "python -m scopeproof_core.github_action_runner" not in copyable
 
     for path in (
         Path(".github/workflows/scopeproof.yml"),
@@ -165,7 +176,7 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
         ),
     )
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
-    reviewed_revision = "39fdf85a3f61667e20863de2f72dfe290a6785c1"
+    reviewed_revision = "e4a9e2f6230ea2e6cd40de861a930b2e4e99785e"
 
     for example in examples:
         assert "pip install scopeproof" not in example
@@ -173,6 +184,27 @@ def test_copyable_example_installs_a_pinned_public_scopeproof_revision() -> None
             f"scopeproof @ git+https://github.com/YuzeJ21/Scope-Proof.git@{reviewed_revision}"
         ) in example
     assert reviewed_revision in guide
+
+
+def test_copyable_workflows_use_the_installed_runner_entry_point() -> None:
+    for path in (
+        Path("examples/github-actions/scopeproof.yml"),
+        Path("examples/github-actions/scopeproof-withdraw.yml"),
+        Path("examples/github-actions/scopeproof-base-advance.yml"),
+    ):
+        workflow = path.read_text(encoding="utf-8")
+        assert "scopeproof-github-action" in workflow
+        assert "python -m scopeproof_core.github_action_runner" not in workflow
+
+    pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+    assert (
+        'scopeproof-github-action = "scopeproof_core.github_action_runner:main"'
+        in pyproject
+    )
+
+    review = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+    assert review.count("python -c") == 2
+    assert review.count('cd "$RUNNER_TEMP" && python -c') == 2
 
 
 def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
@@ -240,6 +272,12 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
         capture_output=True,
         text=True,
     ).stdout
+    pyproject_at_pin = subprocess.run(
+        ["git", "show", f"{pinned_revision}:pyproject.toml"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     withdrawal_workflow_at_pin = subprocess.run(
         [
             "git",
@@ -259,6 +297,10 @@ def test_copyable_source_pin_supports_the_confirmation_contract() -> None:
     assert "class ReviewInputOrigin" in models_at_pin
     assert "LIVE_PUBLIC_GITHUB" in alpha_service_at_pin
     assert 'parser.add_argument("--publish-check"' in runner_at_pin
+    assert (
+        'scopeproof-github-action = "scopeproof_core.github_action_runner:main"'
+        in pyproject_at_pin
+    )
     assert 'parser.add_argument("--invalidate-check"' in runner_at_pin
     assert 'parser.add_argument("--validate-result"' in runner_at_pin
     assert "def publish_check(" in publisher_at_pin
@@ -377,8 +419,10 @@ def test_all_third_party_actions_are_pinned_to_immutable_commit_shas() -> None:
         Path(".github/workflows/ci.yml"),
         Path(".github/workflows/scopeproof.yml"),
         Path(".github/workflows/scopeproof-withdraw.yml"),
+        Path(".github/workflows/scopeproof-base-advance.yml"),
         Path("examples/github-actions/scopeproof.yml"),
         Path("examples/github-actions/scopeproof-withdraw.yml"),
+        Path("examples/github-actions/scopeproof-base-advance.yml"),
     )
 
     for path in workflow_paths:

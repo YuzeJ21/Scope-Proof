@@ -14,7 +14,7 @@ env:
   SCOPEPROOF_REQUIRED_CHECK: false
 
 concurrency:
-  group: scopeproof-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  group: scopeproof-check-writer-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -50,7 +50,7 @@ jobs:
               --requirements .scopeproof/requirements.txt \
               --confirmation .scopeproof/requirements-confirmation.json \
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
-            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen scopeproof-github-action \
               --event-path "$GITHUB_EVENT_PATH" \
               --validate-result "$RUNNER_TEMP/scopeproof-result.json"
             python -m uv run --frozen python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
@@ -79,12 +79,12 @@ jobs:
             content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
           fi
           if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" = "true" ]; then
-            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen scopeproof-github-action \
               --event-path "$GITHUB_EVENT_PATH" \
               --requirements-confirmed \
               --verdict "$SCOPEPROOF_VERDICT" "${content_args[@]}"
           else
-            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen scopeproof-github-action \
               --event-path "$GITHUB_EVENT_PATH" \
               --content "Checked-in .scopeproof/requirements.txt is missing."
           fi
@@ -98,14 +98,14 @@ jobs:
             if [ -s "$RUNNER_TEMP/scopeproof-report.md" ]; then
               content_args=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
             fi
-            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen scopeproof-github-action \
               --event-path "$GITHUB_EVENT_PATH" \
               --requirements .scopeproof/requirements.txt \
               --confirmation .scopeproof/requirements-confirmation.json \
               --verdict "$SCOPEPROOF_VERDICT" \
               --publish-check "${content_args[@]}"
           else
-            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen scopeproof-github-action \
               --event-path "$GITHUB_EVENT_PATH" \
               --invalidate-check
           fi

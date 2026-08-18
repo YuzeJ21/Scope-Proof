@@ -10,7 +10,7 @@ permissions:
   checks: write
 
 concurrency:
-  group: scopeproof-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  group: scopeproof-check-writer-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+          python -m uv run --frozen scopeproof-github-action \
             --event-path "$GITHUB_EVENT_PATH" \
             --withdraw-check \
             --content "The scopeproof-review label was removed; applicability is withdrawn."
