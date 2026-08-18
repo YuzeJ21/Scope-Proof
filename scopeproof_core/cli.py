@@ -196,6 +196,7 @@ def _review(args: argparse.Namespace) -> int:
     metadata = {
         "review_id": state.review.review_id,
         "verdict": bundle.gate.verdict.value,
+        "base_sha": bundle.review.base_sha,
         "head_sha": bundle.review.head_sha,
         "ingestion_state": bundle.review.ingestion_state.value,
         "ingestion_warnings": bundle.review.ingestion_warnings,

@@ -1377,20 +1377,32 @@ def test_launch_matrix_keeps_action_as_an_advanced_preview() -> None:
 
 
 def test_copyable_action_and_guide_share_the_reviewed_source_candidate_pin() -> None:
-    example = Path("examples/github-actions/scopeproof.yml").read_text(encoding="utf-8")
+    examples = [
+        Path(path).read_text(encoding="utf-8")
+        for path in (
+            "examples/github-actions/scopeproof.yml",
+            "examples/github-actions/scopeproof-withdraw.yml",
+            "examples/github-actions/scopeproof-base-advance.yml",
+        )
+    ]
     guide = Path("docs/github-action.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    expected_pin = "d553791cba83d9f756b2adce22bd814872b73ea2"
+    expected_pin = "50058cffd28fb3d4b9bf6da97d05f77ab4dcb509"
 
-    install = re.search(
-        r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
-        example,
-    )
+    installs = [
+        re.search(
+            r"scopeproof @ git\+https://github\.com/YuzeJ21/Scope-Proof\.git@([0-9a-f]{40})",
+            example,
+        )
+        for example in examples
+    ]
 
-    assert install is not None
-    assert install.group(1) == expected_pin
-    assert f"`{install.group(1)}`" in guide
-    assert f"`{install.group(1)}`" in changelog
+    assert all(install is not None for install in installs)
+    assert {install.group(1) for install in installs if install is not None} == {
+        expected_pin
+    }
+    assert f"`{expected_pin}`" in guide
+    assert "`d553791cba83d9f756b2adce22bd814872b73ea2`" in changelog
     assert "source-candidate installation" in guide
     assert "not a published v0.2.3 release" in guide
 
@@ -3612,3 +3624,28 @@ def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> 
             reference = line.split("@", maxsplit=1)[1].split()[0]
             assert len(reference) == 40
             assert all(character in "0123456789abcdef" for character in reference)
+
+
+def test_informational_check_status_preserves_product_evidence_boundaries() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+    for document in (roadmap, status):
+        normalized = " ".join(document.split())
+        assert "ScopeProof evidence summary (informational)" in normalized
+        assert "neutral" in normalized
+        assert "not a required branch-protection check" in normalized
+        assert "does not create customer validation" in normalized
+        assert "does not prove correctness" in normalized
+        assert "does not prove runtime" in normalized
+        assert "does not prove accessibility" in normalized
+        assert "does not prove demand or adoption" in normalized
+        for count in (
+            "0/5 qualifying reviews",
+            "0/3 independent practitioners",
+            "0/3 public repositories",
+            "0/3 independently observed under-ten-minute completions",
+            "0/2 reuse-intent signals",
+        ):
+            assert count in normalized

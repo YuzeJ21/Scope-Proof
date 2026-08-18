@@ -1,16 +1,21 @@
 name: ScopeProof
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, synchronize, labeled]
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
+  checks: write
 
 env:
   # Keep this informational until the repository owner intentionally promotes it.
   SCOPEPROOF_REQUIRED_CHECK: false
+
+concurrency:
+  group: scopeproof-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
 
 jobs:
   review:
@@ -45,9 +50,19 @@ jobs:
               --requirements .scopeproof/requirements.txt \
               --confirmation .scopeproof/requirements-confirmation.json \
               --storage-dir .scopeproof/reviews > "$RUNNER_TEMP/scopeproof-result.json"
+            python -m uv run --frozen scopeproof-github-action \
+              --event-path "$GITHUB_EVENT_PATH" \
+              --validate-result "$RUNNER_TEMP/scopeproof-result.json"
             python -m uv run --frozen python -c 'import json; print("SCOPEPROOF_VERDICT=" + json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["verdict"])' >> "$GITHUB_ENV"
             review_id=$(python -m uv run --frozen python -c 'import json; print(json.load(open("'"$RUNNER_TEMP"'/scopeproof-result.json"))["review_id"])')
-            python -m uv run --frozen scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.md"
+            if python -m uv run --frozen scopeproof export "$review_id" --storage-dir .scopeproof/reviews --format markdown > "$RUNNER_TEMP/scopeproof-report.tmp.md" &&
+              [ -s "$RUNNER_TEMP/scopeproof-report.tmp.md" ] &&
+              mv "$RUNNER_TEMP/scopeproof-report.tmp.md" "$RUNNER_TEMP/scopeproof-report.md"; then
+              :
+            else
+              echo "SCOPEPROOF_VERDICT=needs_review" >> "$GITHUB_ENV"
+              exit 1
+            fi
           fi
       - name: Upload ScopeProof report artifact
         if: always()
@@ -57,41 +72,44 @@ jobs:
           path: ${{ runner.temp }}/scopeproof-report.md
           if-no-files-found: ignore
           retention-days: 7
-      - name: Emit fork-safe ScopeProof summary and comment plan
+      - name: Emit fork-safe ScopeProof summary plan
         run: |
           content_args=()
-          if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
+          if [ -s "$RUNNER_TEMP/scopeproof-report.md" ]; then
             content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
           fi
           if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" = "true" ]; then
-            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen scopeproof-github-action \
               --event-path "$GITHUB_EVENT_PATH" \
               --requirements-confirmed \
               --verdict "$SCOPEPROOF_VERDICT" "${content_args[@]}"
           else
-            python -m uv run --frozen python -m scopeproof_core.github_action_runner \
+            python -m uv run --frozen scopeproof-github-action \
               --event-path "$GITHUB_EVENT_PATH" \
               --content "Checked-in .scopeproof/requirements.txt is missing."
           fi
-      - name: Publish an idempotent informational comment
-        if: github.event.pull_request.head.repo.fork == false && hashFiles('.scopeproof/requirements.txt') != ''
+      - name: Publish exact-head informational Check
+        if: github.event.pull_request.head.repo.full_name == github.repository
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" != "true" ]; then
-            echo "ScopeProof: requirements confirmation is unavailable or does not match."
-            exit 0
+          if [ "$SCOPEPROOF_REQUIREMENTS_CONFIRMED" = "true" ]; then
+            content_args=(--content "No validated ScopeProof report was produced; evidence remains unavailable.")
+            if [ -s "$RUNNER_TEMP/scopeproof-report.md" ]; then
+              content_args=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
+            fi
+            python -m uv run --frozen scopeproof-github-action \
+              --event-path "$GITHUB_EVENT_PATH" \
+              --requirements .scopeproof/requirements.txt \
+              --confirmation .scopeproof/requirements-confirmation.json \
+              --verdict "$SCOPEPROOF_VERDICT" \
+              --publish-check "${content_args[@]}"
+          else
+            python -m uv run --frozen scopeproof-github-action \
+              --event-path "$GITHUB_EVENT_PATH" \
+              --invalidate-check
           fi
-          content_args=()
-          if [ -f "$RUNNER_TEMP/scopeproof-report.md" ]; then
-            content_args+=(--content-file "$RUNNER_TEMP/scopeproof-report.md")
-          fi
-          python -m uv run --frozen python -m scopeproof_core.github_action_runner \
-            --event-path "$GITHUB_EVENT_PATH" \
-            --requirements-confirmed \
-            --verdict "$SCOPEPROOF_VERDICT" \
-            --publish-comment "${content_args[@]}"
       - name: Publication boundary
         run: |
           echo "Fork pull requests never receive a write request."
-          echo "Comments are informational; required-check mode remains disabled."
+          echo "The Check is neutral and informational; required-check mode remains disabled."

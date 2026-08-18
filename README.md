@@ -503,8 +503,19 @@ are not authorized for publication without a separate owner decision.
 The default product is the local workbench. The checked-in [GitHub Actions
 guide](docs/github-action.md) covers an advanced, non-blocking preview for repositories that make a
 separate operator decision to adopt it. It requires checked-in, hash-confirmed requirements and
-never checks out or executes pull-request head code. It is not part of first use and does not
-replace the reviewer-controlled workflow.
+never checks out or executes pull-request head code. For a maintainer-labeled same-repository PR,
+it may publish the neutral-only `ScopeProof evidence summary (informational)` Check bound to the
+exact PR head and confirmed criteria-source snapshot. A same-head rerun updates that identity; a
+new head creates a new auditable Check identity. Removing the opt-in label updates an existing
+trusted exact-head identity to neutral Needs Review while retaining prior evidence for audit. Fork
+or missing token paths do not write, and a stale head or malformed GitHub response fails closed.
+Withdrawal uses a separate trusted-base-only event so conflicted PRs are covered without executing
+pull-request code; same-repository eligibility is based on repository identity, not whether the
+target repository itself is a fork. The Check is not a required
+branch-protection check. It is not part of first use and does not replace the reviewer-controlled
+workflow. Reviewer and source-owner identities remain asserted, not authenticated. This
+engineering surface does not prove correctness, runtime behavior, accessibility, demand, adoption,
+or customer validation, and it does not alter the closed Stage 1 counts.
 
 ## Explicit local Definition-of-Done packs
 
