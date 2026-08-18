@@ -1,4 +1,4 @@
-"""Narrow GitHub REST adapters for pre-approved ScopeProof publication plans."""
+"""Narrow GitHub API adapters for pre-approved ScopeProof publication plans."""
 
 from __future__ import annotations
 
@@ -39,6 +39,45 @@ _BASE_ADVANCE_NOTICE = (
     "The target base branch advanced for this open pull request. The prior snapshot is stale, "
     "so any Ready display is revoked until a new exact-base review completes."
 )
+_POSTWRITE_STALE_NOTICE = (
+    "The pull request identity or applicability changed during publication. "
+    "Any Ready display is revoked."
+)
+_BASE_ADVANCE_QUERY = """
+query ScopeProofBaseAdvanceCandidates(
+  $owner: String!
+  $name: String!
+  $label: String!
+  $baseRef: String!
+  $first: Int!
+  $after: String
+) {
+  repository(owner: $owner, name: $name) {
+    nameWithOwner
+    label(name: $label) {
+      pullRequests(
+        states: OPEN
+        baseRefName: $baseRef
+        first: $first
+        after: $after
+        orderBy: {field: CREATED_AT, direction: ASC}
+      ) {
+        nodes {
+          number
+          state
+          url
+          headRefOid
+          baseRefOid
+          baseRefName
+          headRepository { nameWithOwner }
+          repository { nameWithOwner }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}
+""".strip()
 
 
 class GitHubCheckPublicationError(RuntimeError):
@@ -83,6 +122,61 @@ class _PullResponse(BaseModel):
     head: _PullHeadResponse
     base: _PullBaseResponse
     labels: list[_PullLabelResponse] = Field(max_length=100)
+
+
+class _GraphQLRepositoryResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    nameWithOwner: str = Field(pattern=r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$")
+
+
+class _GraphQLPullResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    number: int = Field(gt=0)
+    state: Literal["OPEN"]
+    url: str = Field(min_length=1, max_length=500)
+    headRefOid: str = Field(pattern=r"^[0-9a-f]{40}$")
+    baseRefOid: str = Field(pattern=r"^[0-9a-f]{40}$")
+    baseRefName: str = Field(min_length=1, max_length=255)
+    headRepository: _GraphQLRepositoryResponse | None
+    repository: _GraphQLRepositoryResponse
+
+
+class _GraphQLPageInfoResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    hasNextPage: bool
+    endCursor: str | None = Field(default=None, min_length=1, max_length=500)
+
+
+class _GraphQLPullConnectionResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    nodes: list[_GraphQLPullResponse] = Field(max_length=_BASE_ADVANCE_PULLS_PER_PAGE)
+    pageInfo: _GraphQLPageInfoResponse
+
+
+class _GraphQLLabelResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    pullRequests: _GraphQLPullConnectionResponse
+
+
+class _GraphQLBaseAdvanceRepositoryResponse(_GraphQLRepositoryResponse):
+    label: _GraphQLLabelResponse | None
+
+
+class _GraphQLBaseAdvanceDataResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    repository: _GraphQLBaseAdvanceRepositoryResponse
+
+
+class _GraphQLBaseAdvanceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    data: _GraphQLBaseAdvanceDataResponse
 
 
 class _CheckAppResponse(BaseModel):
@@ -280,7 +374,7 @@ def _validate_write_response(
     context: CheckRunContext | EventContext,
     plan: CheckRunPlan,
     response: httpx.Response,
-) -> None:
+) -> _CheckRunResponse:
     """Require GitHub to echo the exact published identity."""
 
     response.raise_for_status()
@@ -295,6 +389,46 @@ def _validate_write_response(
         or (plan.mode is CheckMode.UPDATE and created.id != plan.check_run_id)
     ):
         raise GitHubCheckPublicationError("published check run identity mismatch")
+    return created
+
+
+def _compensate_stale_publication(
+    client: httpx.Client,
+    context: CheckRunContext,
+    plan: CheckRunPlan,
+    published: _CheckRunResponse,
+) -> None:
+    """Fail closed by neutralizing the exact Check written by this invocation."""
+
+    summary = f"{_POSTWRITE_STALE_NOTICE} {plan.output.summary}"
+    if len(summary) > 65_535:
+        summary = _POSTWRITE_STALE_NOTICE
+    compensation = CheckRunPlan(
+        mode=CheckMode.UPDATE,
+        reason="live_pull_changed_during_publication",
+        name=plan.name,
+        external_id=plan.external_id,
+        head_sha=plan.head_sha,
+        conclusion="neutral",
+        output=CheckRunOutput(
+            title="ScopeProof — Needs Review (informational)",
+            summary=summary,
+            text=plan.output.text,
+        ),
+        check_run_id=published.id,
+    )
+    request = _UpdateCheckRequest(
+        name=compensation.name,
+        external_id=compensation.external_id,
+        status="completed",
+        conclusion="neutral",
+        output=_request_output(compensation.output),
+    )
+    response = client.patch(
+        f"/repos/{context.repository}/check-runs/{published.id}",
+        json=request.model_dump(mode="json"),
+    )
+    _validate_write_response(context, compensation, response)
 
 
 def _existing_check_skip_plan(context: EventContext, reason: str) -> CheckRunPlan:
@@ -536,7 +670,8 @@ def publish_base_advance_invalidations(
         "Authorization": f"Bearer {checked_token}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    pulls: list[_PullResponse] = []
+    owner, name = identity.repository.split("/", maxsplit=1)
+    pulls: list[_GraphQLPullResponse] = []
     seen_numbers: set[int] = set()
     try:
         with httpx.Client(
@@ -546,75 +681,67 @@ def publish_base_advance_invalidations(
             timeout=15.0,
             follow_redirects=False,
         ) as client:
-            last_page_was_full = False
-            for page_number in range(1, _MAX_BASE_ADVANCE_PULL_PAGES + 1):
-                response = client.get(
-                    f"/repos/{identity.repository}/pulls",
-                    params={
-                        "state": "open",
-                        "base": checked_ref,
-                        "per_page": _BASE_ADVANCE_PULLS_PER_PAGE,
-                        "page": page_number,
+            cursor: str | None = None
+            seen_cursors: set[str] = set()
+            for page_number in range(_MAX_BASE_ADVANCE_PULL_PAGES):
+                response = client.post(
+                    "/graphql",
+                    json={
+                        "query": _BASE_ADVANCE_QUERY,
+                        "variables": {
+                            "owner": owner,
+                            "name": name,
+                            "label": "scopeproof-review",
+                            "baseRef": checked_ref,
+                            "first": _BASE_ADVANCE_PULLS_PER_PAGE,
+                            "after": cursor,
+                        },
                     },
                 )
                 response.raise_for_status()
-                raw_page = response.json()
-                if (
-                    not isinstance(raw_page, list)
-                    or len(raw_page) > _BASE_ADVANCE_PULLS_PER_PAGE
-                ):
-                    raise GitHubCheckPublicationError("malformed pull request page")
-                page = [_PullResponse.model_validate(item) for item in raw_page]
-                for pull in page:
+                page = _GraphQLBaseAdvanceResponse.model_validate(response.json())
+                repository_page = page.data.repository
+                if repository_page.nameWithOwner != identity.repository:
+                    raise GitHubCheckPublicationError("base advance repository mismatch")
+                if repository_page.label is None:
+                    break
+                connection = repository_page.label.pullRequests
+                for pull in connection.nodes:
                     if pull.number in seen_numbers:
                         raise GitHubCheckPublicationError("repeated pull request across pages")
                     seen_numbers.add(pull.number)
                     pulls.append(pull)
-                last_page_was_full = len(page) == _BASE_ADVANCE_PULLS_PER_PAGE
-                if len(page) < _BASE_ADVANCE_PULLS_PER_PAGE:
+                page_info = connection.pageInfo
+                if not page_info.hasNextPage:
                     break
-            if last_page_was_full:
-                sentinel_response = client.get(
-                    f"/repos/{identity.repository}/pulls",
-                    params={
-                        "state": "open",
-                        "base": checked_ref,
-                        "per_page": _BASE_ADVANCE_PULLS_PER_PAGE,
-                        "page": _MAX_BASE_ADVANCE_PULL_PAGES + 1,
-                    },
-                )
-                sentinel_response.raise_for_status()
-                sentinel = sentinel_response.json()
-                if (
-                    not isinstance(sentinel, list)
-                    or len(sentinel) > _BASE_ADVANCE_PULLS_PER_PAGE
-                ):
-                    raise GitHubCheckPublicationError("malformed pull request overflow sentinel")
-                if sentinel:
+                if page_number == _MAX_BASE_ADVANCE_PULL_PAGES - 1:
                     raise GitHubCheckPublicationError("pull request page budget exceeded")
+                cursor = page_info.endCursor
+                if cursor is None or cursor in seen_cursors:
+                    raise GitHubCheckPublicationError("invalid pull request pagination cursor")
+                seen_cursors.add(cursor)
 
         plans: list[CheckRunPlan] = []
         failed_pr_numbers: list[int] = []
         for pull in sorted(pulls, key=lambda item: item.number):
-            label_present = any(label.name == "scopeproof-review" for label in pull.labels)
             if (
-                not label_present
-                or pull.head.repo is None
-                or pull.head.repo.full_name != identity.repository
+                pull.headRepository is None
+                or pull.headRepository.nameWithOwner != identity.repository
             ):
                 continue
             if (
-                pull.state != "open"
-                or pull.base.ref != checked_ref
-                or pull.base.sha != identity.base_sha
-                or pull.base.repo.full_name != identity.repository
+                pull.url
+                != f"https://github.com/{identity.repository}/pull/{pull.number}"
+                or pull.baseRefName != checked_ref
+                or pull.baseRefOid != identity.base_sha
+                or pull.repository.nameWithOwner != identity.repository
             ):
                 raise GitHubCheckPublicationError("base advance pull identity mismatch")
             context = EventContext(
                 repository=identity.repository,
                 pr_number=pull.number,
                 base_sha=identity.base_sha,
-                head_sha=pull.head.sha,
+                head_sha=pull.headRefOid,
                 is_fork=False,
                 requirements_confirmed=False,
             )
@@ -722,7 +849,29 @@ def publish_check(
                     f"/repos/{context.repository}/check-runs/{plan.check_run_id}",
                     json=request.model_dump(mode="json"),
                 )
-            _validate_write_response(context, plan, write_response)
+            published = _validate_write_response(context, plan, write_response)
+            try:
+                postwrite_pull_response = client.get(
+                    f"/repos/{context.repository}/pulls/{context.pr_number}"
+                )
+                postwrite_pull_response.raise_for_status()
+                postwrite_pull = _PullResponse.model_validate(postwrite_pull_response.json())
+                _validate_live_pull(
+                    context,
+                    postwrite_pull,
+                    applicability_label_expected=True,
+                    require_open=True,
+                )
+            except (
+                GitHubCheckPublicationError,
+                httpx.HTTPError,
+                ValidationError,
+                ValueError,
+            ) as exc:
+                _compensate_stale_publication(client, context, plan, published)
+                raise GitHubCheckPublicationError(
+                    "live pull changed during publication"
+                ) from exc
             return plan
     except GitHubCheckPublicationError:
         raise

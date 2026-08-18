@@ -132,6 +132,53 @@ def check_detail_response(**overrides) -> dict:
     return response
 
 
+def graphql_pull(
+    *,
+    pr_number: int = 42,
+    head_sha: str = HEAD_SHA,
+    base_sha: str = BASE_SHA,
+    base_ref: str = "main",
+    head_repository: str | None = "acme/widget",
+) -> dict:
+    return {
+        "number": pr_number,
+        "state": "OPEN",
+        "url": f"https://github.com/acme/widget/pull/{pr_number}",
+        "headRefOid": head_sha,
+        "baseRefOid": base_sha,
+        "baseRefName": base_ref,
+        "headRepository": (
+            {"nameWithOwner": head_repository}
+            if head_repository is not None
+            else None
+        ),
+        "repository": {"nameWithOwner": "acme/widget"},
+    }
+
+
+def graphql_pull_page(
+    *pulls: dict,
+    has_next_page: bool = False,
+    end_cursor: str | None = None,
+) -> dict:
+    return {
+        "data": {
+            "repository": {
+                "nameWithOwner": "acme/widget",
+                "label": {
+                    "pullRequests": {
+                        "nodes": list(pulls),
+                        "pageInfo": {
+                            "hasNextPage": has_next_page,
+                            "endCursor": end_cursor,
+                        },
+                    }
+                }
+            }
+        }
+    }
+
+
 def assert_safe_request(request: httpx.Request) -> None:
     assert str(request.url).startswith("https://api.github.com/repos/acme/widget/")
     assert request.headers["authorization"] == "Bearer secret"
@@ -179,7 +226,7 @@ def test_exact_trusted_check_is_patched_with_neutral_validated_payload() -> None
     plan = publish_check(check_context(), "ready", "Report", "secret", httpx.MockTransport(handler))
 
     assert plan.mode is CheckMode.UPDATE
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "PATCH", "GET"]
 
 
 def test_fork_hosted_repository_same_repository_pr_can_publish() -> None:
@@ -196,7 +243,7 @@ def test_fork_hosted_repository_same_repository_pr_can_publish() -> None:
     plan = publish_check(check_context(), "ready", "Report", "secret", httpx.MockTransport(handler))
 
     assert plan.mode is CheckMode.CREATE
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST", "GET"]
 
 
 def test_label_withdrawal_updates_only_existing_exact_head_check() -> None:
@@ -324,13 +371,45 @@ def test_missing_confirmation_revokes_existing_ready_display() -> None:
     assert [request.method for request in requests] == ["GET", "GET", "GET", "GET", "PATCH"]
 
 
+def test_base_advance_collects_only_label_and_base_filtered_graphql_candidates() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.method == "POST"
+        assert request.url.path == "/graphql"
+        payload = json.loads(request.content)
+        assert "label(name: $label)" in payload["query"]
+        assert "baseRefName: $baseRef" in payload["query"]
+        assert payload["variables"]["label"] == "scopeproof-review"
+        assert payload["variables"]["baseRef"] == "main"
+        return httpx.Response(
+            200,
+            json=graphql_pull_page(
+                graphql_pull(head_repository="acme/fork"),
+            ),
+        )
+
+    result = publish_base_advance_invalidations(
+        repository="acme/widget",
+        base_ref="main",
+        after_sha=BASE_SHA,
+        token="secret",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert result.updated_count == 0
+    assert result.skipped_count == 0
+    assert len(requests) == 1
+
+
 def test_default_base_advance_revokes_existing_labeled_exact_head_check() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        if request.url.path == "/repos/acme/widget/pulls" and "state" in request.url.params:
-            return httpx.Response(200, json=[pull_response()])
+        if request.url.path == "/graphql":
+            return httpx.Response(200, json=graphql_pull_page(graphql_pull()))
         if request.url.path.endswith("/pulls/42"):
             return httpx.Response(200, json=pull_response())
         if request.method == "GET" and request.url.path.endswith("/check-runs/7"):
@@ -353,7 +432,7 @@ def test_default_base_advance_revokes_existing_labeled_exact_head_check() -> Non
     assert result.updated_count == 1
     assert result.skipped_count == 0
     assert [request.method for request in requests] == [
-        "GET",
+        "POST",
         "GET",
         "GET",
         "GET",
@@ -378,23 +457,26 @@ def test_base_advance_without_token_is_non_mutating() -> None:
     assert result.updated_count == 0
 
 
-def test_base_advance_accepts_exactly_110_pulls_with_empty_page_three_sentinel() -> None:
+def test_base_advance_accepts_exactly_110_eligible_pulls_in_two_graphql_pages() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        per_page = int(request.url.params["per_page"])
-        page = int(request.url.params["page"])
-        assert per_page == 55
-        if page == 3:
-            return httpx.Response(200, json=[])
+        payload = json.loads(request.content)
+        assert request.url.path == "/graphql"
+        assert payload["variables"]["first"] == 55
+        page = 1 if payload["variables"]["after"] is None else 2
         start = (page - 1) * 55 + 1
         return httpx.Response(
             200,
-            json=[
-                pull_response(pr_number=number, applicability_label=False)
-                for number in range(start, start + 55)
-            ],
+            json=graphql_pull_page(
+                *(
+                    graphql_pull(pr_number=number, head_repository="acme/fork")
+                    for number in range(start, start + 55)
+                ),
+                has_next_page=page == 1,
+                end_cursor="page-2" if page == 1 else None,
+            ),
         )
 
     result = publish_base_advance_invalidations(
@@ -406,29 +488,28 @@ def test_base_advance_accepts_exactly_110_pulls_with_empty_page_three_sentinel()
     )
 
     assert result.updated_count == 0
-    assert len(requests) == 3
+    assert len(requests) == 2
 
 
-def test_base_advance_rejects_nonempty_overflow_sentinel_before_writes() -> None:
+def test_base_advance_rejects_graphql_overflow_before_writes() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        per_page = int(request.url.params["per_page"])
-        page = int(request.url.params["page"])
-        assert per_page == 55
-        if page == 3:
-            return httpx.Response(
-                200,
-                json=[pull_response(pr_number=111, applicability_label=False)],
-            )
+        payload = json.loads(request.content)
+        assert request.url.path == "/graphql"
+        page = 1 if payload["variables"]["after"] is None else 2
         start = (page - 1) * 55 + 1
         return httpx.Response(
             200,
-            json=[
-                pull_response(pr_number=number, applicability_label=False)
-                for number in range(start, start + 55)
-            ],
+            json=graphql_pull_page(
+                *(
+                    graphql_pull(pr_number=number, head_repository="acme/fork")
+                    for number in range(start, start + 55)
+                ),
+                has_next_page=True,
+                end_cursor=f"page-{page + 1}",
+            ),
         )
 
     with pytest.raises(GitHubCheckPublicationError, match="page budget"):
@@ -440,8 +521,8 @@ def test_base_advance_rejects_nonempty_overflow_sentinel_before_writes() -> None
             transport=httpx.MockTransport(handler),
         )
 
-    assert len(requests) == 3
-    assert all(request.method == "GET" for request in requests)
+    assert len(requests) == 2
+    assert all(request.method == "POST" for request in requests)
 
 
 def test_base_advance_deep_check_pagination_stays_within_actions_token_budget() -> None:
@@ -463,19 +544,24 @@ def test_base_advance_deep_check_pagination_stays_within_actions_token_budget() 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         path = request.url.path
-        if path == "/repos/acme/widget/pulls" and "state" in request.url.params:
-            per_page = int(request.url.params["per_page"])
-            page = int(request.url.params["page"])
-            assert per_page == 55
-            if page == 3:
-                return httpx.Response(200, json=[])
+        if path == "/graphql":
+            payload = json.loads(request.content)
+            assert payload["variables"]["first"] == 55
+            page = 1 if payload["variables"]["after"] is None else 2
             start = (page - 1) * 55 + 1
             return httpx.Response(
                 200,
-                json=[
-                    pull_response(pr_number=number, head_sha=pr_head_sha(number))
-                    for number in range(start, start + 55)
-                ],
+                json=graphql_pull_page(
+                    *(
+                        graphql_pull(
+                            pr_number=number,
+                            head_sha=pr_head_sha(number),
+                        )
+                        for number in range(start, start + 55)
+                    ),
+                    has_next_page=page == 1,
+                    end_cursor="page-2" if page == 1 else None,
+                ),
             )
         if "/pulls/" in path:
             pr_number = int(path.rsplit("/", 1)[-1])
@@ -529,7 +615,7 @@ def test_base_advance_deep_check_pagination_stays_within_actions_token_budget() 
     )
 
     assert result.updated_count == 110
-    assert len(requests) == 993
+    assert len(requests) == 992
     assert len(requests) < 1_000
 
 
@@ -561,15 +647,59 @@ def test_publish_revalidates_live_base_immediately_before_write() -> None:
     assert [request.method for request in requests] == ["GET", "GET", "GET"]
 
 
-def test_base_advance_skips_deleted_fork_before_processing_same_repo_pr() -> None:
+def test_publish_compensates_if_live_base_changes_after_ready_write() -> None:
     requests: list[httpx.Request] = []
-    deleted_fork = pull_response(pr_number=41)
-    deleted_fork["head"]["repo"] = None
+    pull_reads = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal pull_reads
         requests.append(request)
-        if request.url.path == "/repos/acme/widget/pulls" and "state" in request.url.params:
-            return httpx.Response(200, json=[deleted_fork, pull_response()])
+        if request.url.path.endswith("/pulls/42"):
+            pull_reads += 1
+            return httpx.Response(
+                200,
+                json=pull_response(base_sha=BASE_SHA if pull_reads < 3 else OTHER_SHA),
+            )
+        if request.method == "GET":
+            return httpx.Response(200, json=check_list())
+        if request.method == "POST":
+            return httpx.Response(201, json=check_response(check_run_id=8))
+        payload = json.loads(request.content)
+        assert payload["output"]["title"] == "ScopeProof — Needs Review (informational)"
+        assert "changed during publication" in payload["output"]["summary"]
+        return httpx.Response(200, json=check_response(check_run_id=8))
+
+    with pytest.raises(GitHubCheckPublicationError, match="changed during publication"):
+        publish_check(
+            check_context(),
+            "ready",
+            "Report",
+            "secret",
+            httpx.MockTransport(handler),
+        )
+
+    assert [request.method for request in requests] == [
+        "GET",
+        "GET",
+        "GET",
+        "POST",
+        "GET",
+        "PATCH",
+    ]
+
+
+def test_base_advance_skips_deleted_fork_before_processing_same_repo_pr() -> None:
+    requests: list[httpx.Request] = []
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/graphql":
+            return httpx.Response(
+                200,
+                json=graphql_pull_page(
+                    graphql_pull(pr_number=41, head_repository=None),
+                    graphql_pull(),
+                ),
+            )
         if request.url.path.endswith("/pulls/42"):
             return httpx.Response(200, json=pull_response())
         if request.method == "GET" and request.url.path.endswith("/check-runs/7"):
@@ -598,7 +728,10 @@ def test_base_advance_continues_after_individual_pr_failure(
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json=[pull_response(pr_number=41), pull_response(pr_number=42)],
+            json=graphql_pull_page(
+                graphql_pull(pr_number=41),
+                graphql_pull(pr_number=42),
+            ),
         )
 
     def fake_publish(context, token, transport):
@@ -712,7 +845,7 @@ def test_changed_or_foreign_check_posts_new_exact_head_check(existing: dict) -> 
     )
 
     assert plan.mode is CheckMode.CREATE
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST", "GET"]
 
 
 @pytest.mark.parametrize("external_id", [None, ""])
@@ -736,7 +869,7 @@ def test_foreign_same_name_check_without_external_id_is_ignored(
     )
 
     assert plan.mode is CheckMode.CREATE
-    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST"]
+    assert [request.method for request in requests] == ["GET", "GET", "GET", "POST", "GET"]
 
 
 @pytest.mark.parametrize(
