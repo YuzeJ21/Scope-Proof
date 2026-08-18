@@ -1059,15 +1059,35 @@ def test_public_pr_entry_precedes_optional_start_review_controls(
 def test_start_review_secondary_paths_are_collapsed_after_public_pr_entry() -> None:
     app = new_app()
 
-    assert [item.label for item in app.expander[:4]] == [
-        "Try ScopeProof",
-        "Alpha feedback session (optional)",
+    assert [item.label for item in app.expander[:3]] == [
         "Advanced source options",
+        "Research and historical options",
         "Resume a saved review",
     ]
-    assert all(item.proto.expanded is False for item in app.expander[:4])
+    assert all(item.proto.expanded is False for item in app.expander[:3])
     assert app.button(key="load_demo").label == "Load deliberately constructed demo"
     assert app.button(key="reopen_review").disabled is True
+
+
+def test_owner_led_first_use_keeps_demo_visible_and_research_feedback_secondary() -> None:
+    app = new_app()
+    keys = _main_widget_keys(app)
+    visible = "\n".join(item.value for item in [*app.markdown, *app.caption])
+
+    assert "Deliberately constructed demonstration" in visible
+    assert "constructed-demo-tagged" in visible
+    assert "segregated from genuine review claims" in visible
+    assert keys.index("candidate_paths") < keys.index("alpha_feedback_mode")
+    assert "Stage 1 is closed" in visible
+    assert "not required for owner-led Stage 2" in visible
+
+
+def test_criteria_confirmation_explains_draft_submission_boundary() -> None:
+    app = load_demo(new_app())
+    caption_text = "\n".join(item.value for item in app.caption)
+
+    assert "Typing or pressing Enter only stages draft changes" in caption_text
+    assert app.button(key="confirm_criteria").label == "Apply edits and confirm criteria"
 
 
 def test_saved_review_is_discoverable_and_selectable_in_a_fresh_session(
@@ -2250,9 +2270,33 @@ def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> 
     assert "Weak" in visible_text
     assert "None" in visible_text
     assert "Unresolved criteria queue" in visible_text
+    assert "Decisions recorded: 0 of 4" in visible_text
     assert "Review candidate evidence and record an explicit human decision" in visible_text
     assert "ScopeProof does not decide them" in visible_text
     assert "Gate reasons: Blocking Criteria" in visible_text
+
+    captions = [item.value for item in app.caption]
+    assert captions.index("Decisions recorded: 0 of 4.") < next(
+        index for index, value in enumerate(captions) if value.startswith("Observed CI:")
+    )
+    markdown = [item.value for item in app.markdown]
+    assert "[Review AC-01](#review-ac-01)" in markdown
+    assert "#### Review AC-01" in markdown
+    assert app.button(key="inspect_queue_AC-02").label == (
+        "Open AC-02 decision controls"
+    )
+
+    app = app.button(key="inspect_queue_AC-02").click().run()
+
+    assert app.selectbox(key="selected_criterion").value == "AC-02"
+
+
+def test_summary_offers_direct_next_unresolved_action() -> None:
+    app = analyzed_demo(new_app())
+
+    assert "[Review next unresolved criterion](#review-ac-01)" in [
+        item.value for item in app.markdown
+    ]
 
 
 def test_demo_summary_humanizes_gate_reasons_without_mutating_codes() -> None:
@@ -3897,6 +3941,9 @@ def test_evidence_matrix_reports_empty_filter_results() -> None:
 
     assert evidence_matrix_criterion_ids(app) == []
     assert "No criteria match the current filters." in [item.value for item in app.info]
+    markdown = [item.value for item in app.markdown]
+    assert "[Review AC-01](#review-ac-01)" in markdown
+    assert "#### Review AC-01" in markdown
 
 
 def test_evidence_matrix_renders_as_reachable_cards_without_grid_tools() -> None:

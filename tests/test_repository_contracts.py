@@ -43,6 +43,9 @@ PR193_EXACT_BASE_SHA = "9426e8714ffd2c3742bb074ae26fc788f1049c63"
 PR193_RESULTING_MAIN_CI_RUN_ID = "31704668247"
 PR193_RESULTING_MAIN_CODEQL_RUN_ID = "31704666031"
 PR193_RESULTING_MAIN_PAGES_RUN_ID = "31704668164"
+PR196_EXACT_HEAD_SHA = "5a6a25a6dff23cdfa8dcb4023b83144078620610"
+PR196_MERGE_SHA = "8387156fd6f6e90eef7caf58881b0cc5bb62b111"
+PR196_RESULTING_MAIN_CI_RUN_ID = "32093041685"
 GITHUB_ACTIONS_RUN_ROOT = "https://github.com/YuzeJ21/Scope-Proof/actions/runs"
 
 
@@ -1705,6 +1708,67 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
         "WCAG conformance",
     ):
         assert unsupported in platform
+
+
+def test_current_docs_index_and_market_refresh_preserve_owner_led_boundary() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    docs_index = Path("docs/README.md").read_text(encoding="utf-8")
+    market = Path("docs/commercialization/market-comparison-2026-07-26.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "docs/README.md" in readme
+    assert "## Current operating documents" in docs_index
+    assert "## Historical evidence records" in docs_index
+    normalized_docs_index = " ".join(docs_index.split())
+    for current_document in (
+        "../ROADMAP.md",
+        "releases/v0.2.3-status-and-next-stages.md",
+        "commercialization/stage2-readiness-packet.md",
+        "commercialization/market-comparison-2026-07-26.md",
+    ):
+        assert current_document in docs_index
+    assert "Historical records are immutable evidence snapshots" in normalized_docs_index
+
+    normalized_market = " ".join(market.split())
+    assert "Date: 2026-07-26" in market
+    assert "Last refreshed: 2026-08-17" in market
+    for product in ("GitHub Copilot", "CodeRabbit", "Qodo", "Graphite"):
+        assert product in market
+    for official_source in (
+        "https://docs.github.com/en/copilot/concepts/agents/code-review",
+        "https://docs.coderabbit.ai/overview/pull-request-review",
+        "https://docs.qodo.ai/code-review",
+        "https://graphite.com/docs/ai-reviews",
+    ):
+        assert official_source in market
+    assert "exact public PR head" in normalized_market
+    assert "positioning hypothesis, not customer or market validation" in normalized_market
+
+    unreleased = changelog.split("## 0.2.3", maxsplit=1)[0]
+    assert "owner workflow" in unreleased.lower()
+    assert "documentation index" in unreleased.lower()
+
+
+def test_authoritative_status_records_dated_post_pr196_main_evidence() -> None:
+    roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+
+    for document in (roadmap, status):
+        normalized = " ".join(document.split())
+        assert "Post-PR #196 resulting-main snapshot (2026-08-17)" in normalized
+        assert f"PR #196 head `{PR196_EXACT_HEAD_SHA}`" in normalized
+        assert f"merge `{PR196_MERGE_SHA}`" in normalized
+        assert (
+            f"[`{PR196_RESULTING_MAIN_CI_RUN_ID}`]"
+            f"({GITHUB_ACTIONS_RUN_ROOT}/{PR196_RESULTING_MAIN_CI_RUN_ID})"
+        ) in normalized
+        assert "succeeded" in normalized
+        assert "owner workflow consolidation" in normalized.lower()
+        assert "does not claim customer validation" in normalized
 
 
 def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -> None:

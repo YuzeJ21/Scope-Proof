@@ -223,17 +223,12 @@ def _activate_with_keyboard(
     page.keyboard.press(key)
 
 
-def _exercise_primary_path(page: Page, base_url: str) -> None:
+def _exercise_primary_path(
+    page: Page, base_url: str, *, verify_persistence_and_downloads: bool
+) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     expect(page.get_by_role("heading", name="ScopeProof", exact=True)).to_be_visible()
 
-    demo_disclosure = page.locator("summary").filter(has_text="Try ScopeProof")
-    _activate_with_keyboard(
-        page,
-        demo_disclosure,
-        label="Try ScopeProof",
-        key="Enter",
-    )
     load_demo = page.get_by_role(
         "button", name="Load deliberately constructed demo", exact=True
     )
@@ -248,11 +243,13 @@ def _exercise_primary_path(page: Page, base_url: str) -> None:
     page.keyboard.type("Packaged browser reviewer")
     expect(confirmer).to_have_value("Packaged browser reviewer")
 
-    confirm = page.get_by_role("button", name="Confirm criteria", exact=True)
+    confirm = page.get_by_role(
+        "button", name="Apply edits and confirm criteria", exact=True
+    )
     _activate_with_keyboard(
         page,
         confirm,
-        label="Confirm criteria",
+        label="Apply edits and confirm criteria",
         key="Space",
     )
     expect(page.get_by_text("Criteria confirmed by the reviewer.", exact=True)).to_be_visible()
@@ -270,11 +267,50 @@ def _exercise_primary_path(page: Page, base_url: str) -> None:
     expect(page.get_by_text("Missing evidence", exact=True).first).to_be_visible()
     expect(page.get_by_text("Review status: Action required", exact=True)).to_be_visible()
     expect(page.get_by_text("Evidence status:", exact=False).first).to_be_visible()
+    review_ac_02 = page.get_by_role("link", name="Review AC-02", exact=True).first
+    expect(review_ac_02).to_be_visible()
+    review_ac_02.click()
+    assert page.url.endswith("#review-ac-02")
+    expect(page.get_by_role("heading", name="Review AC-02", exact=True)).to_be_visible()
 
-    for label in ("Download Markdown", "Download JSON", "Download CSV"):
+    export_controls = (
+        ("Download Markdown", ".md"),
+        ("Download JSON", ".json"),
+        ("Download CSV", ".csv"),
+    )
+    for label, _suffix in export_controls:
         export = page.get_by_role("button", name=label, exact=True)
         expect(export).to_be_visible()
         expect(export).to_be_enabled()
+
+    if verify_persistence_and_downloads:
+        save_notice = page.get_by_text("Review saved automatically. ID:", exact=False)
+        expect(save_notice).to_be_visible()
+
+        markdown_export = page.get_by_role("button", name="Download Markdown", exact=True)
+        with page.expect_download() as download_info:
+            markdown_export.click()
+        download = download_info.value
+        assert download.suggested_filename.endswith(".md")
+        assert b"head-demo-002" in download.path().read_bytes()
+
+        page.get_by_text("Resume a saved review", exact=True).click()
+        expect(page.get_by_text("saved local review found", exact=False)).to_be_visible()
+        saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
+        saved_review.locator("..").get_by_role("button", name="Open", exact=True).click()
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+        reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+        expect(reopen).to_be_enabled()
+        reopen.click()
+        expect(
+            page.get_by_text(
+                "Review reopened from local storage after validation.", exact=True
+            )
+        ).to_be_visible()
+        expect(
+            page.get_by_role("button", name="Check current head", exact=True)
+        ).to_be_visible()
 
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert page.evaluate("document.body.scrollWidth <= window.innerWidth")
@@ -359,7 +395,7 @@ def test_installed_wheel_primary_path_in_chromium(
             browser = playwright.chromium.launch(headless=True)
             try:
                 external_requests: list[str] = []
-                for viewport in VIEWPORTS:
+                for viewport_index, viewport in enumerate(VIEWPORTS):
                     context = browser.new_context(viewport=viewport)
                     context.route(
                         "**/*",
@@ -383,7 +419,11 @@ def test_installed_wheel_primary_path_in_chromium(
                             else None
                         ),
                     )
-                    _exercise_primary_path(page, base_url)
+                    _exercise_primary_path(
+                        page,
+                        base_url,
+                        verify_persistence_and_downloads=viewport_index == 0,
+                    )
                     context.close()
             finally:
                 browser.close()

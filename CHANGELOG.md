@@ -21,6 +21,12 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
+- Consolidated the owner workflow around visible public-PR and constructed-demo entry points,
+  explicit criteria confirmation, unresolved-decision progress, and direct criterion navigation.
+  Optional alpha-feedback controls now live under research options, constructed demo records remain
+  explicitly segregated, and evidence types remain separate. Added a documentation index that
+  distinguishes current operating guidance from historical evidence snapshots, and refreshed the
+  official-source market comparison without claiming customer or market validation.
 - Limited analysis concurrency to redundant same-PR, same-head runs while leaving every revocation
   writer runnable. The publisher revalidates the live pull immediately before mutation and
   neutralizes its exact Check if identity or applicability changes after the write. Default-base
