@@ -267,6 +267,11 @@ def _exercise_primary_path(
     expect(page.get_by_text("Missing evidence", exact=True).first).to_be_visible()
     expect(page.get_by_text("Review status: Action required", exact=True)).to_be_visible()
     expect(page.get_by_text("Evidence status:", exact=False).first).to_be_visible()
+    review_ac_02 = page.get_by_role("link", name="Review AC-02", exact=True).first
+    expect(review_ac_02).to_be_visible()
+    review_ac_02.click()
+    assert page.url.endswith("#review-ac-02")
+    expect(page.get_by_role("heading", name="Review AC-02", exact=True)).to_be_visible()
 
     export_controls = (
         ("Download Markdown", ".md"),

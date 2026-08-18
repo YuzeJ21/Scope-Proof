@@ -2279,16 +2279,17 @@ def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> 
     assert captions.index("Decisions recorded: 0 of 4.") < next(
         index for index, value in enumerate(captions) if value.startswith("Observed CI:")
     )
-    assert app.button(key="review_unresolved_AC-01").label == "Review AC-01"
+    markdown = [item.value for item in app.markdown]
+    assert "[Review AC-01](#review-ac-01)" in markdown
+    assert "#### Review AC-01" in markdown
 
 
 def test_summary_offers_direct_next_unresolved_action() -> None:
     app = analyzed_demo(new_app())
 
-    action = app.button(key="review_next_unresolved_summary")
-    assert action.label == "Review next unresolved criterion"
-    app = action.click().run()
-    assert app.session_state["selected_criterion"] == "AC-01"
+    assert "[Review next unresolved criterion](#review-ac-01)" in [
+        item.value for item in app.markdown
+    ]
 
 
 def test_demo_summary_humanizes_gate_reasons_without_mutating_codes() -> None:

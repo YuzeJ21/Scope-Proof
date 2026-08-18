@@ -2132,12 +2132,9 @@ else:
                     "separate from static implementation or test candidates."
                 )
                 st.text(finding_by_id[criterion_id].recommended_action)
-                if st.button(
-                    f"Review {criterion_id}",
-                    key=f"review_unresolved_{criterion_id}",
-                ):
-                    st.session_state["selected_criterion"] = criterion_id
-                    st.rerun()
+                st.markdown(
+                    f"[Review {criterion_id}](#review-{criterion_id.lower()})"
+                )
     else:
         st.success("A current human decision is recorded for every active criterion.")
     st.caption(
@@ -2219,6 +2216,7 @@ else:
         )
         for row in matrix:
             with st.container(border=True):
+                st.markdown(f"#### Review {row['Criterion']}")
                 st.markdown(f"**Criterion:** {row['Criterion']}")
                 st.caption("Requirement")
                 st.text(row["Requirement"])
@@ -2862,13 +2860,10 @@ else:
             for message in guidance:
                 st.text(message)
         if unresolved_ids:
-            if st.button(
-                "Review next unresolved criterion",
-                key="review_next_unresolved_summary",
-                use_container_width=True,
-            ):
-                st.session_state["selected_criterion"] = unresolved_ids[0]
-                st.rerun()
+            st.markdown(
+                "[Review next unresolved criterion]"
+                f"(#review-{unresolved_ids[0].lower()})"
+            )
         elif not final_acceptance_recorded:
             st.markdown(
                 "[Record final acceptance after reviewing every criterion]"
