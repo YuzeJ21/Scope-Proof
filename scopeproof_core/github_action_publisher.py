@@ -24,6 +24,7 @@ from scopeproof_core.github_action import (
 
 _API_BASE_URL = "https://api.github.com"
 _MAX_CHECK_PAGES = 5
+_MAX_BASE_ADVANCE_PULL_PAGES = 2
 _PER_PAGE = 100
 _WITHDRAWAL_NOTICE = (
     "The `scopeproof-review` label was removed for this exact pull-request head. "
@@ -154,9 +155,17 @@ class BaseAdvanceInvalidationResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     reason: str = Field(min_length=1, max_length=100)
-    updated_count: int = Field(ge=0, le=500)
-    skipped_count: int = Field(ge=0, le=500)
-    plans: list[CheckRunPlan] = Field(max_length=500)
+    updated_count: int = Field(
+        ge=0,
+        le=_MAX_BASE_ADVANCE_PULL_PAGES * _PER_PAGE,
+    )
+    skipped_count: int = Field(
+        ge=0,
+        le=_MAX_BASE_ADVANCE_PULL_PAGES * _PER_PAGE,
+    )
+    plans: list[CheckRunPlan] = Field(
+        max_length=_MAX_BASE_ADVANCE_PULL_PAGES * _PER_PAGE,
+    )
 
 
 def _skipped_check_plan(
@@ -526,7 +535,7 @@ def publish_base_advance_invalidations(
             follow_redirects=False,
         ) as client:
             last_page_was_full = False
-            for page_number in range(1, _MAX_CHECK_PAGES + 1):
+            for page_number in range(1, _MAX_BASE_ADVANCE_PULL_PAGES + 1):
                 response = client.get(
                     f"/repos/{identity.repository}/pulls",
                     params={
@@ -556,7 +565,7 @@ def publish_base_advance_invalidations(
                         "state": "open",
                         "base": checked_ref,
                         "per_page": 1,
-                        "page": (_MAX_CHECK_PAGES * _PER_PAGE) + 1,
+                        "page": (_MAX_BASE_ADVANCE_PULL_PAGES * _PER_PAGE) + 1,
                     },
                 )
                 sentinel_response.raise_for_status()

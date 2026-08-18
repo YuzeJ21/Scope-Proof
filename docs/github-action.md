@@ -87,14 +87,16 @@ mixed-snapshot results fail before publication.
 
 Because GitHub does not emit a pull-request `synchronize` event when only the default target branch
 advances, the companion `scopeproof-base-advance.yml` runs on trusted default-branch pushes. It
-enumerates up to 500 open PRs targeting the new default-base SHA, then makes one bounded overflow
-sentinel request before any write. Exactly 500 PRs remain valid when that sentinel is empty; a
-nonempty sentinel fails closed. Deleted-fork records are skipped, and work remains limited to
-labeled same-repository PRs. Each eligible PR is attempted independently so one failed revocation
-does not prevent later revocations; any failed PR numbers produce a final nonzero result. The
-publisher updates only an existing trusted exact-head Check to neutral Needs Review. It never
-analyzes a PR or checks out its head. Non-default target branches are not covered by this automatic
-revocation workflow.
+enumerates up to 200 open PRs targeting the new default-base SHA, then makes one bounded overflow
+sentinel request before any write. Exactly 200 PRs remain valid when the page-201 sentinel is empty;
+a nonempty sentinel fails closed. The 200-PR bound keeps the worst-case eligible path at 803 REST
+requests, below the standard 1,000-request-per-repository hourly limit for an Actions
+`GITHUB_TOKEN`. Deleted-fork records are skipped, and work remains limited to labeled
+same-repository PRs. Each eligible PR is attempted independently so one failed revocation does not
+prevent later revocations; any failed PR numbers produce a final nonzero result. The publisher
+updates only an existing trusted exact-head Check to neutral Needs Review. It never analyzes a PR
+or checks out its head. Non-default target branches are not covered by this automatic revocation
+workflow.
 
 If the checked-in confirmed requirements bytes change, maintainers must remove
 `scopeproof-review`, review the new confirmed text for applicability to the PR, and reapply the label

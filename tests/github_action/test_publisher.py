@@ -371,7 +371,7 @@ def test_base_advance_without_token_is_non_mutating() -> None:
     assert result.updated_count == 0
 
 
-def test_base_advance_accepts_exactly_five_full_pages_with_empty_sentinel() -> None:
+def test_base_advance_accepts_exactly_two_full_pages_with_empty_sentinel() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -379,7 +379,7 @@ def test_base_advance_accepts_exactly_five_full_pages_with_empty_sentinel() -> N
         per_page = int(request.url.params["per_page"])
         page = int(request.url.params["page"])
         if per_page == 1:
-            assert page == 501
+            assert page == 201
             return httpx.Response(200, json=[])
         start = (page - 1) * 100 + 1
         return httpx.Response(
@@ -399,7 +399,7 @@ def test_base_advance_accepts_exactly_five_full_pages_with_empty_sentinel() -> N
     )
 
     assert result.updated_count == 0
-    assert len(requests) == 6
+    assert len(requests) == 3
 
 
 def test_base_advance_rejects_nonempty_overflow_sentinel_before_writes() -> None:
@@ -410,9 +410,10 @@ def test_base_advance_rejects_nonempty_overflow_sentinel_before_writes() -> None
         per_page = int(request.url.params["per_page"])
         page = int(request.url.params["page"])
         if per_page == 1:
+            assert page == 201
             return httpx.Response(
                 200,
-                json=[pull_response(pr_number=501, applicability_label=False)],
+                json=[pull_response(pr_number=201, applicability_label=False)],
             )
         start = (page - 1) * 100 + 1
         return httpx.Response(
@@ -432,8 +433,81 @@ def test_base_advance_rejects_nonempty_overflow_sentinel_before_writes() -> None
             transport=httpx.MockTransport(handler),
         )
 
-    assert len(requests) == 6
+    assert len(requests) == 3
     assert all(request.method == "GET" for request in requests)
+
+
+def test_base_advance_worst_case_stays_within_actions_token_budget() -> None:
+    requests: list[httpx.Request] = []
+
+    def pr_head_sha(pr_number: int) -> str:
+        return f"{pr_number:040x}"
+
+    def pr_context(pr_number: int) -> EventContext:
+        return EventContext(
+            repository="acme/widget",
+            pr_number=pr_number,
+            base_sha=BASE_SHA,
+            head_sha=pr_head_sha(pr_number),
+            is_fork=False,
+            requirements_confirmed=False,
+        )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        path = request.url.path
+        if path == "/repos/acme/widget/pulls" and "state" in request.url.params:
+            per_page = int(request.url.params["per_page"])
+            page = int(request.url.params["page"])
+            if per_page == 1:
+                return httpx.Response(200, json=[])
+            start = (page - 1) * 100 + 1
+            return httpx.Response(
+                200,
+                json=[
+                    pull_response(pr_number=number, head_sha=pr_head_sha(number))
+                    for number in range(start, start + 100)
+                ],
+            )
+        if "/pulls/" in path:
+            pr_number = int(path.rsplit("/", 1)[-1])
+            return httpx.Response(
+                200,
+                json=pull_response(
+                    pr_number=pr_number,
+                    head_sha=pr_head_sha(pr_number),
+                ),
+            )
+        if "/commits/" in path:
+            head_sha = path.split("/commits/", 1)[1].split("/", 1)[0]
+            pr_number = int(head_sha, 16)
+            existing = check_response(
+                check_run_id=pr_number,
+                head_sha=head_sha,
+                external_id=check_external_id(pr_context(pr_number)),
+            )
+            return httpx.Response(200, json=check_list(existing))
+        pr_number = int(path.rsplit("/", 1)[-1])
+        existing = check_response(
+            check_run_id=pr_number,
+            head_sha=pr_head_sha(pr_number),
+            external_id=check_external_id(pr_context(pr_number)),
+        )
+        if request.method == "GET":
+            return httpx.Response(200, json=check_detail_response(**existing))
+        return httpx.Response(200, json=existing)
+
+    result = publish_base_advance_invalidations(
+        repository="acme/widget",
+        base_ref="main",
+        after_sha=BASE_SHA,
+        token="secret",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert result.updated_count == 200
+    assert len(requests) == 803
+    assert len(requests) < 1_000
 
 
 def test_base_advance_skips_deleted_fork_before_processing_same_repo_pr() -> None:

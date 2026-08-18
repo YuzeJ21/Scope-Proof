@@ -85,14 +85,16 @@ output before retaining its verdict or exporting its report. A base-advance or f
 therefore fails closed instead of combining criteria, analysis, and publication from different
 snapshots.
 Default-base pushes run a separate trusted workflow because GitHub emits no pull-request
-`synchronize` event for a base-only advance. The bounded publisher enumerates at most five full
-100-item pages of open PRs targeting the pushed default branch and, only when all five are full,
-makes a one-item request for the 501st record before any write. An empty sentinel accepts exactly
-500 PRs; a nonempty sentinel fails closed. It filters out deleted-fork records and other
-non-same-repository PRs, revalidates each eligible live identity, and revokes only an existing
-exact-head display. Individual PR failures are collected without preventing later independent
-revocation attempts, then reported as one final failure. It performs no analysis and never checks
-out a pull-request head. Automatic revocation of non-default target branches remains unsupported.
+`synchronize` event for a base-only advance. The bounded publisher enumerates at most two full
+100-item pages of open PRs targeting the pushed default branch and, only when both are full, makes
+a one-item request for the 201st record before any write. An empty sentinel accepts exactly 200
+PRs; a nonempty sentinel fails closed. This keeps the worst-case eligible path at 803 REST requests,
+below the standard 1,000-request-per-repository hourly limit for an Actions `GITHUB_TOKEN`. It
+filters out deleted-fork records and other non-same-repository PRs, revalidates each eligible live
+identity, and revokes only an existing exact-head display. Individual PR failures are collected
+without preventing later independent revocation attempts, then reported as one final failure. It
+performs no analysis and never checks out a pull-request head. Automatic revocation of non-default
+target branches remains unsupported.
 
 It then reads only
 `/repos/{repository}/commits/{head_sha}/check-runs` with the exact informational check name,
