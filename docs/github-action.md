@@ -113,11 +113,12 @@ artifact step is explicitly ignored and the summary remains conservative.
 
 The copyable example installs ScopeProof from a public, full-SHA-pinned source
 revision because ScopeProof is not distributed on PyPI. The reviewed pin is
-`57ded8d0ec20fcaf6a011f4fede0131ad35bff23`, the immutable source-candidate commit
+`39fdf85a3f61667e20863de2f72dfe290a6785c1`, the immutable source-candidate commit
 containing the exact-head informational Check lifecycle, typed criteria-source confirmation,
 bounded exact-name publisher, same-head concurrency, fail-closed report export, label-removal
 withdrawal for conflicted PRs, repository-identity fork classification, and isolated base-SHA-only
-workflows used by these examples. It remains a source-candidate installation; it is
+workflows with the 200-PR token-budget bound used by these examples. It remains a
+source-candidate installation; it is
 not a published v0.2.3 release. Review and update that pin deliberately when adopting a newer
 public release; do not replace it with an unpinned package or branch reference.
 
