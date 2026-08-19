@@ -12,7 +12,11 @@ from uuid import uuid4
 import streamlit as st
 
 from apps.web.deferred_exports import deferred_review_export
-from apps.web.view_models import default_criterion_detail_id, group_candidate_evidence
+from apps.web.view_models import (
+    default_criterion_detail_id,
+    group_candidate_evidence,
+    prioritize_unresolved_criterion_ids,
+)
 from scopeproof_core.alpha.models import (
     AlphaFrictionStage,
     AlphaOutcome,
@@ -1922,7 +1926,7 @@ review_matches_local_save = bool(
     and not has_pending_review_input
 )
 review_save_notice = st.session_state.pop("review_save_notice", None)
-st.header("3 · Evidence Matrix")
+st.header("3 · Decision Progress")
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
     if review_save_notice is not None:
@@ -2104,6 +2108,10 @@ else:
         for criterion in bundle.criteria
         if criterion.criterion_id not in resolution_by_id
     ]
+    unresolved_ids = prioritize_unresolved_criterion_ids(
+        unresolved_ids=unresolved_ids,
+        blocking_ids=blocking_criteria,
+    )
     recorded_decisions = len(bundle.criteria) - len(unresolved_ids)
     st.markdown("### Decision progress")
     st.caption(
@@ -2141,110 +2149,7 @@ else:
                     st.session_state["selected_criterion"] = criterion_id
     else:
         st.success("A current human decision is recorded for every active criterion.")
-    st.caption(
-        "Evidence status describes deterministic candidates, not correctness. Evidence types "
-        "keep implementation, test, and externally recorded runtime observations separate."
-    )
-    _render_ci_observation_summary(bundle)
-    evidence_strength_counts = {
-        EvidenceStatus.STRONG_CANDIDATE: 0,
-        EvidenceStatus.WEAK_CANDIDATE: 0,
-        EvidenceStatus.NO_CANDIDATE: 0,
-        EvidenceStatus.ANALYSIS_INCOMPLETE: 0,
-    }
-    for row in coverage_by_id.values():
-        if row.evidence_status in evidence_strength_counts:
-            evidence_strength_counts[row.evidence_status] += 1
-    st.markdown(
-        "**Candidate strength:** "
-        f"Strong {evidence_strength_counts[EvidenceStatus.STRONG_CANDIDATE]} · "
-        f"Weak {evidence_strength_counts[EvidenceStatus.WEAK_CANDIDATE]} · "
-        f"None {evidence_strength_counts[EvidenceStatus.NO_CANDIDATE]} · "
-        f"Incomplete {evidence_strength_counts[EvidenceStatus.ANALYSIS_INCOMPLETE]}"
-    )
-    with st.expander("Filter evidence matrix (optional)", expanded=False):
-        status_filter = st.multiselect(
-            "Filter evidence status",
-            options=list(EvidenceStatus),
-            format_func=evidence_status_text,
-            key="status_filter",
-        )
-        priority_filter = st.multiselect(
-            "Filter priority",
-            options=list(Priority),
-            format_func=lambda item: _status_label(item.value),
-            key="priority_filter",
-        )
-        blocking_only = st.checkbox(
-            "Show blocking criteria only",
-            key="blocking_only",
-        )
-        evidence_level_filter = st.multiselect(
-            "Filter evidence level",
-            options=list(EvidenceLevel),
-            format_func=lambda item: item.value,
-            key="evidence_level_filter",
-        )
-    matrix = []
-    for criterion in bundle.criteria:
-        finding = finding_by_id[criterion.criterion_id]
-        coverage = coverage_by_id[criterion.criterion_id]
-        if status_filter and coverage.evidence_status not in status_filter:
-            continue
-        if priority_filter and criterion.priority not in priority_filter:
-            continue
-        if blocking_only and criterion.criterion_id not in blocking_criteria:
-            continue
-        if evidence_level_filter and finding.evidence_level not in evidence_level_filter:
-            continue
-        matrix.append(
-            {
-                "Criterion": criterion.criterion_id,
-                "Requirement": criterion.text,
-                "Priority": coverage.priority,
-                "Evidence status": evidence_status_text(coverage.evidence_status),
-                "Evidence types": ", ".join(coverage.evidence_types) or "None",
-                "Reviewer decision": coverage.reviewer_decision,
-                "Candidate count": len(finding.evidence_ids),
-                "Rationale": finding.reason,
-                "Missing evidence": finding.missing_evidence,
-                "Recommended action": finding.recommended_action,
-            }
-        )
-    if not matrix:
-        st.info("No criteria match the current filters.")
-    else:
-        st.caption(
-            "Each evidence card preserves the criterion, requirement, priority, evidence "
-            "status, evidence types, and reviewer decision without hiding mobile content."
-        )
-        for row in matrix:
-            with st.container(border=True):
-                st.markdown(f"#### Evidence for {row['Criterion']}")
-                st.markdown(f"**Criterion:** {row['Criterion']}")
-                st.caption("Requirement")
-                st.text(row["Requirement"])
-                st.caption(f"Priority: {row['Priority']}")
-                st.caption(f"Evidence status: {row['Evidence status']}")
-                st.caption(f"Evidence types: {row['Evidence types']}")
-                st.caption(f"Reviewer decision: {row['Reviewer decision']}")
-                st.caption(f"Candidate count: {row['Candidate count']}")
-                st.caption("Why ScopeProof classified it this way")
-                st.text(row["Rationale"])
-                if row["Missing evidence"]:
-                    st.caption("Missing evidence")
-                    for missing in row["Missing evidence"]:
-                        st.text(missing)
-                st.caption("Recommended next action")
-                st.code(row["Recommended action"], language=None)
-                if st.button(
-                    "Inspect this criterion",
-                    key=f"inspect_matrix_{row['Criterion']}",
-                ):
-                    st.session_state["selected_criterion"] = row["Criterion"]
-                    st.rerun()
-
-    st.header("4 · Criterion Detail")
+    st.header("4 · Criterion Review")
     criterion_ids = [criterion.criterion_id for criterion in bundle.criteria]
     selected_criterion = st.session_state.get("selected_criterion")
     if selected_criterion not in criterion_ids:
@@ -2661,6 +2566,113 @@ else:
                     else:
                         st.caption("No limitations recorded.")
 
+    st.header("5 · Evidence Matrix")
+    st.caption(
+        "Evidence status describes deterministic candidates, not correctness. Evidence types "
+        "keep implementation, test, and externally recorded runtime observations separate."
+    )
+    _render_ci_observation_summary(bundle)
+    evidence_strength_counts = {
+        EvidenceStatus.STRONG_CANDIDATE: 0,
+        EvidenceStatus.WEAK_CANDIDATE: 0,
+        EvidenceStatus.NO_CANDIDATE: 0,
+        EvidenceStatus.ANALYSIS_INCOMPLETE: 0,
+    }
+    for row in coverage_by_id.values():
+        if row.evidence_status in evidence_strength_counts:
+            evidence_strength_counts[row.evidence_status] += 1
+    st.markdown(
+        "**Candidate strength:** "
+        f"Strong {evidence_strength_counts[EvidenceStatus.STRONG_CANDIDATE]} · "
+        f"Weak {evidence_strength_counts[EvidenceStatus.WEAK_CANDIDATE]} · "
+        f"None {evidence_strength_counts[EvidenceStatus.NO_CANDIDATE]} · "
+        f"Incomplete {evidence_strength_counts[EvidenceStatus.ANALYSIS_INCOMPLETE]}"
+    )
+    with st.expander("Filter evidence matrix (optional)", expanded=False):
+        status_filter = st.multiselect(
+            "Filter evidence status",
+            options=list(EvidenceStatus),
+            format_func=evidence_status_text,
+            key="status_filter",
+        )
+        priority_filter = st.multiselect(
+            "Filter priority",
+            options=list(Priority),
+            format_func=lambda item: _status_label(item.value),
+            key="priority_filter",
+        )
+        blocking_only = st.checkbox(
+            "Show blocking criteria only",
+            key="blocking_only",
+        )
+        evidence_level_filter = st.multiselect(
+            "Filter evidence level",
+            options=list(EvidenceLevel),
+            format_func=lambda item: item.value,
+            key="evidence_level_filter",
+        )
+    matrix = []
+    for criterion in bundle.criteria:
+        finding = finding_by_id[criterion.criterion_id]
+        coverage = coverage_by_id[criterion.criterion_id]
+        if status_filter and coverage.evidence_status not in status_filter:
+            continue
+        if priority_filter and criterion.priority not in priority_filter:
+            continue
+        if blocking_only and criterion.criterion_id not in blocking_criteria:
+            continue
+        if evidence_level_filter and finding.evidence_level not in evidence_level_filter:
+            continue
+        matrix.append(
+            {
+                "Criterion": criterion.criterion_id,
+                "Requirement": criterion.text,
+                "Priority": coverage.priority,
+                "Evidence status": evidence_status_text(coverage.evidence_status),
+                "Evidence types": ", ".join(coverage.evidence_types) or "None",
+                "Reviewer decision": coverage.reviewer_decision,
+                "Candidate count": len(finding.evidence_ids),
+                "Rationale": finding.reason,
+                "Missing evidence": finding.missing_evidence,
+                "Recommended action": finding.recommended_action,
+            }
+        )
+    if not matrix:
+        st.info("No criteria match the current filters.")
+    else:
+        st.caption(
+            "Each evidence card preserves the criterion, requirement, priority, evidence "
+            "status, evidence types, and reviewer decision without hiding mobile content."
+        )
+        for row in matrix:
+            with st.container(border=True):
+                st.markdown(f"#### Evidence for {row['Criterion']}")
+                st.markdown(f"**Criterion:** {row['Criterion']}")
+                st.caption("Requirement")
+                st.text(row["Requirement"])
+                st.caption(f"Priority: {row['Priority']}")
+                st.caption(f"Evidence status: {row['Evidence status']}")
+                st.caption(f"Evidence types: {row['Evidence types']}")
+                st.caption(f"Reviewer decision: {row['Reviewer decision']}")
+                st.caption(f"Candidate count: {row['Candidate count']}")
+                st.caption("Why ScopeProof classified it this way")
+                st.text(row["Rationale"])
+                if row["Missing evidence"]:
+                    st.caption("Missing evidence")
+                    for missing in row["Missing evidence"]:
+                        st.text(missing)
+                st.caption("Recommended next action")
+                st.code(row["Recommended action"], language=None)
+                st.button(
+                    "Inspect this criterion",
+                    key=f"inspect_matrix_{row['Criterion']}",
+                    on_click=partial(
+                        st.session_state.__setitem__,
+                        "selected_criterion",
+                        row["Criterion"],
+                    ),
+                )
+
     final_acceptance_save_notice = st.session_state.pop("final_acceptance_save_notice", None)
     final_acceptance_recorded = bool(
         review_state is not None and review_state.review.final_acceptance
@@ -2837,7 +2849,7 @@ else:
             review_state = status_review_state
             if status_review_state.bundle is not None:
                 bundle = status_review_state.bundle
-        st.header("5 · Summary & Export")
+        st.header("6 · Summary & Export")
         review_truth_conflict = bool(
             review_state is not None
             and st.session_state["review_save_conflict"]

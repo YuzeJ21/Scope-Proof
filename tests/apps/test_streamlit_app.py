@@ -583,9 +583,10 @@ def test_workbench_heading_order_uses_one_h1_and_numbered_h2_sections() -> None:
     assert [item.value for item in app.header] == [
         "1 · Start Review",
         "2 · Confirm Criteria",
-        "3 · Evidence Matrix",
-        "4 · Criterion Detail",
-        "5 · Summary & Export",
+        "3 · Decision Progress",
+        "4 · Criterion Review",
+        "5 · Evidence Matrix",
+        "6 · Summary & Export",
     ]
     assert not app.subheader
     assert not app.sidebar.header
@@ -2288,6 +2289,33 @@ def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> 
     assert app.button(key="inspect_queue_AC-02").label == (
         "Open AC-02 decision controls"
     )
+    queue_keys = [
+        button.key
+        for button in app.button
+        if button.key is not None and button.key.startswith("inspect_queue_")
+    ]
+    assert queue_keys == [
+        "inspect_queue_AC-02",
+        "inspect_queue_AC-03",
+        "inspect_queue_AC-01",
+        "inspect_queue_AC-04",
+    ]
+
+    main_nodes = list(app.main)
+    node_positions = {
+        node.key: index
+        for index, node in enumerate(main_nodes)
+        if node.key
+        in {
+            "inspect_queue_AC-02",
+            "selected_criterion",
+            "resolution_decision",
+            "status_filter",
+        }
+    }
+    assert node_positions["inspect_queue_AC-02"] < node_positions["selected_criterion"]
+    assert node_positions["selected_criterion"] < node_positions["resolution_decision"]
+    assert node_positions["resolution_decision"] < node_positions["status_filter"]
 
     app = app.button(key="inspect_queue_AC-02").click().run()
 
@@ -2297,7 +2325,7 @@ def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> 
 def test_summary_offers_direct_next_unresolved_action() -> None:
     app = analyzed_demo(new_app())
 
-    assert "[Review next unresolved criterion](#review-ac-01)" in [
+    assert "[Review next unresolved criterion](#review-ac-02)" in [
         item.value for item in app.markdown
     ]
 

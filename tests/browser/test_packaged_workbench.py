@@ -263,16 +263,10 @@ def _exercise_primary_path(
         label="Run deterministic analysis",
         key="Space",
     )
-    expect(page.get_by_role("heading", name="3 · Evidence Matrix", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="3 · Decision Progress", exact=True)).to_be_visible()
     expect(page.get_by_text("Missing evidence", exact=True).first).to_be_visible()
     expect(page.get_by_text("Review status: Action required", exact=True)).to_be_visible()
     expect(page.get_by_text("Evidence status:", exact=False).first).to_be_visible()
-    review_ac_02 = page.get_by_role("link", name="Review AC-02", exact=True).first
-    expect(review_ac_02).to_be_visible()
-    review_ac_02.click()
-    assert page.url.endswith("#review-ac-02")
-    expect(page.get_by_role("heading", name="Review AC-02", exact=True)).to_be_visible()
-
     export_controls = (
         ("Download Markdown", ".md"),
         ("Download JSON", ".json"),
@@ -311,6 +305,34 @@ def _exercise_primary_path(
         expect(
             page.get_by_role("button", name="Check current head", exact=True)
         ).to_be_visible()
+
+    open_ac_02 = page.get_by_role(
+        "button", name="Open AC-02 decision controls", exact=True
+    )
+    _activate_with_keyboard(
+        page,
+        open_ac_02,
+        label="Open AC-02 decision controls",
+        key="Enter",
+    )
+    criterion_selector = page.get_by_role(
+        "combobox", name="Inspect criterion", exact=True
+    )
+    expect(criterion_selector).to_have_value("AC-02")
+    decision_selector = page.get_by_role(
+        "combobox", name="Human decision", exact=True
+    )
+    expect(decision_selector).to_be_visible()
+    matrix_filter = page.get_by_role(
+        "heading", name="5 · Evidence Matrix", exact=True
+    )
+    matrix_handle = matrix_filter.element_handle()
+    assert matrix_handle is not None
+    assert decision_selector.evaluate(
+        "(decision, matrix) => Boolean("
+        "decision.compareDocumentPosition(matrix) & Node.DOCUMENT_POSITION_FOLLOWING)",
+        matrix_handle,
+    )
 
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert page.evaluate("document.body.scrollWidth <= window.innerWidth")
