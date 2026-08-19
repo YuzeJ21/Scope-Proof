@@ -1767,16 +1767,37 @@ def test_authoritative_status_records_dated_post_pr197_main_evidence() -> None:
     )
 
     for document in (roadmap, status):
-        normalized = " ".join(document.split())
-        assert "Post-PR #197 resulting-main snapshot (2026-08-18)" in normalized
-        assert f"PR #197 head `{PR197_EXACT_HEAD_SHA}`" in normalized
-        assert f"base `{PR197_EXACT_BASE_SHA}`" in normalized
-        assert f"merge `{PR197_MERGE_SHA}`" in normalized
-        for run_id in PR197_RESULTING_MAIN_RUN_IDS:
-            assert f"{GITHUB_ACTIONS_RUN_ROOT}/{run_id}" in normalized
-        assert "succeeded" in normalized
-        assert "owner workflow consolidation is complete" in normalized.lower()
-        assert "does not claim customer validation" in normalized
+        if document == roadmap:
+            record = next(
+                line
+                for line in document.splitlines()
+                if line.startswith("| Post-PR #197 resulting-main snapshot")
+            )
+        else:
+            record = (
+                "Post-PR #197 resulting-main snapshot (2026-08-18):"
+                + document.split(
+                    "Post-PR #197 resulting-main snapshot (2026-08-18):", maxsplit=1
+                )[1].split("Development version in this snapshot:", maxsplit=1)[0]
+            )
+        normalized_record = " ".join(record.split())
+        assert "Post-PR #197 resulting-main snapshot (2026-08-18)" in normalized_record
+        assert f"PR #197 head `{PR197_EXACT_HEAD_SHA}`" in normalized_record
+        assert f"base `{PR197_EXACT_BASE_SHA}`" in normalized_record
+        assert f"merge `{PR197_MERGE_SHA}`" in normalized_record
+        for label, run_id in zip(
+            ("CI", "CodeQL", "Pages", "base-advance"),
+            PR197_RESULTING_MAIN_RUN_IDS,
+            strict=True,
+        ):
+            assert re.search(
+                rf"{label}(?: run)? \[`{run_id}`\]"
+                rf"\({GITHUB_ACTIONS_RUN_ROOT}/{run_id}\)",
+                normalized_record,
+            )
+        assert "succeeded" in normalized_record
+        assert "owner workflow consolidation is complete" in normalized_record.lower()
+        assert "does not claim customer validation" in normalized_record
 
 
 def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -> None:
