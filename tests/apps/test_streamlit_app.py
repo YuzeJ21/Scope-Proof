@@ -9,7 +9,10 @@ from uuid import UUID
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from apps.web.view_models import default_criterion_detail_id
+from apps.web.view_models import (
+    default_criterion_detail_id,
+    prioritize_unresolved_criterion_ids,
+)
 from scopeproof_core.alpha.models import AlphaOutcome
 from scopeproof_core.alpha.storage import (
     JsonAlphaCaseStore,
@@ -4004,13 +4007,20 @@ def test_invalid_detail_target_defaults_to_first_unresolved_blocker() -> None:
     ) == "AC-02"
 
 
-def test_empty_detail_target_defaults_to_first_criterion() -> None:
+def test_unresolved_criterion_priority_stably_places_blockers_first() -> None:
+    assert prioritize_unresolved_criterion_ids(
+        unresolved_ids=["AC-01", "AC-02", "AC-03", "AC-04"],
+        blocking_ids={"AC-02", "AC-03"},
+    ) == ["AC-02", "AC-03", "AC-01", "AC-04"]
+
+
+def test_empty_detail_target_defaults_to_first_unresolved_blocker() -> None:
     assert default_criterion_detail_id(
         criterion_ids=["AC-01", "AC-02", "AC-03"],
         unresolved_ids=["AC-02", "AC-03"],
         blocking_ids={"AC-02", "AC-03"},
         selected_id=None,
-    ) == "AC-01"
+    ) == "AC-02"
 
 
 def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summary() -> None:
