@@ -46,6 +46,15 @@ PR193_RESULTING_MAIN_PAGES_RUN_ID = "31704668164"
 PR196_EXACT_HEAD_SHA = "5a6a25a6dff23cdfa8dcb4023b83144078620610"
 PR196_MERGE_SHA = "8387156fd6f6e90eef7caf58881b0cc5bb62b111"
 PR196_RESULTING_MAIN_CI_RUN_ID = "32093041685"
+PR197_EXACT_HEAD_SHA = "5a69af4e92e2720adc524a32ea8c4eb94d013cb8"
+PR197_EXACT_BASE_SHA = "8387156fd6f6e90eef7caf58881b0cc5bb62b111"
+PR197_MERGE_SHA = "789950dc63d80ec24d8bca5974a3ae52955b1c4f"
+PR197_RESULTING_MAIN_RUN_IDS = (
+    "32194734107",
+    "32194733033",
+    "32194734125",
+    "32194734440",
+)
 GITHUB_ACTIONS_RUN_ROOT = "https://github.com/YuzeJ21/Scope-Proof/actions/runs"
 
 
@@ -1751,7 +1760,7 @@ def test_current_docs_index_and_market_refresh_preserve_owner_led_boundary() -> 
     assert "documentation index" in unreleased.lower()
 
 
-def test_authoritative_status_records_dated_post_pr196_main_evidence() -> None:
+def test_authoritative_status_records_dated_post_pr197_main_evidence() -> None:
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
     status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
         encoding="utf-8"
@@ -1759,15 +1768,14 @@ def test_authoritative_status_records_dated_post_pr196_main_evidence() -> None:
 
     for document in (roadmap, status):
         normalized = " ".join(document.split())
-        assert "Post-PR #196 resulting-main snapshot (2026-08-17)" in normalized
-        assert f"PR #196 head `{PR196_EXACT_HEAD_SHA}`" in normalized
-        assert f"merge `{PR196_MERGE_SHA}`" in normalized
-        assert (
-            f"[`{PR196_RESULTING_MAIN_CI_RUN_ID}`]"
-            f"({GITHUB_ACTIONS_RUN_ROOT}/{PR196_RESULTING_MAIN_CI_RUN_ID})"
-        ) in normalized
+        assert "Post-PR #197 resulting-main snapshot (2026-08-18)" in normalized
+        assert f"PR #197 head `{PR197_EXACT_HEAD_SHA}`" in normalized
+        assert f"base `{PR197_EXACT_BASE_SHA}`" in normalized
+        assert f"merge `{PR197_MERGE_SHA}`" in normalized
+        for run_id in PR197_RESULTING_MAIN_RUN_IDS:
+            assert f"{GITHUB_ACTIONS_RUN_ROOT}/{run_id}" in normalized
         assert "succeeded" in normalized
-        assert "owner workflow consolidation" in normalized.lower()
+        assert "owner workflow consolidation is complete" in normalized.lower()
         assert "does not claim customer validation" in normalized
 
 

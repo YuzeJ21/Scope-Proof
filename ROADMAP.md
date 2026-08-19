@@ -21,6 +21,7 @@ which provides the wheel, source archive, and checksum manifest.
 | Active source line | Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists |
 | Post-PR #193 resulting-main snapshot (2026-08-13) | PR #193 product-source baseline at `432371c4faec0b790f70fec32b4d3fc4d5132cfa` (PR head `8bb407079a0ff7098d2fc18af3d75b216725df2e`, base `9426e8714ffd2c3742bb074ae26fc788f1049c63`) |
 | Post-PR #196 resulting-main snapshot (2026-08-17) | Exact PR #196 head `5a6a25a6dff23cdfa8dcb4023b83144078620610` landed in merge `8387156fd6f6e90eef7caf58881b0cc5bb62b111`; hosted resulting-main CI run [`32093041685`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32093041685) succeeded as the exact-head engineering record |
+| Post-PR #197 resulting-main snapshot (2026-08-18) | Exact PR #197 head `5a69af4e92e2720adc524a32ea8c4eb94d013cb8`, base `8387156fd6f6e90eef7caf58881b0cc5bb62b111`, and merge `789950dc63d80ec24d8bca5974a3ae52955b1c4f`; resulting-main CI [`32194734107`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32194734107), CodeQL [`32194733033`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32194733033), Pages [`32194734125`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32194734125), and base-advance [`32194734440`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32194734440) succeeded as the dated engineering record |
 | Verified product baseline | PR #184 release integration landed on `main` at `448c42758ea139bf9203cbf1bb04b02b02ae412c` |
 | Product verification | Full product-code verification is bound to `fb74d4bbb402f4de3e2fabb56ce28c948214f8c2`; package, install, installed-benchmark, and health artifacts are bound to `81598899fcd85df58ab22f9212f2e8382f4a5e5f`. |
 | Release integration evidence | PR #184 release integration at `448c42758ea139bf9203cbf1bb04b02b02ae412c`; exact-main CI, CodeQL, and Pages all succeeded, and `origin/main` matched at the 2026-08-08 branch-start snapshot |
@@ -51,11 +52,11 @@ declaration of perpetually current `main`. These are engineering changes on `0.2
 new published release; v0.2.3 remains the published release and none earns Stage 1 credit.
 
 PR #194 aligned the dated status record without turning it into a moving-head claim; PR #195 closed
-Stage 1 as not pursued and activated owner-led Stage 2 without customer-validation claims; and PR
-#196 added the exact-head informational Check lifecycle with bounded default-base repair. The next
-owner workflow consolidation slice may simplify first use, criteria confirmation, decision progress,
-and current documentation. It remains Stage 2 engineering work and does not claim customer
-validation.
+Stage 1 as not pursued and activated owner-led Stage 2 without customer-validation claims; PR #196
+added the exact-head informational Check lifecycle with bounded default-base repair; and PR #197
+completed owner workflow consolidation. The blocker-first decision-handoff ordering and direct
+pre-matrix criterion handoff complete a bounded Stage 2 follow-up. This remains Stage 2 engineering
+work and does not claim customer validation.
 
 ### Verification and evidence boundaries
 
@@ -289,10 +290,11 @@ validation. Work may improve product and workflow clarity, deterministic evidenc
 fail-closed lifecycle integrity, packaging, installation, compatibility, accessibility
 engineering, documentation, public official-source research, and release readiness.
 
-The current owner workflow consolidation priority is to keep public PR and constructed-demo entry
-clear, make explicit criteria confirmation unmistakable, put unresolved decisions before secondary
-evidence detail, and provide direct navigation to the next criterion. It must preserve every
-evidence boundary and keep optional external research secondary.
+PR #197 owner workflow consolidation is complete: public PR and constructed-demo entry remain
+clear, explicit criteria confirmation remains unmistakable, blocker-first unresolved decisions
+precede secondary evidence detail, and the direct pre-matrix criterion handoff provides navigation
+to the next criterion. This bounded Stage 2 follow-up preserves every evidence boundary and keeps
+optional external research secondary.
 
 The [Stage 2 productization packet](docs/commercialization/stage2-readiness-packet.md) is the
 operating boundary. External commercial discovery is optional and separate from owner-led
