@@ -200,6 +200,9 @@ def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> Non
     assert artifact_digest in report
     assert "Imported External Test Result Changes" in report
     assert "externally supplied, non-gating context" in report
+    assert "artifact digest covers imported bytes only" in report
+    assert "importer identity is asserted, not authenticated" in report
+    assert "criterion mapping is organizational context, not proof" in report
     assert "<owner-old>" not in report
     assert "<unsafe>" not in report
     assert "&lt;owner-old&gt;" in report

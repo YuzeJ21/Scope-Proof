@@ -93,6 +93,7 @@ from scopeproof_core.reviews.lifecycle import (
 )
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
+    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     RULESET_VERSION,
     CheckState,
     Criterion,
@@ -2091,11 +2092,8 @@ else:
                         )
         if comparison.junit_import_changes:
             st.markdown("**Imported external test result changes**")
-            st.caption(
-                "These imports are external non-gating context. ScopeProof did not "
-                "execute the tests or target-repository code, and no prior decision "
-                "was carried forward."
-            )
+            st.caption(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION)
+            st.caption("No prior decision was carried forward.")
             for junit_change in comparison.junit_import_changes:
                 with st.container(border=True):
                     st.text(
@@ -2488,7 +2486,7 @@ else:
             st.success(junit_import_save_notice)
 
         with st.expander("Import external JUnit results", expanded=False):
-            st.caption("Imported test results are external, non-gating context.")
+            st.caption(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION)
             st.caption(
                 "ScopeProof reads bounded local XML bytes only. It does not run tests, "
                 "execute target-repository code, follow artifact references, or treat the "

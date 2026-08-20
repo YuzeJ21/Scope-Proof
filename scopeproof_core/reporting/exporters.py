@@ -28,6 +28,7 @@ from scopeproof_core.reviews.comparison import (
     ReviewComparison,
 )
 from scopeproof_core.schemas.models import (
+    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     CriteriaSourceProvenance,
     CriterionRetrievalDiagnostic,
     EvidenceItem,
@@ -219,12 +220,7 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
     lines = [
         "## Imported External Test Results",
         "",
-        (
-            "Imported test results are externally supplied, non-gating context. "
-            "ScopeProof did not execute the tests or target-repository code; the "
-            "artifact digest identifies only the imported bytes, importer identity "
-            "is asserted, and human mapping does not prove criterion satisfaction."
-        ),
+        JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
         "",
     ]
     if not bundle.junit_evidence_imports:
@@ -275,15 +271,9 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
 
 
 def _junit_import_html(bundle: ReviewBundle) -> list[str]:
-    boundary = (
-        "Imported test results are externally supplied, non-gating context. "
-        "ScopeProof did not execute the tests or target-repository code; the "
-        "artifact digest identifies only the imported bytes, importer identity "
-        "is asserted, and human mapping does not prove criterion satisfaction."
-    )
     lines = [
         "<h2>Imported external test results</h2>",
-        f'<p class="note">{html.escape(boundary)}</p>',
+        f'<p class="note">{html.escape(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION)}</p>',
     ]
     if not bundle.junit_evidence_imports:
         return [*lines, "<p>No external JUnit results were imported.</p>"]
@@ -429,11 +419,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
         [
             "## Imported External Test Result Changes",
             "",
-            (
-                "Imported test results are externally supplied, non-gating context. "
-                "ScopeProof did not execute these tests, and changed mappings do not "
-                "prove or disprove criterion satisfaction."
-            ),
+            JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
             "",
         ]
     )
@@ -1128,8 +1114,7 @@ def export_csv(bundle: ExportableReview) -> str:
                     sort_keys=True,
                 ),
                 "junit_evidence_boundary": _csv_text(
-                    "External non-gating context; ScopeProof did not execute these "
-                    "tests or target-repository code."
+                    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
                 )
                 if junit_imports
                 else "",
@@ -1139,19 +1124,29 @@ def export_csv(bundle: ExportableReview) -> str:
                 ),
                 "junit_parser_warnings": json.dumps(
                     [
-                        _csv_text(warning)
+                        {
+                            "import_id": _csv_text(item.import_id),
+                            "artifact_sha256": item.artifact_sha256,
+                            "warning": _csv_text(warning),
+                        }
                         for item in junit_imports
                         for warning in item.parser_warnings
                     ],
                     ensure_ascii=False,
+                    sort_keys=True,
                 ),
                 "junit_limitations": json.dumps(
                     [
-                        _csv_text(limitation)
+                        {
+                            "import_id": _csv_text(item.import_id),
+                            "artifact_sha256": item.artifact_sha256,
+                            "limitation": _csv_text(limitation),
+                        }
                         for item in junit_imports
                         for limitation in item.limitations
                     ],
                     ensure_ascii=False,
+                    sort_keys=True,
                 ),
             }
         )

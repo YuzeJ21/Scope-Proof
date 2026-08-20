@@ -232,6 +232,8 @@ def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
             "import_id": "junit-import-002",
             "artifact_sha256": "c" * 64,
             "imported_by": "second owner",
+            "parser_warnings": ["second warning"],
+            "limitations": ["second limitation"],
         }
     )
     bundle.junit_evidence_imports.append(second_import)
@@ -275,12 +277,39 @@ def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
         ("junit-import-001", "b" * 64, "'=ASSERTED <owner>"),
         ("junit-import-002", "c" * 64, "second owner"),
     }
-    assert "external non-gating context" in csv_row["junit_evidence_boundary"].lower()
+    assert "externally supplied, non-gating context" in csv_row[
+        "junit_evidence_boundary"
+    ].lower()
     assert "did not execute" in csv_row["junit_evidence_boundary"].lower()
+    assert "imported bytes only" in csv_row["junit_evidence_boundary"].lower()
+    assert "asserted, not authenticated" in csv_row["junit_evidence_boundary"].lower()
+    assert "organizational context, not proof" in csv_row["junit_evidence_boundary"].lower()
     assert csv_row["junit_importers"].startswith("[")
     assert "'=ASSERTED <owner>" in csv_row["junit_importers"]
-    assert "'@warning <unsafe>" in csv_row["junit_parser_warnings"]
-    assert "'+external result only <unsafe>" in csv_row["junit_limitations"]
+    assert json.loads(csv_row["junit_parser_warnings"]) == [
+        {
+            "artifact_sha256": "b" * 64,
+            "import_id": "junit-import-001",
+            "warning": "'@warning <unsafe>",
+        },
+        {
+            "artifact_sha256": "c" * 64,
+            "import_id": "junit-import-002",
+            "warning": "second warning",
+        },
+    ]
+    assert json.loads(csv_row["junit_limitations"]) == [
+        {
+            "artifact_sha256": "b" * 64,
+            "import_id": "junit-import-001",
+            "limitation": "'+external result only <unsafe>",
+        },
+        {
+            "artifact_sha256": "c" * 64,
+            "import_id": "junit-import-002",
+            "limitation": "second limitation",
+        },
+    ]
     assert bundle.gate.verdict.value in rendered
 
 

@@ -32,6 +32,7 @@ from scopeproof_core.reviews.lifecycle import (
 )
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
+    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     RULESET_VERSION,
     CheckState,
     CIObservation,
@@ -3579,8 +3580,11 @@ def test_comparison_view_shows_removed_external_junit_import_as_non_gating() -> 
     assert "Imported external test result changes" in rendered
     assert "Removed" in rendered
     assert imported.artifact_sha256 in rendered
-    assert "external non-gating context" in rendered.lower()
+    assert "externally supplied, non-gating context" in rendered.lower()
     assert "did not execute" in rendered.lower()
+    assert "imported bytes only" in rendered.lower()
+    assert "asserted, not authenticated" in rendered.lower()
+    assert "organizational context, not proof" in rendered.lower()
 
 
 def test_ineligible_comparison_base_is_cleared_without_hiding_current_analysis() -> None:
@@ -5191,7 +5195,7 @@ def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -
     assert updated.bundle.resolutions == before.bundle.resolutions
     assert updated.bundle.runtime_evidence == before.bundle.runtime_evidence
     assert updated.review.final_acceptance is before.review.final_acceptance
-    assert "Imported test results are external, non-gating context." in [
+    assert JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION in [
         item.value for item in app.caption
     ]
     assert app.file_uploader(key="junit_artifact_upload_1").value is None

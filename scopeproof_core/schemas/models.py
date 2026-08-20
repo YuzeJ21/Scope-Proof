@@ -1109,6 +1109,14 @@ class JUnitCaseStatus(StringEnum):
     SKIPPED = "skipped"
 
 
+JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION = (
+    "Imported test results are externally supplied, non-gating context. "
+    "ScopeProof did not execute the tests or target-repository code; the artifact "
+    "digest covers imported bytes only; importer identity is asserted, not "
+    "authenticated; and criterion mapping is organizational context, not proof."
+)
+
+
 class JUnitCaseResult(BaseModel):
     """One bounded result projection without raw XML or output bodies."""
 
