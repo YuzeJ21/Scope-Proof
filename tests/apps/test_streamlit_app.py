@@ -5123,3 +5123,102 @@ def test_successful_runtime_evidence_save_clears_form_and_prevents_accidental_re
     assert "External verification and reviewer decision recorded together." in [
         item.value for item in app.success
     ]
+
+
+def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    before = app.session_state["review_state"].model_copy(deep=True)
+    assert before.bundle is not None
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml",
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+        "application/xml",
+    ).run()
+    app = app.text_input(key="junit_importer").set_value("QA owner").run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(
+        ["suite-0001"]
+    ).run()
+    app = app.button(key="save_junit_import").click().run()
+
+    updated = app.session_state["review_state"]
+    assert updated.bundle is not None
+    assert len(updated.bundle.junit_evidence_imports) == 1
+    imported = updated.bundle.junit_evidence_imports[0]
+    assert imported.criterion_mappings[0].criterion_id == app.session_state[
+        "selected_criterion"
+    ]
+    assert imported.test_cases[0].test_case_id == "suite-0001-case-0001"
+    assert updated.bundle.gate == before.bundle.gate
+    assert updated.bundle.resolutions == before.bundle.resolutions
+    assert updated.bundle.runtime_evidence == before.bundle.runtime_evidence
+    assert updated.review.final_acceptance is before.review.final_acceptance
+    assert "Imported test results are external, non-gating context." in [
+        item.value for item in app.caption
+    ]
+    assert app.file_uploader(key="junit_artifact_upload").value is None
+    assert app.text_input(key="junit_importer").value == ""
+    assert app.multiselect(key="junit_mapping_scopes").value == []
+    assert app.button(key="save_junit_import").disabled is True
+
+
+def test_junit_preview_and_saved_values_render_inertly_without_raw_output() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    hostile_name = "<script>alert('suite')</script>"
+    raw_output = "RAW-JUNIT-OUTPUT-SENTINEL"
+    xml = (
+        f'<testsuite name="{hostile_name.replace("<", "&lt;").replace(">", "&gt;")}">'
+        f'<testcase name="=1+1"/><system-out>{raw_output}</system-out></testsuite>'
+    ).encode()
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml", xml, "application/xml"
+    ).run()
+
+    assert app.exception == []
+    assert hostile_name not in [item.value for item in app.markdown]
+    assert raw_output not in "\n".join(
+        [
+            *(item.value for item in app.text),
+            *(item.value for item in app.code),
+            *(item.value for item in app.caption),
+            *(item.value for item in app.markdown),
+        ]
+    )
+    assert "JUnit properties and output content were discarded during import." in [
+        item.value for item in app.text
+    ]
+
+
+def test_junit_parser_failure_leaves_review_unchanged_and_hides_artifact_text() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    before = app.session_state["review_state"].model_copy(deep=True)
+    unsafe = (
+        b'<!DOCTYPE testsuite [<!ENTITY secret SYSTEM "file:///PRIVATE-SENTINEL">]>'
+        b'<testsuite name="x"><testcase name="&secret;"/></testsuite>'
+    )
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "unsafe.xml", unsafe, "application/xml"
+    ).run()
+
+    assert app.session_state["review_state"] == before
+    rendered_errors = "\n".join(item.value for item in app.error)
+    assert "could not be inspected" in rendered_errors
+    assert "PRIVATE-SENTINEL" not in rendered_errors
+    assert app.button(key="save_junit_import").disabled is True
+
+
+def test_junit_import_requires_exact_head_and_explicit_mapping() -> None:
+    app = analyzed_demo(new_app())
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml",
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+        "application/xml",
+    ).run()
+    app = app.text_input(key="junit_importer").set_value("QA owner").run()
+
+    assert app.button(key="save_junit_import").disabled is True
+    assert "An exact 40-character reviewed head is required before import." in [
+        item.value for item in app.caption
+    ]

@@ -51,6 +51,13 @@ from scopeproof_core.github.client import (
     InvalidPullRequestUrl,
     parse_pr_url,
 )
+from scopeproof_core.importers.junit import (
+    MAX_JUNIT_BYTES,
+    JUnitImportError,
+    JUnitMappingSelection,
+    build_junit_evidence_import,
+    parse_junit_artifact,
+)
 from scopeproof_core.presentation import (
     EvidenceStatus,
     criterion_coverage_rows,
@@ -75,6 +82,7 @@ from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     acceptance_requires_comment,
     append_external_verification,
+    append_junit_evidence_import,
     append_resolution,
     attach_analysis,
     can_record_final_acceptance,
@@ -838,7 +846,13 @@ def _criterion_detail_draft_pending() -> bool:
         "runtime_reviewer",
         "runtime_limitations",
     )
-    return any(
+    junit_pending = bool(
+        st.session_state.get("junit_artifact_upload")
+        or str(st.session_state.get("junit_importer", "")).strip()
+        or str(st.session_state.get("junit_limitations", "")).strip()
+        or st.session_state.get("junit_mapping_scopes", [])
+    )
+    return junit_pending or any(
         bool(str(st.session_state.get(key, ""))) for key in runtime_text_keys
     ) or (
         st.session_state.get("runtime_evidence_level", EvidenceLevel.E3)
@@ -870,11 +884,19 @@ def _clear_resolution_draft() -> None:
     st.session_state.pop("manual_evidence_level", None)
 
 
+def _clear_junit_import_draft() -> None:
+    st.session_state.pop("junit_artifact_upload", None)
+    st.session_state["junit_importer"] = ""
+    st.session_state["junit_limitations"] = ""
+    st.session_state["junit_mapping_scopes"] = []
+
+
 def _clear_criterion_detail_drafts() -> bool:
     """Clear unsaved target-specific inputs and report whether any draft existed."""
     had_pending_input = _criterion_detail_draft_pending()
     _clear_runtime_evidence_draft()
     _clear_resolution_draft()
+    _clear_junit_import_draft()
     return had_pending_input
 
 
@@ -988,6 +1010,8 @@ if st.session_state["delete_saved_review_reset_pending"]:
     st.session_state["delete_saved_review_confirmed"] = False
 if st.session_state.pop("runtime_evidence_form_reset_pending", False):
     _clear_runtime_evidence_draft()
+if st.session_state.pop("junit_import_form_reset_pending", False):
+    _clear_junit_import_draft()
 if st.session_state.pop("resolution_form_reset_pending", False):
     _clear_resolution_draft()
 if st.session_state.pop("criteria_draft_reset_pending", False):
@@ -2414,6 +2438,195 @@ else:
                         "Human resolution appended to the local review history."
                     )
                     st.rerun()
+
+        junit_import_save_notice = st.session_state.pop(
+            "junit_import_save_notice", None
+        )
+        if junit_import_save_notice is not None:
+            st.success(junit_import_save_notice)
+
+        with st.expander("Import external JUnit results", expanded=False):
+            st.caption("Imported test results are external, non-gating context.")
+            st.caption(
+                "ScopeProof reads bounded local XML bytes only. It does not run tests, "
+                "execute target-repository code, follow artifact references, or treat the "
+                "import as E1, E2, E3, E4, correctness, or acceptance."
+            )
+            exact_head_ready = bool(
+                len(bundle.review.head_sha) == 40
+                and all(character in "0123456789abcdef" for character in bundle.review.head_sha)
+            )
+            if not exact_head_ready:
+                st.caption(
+                    "An exact 40-character reviewed head is required before import."
+                )
+            uploaded_junit = st.file_uploader(
+                "Local JUnit XML artifact",
+                type=["xml"],
+                accept_multiple_files=False,
+                key="junit_artifact_upload",
+            )
+            junit_importer = st.text_input(
+                "Asserted JUnit importer (required)", key="junit_importer"
+            )
+            junit_limitations = st.text_area(
+                "Additional JUnit limitations (optional; one per line)",
+                key="junit_limitations",
+            )
+            parsed_junit = None
+            available_scope_ids: list[str] = []
+            scope_labels: dict[str, str] = {}
+            if uploaded_junit is not None:
+                if uploaded_junit.size > MAX_JUNIT_BYTES:
+                    st.error(
+                        "JUnit artifact could not be inspected. It exceeds the local "
+                        "import byte limit and remains unsaved."
+                    )
+                else:
+                    try:
+                        parsed_junit = parse_junit_artifact(uploaded_junit.getvalue())
+                    except (JUnitImportError, TypeError, ValueError):
+                        st.error(
+                            "JUnit artifact could not be inspected. It is malformed, "
+                            "unsafe, unsupported, or over a bounded parser limit; the "
+                            "review remains unchanged."
+                        )
+                    else:
+                        st.caption("Sanitized JUnit preview")
+                        st.text(
+                            "Computed results: "
+                            f"{parsed_junit.totals.total} total · "
+                            f"{parsed_junit.totals.passed} passed · "
+                            f"{parsed_junit.totals.failures} failed · "
+                            f"{parsed_junit.totals.errors} errors · "
+                            f"{parsed_junit.totals.skipped} skipped"
+                        )
+                        for suite in parsed_junit.suites:
+                            available_scope_ids.append(suite.suite_id)
+                            scope_labels[suite.suite_id] = (
+                                f"{suite.suite_id} · suite · {suite.suite_name}"
+                            )
+                            st.text(scope_labels[suite.suite_id])
+                            for case in suite.test_cases:
+                                available_scope_ids.append(case.test_case_id)
+                                scope_labels[case.test_case_id] = (
+                                    f"{case.test_case_id} · {case.status.value} · "
+                                    f"{case.test_name}"
+                                )
+                                st.text(scope_labels[case.test_case_id])
+                        if parsed_junit.parser_warnings:
+                            st.caption("Parser warnings")
+                            for warning in parsed_junit.parser_warnings:
+                                st.text(warning)
+            junit_mapping_scopes = st.multiselect(
+                "Map JUnit scopes to the selected criterion",
+                options=available_scope_ids,
+                format_func=lambda scope_id: scope_labels.get(scope_id, scope_id),
+                key="junit_mapping_scopes",
+                disabled=parsed_junit is None,
+            )
+            st.caption(
+                f"Selected mapping target: {selected_id}. ScopeProof never infers this "
+                "relationship from test names."
+            )
+            junit_import_ready = bool(
+                exact_head_ready
+                and review_state is not None
+                and parsed_junit is not None
+                and junit_importer.strip()
+                and junit_mapping_scopes
+            )
+            if st.button(
+                "Save imported JUnit results",
+                key="save_junit_import",
+                disabled=not junit_import_ready,
+            ):
+                assert review_state is not None
+                try:
+                    junit_record = build_junit_evidence_import(
+                        review_state,
+                        uploaded_junit.getvalue(),
+                        [
+                            JUnitMappingSelection(
+                                scope_id=scope_id,
+                                criterion_id=selected_id,
+                            )
+                            for scope_id in junit_mapping_scopes
+                        ],
+                        importer=junit_importer,
+                        limitations=[
+                            line.strip()
+                            for line in junit_limitations.splitlines()
+                            if line.strip()
+                        ],
+                    )
+                    review_state = append_junit_evidence_import(
+                        review_state, junit_record
+                    )
+                except (JUnitImportError, TypeError, ValueError):
+                    st.error(
+                        "JUnit results could not be saved. The artifact, mapping, or "
+                        "active review identity is invalid; the review remains unchanged."
+                    )
+                else:
+                    st.session_state["review_state"] = review_state
+                    st.session_state["bundle"] = review_state.bundle
+                    bundle = review_state.bundle
+                    st.session_state["junit_import_form_reset_pending"] = True
+                    st.session_state["junit_import_save_notice"] = (
+                        "Imported JUnit results appended as external non-gating context."
+                    )
+                    st.rerun()
+
+        selected_junit_imports = [
+            (evidence_import, mapping)
+            for evidence_import in bundle.junit_evidence_imports
+            for mapping in evidence_import.criterion_mappings
+            if mapping.criterion_id == selected_id
+        ]
+        with st.expander(
+            f"Recorded imported JUnit results ({len(selected_junit_imports)})",
+            expanded=False,
+        ):
+            if not selected_junit_imports:
+                st.caption(
+                    "No external JUnit results are mapped to this criterion."
+                )
+            for evidence_import, mapping in selected_junit_imports:
+                cases_by_id = {
+                    item.test_case_id: item for item in evidence_import.test_cases
+                }
+                with st.container(border=True):
+                    st.caption("External non-gating import ID")
+                    st.code(evidence_import.import_id, language=None)
+                    st.caption("Artifact SHA-256")
+                    st.code(evidence_import.artifact_sha256, language=None)
+                    st.caption("Bound repository and pull request")
+                    st.text(
+                        f"{evidence_import.repository} · PR #{evidence_import.pr_number}"
+                    )
+                    st.caption("Bound exact head")
+                    st.code(evidence_import.head_sha, language=None)
+                    st.caption("Asserted importer")
+                    st.text(evidence_import.imported_by)
+                    st.caption("Imported at (UTC)")
+                    st.text(
+                        evidence_import.model_dump(mode="json")["imported_at"]
+                    )
+                    st.caption("Explicitly mapped sanitized test cases")
+                    for case_id in mapping.test_case_ids:
+                        case = cases_by_id[case_id]
+                        st.text(
+                            f"{case.test_case_id} · {case.status.value} · "
+                            f"{case.test_name}"
+                        )
+                    if evidence_import.parser_warnings:
+                        st.caption("Parser warnings")
+                        for warning in evidence_import.parser_warnings:
+                            st.text(warning)
+                    st.caption("Limitations")
+                    for limitation in evidence_import.limitations:
+                        st.text(limitation)
 
         runtime_evidence_save_notice = st.session_state.pop("runtime_evidence_save_notice", None)
         if runtime_evidence_save_notice is not None:

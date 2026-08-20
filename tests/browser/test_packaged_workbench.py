@@ -267,6 +267,9 @@ def _exercise_primary_path(
     expect(page.get_by_text("Missing evidence", exact=True).first).to_be_visible()
     expect(page.get_by_text("Review status: Action required", exact=True)).to_be_visible()
     expect(page.get_by_text("Evidence status:", exact=False).first).to_be_visible()
+    expect(
+        page.get_by_text("Import external JUnit results", exact=True)
+    ).to_be_visible()
     export_controls = (
         ("Download Markdown", ".md"),
         ("Download JSON", ".json"),
