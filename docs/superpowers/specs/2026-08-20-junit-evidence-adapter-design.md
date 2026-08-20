@@ -1,8 +1,8 @@
 # Bounded JUnit Evidence Adapter Design
 
-**Date:** 2026-08-20  
-**Stage:** Owner-led Stage 2 productization  
-**Status:** Approved for implementation by the owner  
+**Date:** 2026-08-20
+**Stage:** Owner-led Stage 2 productization
+**Status:** Approved for implementation by the owner
 **Target branch:** `codex/junit-evidence-adapter`
 
 ## Objective
