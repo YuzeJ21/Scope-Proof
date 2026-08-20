@@ -5,11 +5,16 @@ from pydantic import ValidationError
 
 from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.gates.evaluator import evaluate_gate
+from scopeproof_core.importers.junit import (
+    JUnitMappingSelection,
+    build_junit_evidence_import,
+)
 from scopeproof_core.reviews import attach_analysis
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     acceptance_requires_comment,
     append_external_verification,
+    append_junit_evidence_import,
     append_resolution,
     append_runtime_evidence,
     can_record_final_acceptance,
@@ -33,6 +38,7 @@ from scopeproof_core.schemas.models import (
     ResolutionEvent,
     Review,
     ReviewBundle,
+    ReviewState,
     RuntimeEvidence,
     normalized_criteria_sha256,
     source_text_sha256,
@@ -1541,3 +1547,109 @@ def test_appended_runtime_evidence_does_not_alias_the_supplied_object() -> None:
     assert updated.bundle is not None
     assert updated.bundle.runtime_evidence[0].result == "passed"
     assert updated.bundle.runtime_evidence[0].limitations == ["Browser only"]
+
+
+def exact_head_state() -> ReviewState:
+    state = initial_state().model_copy(deep=True)
+    state.review.head_sha = "a" * 40
+    assert state.bundle is not None
+    state.bundle.review.head_sha = "a" * 40
+    return ReviewState.model_validate(state.model_dump(mode="python"))
+
+
+def junit_import_for(state: ReviewState, *, import_id: str = "import-001"):
+    return build_junit_evidence_import(
+        state,
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+        [
+            JUnitMappingSelection(
+                scope_id="suite-0001",
+                criterion_id="AC-01",
+            )
+        ],
+        importer="QA owner",
+        imported_at=datetime(2026, 8, 20, tzinfo=UTC),
+        import_id=import_id,
+    )
+
+
+def test_junit_import_append_is_non_gating_and_does_not_alias_input() -> None:
+    state = exact_head_state()
+    record = junit_import_for(state)
+    assert state.bundle is not None
+    original_gate = state.bundle.gate.model_copy(deep=True)
+    original_findings = [item.model_copy(deep=True) for item in state.bundle.findings]
+    original_resolutions = list(state.bundle.resolutions)
+    original_runtime = list(state.bundle.runtime_evidence)
+    original_events = list(state.resolution_events)
+    original_final_acceptance = state.review.final_acceptance
+
+    updated = append_junit_evidence_import(state, record)
+    record.limitations.append("Caller mutation")
+
+    assert updated.bundle is not None
+    assert len(updated.bundle.junit_evidence_imports) == 1
+    assert "Caller mutation" not in updated.bundle.junit_evidence_imports[0].limitations
+    assert state.bundle.junit_evidence_imports == []
+    assert updated.bundle.gate == original_gate
+    assert updated.bundle.findings == original_findings
+    assert updated.bundle.resolutions == original_resolutions
+    assert updated.bundle.runtime_evidence == original_runtime
+    assert updated.resolution_events == original_events
+    assert updated.review.final_acceptance is original_final_acceptance
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("repository", "other/repository", "active review identity"),
+        ("pr_number", 2, "active review identity"),
+        ("head_sha", "b" * 40, "active review identity"),
+        ("criteria_revision_number", 2, "criteria revision"),
+        ("confirmed_criteria_sha256", "f" * 64, "criteria digest"),
+    ],
+)
+def test_junit_import_append_rejects_stale_or_foreign_relationship_atomically(
+    field: str, value: object, message: str
+) -> None:
+    state = exact_head_state()
+    record = junit_import_for(state).model_copy(update={field: value})
+
+    with pytest.raises(ValueError, match=message):
+        append_junit_evidence_import(state, record)
+
+    assert state.bundle is not None
+    assert state.bundle.junit_evidence_imports == []
+
+
+def test_junit_import_append_rejects_duplicate_id_or_artifact_atomically() -> None:
+    state = exact_head_state()
+    record = junit_import_for(state)
+    imported = append_junit_evidence_import(state, record)
+    assert imported.bundle is not None
+
+    with pytest.raises(ValueError, match="already imported"):
+        append_junit_evidence_import(imported, record)
+
+    conflicting_id = record.model_copy(
+        update={"artifact_sha256": "e" * 64}
+    )
+    with pytest.raises(ValueError, match="import ID"):
+        append_junit_evidence_import(imported, conflicting_id)
+
+    assert len(imported.bundle.junit_evidence_imports) == 1
+
+
+def test_junit_import_append_requires_active_analysis() -> None:
+    state = exact_head_state()
+    record = junit_import_for(state)
+    pending = revise_criteria(
+        state,
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+
+    with pytest.raises(ValueError, match="active analysis"):
+        append_junit_evidence_import(pending, record)
+
+    assert pending.bundle is None
