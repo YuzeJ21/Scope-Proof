@@ -238,6 +238,7 @@ _STATE_DEFAULTS = {
     "criteria_source_widget_sync_pending": None,
     "source_widget_sync_pending": None,
     "junit_artifact_upload_version": 0,
+    "junit_mapping_artifact_sha256": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -900,6 +901,7 @@ def _clear_junit_import_draft() -> None:
     st.session_state["junit_importer"] = ""
     st.session_state["junit_limitations"] = ""
     st.session_state["junit_mapping_scopes"] = []
+    st.session_state["junit_mapping_artifact_sha256"] = None
 
 
 def _clear_criterion_detail_drafts() -> bool:
@@ -2087,6 +2089,35 @@ else:
                         _render_comparison_reference(
                             "Current candidate", evidence_change.current
                         )
+        if comparison.junit_import_changes:
+            st.markdown("**Imported external test result changes**")
+            st.caption(
+                "These imports are external non-gating context. ScopeProof did not "
+                "execute the tests or target-repository code, and no prior decision "
+                "was carried forward."
+            )
+            for junit_change in comparison.junit_import_changes:
+                with st.container(border=True):
+                    st.text(
+                        "Imported test result: "
+                        f"{_status_label(junit_change.kind.value)}"
+                    )
+                    st.code(junit_change.artifact_sha256)
+                    for label, reference in (
+                        ("Previous import", junit_change.previous),
+                        ("Current import", junit_change.current),
+                    ):
+                        if reference is None:
+                            continue
+                        st.text(
+                            f"{label}: {reference.import_id} · asserted importer: "
+                            f"{reference.imported_by}"
+                        )
+                        for mapping in reference.mappings:
+                            st.text(
+                                f"{mapping.criterion_id}: "
+                                + ", ".join(mapping.test_case_ids)
+                            )
         if comparison.changed_finding_statuses:
             st.markdown("**Changed criterion findings**")
             for change in comparison.changed_finding_statuses:
@@ -2503,6 +2534,18 @@ else:
                             "review remains unchanged."
                         )
                     else:
+                        previous_mapping_digest = st.session_state.get(
+                            "junit_mapping_artifact_sha256"
+                        )
+                        if (
+                            previous_mapping_digest is not None
+                            and previous_mapping_digest
+                            != parsed_junit.artifact_sha256
+                        ):
+                            st.session_state["junit_mapping_scopes"] = []
+                        st.session_state["junit_mapping_artifact_sha256"] = (
+                            parsed_junit.artifact_sha256
+                        )
                         st.caption("Sanitized JUnit preview")
                         st.text(
                             "Computed results: "

@@ -947,6 +947,7 @@ def export_csv(bundle: ExportableReview) -> str:
         "manual_runtime_evidence_id",
         "junit_artifact_digests",
         "junit_mapped_cases",
+        "junit_evidence_boundary",
         "junit_importers",
         "junit_parser_warnings",
         "junit_limitations",
@@ -969,11 +970,6 @@ def export_csv(bundle: ExportableReview) -> str:
                 mapping.criterion_id == criterion.criterion_id
                 for mapping in item.criterion_mappings
             )
-        ]
-        junit_cases = [
-            case
-            for evidence_import in junit_imports
-            for case in _junit_mapping_cases(evidence_import, criterion.criterion_id)
         ]
         writer.writerow(
             {
@@ -1115,16 +1111,28 @@ def export_csv(bundle: ExportableReview) -> str:
                 "junit_mapped_cases": json.dumps(
                     [
                         {
-                            "test_case_id": _csv_text(item.test_case_id),
-                            "status": item.status.value,
-                            "suite_name": _csv_text(item.suite_name),
-                            "test_name": _csv_text(item.test_name),
+                            "import_id": _csv_text(evidence_import.import_id),
+                            "artifact_sha256": evidence_import.artifact_sha256,
+                            "imported_by": _csv_text(evidence_import.imported_by),
+                            "test_case_id": _csv_text(case.test_case_id),
+                            "status": case.status.value,
+                            "suite_name": _csv_text(case.suite_name),
+                            "test_name": _csv_text(case.test_name),
                         }
-                        for item in junit_cases
+                        for evidence_import in junit_imports
+                        for case in _junit_mapping_cases(
+                            evidence_import, criterion.criterion_id
+                        )
                     ],
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
+                "junit_evidence_boundary": _csv_text(
+                    "External non-gating context; ScopeProof did not execute these "
+                    "tests or target-repository code."
+                )
+                if junit_imports
+                else "",
                 "junit_importers": json.dumps(
                     [_csv_text(item.imported_by) for item in junit_imports],
                     ensure_ascii=False,

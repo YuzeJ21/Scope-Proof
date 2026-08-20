@@ -46,7 +46,8 @@ Every product surface labels the record as externally supplied and states:
 - `JUnitCaseStatus`: `passed`, `failure`, `error`, or `skipped`.
 - `JUnitCaseResult`: stable document-order IDs, bounded suite/class/test names,
   and one status. Failure bodies, stdout, stderr, properties, commands, paths,
-  URLs, and attachments are never persisted.
+  URLs, and attachments are never persisted. Path- or URL-like names are
+  replaced with deterministic redacted labels.
 - `JUnitResultTotals`: total, passed, failure, error, and skipped counts whose
   sum must equal total.
 - `JUnitCriterionMapping`: one confirmed criterion ID and a sorted unique list
@@ -164,6 +165,7 @@ The strict mapping document is:
 ```json
 {
   "schema_version": "junit-mapping-v1",
+  "artifact_sha256": "COPY_THE_64_CHARACTER_DIGEST_FROM_INSPECT_JUNIT",
   "selections": [
     {"scope_id": "suite-0001", "criterion_id": "AC-01"}
   ]
@@ -171,9 +173,9 @@ The strict mapping document is:
 ```
 
 `import-junit` reads the explicitly named local artifact and mapping files,
-builds the record through the shared core service, applies the atomic lifecycle
-transition, and prints `JUnitImportMutationMetadata`. It never persists file
-paths or raw XML.
+requires the mapping digest to match the bounded artifact bytes, builds the
+record through the shared core service, applies the atomic lifecycle transition,
+and prints `JUnitImportMutationMetadata`. It never persists file paths or raw XML.
 
 ### Streamlit
 

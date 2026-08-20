@@ -306,7 +306,8 @@ git commit -m "feat: append imported test evidence atomically"
 
 Create a strict `junit-mapping-v1` JSON fixture and assert `inspect-junit`
 outputs sanitized JSON with no raw output. Assert `import-junit` appends one
-record and emits validated metadata. Test malformed mapping, wrong schema,
+record and emits validated metadata. Bind the mapping to the exact inspected
+artifact SHA-256. Test malformed mapping, digest mismatch, wrong schema,
 extra fields, unsafe XML, stale review identity, duplicate artifact, missing
 file, and store failure; each failed command must leave record bytes unchanged.
 
@@ -335,7 +336,8 @@ Expected: argparse rejects `inspect-junit` and `import-junit`.
 - [ ] **Step 3: Implement strict mapping parsing and command handlers**
 
 Define a strict Pydantic `JUnitMappingDocument` with literal
-`junit-mapping-v1`. Read explicit local files only in the CLI adapter. Use
+`junit-mapping-v1` and required artifact SHA-256. Read only bounded regular
+local artifact files in the CLI adapter and reject a digest mismatch. Use
 `JsonReviewStore.mutate` for the persisted transition. Print only sanitized
 Pydantic JSON metadata; never print raw XML or local paths from XML.
 

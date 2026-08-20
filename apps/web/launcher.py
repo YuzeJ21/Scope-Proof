@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"--server.address={args.host}",
                     f"--server.port={args.port}",
                     f"--server.headless={str(args.headless).lower()}",
+                    "--server.maxUploadSize=1",
                     "--theme.base=dark",
                     "--theme.primaryColor=#d8ff63",
                     "--theme.backgroundColor=#0d0f12",

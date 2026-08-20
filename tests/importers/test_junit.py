@@ -8,6 +8,7 @@ import scopeproof_core.importers.junit as junit_module
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.importers.junit import (
     JUnitImportError,
+    JUnitMappingDocument,
     JUnitMappingSelection,
     build_junit_evidence_import,
     parse_junit_artifact,
@@ -75,6 +76,30 @@ def test_parser_discards_output_and_properties_with_one_bounded_warning() -> Non
     ]
     assert secret not in parsed.model_dump_json()
     assert "hidden" not in parsed.model_dump_json()
+
+
+def test_parser_redacts_path_and_url_like_names_before_persistence() -> None:
+    xml = (
+        b'<testsuite name="https://ci.example.test/jobs/42">'
+        b'<testcase classname="/workspace/tests/test_export.py" '
+        b'name="C:\\agent\\tests\\test_export.py"/></testsuite>'
+    )
+
+    parsed = parse_junit_artifact(xml)
+
+    suite = parsed.suites[0]
+    case = suite.test_cases[0]
+    assert suite.suite_name == "Redacted suite name 0001"
+    assert case.suite_name == "Redacted suite name 0001"
+    assert case.class_name == "Redacted class name"
+    assert case.test_name == "Redacted test name 0001"
+    assert parsed.parser_warnings == [
+        "Path- or URL-like JUnit names were redacted during import."
+    ]
+    serialized = parsed.model_dump_json()
+    assert "ci.example.test" not in serialized
+    assert "workspace" not in serialized
+    assert "agent" not in serialized
 
 
 def test_parser_reports_declared_count_mismatches_without_trusting_them() -> None:
@@ -182,6 +207,21 @@ def test_mapping_selection_is_strict_and_non_blank() -> None:
         )
     with pytest.raises(ValidationError, match="non-whitespace"):
         JUnitMappingSelection(scope_id="suite-0001", criterion_id=" ")
+
+
+def test_mapping_document_requires_exact_artifact_digest() -> None:
+    payload = {
+        "schema_version": "junit-mapping-v1",
+        "selections": [{"scope_id": "suite-0001", "criterion_id": "AC-01"}],
+    }
+
+    with pytest.raises(ValidationError, match="artifact_sha256"):
+        JUnitMappingDocument.model_validate(payload)
+
+    document = JUnitMappingDocument.model_validate(
+        {**payload, "artifact_sha256": "a" * 64}
+    )
+    assert document.artifact_sha256 == "a" * 64
 
 
 def test_builder_expands_explicit_suite_mapping_and_binds_review() -> None:

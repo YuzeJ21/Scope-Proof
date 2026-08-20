@@ -21,8 +21,13 @@ from scopeproof_core.alpha.storage import (
 from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubNetworkError, GitHubPaginationError
+from scopeproof_core.importers.junit import (
+    JUnitMappingSelection,
+    build_junit_evidence_import,
+)
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
+    append_junit_evidence_import,
     append_resolution,
 )
 from scopeproof_core.schemas.models import (
@@ -3545,6 +3550,38 @@ def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_export
     assert all(not button.disabled for button in comparison_downloads.values())
 
 
+def test_comparison_view_shows_removed_external_junit_import_as_non_gating() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    current_state = app.session_state["review_state"]
+    criterion_id = current_state.criteria_revision.criteria[0].criterion_id
+    imported = build_junit_evidence_import(
+        current_state,
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+        [
+            JUnitMappingSelection(
+                scope_id="suite-0001",
+                criterion_id=criterion_id,
+            )
+        ],
+        importer="QA owner",
+        import_id="junit-comparison-import",
+    )
+    previous_state = append_junit_evidence_import(current_state, imported)
+    assert previous_state.bundle is not None
+    app.session_state["comparison_base_bundle"] = previous_state.bundle
+
+    app = app.run()
+
+    rendered = "\n".join(
+        item.value for item in [*app.markdown, *app.caption, *app.text, *app.code]
+    )
+    assert "Imported external test result changes" in rendered
+    assert "Removed" in rendered
+    assert imported.artifact_sha256 in rendered
+    assert "external non-gating context" in rendered.lower()
+    assert "did not execute" in rendered.lower()
+
+
 def test_ineligible_comparison_base_is_cleared_without_hiding_current_analysis() -> None:
     app = analyzed_demo(new_app())
     current_bundle = app.session_state["bundle"].model_copy(deep=True)
@@ -5160,6 +5197,26 @@ def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -
     assert app.text_input(key="junit_importer").value == ""
     assert app.multiselect(key="junit_mapping_scopes").value == []
     assert app.button(key="save_junit_import").disabled is True
+
+
+def test_replacing_junit_upload_clears_mapping_even_when_scope_ids_match() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "first.xml",
+        b'<testsuite name="first"><testcase name="one"/></testsuite>',
+        "application/xml",
+    ).run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(
+        ["suite-0001"]
+    ).run()
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "second.xml",
+        b'<testsuite name="second"><testcase name="two"/></testsuite>',
+        "application/xml",
+    ).run()
+
+    assert app.multiselect(key="junit_mapping_scopes").value == []
 
 
 def test_junit_preview_and_saved_values_render_inertly_without_raw_output() -> None:

@@ -224,6 +224,15 @@ def rebind_criteria_source_provenance(bundle: ReviewBundle) -> None:
 
 def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
     bundle = add_junit_import(example_bundle())
+    second_import = bundle.junit_evidence_imports[0].model_copy(
+        update={
+            "import_id": "junit-import-002",
+            "artifact_sha256": "c" * 64,
+            "imported_by": "second owner",
+        }
+    )
+    bundle.junit_evidence_imports.append(second_import)
+    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
 
     json_report = export_json(bundle)
     markdown = export_markdown(bundle)
@@ -245,7 +254,17 @@ def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
     assert "<suite>" not in html_report
     assert "&lt;suite&gt;" in markdown
     assert "&lt;suite&gt;" in html_report
-    assert csv_row["junit_artifact_digests"] == json.dumps(["b" * 64])
+    assert csv_row["junit_artifact_digests"] == json.dumps(["b" * 64, "c" * 64])
+    csv_cases = json.loads(csv_row["junit_mapped_cases"])
+    assert {
+        (item["import_id"], item["artifact_sha256"], item["imported_by"])
+        for item in csv_cases
+    } == {
+        ("junit-import-001", "b" * 64, "'=ASSERTED <owner>"),
+        ("junit-import-002", "c" * 64, "second owner"),
+    }
+    assert "external non-gating context" in csv_row["junit_evidence_boundary"].lower()
+    assert "did not execute" in csv_row["junit_evidence_boundary"].lower()
     assert csv_row["junit_importers"].startswith("[")
     assert "'=ASSERTED <owner>" in csv_row["junit_importers"]
     assert "'@warning <unsafe>" in csv_row["junit_parser_warnings"]

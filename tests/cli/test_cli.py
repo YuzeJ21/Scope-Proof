@@ -2864,6 +2864,7 @@ def write_junit_cli_files(tmp_path: Path, criterion_id: str) -> tuple[Path, Path
         json.dumps(
             {
                 "schema_version": "junit-mapping-v1",
+                "artifact_sha256": sha256(artifact.read_bytes()).hexdigest(),
                 "selections": [
                     {"scope_id": "suite-0001", "criterion_id": criterion_id}
                 ],
@@ -2999,6 +3000,64 @@ def test_import_junit_rejects_extra_mapping_fields_without_mutation(
     assert error.value.code == 2
     assert "raw_xml" in capsys.readouterr().err
     assert path.read_bytes() == before
+
+
+def test_import_junit_rejects_mapping_for_changed_artifact_without_mutation(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    state = save_exact_head_cli_review(storage)
+    artifact, mapping = write_junit_cli_files(
+        tmp_path, state.criteria_revision.criteria[0].criterion_id
+    )
+    artifact.write_bytes(
+        b'<testsuite name="changed"><testcase name="different"/></testsuite>'
+    )
+    path = storage / f"{state.review.review_id}.json"
+    before = path.read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "import-junit",
+                state.review.review_id,
+                str(artifact),
+                "--mapping",
+                str(mapping),
+                "--importer",
+                "QA",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "digest" in capsys.readouterr().err.lower()
+    assert path.read_bytes() == before
+
+
+def test_inspect_junit_rejects_oversized_regular_file_before_parsing(
+    tmp_path: Path, capsys
+) -> None:
+    artifact = tmp_path / "oversized.xml"
+    artifact.write_bytes(b"x" * 1_048_577)
+
+    with pytest.raises(SystemExit) as error:
+        main(["inspect-junit", str(artifact)])
+
+    assert error.value.code == 2
+    assert "byte limit" in capsys.readouterr().err.lower()
+
+
+def test_inspect_junit_rejects_non_regular_artifact(tmp_path: Path, capsys) -> None:
+    artifact = tmp_path / "artifact-directory"
+    artifact.mkdir()
+
+    with pytest.raises(SystemExit) as error:
+        main(["inspect-junit", str(artifact)])
+
+    assert error.value.code == 2
+    assert "regular file" in capsys.readouterr().err.lower()
 
 
 def test_inspect_junit_rejects_unsafe_xml_without_echoing_artifact(

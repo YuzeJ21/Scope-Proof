@@ -45,6 +45,9 @@ _DISCARDED_WARNING = (
 _COUNT_WARNING = (
     "Declared JUnit counts differed from the sanitized observed results."
 )
+_REDACTED_NAME_WARNING = (
+    "Path- or URL-like JUnit names were redacted during import."
+)
 _FIXED_LIMITATIONS = (
     "ScopeProof did not execute the imported tests or target-repository code.",
     "The artifact digest does not prove criterion correctness or runtime behavior.",
@@ -102,6 +105,7 @@ class JUnitMappingDocument(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal["junit-mapping-v1"] = "junit-mapping-v1"
+    artifact_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     selections: list[JUnitMappingSelection] = Field(min_length=1, max_length=5_000)
 
 
@@ -135,6 +139,31 @@ def _optional_bounded_name(value: str | None) -> str | None:
     if len(normalized) > MAX_JUNIT_NAME_LENGTH:
         raise JUnitImportError("JUnit names exceed the supported length.")
     return normalized
+
+
+def _looks_like_path_or_url(value: str) -> bool:
+    return "://" in value or "/" in value or "\\" in value
+
+
+def _sanitized_required_name(
+    value: str | None,
+    *,
+    fallback: str | None = None,
+    redacted_fallback: str,
+) -> tuple[str, bool]:
+    normalized = _bounded_name(value, fallback=fallback)
+    if _looks_like_path_or_url(normalized):
+        return redacted_fallback, True
+    return normalized, False
+
+
+def _sanitized_optional_name(
+    value: str | None, *, redacted_fallback: str
+) -> tuple[str | None, bool]:
+    normalized = _optional_bounded_name(value)
+    if normalized is not None and _looks_like_path_or_url(normalized):
+        return redacted_fallback, True
+    return normalized, False
 
 
 def _declared_count(element: ElementTree.Element, name: str) -> int | None:
@@ -192,7 +221,7 @@ def _parse_case(
     suite_id: str,
     suite_name: str,
     case_number: int,
-) -> tuple[JUnitCaseResult, bool]:
+) -> tuple[JUnitCaseResult, bool, bool]:
     result_markers: list[str] = []
     discarded = False
     for child in element:
@@ -206,26 +235,35 @@ def _parse_case(
     if len(result_markers) > 1:
         raise JUnitImportError("JUnit test case contains multiple result markers.")
     marker = result_markers[0] if result_markers else "passed"
+    class_name, class_name_redacted = _sanitized_optional_name(
+        element.attrib.get("classname"), redacted_fallback="Redacted class name"
+    )
+    test_name, test_name_redacted = _sanitized_required_name(
+        element.attrib.get("name"),
+        redacted_fallback=f"Redacted test name {case_number:04d}",
+    )
     try:
         result = JUnitCaseResult(
             test_case_id=f"{suite_id}-case-{case_number:04d}",
             suite_id=suite_id,
             suite_name=suite_name,
-            class_name=_optional_bounded_name(element.attrib.get("classname")),
-            test_name=_bounded_name(element.attrib.get("name")),
+            class_name=class_name,
+            test_name=test_name,
             status=JUnitCaseStatus(marker),
         )
     except ValidationError:
         raise JUnitImportError("JUnit names exceed the supported length or shape.") from None
-    return result, discarded
+    return result, discarded, class_name_redacted or test_name_redacted
 
 
 def _parse_suite(
     element: ElementTree.Element, suite_number: int
-) -> tuple[ParsedJUnitSuite, bool, bool]:
+) -> tuple[ParsedJUnitSuite, bool, bool, bool]:
     suite_id = f"suite-{suite_number:04d}"
-    suite_name = _bounded_name(
-        element.attrib.get("name"), fallback=f"Unnamed suite {suite_number:04d}"
+    suite_name, names_redacted = _sanitized_required_name(
+        element.attrib.get("name"),
+        fallback=f"Unnamed suite {suite_number:04d}",
+        redacted_fallback=f"Redacted suite name {suite_number:04d}",
     )
     test_cases: list[JUnitCaseResult] = []
     discarded = False
@@ -234,7 +272,7 @@ def _parse_suite(
         if name == "testcase":
             if len(test_cases) >= MAX_JUNIT_CASES:
                 raise JUnitImportError("JUnit artifact exceeds the test-case limit.")
-            case, case_discarded = _parse_case(
+            case, case_discarded, case_name_redacted = _parse_case(
                 child,
                 suite_id=suite_id,
                 suite_name=suite_name,
@@ -242,6 +280,7 @@ def _parse_suite(
             )
             test_cases.append(case)
             discarded = discarded or case_discarded
+            names_redacted = names_redacted or case_name_redacted
         elif name == "testsuite":
             raise JUnitImportError("Nested JUnit test suites are unsupported.")
         elif name in {"properties", "system-out", "system-err"}:
@@ -258,6 +297,7 @@ def _parse_suite(
         ),
         discarded,
         differs,
+        names_redacted,
     )
 
 
@@ -322,15 +362,19 @@ def parse_junit_artifact(artifact_bytes: bytes) -> ParsedJUnitArtifact:
     suites: list[ParsedJUnitSuite] = []
     discarded = root_discarded
     declared_mismatch = False
+    names_redacted = False
     total_cases = 0
     for suite_number, element in enumerate(suite_elements, start=1):
-        suite, suite_discarded, suite_mismatch = _parse_suite(element, suite_number)
+        suite, suite_discarded, suite_mismatch, suite_names_redacted = _parse_suite(
+            element, suite_number
+        )
         total_cases += len(suite.test_cases)
         if total_cases > MAX_JUNIT_CASES:
             raise JUnitImportError("JUnit artifact exceeds the test-case limit.")
         suites.append(suite)
         discarded = discarded or suite_discarded
         declared_mismatch = declared_mismatch or suite_mismatch
+        names_redacted = names_redacted or suite_names_redacted
 
     all_cases = [item for suite in suites for item in suite.test_cases]
     totals = _totals_for_cases(all_cases)
@@ -341,6 +385,8 @@ def parse_junit_artifact(artifact_bytes: bytes) -> ParsedJUnitArtifact:
         warnings.append(_DISCARDED_WARNING)
     if declared_mismatch:
         warnings.append(_COUNT_WARNING)
+    if names_redacted:
+        warnings.append(_REDACTED_NAME_WARNING)
     return ParsedJUnitArtifact(
         artifact_sha256=sha256(artifact_bytes).hexdigest(),
         suites=suites,

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
@@ -30,6 +33,7 @@ from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
 from scopeproof_core.importers.junit import (
+    MAX_JUNIT_BYTES,
     JUnitMappingDocument,
     build_junit_evidence_import,
     parse_junit_artifact,
@@ -452,10 +456,40 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _read_bounded_junit_artifact(path: Path) -> bytes:
+    """Read one regular local artifact without buffering beyond the parser budget."""
+
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("JUnit artifact must be a regular file")
+        if metadata.st_size > MAX_JUNIT_BYTES:
+            raise ValueError("JUnit artifact exceeds the byte limit")
+        chunks: list[bytes] = []
+        remaining = MAX_JUNIT_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65_536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        artifact_bytes = b"".join(chunks)
+        if len(artifact_bytes) > MAX_JUNIT_BYTES:
+            raise ValueError("JUnit artifact exceeds the byte limit")
+        return artifact_bytes
+    finally:
+        os.close(descriptor)
+
+
 def _inspect_junit(args: argparse.Namespace) -> int:
     """Print a sanitized bytes-only JUnit projection without persistence."""
 
-    parsed = parse_junit_artifact(Path(args.artifact).read_bytes())
+    parsed = parse_junit_artifact(_read_bounded_junit_artifact(Path(args.artifact)))
     print(parsed.model_dump_json(indent=2))
     return 0
 
@@ -466,7 +500,9 @@ def _import_junit(args: argparse.Namespace) -> int:
     mapping = JUnitMappingDocument.model_validate_json(
         Path(args.mapping).read_text(encoding="utf-8")
     )
-    artifact_bytes = Path(args.artifact).read_bytes()
+    artifact_bytes = _read_bounded_junit_artifact(Path(args.artifact))
+    if sha256(artifact_bytes).hexdigest() != mapping.artifact_sha256:
+        raise ValueError("JUnit mapping digest does not match the selected artifact")
     store = JsonReviewStore(Path(args.storage_dir))
     imported = None
 

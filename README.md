@@ -275,6 +275,7 @@ inferring one from test names:
 ```json
 {
   "schema_version": "junit-mapping-v1",
+  "artifact_sha256": "COPY_THE_64_CHARACTER_DIGEST_FROM_INSPECT_JUNIT",
   "selections": [
     {"scope_id": "suite-0001", "criterion_id": "AC-01"}
   ]
@@ -295,7 +296,9 @@ UTF-8 only and rejects DTDs, entities, non-declaration processing instructions, 
 references, unsupported nesting, and ambiguous result markers. It stores computed statuses,
 stable local scope IDs, the artifact SHA-256, exact review and criteria provenance, explicit
 mappings, an asserted importer, warnings, and limitations. Raw XML, stdout, stderr, properties,
-failure bodies, commands, paths, URLs, and attachments are discarded. An import is external,
+failure bodies, commands, paths, URLs, and attachments are discarded; path- or URL-like
+suite/class/test names are replaced with deterministic redacted labels. The CLI mapping digest
+must match the selected artifact before any saved-review mutation. An import is external,
 non-gating context—not E1, E2, E3, E4, observed CI, runtime verification, human acceptance, final
 acceptance, or proof that a criterion passed. Failed inspection, mapping, validation, or storage
 does not mutate the saved review.
