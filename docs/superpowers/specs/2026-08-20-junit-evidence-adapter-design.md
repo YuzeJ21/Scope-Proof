@@ -55,7 +55,10 @@ Every product surface labels the record as externally supplied and states:
 - `JUnitEvidenceImport`: a frozen `junit-import-v1` envelope containing import
   ID, review identity, exact head, criteria revision and source provenance,
   artifact digest, sanitized case results, totals, explicit mappings, asserted
-  importer metadata, warnings, and limitations.
+  importer metadata, warnings, limitations, and a required fixed typed trust
+  boundary. The boundary is preserved in full JSON and comparison JSON so
+  machine consumers receive the same non-gating semantics as human-readable
+  surfaces.
 - `JUnitImportMutationMetadata`: validated CLI result metadata with an explicit
   `externally_supplied_non_gating` boundary beside any unchanged review verdict.
 

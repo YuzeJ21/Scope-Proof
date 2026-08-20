@@ -18,6 +18,7 @@ from scopeproof_core.schemas.models import (
     JUnitCaseResult,
     JUnitCaseStatus,
     JUnitCriterionMapping,
+    JUnitEvidenceBoundary,
     JUnitEvidenceImport,
     JUnitResultTotals,
     ReviewState,
@@ -53,6 +54,7 @@ _FIXED_LIMITATIONS = (
     "ScopeProof did not execute the imported tests or target-repository code.",
     "The artifact digest does not prove criterion correctness or runtime behavior.",
     "The asserted importer identity is not authenticated.",
+    "Explicit human mapping is organizational context, not proof that a criterion passed.",
 )
 
 
@@ -474,6 +476,14 @@ def build_junit_evidence_import(
     try:
         return JUnitEvidenceImport(
             schema_version="junit-import-v1",
+            evidence_boundary=JUnitEvidenceBoundary(
+                source="externally_supplied",
+                gate_effect="non_gating",
+                execution="not_executed_by_scopeproof",
+                artifact_digest_scope="imported_bytes_only",
+                importer_identity="asserted_not_authenticated",
+                criterion_mapping="organizational_context_not_proof",
+            ),
             import_id=resolved_import_id,
             repository=bundle.review.repository,
             pr_number=bundle.review.pr_number,

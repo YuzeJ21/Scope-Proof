@@ -191,6 +191,12 @@ def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> Non
     report = export_comparison_markdown(comparison)
 
     assert payload["junit_import_changes"][0]["kind"] == "mapping_modified"
+    assert payload["junit_import_changes"][0]["previous"]["evidence_boundary"][
+        "criterion_mapping"
+    ] == "organizational_context_not_proof"
+    assert payload["junit_import_changes"][0]["current"]["evidence_boundary"][
+        "gate_effect"
+    ] == "non_gating"
     assert artifact_digest in report
     assert "Imported External Test Result Changes" in report
     assert "externally supplied, non-gating context" in report

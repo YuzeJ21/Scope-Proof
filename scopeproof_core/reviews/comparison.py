@@ -16,6 +16,7 @@ from scopeproof_core.schemas.models import (
     FindingStatus,
     GateVerdict,
     HumanDecision,
+    JUnitEvidenceBoundary,
     JUnitEvidenceImport,
     ReviewBundle,
     ReviewInputOrigin,
@@ -174,6 +175,9 @@ class JUnitImportReference(BaseModel):
     artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     asserted_importer: str = Field(min_length=1)
+    evidence_boundary: JUnitEvidenceBoundary = Field(
+        default_factory=JUnitEvidenceBoundary
+    )
     mappings: list[JUnitMappingReference] = Field(min_length=1)
 
     @classmethod
@@ -185,6 +189,7 @@ class JUnitImportReference(BaseModel):
             artifact_sha256=evidence_import.artifact_sha256,
             head_sha=evidence_import.head_sha,
             asserted_importer=evidence_import.imported_by,
+            evidence_boundary=evidence_import.evidence_boundary.model_copy(deep=True),
             mappings=[
                 JUnitMappingReference(
                     criterion_id=mapping.criterion_id,

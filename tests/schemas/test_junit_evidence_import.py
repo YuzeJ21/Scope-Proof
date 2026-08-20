@@ -39,6 +39,14 @@ def valid_import_payload(bundle: ReviewBundle | None = None) -> dict[str, object
         "criteria_source_provenance": provenance.model_dump(mode="python"),
         "artifact_sha256": ARTIFACT_SHA256,
         "artifact_format": "junit_xml",
+        "evidence_boundary": {
+            "source": "externally_supplied",
+            "gate_effect": "non_gating",
+            "execution": "not_executed_by_scopeproof",
+            "artifact_digest_scope": "imported_bytes_only",
+            "importer_identity": "asserted_not_authenticated",
+            "criterion_mapping": "organizational_context_not_proof",
+        },
         "imported_by": "QA owner",
         "imported_at": datetime(2026, 8, 20, tzinfo=UTC),
         "totals": {
@@ -91,11 +99,12 @@ def test_junit_import_accepts_strict_exact_identity_and_sanitized_results() -> N
     assert record.model_dump_json().count("test_error") == 1
 
 
-def test_junit_import_requires_explicit_schema_version() -> None:
+@pytest.mark.parametrize("required_field", ["schema_version", "evidence_boundary"])
+def test_junit_import_requires_explicit_envelope_fields(required_field: str) -> None:
     payload = valid_import_payload()
-    payload.pop("schema_version")
+    payload.pop(required_field)
 
-    with pytest.raises(ValidationError, match="schema_version"):
+    with pytest.raises(ValidationError, match=required_field):
         JUnitEvidenceImport.model_validate(payload)
 
 
@@ -103,6 +112,7 @@ def test_junit_import_requires_explicit_schema_version() -> None:
     ("path", "value", "message"),
     [
         (("schema_version",), "junit-import-v2", "junit-import-v1"),
+        (("evidence_boundary", "gate_effect"), "gating", "non_gating"),
         (("head_sha",), "short", "40"),
         (("artifact_sha256",), "A" * 64, "SHA-256"),
         (("imported_by",), "   ", "non-whitespace"),
@@ -158,6 +168,8 @@ def test_junit_import_rejects_inconsistent_totals() -> None:
         ("class_name", "C:\\agent\\tests.Widget"),
         ("test_name", "https://ci.example.test/jobs/42"),
         ("test_name", "mailto:secret@example.test"),
+        ("test_name", "case for mailto:secret@example.test"),
+        ("test_name", "artifact C:relative-secret.xml"),
     ],
 )
 def test_persisted_junit_case_rejects_path_or_url_like_names(

@@ -34,6 +34,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    JUnitEvidenceBoundary,
     JUnitEvidenceImport,
     RepositoryVisibility,
     ResearchContext,
@@ -60,6 +61,7 @@ def add_junit_import(bundle: ReviewBundle) -> ReviewBundle:
     bundle.junit_evidence_imports = [
         JUnitEvidenceImport(
             schema_version="junit-import-v1",
+            evidence_boundary=JUnitEvidenceBoundary(),
             import_id="junit-import-001",
             repository=bundle.review.repository,
             pr_number=bundle.review.pr_number,
@@ -246,6 +248,15 @@ def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
     assert "suite-0001-case-0001" in rendered
     assert "passed" in rendered
     assert "=ASSERTED <owner>" in json_report
+    json_payload = json.loads(json_report)
+    assert json_payload["junit_evidence_imports"][0]["evidence_boundary"] == {
+        "source": "externally_supplied",
+        "gate_effect": "non_gating",
+        "execution": "not_executed_by_scopeproof",
+        "artifact_digest_scope": "imported_bytes_only",
+        "importer_identity": "asserted_not_authenticated",
+        "criterion_mapping": "organizational_context_not_proof",
+    }
     assert "## Imported External Test Results" in markdown
     assert "Imported external test results" in html_report
     assert "RAW-JUNIT-OUTPUT-SENTINEL" not in rendered

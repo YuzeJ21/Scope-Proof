@@ -298,6 +298,12 @@ def _exercise_primary_path(
     if verify_persistence_and_downloads:
         save_notice = page.get_by_text("Review saved automatically. ID:", exact=False)
         expect(save_notice).to_be_visible()
+        saved_id_match = re.search(
+            r"Review saved automatically\. ID: ([A-Za-z0-9_-]+)\.",
+            save_notice.inner_text(),
+        )
+        assert saved_id_match is not None
+        saved_review_id = saved_id_match.group(1)
 
         markdown_export = page.get_by_role("button", name="Download Markdown", exact=True)
         with page.expect_download() as download_info:
@@ -309,9 +315,7 @@ def _exercise_primary_path(
         page.get_by_text("Resume a saved review", exact=True).click()
         expect(page.get_by_text(re.compile(r"saved local reviews? found"))).to_be_visible()
         saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
-        saved_review.locator("..").get_by_role("button", name="Open", exact=True).click()
-        page.keyboard.press("ArrowDown")
-        page.keyboard.press("Enter")
+        _choose_combobox_option(page, saved_review, option_name=saved_review_id)
         reopen = page.get_by_role("button", name="Reopen local review", exact=True)
         expect(reopen).to_be_enabled()
         reopen.click()

@@ -107,7 +107,9 @@ def require_verified_public_origin(
 
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _EXACT_HEAD_PATTERN = r"^[a-f0-9]{40}$"
-_PATH_OR_URI_LIKE = re.compile(r"(?:[/\\]|^[A-Za-z][A-Za-z0-9+.-]*:)")
+_PATH_OR_URI_LIKE = re.compile(
+    r"(?:[/\\]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:)"
+)
 CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
     "scopeproof://constructed-demo/acceptance-criteria"
 )
@@ -1193,12 +1195,30 @@ class JUnitCriterionMapping(BaseModel):
         return value
 
 
+class JUnitEvidenceBoundary(BaseModel):
+    """Fixed machine-readable trust semantics for every external JUnit import."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: Literal["externally_supplied"] = "externally_supplied"
+    gate_effect: Literal["non_gating"] = "non_gating"
+    execution: Literal["not_executed_by_scopeproof"] = "not_executed_by_scopeproof"
+    artifact_digest_scope: Literal["imported_bytes_only"] = "imported_bytes_only"
+    importer_identity: Literal["asserted_not_authenticated"] = (
+        "asserted_not_authenticated"
+    )
+    criterion_mapping: Literal["organizational_context_not_proof"] = (
+        "organizational_context_not_proof"
+    )
+
+
 class JUnitEvidenceImport(BaseModel):
     """Versioned external test-result context that never enters gate truth."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal["junit-import-v1"]
+    evidence_boundary: JUnitEvidenceBoundary
     import_id: LocalReviewId
     repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
     pr_number: int = Field(gt=0)

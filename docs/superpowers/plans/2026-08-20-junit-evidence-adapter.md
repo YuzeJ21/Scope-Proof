@@ -25,6 +25,10 @@ storage and exports continue to revalidate complete review state.
 - Require repository, PR, exact 40-character lowercase hexadecimal head, criteria revision, normalized criteria digest, and exact criteria-source provenance binding.
 - Imported results are never E1, E2, E3, E4, CI, a human resolution, final acceptance, or a deterministic gate input.
 - Every saved or exported object is Pydantic-revalidated; failed imports do not mutate state.
+- Full and comparison JSON preserve a fixed typed boundary for external source,
+  non-gating effect, non-execution, digest scope, asserted identity, and mapping
+  limitations.
+- Browser persistence checks reopen the exact review ID reported by the save notice.
 - Preserve `.coverage 2` exactly and never stage, package, modify, rename, or delete it.
 - Keep Stage 1 closed at 0/5, 0/3, 0/3, 0/3, and 0/2; keep Stage 2 active; do not begin Stage 3.
 

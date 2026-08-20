@@ -109,6 +109,8 @@ def test_parser_redacts_path_and_url_like_names_before_persistence() -> None:
         "data:,TOP-SECRET",
         "urn:example:private",
         "C:relative-secret.xml",
+        "case for mailto:secret@example.test",
+        "artifact C:relative-secret.xml",
     ],
 )
 def test_parser_redacts_scheme_like_names(unsafe_name: str) -> None:
