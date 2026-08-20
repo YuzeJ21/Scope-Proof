@@ -78,6 +78,33 @@ def test_parser_discards_output_and_properties_with_one_bounded_warning() -> Non
     assert "hidden" not in parsed.model_dump_json()
 
 
+@pytest.mark.parametrize(
+    "xml",
+    [
+        (
+            b'<testsuites><properties><testcase name="hidden"><failure/></testcase>'
+            b'</properties><testsuite name="visible"><testcase name="pass"/>'
+            b'</testsuite></testsuites>'
+        ),
+        (
+            b'<testsuite name="visible"><properties><testsuite name="hidden">'
+            b'<testcase name="failure"><failure/></testcase></testsuite></properties>'
+            b'<testcase name="pass"/></testsuite>'
+        ),
+        (
+            b'<testsuite name="visible"><testcase name="pass"><system-out>'
+            b'<testcase name="hidden"><failure/></testcase></system-out></testcase>'
+            b'</testsuite>'
+        ),
+    ],
+)
+def test_parser_rejects_structural_results_hidden_inside_discarded_wrappers(
+    xml: bytes,
+) -> None:
+    with pytest.raises(JUnitImportError, match="unsupported structure"):
+        parse_junit_artifact(xml)
+
+
 def test_parser_redacts_path_and_url_like_names_before_persistence() -> None:
     xml = (
         b'<testsuite name="https://ci.example.test/jobs/42">'

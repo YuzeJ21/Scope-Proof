@@ -2583,21 +2583,19 @@ else:
                 f"Selected mapping target: {selected_id}. ScopeProof never infers this "
                 "relationship from test names."
             )
-            junit_import_ready = bool(
+            junit_import_candidate = None
+            junit_import_draft_present = bool(
                 exact_head_ready
                 and review_state is not None
                 and parsed_junit is not None
                 and junit_importer.strip()
                 and junit_mapping_scopes
             )
-            if st.button(
-                "Save imported JUnit results",
-                key="save_junit_import",
-                disabled=not junit_import_ready,
-            ):
+            if junit_import_draft_present:
                 assert review_state is not None
+                assert uploaded_junit is not None
                 try:
-                    junit_record = build_junit_evidence_import(
+                    junit_import_candidate = build_junit_evidence_import(
                         review_state,
                         uploaded_junit.getvalue(),
                         [
@@ -2614,8 +2612,21 @@ else:
                             if line.strip()
                         ],
                     )
+                    append_junit_evidence_import(
+                        review_state, junit_import_candidate
+                    )
+                except (JUnitImportError, TypeError, ValueError):
+                    junit_import_candidate = None
+            if st.button(
+                "Save imported JUnit results",
+                key="save_junit_import",
+                disabled=junit_import_candidate is None,
+            ):
+                assert review_state is not None
+                assert junit_import_candidate is not None
+                try:
                     review_state = append_junit_evidence_import(
-                        review_state, junit_record
+                        review_state, junit_import_candidate
                     )
                 except (JUnitImportError, TypeError, ValueError):
                     st.error(

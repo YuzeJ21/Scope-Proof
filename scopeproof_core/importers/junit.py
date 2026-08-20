@@ -214,6 +214,24 @@ def _declared_counts_differ(
     return any(value is not None and value != observed[name] for name, value in declared.items())
 
 
+def _validate_discarded_wrapper(
+    element: ElementTree.Element, wrapper_name: str
+) -> None:
+    """Reject element structure that would otherwise disappear inside ignored content."""
+
+    if wrapper_name == "properties":
+        for child in element:
+            if _local_name(child.tag) != "property" or len(child):
+                raise JUnitImportError(
+                    "JUnit discarded content contains an unsupported structure."
+                )
+        return
+    if len(element):
+        raise JUnitImportError(
+            "JUnit discarded content contains an unsupported structure."
+        )
+
+
 def _parse_case(
     element: ElementTree.Element,
     *,
@@ -226,8 +244,13 @@ def _parse_case(
     for child in element:
         name = _local_name(child.tag)
         if name in {"failure", "error", "skipped"}:
+            if len(child):
+                raise JUnitImportError(
+                    "JUnit test result contains an unsupported structure."
+                )
             result_markers.append(name)
         elif name in {"properties", "system-out", "system-err"}:
+            _validate_discarded_wrapper(child, name)
             discarded = True
         else:
             raise JUnitImportError("JUnit test case contains an unsupported result structure.")
@@ -283,6 +306,7 @@ def _parse_suite(
         elif name == "testsuite":
             raise JUnitImportError("Nested JUnit test suites are unsupported.")
         elif name in {"properties", "system-out", "system-err"}:
+            _validate_discarded_wrapper(child, name)
             discarded = True
         else:
             raise JUnitImportError("JUnit test suite contains an unsupported structure.")
@@ -348,6 +372,7 @@ def parse_junit_artifact(artifact_bytes: bytes) -> ParsedJUnitArtifact:
             if child_name == "testsuite":
                 suite_elements.append(child)
             elif child_name in {"properties", "system-out", "system-err"}:
+                _validate_discarded_wrapper(child, child_name)
                 root_discarded = True
             else:
                 raise JUnitImportError(

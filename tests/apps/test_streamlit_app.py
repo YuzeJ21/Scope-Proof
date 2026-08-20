@@ -5280,3 +5280,52 @@ def test_junit_import_requires_exact_head_and_explicit_mapping() -> None:
     assert "An exact 40-character reviewed head is required before import." in [
         item.value for item in app.caption
     ]
+
+
+@pytest.mark.parametrize(
+    ("xml", "importer", "mapping"),
+    [
+        (b'<testsuite name="empty"/>', "QA owner", ["suite-0001"]),
+        (
+            b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+            "x" * 257,
+            ["suite-0001"],
+        ),
+    ],
+)
+def test_junit_import_save_stays_disabled_until_full_draft_is_valid(
+    xml: bytes,
+    importer: str,
+    mapping: list[str],
+) -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml", xml, "application/xml"
+    ).run()
+    app = app.text_input(key="junit_importer").set_value(importer).run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(mapping).run()
+
+    assert app.button(key="save_junit_import").disabled is True
+
+
+def test_junit_import_save_stays_disabled_for_already_imported_artifact() -> None:
+    xml = b'<testsuite name="unit"><testcase name="test_export"/></testsuite>'
+    app = analyzed_exact_head_standard_demo(new_app())
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml", xml, "application/xml"
+    ).run()
+    app = app.text_input(key="junit_importer").set_value("QA owner").run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(
+        ["suite-0001"]
+    ).run()
+    app = app.button(key="save_junit_import").click().run()
+
+    app = app.file_uploader(key="junit_artifact_upload_1").upload(
+        "results.xml", xml, "application/xml"
+    ).run()
+    app = app.text_input(key="junit_importer").set_value("QA owner").run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(
+        ["suite-0001"]
+    ).run()
+
+    assert app.button(key="save_junit_import").disabled is True
