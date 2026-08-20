@@ -143,6 +143,25 @@ def test_junit_import_rejects_inconsistent_totals() -> None:
         JUnitEvidenceImport.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("suite_name", "/private/workspace/unit"),
+        ("class_name", "C:\\agent\\tests.Widget"),
+        ("test_name", "https://ci.example.test/jobs/42"),
+        ("test_name", "mailto:secret@example.test"),
+    ],
+)
+def test_persisted_junit_case_rejects_path_or_url_like_names(
+    field: str, value: str
+) -> None:
+    payload = valid_import_payload()
+    payload["test_cases"][0][field] = value  # type: ignore[index]
+
+    with pytest.raises(ValidationError, match="path- or URL-like"):
+        JUnitEvidenceImport.model_validate(payload)
+
+
 def test_junit_import_rejects_unknown_or_duplicate_case_mapping() -> None:
     unknown = valid_import_payload()
     unknown["criterion_mappings"] = [

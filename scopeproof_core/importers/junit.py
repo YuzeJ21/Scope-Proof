@@ -21,6 +21,7 @@ from scopeproof_core.schemas.models import (
     JUnitEvidenceImport,
     JUnitResultTotals,
     ReviewState,
+    junit_name_is_path_or_url_like,
 )
 
 MAX_JUNIT_BYTES = 1_048_576
@@ -141,10 +142,6 @@ def _optional_bounded_name(value: str | None) -> str | None:
     return normalized
 
 
-def _looks_like_path_or_url(value: str) -> bool:
-    return "://" in value or "/" in value or "\\" in value
-
-
 def _sanitized_required_name(
     value: str | None,
     *,
@@ -152,7 +149,7 @@ def _sanitized_required_name(
     redacted_fallback: str,
 ) -> tuple[str, bool]:
     normalized = _bounded_name(value, fallback=fallback)
-    if _looks_like_path_or_url(normalized):
+    if junit_name_is_path_or_url_like(normalized):
         return redacted_fallback, True
     return normalized, False
 
@@ -161,7 +158,7 @@ def _sanitized_optional_name(
     value: str | None, *, redacted_fallback: str
 ) -> tuple[str | None, bool]:
     normalized = _optional_bounded_name(value)
-    if normalized is not None and _looks_like_path_or_url(normalized):
+    if normalized is not None and junit_name_is_path_or_url_like(normalized):
         return redacted_fallback, True
     return normalized, False
 

@@ -102,6 +102,24 @@ def test_parser_redacts_path_and_url_like_names_before_persistence() -> None:
     assert "agent" not in serialized
 
 
+@pytest.mark.parametrize(
+    "unsafe_name",
+    [
+        "mailto:secret@example.test",
+        "data:,TOP-SECRET",
+        "urn:example:private",
+        "C:relative-secret.xml",
+    ],
+)
+def test_parser_redacts_scheme_like_names(unsafe_name: str) -> None:
+    parsed = parse_junit_artifact(
+        f'<testsuite name="unit"><testcase name="{unsafe_name}"/></testsuite>'.encode()
+    )
+
+    assert parsed.suites[0].test_cases[0].test_name == "Redacted test name 0001"
+    assert unsafe_name not in parsed.model_dump_json()
+
+
 def test_parser_reports_declared_count_mismatches_without_trusting_them() -> None:
     parsed = parse_junit_artifact(
         b'<testsuite name="unit" tests="99" failures="4" errors="0" skipped="0">'

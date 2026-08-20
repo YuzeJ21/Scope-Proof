@@ -2977,7 +2977,7 @@ def test_import_junit_rejects_extra_mapping_fields_without_mutation(
         tmp_path, state.criteria_revision.criteria[0].criterion_id
     )
     payload = json.loads(mapping.read_text(encoding="utf-8"))
-    payload["raw_xml"] = "forbidden"
+    payload["raw_xml"] = "TOP-SECRET-MAPPING-CONTENT"
     mapping.write_text(json.dumps(payload), encoding="utf-8")
     path = storage / f"{state.review.review_id}.json"
     before = path.read_bytes()
@@ -2998,7 +2998,41 @@ def test_import_junit_rejects_extra_mapping_fields_without_mutation(
         )
 
     assert error.value.code == 2
-    assert "raw_xml" in capsys.readouterr().err
+    stderr = capsys.readouterr().err
+    assert "mapping document is invalid" in stderr.lower()
+    assert "TOP-SECRET-MAPPING-CONTENT" not in stderr
+    assert path.read_bytes() == before
+
+
+def test_import_junit_rejects_oversized_mapping_without_mutation(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    state = save_exact_head_cli_review(storage)
+    artifact, mapping = write_junit_cli_files(
+        tmp_path, state.criteria_revision.criteria[0].criterion_id
+    )
+    mapping.write_bytes(b"x" * 1_048_577)
+    path = storage / f"{state.review.review_id}.json"
+    before = path.read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "import-junit",
+                state.review.review_id,
+                str(artifact),
+                "--mapping",
+                str(mapping),
+                "--importer",
+                "QA",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "mapping exceeds the byte limit" in capsys.readouterr().err.lower()
     assert path.read_bytes() == before
 
 

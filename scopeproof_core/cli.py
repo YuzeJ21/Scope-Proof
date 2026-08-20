@@ -11,6 +11,8 @@ from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from scopeproof_core.alpha.models import AlphaFrictionStage, AlphaOutcome, ParticipantRole
 from scopeproof_core.alpha.rehearsal import initialize_alpha_rehearsal
 from scopeproof_core.alpha.rehearsal_storage import JsonAlphaRehearsalStore
@@ -456,8 +458,10 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
-def _read_bounded_junit_artifact(path: Path) -> bytes:
-    """Read one regular local artifact without buffering beyond the parser budget."""
+def _read_bounded_regular_file(
+    path: Path, *, max_bytes: int, label: str
+) -> bytes:
+    """Read one regular local file without buffering beyond its explicit budget."""
 
     flags = os.O_RDONLY
     flags |= getattr(os, "O_CLOEXEC", 0)
@@ -467,11 +471,11 @@ def _read_bounded_junit_artifact(path: Path) -> bytes:
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
-            raise ValueError("JUnit artifact must be a regular file")
-        if metadata.st_size > MAX_JUNIT_BYTES:
-            raise ValueError("JUnit artifact exceeds the byte limit")
+            raise ValueError(f"{label} must be a regular file")
+        if metadata.st_size > max_bytes:
+            raise ValueError(f"{label} exceeds the byte limit")
         chunks: list[bytes] = []
-        remaining = MAX_JUNIT_BYTES + 1
+        remaining = max_bytes + 1
         while remaining:
             chunk = os.read(descriptor, min(65_536, remaining))
             if not chunk:
@@ -479,11 +483,19 @@ def _read_bounded_junit_artifact(path: Path) -> bytes:
             chunks.append(chunk)
             remaining -= len(chunk)
         artifact_bytes = b"".join(chunks)
-        if len(artifact_bytes) > MAX_JUNIT_BYTES:
-            raise ValueError("JUnit artifact exceeds the byte limit")
+        if len(artifact_bytes) > max_bytes:
+            raise ValueError(f"{label} exceeds the byte limit")
         return artifact_bytes
     finally:
         os.close(descriptor)
+
+
+def _read_bounded_junit_artifact(path: Path) -> bytes:
+    return _read_bounded_regular_file(
+        path,
+        max_bytes=MAX_JUNIT_BYTES,
+        label="JUnit artifact",
+    )
 
 
 def _inspect_junit(args: argparse.Namespace) -> int:
@@ -497,9 +509,15 @@ def _inspect_junit(args: argparse.Namespace) -> int:
 def _import_junit(args: argparse.Namespace) -> int:
     """Atomically append one validated external test-result import."""
 
-    mapping = JUnitMappingDocument.model_validate_json(
-        Path(args.mapping).read_text(encoding="utf-8")
+    mapping_bytes = _read_bounded_regular_file(
+        Path(args.mapping),
+        max_bytes=MAX_JUNIT_BYTES,
+        label="JUnit mapping",
     )
+    try:
+        mapping = JUnitMappingDocument.model_validate_json(mapping_bytes)
+    except ValidationError:
+        raise ValueError("JUnit mapping document is invalid") from None
     artifact_bytes = _read_bounded_junit_artifact(Path(args.artifact))
     if sha256(artifact_bytes).hexdigest() != mapping.artifact_sha256:
         raise ValueError("JUnit mapping digest does not match the selected artifact")

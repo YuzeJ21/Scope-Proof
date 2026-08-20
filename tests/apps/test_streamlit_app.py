@@ -3572,6 +3572,7 @@ def test_comparison_view_shows_removed_external_junit_import_as_non_gating() -> 
 
     app = app.run()
 
+    assert app.exception == []
     rendered = "\n".join(
         item.value for item in [*app.markdown, *app.caption, *app.text, *app.code]
     )

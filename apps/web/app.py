@@ -2111,7 +2111,7 @@ else:
                             continue
                         st.text(
                             f"{label}: {reference.import_id} · asserted importer: "
-                            f"{reference.imported_by}"
+                            f"{reference.asserted_importer}"
                         )
                         for mapping in reference.mappings:
                             st.text(

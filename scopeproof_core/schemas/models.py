@@ -107,9 +107,16 @@ def require_verified_public_origin(
 
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _EXACT_HEAD_PATTERN = r"^[a-f0-9]{40}$"
+_PATH_OR_URI_LIKE = re.compile(r"(?:[/\\]|^[A-Za-z][A-Za-z0-9+.-]*:)")
 CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
     "scopeproof://constructed-demo/acceptance-criteria"
 )
+
+
+def junit_name_is_path_or_url_like(value: str) -> bool:
+    """Return whether a JUnit display name could disclose a path or URI."""
+
+    return _PATH_OR_URI_LIKE.search(value) is not None
 _CRITERIA_SOURCE_URI_ERROR = (
     "source URI must be an HTTPS URL or "
     "scopeproof://constructed-demo/acceptance-criteria"
@@ -1118,6 +1125,8 @@ class JUnitCaseResult(BaseModel):
         normalized = value.strip()
         if not normalized:
             raise ValueError("must contain non-whitespace text")
+        if junit_name_is_path_or_url_like(normalized):
+            raise ValueError("JUnit names must not contain path- or URL-like text")
         return normalized
 
     @field_validator("class_name")
@@ -1128,6 +1137,8 @@ class JUnitCaseResult(BaseModel):
         normalized = value.strip()
         if not normalized:
             raise ValueError("class name must contain non-whitespace text")
+        if junit_name_is_path_or_url_like(normalized):
+            raise ValueError("JUnit names must not contain path- or URL-like text")
         return normalized
 
     @model_validator(mode="after")
