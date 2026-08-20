@@ -323,16 +323,10 @@ def _exercise_primary_path(
         "combobox", name="Human decision", exact=True
     )
     expect(decision_selector).to_be_visible()
-    matrix_filter = page.get_by_role(
-        "heading", name="5 · Evidence Matrix", exact=True
+    decision_before_matrix = decision_selector.locator(
+        "xpath=following::h2[@id='5-evidence-matrix']"
     )
-    matrix_handle = matrix_filter.element_handle()
-    assert matrix_handle is not None
-    assert decision_selector.evaluate(
-        "(decision, matrix) => Boolean("
-        "decision.compareDocumentPosition(matrix) & Node.DOCUMENT_POSITION_FOLLOWING)",
-        matrix_handle,
-    )
+    expect(decision_before_matrix).to_have_count(1)
 
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert page.evaluate("document.body.scrollWidth <= window.innerWidth")
