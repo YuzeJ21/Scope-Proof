@@ -16,6 +16,7 @@ from scopeproof_core.schemas.models import (
     FindingStatus,
     GateVerdict,
     HumanDecision,
+    JUnitEvidenceImport,
     ReviewBundle,
     ReviewInputOrigin,
 )
@@ -143,12 +144,107 @@ class ResolutionChange(BaseModel):
     current_decision: HumanDecision | None
 
 
+class JUnitImportChangeKind(StrEnum):
+    """Relationship between one bounded imported artifact across reviews."""
+
+    UNCHANGED = "unchanged"
+    MAPPING_MODIFIED = "mapping_modified"
+    ADDED = "added"
+    REMOVED = "removed"
+
+
+class JUnitMappingReference(BaseModel):
+    """Validated comparison projection of an explicit human mapping."""
+
+    criterion_id: str = Field(min_length=1)
+    test_case_ids: list[str] = Field(min_length=1)
+
+    @field_validator("test_case_ids")
+    @classmethod
+    def _case_ids_are_canonical(cls, value: list[str]) -> list[str]:
+        if value != sorted(set(value)):
+            raise ValueError("JUnit comparison case IDs must be sorted and unique")
+        return value
+
+
+class JUnitImportReference(BaseModel):
+    """Sanitized immutable reference used only for comparison reporting."""
+
+    import_id: str = Field(min_length=1)
+    artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    asserted_importer: str = Field(min_length=1)
+    mappings: list[JUnitMappingReference] = Field(min_length=1)
+
+    @classmethod
+    def from_import(cls, evidence_import: JUnitEvidenceImport) -> JUnitImportReference:
+        """Project only sanitized identity and explicit mappings."""
+
+        return cls(
+            import_id=evidence_import.import_id,
+            artifact_sha256=evidence_import.artifact_sha256,
+            head_sha=evidence_import.head_sha,
+            asserted_importer=evidence_import.imported_by,
+            mappings=[
+                JUnitMappingReference(
+                    criterion_id=mapping.criterion_id,
+                    test_case_ids=mapping.test_case_ids,
+                )
+                for mapping in evidence_import.criterion_mappings
+            ],
+        )
+
+
+class JUnitImportChange(BaseModel):
+    """One artifact-digest relationship with explicit mapping projections."""
+
+    artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    kind: JUnitImportChangeKind
+    previous: JUnitImportReference | None = None
+    current: JUnitImportReference | None = None
+
+    @model_validator(mode="after")
+    def _references_match_kind_and_digest(self) -> JUnitImportChange:
+        if self.kind in {
+            JUnitImportChangeKind.UNCHANGED,
+            JUnitImportChangeKind.MAPPING_MODIFIED,
+        } and (self.previous is None or self.current is None):
+            raise ValueError("paired JUnit import changes require both references")
+        if self.kind is JUnitImportChangeKind.ADDED and (
+            self.previous is not None or self.current is None
+        ):
+            raise ValueError("added JUnit import changes require only a current reference")
+        if self.kind is JUnitImportChangeKind.REMOVED and (
+            self.previous is None or self.current is not None
+        ):
+            raise ValueError("removed JUnit import changes require only a previous reference")
+        for reference in (self.previous, self.current):
+            if reference is not None and reference.artifact_sha256 != self.artifact_sha256:
+                raise ValueError("JUnit import change digest must match its references")
+        if (
+            self.kind is JUnitImportChangeKind.UNCHANGED
+            and self.previous is not None
+            and self.current is not None
+            and self.previous.mappings != self.current.mappings
+        ):
+            raise ValueError("unchanged JUnit imports require identical mappings")
+        if (
+            self.kind is JUnitImportChangeKind.MAPPING_MODIFIED
+            and self.previous is not None
+            and self.current is not None
+            and self.previous.mappings == self.current.mappings
+        ):
+            raise ValueError("mapping-modified JUnit imports require changed mappings")
+        return self
+
+
 class ReviewComparison(BaseModel):
     previous_head_sha: str
     current_head_sha: str
     evidence_changes: list[EvidenceChange]
     changed_finding_statuses: list[FindingStatusChange]
     changed_human_resolutions: list[ResolutionChange]
+    junit_import_changes: list[JUnitImportChange] = Field(default_factory=list)
     previous_gate: GateVerdict
     current_gate: GateVerdict
     ruleset_version_changed: bool
@@ -422,6 +518,56 @@ def _resolution_decisions(bundle: ReviewBundle) -> dict[str, HumanDecision]:
     return {resolution.criterion_id: resolution.decision for resolution in bundle.resolutions}
 
 
+def _compare_junit_imports(
+    previous_items: list[JUnitEvidenceImport],
+    current_items: list[JUnitEvidenceImport],
+) -> list[JUnitImportChange]:
+    previous_by_digest = {item.artifact_sha256: item for item in previous_items}
+    current_by_digest = {item.artifact_sha256: item for item in current_items}
+    changes: list[JUnitImportChange] = []
+    for digest in sorted(set(previous_by_digest) | set(current_by_digest)):
+        previous_item = previous_by_digest.get(digest)
+        current_item = current_by_digest.get(digest)
+        previous_reference = (
+            JUnitImportReference.from_import(previous_item)
+            if previous_item is not None
+            else None
+        )
+        current_reference = (
+            JUnitImportReference.from_import(current_item)
+            if current_item is not None
+            else None
+        )
+        if previous_reference is None:
+            kind = JUnitImportChangeKind.ADDED
+        elif current_reference is None:
+            kind = JUnitImportChangeKind.REMOVED
+        elif previous_reference.mappings == current_reference.mappings:
+            kind = JUnitImportChangeKind.UNCHANGED
+        else:
+            kind = JUnitImportChangeKind.MAPPING_MODIFIED
+        changes.append(
+            JUnitImportChange(
+                artifact_sha256=digest,
+                kind=kind,
+                previous=previous_reference,
+                current=current_reference,
+            )
+        )
+    return changes
+
+
+def _changed_junit_criteria(changes: list[JUnitImportChange]) -> set[str]:
+    return {
+        mapping.criterion_id
+        for change in changes
+        if change.kind is not JUnitImportChangeKind.UNCHANGED
+        for reference in (change.previous, change.current)
+        if reference is not None
+        for mapping in reference.mappings
+    }
+
+
 def _criteria_source_identity(bundle: ReviewBundle) -> tuple[str, str | None, str, str]:
     provenance = bundle.review.criteria_source_provenance
     if provenance is None:
@@ -498,6 +644,9 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
         if previous_resolutions.get(criterion_id) != current_resolutions.get(criterion_id)
     ]
     evidence_changes = _compare_evidence(previous.evidence, current.evidence)
+    junit_import_changes = _compare_junit_imports(
+        previous.junit_evidence_imports, current.junit_evidence_imports
+    )
     changed_criterion_ids = {
         change.criterion_id
         for change in evidence_changes
@@ -506,6 +655,7 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
     changed_criterion_ids.update(
         change.criterion_id for change in changed_findings
     )
+    changed_criterion_ids.update(_changed_junit_criteria(junit_import_changes))
     if (
         previous.review.head_sha != current.review.head_sha
         or previous.review.ruleset_version != current.review.ruleset_version
@@ -517,6 +667,7 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
         evidence_changes=evidence_changes,
         changed_finding_statuses=changed_findings,
         changed_human_resolutions=changed_resolutions,
+        junit_import_changes=junit_import_changes,
         previous_gate=previous.gate.verdict,
         current_gate=current.gate.verdict,
         ruleset_version_changed=(

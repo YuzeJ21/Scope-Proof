@@ -5,7 +5,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+from scopeproof_core.criteria.confirmation import (
+    build_criteria_source_provenance,
+    normalized_criteria_sha256,
+)
 from scopeproof_core.gates import validation as gate_validation
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import (
@@ -31,6 +34,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    JUnitEvidenceImport,
     RepositoryVisibility,
     ResearchContext,
     ResolutionEvent,
@@ -40,6 +44,70 @@ from scopeproof_core.schemas.models import (
     ReviewInputOrigin,
     RuntimeEvidence,
 )
+
+
+def add_junit_import(bundle: ReviewBundle) -> ReviewBundle:
+    bundle = bundle.model_copy(deep=True)
+    bundle.review.head_sha = "a" * 40
+    bundle.evidence[0].commit_sha = bundle.review.head_sha
+    bundle.evidence[0].permalink = (
+        "https://github.com/acme/widget/blob/"
+        f"{bundle.review.head_sha}/src/export.py#L42-L42"
+    )
+    bundle.criteria_revision_number = 1
+    provenance = bundle.review.criteria_source_provenance
+    assert provenance is not None
+    bundle.junit_evidence_imports = [
+        JUnitEvidenceImport(
+            import_id="junit-import-001",
+            repository=bundle.review.repository,
+            pr_number=bundle.review.pr_number,
+            head_sha=bundle.review.head_sha,
+            criteria_revision_number=1,
+            confirmed_criteria_sha256=normalized_criteria_sha256(bundle.criteria),
+            criteria_source_provenance=provenance,
+            artifact_sha256="b" * 64,
+            imported_by="=ASSERTED <owner>",
+            imported_at=datetime(2026, 8, 20, tzinfo=UTC),
+            totals={
+                "total": 2,
+                "passed": 1,
+                "failures": 1,
+                "errors": 0,
+                "skipped": 0,
+            },
+            test_cases=[
+                {
+                    "test_case_id": "suite-0001-case-0001",
+                    "suite_id": "suite-0001",
+                    "suite_name": "<suite>",
+                    "class_name": None,
+                    "test_name": "=test_pass",
+                    "status": "passed",
+                },
+                {
+                    "test_case_id": "suite-0001-case-0002",
+                    "suite_id": "suite-0001",
+                    "suite_name": "<suite>",
+                    "class_name": "tests.<Unsafe>",
+                    "test_name": "test_fail **claim**",
+                    "status": "failure",
+                },
+            ],
+            criterion_mappings=[
+                {
+                    "criterion_id": "AC-01",
+                    "test_case_ids": [
+                        "suite-0001-case-0001",
+                        "suite-0001-case-0002",
+                    ],
+                }
+            ],
+            parser_warnings=["@warning <unsafe>"],
+            limitations=["+external result only <unsafe>"],
+        )
+    ]
+    return ReviewBundle.model_validate(bundle.model_dump(mode="python"))
 
 
 def example_bundle() -> ReviewBundle:
@@ -152,6 +220,37 @@ def rebind_criteria_source_provenance(bundle: ReviewBundle) -> None:
         confirmed_by=provenance.confirmed_by,
         confirmed_at=provenance.confirmed_at,
     )
+
+
+def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
+    bundle = add_junit_import(example_bundle())
+
+    json_report = export_json(bundle)
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+    rendered = "\n".join((json_report, markdown, str(csv_row), html_report))
+
+    assert "b" * 64 in rendered
+    assert bundle.review.head_sha in rendered
+    assert "suite-0001-case-0001" in rendered
+    assert "passed" in rendered
+    assert "=ASSERTED <owner>" in json_report
+    assert "## Imported External Test Results" in markdown
+    assert "Imported external test results" in html_report
+    assert "RAW-JUNIT-OUTPUT-SENTINEL" not in rendered
+    assert "FAILURE-BODY-SENTINEL" not in rendered
+    assert "/private/local/results.xml" not in rendered
+    assert "<suite>" not in markdown
+    assert "<suite>" not in html_report
+    assert "&lt;suite&gt;" in markdown
+    assert "&lt;suite&gt;" in html_report
+    assert csv_row["junit_artifact_digests"] == json.dumps(["b" * 64])
+    assert csv_row["junit_importers"].startswith("[")
+    assert "'=ASSERTED <owner>" in csv_row["junit_importers"]
+    assert "'@warning <unsafe>" in csv_row["junit_parser_warnings"]
+    assert "'+external result only <unsafe>" in csv_row["junit_limitations"]
+    assert bundle.gate.verdict.value in rendered
 
 
 def example_state():

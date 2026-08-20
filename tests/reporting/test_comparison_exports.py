@@ -11,6 +11,10 @@ from scopeproof_core.reviews.comparison import (
     EvidenceChange,
     EvidenceChangeKind,
     EvidenceReference,
+    JUnitImportChange,
+    JUnitImportChangeKind,
+    JUnitImportReference,
+    JUnitMappingReference,
     ResolutionChange,
     ReviewComparison,
 )
@@ -142,6 +146,58 @@ def test_comparison_exports_do_not_carry_a_previous_decision_into_current() -> N
     ]
     assert "<code>accepted</code> → <code>none</code>" in report
     assert "does not carry forward a prior human decision" in report
+
+
+def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> None:
+    comparison = example_comparison()
+    artifact_digest = "a" * 64
+    previous = JUnitImportReference(
+        import_id="import-old",
+        artifact_sha256=artifact_digest,
+        head_sha="b" * 40,
+        asserted_importer="<owner-old>",
+        mappings=[
+            JUnitMappingReference(
+                criterion_id="AC-01",
+                test_case_ids=["suite-0001-case-0001"],
+            )
+        ],
+    )
+    current = JUnitImportReference(
+        import_id="import-new",
+        artifact_sha256=artifact_digest,
+        head_sha="c" * 40,
+        asserted_importer="=owner-new <unsafe>",
+        mappings=[
+            JUnitMappingReference(
+                criterion_id="AC-01",
+                test_case_ids=[
+                    "suite-0001-case-0001",
+                    "suite-0001-case-0002",
+                ],
+            )
+        ],
+    )
+    comparison.junit_import_changes = [
+        JUnitImportChange(
+            artifact_sha256=artifact_digest,
+            kind=JUnitImportChangeKind.MAPPING_MODIFIED,
+            previous=previous,
+            current=current,
+        )
+    ]
+
+    payload = json.loads(export_comparison_json(comparison))
+    report = export_comparison_markdown(comparison)
+
+    assert payload["junit_import_changes"][0]["kind"] == "mapping_modified"
+    assert artifact_digest in report
+    assert "Imported External Test Result Changes" in report
+    assert "externally supplied, non-gating context" in report
+    assert "<owner-old>" not in report
+    assert "<unsafe>" not in report
+    assert "&lt;owner-old&gt;" in report
+    assert "&lt;unsafe&gt;" in report
 
 
 def test_comparison_markdown_escapes_repository_controlled_text() -> None:
