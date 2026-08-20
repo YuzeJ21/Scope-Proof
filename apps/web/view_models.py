@@ -27,6 +27,16 @@ def group_candidate_evidence(items: list[EvidenceItem]) -> list[EvidenceGroup]:
     ]
 
 
+def prioritize_unresolved_criterion_ids(
+    *, unresolved_ids: list[str], blocking_ids: set[str]
+) -> list[str]:
+    """Return blockers first while preserving order within both groups."""
+    return [
+        *(criterion_id for criterion_id in unresolved_ids if criterion_id in blocking_ids),
+        *(criterion_id for criterion_id in unresolved_ids if criterion_id not in blocking_ids),
+    ]
+
+
 def default_criterion_detail_id(
     *,
     criterion_ids: list[str],
@@ -37,8 +47,6 @@ def default_criterion_detail_id(
     """Return a reachable detail target without rewriting a valid selection."""
     if selected_id in criterion_ids:
         return selected_id
-    if selected_id is None:
-        return next(iter(criterion_ids), None)
     return (
         next(
             (

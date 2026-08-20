@@ -9,7 +9,10 @@ from uuid import UUID
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from apps.web.view_models import default_criterion_detail_id
+from apps.web.view_models import (
+    default_criterion_detail_id,
+    prioritize_unresolved_criterion_ids,
+)
 from scopeproof_core.alpha.models import AlphaOutcome
 from scopeproof_core.alpha.storage import (
     JsonAlphaCaseStore,
@@ -580,12 +583,35 @@ def test_workbench_heading_order_uses_one_h1_and_numbered_h2_sections() -> None:
     assert [item.value for item in app.header] == [
         "1 · Start Review",
         "2 · Confirm Criteria",
-        "3 · Evidence Matrix",
-        "4 · Criterion Detail",
-        "5 · Summary & Export",
+        "3 · Decision Progress",
+        "4 · Criterion Review",
+        "5 · Evidence Matrix",
+        "6 · Summary & Export",
     ]
     assert not app.subheader
     assert not app.sidebar.header
+
+
+def test_readme_workbench_steps_match_rendered_numbered_sections() -> None:
+    app = analyzed_demo(new_app())
+    readme_lines = (APP_PATH.parents[2] / "README.md").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    list_heading_index = next(
+        index
+        for index, line in enumerate(readme_lines)
+        if line.startswith("The ") and " review " in line and line.endswith(" are:")
+    )
+    documented_sections: list[str] = []
+    for line in readme_lines[list_heading_index + 1 :]:
+        if line and line[0].isdigit() and ". " in line:
+            documented_sections.append(line.split(". ", maxsplit=1)[1].removesuffix("."))
+        elif documented_sections:
+            break
+
+    assert documented_sections == [
+        item.value.split(" · ", maxsplit=1)[1] for item in app.header
+    ]
 
 
 def test_product_disclaimer_is_visible() -> None:
@@ -2045,7 +2071,7 @@ def test_sidebar_step_navigation_tracks_available_workflow_sections() -> None:
         "[Complete — Source loaded](#1-start-review)",
         "[Complete — Criteria prepared](#2-confirm-criteria)",
         "[Complete — Criteria confirmed](#2-confirm-criteria)",
-        "[Complete — Analysis generated](#3-evidence-matrix)",
+        "[Complete — Analysis generated](#3-decision-progress)",
         "Available — Review evidence and export",
     ]
 
@@ -2285,6 +2311,33 @@ def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> 
     assert app.button(key="inspect_queue_AC-02").label == (
         "Open AC-02 decision controls"
     )
+    queue_keys = [
+        button.key
+        for button in app.button
+        if button.key is not None and button.key.startswith("inspect_queue_")
+    ]
+    assert queue_keys == [
+        "inspect_queue_AC-02",
+        "inspect_queue_AC-03",
+        "inspect_queue_AC-01",
+        "inspect_queue_AC-04",
+    ]
+
+    main_nodes = list(app.main)
+    node_positions = {
+        node.key: index
+        for index, node in enumerate(main_nodes)
+        if node.key
+        in {
+            "inspect_queue_AC-02",
+            "selected_criterion",
+            "resolution_decision",
+            "status_filter",
+        }
+    }
+    assert node_positions["inspect_queue_AC-02"] < node_positions["selected_criterion"]
+    assert node_positions["selected_criterion"] < node_positions["resolution_decision"]
+    assert node_positions["resolution_decision"] < node_positions["status_filter"]
 
     app = app.button(key="inspect_queue_AC-02").click().run()
 
@@ -2294,7 +2347,7 @@ def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> 
 def test_summary_offers_direct_next_unresolved_action() -> None:
     app = analyzed_demo(new_app())
 
-    assert "[Review next unresolved criterion](#review-ac-01)" in [
+    assert "[Review next unresolved criterion](#review-ac-02)" in [
         item.value for item in app.markdown
     ]
 
@@ -4004,17 +4057,25 @@ def test_invalid_detail_target_defaults_to_first_unresolved_blocker() -> None:
     ) == "AC-02"
 
 
-def test_empty_detail_target_defaults_to_first_criterion() -> None:
+def test_unresolved_criterion_priority_stably_places_blockers_first() -> None:
+    assert prioritize_unresolved_criterion_ids(
+        unresolved_ids=["AC-01", "AC-02", "AC-03", "AC-04"],
+        blocking_ids={"AC-02", "AC-03"},
+    ) == ["AC-02", "AC-03", "AC-01", "AC-04"]
+
+
+def test_empty_detail_target_defaults_to_first_unresolved_blocker() -> None:
     assert default_criterion_detail_id(
         criterion_ids=["AC-01", "AC-02", "AC-03"],
         unresolved_ids=["AC-02", "AC-03"],
         blocking_ids={"AC-02", "AC-03"},
         selected_id=None,
-    ) == "AC-01"
+    ) == "AC-02"
 
 
 def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summary() -> None:
     app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     markdown_text = [item.value for item in app.markdown]
     visible_markdown = "\n".join(markdown_text)
     text_values = [item.value for item in app.text]
@@ -4050,6 +4111,7 @@ def test_ordinary_resolution_precedes_optional_external_verification() -> None:
 
 def test_candidate_evidence_groups_by_path_and_type_without_losing_items() -> None:
     app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     groups = [item for item in app.expander if item.label.startswith("Evidence group ")]
 
     assert [item.label for item in groups] == [
@@ -4210,6 +4272,7 @@ def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
 
 def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> None:
     app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     bundle = app.session_state["review_state"].bundle
     finding = next(item for item in bundle.findings if item.criterion_id == "AC-01")
     evidence = next(item for item in bundle.evidence if item.evidence_id in finding.evidence_ids)
@@ -4316,6 +4379,7 @@ def test_resolution_history_distinguishes_current_and_superseded_decisions() -> 
 
 def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None:
     app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     review_state = app.session_state["review_state"].model_copy(deep=True)
     recorded_at = datetime(2026, 7, 14, 19, 45, tzinfo=UTC)
     review_state = append_external_verification(

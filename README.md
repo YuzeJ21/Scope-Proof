@@ -303,13 +303,17 @@ Open the displayed local URL, then choose either path:
 2. Enter a public GitHub PR URL, fetch it, paste one criterion per line, and confirm the criteria.
    Session-only tokens and bounded unchanged candidate paths are under **Advanced source options**.
 
-The five review steps are:
+The six review sections are:
 
 1. Start Review.
 2. Confirm Criteria.
-3. Evidence Matrix.
-4. Criterion Detail, external verification, and human resolution.
-5. Summary and Markdown, JSON, or CSV export.
+3. Decision Progress.
+4. Criterion Review.
+5. Evidence Matrix.
+6. Summary & Export.
+
+Criterion Review contains the selected criterion evidence, external verification, and human
+resolution controls. Summary & Export provides the Markdown, JSON, and CSV review records.
 
 ### Durable local review workflow
 

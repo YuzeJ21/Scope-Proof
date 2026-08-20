@@ -46,6 +46,15 @@ PR193_RESULTING_MAIN_PAGES_RUN_ID = "31704668164"
 PR196_EXACT_HEAD_SHA = "5a6a25a6dff23cdfa8dcb4023b83144078620610"
 PR196_MERGE_SHA = "8387156fd6f6e90eef7caf58881b0cc5bb62b111"
 PR196_RESULTING_MAIN_CI_RUN_ID = "32093041685"
+PR197_EXACT_HEAD_SHA = "5a69af4e92e2720adc524a32ea8c4eb94d013cb8"
+PR197_EXACT_BASE_SHA = "8387156fd6f6e90eef7caf58881b0cc5bb62b111"
+PR197_MERGE_SHA = "789950dc63d80ec24d8bca5974a3ae52955b1c4f"
+PR197_RESULTING_MAIN_RUN_IDS = (
+    "32194734107",
+    "32194733033",
+    "32194734125",
+    "32194734440",
+)
 GITHUB_ACTIONS_RUN_ROOT = "https://github.com/YuzeJ21/Scope-Proof/actions/runs"
 
 
@@ -1751,24 +1760,81 @@ def test_current_docs_index_and_market_refresh_preserve_owner_led_boundary() -> 
     assert "documentation index" in unreleased.lower()
 
 
-def test_authoritative_status_records_dated_post_pr196_main_evidence() -> None:
+def test_authoritative_status_records_dated_post_pr197_main_evidence() -> None:
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
     status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
         encoding="utf-8"
     )
 
     for document in (roadmap, status):
-        normalized = " ".join(document.split())
-        assert "Post-PR #196 resulting-main snapshot (2026-08-17)" in normalized
-        assert f"PR #196 head `{PR196_EXACT_HEAD_SHA}`" in normalized
-        assert f"merge `{PR196_MERGE_SHA}`" in normalized
-        assert (
-            f"[`{PR196_RESULTING_MAIN_CI_RUN_ID}`]"
-            f"({GITHUB_ACTIONS_RUN_ROOT}/{PR196_RESULTING_MAIN_CI_RUN_ID})"
-        ) in normalized
-        assert "succeeded" in normalized
-        assert "owner workflow consolidation" in normalized.lower()
-        assert "does not claim customer validation" in normalized
+        if document == roadmap:
+            record = next(
+                line
+                for line in document.splitlines()
+                if line.startswith("| Post-PR #197 resulting-main snapshot")
+            )
+        else:
+            record = (
+                "Post-PR #197 resulting-main snapshot (2026-08-18):"
+                + document.split(
+                    "Post-PR #197 resulting-main snapshot (2026-08-18):", maxsplit=1
+                )[1].split("Development version in this snapshot:", maxsplit=1)[0]
+            )
+        normalized_record = " ".join(record.split())
+        assert "Post-PR #197 resulting-main snapshot (2026-08-18)" in normalized_record
+        assert f"PR #197 head `{PR197_EXACT_HEAD_SHA}`" in normalized_record
+        assert f"base `{PR197_EXACT_BASE_SHA}`" in normalized_record
+        assert f"merge `{PR197_MERGE_SHA}`" in normalized_record
+        for label, run_id in zip(
+            ("CI", "CodeQL", "Pages", "base-advance"),
+            PR197_RESULTING_MAIN_RUN_IDS,
+            strict=True,
+        ):
+            assert re.search(
+                rf"{label}(?: run)? \[`{run_id}`\]"
+                rf"\({GITHUB_ACTIONS_RUN_ROOT}/{run_id}\)",
+                normalized_record,
+            )
+        assert "succeeded" in normalized_record
+        assert "owner workflow consolidation is complete" in normalized_record.lower()
+        assert "does not claim customer validation" in normalized_record
+
+
+def test_authoritative_stage_two_docs_separate_pr197_from_pr198_behavior() -> None:
+    documents = (
+        (
+            Path("ROADMAP.md"),
+            "## Stage 2 — Owner-led productization",
+            "## Stage 3 — Limited beta",
+        ),
+        (
+            Path("docs/releases/v0.2.3-status-and-next-stages.md"),
+            "### Stage 2 — owner-led productization",
+            "### Stage 3 — limited beta",
+        ),
+    )
+
+    for path, section_start, section_end in documents:
+        document = path.read_text(encoding="utf-8")
+        stage_two = document.split(section_start, maxsplit=1)[1].split(
+            section_end, maxsplit=1
+        )[0]
+        normalized_stage_two = " ".join(stage_two.split())
+        pr197_marker = "PR #197 owner workflow consolidation is complete"
+        pr198_marker = "PR #198"
+
+        assert pr197_marker in normalized_stage_two
+        assert pr198_marker in normalized_stage_two
+        pr197_index = normalized_stage_two.index(pr197_marker)
+        pr198_index = normalized_stage_two.index(pr198_marker)
+        assert pr197_index < pr198_index
+
+        pr197_baseline = normalized_stage_two[pr197_index:pr198_index]
+        pr198_followup = normalized_stage_two[pr198_index:]
+        assert "blocker-first" not in pr197_baseline
+        assert "pre-matrix" not in pr197_baseline
+        assert "blocker-first" in pr198_followup
+        assert "before the secondary evidence matrix" in pr198_followup
 
 
 def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -> None:

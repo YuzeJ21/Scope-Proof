@@ -21,6 +21,9 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
+- Consolidated the owner decision handoff around blocker-first unresolved decisions and a direct
+  pre-matrix criterion handoff. This is a bounded Stage 2 workflow clarification, not a claim of
+  acceptance-criteria correctness or runtime verification.
 - Consolidated the owner workflow around visible public-PR and constructed-demo entry points,
   explicit criteria confirmation, unresolved-decision progress, and direct criterion navigation.
   Optional alpha-feedback controls now live under research options, constructed demo records remain
