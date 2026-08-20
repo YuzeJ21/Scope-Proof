@@ -54,9 +54,10 @@ new published release; v0.2.3 remains the published release and none earns Stage
 PR #194 aligned the dated status record without turning it into a moving-head claim; PR #195 closed
 Stage 1 as not pursued and activated owner-led Stage 2 without customer-validation claims; PR #196
 added the exact-head informational Check lifecycle with bounded default-base repair; and PR #197
-completed owner workflow consolidation. The blocker-first decision-handoff ordering and direct
-pre-matrix criterion handoff complete a bounded Stage 2 follow-up. This remains Stage 2 engineering
-work and does not claim customer validation.
+completed owner workflow consolidation. PR #198 adds blocker-first decision-handoff ordering and
+places the selected criterion evidence and controls before the secondary evidence matrix as a
+bounded Stage 2 follow-up. This remains Stage 2 engineering work and does not claim customer
+validation.
 
 ### Verification and evidence boundaries
 
@@ -291,10 +292,11 @@ fail-closed lifecycle integrity, packaging, installation, compatibility, accessi
 engineering, documentation, public official-source research, and release readiness.
 
 PR #197 owner workflow consolidation is complete: public PR and constructed-demo entry remain
-clear, explicit criteria confirmation remains unmistakable, blocker-first unresolved decisions
-precede secondary evidence detail, and the direct pre-matrix criterion handoff provides navigation
-to the next criterion. This bounded Stage 2 follow-up preserves every evidence boundary and keeps
-optional external research secondary.
+clear, explicit criteria confirmation remains unmistakable, and stable unresolved-criteria queue
+actions select the matching criterion. PR #198 adds blocker-first unresolved decisions and places
+the selected criterion evidence and controls before the secondary evidence matrix. This bounded
+Stage 2 follow-up preserves every evidence boundary and keeps optional external research
+secondary.
 
 The [Stage 2 productization packet](docs/commercialization/stage2-readiness-packet.md) is the
 operating boundary. External commercial discovery is optional and separate from owner-led

@@ -592,6 +592,28 @@ def test_workbench_heading_order_uses_one_h1_and_numbered_h2_sections() -> None:
     assert not app.sidebar.header
 
 
+def test_readme_workbench_steps_match_rendered_numbered_sections() -> None:
+    app = analyzed_demo(new_app())
+    readme_lines = (APP_PATH.parents[2] / "README.md").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    list_heading_index = next(
+        index
+        for index, line in enumerate(readme_lines)
+        if line.startswith("The ") and " review " in line and line.endswith(" are:")
+    )
+    documented_sections: list[str] = []
+    for line in readme_lines[list_heading_index + 1 :]:
+        if line and line[0].isdigit() and ". " in line:
+            documented_sections.append(line.split(". ", maxsplit=1)[1].removesuffix("."))
+        elif documented_sections:
+            break
+
+    assert documented_sections == [
+        item.value.split(" · ", maxsplit=1)[1] for item in app.header
+    ]
+
+
 def test_product_disclaimer_is_visible() -> None:
     app = new_app()
     markdown_text = [markdown.value for markdown in app.markdown]

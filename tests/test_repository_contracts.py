@@ -1800,6 +1800,43 @@ def test_authoritative_status_records_dated_post_pr197_main_evidence() -> None:
         assert "does not claim customer validation" in normalized_record
 
 
+def test_authoritative_stage_two_docs_separate_pr197_from_pr198_behavior() -> None:
+    documents = (
+        (
+            Path("ROADMAP.md"),
+            "## Stage 2 — Owner-led productization",
+            "## Stage 3 — Limited beta",
+        ),
+        (
+            Path("docs/releases/v0.2.3-status-and-next-stages.md"),
+            "### Stage 2 — owner-led productization",
+            "### Stage 3 — limited beta",
+        ),
+    )
+
+    for path, section_start, section_end in documents:
+        document = path.read_text(encoding="utf-8")
+        stage_two = document.split(section_start, maxsplit=1)[1].split(
+            section_end, maxsplit=1
+        )[0]
+        normalized_stage_two = " ".join(stage_two.split())
+        pr197_marker = "PR #197 owner workflow consolidation is complete"
+        pr198_marker = "PR #198"
+
+        assert pr197_marker in normalized_stage_two
+        assert pr198_marker in normalized_stage_two
+        pr197_index = normalized_stage_two.index(pr197_marker)
+        pr198_index = normalized_stage_two.index(pr198_marker)
+        assert pr197_index < pr198_index
+
+        pr197_baseline = normalized_stage_two[pr197_index:pr198_index]
+        pr198_followup = normalized_stage_two[pr198_index:]
+        assert "blocker-first" not in pr197_baseline
+        assert "pre-matrix" not in pr197_baseline
+        assert "blocker-first" in pr198_followup
+        assert "before the secondary evidence matrix" in pr198_followup
+
+
 def test_authoritative_stage_one_docs_record_post_pr193_truth_and_owner_gate() -> None:
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
     status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(

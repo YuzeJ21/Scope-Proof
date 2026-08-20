@@ -1,4 +1,4 @@
-"""ScopeProof's five-step local Streamlit review workbench."""
+"""ScopeProof's six-section local Streamlit review workbench."""
 
 from __future__ import annotations
 
