@@ -35,11 +35,13 @@ from scopeproof_core.schemas.models import (
     Criterion,
     EvidenceLevel,
     HumanDecision,
+    JUnitImportMutationMetadata,
     LifecycleMutationMetadata,
     PullRequestSnapshot,
     RepositoryVisibility,
     ResolutionEvent,
     ReviewInputOrigin,
+    ReviewState,
     RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
@@ -2840,3 +2842,178 @@ def test_alpha_friction_requires_stage(tmp_path: Path, capsys) -> None:
 
     assert error.value.code == 2
     assert "friction stage" in capsys.readouterr().err
+
+
+def save_exact_head_cli_review(storage: Path) -> ReviewState:
+    state = new_review_state(build_demo_review()).model_copy(deep=True)
+    state.review.head_sha = "a" * 40
+    assert state.bundle is not None
+    state.bundle.review.head_sha = "a" * 40
+    state = ReviewState.model_validate(state.model_dump(mode="python"))
+    JsonReviewStore(storage).save(state)
+    return state
+
+
+def write_junit_cli_files(tmp_path: Path, criterion_id: str) -> tuple[Path, Path]:
+    artifact = tmp_path / "results.xml"
+    artifact.write_bytes(
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>'
+    )
+    mapping = tmp_path / "mapping.json"
+    mapping.write_text(
+        json.dumps(
+            {
+                "schema_version": "junit-mapping-v1",
+                "selections": [
+                    {"scope_id": "suite-0001", "criterion_id": criterion_id}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return artifact, mapping
+
+
+def test_inspect_junit_prints_only_sanitized_bounded_json(
+    tmp_path: Path, capsys
+) -> None:
+    artifact = tmp_path / "results.xml"
+    artifact.write_bytes(
+        b'<testsuite name="unit"><testcase name="test_export"><failure>'
+        b'RAW-FAILURE-SENTINEL</failure></testcase><system-out>'
+        b'RAW-OUTPUT-SENTINEL</system-out></testsuite>'
+    )
+
+    assert main(["inspect-junit", str(artifact)]) == 0
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["suites"][0]["suite_id"] == "suite-0001"
+    assert payload["suites"][0]["test_cases"][0]["status"] == "failure"
+    assert payload["totals"]["total"] == 1
+    assert "RAW-FAILURE-SENTINEL" not in output
+    assert "RAW-OUTPUT-SENTINEL" not in output
+
+
+def test_import_junit_persists_one_non_gating_record(tmp_path: Path, capsys) -> None:
+    storage = tmp_path / "reviews"
+    state = save_exact_head_cli_review(storage)
+    artifact, mapping = write_junit_cli_files(
+        tmp_path, state.criteria_revision.criteria[0].criterion_id
+    )
+    assert state.bundle is not None
+    original_gate = state.bundle.gate
+
+    assert main(
+        [
+            "import-junit",
+            state.review.review_id,
+            str(artifact),
+            "--mapping",
+            str(mapping),
+            "--importer",
+            "QA owner",
+            "--limitation",
+            "Synthetic local artifact",
+            "--storage-dir",
+            str(storage),
+        ]
+    ) == 0
+
+    metadata = JUnitImportMutationMetadata.model_validate_json(
+        capsys.readouterr().out
+    )
+    loaded = JsonReviewStore(storage).load(state.review.review_id)
+    assert loaded.bundle is not None
+    assert len(loaded.bundle.junit_evidence_imports) == 1
+    imported = loaded.bundle.junit_evidence_imports[0]
+    assert metadata.import_id == imported.import_id
+    assert metadata.artifact_sha256 == sha256(artifact.read_bytes()).hexdigest()
+    assert metadata.head_sha == "a" * 40
+    assert loaded.bundle.gate == original_gate
+    assert loaded.bundle.runtime_evidence == []
+    assert loaded.bundle.resolutions == []
+
+
+def test_import_junit_failure_preserves_saved_record_bytes(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    state = save_exact_head_cli_review(storage)
+    artifact, mapping = write_junit_cli_files(
+        tmp_path, state.criteria_revision.criteria[0].criterion_id
+    )
+    command = [
+        "import-junit",
+        state.review.review_id,
+        str(artifact),
+        "--mapping",
+        str(mapping),
+        "--importer",
+        "QA",
+        "--storage-dir",
+        str(storage),
+    ]
+    assert main(command) == 0
+    capsys.readouterr()
+    path = storage / f"{state.review.review_id}.json"
+    before = path.read_bytes()
+
+    with pytest.raises(SystemExit) as duplicate:
+        main(command)
+
+    assert duplicate.value.code == 2
+    assert "already imported" in capsys.readouterr().err.lower()
+    assert path.read_bytes() == before
+
+
+def test_import_junit_rejects_extra_mapping_fields_without_mutation(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    state = save_exact_head_cli_review(storage)
+    artifact, mapping = write_junit_cli_files(
+        tmp_path, state.criteria_revision.criteria[0].criterion_id
+    )
+    payload = json.loads(mapping.read_text(encoding="utf-8"))
+    payload["raw_xml"] = "forbidden"
+    mapping.write_text(json.dumps(payload), encoding="utf-8")
+    path = storage / f"{state.review.review_id}.json"
+    before = path.read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "import-junit",
+                state.review.review_id,
+                str(artifact),
+                "--mapping",
+                str(mapping),
+                "--importer",
+                "QA",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "raw_xml" in capsys.readouterr().err
+    assert path.read_bytes() == before
+
+
+def test_inspect_junit_rejects_unsafe_xml_without_echoing_artifact(
+    tmp_path: Path, capsys
+) -> None:
+    artifact = tmp_path / "unsafe.xml"
+    artifact.write_bytes(
+        b'<!DOCTYPE testsuite [<!ENTITY secret SYSTEM "file:///PRIVATE-SENTINEL">]>'
+        b'<testsuite name="x"><testcase name="&secret;"/></testsuite>'
+    )
+
+    with pytest.raises(SystemExit) as error:
+        main(["inspect-junit", str(artifact)])
+
+    assert error.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "forbidden XML construct" in stderr
+    assert "PRIVATE-SENTINEL" not in stderr

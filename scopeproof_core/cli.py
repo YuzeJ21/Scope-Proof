@@ -29,6 +29,11 @@ from scopeproof_core.evals.metrics import EvidenceQualityMetrics
 from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
+from scopeproof_core.importers.junit import (
+    JUnitMappingDocument,
+    build_junit_evidence_import,
+    parse_junit_artifact,
+)
 from scopeproof_core.reporting.exporters import (
     export_comparison_json,
     export_comparison_markdown,
@@ -42,6 +47,7 @@ from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     acceptance_requires_comment,
     append_external_verification,
+    append_junit_evidence_import,
     append_resolution,
     new_review_state,
 )
@@ -51,6 +57,7 @@ from scopeproof_core.schemas.models import (
     Criterion,
     EvidenceLevel,
     HumanDecision,
+    JUnitImportMutationMetadata,
     LifecycleMutationMetadata,
     PullRequestSnapshot,
     ResearchContext,
@@ -445,6 +452,54 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _inspect_junit(args: argparse.Namespace) -> int:
+    """Print a sanitized bytes-only JUnit projection without persistence."""
+
+    parsed = parse_junit_artifact(Path(args.artifact).read_bytes())
+    print(parsed.model_dump_json(indent=2))
+    return 0
+
+
+def _import_junit(args: argparse.Namespace) -> int:
+    """Atomically append one validated external test-result import."""
+
+    mapping = JUnitMappingDocument.model_validate_json(
+        Path(args.mapping).read_text(encoding="utf-8")
+    )
+    artifact_bytes = Path(args.artifact).read_bytes()
+    store = JsonReviewStore(Path(args.storage_dir))
+    imported = None
+
+    def transition(state: ReviewState) -> ReviewState:
+        nonlocal imported
+        imported = build_junit_evidence_import(
+            state,
+            artifact_bytes,
+            mapping.selections,
+            importer=args.importer,
+            limitations=args.limitation,
+        )
+        return append_junit_evidence_import(state, imported)
+
+    updated, path = store.mutate(args.review_id, transition)
+    if imported is None or updated.bundle is None:
+        raise ValueError("JUnit import transition did not produce an active record")
+    metadata = JUnitImportMutationMetadata(
+        review_id=updated.review.review_id,
+        record=str(path),
+        head_sha=updated.review.head_sha,
+        import_id=imported.import_id,
+        artifact_sha256=imported.artifact_sha256,
+        mapped_criterion_ids=sorted(
+            mapping.criterion_id for mapping in imported.criterion_mappings
+        ),
+        totals=imported.totals,
+        verdict=updated.bundle.gate.verdict,
+    )
+    print(metadata.model_dump_json())
+    return 0
+
+
 def _validate_action_evidence(args: argparse.Namespace) -> int:
     """Validate owner-supplied external Action evidence without contacting GitHub."""
 
@@ -680,6 +735,23 @@ def _parser() -> argparse.ArgumentParser:
     compare.add_argument("--output")
     compare.add_argument("--storage-dir", default=".scopeproof/reviews")
     compare.set_defaults(handler=_compare)
+    inspect_junit = commands.add_parser(
+        "inspect-junit",
+        help="Inspect bounded local JUnit XML without saving or executing it",
+    )
+    inspect_junit.add_argument("artifact", help="Explicit local JUnit XML file")
+    inspect_junit.set_defaults(handler=_inspect_junit)
+    import_junit = commands.add_parser(
+        "import-junit",
+        help="Append mapped external JUnit results to one exact-head saved review",
+    )
+    import_junit.add_argument("review_id")
+    import_junit.add_argument("artifact", help="Explicit local JUnit XML file")
+    import_junit.add_argument("--mapping", required=True, help="Strict mapping JSON file")
+    import_junit.add_argument("--importer", required=True, help="Asserted importer identity")
+    import_junit.add_argument("--limitation", action="append", default=[])
+    import_junit.add_argument("--storage-dir", default=".scopeproof/reviews")
+    import_junit.set_defaults(handler=_import_junit)
     benchmark = commands.add_parser("benchmark", help="Run every labelled local benchmark case")
     benchmark.set_defaults(handler=lambda _: _benchmark())
     comparison_benchmark = commands.add_parser(

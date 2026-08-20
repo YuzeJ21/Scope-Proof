@@ -96,6 +96,15 @@ class JUnitMappingSelection(BaseModel):
         return normalized
 
 
+class JUnitMappingDocument(BaseModel):
+    """Strict local mapping-file contract for CLI imports."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["junit-mapping-v1"] = "junit-mapping-v1"
+    selections: list[JUnitMappingSelection] = Field(min_length=1, max_length=5_000)
+
+
 def _local_name(tag: object) -> str:
     if not isinstance(tag, str):
         raise JUnitImportError("JUnit XML contains an unsupported element tag.")
