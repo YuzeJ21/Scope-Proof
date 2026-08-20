@@ -3113,7 +3113,7 @@ with st.sidebar:
     else:
         _render_sidebar_step("Locked — Confirm criteria")
     if has_analysis:
-        _render_sidebar_step("Complete — Analysis generated", "#3-evidence-matrix")
+        _render_sidebar_step("Complete — Analysis generated", "#3-decision-progress")
     elif criteria_are_confirmed:
         _render_sidebar_step(
             "Next — Run deterministic analysis", "#run-deterministic-analysis"

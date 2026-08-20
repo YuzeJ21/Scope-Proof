@@ -2049,7 +2049,7 @@ def test_sidebar_step_navigation_tracks_available_workflow_sections() -> None:
         "[Complete — Source loaded](#1-start-review)",
         "[Complete — Criteria prepared](#2-confirm-criteria)",
         "[Complete — Criteria confirmed](#2-confirm-criteria)",
-        "[Complete — Analysis generated](#3-evidence-matrix)",
+        "[Complete — Analysis generated](#3-decision-progress)",
         "Available — Review evidence and export",
     ]
 
