@@ -17,6 +17,8 @@ from urllib.request import urlopen
 import pytest
 from playwright.sync_api import Locator, Page, Route, expect, sync_playwright
 
+from scopeproof_core.schemas.models import JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
+
 pytestmark = pytest.mark.browser
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -431,9 +433,7 @@ def _exercise_junit_import_round_trip(
             exact=True,
         )
     ).to_be_visible()
-    boundary = page.get_by_text(
-        "Imported test results are external, non-gating context.", exact=True
-    )
+    boundary = page.get_by_text(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION, exact=True)
     if not boundary.is_visible():
         junit_expander.click()
     expect(boundary).to_be_visible()
