@@ -3779,3 +3779,21 @@ def test_informational_check_status_preserves_product_evidence_boundaries() -> N
             "0/2 reuse-intent signals",
         ):
             assert count in normalized
+
+
+def test_stage2_status_separates_delivered_junit_and_check_foundations_from_candidates() -> None:
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+    delivered = status.split("## Delivered Stage 2 foundations", maxsplit=1)[1].split(
+        "## Prioritized post-release decision candidates", maxsplit=1
+    )[0]
+    candidates = status.split(
+        "## Prioritized post-release decision candidates", maxsplit=1
+    )[1].split("## Next executable queue", maxsplit=1)[0]
+
+    assert "exact-SHA informational GitHub Check lifecycle is implemented" in delivered
+    assert "bounded JUnit XML adapter is implemented" in delivered
+    assert "Exact-SHA GitHub Check lifecycle:" not in candidates
+    assert "JUnit-style results" not in candidates
+    assert "Additional non-executing evidence adapters" in candidates

@@ -32,6 +32,15 @@ Stage 2 may improve:
 Every result remains bounded to its actual evidence. Tests and CI are engineering evidence, not
 target-repository runtime proof, accessibility conformance, customer use, demand, or adoption.
 
+### Current bounded adapter slice
+
+The first owner-led adapter accepts one bounded local JUnit XML artifact without executing target
+code or following references. It persists only sanitized case names and statuses, a byte digest,
+exact review and confirmed-criteria identity, explicit human mappings, an asserted importer,
+warnings, and limitations. It is external non-gating context and cannot become E1–E4, observed CI,
+runtime verification, a reviewer decision, final acceptance, correctness, or customer validation.
+Other adapter families remain unimplemented and require their own bounded design and owner scope.
+
 This stage does not authorize outreach, participant contact, a merge, release, tag, or package
 publication, R-002 retuning, R-003 generation, billing, accounts, private-repository support,
 hosted source processing, generic code review, security scanning, automatic fixes, or paid APIs.

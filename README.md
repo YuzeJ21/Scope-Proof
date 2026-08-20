@@ -262,6 +262,44 @@ scopeproof compare PREVIOUS_REVIEW_ID CURRENT_REVIEW_ID \
   --storage-dir .scopeproof/reviews
 ```
 
+Current `0.2.4.dev0` source can also inspect and append one bounded local JUnit XML artifact
+without executing target-repository code. First inspect the sanitized scope IDs:
+
+```bash
+scopeproof inspect-junit results.xml
+```
+
+Create a strict mapping document that records an explicit human relationship rather than
+inferring one from test names:
+
+```json
+{
+  "schema_version": "junit-mapping-v1",
+  "selections": [
+    {"scope_id": "suite-0001", "criterion_id": "AC-01"}
+  ]
+}
+```
+
+Then append the validated import to the exact-head saved review:
+
+```bash
+scopeproof import-junit REVIEW_ID results.xml \
+  --mapping junit-mapping.json \
+  --importer "Asserted reviewer name or role" \
+  --storage-dir .scopeproof/reviews
+```
+
+The adapter accepts at most 1 MiB, 100 suites, 5,000 cases, and 20,000 XML elements. It accepts
+UTF-8 only and rejects DTDs, entities, non-declaration processing instructions, XInclude, remote
+references, unsupported nesting, and ambiguous result markers. It stores computed statuses,
+stable local scope IDs, the artifact SHA-256, exact review and criteria provenance, explicit
+mappings, an asserted importer, warnings, and limitations. Raw XML, stdout, stderr, properties,
+failure bodies, commands, paths, URLs, and attachments are discarded. An import is external,
+non-gating context—not E1, E2, E3, E4, observed CI, runtime verification, human acceptance, final
+acceptance, or proof that a criterion passed. Failed inspection, mapping, validation, or storage
+does not mutate the saved review.
+
 `resolve` records one human criterion decision and never executes PR code.
 Static candidates never become runtime evidence through `resolve`; accepting below a criterion's
 required evidence level requires a non-empty reviewer note. `verify-runtime` is the only CLI
@@ -270,12 +308,15 @@ atomically links a human-supplied E3/E4 runtime record to its manual-verificatio
 does not run or independently verify the cited artifact. Final acceptance remains fail-closed
 until the deterministic prerequisites are satisfied; use `--revoke` to append a revocation.
 `compare` validates both saved reviews, reports candidate changes without carrying decisions
-forward, and refuses to overwrite an existing output file.
+forward, reports imported-artifact and mapping changes separately, and refuses to overwrite an
+existing output file. Changed imported context can require a previous human decision to be
+reviewed again, but it never carries, creates, or changes that decision or either gate.
 
 CSV exports neutralize leading spreadsheet-formula characters in scalar text cells. Fields that
 can contain multiple values (`ingestion_warnings`, `skipped_files`, `evidence_links`,
-`missing_evidence`, `runtime_artifacts`, and `runtime_result`) are JSON arrays inside their CSV
-cells so delimiters in repository or reviewer text do not destroy provenance.
+`missing_evidence`, `runtime_artifacts`, `runtime_result`, and imported-JUnit fields) are JSON
+arrays inside their CSV cells so delimiters in repository or reviewer text do not destroy
+provenance.
 
 Anonymous public-repository access is the default. `--token` is optional and can increase GitHub's
 free rate limit, but it is not required or persisted. The CLI never comments on the pull request,
@@ -312,8 +353,9 @@ The six review sections are:
 5. Evidence Matrix.
 6. Summary & Export.
 
-Criterion Review contains the selected criterion evidence, external verification, and human
-resolution controls. Summary & Export provides the Markdown, JSON, and CSV review records.
+Criterion Review contains the selected criterion evidence, separate external JUnit context,
+external verification, and human resolution controls. Summary & Export provides the Markdown,
+JSON, and CSV review records.
 
 ### Durable local review workflow
 
@@ -329,7 +371,8 @@ safe local record IDs in deterministic order, while an empty store retains manua
 The app validates the selected record when it is opened and refuses a configured review path that
 is a symbolic link or another existing non-directory. This app-owned local directory prevents a
 browser input from selecting arbitrary file paths. Records preserve the review SHAs, criteria
-revisions, evidence, findings, resolution history, and gate decision. They never contain the
+revisions, evidence, bounded imported-JUnit envelopes, findings, resolution history, and gate
+decision. They never contain raw JUnit XML or the
 optional GitHub token. A reopened review prepares its public PR URL and bounded unchanged-candidate
 paths for a one-click current-head check rather than silently reusing old evidence. Records also
 preserve whether public repository visibility was verified; legacy records without that fact
@@ -342,6 +385,9 @@ reviewer can inspect what moved or changed before recording a new decision. Exac
 candidates remain inspectable in a collapsed section, and the validated comparison can be
 downloaded as Markdown or JSON. This comparison does not prove criterion satisfaction or carry a
 prior human decision forward.
+Imported JUnit artifacts are compared separately by digest and explicit mapping signature as
+Unchanged, Added, Removed, or Mapping modified. This projection does not reinterpret test names,
+copy decisions, or make imported results a gate input.
 
 From the CLI, run `scopeproof list` to return the safe local review IDs in the default
 `.scopeproof/reviews` directory; add `--storage-dir PATH` only when earlier CLI commands used that
