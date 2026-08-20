@@ -237,6 +237,7 @@ _STATE_DEFAULTS = {
     "criteria_source_draft": None,
     "criteria_source_widget_sync_pending": None,
     "source_widget_sync_pending": None,
+    "junit_artifact_upload_version": 0,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -837,6 +838,15 @@ def _clear_requirements_draft() -> None:
     st.session_state["requirements_input"] = st.session_state["source_text"]
 
 
+def _junit_artifact_upload_key() -> str:
+    version = int(st.session_state["junit_artifact_upload_version"])
+    return (
+        "junit_artifact_upload"
+        if version == 0
+        else f"junit_artifact_upload_{version}"
+    )
+
+
 def _criterion_detail_draft_pending() -> bool:
     runtime_text_keys = (
         "runtime_artifact_reference",
@@ -847,7 +857,7 @@ def _criterion_detail_draft_pending() -> bool:
         "runtime_limitations",
     )
     junit_pending = bool(
-        st.session_state.get("junit_artifact_upload")
+        st.session_state.get(_junit_artifact_upload_key())
         or str(st.session_state.get("junit_importer", "")).strip()
         or str(st.session_state.get("junit_limitations", "")).strip()
         or st.session_state.get("junit_mapping_scopes", [])
@@ -885,7 +895,8 @@ def _clear_resolution_draft() -> None:
 
 
 def _clear_junit_import_draft() -> None:
-    st.session_state.pop("junit_artifact_upload", None)
+    st.session_state.pop(_junit_artifact_upload_key(), None)
+    st.session_state["junit_artifact_upload_version"] += 1
     st.session_state["junit_importer"] = ""
     st.session_state["junit_limitations"] = ""
     st.session_state["junit_mapping_scopes"] = []
@@ -2464,7 +2475,7 @@ else:
                 "Local JUnit XML artifact",
                 type=["xml"],
                 accept_multiple_files=False,
-                key="junit_artifact_upload",
+                key=_junit_artifact_upload_key(),
             )
             junit_importer = st.text_input(
                 "Asserted JUnit importer (required)", key="junit_importer"

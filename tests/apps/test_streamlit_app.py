@@ -5156,7 +5156,7 @@ def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -
     assert "Imported test results are external, non-gating context." in [
         item.value for item in app.caption
     ]
-    assert app.file_uploader(key="junit_artifact_upload").value is None
+    assert app.file_uploader(key="junit_artifact_upload_1").value is None
     assert app.text_input(key="junit_importer").value == ""
     assert app.multiselect(key="junit_mapping_scopes").value == []
     assert app.button(key="save_junit_import").disabled is True

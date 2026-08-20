@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import re
 import signal
 import socket
 import subprocess
 import sys
 import time
+from hashlib import sha256
 from importlib.metadata import version
 from importlib.util import find_spec
 from pathlib import Path
@@ -223,6 +225,19 @@ def _activate_with_keyboard(
     page.keyboard.press(key)
 
 
+def _choose_combobox_option(
+    page: Page, combobox: Locator, *, option_name: str
+) -> None:
+    if combobox.input_value() == option_name:
+        return
+    combobox.click()
+    combobox.fill(option_name)
+    option = page.get_by_role("option", name=option_name, exact=True)
+    expect(option).to_be_visible()
+    option.click()
+    expect(combobox).to_have_value(option_name)
+
+
 def _exercise_primary_path(
     page: Page, base_url: str, *, verify_persistence_and_downloads: bool
 ) -> None:
@@ -292,7 +307,7 @@ def _exercise_primary_path(
         assert b"head-demo-002" in download.path().read_bytes()
 
         page.get_by_text("Resume a saved review", exact=True).click()
-        expect(page.get_by_text("saved local review found", exact=False)).to_be_visible()
+        expect(page.get_by_text(re.compile(r"saved local reviews? found"))).to_be_visible()
         saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
         saved_review.locator("..").get_by_role("button", name="Open", exact=True).click()
         page.keyboard.press("ArrowDown")
@@ -333,6 +348,120 @@ def _exercise_primary_path(
 
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert page.evaluate("document.body.scrollWidth <= window.innerWidth")
+
+
+def _exercise_junit_import_round_trip(
+    page: Page,
+    base_url: str,
+    *,
+    artifact_path: Path,
+    artifact_digest: str,
+) -> None:
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.get_by_text("Resume a saved review", exact=True).click()
+    saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
+    _choose_combobox_option(
+        page, saved_review, option_name="junit-browser-review"
+    )
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    expect(reopen).to_be_enabled()
+    reopen.click()
+    expect(
+        page.get_by_text(
+            "Review reopened from local storage after validation.", exact=True
+        )
+    ).to_be_visible()
+
+    junit_expander = page.get_by_text("Import external JUnit results", exact=True)
+    junit_expander.click()
+    page.get_by_label("Local JUnit XML artifact", exact=True).locator(
+        "input[type=file]"
+    ).set_input_files(artifact_path)
+    preview = page.get_by_text(
+        "Computed results: 1 total · 1 passed · 0 failed · 0 errors · 0 skipped",
+        exact=True,
+    )
+    expect(preview).to_have_count(1)
+    if not preview.is_visible():
+        junit_expander.click()
+    expect(preview).to_be_visible()
+    importer = page.get_by_label("Asserted JUnit importer (required)", exact=True)
+    importer.fill("Packaged browser reviewer")
+    importer.press("Tab")
+    if not preview.is_visible():
+        junit_expander.click()
+    expect(preview).to_be_visible()
+    mapping = page.get_by_role(
+        "combobox", name="Map JUnit scopes to the selected criterion", exact=True
+    )
+    expect(mapping).to_be_enabled()
+    mapping.click()
+    mapping.fill("suite-0001")
+    suite_option = page.get_by_text(
+        "suite-0001 · suite · unit", exact=True
+    ).last
+    expect(suite_option).to_be_visible()
+    suite_option.click()
+    page.keyboard.press("Escape")
+    expect(preview).to_have_count(1)
+    if not preview.is_visible():
+        junit_expander.click()
+    importer = page.get_by_label("Asserted JUnit importer (required)", exact=True)
+    importer.fill("Packaged browser reviewer")
+    importer.press("Enter")
+    expect(preview).to_have_count(1)
+    if not preview.is_visible():
+        junit_expander.click()
+    expect(
+        page.get_by_label("Asserted JUnit importer (required)", exact=True)
+    ).to_have_value("Packaged browser reviewer")
+    save = page.get_by_role(
+        "button", name="Save imported JUnit results", exact=True
+    )
+    expect(save).to_be_enabled()
+    expect(save).to_be_visible()
+    save.click()
+    expect(
+        page.get_by_text(
+            "Imported JUnit results appended as external non-gating context.",
+            exact=True,
+        )
+    ).to_be_visible()
+    boundary = page.get_by_text(
+        "Imported test results are external, non-gating context.", exact=True
+    )
+    if not boundary.is_visible():
+        junit_expander.click()
+    expect(boundary).to_be_visible()
+    expect(page.get_by_text("Review saved automatically. ID:", exact=False)).to_be_visible()
+
+    page.get_by_text("Resume a saved review", exact=True).click()
+    saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
+    _choose_combobox_option(
+        page, saved_review, option_name="junit-browser-review"
+    )
+    page.get_by_role("button", name="Reopen local review", exact=True).click()
+    expect(
+        page.get_by_text(
+            "Review reopened from local storage after validation.", exact=True
+        )
+    ).to_be_visible()
+    expect(
+        page.get_by_text("Recorded imported JUnit results (1)", exact=True)
+    ).to_be_visible()
+
+    for label, suffix in (("Download Markdown", ".md"), ("Download JSON", ".json")):
+        download_button = page.get_by_role("button", name=label, exact=True)
+        expect(download_button).to_be_visible()
+        expect(download_button).to_be_enabled()
+        with page.expect_download() as download_info:
+            download_button.click()
+        download = download_info.value
+        assert download.suggested_filename.endswith(suffix)
+        downloaded_bytes = download.path().read_bytes()
+        assert artifact_digest.encode() in downloaded_bytes
+        assert b"RAW-JUNIT-OUTPUT-SENTINEL" not in downloaded_bytes
+        assert b"FAILURE-BODY-SENTINEL" not in downloaded_bytes
 
 
 def test_installed_wheel_primary_path_in_chromium(
@@ -383,6 +512,36 @@ def test_installed_wheel_primary_path_in_chromium(
         f"playwright=={version('playwright')}",
     )
     _run(str(environment_python), "-c", "import playwright, scopeproof_core, streamlit")
+
+    review_store_dir = home_dir / ".scopeproof" / "reviews"
+    _run(
+        str(environment_python),
+        "-c",
+        (
+            "from pathlib import Path; import sys; "
+            "from scopeproof_core.demo import build_demo_review; "
+            "from scopeproof_core.reviews.lifecycle import new_review_state; "
+            "from scopeproof_core.schemas.models import ReviewBundle; "
+            "from scopeproof_core.storage.json_store import JsonReviewStore; "
+            "bundle=build_demo_review().model_copy(deep=True); "
+            "bundle.review.review_id='junit-browser-review'; "
+            "bundle.review.head_sha='a'*40; "
+            "bundle.criteria_revision_number=1; "
+            "[(setattr(item, 'commit_sha', bundle.review.head_sha), "
+            "setattr(item, 'permalink', item.permalink.replace('head-demo-002', "
+            "bundle.review.head_sha))) for item in bundle.evidence]; "
+            "bundle=ReviewBundle.model_validate(bundle.model_dump(mode='python')); "
+            "JsonReviewStore(Path(sys.argv[1])).save(new_review_state(bundle))"
+        ),
+        str(review_store_dir),
+    )
+    junit_artifact = runtime_dir / "junit-results.xml"
+    junit_artifact_bytes = (
+        b'<testsuite name="unit"><testcase name="test_browser_round_trip"/>'
+        b"<system-out>RAW-JUNIT-OUTPUT-SENTINEL</system-out></testsuite>"
+    )
+    junit_artifact.write_bytes(junit_artifact_bytes)
+    junit_artifact_digest = sha256(junit_artifact_bytes).hexdigest()
 
     port = _available_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -441,8 +600,15 @@ def test_installed_wheel_primary_path_in_chromium(
                     _exercise_primary_path(
                         page,
                         base_url,
-                        verify_persistence_and_downloads=viewport_index == 0,
+                        verify_persistence_and_downloads=viewport_index == 1,
                     )
+                    if viewport_index == 0:
+                        _exercise_junit_import_round_trip(
+                            page,
+                            base_url,
+                            artifact_path=junit_artifact,
+                            artifact_digest=junit_artifact_digest,
+                        )
                     context.close()
             finally:
                 browser.close()
