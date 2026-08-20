@@ -91,6 +91,14 @@ def test_junit_import_accepts_strict_exact_identity_and_sanitized_results() -> N
     assert record.model_dump_json().count("test_error") == 1
 
 
+def test_junit_import_requires_explicit_schema_version() -> None:
+    payload = valid_import_payload()
+    payload.pop("schema_version")
+
+    with pytest.raises(ValidationError, match="schema_version"):
+        JUnitEvidenceImport.model_validate(payload)
+
+
 @pytest.mark.parametrize(
     ("path", "value", "message"),
     [
@@ -185,6 +193,25 @@ def test_junit_import_rejects_unknown_or_duplicate_case_mapping() -> None:
     ]
     with pytest.raises(ValidationError, match="sorted and unique"):
         JUnitEvidenceImport.model_validate(duplicate)
+
+
+def test_junit_import_rejects_one_case_mapped_to_multiple_criteria() -> None:
+    bundle = exact_head_bundle()
+    first, second = bundle.criteria[:2]
+    payload = valid_import_payload(bundle)
+    payload["criterion_mappings"] = [
+        {
+            "criterion_id": first.criterion_id,
+            "test_case_ids": ["suite-0001-case-0001"],
+        },
+        {
+            "criterion_id": second.criterion_id,
+            "test_case_ids": ["suite-0001-case-0001"],
+        },
+    ]
+
+    with pytest.raises(ValidationError, match="multiple criteria"):
+        JUnitEvidenceImport.model_validate(payload)
 
 
 def test_review_bundle_accepts_matching_import_and_preserves_legacy_absence() -> None:

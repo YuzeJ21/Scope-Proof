@@ -59,6 +59,7 @@ def add_junit_import(bundle: ReviewBundle) -> ReviewBundle:
     assert provenance is not None
     bundle.junit_evidence_imports = [
         JUnitEvidenceImport(
+            schema_version="junit-import-v1",
             import_id="junit-import-001",
             repository=bundle.review.repository,
             pr_number=bundle.review.pr_number,

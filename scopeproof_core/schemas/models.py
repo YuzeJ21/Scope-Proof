@@ -1198,7 +1198,7 @@ class JUnitEvidenceImport(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["junit-import-v1"] = "junit-import-v1"
+    schema_version: Literal["junit-import-v1"]
     import_id: LocalReviewId
     repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
     pr_number: int = Field(gt=0)
@@ -1285,6 +1285,13 @@ class JUnitEvidenceImport(BaseModel):
             for case_id in mapping.test_case_ids
         ):
             raise ValueError("mapped test case IDs must resolve")
+        mapped_case_ids = [
+            case_id
+            for mapping in self.criterion_mappings
+            for case_id in mapping.test_case_ids
+        ]
+        if len(mapped_case_ids) != len(set(mapped_case_ids)):
+            raise ValueError("one JUnit test case must not map to multiple criteria")
         return self
 
 
@@ -1300,6 +1307,7 @@ class JUnitImportMutationMetadata(BaseModel):
     artifact_sha256: str
     mapped_criterion_ids: list[str] = Field(min_length=1)
     totals: JUnitResultTotals
+    evidence_boundary: Literal["externally_supplied_non_gating"]
     verdict: GateVerdict
 
     @field_validator("artifact_sha256")

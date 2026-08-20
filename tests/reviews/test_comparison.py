@@ -127,6 +127,7 @@ def with_junit_import(
     assert provenance is not None
     bundle.junit_evidence_imports = [
         JUnitEvidenceImport(
+            schema_version="junit-import-v1",
             import_id=f"import-{artifact_digest[0]}",
             repository=bundle.review.repository,
             pr_number=bundle.review.pr_number,

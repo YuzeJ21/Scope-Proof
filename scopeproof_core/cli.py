@@ -85,6 +85,8 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
 from scopeproof_core.version import __version__
 
+_BINARY = getattr(os, "O_BINARY", 0)
+
 EXPORT_RENDERERS = {
     "json": export_json,
     "markdown": export_markdown,
@@ -463,7 +465,7 @@ def _read_bounded_regular_file(
 ) -> bytes:
     """Read one regular local file without buffering beyond its explicit budget."""
 
-    flags = os.O_RDONLY
+    flags = os.O_RDONLY | _BINARY
     flags |= getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NONBLOCK", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
@@ -548,6 +550,7 @@ def _import_junit(args: argparse.Namespace) -> int:
             mapping.criterion_id for mapping in imported.criterion_mappings
         ),
         totals=imported.totals,
+        evidence_boundary="externally_supplied_non_gating",
         verdict=updated.bundle.gate.verdict,
     )
     print(metadata.model_dump_json())

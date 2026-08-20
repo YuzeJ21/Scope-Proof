@@ -335,11 +335,12 @@ Expected: argparse rejects `inspect-junit` and `import-junit`.
 
 - [ ] **Step 3: Implement strict mapping parsing and command handlers**
 
-Define a strict Pydantic `JUnitMappingDocument` with literal
+Define a strict Pydantic `JUnitMappingDocument` with required literal
 `junit-mapping-v1` and required artifact SHA-256. Read only bounded regular
-local artifact files in the CLI adapter and reject a digest mismatch. Use
+local artifact files in binary mode in the CLI adapter and reject a digest mismatch. Use
 `JsonReviewStore.mutate` for the persisted transition. Print only sanitized
-Pydantic JSON metadata; never print raw XML or local paths from XML.
+Pydantic JSON metadata with an explicit external non-gating boundary; never
+print raw XML, supplied invalid values, or local paths from XML.
 
 - [ ] **Step 4: Run CLI and adjacent storage tests to green**
 

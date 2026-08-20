@@ -242,6 +242,18 @@ def test_mapping_document_requires_exact_artifact_digest() -> None:
     assert document.artifact_sha256 == "a" * 64
 
 
+def test_mapping_document_requires_explicit_schema_version() -> None:
+    with pytest.raises(ValidationError, match="schema_version"):
+        JUnitMappingDocument.model_validate(
+            {
+                "artifact_sha256": "a" * 64,
+                "selections": [
+                    {"scope_id": "suite-0001", "criterion_id": "AC-01"}
+                ],
+            }
+        )
+
+
 def test_builder_expands_explicit_suite_mapping_and_binds_review() -> None:
     state = exact_head_state()
     criterion_id = first_criterion_id(state)
@@ -290,6 +302,49 @@ def test_builder_expands_case_mapping_and_canonicalizes_duplicate_pairs() -> Non
     assert record.criterion_mappings[0].test_case_ids == [
         "suite-0001-case-0002"
     ]
+
+
+def test_builder_rejects_one_case_mapped_to_multiple_criteria() -> None:
+    state = exact_head_state()
+    assert state.bundle is not None
+    first, second = state.bundle.criteria[:2]
+
+    with pytest.raises(JUnitImportError, match="multiple criteria"):
+        build_junit_evidence_import(
+            state,
+            SIMPLE_XML,
+            [
+                JUnitMappingSelection(
+                    scope_id="suite-0001", criterion_id=first.criterion_id
+                ),
+                JUnitMappingSelection(
+                    scope_id="suite-0001-case-0001",
+                    criterion_id=second.criterion_id,
+                ),
+            ],
+            importer="QA",
+        )
+
+
+def test_builder_bounds_envelope_validation_errors_without_echoing_input() -> None:
+    state = exact_head_state()
+    secret = "SECRET-CREDENTIAL-" + "x" * 280
+
+    with pytest.raises(JUnitImportError, match="metadata is invalid") as exc_info:
+        build_junit_evidence_import(
+            state,
+            SIMPLE_XML,
+            [
+                JUnitMappingSelection(
+                    scope_id="suite-0001",
+                    criterion_id=first_criterion_id(state),
+                )
+            ],
+            importer=secret,
+        )
+
+    assert secret not in str(exc_info.value)
+    assert "SECRET-CREDENTIAL" not in str(exc_info.value)
 
 
 @pytest.mark.parametrize(

@@ -56,7 +56,8 @@ Every product surface labels the record as externally supplied and states:
   ID, review identity, exact head, criteria revision and source provenance,
   artifact digest, sanitized case results, totals, explicit mappings, asserted
   importer metadata, warnings, and limitations.
-- `JUnitImportMutationMetadata`: validated CLI result metadata.
+- `JUnitImportMutationMetadata`: validated CLI result metadata with an explicit
+  `externally_supplied_non_gating` boundary beside any unchanged review verdict.
 
 `ReviewBundle.junit_evidence_imports` is an append-only list with an empty
 default so historical records remain readable without inventing imports.
@@ -72,7 +73,8 @@ Bundle validation enforces:
 
 The outer local-review record stays at version 4 because an absent
 `junit_evidence_imports` field has one unambiguous meaning: no imported JUnit
-record. The nested import is independently versioned and strict.
+record. The nested import and CLI mapping document each require their explicit
+version discriminator; neither silently defaults an unversioned payload to v1.
 
 ### Parser and import service
 
@@ -107,7 +109,8 @@ selector needs to be reinterpreted after import.
 
 At least one mapping selection and at least one mapped case are required.
 Mappings are never inferred from suite, class, or test names. Duplicate pairs
-are canonicalized; unknown, empty, or conflicting selectors fail closed.
+are canonicalized; unknown, empty, or conflicting selectors fail closed. One
+resolved case cannot belong to more than one criterion in the same import.
 
 ### XML safety and boundedness
 
@@ -172,10 +175,12 @@ The strict mapping document is:
 }
 ```
 
-`import-junit` reads the explicitly named local artifact and mapping files,
+`import-junit` reads the explicitly named local artifact and mapping files in
+binary mode on every supported platform,
 requires the mapping digest to match the bounded artifact bytes, builds the
 record through the shared core service, applies the atomic lifecycle transition,
-and prints `JUnitImportMutationMetadata`. It never persists file paths or raw XML.
+and prints `JUnitImportMutationMetadata` with an explicit external non-gating
+boundary. It never persists file paths or raw XML.
 
 ### Streamlit
 

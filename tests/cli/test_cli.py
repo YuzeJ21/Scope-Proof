@@ -2931,6 +2931,7 @@ def test_import_junit_persists_one_non_gating_record(tmp_path: Path, capsys) -> 
     assert metadata.import_id == imported.import_id
     assert metadata.artifact_sha256 == sha256(artifact.read_bytes()).hexdigest()
     assert metadata.head_sha == "a" * 40
+    assert metadata.evidence_boundary == "externally_supplied_non_gating"
     assert loaded.bundle.gate == original_gate
     assert loaded.bundle.runtime_evidence == []
     assert loaded.bundle.resolutions == []
@@ -3001,6 +3002,75 @@ def test_import_junit_rejects_extra_mapping_fields_without_mutation(
     stderr = capsys.readouterr().err
     assert "mapping document is invalid" in stderr.lower()
     assert "TOP-SECRET-MAPPING-CONTENT" not in stderr
+    assert path.read_bytes() == before
+
+
+def test_import_junit_rejects_unversioned_mapping_without_mutation(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    state = save_exact_head_cli_review(storage)
+    artifact, mapping = write_junit_cli_files(
+        tmp_path, state.criteria_revision.criteria[0].criterion_id
+    )
+    payload = json.loads(mapping.read_text(encoding="utf-8"))
+    payload.pop("schema_version")
+    mapping.write_text(json.dumps(payload), encoding="utf-8")
+    path = storage / f"{state.review.review_id}.json"
+    before = path.read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "import-junit",
+                state.review.review_id,
+                str(artifact),
+                "--mapping",
+                str(mapping),
+                "--importer",
+                "QA",
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "mapping document is invalid" in capsys.readouterr().err.lower()
+    assert path.read_bytes() == before
+
+
+def test_import_junit_bounds_invalid_importer_error_without_mutation(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    state = save_exact_head_cli_review(storage)
+    artifact, mapping = write_junit_cli_files(
+        tmp_path, state.criteria_revision.criteria[0].criterion_id
+    )
+    path = storage / f"{state.review.review_id}.json"
+    before = path.read_bytes()
+    secret = "SECRET-CREDENTIAL-" + "x" * 280
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "import-junit",
+                state.review.review_id,
+                str(artifact),
+                "--mapping",
+                str(mapping),
+                "--importer",
+                secret,
+                "--storage-dir",
+                str(storage),
+            ]
+        )
+
+    assert error.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "metadata is invalid" in stderr.lower()
+    assert "SECRET-CREDENTIAL" not in stderr
+    assert secret not in stderr
     assert path.read_bytes() == before
 
 
@@ -3081,6 +3151,29 @@ def test_inspect_junit_rejects_oversized_regular_file_before_parsing(
 
     assert error.value.code == 2
     assert "byte limit" in capsys.readouterr().err.lower()
+
+
+def test_junit_file_reader_requests_binary_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = tmp_path / "results.xml"
+    artifact.write_bytes(
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>'
+    )
+    binary_flag = 1 << 29
+    observed_flags: list[int] = []
+    original_open = cli_module.os.open
+
+    def recording_open(path, flags, *args, **kwargs):
+        observed_flags.append(flags)
+        return original_open(path, flags & ~binary_flag, *args, **kwargs)
+
+    monkeypatch.setattr(cli_module, "_BINARY", binary_flag, raising=False)
+    monkeypatch.setattr(cli_module.os, "open", recording_open)
+
+    assert cli_module._read_bounded_junit_artifact(artifact) == artifact.read_bytes()
+    assert observed_flags
+    assert all(flags & binary_flag for flags in observed_flags)
 
 
 def test_inspect_junit_rejects_non_regular_artifact(tmp_path: Path, capsys) -> None:

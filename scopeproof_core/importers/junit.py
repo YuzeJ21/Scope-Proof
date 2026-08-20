@@ -105,7 +105,7 @@ class JUnitMappingDocument(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["junit-mapping-v1"] = "junit-mapping-v1"
+    schema_version: Literal["junit-mapping-v1"]
     artifact_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     selections: list[JUnitMappingSelection] = Field(min_length=1, max_length=5_000)
 
@@ -445,6 +445,7 @@ def build_junit_evidence_import(
             scopes[item.test_case_id] = [item.test_case_id]
             test_cases.append(item)
     mapped: dict[str, set[str]] = defaultdict(set)
+    case_owners: dict[str, str] = {}
     for selection in validated_selections:
         if selection.criterion_id not in known_criteria:
             raise JUnitImportError("JUnit mapping references an unknown criterion.")
@@ -453,6 +454,13 @@ def build_junit_evidence_import(
             raise JUnitImportError("JUnit import references an unknown mapping scope.")
         if not case_ids:
             raise JUnitImportError("JUnit mapping scope contains no test cases.")
+        for case_id in case_ids:
+            existing_owner = case_owners.get(case_id)
+            if existing_owner is not None and existing_owner != selection.criterion_id:
+                raise JUnitImportError(
+                    "JUnit mapping must not assign one test case to multiple criteria."
+                )
+            case_owners[case_id] = selection.criterion_id
         mapped[selection.criterion_id].update(case_ids)
     if not mapped or not any(mapped.values()):
         raise JUnitImportError("JUnit import requires at least one explicit mapping.")
@@ -463,20 +471,24 @@ def build_junit_evidence_import(
         )
         for criterion_id, case_ids in sorted(mapped.items())
     ]
-    return JUnitEvidenceImport(
-        import_id=resolved_import_id,
-        repository=bundle.review.repository,
-        pr_number=bundle.review.pr_number,
-        head_sha=bundle.review.head_sha,
-        criteria_revision_number=state.criteria_revision.number,
-        confirmed_criteria_sha256=normalized_criteria_sha256(bundle.criteria),
-        criteria_source_provenance=provenance.model_copy(deep=True),
-        artifact_sha256=parsed.artifact_sha256,
-        imported_by=normalized_importer,
-        imported_at=imported_at or datetime.now(UTC),
-        totals=parsed.totals,
-        test_cases=sorted(test_cases, key=lambda item: item.test_case_id),
-        criterion_mappings=criterion_mappings,
-        parser_warnings=parsed.parser_warnings,
-        limitations=list(dict.fromkeys((*_FIXED_LIMITATIONS, *supplied_limitations))),
-    )
+    try:
+        return JUnitEvidenceImport(
+            schema_version="junit-import-v1",
+            import_id=resolved_import_id,
+            repository=bundle.review.repository,
+            pr_number=bundle.review.pr_number,
+            head_sha=bundle.review.head_sha,
+            criteria_revision_number=state.criteria_revision.number,
+            confirmed_criteria_sha256=normalized_criteria_sha256(bundle.criteria),
+            criteria_source_provenance=provenance.model_copy(deep=True),
+            artifact_sha256=parsed.artifact_sha256,
+            imported_by=normalized_importer,
+            imported_at=imported_at or datetime.now(UTC),
+            totals=parsed.totals,
+            test_cases=sorted(test_cases, key=lambda item: item.test_case_id),
+            criterion_mappings=criterion_mappings,
+            parser_warnings=parsed.parser_warnings,
+            limitations=list(dict.fromkeys((*_FIXED_LIMITATIONS, *supplied_limitations))),
+        )
+    except ValidationError:
+        raise JUnitImportError("JUnit import metadata is invalid.") from None
