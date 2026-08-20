@@ -4053,6 +4053,7 @@ def test_empty_detail_target_defaults_to_first_unresolved_blocker() -> None:
 
 def test_criterion_detail_preserves_deep_matrix_context_without_duplicate_summary() -> None:
     app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     markdown_text = [item.value for item in app.markdown]
     visible_markdown = "\n".join(markdown_text)
     text_values = [item.value for item in app.text]
@@ -4088,6 +4089,7 @@ def test_ordinary_resolution_precedes_optional_external_verification() -> None:
 
 def test_candidate_evidence_groups_by_path_and_type_without_losing_items() -> None:
     app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     groups = [item for item in app.expander if item.label.startswith("Evidence group ")]
 
     assert [item.label for item in groups] == [
@@ -4248,6 +4250,7 @@ def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
 
 def test_criterion_detail_labels_candidate_evidence_and_recovery_guidance() -> None:
     app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     bundle = app.session_state["review_state"].bundle
     finding = next(item for item in bundle.findings if item.criterion_id == "AC-01")
     evidence = next(item for item in bundle.evidence if item.evidence_id in finding.evidence_ids)
@@ -4354,6 +4357,7 @@ def test_resolution_history_distinguishes_current_and_superseded_decisions() -> 
 
 def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None:
     app = analyzed_demo(new_app())
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     review_state = app.session_state["review_state"].model_copy(deep=True)
     recorded_at = datetime(2026, 7, 14, 19, 45, tzinfo=UTC)
     review_state = append_external_verification(
