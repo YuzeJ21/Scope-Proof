@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from scopeproof_core.criteria.confirmation import normalized_criteria_sha256
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import (
+    MAX_JUNIT_IMPORTS_PER_REVIEW,
     JUnitCaseResult,
     JUnitCaseStatus,
     JUnitCriterionMapping,
@@ -435,6 +436,10 @@ def build_junit_evidence_import(
     if state.bundle is None:
         raise ValueError("JUnit import requires an active analysis")
     bundle = state.bundle
+    if len(bundle.junit_evidence_imports) >= MAX_JUNIT_IMPORTS_PER_REVIEW:
+        raise JUnitImportError(
+            "Review already contains the maximum number of JUnit imports."
+        )
     provenance = bundle.review.criteria_source_provenance
     if provenance is None or not bundle.review.criteria_confirmed:
         raise ValueError("JUnit import requires confirmed criteria provenance")

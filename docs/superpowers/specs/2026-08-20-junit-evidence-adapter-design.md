@@ -88,6 +88,8 @@ MAX_JUNIT_BYTES = 1_048_576
 MAX_JUNIT_SUITES = 100
 MAX_JUNIT_CASES = 5_000
 MAX_JUNIT_ELEMENTS = 20_000
+MAX_JUNIT_IMPORTS_PER_REVIEW = 20
+MAX_JUNIT_NOTE_LENGTH = 1_000
 
 def parse_junit_artifact(artifact_bytes: bytes) -> ParsedJUnitArtifact: ...
 

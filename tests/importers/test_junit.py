@@ -452,3 +452,63 @@ def test_builder_rejects_blank_limitations_without_exposing_artifact() -> None:
             importer="QA",
             limitations=[""],
         )
+
+
+def test_builder_rejects_overlong_limitations_without_exposing_artifact() -> None:
+    state = exact_head_state()
+    mapping = [
+        JUnitMappingSelection(
+            scope_id="suite-0001", criterion_id=first_criterion_id(state)
+        )
+    ]
+
+    with pytest.raises(JUnitImportError, match="metadata is invalid"):
+        build_junit_evidence_import(
+            state,
+            SIMPLE_XML,
+            mapping,
+            importer="QA",
+            limitations=["x" * 1_001],
+        )
+
+    assert state.bundle is not None
+    assert state.bundle.junit_evidence_imports == []
+
+
+def test_builder_rejects_review_at_aggregate_import_cap() -> None:
+    state = exact_head_state()
+    mapping = [
+        JUnitMappingSelection(
+            scope_id="suite-0001", criterion_id=first_criterion_id(state)
+        )
+    ]
+    record = build_junit_evidence_import(
+        state,
+        SIMPLE_XML,
+        mapping,
+        importer="QA",
+        imported_at=datetime(2026, 8, 20, tzinfo=UTC),
+        import_id="import-template",
+    )
+    assert state.bundle is not None
+    state.bundle.junit_evidence_imports = [
+        record.model_copy(
+            update={
+                "import_id": f"import-{index + 1:03d}",
+                "artifact_sha256": f"{index + 1:064x}",
+            }
+        )
+        for index in range(20)
+    ]
+    capped = ReviewState.model_validate(state.model_dump(mode="python"))
+
+    with pytest.raises(JUnitImportError, match="maximum number"):
+        build_junit_evidence_import(
+            capped,
+            SIMPLE_XML,
+            mapping,
+            importer="QA",
+        )
+
+    assert capped.bundle is not None
+    assert len(capped.bundle.junit_evidence_imports) == 20

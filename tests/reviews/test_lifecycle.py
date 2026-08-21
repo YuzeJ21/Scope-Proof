@@ -1599,6 +1599,42 @@ def test_junit_import_append_is_non_gating_and_does_not_alias_input() -> None:
     assert updated.review.final_acceptance is original_final_acceptance
 
 
+def test_new_review_state_rejects_preexisting_junit_imports() -> None:
+    state = exact_head_state()
+    imported = append_junit_evidence_import(state, junit_import_for(state))
+    assert imported.bundle is not None
+
+    with pytest.raises(
+        ValueError, match="initial analysis bundle must not contain JUnit imports"
+    ):
+        new_review_state(imported.bundle)
+
+
+def test_junit_import_append_rejects_aggregate_cap_atomically() -> None:
+    state = exact_head_state()
+    record = junit_import_for(state)
+    assert state.bundle is not None
+    state.bundle.junit_evidence_imports = [
+        record.model_copy(
+            update={
+                "import_id": f"import-{index + 1:03d}",
+                "artifact_sha256": f"{index + 1:064x}",
+            }
+        )
+        for index in range(20)
+    ]
+    capped = ReviewState.model_validate(state.model_dump(mode="python"))
+    overflow = record.model_copy(
+        update={"import_id": "import-overflow", "artifact_sha256": "f" * 64}
+    )
+
+    with pytest.raises(ValueError, match="at most 20"):
+        append_junit_evidence_import(capped, overflow)
+
+    assert capped.bundle is not None
+    assert len(capped.bundle.junit_evidence_imports) == 20
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [

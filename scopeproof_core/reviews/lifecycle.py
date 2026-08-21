@@ -12,6 +12,7 @@ from scopeproof_core.gates.validation import (
 from scopeproof_core.resolution_events import current_resolutions, final_acceptance
 from scopeproof_core.review_policy import acceptance_requires_comment
 from scopeproof_core.schemas.models import (
+    MAX_JUNIT_IMPORTS_PER_REVIEW,
     CheckState,
     CriteriaRevision,
     CriteriaSourceProvenance,
@@ -50,6 +51,8 @@ def new_review_state(bundle: ReviewBundle) -> ReviewState:
         raise ValueError("initial analysis bundle must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("initial analysis bundle must not contain final acceptance")
+    if bundle.junit_evidence_imports:
+        raise ValueError("initial analysis bundle must not contain JUnit imports")
     bundle = validated_review_bundle(bundle)
     if bundle.review.criteria_source_provenance is None:
         raise ValueError(
@@ -346,6 +349,10 @@ def append_junit_evidence_import(
     if state.bundle is None:
         raise ValueError("JUnit import requires an active analysis")
     bundle = state.bundle
+    if len(bundle.junit_evidence_imports) >= MAX_JUNIT_IMPORTS_PER_REVIEW:
+        raise ValueError(
+            f"review may contain at most {MAX_JUNIT_IMPORTS_PER_REVIEW} JUnit imports"
+        )
     evidence_import = JUnitEvidenceImport.model_validate(
         evidence_import.model_dump(mode="python")
     )

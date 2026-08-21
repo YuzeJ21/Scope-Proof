@@ -29,6 +29,8 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
   deterministic comparison, and an installed-wheel loopback-only Chromium round trip share the
   same core contracts. Raw XML, output bodies, failure bodies, paths, URLs, and attachments are
   neither persisted nor exported.
+- Capped retained JUnit imports at 20 per review and each warning or limitation at 1,000
+  characters each. A new analysis cannot inherit imports from an earlier criteria revision.
 - Consolidated the owner decision handoff around blocker-first unresolved decisions and a direct
   pre-matrix criterion handoff. This is a bounded Stage 2 workflow clarification, not a claim of
   acceptance-criteria correctness or runtime verification.

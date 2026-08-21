@@ -39,6 +39,8 @@ code or following references. It persists only sanitized case names and statuses
 exact review and confirmed-criteria identity, explicit human mappings, an asserted importer,
 warnings, and limitations. It is external non-gating context and cannot become E1–E4, observed CI,
 runtime verification, a reviewer decision, final acceptance, correctness, or customer validation.
+One review retains at most 20 imports, each retained warning or asserted limitation is capped at
+1,000 characters, and a new analysis never inherits an earlier criteria revision's imports.
 Other adapter families remain unimplemented and require their own bounded design and owner scope.
 
 This stage does not authorize outreach, participant contact, a merge, release, tag, or package

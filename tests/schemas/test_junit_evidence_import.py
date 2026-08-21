@@ -147,6 +147,29 @@ def test_junit_import_rejects_naive_timestamp_and_extra_fields() -> None:
     assert "raw_xml" in rendered
 
 
+def test_junit_import_rejects_overlong_note_entries() -> None:
+    payload = valid_import_payload()
+    payload["limitations"] = ["x" * 1_001]
+
+    with pytest.raises(ValidationError, match="at most 1000"):
+        JUnitEvidenceImport.model_validate(payload)
+
+
+def test_review_bundle_caps_accumulated_junit_imports() -> None:
+    bundle = exact_head_bundle()
+    payload = bundle.model_dump(mode="python")
+    imports: list[dict[str, object]] = []
+    for index in range(21):
+        imported = deepcopy(valid_import_payload(bundle))
+        imported["import_id"] = f"import-{index + 1:03d}"
+        imported["artifact_sha256"] = f"{index + 1:064x}"
+        imports.append(imported)
+    payload["junit_evidence_imports"] = imports
+
+    with pytest.raises(ValidationError, match="at most 20"):
+        ReviewBundle.model_validate(payload)
+
+
 def test_junit_import_rejects_inconsistent_totals() -> None:
     payload = valid_import_payload()
     payload["totals"] = {

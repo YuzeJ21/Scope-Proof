@@ -107,6 +107,8 @@ def require_verified_public_origin(
 
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _EXACT_HEAD_PATTERN = r"^[a-f0-9]{40}$"
+MAX_JUNIT_IMPORTS_PER_REVIEW = 20
+MAX_JUNIT_NOTE_LENGTH = 1_000
 _PATH_OR_URI_LIKE = re.compile(
     r"(?:[/\\]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:)"
 )
@@ -1272,6 +1274,10 @@ class JUnitEvidenceImport(BaseModel):
         normalized = [item.strip() for item in value]
         if any(not item for item in normalized):
             raise ValueError("notes must contain non-whitespace text")
+        if any(len(item) > MAX_JUNIT_NOTE_LENGTH for item in normalized):
+            raise ValueError(
+                f"notes must be at most {MAX_JUNIT_NOTE_LENGTH} characters each"
+            )
         if len(normalized) != len(set(normalized)):
             raise ValueError("notes must be unique")
         return normalized
@@ -1558,7 +1564,9 @@ class ReviewBundle(BaseModel):
         default_factory=list
     )
     runtime_evidence: list[RuntimeEvidence] = Field(default_factory=list)
-    junit_evidence_imports: list[JUnitEvidenceImport] = Field(default_factory=list)
+    junit_evidence_imports: list[JUnitEvidenceImport] = Field(
+        default_factory=list, max_length=MAX_JUNIT_IMPORTS_PER_REVIEW
+    )
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
     gate: GateDecision

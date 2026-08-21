@@ -291,9 +291,11 @@ scopeproof import-junit REVIEW_ID results.xml \
   --storage-dir .scopeproof/reviews
 ```
 
-The adapter accepts at most 1 MiB, 100 suites, 5,000 cases, and 20,000 XML elements. It accepts
-UTF-8 only and rejects DTDs, entities, non-declaration processing instructions, XInclude, remote
-references, unsupported nesting, and ambiguous result markers. It stores computed statuses,
+The adapter accepts at most 1 MiB, 100 suites, 5,000 cases, and 20,000 XML elements. Each review
+can retain at most 20 imports, and each retained warning or asserted limitation is capped at 1,000
+characters. It accepts UTF-8 only and rejects DTDs, entities, non-declaration processing
+instructions, XInclude, remote references, unsupported nesting, and ambiguous result markers. It
+stores computed statuses,
 stable local scope IDs, the artifact SHA-256, exact review and criteria provenance, explicit
 mappings, an asserted importer, warnings, and limitations. Raw XML, stdout, stderr, properties,
 failure bodies, commands, paths, URLs, and attachments are discarded; path- or URL-like
