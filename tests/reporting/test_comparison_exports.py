@@ -121,7 +121,8 @@ def test_comparison_markdown_shows_two_sides_and_evidence_boundary() -> None:
     assert "review the current evidence" in report.lower()
     assert "Prior Decisions Requiring Review" in report
     assert "AC\\-01" in report
-    assert "never carries acceptance to a changed head" in report
+    assert "does not carry a prior decision forward automatically" in report
+    assert "changed head" not in report
 
 
 def test_comparison_exports_do_not_carry_a_previous_decision_into_current() -> None:

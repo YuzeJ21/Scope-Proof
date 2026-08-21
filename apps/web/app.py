@@ -2148,7 +2148,7 @@ else:
             st.warning(
                 "Prior decisions must be revisited for: "
                 + ", ".join(comparison.criteria_requiring_decision_review)
-                + ". ScopeProof never carries acceptance to a changed head."
+                + ". ScopeProof does not carry a prior decision forward automatically."
             )
         st.caption(
             "Ruleset changed between reviews."

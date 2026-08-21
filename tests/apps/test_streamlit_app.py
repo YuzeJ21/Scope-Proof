@@ -3555,6 +3555,14 @@ def test_comparison_view_shows_removed_external_junit_import_as_non_gating() -> 
     app = analyzed_exact_head_standard_demo(new_app())
     current_state = app.session_state["review_state"]
     criterion_id = current_state.criteria_revision.criteria[0].criterion_id
+    current_state = append_resolution(
+        current_state,
+        ResolutionEvent(
+            criterion_id=criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            comment="Reviewed before the imported context changed.",
+        ),
+    )
     imported = build_junit_evidence_import(
         current_state,
         b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
@@ -3570,6 +3578,8 @@ def test_comparison_view_shows_removed_external_junit_import_as_non_gating() -> 
     previous_state = append_junit_evidence_import(current_state, imported)
     assert previous_state.bundle is not None
     app.session_state["comparison_base_bundle"] = previous_state.bundle
+    app.session_state["review_state"] = current_state
+    app.session_state["bundle"] = current_state.bundle
 
     app = app.run()
 
@@ -3585,6 +3595,9 @@ def test_comparison_view_shows_removed_external_junit_import_as_non_gating() -> 
     assert "imported bytes only" in rendered.lower()
     assert "asserted, not authenticated" in rendered.lower()
     assert "organizational context, not proof" in rendered.lower()
+    warnings = "\n".join(item.value for item in app.warning)
+    assert "does not carry a prior decision forward automatically" in warnings
+    assert "changed head" not in warnings
 
 
 def test_ineligible_comparison_base_is_cleared_without_hiding_current_analysis() -> None:

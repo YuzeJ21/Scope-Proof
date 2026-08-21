@@ -490,8 +490,8 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
                 ],
                 "",
                 (
-                    "ScopeProof never carries acceptance to a changed head. Review current "
-                    "evidence and record a new decision."
+                    "ScopeProof does not carry a prior decision forward automatically. Review "
+                    "the current evidence and imported context, then record a new decision."
                 ),
                 "",
             ]
@@ -1097,13 +1097,13 @@ def export_csv(bundle: ExportableReview) -> str:
                 "junit_mapped_cases": json.dumps(
                     [
                         {
-                            "import_id": _csv_text(evidence_import.import_id),
+                            "import_id": evidence_import.import_id,
                             "artifact_sha256": evidence_import.artifact_sha256,
-                            "imported_by": _csv_text(evidence_import.imported_by),
-                            "test_case_id": _csv_text(case.test_case_id),
+                            "imported_by": evidence_import.imported_by,
+                            "test_case_id": case.test_case_id,
                             "status": case.status.value,
-                            "suite_name": _csv_text(case.suite_name),
-                            "test_name": _csv_text(case.test_name),
+                            "suite_name": case.suite_name,
+                            "test_name": case.test_name,
                         }
                         for evidence_import in junit_imports
                         for case in _junit_mapping_cases(
@@ -1119,15 +1119,15 @@ def export_csv(bundle: ExportableReview) -> str:
                 if junit_imports
                 else "",
                 "junit_importers": json.dumps(
-                    [_csv_text(item.imported_by) for item in junit_imports],
+                    [item.imported_by for item in junit_imports],
                     ensure_ascii=False,
                 ),
                 "junit_parser_warnings": json.dumps(
                     [
                         {
-                            "import_id": _csv_text(item.import_id),
+                            "import_id": item.import_id,
                             "artifact_sha256": item.artifact_sha256,
-                            "warning": _csv_text(warning),
+                            "warning": warning,
                         }
                         for item in junit_imports
                         for warning in item.parser_warnings
@@ -1138,9 +1138,9 @@ def export_csv(bundle: ExportableReview) -> str:
                 "junit_limitations": json.dumps(
                     [
                         {
-                            "import_id": _csv_text(item.import_id),
+                            "import_id": item.import_id,
                             "artifact_sha256": item.artifact_sha256,
-                            "limitation": _csv_text(limitation),
+                            "limitation": limitation,
                         }
                         for item in junit_imports
                         for limitation in item.limitations

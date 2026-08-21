@@ -274,7 +274,7 @@ def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
         (item["import_id"], item["artifact_sha256"], item["imported_by"])
         for item in csv_cases
     } == {
-        ("junit-import-001", "b" * 64, "'=ASSERTED <owner>"),
+        ("junit-import-001", "b" * 64, "=ASSERTED <owner>"),
         ("junit-import-002", "c" * 64, "second owner"),
     }
     assert "externally supplied, non-gating context" in csv_row[
@@ -285,12 +285,12 @@ def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
     assert "asserted, not authenticated" in csv_row["junit_evidence_boundary"].lower()
     assert "organizational context, not proof" in csv_row["junit_evidence_boundary"].lower()
     assert csv_row["junit_importers"].startswith("[")
-    assert "'=ASSERTED <owner>" in csv_row["junit_importers"]
+    assert json.loads(csv_row["junit_importers"])[0] == "=ASSERTED <owner>"
     assert json.loads(csv_row["junit_parser_warnings"]) == [
         {
             "artifact_sha256": "b" * 64,
             "import_id": "junit-import-001",
-            "warning": "'@warning <unsafe>",
+            "warning": "@warning <unsafe>",
         },
         {
             "artifact_sha256": "c" * 64,
@@ -302,7 +302,7 @@ def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
         {
             "artifact_sha256": "b" * 64,
             "import_id": "junit-import-001",
-            "limitation": "'+external result only <unsafe>",
+            "limitation": "+external result only <unsafe>",
         },
         {
             "artifact_sha256": "c" * 64,
