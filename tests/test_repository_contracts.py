@@ -428,10 +428,10 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "scopeproof_core.evals.runner" in workflow
 
 
-def test_streamlit_floor_supports_click_time_deferred_exports() -> None:
+def test_streamlit_floor_supports_per_widget_junit_upload_limits() -> None:
     project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
-    assert "streamlit>=1.52,<2" in project["project"]["dependencies"]
+    assert "streamlit>=1.53,<2" in project["project"]["dependencies"]
 
 
 def test_locked_development_environment_is_documented_and_verified() -> None:
@@ -447,6 +447,7 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "uv run pytest" in guide
     assert "uv run scopeproof benchmark" in guide
     assert "Streamlit 1.59.1" in guide
+    assert "Streamlit 1.53 or newer" in guide
     assert "Streamlit 1.57.0" in guide
     assert "testing-interface regression" in guide
     assert "locked-environment:" in workflow
