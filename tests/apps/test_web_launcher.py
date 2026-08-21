@@ -64,7 +64,7 @@ def test_packaged_web_launcher_uses_current_interpreter_without_shell(monkeypatc
         "--server.address=127.0.0.2",
         "--server.port=8765",
         "--server.headless=false",
-        "--server.maxUploadSize=1",
+        "--server.maxUploadSize=2",
         "--theme.base=dark",
         "--theme.primaryColor=#d8ff63",
         "--theme.backgroundColor=#0d0f12",

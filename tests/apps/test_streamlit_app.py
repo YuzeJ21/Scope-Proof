@@ -5184,6 +5184,10 @@ def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -
     app = analyzed_exact_head_standard_demo(new_app())
     before = app.session_state["review_state"].model_copy(deep=True)
     assert before.bundle is not None
+    assert (
+        app.file_uploader(key="junit_artifact_upload").proto.max_upload_size_mb
+        == 1
+    )
 
     app = app.file_uploader(key="junit_artifact_upload").upload(
         "results.xml",

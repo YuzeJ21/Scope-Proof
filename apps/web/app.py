@@ -2505,6 +2505,7 @@ else:
                 type=["xml"],
                 accept_multiple_files=False,
                 key=_junit_artifact_upload_key(),
+                max_upload_size=1,
             )
             junit_importer = st.text_input(
                 "Asserted JUnit importer (required)", key="junit_importer"
