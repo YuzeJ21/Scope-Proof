@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import re
 import signal
 import socket
 import subprocess
 import sys
 import time
+from collections.abc import Callable
+from hashlib import sha256
 from importlib.metadata import version
 from importlib.util import find_spec
 from pathlib import Path
@@ -13,7 +16,19 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 import pytest
-from playwright.sync_api import Locator, Page, Route, expect, sync_playwright
+from playwright.sync_api import (
+    Download,
+    Locator,
+    Page,
+    Route,
+    expect,
+    sync_playwright,
+)
+from playwright.sync_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
+
+from scopeproof_core.schemas.models import JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
 
 pytestmark = pytest.mark.browser
 
@@ -58,6 +73,40 @@ FOCUS_STYLE_SCRIPT = """element => {
             colorIsVisible(style.outlineColor),
         outlineWidth: parseFloat(style.outlineWidth),
     };
+}"""
+ARM_STREAMLIT_RERUN_OBSERVER_SCRIPT = """() => {
+    if (window.__scopeproofRerunObserver) {
+        window.__scopeproofRerunObserver.disconnect();
+    }
+    window.__scopeproofRerunObserved = false;
+    const observer = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            if (
+                mutation.attributeName === "data-test-script-state" &&
+                (
+                    mutation.oldValue === "notRunning" ||
+                    mutation.target.getAttribute("data-test-script-state") !==
+                        "notRunning"
+                )
+            ) {
+                window.__scopeproofRerunObserved = true;
+            }
+        }
+    });
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-test-script-state"],
+        attributeOldValue: true,
+        subtree: true,
+    });
+    window.__scopeproofRerunObserver = observer;
+}"""
+STREAMLIT_RERUN_FINISHED_SCRIPT = """() => {
+    const app = document.querySelector('[data-testid="stApp"]');
+    return (
+        window.__scopeproofRerunObserved === true &&
+        app?.getAttribute("data-test-script-state") === "notRunning"
+    );
 }"""
 
 
@@ -223,6 +272,237 @@ def _activate_with_keyboard(
     page.keyboard.press(key)
 
 
+def _run_and_wait_for_streamlit_rerun(
+    page: Page, action: Callable[[], None]
+) -> None:
+    page.evaluate(ARM_STREAMLIT_RERUN_OBSERVER_SCRIPT)
+    action()
+    page.wait_for_function(STREAMLIT_RERUN_FINISHED_SCRIPT, timeout=10_000)
+
+
+def _choose_combobox_option(
+    page: Page,
+    combobox: Locator,
+    *,
+    option_name: str,
+    settled_control: Locator | None = None,
+) -> None:
+    for attempt in range(3):
+        value_is_selected = combobox.input_value() == option_name
+        control_is_settled = (
+            settled_control is None or settled_control.is_enabled()
+        )
+        if value_is_selected and control_is_settled:
+            return
+        try:
+            if value_is_selected:
+                combobox.fill("")
+            combobox.click()
+            combobox.fill(option_name)
+            option = page.get_by_role("option", name=option_name, exact=True)
+            expect(option).to_be_visible(timeout=5_000)
+            _run_and_wait_for_streamlit_rerun(
+                page,
+                lambda selected_option=option: selected_option.click(timeout=5_000),
+            )
+            expect(combobox).to_have_value(option_name, timeout=5_000)
+            if settled_control is not None:
+                expect(settled_control).to_be_enabled(timeout=5_000)
+            return
+        except PlaywrightTimeoutError:
+            if attempt == 2:
+                raise
+
+
+def _download_with_retry(page: Page, *, button_name: str) -> Download:
+    for attempt in range(3):
+        download_button = page.get_by_role(
+            "button", name=button_name, exact=True
+        )
+        expect(download_button).to_be_visible(timeout=5_000)
+        expect(download_button).to_be_enabled(timeout=5_000)
+        try:
+            with page.expect_download(timeout=5_000) as download_info:
+                download_button.click()
+            return download_info.value
+        except PlaywrightTimeoutError:
+            if attempt == 2:
+                raise
+    raise AssertionError("download retry loop exhausted without a terminal result")
+
+
+def _click_until_text_visible(
+    page: Page, *, button_name: str, outcome_text: str
+) -> None:
+    outcome = page.get_by_text(outcome_text, exact=True)
+    for attempt in range(3):
+        if outcome.is_visible():
+            return
+        button = page.get_by_role("button", name=button_name, exact=True)
+        try:
+            expect(button).to_be_visible(timeout=5_000)
+            expect(button).to_be_enabled(timeout=5_000)
+            button.click(timeout=5_000)
+            expect(outcome).to_be_visible(timeout=5_000)
+            return
+        except (AssertionError, PlaywrightTimeoutError):
+            if outcome.is_visible():
+                return
+            if attempt == 2:
+                raise
+
+
+def test_choose_combobox_option_retries_after_detached_option(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeCombobox:
+        def __init__(self) -> None:
+            self.value = ""
+            self.clicks = 0
+            self.fills: list[str] = []
+
+        def input_value(self) -> str:
+            return self.value
+
+        def click(self) -> None:
+            self.clicks += 1
+
+        def fill(self, value: str) -> None:
+            self.fills.append(value)
+
+    class FakeControl:
+        def __init__(self) -> None:
+            self.enabled = False
+
+        def is_enabled(self) -> bool:
+            return self.enabled
+
+    class FakeOption:
+        def __init__(self, combobox: FakeCombobox, control: FakeControl) -> None:
+            self.combobox = combobox
+            self.control = control
+            self.clicks = 0
+
+        def click(self, *, timeout: int | None = None) -> None:
+            self.clicks += 1
+            self.combobox.value = "junit-browser-review"
+            if self.clicks == 1:
+                raise PlaywrightTimeoutError("element was detached from the DOM")
+            self.control.enabled = True
+
+    class FakePage:
+        def __init__(self, option: FakeOption) -> None:
+            self.option = option
+
+        def evaluate(self, script: str) -> None:
+            return None
+
+        def get_by_role(self, *args: object, **kwargs: object) -> FakeOption:
+            return self.option
+
+        def wait_for_function(self, script: str, *, timeout: int) -> None:
+            return None
+
+    class FakeExpectation:
+        def __init__(self, target: object) -> None:
+            self.target = target
+
+        def to_be_visible(self, *, timeout: int | None = None) -> None:
+            return None
+
+        def to_have_value(self, expected: str, *, timeout: int | None = None) -> None:
+            assert isinstance(self.target, FakeCombobox)
+            assert self.target.value == expected
+
+        def to_be_enabled(self, *, timeout: int | None = None) -> None:
+            assert isinstance(self.target, FakeControl)
+            if not self.target.enabled:
+                raise PlaywrightTimeoutError("dependent control did not settle")
+
+    combobox = FakeCombobox()
+    control = FakeControl()
+    option = FakeOption(combobox, control)
+    monkeypatch.setattr(
+        sys.modules[__name__], "expect", lambda target: FakeExpectation(target)
+    )
+
+    _choose_combobox_option(
+        FakePage(option),  # type: ignore[arg-type]
+        combobox,  # type: ignore[arg-type]
+        option_name="junit-browser-review",
+        settled_control=control,  # type: ignore[arg-type]
+    )
+
+    assert option.clicks == 2
+    assert combobox.clicks == 2
+    assert combobox.fills == [
+        "junit-browser-review",
+        "",
+        "junit-browser-review",
+    ]
+    assert control.enabled is True
+
+
+def test_download_with_retry_reissues_click_after_missed_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeButton:
+        def __init__(self) -> None:
+            self.clicks = 0
+
+        def click(self) -> None:
+            self.clicks += 1
+
+    class FakeDownload:
+        suggested_filename = "review.md"
+
+    class FakeDownloadEvent:
+        def __init__(self, attempt: int) -> None:
+            self.attempt = attempt
+            self.value = FakeDownload()
+
+        def __enter__(self) -> FakeDownloadEvent:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            if self.attempt == 1:
+                raise PlaywrightTimeoutError("download event was not observed")
+
+    class FakePage:
+        def __init__(self, button: FakeButton) -> None:
+            self.button = button
+            self.download_attempts = 0
+
+        def get_by_role(self, *args: object, **kwargs: object) -> FakeButton:
+            return self.button
+
+        def expect_download(self, *, timeout: int) -> FakeDownloadEvent:
+            self.download_attempts += 1
+            return FakeDownloadEvent(self.download_attempts)
+
+    class FakeExpectation:
+        def to_be_visible(self, *, timeout: int | None = None) -> None:
+            return None
+
+        def to_be_enabled(self, *, timeout: int | None = None) -> None:
+            return None
+
+    button = FakeButton()
+    page = FakePage(button)
+    monkeypatch.setattr(
+        sys.modules[__name__], "expect", lambda target: FakeExpectation()
+    )
+
+    download = _download_with_retry(
+        page,  # type: ignore[arg-type]
+        button_name="Download Markdown",
+    )
+
+    assert download.suggested_filename == "review.md"
+    assert page.download_attempts == 2
+    assert button.clicks == 2
+
+
 def _exercise_primary_path(
     page: Page, base_url: str, *, verify_persistence_and_downloads: bool
 ) -> None:
@@ -267,6 +547,9 @@ def _exercise_primary_path(
     expect(page.get_by_text("Missing evidence", exact=True).first).to_be_visible()
     expect(page.get_by_text("Review status: Action required", exact=True)).to_be_visible()
     expect(page.get_by_text("Evidence status:", exact=False).first).to_be_visible()
+    expect(
+        page.get_by_text("Import external JUnit results", exact=True)
+    ).to_be_visible()
     export_controls = (
         ("Download Markdown", ".md"),
         ("Download JSON", ".json"),
@@ -280,22 +563,27 @@ def _exercise_primary_path(
     if verify_persistence_and_downloads:
         save_notice = page.get_by_text("Review saved automatically. ID:", exact=False)
         expect(save_notice).to_be_visible()
+        saved_id_match = re.search(
+            r"Review saved automatically\. ID: ([A-Za-z0-9_-]+)\.",
+            save_notice.inner_text(),
+        )
+        assert saved_id_match is not None
+        saved_review_id = saved_id_match.group(1)
 
-        markdown_export = page.get_by_role("button", name="Download Markdown", exact=True)
-        with page.expect_download() as download_info:
-            markdown_export.click()
-        download = download_info.value
+        download = _download_with_retry(page, button_name="Download Markdown")
         assert download.suggested_filename.endswith(".md")
         assert b"head-demo-002" in download.path().read_bytes()
 
         page.get_by_text("Resume a saved review", exact=True).click()
-        expect(page.get_by_text("saved local review found", exact=False)).to_be_visible()
+        expect(page.get_by_text(re.compile(r"saved local reviews? found"))).to_be_visible()
         saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
-        saved_review.locator("..").get_by_role("button", name="Open", exact=True).click()
-        page.keyboard.press("ArrowDown")
-        page.keyboard.press("Enter")
         reopen = page.get_by_role("button", name="Reopen local review", exact=True)
-        expect(reopen).to_be_enabled()
+        _choose_combobox_option(
+            page,
+            saved_review,
+            option_name=saved_review_id,
+            settled_control=reopen,
+        )
         reopen.click()
         expect(
             page.get_by_text(
@@ -330,6 +618,116 @@ def _exercise_primary_path(
 
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert page.evaluate("document.body.scrollWidth <= window.innerWidth")
+
+
+def _exercise_junit_import_round_trip(
+    page: Page,
+    base_url: str,
+    *,
+    artifact_path: Path,
+    artifact_digest: str,
+) -> None:
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.get_by_text("Resume a saved review", exact=True).click()
+    saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    _choose_combobox_option(
+        page,
+        saved_review,
+        option_name="junit-browser-review",
+        settled_control=reopen,
+    )
+    reopen.click()
+    expect(
+        page.get_by_text(
+            "Review reopened from local storage after validation.", exact=True
+        )
+    ).to_be_visible()
+
+    junit_expander = page.get_by_text("Import external JUnit results", exact=True)
+    junit_expander.click()
+    artifact_input = page.get_by_label(
+        "Local JUnit XML artifact", exact=True
+    ).locator("input[type=file]")
+    _run_and_wait_for_streamlit_rerun(
+        page, lambda: artifact_input.set_input_files(artifact_path)
+    )
+    preview = page.get_by_text(
+        "Computed results: 1 total · 1 passed · 0 failed · 0 errors · 0 skipped",
+        exact=True,
+    )
+    expect(preview).to_have_count(1)
+    if not preview.is_visible():
+        junit_expander.click()
+    expect(preview).to_be_visible()
+    importer = page.get_by_label("Asserted JUnit importer (required)", exact=True)
+    importer.fill("Packaged browser reviewer")
+    _run_and_wait_for_streamlit_rerun(page, lambda: importer.press("Tab"))
+    if not preview.is_visible():
+        junit_expander.click()
+    expect(preview).to_be_visible()
+    mapping = page.get_by_role(
+        "combobox", name="Map JUnit scopes to the selected criterion", exact=True
+    )
+    expect(mapping).to_be_enabled()
+    mapping.click()
+    mapping.fill("suite-0001")
+    suite_option = page.get_by_text(
+        "suite-0001 · suite · unit", exact=True
+    ).last
+    expect(suite_option).to_be_visible()
+    _run_and_wait_for_streamlit_rerun(page, suite_option.click)
+    page.keyboard.press("Escape")
+    expect(preview).to_have_count(1)
+    if not preview.is_visible():
+        junit_expander.click()
+    expect(
+        page.get_by_label("Asserted JUnit importer (required)", exact=True)
+    ).to_have_value("Packaged browser reviewer")
+    save = page.get_by_role(
+        "button", name="Save imported JUnit results", exact=True
+    )
+    expect(save).to_be_enabled()
+    expect(save).to_be_visible()
+    _click_until_text_visible(
+        page,
+        button_name="Save imported JUnit results",
+        outcome_text=(
+            "Imported JUnit results appended as external non-gating context."
+        ),
+    )
+    boundary = page.get_by_text(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION, exact=True)
+    if not boundary.is_visible():
+        junit_expander.click()
+    expect(boundary).to_be_visible()
+    expect(page.get_by_text("Review saved automatically. ID:", exact=False)).to_be_visible()
+
+    page.get_by_text("Resume a saved review", exact=True).click()
+    saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    _choose_combobox_option(
+        page,
+        saved_review,
+        option_name="junit-browser-review",
+        settled_control=reopen,
+    )
+    reopen.click()
+    expect(
+        page.get_by_text(
+            "Review reopened from local storage after validation.", exact=True
+        )
+    ).to_be_visible()
+    expect(
+        page.get_by_text("Recorded imported JUnit results (1)", exact=True)
+    ).to_be_visible()
+
+    for label, suffix in (("Download Markdown", ".md"), ("Download JSON", ".json")):
+        download = _download_with_retry(page, button_name=label)
+        assert download.suggested_filename.endswith(suffix)
+        downloaded_bytes = download.path().read_bytes()
+        assert artifact_digest.encode() in downloaded_bytes
+        assert b"RAW-JUNIT-OUTPUT-SENTINEL" not in downloaded_bytes
+        assert b"FAILURE-BODY-SENTINEL" not in downloaded_bytes
 
 
 def test_installed_wheel_primary_path_in_chromium(
@@ -380,6 +778,36 @@ def test_installed_wheel_primary_path_in_chromium(
         f"playwright=={version('playwright')}",
     )
     _run(str(environment_python), "-c", "import playwright, scopeproof_core, streamlit")
+
+    review_store_dir = home_dir / ".scopeproof" / "reviews"
+    _run(
+        str(environment_python),
+        "-c",
+        (
+            "from pathlib import Path; import sys; "
+            "from scopeproof_core.demo import build_demo_review; "
+            "from scopeproof_core.reviews.lifecycle import new_review_state; "
+            "from scopeproof_core.schemas.models import ReviewBundle; "
+            "from scopeproof_core.storage.json_store import JsonReviewStore; "
+            "bundle=build_demo_review().model_copy(deep=True); "
+            "bundle.review.review_id='junit-browser-review'; "
+            "bundle.review.head_sha='a'*40; "
+            "bundle.criteria_revision_number=1; "
+            "[(setattr(item, 'commit_sha', bundle.review.head_sha), "
+            "setattr(item, 'permalink', item.permalink.replace('head-demo-002', "
+            "bundle.review.head_sha))) for item in bundle.evidence]; "
+            "bundle=ReviewBundle.model_validate(bundle.model_dump(mode='python')); "
+            "JsonReviewStore(Path(sys.argv[1])).save(new_review_state(bundle))"
+        ),
+        str(review_store_dir),
+    )
+    junit_artifact = runtime_dir / "junit-results.xml"
+    junit_artifact_bytes = (
+        b'<testsuite name="unit"><testcase name="test_browser_round_trip"/>'
+        b"<system-out>RAW-JUNIT-OUTPUT-SENTINEL</system-out></testsuite>"
+    )
+    junit_artifact.write_bytes(junit_artifact_bytes)
+    junit_artifact_digest = sha256(junit_artifact_bytes).hexdigest()
 
     port = _available_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -438,8 +866,15 @@ def test_installed_wheel_primary_path_in_chromium(
                     _exercise_primary_path(
                         page,
                         base_url,
-                        verify_persistence_and_downloads=viewport_index == 0,
+                        verify_persistence_and_downloads=viewport_index == 1,
                     )
+                    if viewport_index == 0:
+                        _exercise_junit_import_round_trip(
+                            page,
+                            base_url,
+                            artifact_path=junit_artifact,
+                            artifact_digest=junit_artifact_digest,
+                        )
                     context.close()
             finally:
                 browser.close()

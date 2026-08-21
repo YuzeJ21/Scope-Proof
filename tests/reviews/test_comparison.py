@@ -3,7 +3,10 @@ from datetime import timedelta
 import pytest
 from pydantic import ValidationError
 
-from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+from scopeproof_core.criteria.confirmation import (
+    build_criteria_source_provenance,
+    normalized_criteria_sha256,
+)
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews.comparison import (
     EvidenceChange,
@@ -25,6 +28,8 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    JUnitEvidenceBoundary,
+    JUnitEvidenceImport,
     RepositoryVisibility,
     Review,
     ReviewBundle,
@@ -109,6 +114,67 @@ def bundle_with(*items: EvidenceItem, head_sha: str) -> ReviewBundle:
         findings=findings,
         gate=gate,
     )
+
+
+def with_junit_import(
+    bundle: ReviewBundle,
+    *,
+    artifact_digest: str,
+    mapped_case_ids: list[str],
+) -> ReviewBundle:
+    bundle = bundle.model_copy(deep=True)
+    bundle.criteria_revision_number = 1
+    provenance = bundle.review.criteria_source_provenance
+    assert provenance is not None
+    bundle.junit_evidence_imports = [
+        JUnitEvidenceImport(
+            schema_version="junit-import-v1",
+            evidence_boundary=JUnitEvidenceBoundary(),
+            import_id=f"import-{artifact_digest[0]}",
+            repository=bundle.review.repository,
+            pr_number=bundle.review.pr_number,
+            head_sha=bundle.review.head_sha,
+            criteria_revision_number=1,
+            confirmed_criteria_sha256=normalized_criteria_sha256(bundle.criteria),
+            criteria_source_provenance=provenance,
+            artifact_sha256=artifact_digest,
+            imported_by="Fixture owner",
+            imported_at=bundle.review.created_at,
+            totals={
+                "total": 2,
+                "passed": 1,
+                "failures": 1,
+                "errors": 0,
+                "skipped": 0,
+            },
+            test_cases=[
+                {
+                    "test_case_id": "suite-0001-case-0001",
+                    "suite_id": "suite-0001",
+                    "suite_name": "unit",
+                    "class_name": None,
+                    "test_name": "test_one",
+                    "status": "passed",
+                },
+                {
+                    "test_case_id": "suite-0001-case-0002",
+                    "suite_id": "suite-0001",
+                    "suite_name": "unit",
+                    "class_name": None,
+                    "test_name": "test_two",
+                    "status": "failure",
+                },
+            ],
+            criterion_mappings=[
+                {
+                    "criterion_id": "AC-01",
+                    "test_case_ids": mapped_case_ids,
+                }
+            ],
+            limitations=["External non-gating context."],
+        )
+    ]
+    return ReviewBundle.model_validate(bundle.model_dump(mode="python"))
 
 
 def test_comparison_preserves_legacy_unlinked_manual_verification_as_needs_review() -> None:
@@ -613,3 +679,90 @@ def test_comparison_relationship_rejects_non_exact_legacy_unknown_head() -> None
 
     with pytest.raises(ValueError, match="exact head SHAs"):
         compare_reviews(previous, current)
+
+
+def test_comparison_projects_unchanged_added_removed_and_mapping_modified_junit_imports() -> None:
+    head = "a" * 40
+    base = bundle_with(head_sha=head)
+    unchanged_previous = with_junit_import(
+        base, artifact_digest="b" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+    unchanged_current = with_junit_import(
+        base, artifact_digest="b" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+
+    unchanged = compare_reviews(unchanged_previous, unchanged_current)
+    assert [item.kind.value for item in unchanged.junit_import_changes] == [
+        "unchanged"
+    ]
+    assert unchanged.junit_import_changes[0].artifact_sha256 == "b" * 64
+
+    modified_current = with_junit_import(
+        base,
+        artifact_digest="b" * 64,
+        mapped_case_ids=["suite-0001-case-0001", "suite-0001-case-0002"],
+    )
+    modified = compare_reviews(unchanged_previous, modified_current)
+    assert [item.kind.value for item in modified.junit_import_changes] == [
+        "mapping_modified"
+    ]
+    assert modified.junit_import_changes[0].previous is not None
+    assert modified.junit_import_changes[0].current is not None
+
+    different_current = with_junit_import(
+        base, artifact_digest="c" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+    different = compare_reviews(unchanged_previous, different_current)
+    assert [item.kind.value for item in different.junit_import_changes] == [
+        "removed",
+        "added",
+    ]
+
+
+def test_changed_junit_mapping_requires_review_only_for_previously_resolved_criteria() -> None:
+    head = "a" * 40
+    base = bundle_with(
+        evidence("EV-AC-01", sha=head, criterion_id="AC-01"),
+        evidence("EV-AC-02", sha=head, criterion_id="AC-02"),
+        head_sha=head,
+    )
+    base.resolutions = [
+        HumanResolution(
+            criterion_id=criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            comment="Owner reviewed existing evidence.",
+        )
+        for criterion_id in ("AC-01", "AC-02")
+    ]
+    base.gate = evaluate_gate(
+        base.review, base.criteria, base.findings, base.resolutions
+    )
+    previous = with_junit_import(
+        base, artifact_digest="d" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+    current = with_junit_import(
+        base,
+        artifact_digest="d" * 64,
+        mapped_case_ids=["suite-0001-case-0001", "suite-0001-case-0002"],
+    )
+
+    comparison = compare_reviews(previous, current)
+
+    assert comparison.criteria_requiring_decision_review == ["AC-01"]
+    assert previous.resolutions == current.resolutions
+    assert previous.gate == current.gate
+
+
+def test_comparison_revalidates_junit_import_relationships_before_projection() -> None:
+    head = "a" * 40
+    valid = with_junit_import(
+        bundle_with(head_sha=head),
+        artifact_digest="e" * 64,
+        mapped_case_ids=["suite-0001-case-0001"],
+    )
+    tampered = valid.model_copy(deep=True)
+    imported = tampered.junit_evidence_imports[0]
+    object.__setattr__(imported, "head_sha", "f" * 40)
+
+    with pytest.raises(ValidationError, match="JUnit import identity"):
+        compare_reviews(valid, tampered)

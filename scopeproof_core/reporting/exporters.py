@@ -28,10 +28,13 @@ from scopeproof_core.reviews.comparison import (
     ReviewComparison,
 )
 from scopeproof_core.schemas.models import (
+    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     CriteriaSourceProvenance,
     CriterionRetrievalDiagnostic,
     EvidenceItem,
     HumanDecision,
+    JUnitCaseResult,
+    JUnitEvidenceImport,
     ReviewBundle,
     ReviewState,
 )
@@ -169,12 +172,14 @@ def _retrieval_diagnostic_html(
     )
     exact_identifiers = (
         ", ".join(
-            f"<code>{html.escape(identifier)}</code>" for identifier in diagnostic.exact_identifiers
+            f"<code>{html.escape(identifier)}</code>"
+            for identifier in diagnostic.exact_identifiers
         )
         or "None"
     )
     evidence_types = (
-        ", ".join(html.escape(item.value) for item in diagnostic.searched_evidence_types) or "None"
+        ", ".join(html.escape(item.value) for item in diagnostic.searched_evidence_types)
+        or "None"
     )
     return "".join(
         [
@@ -195,6 +200,137 @@ def _retrieval_diagnostic_html(
             f'<p class="note">{html.escape(_RETRIEVAL_BOUNDARY)}</p>',
         ]
     )
+
+
+def _junit_mapping_cases(
+    evidence_import: JUnitEvidenceImport, criterion_id: str
+) -> list[JUnitCaseResult]:
+    mapped_ids = {
+        case_id
+        for mapping in evidence_import.criterion_mappings
+        if mapping.criterion_id == criterion_id
+        for case_id in mapping.test_case_ids
+    }
+    return [
+        item for item in evidence_import.test_cases if item.test_case_id in mapped_ids
+    ]
+
+
+def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
+    lines = [
+        "## Imported External Test Results",
+        "",
+        JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
+        "",
+    ]
+    if not bundle.junit_evidence_imports:
+        return [*lines, "No external JUnit results were imported.", ""]
+    for evidence_import in bundle.junit_evidence_imports:
+        lines.extend(
+            [
+                f"### Import {_render_markdown_code(evidence_import.import_id)}",
+                "",
+                f"- Artifact SHA-256: {_render_markdown_code(evidence_import.artifact_sha256)}",
+                f"- Bound head: {_render_markdown_code(evidence_import.head_sha)}",
+                f"- Asserted importer: {_render_markdown_code(evidence_import.imported_by)}",
+                "- Computed totals: "
+                f"{evidence_import.totals.total} total; "
+                f"{evidence_import.totals.passed} passed; "
+                f"{evidence_import.totals.failures} failed; "
+                f"{evidence_import.totals.errors} errors; "
+                f"{evidence_import.totals.skipped} skipped.",
+                "- Explicit mappings:",
+            ]
+        )
+        cases_by_id = {
+            item.test_case_id: item for item in evidence_import.test_cases
+        }
+        for mapping in evidence_import.criterion_mappings:
+            lines.append(f"  - Criterion {_render_markdown_code(mapping.criterion_id)}")
+            for case_id in mapping.test_case_ids:
+                case = cases_by_id[case_id]
+                lines.append(
+                    "    - "
+                    f"{_render_markdown_code(case.test_case_id)} · "
+                    f"{_render_markdown_code(case.status.value)} · "
+                    f"{_render_markdown_code(case.suite_name)} · "
+                    f"{_render_markdown_code(case.test_name)}"
+                )
+        if evidence_import.parser_warnings:
+            lines.append("- Parser warnings:")
+            lines.extend(
+                f"  - {_render_markdown_code(item)}"
+                for item in evidence_import.parser_warnings
+            )
+        lines.append("- Limitations:")
+        lines.extend(
+            f"  - {_render_markdown_code(item)}" for item in evidence_import.limitations
+        )
+        lines.append("")
+    return lines
+
+
+def _junit_import_html(bundle: ReviewBundle) -> list[str]:
+    lines = [
+        "<h2>Imported external test results</h2>",
+        f'<p class="note">{html.escape(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION)}</p>',
+    ]
+    if not bundle.junit_evidence_imports:
+        return [*lines, "<p>No external JUnit results were imported.</p>"]
+    for evidence_import in bundle.junit_evidence_imports:
+        cases_by_id = {
+            item.test_case_id: item for item in evidence_import.test_cases
+        }
+        lines.extend(
+            [
+                f"<h3>Import <code>{html.escape(evidence_import.import_id)}</code></h3>",
+                "<ul>",
+                "<li>Artifact SHA-256: "
+                f"<code>{html.escape(evidence_import.artifact_sha256)}</code></li>",
+                f"<li>Bound head: <code>{html.escape(evidence_import.head_sha)}</code></li>",
+                "<li>Asserted importer: "
+                f"<code>{html.escape(evidence_import.imported_by)}</code></li>",
+                "<li>Explicit mappings:<ul>",
+            ]
+        )
+        for mapping in evidence_import.criterion_mappings:
+            lines.append(
+                f"<li>Criterion <code>{html.escape(mapping.criterion_id)}</code><ul>"
+            )
+            for case_id in mapping.test_case_ids:
+                case = cases_by_id[case_id]
+                lines.append(
+                    "<li>"
+                    f"<code>{html.escape(case.test_case_id)}</code> · "
+                    f"<code>{html.escape(case.status.value)}</code> · "
+                    f"<code>{html.escape(case.suite_name)}</code> · "
+                    f"<code>{html.escape(case.test_name)}</code></li>"
+                )
+            lines.append("</ul></li>")
+        lines.extend(["</ul></li>"])
+        if evidence_import.parser_warnings:
+            lines.extend(
+                [
+                    "<li>Parser warnings:<ul>",
+                    *[
+                        f"<li><code>{html.escape(item)}</code></li>"
+                        for item in evidence_import.parser_warnings
+                    ],
+                    "</ul></li>",
+                ]
+            )
+        lines.extend(
+            [
+                "<li>Limitations:<ul>",
+                *[
+                    f"<li><code>{html.escape(item)}</code></li>"
+                    for item in evidence_import.limitations
+                ],
+                "</ul></li>",
+                "</ul>",
+            ]
+        )
+    return lines
 
 
 def export_json(bundle: ExportableReview) -> str:
@@ -279,6 +415,50 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
             lines.append("- Review the current evidence before recording a new decision.")
         lines.append("")
 
+    lines.extend(
+        [
+            "## Imported External Test Result Changes",
+            "",
+            JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
+            "",
+        ]
+    )
+    if not comparison.junit_import_changes:
+        lines.extend(["No imported JUnit context was present in either review.", ""])
+    for change in comparison.junit_import_changes:
+        lines.extend(
+            [
+                "### "
+                f"{_render_markdown_code(change.artifact_sha256)} — "
+                f"{_escape_markdown_text(change.kind.value.replace('_', ' ').title())}",
+                "",
+            ]
+        )
+        for label, reference in (
+            ("Previous import", change.previous),
+            ("Current import", change.current),
+        ):
+            if reference is None:
+                continue
+            lines.extend(
+                [
+                    f"- **{label}:** {_render_markdown_code(reference.import_id)}",
+                    f"  - Bound head: {_render_markdown_code(reference.head_sha)}",
+                    "  - Asserted importer: "
+                    f"{_render_markdown_code(reference.asserted_importer)}",
+                    "  - Explicit mappings:",
+                ]
+            )
+            for mapping in reference.mappings:
+                lines.append(
+                    f"    - {_render_markdown_code(mapping.criterion_id)}: "
+                    + ", ".join(
+                        _render_markdown_code(case_id)
+                        for case_id in mapping.test_case_ids
+                    )
+                )
+        lines.append("")
+
     if comparison.changed_finding_statuses:
         lines.extend(["## Changed Criterion Findings", ""])
         for change in comparison.changed_finding_statuses:
@@ -310,8 +490,8 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
                 ],
                 "",
                 (
-                    "ScopeProof never carries acceptance to a changed head. Review current "
-                    "evidence and record a new decision."
+                    "ScopeProof does not carry a prior decision forward automatically. Review "
+                    "the current evidence and imported context, then record a new decision."
                 ),
                 "",
             ]
@@ -558,6 +738,7 @@ def export_markdown(bundle: ExportableReview) -> str:
             ]
         )
 
+    lines.extend(_junit_import_markdown(bundle))
     lines.extend(
         [
             "## Runtime Verification Boundary",
@@ -750,6 +931,12 @@ def export_csv(bundle: ExportableReview) -> str:
         "runtime_pr_numbers",
         "runtime_head_shas",
         "manual_runtime_evidence_id",
+        "junit_artifact_digests",
+        "junit_mapped_cases",
+        "junit_evidence_boundary",
+        "junit_importers",
+        "junit_parser_warnings",
+        "junit_limitations",
     ]
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
@@ -761,6 +948,14 @@ def export_csv(bundle: ExportableReview) -> str:
         coverage = coverage_by_id[criterion.criterion_id]
         runtime_items = [
             item for item in bundle.runtime_evidence if item.criterion_id == criterion.criterion_id
+        ]
+        junit_imports = [
+            item
+            for item in bundle.junit_evidence_imports
+            if any(
+                mapping.criterion_id == criterion.criterion_id
+                for mapping in item.criterion_mappings
+            )
         ]
         writer.writerow(
             {
@@ -895,6 +1090,64 @@ def export_csv(bundle: ExportableReview) -> str:
                 )
                 if resolution is not None and resolution.decision is HumanDecision.MANUALLY_VERIFIED
                 else "",
+                "junit_artifact_digests": json.dumps(
+                    [item.artifact_sha256 for item in junit_imports],
+                    ensure_ascii=False,
+                ),
+                "junit_mapped_cases": json.dumps(
+                    [
+                        {
+                            "import_id": evidence_import.import_id,
+                            "artifact_sha256": evidence_import.artifact_sha256,
+                            "imported_by": evidence_import.imported_by,
+                            "test_case_id": case.test_case_id,
+                            "status": case.status.value,
+                            "suite_name": case.suite_name,
+                            "test_name": case.test_name,
+                        }
+                        for evidence_import in junit_imports
+                        for case in _junit_mapping_cases(
+                            evidence_import, criterion.criterion_id
+                        )
+                    ],
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                "junit_evidence_boundary": _csv_text(
+                    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
+                )
+                if junit_imports
+                else "",
+                "junit_importers": json.dumps(
+                    [item.imported_by for item in junit_imports],
+                    ensure_ascii=False,
+                ),
+                "junit_parser_warnings": json.dumps(
+                    [
+                        {
+                            "import_id": item.import_id,
+                            "artifact_sha256": item.artifact_sha256,
+                            "warning": warning,
+                        }
+                        for item in junit_imports
+                        for warning in item.parser_warnings
+                    ],
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                "junit_limitations": json.dumps(
+                    [
+                        {
+                            "import_id": item.import_id,
+                            "artifact_sha256": item.artifact_sha256,
+                            "limitation": limitation,
+                        }
+                        for item in junit_imports
+                        for limitation in item.limitations
+                    ],
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
             }
         )
     return output.getvalue()
@@ -1153,6 +1406,7 @@ def export_html(value: ExportableReview) -> str:
                 if bundle.runtime_evidence
                 else []
             ),
+            *_junit_import_html(bundle),
             "<h2>Runtime Verification Boundary</h2>",
             "<p>"
             + (

@@ -428,10 +428,10 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "scopeproof_core.evals.runner" in workflow
 
 
-def test_streamlit_floor_supports_click_time_deferred_exports() -> None:
+def test_streamlit_floor_supports_per_widget_junit_upload_limits() -> None:
     project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
-    assert "streamlit>=1.52,<2" in project["project"]["dependencies"]
+    assert "streamlit>=1.53,<2" in project["project"]["dependencies"]
 
 
 def test_locked_development_environment_is_documented_and_verified() -> None:
@@ -447,6 +447,7 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "uv run pytest" in guide
     assert "uv run scopeproof benchmark" in guide
     assert "Streamlit 1.59.1" in guide
+    assert "Streamlit 1.53 or newer" in guide
     assert "Streamlit 1.57.0" in guide
     assert "testing-interface regression" in guide
     assert "locked-environment:" in workflow
@@ -634,6 +635,7 @@ def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy()
         "secondaryBackgroundColor": "#171a1f",
         "textColor": "#f7f7f2",
     }
+    assert config["server"]["maxUploadSize"] == 2
     assert "):focus-visible" in app
     assert "[data-testid=\"stAppViewContainer\"]" in app
     assert "@media (prefers-reduced-motion: reduce)" in app
@@ -3779,3 +3781,21 @@ def test_informational_check_status_preserves_product_evidence_boundaries() -> N
             "0/2 reuse-intent signals",
         ):
             assert count in normalized
+
+
+def test_stage2_status_separates_delivered_junit_and_check_foundations_from_candidates() -> None:
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+    delivered = status.split("## Delivered Stage 2 foundations", maxsplit=1)[1].split(
+        "## Prioritized post-release decision candidates", maxsplit=1
+    )[0]
+    candidates = status.split(
+        "## Prioritized post-release decision candidates", maxsplit=1
+    )[1].split("## Next executable queue", maxsplit=1)[0]
+
+    assert "exact-SHA informational GitHub Check lifecycle is implemented" in delivered
+    assert "bounded JUnit XML adapter is implemented" in delivered
+    assert "Exact-SHA GitHub Check lifecycle:" not in candidates
+    assert "JUnit-style results" not in candidates
+    assert "Additional non-executing evidence adapters" in candidates

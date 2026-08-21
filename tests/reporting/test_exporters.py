@@ -5,7 +5,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+from scopeproof_core.criteria.confirmation import (
+    build_criteria_source_provenance,
+    normalized_criteria_sha256,
+)
 from scopeproof_core.gates import validation as gate_validation
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting.exporters import (
@@ -31,6 +34,8 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    JUnitEvidenceBoundary,
+    JUnitEvidenceImport,
     RepositoryVisibility,
     ResearchContext,
     ResolutionEvent,
@@ -40,6 +45,72 @@ from scopeproof_core.schemas.models import (
     ReviewInputOrigin,
     RuntimeEvidence,
 )
+
+
+def add_junit_import(bundle: ReviewBundle) -> ReviewBundle:
+    bundle = bundle.model_copy(deep=True)
+    bundle.review.head_sha = "a" * 40
+    bundle.evidence[0].commit_sha = bundle.review.head_sha
+    bundle.evidence[0].permalink = (
+        "https://github.com/acme/widget/blob/"
+        f"{bundle.review.head_sha}/src/export.py#L42-L42"
+    )
+    bundle.criteria_revision_number = 1
+    provenance = bundle.review.criteria_source_provenance
+    assert provenance is not None
+    bundle.junit_evidence_imports = [
+        JUnitEvidenceImport(
+            schema_version="junit-import-v1",
+            evidence_boundary=JUnitEvidenceBoundary(),
+            import_id="junit-import-001",
+            repository=bundle.review.repository,
+            pr_number=bundle.review.pr_number,
+            head_sha=bundle.review.head_sha,
+            criteria_revision_number=1,
+            confirmed_criteria_sha256=normalized_criteria_sha256(bundle.criteria),
+            criteria_source_provenance=provenance,
+            artifact_sha256="b" * 64,
+            imported_by="=ASSERTED <owner>",
+            imported_at=datetime(2026, 8, 20, tzinfo=UTC),
+            totals={
+                "total": 2,
+                "passed": 1,
+                "failures": 1,
+                "errors": 0,
+                "skipped": 0,
+            },
+            test_cases=[
+                {
+                    "test_case_id": "suite-0001-case-0001",
+                    "suite_id": "suite-0001",
+                    "suite_name": "<suite>",
+                    "class_name": None,
+                    "test_name": "=test_pass",
+                    "status": "passed",
+                },
+                {
+                    "test_case_id": "suite-0001-case-0002",
+                    "suite_id": "suite-0001",
+                    "suite_name": "<suite>",
+                    "class_name": "tests.<Unsafe>",
+                    "test_name": "test_fail **claim**",
+                    "status": "failure",
+                },
+            ],
+            criterion_mappings=[
+                {
+                    "criterion_id": "AC-01",
+                    "test_case_ids": [
+                        "suite-0001-case-0001",
+                        "suite-0001-case-0002",
+                    ],
+                }
+            ],
+            parser_warnings=["@warning <unsafe>"],
+            limitations=["+external result only <unsafe>"],
+        )
+    ]
+    return ReviewBundle.model_validate(bundle.model_dump(mode="python"))
 
 
 def example_bundle() -> ReviewBundle:
@@ -152,6 +223,94 @@ def rebind_criteria_source_provenance(bundle: ReviewBundle) -> None:
         confirmed_by=provenance.confirmed_by,
         confirmed_at=provenance.confirmed_at,
     )
+
+
+def test_junit_import_exports_are_complete_inert_and_non_gating() -> None:
+    bundle = add_junit_import(example_bundle())
+    second_import = bundle.junit_evidence_imports[0].model_copy(
+        update={
+            "import_id": "junit-import-002",
+            "artifact_sha256": "c" * 64,
+            "imported_by": "second owner",
+            "parser_warnings": ["second warning"],
+            "limitations": ["second limitation"],
+        }
+    )
+    bundle.junit_evidence_imports.append(second_import)
+    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+
+    json_report = export_json(bundle)
+    markdown = export_markdown(bundle)
+    csv_row = next(csv.DictReader(io.StringIO(export_csv(bundle))))
+    html_report = export_html(bundle)
+    rendered = "\n".join((json_report, markdown, str(csv_row), html_report))
+
+    assert "b" * 64 in rendered
+    assert bundle.review.head_sha in rendered
+    assert "suite-0001-case-0001" in rendered
+    assert "passed" in rendered
+    assert "=ASSERTED <owner>" in json_report
+    json_payload = json.loads(json_report)
+    assert json_payload["junit_evidence_imports"][0]["evidence_boundary"] == {
+        "source": "externally_supplied",
+        "gate_effect": "non_gating",
+        "execution": "not_executed_by_scopeproof",
+        "artifact_digest_scope": "imported_bytes_only",
+        "importer_identity": "asserted_not_authenticated",
+        "criterion_mapping": "organizational_context_not_proof",
+    }
+    assert "## Imported External Test Results" in markdown
+    assert "Imported external test results" in html_report
+    assert "RAW-JUNIT-OUTPUT-SENTINEL" not in rendered
+    assert "FAILURE-BODY-SENTINEL" not in rendered
+    assert "/private/local/results.xml" not in rendered
+    assert "<suite>" not in markdown
+    assert "<suite>" not in html_report
+    assert "&lt;suite&gt;" in markdown
+    assert "&lt;suite&gt;" in html_report
+    assert csv_row["junit_artifact_digests"] == json.dumps(["b" * 64, "c" * 64])
+    csv_cases = json.loads(csv_row["junit_mapped_cases"])
+    assert {
+        (item["import_id"], item["artifact_sha256"], item["imported_by"])
+        for item in csv_cases
+    } == {
+        ("junit-import-001", "b" * 64, "=ASSERTED <owner>"),
+        ("junit-import-002", "c" * 64, "second owner"),
+    }
+    assert "externally supplied, non-gating context" in csv_row[
+        "junit_evidence_boundary"
+    ].lower()
+    assert "did not execute" in csv_row["junit_evidence_boundary"].lower()
+    assert "imported bytes only" in csv_row["junit_evidence_boundary"].lower()
+    assert "asserted, not authenticated" in csv_row["junit_evidence_boundary"].lower()
+    assert "organizational context, not proof" in csv_row["junit_evidence_boundary"].lower()
+    assert csv_row["junit_importers"].startswith("[")
+    assert json.loads(csv_row["junit_importers"])[0] == "=ASSERTED <owner>"
+    assert json.loads(csv_row["junit_parser_warnings"]) == [
+        {
+            "artifact_sha256": "b" * 64,
+            "import_id": "junit-import-001",
+            "warning": "@warning <unsafe>",
+        },
+        {
+            "artifact_sha256": "c" * 64,
+            "import_id": "junit-import-002",
+            "warning": "second warning",
+        },
+    ]
+    assert json.loads(csv_row["junit_limitations"]) == [
+        {
+            "artifact_sha256": "b" * 64,
+            "import_id": "junit-import-001",
+            "limitation": "+external result only <unsafe>",
+        },
+        {
+            "artifact_sha256": "c" * 64,
+            "import_id": "junit-import-002",
+            "limitation": "second limitation",
+        },
+    ]
+    assert bundle.gate.verdict.value in rendered
 
 
 def example_state():

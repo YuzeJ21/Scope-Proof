@@ -59,6 +59,12 @@ places the selected criterion evidence and controls before the secondary evidenc
 bounded Stage 2 follow-up. This remains Stage 2 engineering work and does not claim customer
 validation.
 
+The current bounded JUnit adapter slice adds the first separately typed, non-executing evidence
+adapter across the core, CLI, local workbench, saved records, exports, comparison, and installed
+browser proof. It accepts only bounded local bytes, stores sanitized exact-head and criteria-bound
+context, requires explicit human mapping, and never changes gate inputs or creates E1–E4, CI,
+runtime, decision, acceptance, correctness, or customer-validation claims.
+
 ### Verification and evidence boundaries
 
 - Engineering checks do not prove acceptance-criteria correctness.
@@ -297,6 +303,11 @@ actions select the matching criterion. PR #198 adds blocker-first unresolved dec
 the selected criterion evidence and controls before the secondary evidence matrix. This bounded
 Stage 2 follow-up preserves every evidence boundary and keeps optional external research
 secondary.
+
+The bounded JUnit adapter is the first implemented non-executing adapter. Its locally supplied
+results remain exact-head/provenance-bound, separately rendered, explicitly mapped, and
+non-gating. Coverage summaries, contract reports, deployment records, and other adapter families
+remain separately scoped future decisions.
 
 The [Stage 2 productization packet](docs/commercialization/stage2-readiness-packet.md) is the
 operating boundary. External commercial discovery is optional and separate from owner-led

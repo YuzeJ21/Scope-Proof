@@ -4,7 +4,7 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from threading import Event, Lock
@@ -17,10 +17,15 @@ import scopeproof_core.storage.json_store as json_store_module
 from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
+from scopeproof_core.importers.junit import (
+    JUnitMappingSelection,
+    build_junit_evidence_import,
+)
 from scopeproof_core.reporting.exporters import export_html, export_markdown
 from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
+    append_junit_evidence_import,
     append_resolution,
     append_runtime_evidence,
     attach_analysis,
@@ -1842,3 +1847,94 @@ def test_load_rejects_a_review_record_symlink_that_escapes_the_store(tmp_path: P
 
     with pytest.raises(FileNotFoundError):
         store.load("review-1")
+
+
+def exact_head_review_state(review_id: str = "junit-review"):
+    state = review_state(review_id).model_copy(deep=True)
+    state.review.head_sha = "a" * 40
+    assert state.bundle is not None
+    state.bundle.review.head_sha = "a" * 40
+    return type(state).model_validate(state.model_dump(mode="python"))
+
+
+def imported_junit_state(review_id: str = "junit-review"):
+    state = exact_head_review_state(review_id)
+    record = build_junit_evidence_import(
+        state,
+        (
+            b'<testsuite name="unit"><testcase name="test_export">'
+            b'<failure>RAW-FAILURE-SENTINEL</failure></testcase></testsuite>'
+        ),
+        [
+            JUnitMappingSelection(
+                scope_id="suite-0001",
+                criterion_id=state.criteria_revision.criteria[0].criterion_id,
+            )
+        ],
+        importer="QA owner",
+        imported_at=datetime(2026, 8, 20, tzinfo=UTC),
+        import_id="import-001",
+    )
+    return append_junit_evidence_import(state, record)
+
+
+def test_junit_import_round_trips_in_record_version_four_without_raw_xml(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = imported_junit_state()
+
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    reopened = store.load(state.review.review_id)
+
+    assert payload["record_version"] == 4
+    assert payload["state"]["bundle"]["junit_evidence_imports"][0][
+        "schema_version"
+    ] == "junit-import-v1"
+    assert b"RAW-FAILURE-SENTINEL" not in path.read_bytes()
+    assert reopened == state
+
+
+def test_legacy_record_without_junit_import_field_reopens_as_empty(
+    tmp_path: Path,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = exact_head_review_state()
+    path = store.save(state)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"]["bundle"].pop("junit_evidence_imports", None)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    reopened = store.load(state.review.review_id)
+
+    assert reopened.bundle is not None
+    assert reopened.bundle.junit_evidence_imports == []
+
+
+def test_failed_junit_mutation_preserves_saved_record_bytes(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = exact_head_review_state()
+    path = store.save(state)
+    before = path.read_bytes()
+
+    def stale_transition(current):
+        record = build_junit_evidence_import(
+            current,
+            b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+            [
+                JUnitMappingSelection(
+                    scope_id="suite-0001",
+                    criterion_id=current.criteria_revision.criteria[0].criterion_id,
+                )
+            ],
+            importer="QA",
+            import_id="import-stale",
+        ).model_copy(update={"head_sha": "b" * 40})
+        return append_junit_evidence_import(current, record)
+
+    with pytest.raises(ValueError, match="active review identity"):
+        store.mutate(state.review.review_id, stale_transition)
+
+    assert path.read_bytes() == before
+    assert store.load(state.review.review_id) == state
