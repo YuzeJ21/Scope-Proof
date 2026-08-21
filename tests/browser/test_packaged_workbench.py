@@ -15,7 +15,16 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 import pytest
-from playwright.sync_api import Locator, Page, Route, expect, sync_playwright
+from playwright.sync_api import (
+    Locator,
+    Page,
+    Route,
+    expect,
+    sync_playwright,
+)
+from playwright.sync_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 from scopeproof_core.schemas.models import JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
 
@@ -230,14 +239,86 @@ def _activate_with_keyboard(
 def _choose_combobox_option(
     page: Page, combobox: Locator, *, option_name: str
 ) -> None:
-    if combobox.input_value() == option_name:
-        return
-    combobox.click()
-    combobox.fill(option_name)
-    option = page.get_by_role("option", name=option_name, exact=True)
-    expect(option).to_be_visible()
-    option.click()
-    expect(combobox).to_have_value(option_name)
+    for attempt in range(3):
+        if combobox.input_value() == option_name:
+            return
+        try:
+            combobox.click()
+            combobox.fill(option_name)
+            option = page.get_by_role("option", name=option_name, exact=True)
+            expect(option).to_be_visible(timeout=5_000)
+            option.click(timeout=5_000)
+            expect(combobox).to_have_value(option_name, timeout=5_000)
+            return
+        except PlaywrightTimeoutError:
+            if combobox.input_value() == option_name:
+                return
+            if attempt == 2:
+                raise
+
+
+def test_choose_combobox_option_retries_after_detached_option(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeCombobox:
+        def __init__(self) -> None:
+            self.value = ""
+            self.clicks = 0
+            self.fills: list[str] = []
+
+        def input_value(self) -> str:
+            return self.value
+
+        def click(self) -> None:
+            self.clicks += 1
+
+        def fill(self, value: str) -> None:
+            self.fills.append(value)
+
+    class FakeOption:
+        def __init__(self, combobox: FakeCombobox) -> None:
+            self.combobox = combobox
+            self.clicks = 0
+
+        def click(self, *, timeout: int | None = None) -> None:
+            self.clicks += 1
+            if self.clicks == 1:
+                raise PlaywrightTimeoutError("element was detached from the DOM")
+            self.combobox.value = "junit-browser-review"
+
+    class FakePage:
+        def __init__(self, option: FakeOption) -> None:
+            self.option = option
+
+        def get_by_role(self, *args: object, **kwargs: object) -> FakeOption:
+            return self.option
+
+    class FakeExpectation:
+        def __init__(self, target: object) -> None:
+            self.target = target
+
+        def to_be_visible(self, *, timeout: int | None = None) -> None:
+            return None
+
+        def to_have_value(self, expected: str, *, timeout: int | None = None) -> None:
+            assert isinstance(self.target, FakeCombobox)
+            assert self.target.value == expected
+
+    combobox = FakeCombobox()
+    option = FakeOption(combobox)
+    monkeypatch.setattr(
+        sys.modules[__name__], "expect", lambda target: FakeExpectation(target)
+    )
+
+    _choose_combobox_option(
+        FakePage(option),  # type: ignore[arg-type]
+        combobox,  # type: ignore[arg-type]
+        option_name="junit-browser-review",
+    )
+
+    assert option.clicks == 2
+    assert combobox.clicks == 2
+    assert combobox.fills == ["junit-browser-review", "junit-browser-review"]
 
 
 def _exercise_primary_path(
