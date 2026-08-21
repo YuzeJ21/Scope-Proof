@@ -167,6 +167,8 @@ def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
         raise ValueError("attached analysis must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("attached analysis must not contain final acceptance")
+    if bundle.junit_evidence_imports:
+        raise ValueError("attached analysis must not contain JUnit imports")
     bundle = validated_review_bundle(bundle)
     if (
         state.criteria_revision.source_provenance is None

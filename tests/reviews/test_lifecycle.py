@@ -355,6 +355,28 @@ def test_attach_analysis_preserves_reanalysis_lineage() -> None:
     assert attached.bundle.criteria_revision_number == 2
 
 
+def test_attach_analysis_rejects_preloaded_junit_imports() -> None:
+    state = exact_head_state()
+    revised = revise_criteria(
+        state,
+        [Criterion(criterion_id="AC-01", text="Export filtered CSV")],
+        "Export filtered CSV",
+    )
+    confirmed = confirm_pending_revision(revised)
+    incoming = analysis_bundle_for(confirmed)
+    analyzed = attach_analysis(confirmed, incoming)
+    record = junit_import_for(analyzed)
+    incoming.criteria_revision_number = confirmed.criteria_revision.number
+    incoming.junit_evidence_imports = [record]
+
+    with pytest.raises(
+        ValueError, match="attached analysis must not contain JUnit imports"
+    ):
+        attach_analysis(confirmed, incoming)
+
+    assert confirmed.bundle is None
+
+
 def test_skipped_analysis_history_records_exact_criteria_revisions() -> None:
     revision_one = initial_state()
     revision_two = confirm_pending_revision(
