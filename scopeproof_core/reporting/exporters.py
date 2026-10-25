@@ -172,14 +172,12 @@ def _retrieval_diagnostic_html(
     )
     exact_identifiers = (
         ", ".join(
-            f"<code>{html.escape(identifier)}</code>"
-            for identifier in diagnostic.exact_identifiers
+            f"<code>{html.escape(identifier)}</code>" for identifier in diagnostic.exact_identifiers
         )
         or "None"
     )
     evidence_types = (
-        ", ".join(html.escape(item.value) for item in diagnostic.searched_evidence_types)
-        or "None"
+        ", ".join(html.escape(item.value) for item in diagnostic.searched_evidence_types) or "None"
     )
     return "".join(
         [
@@ -211,9 +209,7 @@ def _junit_mapping_cases(
         if mapping.criterion_id == criterion_id
         for case_id in mapping.test_case_ids
     }
-    return [
-        item for item in evidence_import.test_cases if item.test_case_id in mapped_ids
-    ]
+    return [item for item in evidence_import.test_cases if item.test_case_id in mapped_ids]
 
 
 def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
@@ -242,9 +238,7 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
                 "- Explicit mappings:",
             ]
         )
-        cases_by_id = {
-            item.test_case_id: item for item in evidence_import.test_cases
-        }
+        cases_by_id = {item.test_case_id: item for item in evidence_import.test_cases}
         for mapping in evidence_import.criterion_mappings:
             lines.append(f"  - Criterion {_render_markdown_code(mapping.criterion_id)}")
             for case_id in mapping.test_case_ids:
@@ -259,13 +253,10 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
         if evidence_import.parser_warnings:
             lines.append("- Parser warnings:")
             lines.extend(
-                f"  - {_render_markdown_code(item)}"
-                for item in evidence_import.parser_warnings
+                f"  - {_render_markdown_code(item)}" for item in evidence_import.parser_warnings
             )
         lines.append("- Limitations:")
-        lines.extend(
-            f"  - {_render_markdown_code(item)}" for item in evidence_import.limitations
-        )
+        lines.extend(f"  - {_render_markdown_code(item)}" for item in evidence_import.limitations)
         lines.append("")
     return lines
 
@@ -278,9 +269,7 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
     if not bundle.junit_evidence_imports:
         return [*lines, "<p>No external JUnit results were imported.</p>"]
     for evidence_import in bundle.junit_evidence_imports:
-        cases_by_id = {
-            item.test_case_id: item for item in evidence_import.test_cases
-        }
+        cases_by_id = {item.test_case_id: item for item in evidence_import.test_cases}
         lines.extend(
             [
                 f"<h3>Import <code>{html.escape(evidence_import.import_id)}</code></h3>",
@@ -294,9 +283,7 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
             ]
         )
         for mapping in evidence_import.criterion_mappings:
-            lines.append(
-                f"<li>Criterion <code>{html.escape(mapping.criterion_id)}</code><ul>"
-            )
+            lines.append(f"<li>Criterion <code>{html.escape(mapping.criterion_id)}</code><ul>")
             for case_id in mapping.test_case_ids:
                 case = cases_by_id[case_id]
                 lines.append(
@@ -444,18 +431,16 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
                 [
                     f"- **{label}:** {_render_markdown_code(reference.import_id)}",
                     f"  - Bound head: {_render_markdown_code(reference.head_sha)}",
-                    "  - Asserted importer: "
-                    f"{_render_markdown_code(reference.asserted_importer)}",
+                    "  - Sanitized context digest: "
+                    f"{_render_markdown_code(reference.context_sha256)}",
+                    f"  - Asserted importer: {_render_markdown_code(reference.asserted_importer)}",
                     "  - Explicit mappings:",
                 ]
             )
             for mapping in reference.mappings:
                 lines.append(
                     f"    - {_render_markdown_code(mapping.criterion_id)}: "
-                    + ", ".join(
-                        _render_markdown_code(case_id)
-                        for case_id in mapping.test_case_ids
-                    )
+                    + ", ".join(_render_markdown_code(case_id) for case_id in mapping.test_case_ids)
                 )
         lines.append("")
 
@@ -1106,16 +1091,12 @@ def export_csv(bundle: ExportableReview) -> str:
                             "test_name": case.test_name,
                         }
                         for evidence_import in junit_imports
-                        for case in _junit_mapping_cases(
-                            evidence_import, criterion.criterion_id
-                        )
+                        for case in _junit_mapping_cases(evidence_import, criterion.criterion_id)
                     ],
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
-                "junit_evidence_boundary": _csv_text(
-                    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
-                )
+                "junit_evidence_boundary": _csv_text(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION)
                 if junit_imports
                 else "",
                 "junit_importers": json.dumps(

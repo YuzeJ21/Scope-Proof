@@ -149,7 +149,7 @@ def test_comparison_exports_do_not_carry_a_previous_decision_into_current() -> N
     assert "does not carry forward a prior human decision" in report
 
 
-def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> None:
+def test_comparison_exports_show_inert_non_gating_junit_context_and_mapping_changes() -> None:
     comparison = example_comparison()
     artifact_digest = "a" * 64
     previous = JUnitImportReference(
@@ -157,6 +157,7 @@ def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> Non
         artifact_sha256=artifact_digest,
         head_sha="b" * 40,
         asserted_importer="<owner-old>",
+        context_sha256="e" * 64,
         mappings=[
             JUnitMappingReference(
                 criterion_id="AC-01",
@@ -169,6 +170,7 @@ def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> Non
         artifact_sha256=artifact_digest,
         head_sha="c" * 40,
         asserted_importer="=owner-new <unsafe>",
+        context_sha256="d" * 64,
         mappings=[
             JUnitMappingReference(
                 criterion_id="AC-01",
@@ -182,7 +184,7 @@ def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> Non
     comparison.junit_import_changes = [
         JUnitImportChange(
             artifact_sha256=artifact_digest,
-            kind=JUnitImportChangeKind.MAPPING_MODIFIED,
+            kind=JUnitImportChangeKind.MAPPING_AND_CONTEXT_MODIFIED,
             previous=previous,
             current=current,
         )
@@ -191,7 +193,7 @@ def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> Non
     payload = json.loads(export_comparison_json(comparison))
     report = export_comparison_markdown(comparison)
 
-    assert payload["junit_import_changes"][0]["kind"] == "mapping_modified"
+    assert payload["junit_import_changes"][0]["kind"] == "mapping_and_context_modified"
     assert payload["junit_import_changes"][0]["previous"]["evidence_boundary"][
         "criterion_mapping"
     ] == "organizational_context_not_proof"
@@ -199,6 +201,7 @@ def test_comparison_exports_show_inert_non_gating_junit_mapping_changes() -> Non
         "gate_effect"
     ] == "non_gating"
     assert artifact_digest in report
+    assert "Sanitized context digest" in report
     assert "Imported External Test Result Changes" in report
     assert "externally supplied, non-gating context" in report
     assert "artifact digest covers imported bytes only" in report

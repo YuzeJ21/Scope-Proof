@@ -42,15 +42,9 @@ _OTHER_PROCESSING_INSTRUCTION = re.compile(
     re.IGNORECASE,
 )
 _STABLE_SCOPE = r"^suite-\d{4}(?:-case-\d{4})?$"
-_DISCARDED_WARNING = (
-    "JUnit properties and output content were discarded during import."
-)
-_COUNT_WARNING = (
-    "Declared JUnit counts differed from the sanitized observed results."
-)
-_REDACTED_NAME_WARNING = (
-    "Path- or URL-like JUnit names were redacted during import."
-)
+_DISCARDED_WARNING = "JUnit properties and output content were discarded during import."
+_COUNT_WARNING = "Declared JUnit counts differed from the sanitized observed results."
+_REDACTED_NAME_WARNING = "Path- or URL-like JUnit names were redacted during import."
 _FIXED_LIMITATIONS = (
     "ScopeProof did not execute the imported tests or target-repository code.",
     "The artifact digest does not prove criterion correctness or runtime behavior.",
@@ -197,9 +191,7 @@ def _totals_for_cases(cases: list[JUnitCaseResult]) -> JUnitResultTotals:
     )
 
 
-def _declared_counts_differ(
-    element: ElementTree.Element, totals: JUnitResultTotals
-) -> bool:
+def _declared_counts_differ(element: ElementTree.Element, totals: JUnitResultTotals) -> bool:
     declared = {
         "tests": _declared_count(element, "tests"),
         "failures": _declared_count(element, "failures"),
@@ -215,22 +207,16 @@ def _declared_counts_differ(
     return any(value is not None and value != observed[name] for name, value in declared.items())
 
 
-def _validate_discarded_wrapper(
-    element: ElementTree.Element, wrapper_name: str
-) -> None:
+def _validate_discarded_wrapper(element: ElementTree.Element, wrapper_name: str) -> None:
     """Reject element structure that would otherwise disappear inside ignored content."""
 
     if wrapper_name == "properties":
         for child in element:
             if _local_name(child.tag) != "property" or len(child):
-                raise JUnitImportError(
-                    "JUnit discarded content contains an unsupported structure."
-                )
+                raise JUnitImportError("JUnit discarded content contains an unsupported structure.")
         return
     if len(element):
-        raise JUnitImportError(
-            "JUnit discarded content contains an unsupported structure."
-        )
+        raise JUnitImportError("JUnit discarded content contains an unsupported structure.")
 
 
 def _parse_case(
@@ -240,15 +226,15 @@ def _parse_case(
     suite_name: str,
     case_number: int,
 ) -> tuple[JUnitCaseResult, bool, bool]:
+    if any(_local_name(name) in {"status", "result", "outcome"} for name in element.attrib):
+        raise JUnitImportError("JUnit test case has an unsupported outcome attribute.")
     result_markers: list[str] = []
     discarded = False
     for child in element:
         name = _local_name(child.tag)
         if name in {"failure", "error", "skipped"}:
             if len(child):
-                raise JUnitImportError(
-                    "JUnit test result contains an unsupported structure."
-                )
+                raise JUnitImportError("JUnit test result contains an unsupported structure.")
             result_markers.append(name)
         elif name in {"properties", "system-out", "system-err"}:
             _validate_discarded_wrapper(child, name)
@@ -376,9 +362,7 @@ def parse_junit_artifact(artifact_bytes: bytes) -> ParsedJUnitArtifact:
                 _validate_discarded_wrapper(child, child_name)
                 root_discarded = True
             else:
-                raise JUnitImportError(
-                    "JUnit testsuites root requires direct testsuite children."
-                )
+                raise JUnitImportError("JUnit testsuites root requires direct testsuite children.")
     else:
         raise JUnitImportError("JUnit artifact root must be testsuite or testsuites.")
     if len(suite_elements) > MAX_JUNIT_SUITES:
@@ -437,9 +421,7 @@ def build_junit_evidence_import(
         raise ValueError("JUnit import requires an active analysis")
     bundle = state.bundle
     if len(bundle.junit_evidence_imports) >= MAX_JUNIT_IMPORTS_PER_REVIEW:
-        raise JUnitImportError(
-            "Review already contains the maximum number of JUnit imports."
-        )
+        raise JUnitImportError("Review already contains the maximum number of JUnit imports.")
     provenance = bundle.review.criteria_source_provenance
     if provenance is None or not bundle.review.criteria_confirmed:
         raise ValueError("JUnit import requires confirmed criteria provenance")
@@ -454,8 +436,7 @@ def build_junit_evidence_import(
     if not selections:
         raise JUnitImportError("JUnit import requires at least one explicit mapping.")
     validated_selections = [
-        JUnitMappingSelection.model_validate(item.model_dump(mode="python"))
-        for item in selections
+        JUnitMappingSelection.model_validate(item.model_dump(mode="python")) for item in selections
     ]
     parsed = parse_junit_artifact(artifact_bytes)
     if any(

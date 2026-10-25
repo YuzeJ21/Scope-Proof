@@ -239,9 +239,7 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
     resolutions = [
         HumanResolution(
             criterion_id="AC-01",
-            decision=(
-                HumanDecision.ACCEPTED if with_evidence else HumanDecision.CHANGE_REQUIRED
-            ),
+            decision=(HumanDecision.ACCEPTED if with_evidence else HumanDecision.CHANGE_REQUIRED),
             comment="Reviewed candidate evidence" if with_evidence else "",
         )
     ]
@@ -335,9 +333,7 @@ def test_exact_candidate_reference_is_unchanged() -> None:
         bundle_with(item.model_copy(deep=True), head_sha="same-head"),
     )
 
-    assert [change.kind for change in comparison.evidence_changes] == [
-        EvidenceChangeKind.UNCHANGED
-    ]
+    assert [change.kind for change in comparison.evidence_changes] == [EvidenceChangeKind.UNCHANGED]
 
 
 def test_sha_only_change_is_relocated() -> None:
@@ -365,12 +361,8 @@ def test_line_only_change_is_relocated() -> None:
 
 def test_path_only_change_is_relocated() -> None:
     comparison = compare_reviews(
-        bundle_with(
-            evidence("EV-old", sha="head", path="src/export.py"), head_sha="head"
-        ),
-        bundle_with(
-            evidence("EV-new", sha="head", path="src/csv/export.py"), head_sha="head"
-        ),
+        bundle_with(evidence("EV-old", sha="head", path="src/export.py"), head_sha="head"),
+        bundle_with(evidence("EV-new", sha="head", path="src/csv/export.py"), head_sha="head"),
     )
 
     assert comparison.evidence_changes[0].kind is EvidenceChangeKind.RELOCATED
@@ -378,12 +370,8 @@ def test_path_only_change_is_relocated() -> None:
 
 def test_same_positional_id_with_changed_excerpt_is_modified() -> None:
     comparison = compare_reviews(
-        bundle_with(
-            evidence("EV-AC-01-01", sha="old", excerpt="return csv"), head_sha="old"
-        ),
-        bundle_with(
-            evidence("EV-AC-01-01", sha="new", excerpt="return safe_csv"), head_sha="new"
-        ),
+        bundle_with(evidence("EV-AC-01-01", sha="old", excerpt="return csv"), head_sha="old"),
+        bundle_with(evidence("EV-AC-01-01", sha="new", excerpt="return safe_csv"), head_sha="new"),
     )
 
     change = comparison.evidence_changes[0]
@@ -396,9 +384,7 @@ def test_same_positional_id_with_changed_excerpt_is_modified() -> None:
 
 def test_unmatched_candidates_are_added_and_removed_with_compatibility_ids() -> None:
     comparison = compare_reviews(
-        bundle_with(
-            evidence("EV-removed", sha="old", path="src/removed.py"), head_sha="old"
-        ),
+        bundle_with(evidence("EV-removed", sha="old", path="src/removed.py"), head_sha="old"),
         bundle_with(
             evidence("EV-added", sha="new", path="src/added.py", excerpt="new_candidate()"),
             head_sha="new",
@@ -501,9 +487,9 @@ def test_change_model_rejects_references_that_do_not_match_kind(
 
 
 def test_change_model_rejects_blank_criterion_identity() -> None:
-    reference = EvidenceReference.from_item(
-        evidence("EV-1", sha="head")
-    ).model_copy(update={"criterion_id": " "})
+    reference = EvidenceReference.from_item(evidence("EV-1", sha="head")).model_copy(
+        update={"criterion_id": " "}
+    )
 
     with pytest.raises(ValidationError, match="criterion ID"):
         EvidenceChange(
@@ -600,9 +586,7 @@ def test_comparison_relationship_rejects_incompatible_criteria_source_provenance
     assert provenance is not None
     current.review = current.review.model_copy(
         update={
-            "criteria_source_provenance": provenance.model_copy(
-                update={field_name: field_value}
-            )
+            "criteria_source_provenance": provenance.model_copy(update={field_name: field_value})
         }
     )
 
@@ -692,9 +676,7 @@ def test_comparison_projects_unchanged_added_removed_and_mapping_modified_junit_
     )
 
     unchanged = compare_reviews(unchanged_previous, unchanged_current)
-    assert [item.kind.value for item in unchanged.junit_import_changes] == [
-        "unchanged"
-    ]
+    assert [item.kind.value for item in unchanged.junit_import_changes] == ["unchanged"]
     assert unchanged.junit_import_changes[0].artifact_sha256 == "b" * 64
 
     modified_current = with_junit_import(
@@ -703,9 +685,7 @@ def test_comparison_projects_unchanged_added_removed_and_mapping_modified_junit_
         mapped_case_ids=["suite-0001-case-0001", "suite-0001-case-0002"],
     )
     modified = compare_reviews(unchanged_previous, modified_current)
-    assert [item.kind.value for item in modified.junit_import_changes] == [
-        "mapping_modified"
-    ]
+    assert [item.kind.value for item in modified.junit_import_changes] == ["mapping_modified"]
     assert modified.junit_import_changes[0].previous is not None
     assert modified.junit_import_changes[0].current is not None
 
@@ -717,6 +697,33 @@ def test_comparison_projects_unchanged_added_removed_and_mapping_modified_junit_
         "removed",
         "added",
     ]
+
+
+@pytest.mark.parametrize("changed_field", ["parser_warnings", "limitations", "test_cases"])
+def test_comparison_reports_changed_sanitized_junit_context(changed_field: str) -> None:
+    base = bundle_with(head_sha="a" * 40)
+    previous = with_junit_import(
+        base, artifact_digest="b" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+    current = previous.model_copy(deep=True)
+    payload = current.junit_evidence_imports[0].model_dump(mode="python")
+    if changed_field == "test_cases":
+        payload["test_cases"][0]["status"] = "failure"
+        payload["totals"]["passed"] = 0
+        payload["totals"]["failures"] = 2
+    elif changed_field == "parser_warnings":
+        payload["parser_warnings"] = ["A sanitized parser warning changed."]
+    else:
+        payload["limitations"] = ["Different external context limitation."]
+    current.junit_evidence_imports = [JUnitEvidenceImport.model_validate(payload)]
+    current = ReviewBundle.model_validate(current.model_dump(mode="python"))
+
+    comparison = compare_reviews(previous, current)
+
+    assert [item.kind.value for item in comparison.junit_import_changes] == ["context_modified"]
+    assert comparison.junit_import_changes[0].previous.context_sha256 != (
+        comparison.junit_import_changes[0].current.context_sha256
+    )
 
 
 def test_changed_junit_mapping_requires_review_only_for_previously_resolved_criteria() -> None:
@@ -734,9 +741,7 @@ def test_changed_junit_mapping_requires_review_only_for_previously_resolved_crit
         )
         for criterion_id in ("AC-01", "AC-02")
     ]
-    base.gate = evaluate_gate(
-        base.review, base.criteria, base.findings, base.resolutions
-    )
+    base.gate = evaluate_gate(base.review, base.criteria, base.findings, base.resolutions)
     previous = with_junit_import(
         base, artifact_digest="d" * 64, mapped_case_ids=["suite-0001-case-0001"]
     )

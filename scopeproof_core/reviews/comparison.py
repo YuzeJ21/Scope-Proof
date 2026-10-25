@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
 from enum import StrEnum
+from hashlib import sha256
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
@@ -150,6 +152,8 @@ class JUnitImportChangeKind(StrEnum):
 
     UNCHANGED = "unchanged"
     MAPPING_MODIFIED = "mapping_modified"
+    CONTEXT_MODIFIED = "context_modified"
+    MAPPING_AND_CONTEXT_MODIFIED = "mapping_and_context_modified"
     ADDED = "added"
     REMOVED = "removed"
 
@@ -175,20 +179,25 @@ class JUnitImportReference(BaseModel):
     artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     asserted_importer: str = Field(min_length=1)
-    evidence_boundary: JUnitEvidenceBoundary = Field(
-        default_factory=JUnitEvidenceBoundary
-    )
+    context_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence_boundary: JUnitEvidenceBoundary = Field(default_factory=JUnitEvidenceBoundary)
     mappings: list[JUnitMappingReference] = Field(min_length=1)
 
     @classmethod
     def from_import(cls, evidence_import: JUnitEvidenceImport) -> JUnitImportReference:
         """Project only sanitized identity and explicit mappings."""
 
+        sanitized_context = evidence_import.model_dump(mode="json", exclude={"criterion_mappings"})
+        context_sha256 = sha256(
+            json.dumps(sanitized_context, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
         return cls(
             import_id=evidence_import.import_id,
             artifact_sha256=evidence_import.artifact_sha256,
             head_sha=evidence_import.head_sha,
             asserted_importer=evidence_import.imported_by,
+            context_sha256=context_sha256,
             evidence_boundary=evidence_import.evidence_boundary.model_copy(deep=True),
             mappings=[
                 JUnitMappingReference(
@@ -213,6 +222,8 @@ class JUnitImportChange(BaseModel):
         if self.kind in {
             JUnitImportChangeKind.UNCHANGED,
             JUnitImportChangeKind.MAPPING_MODIFIED,
+            JUnitImportChangeKind.CONTEXT_MODIFIED,
+            JUnitImportChangeKind.MAPPING_AND_CONTEXT_MODIFIED,
         } and (self.previous is None or self.current is None):
             raise ValueError("paired JUnit import changes require both references")
         if self.kind is JUnitImportChangeKind.ADDED and (
@@ -226,20 +237,19 @@ class JUnitImportChange(BaseModel):
         for reference in (self.previous, self.current):
             if reference is not None and reference.artifact_sha256 != self.artifact_sha256:
                 raise ValueError("JUnit import change digest must match its references")
-        if (
-            self.kind is JUnitImportChangeKind.UNCHANGED
-            and self.previous is not None
-            and self.current is not None
-            and self.previous.mappings != self.current.mappings
-        ):
-            raise ValueError("unchanged JUnit imports require identical mappings")
-        if (
-            self.kind is JUnitImportChangeKind.MAPPING_MODIFIED
-            and self.previous is not None
-            and self.current is not None
-            and self.previous.mappings == self.current.mappings
-        ):
-            raise ValueError("mapping-modified JUnit imports require changed mappings")
+        if self.previous is not None and self.current is not None:
+            mapping_changed = self.previous.mappings != self.current.mappings
+            context_changed = self.previous.context_sha256 != self.current.context_sha256
+            expected = {
+                (False, False): JUnitImportChangeKind.UNCHANGED,
+                (True, False): JUnitImportChangeKind.MAPPING_MODIFIED,
+                (False, True): JUnitImportChangeKind.CONTEXT_MODIFIED,
+                (True, True): JUnitImportChangeKind.MAPPING_AND_CONTEXT_MODIFIED,
+            }[(mapping_changed, context_changed)]
+            if self.kind is not expected:
+                raise ValueError(
+                    "JUnit import change kind must match sanitized context and mapping"
+                )
         return self
 
 
@@ -259,9 +269,7 @@ class ReviewComparison(BaseModel):
     @classmethod
     def _decision_review_ids_are_canonical(cls, value: list[str]) -> list[str]:
         if value != sorted(set(value)) or any(not item.strip() for item in value):
-            raise ValueError(
-                "criteria requiring decision review must be sorted unique IDs"
-            )
+            raise ValueError("criteria requiring decision review must be sorted unique IDs")
         return value
 
     @computed_field
@@ -534,23 +542,24 @@ def _compare_junit_imports(
         previous_item = previous_by_digest.get(digest)
         current_item = current_by_digest.get(digest)
         previous_reference = (
-            JUnitImportReference.from_import(previous_item)
-            if previous_item is not None
-            else None
+            JUnitImportReference.from_import(previous_item) if previous_item is not None else None
         )
         current_reference = (
-            JUnitImportReference.from_import(current_item)
-            if current_item is not None
-            else None
+            JUnitImportReference.from_import(current_item) if current_item is not None else None
         )
         if previous_reference is None:
             kind = JUnitImportChangeKind.ADDED
         elif current_reference is None:
             kind = JUnitImportChangeKind.REMOVED
-        elif previous_reference.mappings == current_reference.mappings:
-            kind = JUnitImportChangeKind.UNCHANGED
         else:
-            kind = JUnitImportChangeKind.MAPPING_MODIFIED
+            mapping_changed = previous_reference.mappings != current_reference.mappings
+            context_changed = previous_reference.context_sha256 != current_reference.context_sha256
+            kind = {
+                (False, False): JUnitImportChangeKind.UNCHANGED,
+                (True, False): JUnitImportChangeKind.MAPPING_MODIFIED,
+                (False, True): JUnitImportChangeKind.CONTEXT_MODIFIED,
+                (True, True): JUnitImportChangeKind.MAPPING_AND_CONTEXT_MODIFIED,
+            }[(mapping_changed, context_changed)]
         changes.append(
             JUnitImportChange(
                 artifact_sha256=digest,
@@ -595,9 +604,7 @@ def _validate_review_head_identity(bundle: ReviewBundle) -> None:
         }
         and _EXACT_GIT_HEAD.fullmatch(review.head_sha) is None
     ):
-        raise ValueError(
-            "comparison live or unknown-origin reviews require exact head SHAs"
-        )
+        raise ValueError("comparison live or unknown-origin reviews require exact head SHAs")
     if any(item.commit_sha != review.head_sha for item in bundle.evidence):
         raise ValueError("comparison evidence candidates must match the reviewed head")
 
@@ -657,9 +664,7 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
         for change in evidence_changes
         if change.kind is not EvidenceChangeKind.UNCHANGED
     }
-    changed_criterion_ids.update(
-        change.criterion_id for change in changed_findings
-    )
+    changed_criterion_ids.update(change.criterion_id for change in changed_findings)
     changed_criterion_ids.update(_changed_junit_criteria(junit_import_changes))
     if (
         previous.review.head_sha != current.review.head_sha
@@ -675,9 +680,7 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
         junit_import_changes=junit_import_changes,
         previous_gate=previous.gate.verdict,
         current_gate=current.gate.verdict,
-        ruleset_version_changed=(
-            previous.review.ruleset_version != current.review.ruleset_version
-        ),
+        ruleset_version_changed=(previous.review.ruleset_version != current.review.ruleset_version),
         criteria_requiring_decision_review=sorted(
             set(previous_resolutions) & changed_criterion_ids
         ),

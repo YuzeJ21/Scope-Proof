@@ -23,7 +23,7 @@ TWO_CASE_XML = (
     b'<testsuite name="unit" tests="2" failures="1">'
     b'<testcase classname="tests.Widget" name="test_export"/>'
     b'<testcase name="test_error"><failure message="boom">secret body</failure></testcase>'
-    b'</testsuite></testsuites>'
+    b"</testsuite></testsuites>"
 )
 
 
@@ -61,12 +61,34 @@ def test_parser_returns_sanitized_cases_and_computed_totals() -> None:
     assert "boom" not in serialized
 
 
+@pytest.mark.parametrize(
+    ("namespace", "attribute"),
+    [
+        (b"", b'status="failed"'),
+        (b"", b'result="failure"'),
+        (b' xmlns:x="urn:test"', b'x:status="failed"'),
+    ],
+)
+def test_parser_rejects_unsupported_outcome_attributes(namespace: bytes, attribute: bytes) -> None:
+    xml = (
+        b'<testsuite name="unit"'
+        + namespace
+        + b'><testcase name="case" '
+        + attribute
+        + b"/></testsuite>"
+    )
+    with pytest.raises(
+        JUnitImportError, match=r"unsupported outcome attribute|namespaces are unsupported"
+    ):
+        parse_junit_artifact(xml)
+
+
 def test_parser_discards_output_and_properties_with_one_bounded_warning() -> None:
     secret = "SENTINEL-OUTPUT-DO-NOT-PERSIST"
     xml = (
         '<testsuite name="unit"><properties><property name="token" value="hidden"/>'
         f'</properties><testcase name="safe"/><system-out>{secret}</system-out>'
-        '<system-err>also hidden</system-err></testsuite>'
+        "<system-err>also hidden</system-err></testsuite>"
     ).encode()
 
     parsed = parse_junit_artifact(xml)
@@ -84,7 +106,7 @@ def test_parser_discards_output_and_properties_with_one_bounded_warning() -> Non
         (
             b'<testsuites><properties><testcase name="hidden"><failure/></testcase>'
             b'</properties><testsuite name="visible"><testcase name="pass"/>'
-            b'</testsuite></testsuites>'
+            b"</testsuite></testsuites>"
         ),
         (
             b'<testsuite name="visible"><properties><testsuite name="hidden">'
@@ -94,7 +116,7 @@ def test_parser_discards_output_and_properties_with_one_bounded_warning() -> Non
         (
             b'<testsuite name="visible"><testcase name="pass"><system-out>'
             b'<testcase name="hidden"><failure/></testcase></system-out></testcase>'
-            b'</testsuite>'
+            b"</testsuite>"
         ),
     ],
 )
@@ -120,9 +142,7 @@ def test_parser_redacts_path_and_url_like_names_before_persistence() -> None:
     assert case.suite_name == "Redacted suite name 0001"
     assert case.class_name == "Redacted class name"
     assert case.test_name == "Redacted test name 0001"
-    assert parsed.parser_warnings == [
-        "Path- or URL-like JUnit names were redacted during import."
-    ]
+    assert parsed.parser_warnings == ["Path- or URL-like JUnit names were redacted during import."]
     serialized = parsed.model_dump_json()
     assert "ci.example.test" not in serialized
     assert "workspace" not in serialized
@@ -178,7 +198,7 @@ def test_parser_reports_declared_count_mismatches_without_trusting_them() -> Non
             b'<xi:include href="file:///etc/passwd"/></testsuite>',
             "XInclude",
         ),
-        (b'<root/>', "root"),
+        (b"<root/>", "root"),
         (b'<testsuites><testcase name="outside"/></testsuites>', "direct testsuite"),
         (
             b'<testsuite name="outer"><testsuite name="nested">'
@@ -188,7 +208,7 @@ def test_parser_reports_declared_count_mismatches_without_trusting_them() -> Non
         (b'<testsuite name="x"><testcase/></testsuite>', "test name"),
         (
             b'<testsuite name="x"><testcase name="ambiguous"><failure/><error/>'
-            b'</testcase></testsuite>',
+            b"</testcase></testsuite>",
             "multiple result",
         ),
         (b'<testsuite name="x">', "malformed"),
@@ -223,30 +243,24 @@ def test_parser_enforces_byte_suite_case_and_element_budgets(
     monkeypatch.setattr(junit_module, "MAX_JUNIT_BYTES", 1_048_576)
     monkeypatch.setattr(junit_module, "MAX_JUNIT_SUITES", 1)
     with pytest.raises(JUnitImportError, match="suite limit"):
-        parse_junit_artifact(
-            b'<testsuites><testsuite name="a"/><testsuite name="b"/></testsuites>'
-        )
+        parse_junit_artifact(b'<testsuites><testsuite name="a"/><testsuite name="b"/></testsuites>')
 
     monkeypatch.setattr(junit_module, "MAX_JUNIT_CASES", 1)
     with pytest.raises(JUnitImportError, match="test-case limit"):
         parse_junit_artifact(
-            b'<testsuite name="a"><testcase name="one"/><testcase name="two"/>'
-            b'</testsuite>'
+            b'<testsuite name="a"><testcase name="one"/><testcase name="two"/></testsuite>'
         )
 
     monkeypatch.setattr(junit_module, "MAX_JUNIT_CASES", 5_000)
     monkeypatch.setattr(junit_module, "MAX_JUNIT_ELEMENTS", 2)
     with pytest.raises(JUnitImportError, match="element limit"):
         parse_junit_artifact(
-            b'<testsuite name="a"><testcase name="one"><skipped/></testcase>'
-            b'</testsuite>'
+            b'<testsuite name="a"><testcase name="one"><skipped/></testcase></testsuite>'
         )
 
 
 def test_mapping_selection_is_strict_and_non_blank() -> None:
-    selection = JUnitMappingSelection(
-        scope_id="suite-0001", criterion_id="AC-01"
-    )
+    selection = JUnitMappingSelection(scope_id="suite-0001", criterion_id="AC-01")
     assert selection.scope_id == "suite-0001"
     with pytest.raises(ValidationError):
         JUnitMappingSelection.model_validate(
@@ -265,9 +279,7 @@ def test_mapping_document_requires_exact_artifact_digest() -> None:
     with pytest.raises(ValidationError, match="artifact_sha256"):
         JUnitMappingDocument.model_validate(payload)
 
-    document = JUnitMappingDocument.model_validate(
-        {**payload, "artifact_sha256": "a" * 64}
-    )
+    document = JUnitMappingDocument.model_validate({**payload, "artifact_sha256": "a" * 64})
     assert document.artifact_sha256 == "a" * 64
 
 
@@ -276,9 +288,7 @@ def test_mapping_document_requires_explicit_schema_version() -> None:
         JUnitMappingDocument.model_validate(
             {
                 "artifact_sha256": "a" * 64,
-                "selections": [
-                    {"scope_id": "suite-0001", "criterion_id": "AC-01"}
-                ],
+                "selections": [{"scope_id": "suite-0001", "criterion_id": "AC-01"}],
             }
         )
 
@@ -309,17 +319,14 @@ def test_builder_expands_explicit_suite_mapping_and_binds_review() -> None:
     assert record.imported_by == "QA owner"
     assert record.limitations[-1] == "Browser lane not supplied."
     assert all(
-        "did not execute" in item or "not" in item.lower()
-        for item in record.limitations[:3]
+        "did not execute" in item or "not" in item.lower() for item in record.limitations[:3]
     )
 
 
 def test_builder_expands_case_mapping_and_canonicalizes_duplicate_pairs() -> None:
     state = exact_head_state()
     criterion_id = first_criterion_id(state)
-    selection = JUnitMappingSelection(
-        scope_id="suite-0001-case-0002", criterion_id=criterion_id
-    )
+    selection = JUnitMappingSelection(scope_id="suite-0001-case-0002", criterion_id=criterion_id)
 
     record = build_junit_evidence_import(
         state,
@@ -328,9 +335,7 @@ def test_builder_expands_case_mapping_and_canonicalizes_duplicate_pairs() -> Non
         importer="QA",
     )
 
-    assert record.criterion_mappings[0].test_case_ids == [
-        "suite-0001-case-0002"
-    ]
+    assert record.criterion_mappings[0].test_case_ids == ["suite-0001-case-0002"]
 
 
 def test_builder_rejects_one_case_mapped_to_multiple_criteria() -> None:
@@ -343,9 +348,7 @@ def test_builder_rejects_one_case_mapped_to_multiple_criteria() -> None:
             state,
             SIMPLE_XML,
             [
-                JUnitMappingSelection(
-                    scope_id="suite-0001", criterion_id=first.criterion_id
-                ),
+                JUnitMappingSelection(scope_id="suite-0001", criterion_id=first.criterion_id),
                 JUnitMappingSelection(
                     scope_id="suite-0001-case-0001",
                     criterion_id=second.criterion_id,
@@ -386,11 +389,7 @@ def test_builder_bounds_envelope_validation_errors_without_echoing_input() -> No
             "unknown mapping scope",
         ),
         (
-            [
-                JUnitMappingSelection(
-                    scope_id="suite-0001", criterion_id="AC-UNKNOWN"
-                )
-            ],
+            [JUnitMappingSelection(scope_id="suite-0001", criterion_id="AC-UNKNOWN")],
             "QA",
             "unknown criterion",
         ),
@@ -403,9 +402,7 @@ def test_builder_rejects_missing_or_invalid_human_mapping(
     state = exact_head_state()
     if selections and selections[0].criterion_id == "AC-01":
         selections = [
-            selection.model_copy(
-                update={"criterion_id": first_criterion_id(state)}
-            )
+            selection.model_copy(update={"criterion_id": first_criterion_id(state)})
             for selection in selections
         ]
 
@@ -421,9 +418,7 @@ def test_builder_rejects_missing_or_invalid_human_mapping(
 def test_builder_requires_active_confirmed_exact_head_review() -> None:
     state = exact_head_state()
     criterion_id = first_criterion_id(state)
-    mapping = [
-        JUnitMappingSelection(scope_id="suite-0001", criterion_id=criterion_id)
-    ]
+    mapping = [JUnitMappingSelection(scope_id="suite-0001", criterion_id=criterion_id)]
 
     no_bundle = state.model_copy(update={"bundle": None})
     with pytest.raises(ValueError, match="active analysis"):
@@ -439,11 +434,7 @@ def test_builder_requires_active_confirmed_exact_head_review() -> None:
 
 def test_builder_rejects_blank_limitations_without_exposing_artifact() -> None:
     state = exact_head_state()
-    mapping = [
-        JUnitMappingSelection(
-            scope_id="suite-0001", criterion_id=first_criterion_id(state)
-        )
-    ]
+    mapping = [JUnitMappingSelection(scope_id="suite-0001", criterion_id=first_criterion_id(state))]
     with pytest.raises(ValueError, match="limitations"):
         build_junit_evidence_import(
             state,
@@ -456,11 +447,7 @@ def test_builder_rejects_blank_limitations_without_exposing_artifact() -> None:
 
 def test_builder_rejects_overlong_limitations_without_exposing_artifact() -> None:
     state = exact_head_state()
-    mapping = [
-        JUnitMappingSelection(
-            scope_id="suite-0001", criterion_id=first_criterion_id(state)
-        )
-    ]
+    mapping = [JUnitMappingSelection(scope_id="suite-0001", criterion_id=first_criterion_id(state))]
 
     with pytest.raises(JUnitImportError, match="metadata is invalid"):
         build_junit_evidence_import(
@@ -477,11 +464,7 @@ def test_builder_rejects_overlong_limitations_without_exposing_artifact() -> Non
 
 def test_builder_rejects_review_at_aggregate_import_cap() -> None:
     state = exact_head_state()
-    mapping = [
-        JUnitMappingSelection(
-            scope_id="suite-0001", criterion_id=first_criterion_id(state)
-        )
-    ]
+    mapping = [JUnitMappingSelection(scope_id="suite-0001", criterion_id=first_criterion_id(state))]
     record = build_junit_evidence_import(
         state,
         SIMPLE_XML,
