@@ -375,9 +375,10 @@ history rather than silently replacing earlier decisions.
 
 The workbench stores versioned JSON records under `~/.scopeproof/reviews`. The reopen panel lists
 safe local record IDs in deterministic order, while an empty store retains manual ID recovery.
-The app validates the selected record when it is opened and refuses a configured review path that
-is a symbolic link or another existing non-directory. This app-owned local directory prevents a
-browser input from selecting arbitrary file paths. Saved review, alpha-case, and owner-rehearsal
+The app validates the selected record when it is opened and refuses a configured review path if it
+or any ancestor is a symbolic link or reparse point, or if an existing path component is not a
+directory. This app-owned local directory prevents a browser input from selecting arbitrary file
+paths. Saved review, alpha-case, and owner-rehearsal
 JSON records each have a 64 MiB UTF-8 byte limit on save and reopen; oversized records fail with a
 local-storage error rather than being parsed or treated as partial evidence. Records preserve the
 review SHAs, criteria revisions, evidence, bounded imported-JUnit envelopes, findings, resolution

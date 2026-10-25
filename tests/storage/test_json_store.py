@@ -1740,6 +1740,46 @@ def test_save_rejects_a_symlinked_store_root(tmp_path: Path) -> None:
     assert list(outside.iterdir()) == []
 
 
+def test_store_rejects_symlinked_ancestor_before_save_or_discovery(tmp_path: Path) -> None:
+    real_workspace = tmp_path / "real-workspace"
+    real_workspace.mkdir()
+    linked_workspace = tmp_path / "linked-workspace"
+    try:
+        linked_workspace.symlink_to(real_workspace, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks are unavailable")
+    direct_store = JsonReviewStore(real_workspace / ".scopeproof" / "reviews")
+    saved_path = direct_store.save(review_state())
+    original_bytes = saved_path.read_bytes()
+    store = JsonReviewStore(linked_workspace / ".scopeproof" / "reviews")
+
+    with pytest.raises(UnsafeReviewStore, match="symbolic link"):
+        store.save(review_state())
+    with pytest.raises(UnsafeReviewStore, match="symbolic link"):
+        store.list_review_ids()
+    with pytest.raises(UnsafeReviewStore, match="symbolic link"):
+        store.load("review-1")
+    assert saved_path.read_bytes() == original_bytes
+
+
+def test_store_rejects_non_directory_ancestor_before_save(tmp_path: Path) -> None:
+    blocking_file = tmp_path / "workspace"
+    blocking_file.write_text("keep", encoding="utf-8")
+    store = JsonReviewStore(blocking_file / ".scopeproof" / "reviews")
+
+    with pytest.raises(UnsafeReviewStore, match="directory"):
+        store.save(review_state())
+    assert blocking_file.read_text(encoding="utf-8") == "keep"
+
+
+def test_store_rejects_parent_traversal_before_save(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path / "workspace" / ".." / "reviews")
+
+    with pytest.raises(UnsafeReviewStore, match="parent traversal"):
+        store.save(review_state())
+    assert not (tmp_path / "reviews").exists()
+
+
 def test_list_review_ids_rejects_a_regular_file_store_root(tmp_path: Path) -> None:
     store_root = tmp_path / "reviews"
     store_root.write_text("not a directory", encoding="utf-8")

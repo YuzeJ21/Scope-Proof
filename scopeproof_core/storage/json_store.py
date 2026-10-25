@@ -93,10 +93,28 @@ class JsonReviewStore:
         self.directory = directory
 
     def _require_safe_directory(self) -> None:
-        if self.directory.is_symlink():
-            raise UnsafeReviewStore("review store directory must not be a symbolic link")
-        if self.directory.exists() and not self.directory.is_dir():
-            raise UnsafeReviewStore("review store path must be a directory")
+        if ".." in self.directory.parts:
+            raise UnsafeReviewStore("review store path must not contain parent traversal")
+        absolute = Path(os.path.abspath(self.directory))
+        reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        for component in (absolute, *absolute.parents):
+            try:
+                metadata = os.lstat(component)
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            is_link = stat.S_ISLNK(metadata.st_mode) or bool(
+                reparse_point & getattr(metadata, "st_file_attributes", 0)
+            )
+            if is_link:
+                if component == absolute:
+                    raise UnsafeReviewStore(
+                        "review store directory must not be a symbolic link"
+                    )
+                raise UnsafeReviewStore(
+                    "review store path must not traverse a symbolic link or reparse point"
+                )
+            if not stat.S_ISDIR(metadata.st_mode):
+                raise UnsafeReviewStore("review store path must be a directory")
 
     @staticmethod
     def _validate_review_id(review_id: str) -> str:
