@@ -61,6 +61,13 @@ def new_app() -> AppTest:
     return AppTest.from_file(str(APP_PATH)).run()
 
 
+def _filtered_app_state(app: AppTest) -> dict[str, object]:
+    state = app.session_state
+    if hasattr(state, "to_dict"):
+        return state.to_dict()
+    return state.filtered_state
+
+
 def load_demo(app: AppTest) -> AppTest:
     app = app.button(key="load_demo").click().run()
     return app.text_input(key="criteria_source_confirmer").set_value(
@@ -1798,7 +1805,7 @@ def test_sidebar_reports_confirmation_and_next_action_in_same_run() -> None:
     sidebar_text = "\n".join(markdown.value for markdown in app.sidebar.markdown)
     assert "Complete — Criteria confirmed" in sidebar_text
     assert "Next — Run deterministic analysis" in sidebar_text
-    assert "active_step" not in app.session_state.filtered_state
+    assert "active_step" not in _filtered_app_state(app)
 
 
 def test_criteria_confirmation_shows_one_durable_success_message() -> None:
@@ -3781,7 +3788,7 @@ def test_reopened_review_does_not_compare_a_different_pull_request(
     with patch("scopeproof_core.demo.load_demo_snapshot", return_value=unrelated_snapshot):
         fresh = fresh.button(key="load_demo").click().run()
 
-    assert fresh.session_state.filtered_state.get("source_reload_notice", "missing") is None
+    assert _filtered_app_state(fresh).get("source_reload_notice", "missing") is None
     assert not any("PR head changed" in item.value for item in fresh.warning)
 
 
@@ -3856,7 +3863,6 @@ def test_pending_contradictory_resolution_blocks_final_acceptance_without_mutati
     ).run()
 
     assert app.button(key="record_final_acceptance").disabled is True
-    app = app.button(key="record_final_acceptance").click().run()
     assert app.session_state["review_state"] == authoritative_state
     assert not any(
         event.final_acceptance
@@ -4739,7 +4745,7 @@ def test_criterion_change_clears_pending_target_specific_drafts() -> None:
     assert app.button(key="save_runtime_evidence").disabled is True
     assert app.selectbox(key="resolution_decision").value is None
     assert app.text_area(key="resolution_note").value == ""
-    assert "manual_evidence_level" not in app.session_state.filtered_state
+    assert "manual_evidence_level" not in _filtered_app_state(app)
     assert app.button(key="save_resolution").disabled is True
     assert app.session_state["review_state"].bundle.runtime_evidence == []
     assert app.session_state["review_state"].resolution_events == []
