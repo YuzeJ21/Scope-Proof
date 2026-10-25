@@ -3,7 +3,10 @@ from datetime import timedelta
 import pytest
 from pydantic import ValidationError
 
-from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+from scopeproof_core.criteria.confirmation import (
+    build_criteria_source_provenance,
+    normalized_criteria_sha256,
+)
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews.comparison import (
     EvidenceChange,
@@ -25,6 +28,8 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     HumanResolution,
     IngestionState,
+    JUnitEvidenceBoundary,
+    JUnitEvidenceImport,
     RepositoryVisibility,
     Review,
     ReviewBundle,
@@ -111,6 +116,67 @@ def bundle_with(*items: EvidenceItem, head_sha: str) -> ReviewBundle:
     )
 
 
+def with_junit_import(
+    bundle: ReviewBundle,
+    *,
+    artifact_digest: str,
+    mapped_case_ids: list[str],
+) -> ReviewBundle:
+    bundle = bundle.model_copy(deep=True)
+    bundle.criteria_revision_number = 1
+    provenance = bundle.review.criteria_source_provenance
+    assert provenance is not None
+    bundle.junit_evidence_imports = [
+        JUnitEvidenceImport(
+            schema_version="junit-import-v1",
+            evidence_boundary=JUnitEvidenceBoundary(),
+            import_id=f"import-{artifact_digest[0]}",
+            repository=bundle.review.repository,
+            pr_number=bundle.review.pr_number,
+            head_sha=bundle.review.head_sha,
+            criteria_revision_number=1,
+            confirmed_criteria_sha256=normalized_criteria_sha256(bundle.criteria),
+            criteria_source_provenance=provenance,
+            artifact_sha256=artifact_digest,
+            imported_by="Fixture owner",
+            imported_at=bundle.review.created_at,
+            totals={
+                "total": 2,
+                "passed": 1,
+                "failures": 1,
+                "errors": 0,
+                "skipped": 0,
+            },
+            test_cases=[
+                {
+                    "test_case_id": "suite-0001-case-0001",
+                    "suite_id": "suite-0001",
+                    "suite_name": "unit",
+                    "class_name": None,
+                    "test_name": "test_one",
+                    "status": "passed",
+                },
+                {
+                    "test_case_id": "suite-0001-case-0002",
+                    "suite_id": "suite-0001",
+                    "suite_name": "unit",
+                    "class_name": None,
+                    "test_name": "test_two",
+                    "status": "failure",
+                },
+            ],
+            criterion_mappings=[
+                {
+                    "criterion_id": "AC-01",
+                    "test_case_ids": mapped_case_ids,
+                }
+            ],
+            limitations=["External non-gating context."],
+        )
+    ]
+    return ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+
+
 def test_comparison_preserves_legacy_unlinked_manual_verification_as_needs_review() -> None:
     previous = bundle_with(head_sha="old")
     current = bundle_with(head_sha="new")
@@ -173,9 +239,7 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
     resolutions = [
         HumanResolution(
             criterion_id="AC-01",
-            decision=(
-                HumanDecision.ACCEPTED if with_evidence else HumanDecision.CHANGE_REQUIRED
-            ),
+            decision=(HumanDecision.ACCEPTED if with_evidence else HumanDecision.CHANGE_REQUIRED),
             comment="Reviewed candidate evidence" if with_evidence else "",
         )
     ]
@@ -271,9 +335,7 @@ def test_exact_candidate_reference_is_unchanged() -> None:
         bundle_with(item.model_copy(deep=True), head_sha="same-head"),
     )
 
-    assert [change.kind for change in comparison.evidence_changes] == [
-        EvidenceChangeKind.UNCHANGED
-    ]
+    assert [change.kind for change in comparison.evidence_changes] == [EvidenceChangeKind.UNCHANGED]
 
 
 def test_sha_only_change_is_relocated() -> None:
@@ -301,12 +363,8 @@ def test_line_only_change_is_relocated() -> None:
 
 def test_path_only_change_is_relocated() -> None:
     comparison = compare_reviews(
-        bundle_with(
-            evidence("EV-old", sha="head", path="src/export.py"), head_sha="head"
-        ),
-        bundle_with(
-            evidence("EV-new", sha="head", path="src/csv/export.py"), head_sha="head"
-        ),
+        bundle_with(evidence("EV-old", sha="head", path="src/export.py"), head_sha="head"),
+        bundle_with(evidence("EV-new", sha="head", path="src/csv/export.py"), head_sha="head"),
     )
 
     assert comparison.evidence_changes[0].kind is EvidenceChangeKind.RELOCATED
@@ -314,12 +372,8 @@ def test_path_only_change_is_relocated() -> None:
 
 def test_same_positional_id_with_changed_excerpt_is_modified() -> None:
     comparison = compare_reviews(
-        bundle_with(
-            evidence("EV-AC-01-01", sha="old", excerpt="return csv"), head_sha="old"
-        ),
-        bundle_with(
-            evidence("EV-AC-01-01", sha="new", excerpt="return safe_csv"), head_sha="new"
-        ),
+        bundle_with(evidence("EV-AC-01-01", sha="old", excerpt="return csv"), head_sha="old"),
+        bundle_with(evidence("EV-AC-01-01", sha="new", excerpt="return safe_csv"), head_sha="new"),
     )
 
     change = comparison.evidence_changes[0]
@@ -332,9 +386,7 @@ def test_same_positional_id_with_changed_excerpt_is_modified() -> None:
 
 def test_unmatched_candidates_are_added_and_removed_with_compatibility_ids() -> None:
     comparison = compare_reviews(
-        bundle_with(
-            evidence("EV-removed", sha="old", path="src/removed.py"), head_sha="old"
-        ),
+        bundle_with(evidence("EV-removed", sha="old", path="src/removed.py"), head_sha="old"),
         bundle_with(
             evidence("EV-added", sha="new", path="src/added.py", excerpt="new_candidate()"),
             head_sha="new",
@@ -437,9 +489,9 @@ def test_change_model_rejects_references_that_do_not_match_kind(
 
 
 def test_change_model_rejects_blank_criterion_identity() -> None:
-    reference = EvidenceReference.from_item(
-        evidence("EV-1", sha="head")
-    ).model_copy(update={"criterion_id": " "})
+    reference = EvidenceReference.from_item(evidence("EV-1", sha="head")).model_copy(
+        update={"criterion_id": " "}
+    )
 
     with pytest.raises(ValidationError, match="criterion ID"):
         EvidenceChange(
@@ -536,9 +588,7 @@ def test_comparison_relationship_rejects_incompatible_criteria_source_provenance
     assert provenance is not None
     current.review = current.review.model_copy(
         update={
-            "criteria_source_provenance": provenance.model_copy(
-                update={field_name: field_value}
-            )
+            "criteria_source_provenance": provenance.model_copy(update={field_name: field_value})
         }
     )
 
@@ -618,3 +668,111 @@ def test_comparison_relationship_rejects_non_exact_legacy_unknown_head() -> None
 
     with pytest.raises(ValueError, match="exact head SHAs"):
         compare_reviews(previous, current)
+
+
+def test_comparison_projects_unchanged_added_removed_and_mapping_modified_junit_imports() -> None:
+    head = "a" * 40
+    base = bundle_with(head_sha=head)
+    unchanged_previous = with_junit_import(
+        base, artifact_digest="b" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+    unchanged_current = with_junit_import(
+        base, artifact_digest="b" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+
+    unchanged = compare_reviews(unchanged_previous, unchanged_current)
+    assert [item.kind.value for item in unchanged.junit_import_changes] == ["unchanged"]
+    assert unchanged.junit_import_changes[0].artifact_sha256 == "b" * 64
+
+    modified_current = with_junit_import(
+        base,
+        artifact_digest="b" * 64,
+        mapped_case_ids=["suite-0001-case-0001", "suite-0001-case-0002"],
+    )
+    modified = compare_reviews(unchanged_previous, modified_current)
+    assert [item.kind.value for item in modified.junit_import_changes] == ["mapping_modified"]
+    assert modified.junit_import_changes[0].previous is not None
+    assert modified.junit_import_changes[0].current is not None
+
+    different_current = with_junit_import(
+        base, artifact_digest="c" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+    different = compare_reviews(unchanged_previous, different_current)
+    assert [item.kind.value for item in different.junit_import_changes] == [
+        "removed",
+        "added",
+    ]
+
+
+@pytest.mark.parametrize("changed_field", ["parser_warnings", "limitations", "test_cases"])
+def test_comparison_reports_changed_sanitized_junit_context(changed_field: str) -> None:
+    base = bundle_with(head_sha="a" * 40)
+    previous = with_junit_import(
+        base, artifact_digest="b" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+    current = previous.model_copy(deep=True)
+    payload = current.junit_evidence_imports[0].model_dump(mode="python")
+    if changed_field == "test_cases":
+        payload["test_cases"][0]["status"] = "failure"
+        payload["totals"]["passed"] = 0
+        payload["totals"]["failures"] = 2
+    elif changed_field == "parser_warnings":
+        payload["parser_warnings"] = ["A sanitized parser warning changed."]
+    else:
+        payload["limitations"] = ["Different external context limitation."]
+    current.junit_evidence_imports = [JUnitEvidenceImport.model_validate(payload)]
+    current = ReviewBundle.model_validate(current.model_dump(mode="python"))
+
+    comparison = compare_reviews(previous, current)
+
+    assert [item.kind.value for item in comparison.junit_import_changes] == ["context_modified"]
+    assert comparison.junit_import_changes[0].previous.context_sha256 != (
+        comparison.junit_import_changes[0].current.context_sha256
+    )
+
+
+def test_changed_junit_mapping_requires_review_only_for_previously_resolved_criteria() -> None:
+    head = "a" * 40
+    base = bundle_with(
+        evidence("EV-AC-01", sha=head, criterion_id="AC-01"),
+        evidence("EV-AC-02", sha=head, criterion_id="AC-02"),
+        head_sha=head,
+    )
+    base.resolutions = [
+        HumanResolution(
+            criterion_id=criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            comment="Owner reviewed existing evidence.",
+        )
+        for criterion_id in ("AC-01", "AC-02")
+    ]
+    base.gate = evaluate_gate(base.review, base.criteria, base.findings, base.resolutions)
+    previous = with_junit_import(
+        base, artifact_digest="d" * 64, mapped_case_ids=["suite-0001-case-0001"]
+    )
+    current = with_junit_import(
+        base,
+        artifact_digest="d" * 64,
+        mapped_case_ids=["suite-0001-case-0001", "suite-0001-case-0002"],
+    )
+
+    comparison = compare_reviews(previous, current)
+
+    assert comparison.criteria_requiring_decision_review == ["AC-01"]
+    assert previous.resolutions == current.resolutions
+    assert previous.gate == current.gate
+
+
+def test_comparison_revalidates_junit_import_relationships_before_projection() -> None:
+    head = "a" * 40
+    valid = with_junit_import(
+        bundle_with(head_sha=head),
+        artifact_digest="e" * 64,
+        mapped_case_ids=["suite-0001-case-0001"],
+    )
+    tampered = valid.model_copy(deep=True)
+    imported = tampered.junit_evidence_imports[0]
+    object.__setattr__(imported, "head_sha", "f" * 40)
+
+    with pytest.raises(ValidationError, match="JUnit import identity"):
+        compare_reviews(valid, tampered)

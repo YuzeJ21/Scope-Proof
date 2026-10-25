@@ -12,6 +12,7 @@ from scopeproof_core.gates.validation import (
 from scopeproof_core.resolution_events import current_resolutions, final_acceptance
 from scopeproof_core.review_policy import acceptance_requires_comment
 from scopeproof_core.schemas.models import (
+    MAX_JUNIT_IMPORTS_PER_REVIEW,
     CheckState,
     CriteriaRevision,
     CriteriaSourceProvenance,
@@ -19,10 +20,12 @@ from scopeproof_core.schemas.models import (
     EvidenceLevel,
     HumanDecision,
     IngestionState,
+    JUnitEvidenceImport,
     ResolutionEvent,
     ReviewBundle,
     ReviewState,
     RuntimeEvidence,
+    normalized_criteria_sha256,
 )
 
 
@@ -48,6 +51,8 @@ def new_review_state(bundle: ReviewBundle) -> ReviewState:
         raise ValueError("initial analysis bundle must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("initial analysis bundle must not contain final acceptance")
+    if bundle.junit_evidence_imports:
+        raise ValueError("initial analysis bundle must not contain JUnit imports")
     bundle = validated_review_bundle(bundle)
     if bundle.review.criteria_source_provenance is None:
         raise ValueError(
@@ -162,6 +167,8 @@ def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
         raise ValueError("attached analysis must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("attached analysis must not contain final acceptance")
+    if bundle.junit_evidence_imports:
+        raise ValueError("attached analysis must not contain JUnit imports")
     bundle = validated_review_bundle(bundle)
     if (
         state.criteria_revision.source_provenance is None
@@ -332,6 +339,86 @@ def append_runtime_evidence(state: ReviewState, evidence: RuntimeEvidence) -> Re
     bundle = state.bundle.model_copy(deep=True)
     bundle.runtime_evidence.append(evidence.model_copy(deep=True))
     return validated_review_state(state.model_copy(update={"bundle": bundle}))
+
+
+def append_junit_evidence_import(
+    state: ReviewState,
+    evidence_import: JUnitEvidenceImport,
+) -> ReviewState:
+    """Append non-gating external test context to one exact active review."""
+
+    state = _validated_state(state)
+    if state.bundle is None:
+        raise ValueError("JUnit import requires an active analysis")
+    bundle = state.bundle
+    if len(bundle.junit_evidence_imports) >= MAX_JUNIT_IMPORTS_PER_REVIEW:
+        raise ValueError(
+            f"review may contain at most {MAX_JUNIT_IMPORTS_PER_REVIEW} JUnit imports"
+        )
+    evidence_import = JUnitEvidenceImport.model_validate(
+        evidence_import.model_dump(mode="python")
+    )
+    if (
+        evidence_import.repository,
+        evidence_import.pr_number,
+        evidence_import.head_sha,
+    ) != (
+        state.review.repository,
+        state.review.pr_number,
+        state.review.head_sha,
+    ):
+        raise ValueError("JUnit import must match the active review identity")
+    if evidence_import.criteria_revision_number != state.criteria_revision.number:
+        raise ValueError("JUnit import criteria revision must match the active revision")
+    if evidence_import.confirmed_criteria_sha256 != normalized_criteria_sha256(
+        state.criteria_revision.criteria
+    ):
+        raise ValueError("JUnit import criteria digest must match the active revision")
+    if (
+        state.criteria_revision.source_provenance is None
+        or evidence_import.criteria_source_provenance
+        != state.criteria_revision.source_provenance
+    ):
+        raise ValueError("JUnit import criteria provenance must match the active revision")
+    known_criteria = {
+        criterion.criterion_id for criterion in state.criteria_revision.criteria
+    }
+    if any(
+        mapping.criterion_id not in known_criteria
+        for mapping in evidence_import.criterion_mappings
+    ):
+        raise ValueError("JUnit import mappings must reference active criteria")
+    if any(
+        existing.artifact_sha256 == evidence_import.artifact_sha256
+        for existing in bundle.junit_evidence_imports
+    ):
+        raise ValueError("JUnit artifact is already imported")
+    if any(
+        existing.import_id == evidence_import.import_id
+        for existing in bundle.junit_evidence_imports
+    ):
+        raise ValueError("JUnit import ID is already recorded")
+
+    unchanged_gate = bundle.gate.model_copy(deep=True)
+    unchanged_findings = [item.model_copy(deep=True) for item in bundle.findings]
+    unchanged_resolutions = [item.model_copy(deep=True) for item in bundle.resolutions]
+    unchanged_runtime = [item.model_copy(deep=True) for item in bundle.runtime_evidence]
+    unchanged_events = [item.model_copy(deep=True) for item in state.resolution_events]
+    unchanged_final_acceptance = state.review.final_acceptance
+    updated_bundle = bundle.model_copy(deep=True)
+    updated_bundle.junit_evidence_imports.append(evidence_import.model_copy(deep=True))
+    updated = validated_review_state(state.model_copy(update={"bundle": updated_bundle}))
+    assert updated.bundle is not None
+    if (
+        updated.bundle.gate != unchanged_gate
+        or updated.bundle.findings != unchanged_findings
+        or updated.bundle.resolutions != unchanged_resolutions
+        or updated.bundle.runtime_evidence != unchanged_runtime
+        or updated.resolution_events != unchanged_events
+        or updated.review.final_acceptance is not unchanged_final_acceptance
+    ):
+        raise ValueError("JUnit import must not alter deterministic or human review truth")
+    return updated
 
 
 def append_external_verification(
