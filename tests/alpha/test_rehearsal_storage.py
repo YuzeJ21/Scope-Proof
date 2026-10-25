@@ -67,6 +67,48 @@ def test_portable_rehearsal_backend_round_trips_without_posix_descriptors(
         store.save(record)
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_rehearsal_load_rejects_one_byte_over_cap_on_both_backends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative rehearsal backend is unavailable")
+    monkeypatch.setattr(rehearsal_storage_module, "_DESCRIPTOR_BACKEND_SUPPORTED", not portable)
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    record = alpha_rehearsal()
+    store = JsonAlphaRehearsalStore(tmp_path)
+    path = store.save(record)
+    original = path.read_bytes()
+    monkeypatch.setattr(
+        rehearsal_storage_module, "MAX_SAVED_RECORD_BYTES", len(original), raising=False
+    )
+
+    assert store.load(record.rehearsal_id) == record
+    path.write_bytes(original + b" ")
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.load(record.rehearsal_id)
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_rehearsal_save_rejects_oversized_record_before_creating_a_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not rehearsal_storage_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative rehearsal backend is unavailable")
+    monkeypatch.setattr(rehearsal_storage_module, "_DESCRIPTOR_BACKEND_SUPPORTED", not portable)
+    if portable:
+        monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", False)
+    monkeypatch.setattr(rehearsal_storage_module, "MAX_SAVED_RECORD_BYTES", 1, raising=False)
+    store = JsonAlphaRehearsalStore(tmp_path / "rehearsals")
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.save(alpha_rehearsal())
+
+    assert not store.directory.exists()
+
+
 def test_portable_rehearsal_preserves_relative_caller_facing_save_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

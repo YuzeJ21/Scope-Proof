@@ -11,6 +11,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass, replace
 from hashlib import sha256
 from pathlib import Path
+from typing import BinaryIO
 
 _CLOSE_ON_EXEC = getattr(os, "O_CLOEXEC", 0)
 _BINARY = getattr(os, "O_BINARY", 0)
@@ -19,6 +20,7 @@ _NONBLOCK = getattr(os, "O_NONBLOCK", 0)
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
 _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
 PORTABLE_HARD_LINK_REQUIRED = "portable atomic storage requires local hard-link support"
+MAX_SAVED_RECORD_BYTES = 64 * 1024 * 1024
 _DESCRIPTOR_BACKEND_SUPPORTED = (
     os.name != "nt"
     and bool(_DIRECTORY)
@@ -300,7 +302,27 @@ def _require_regular_at(directory_fd: int, name: str) -> os.stat_result:
     return metadata
 
 
-def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> str:
+def read_bounded_utf8(
+    handle: BinaryIO, *, max_bytes: int = MAX_SAVED_RECORD_BYTES
+) -> str:
+    """Decode a regular opened file after reading no more than its byte limit plus one."""
+
+    if type(max_bytes) is not int or max_bytes < 1:
+        raise ValueError("max_bytes must be a positive integer")
+    if os.fstat(handle.fileno()).st_size > max_bytes:
+        raise ValueError("app-owned record exceeds the byte limit")
+    raw = handle.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise ValueError("app-owned record exceeds the byte limit")
+    return raw.decode("utf-8")
+
+
+def read_text_no_follow(
+    path: Path,
+    *,
+    claim: MutationClaim | None = None,
+    max_bytes: int = MAX_SAVED_RECORD_BYTES,
+) -> str:
     """Read one regular UTF-8 file without knowingly following a link or reparse point."""
 
     target = _absolute_path(path)
@@ -322,9 +344,9 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
                 raise UnsafeAtomicPath(f"app-owned record must be a regular file: {target}")
             if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
                 raise UnsafeAtomicPath("app-owned record changed while it was being opened")
-            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            with os.fdopen(descriptor, "rb") as handle:
                 descriptor = -1
-                return handle.read()
+                return read_bounded_utf8(handle, max_bytes=max_bytes)
         finally:
             if descriptor >= 0:
                 os.close(descriptor)
@@ -351,9 +373,9 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
                     raise UnsafeAtomicPath(f"app-owned record must be a regular file: {target}")
                 if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
                     raise UnsafeAtomicPath("app-owned record changed while it was being opened")
-                with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                with os.fdopen(descriptor, "rb") as handle:
                     descriptor = -1
-                    return handle.read()
+                    return read_bounded_utf8(handle, max_bytes=max_bytes)
             finally:
                 if descriptor >= 0:
                     os.close(descriptor)
@@ -375,9 +397,9 @@ def read_text_no_follow(path: Path, *, claim: MutationClaim | None = None) -> st
             raise UnsafeAtomicPath(f"app-owned record must be a regular file: {target}")
         if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
             raise UnsafeAtomicPath("app-owned record changed while it was being opened")
-        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "rb") as handle:
             descriptor = -1
-            return handle.read()
+            return read_bounded_utf8(handle, max_bytes=max_bytes)
     finally:
         if descriptor >= 0:
             os.close(descriptor)

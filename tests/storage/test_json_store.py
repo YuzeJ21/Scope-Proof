@@ -1834,6 +1834,65 @@ def test_load_rejects_record_missing_state_without_key_error(tmp_path: Path) -> 
     assert not isinstance(error.value, KeyError)
 
 
+def test_review_load_rejects_one_byte_over_cap_before_json_parsing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    original = path.read_bytes()
+    monkeypatch.setattr(json_store_module, "MAX_SAVED_RECORD_BYTES", len(original), raising=False)
+
+    assert store.load("review-1").review.review_id == "review-1"
+    path.write_bytes(original + b" ")
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.load("review-1")
+
+
+def test_review_save_rejects_oversized_record_without_replacing_existing_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    original = path.read_bytes()
+    monkeypatch.setattr(
+        json_store_module, "MAX_SAVED_RECORD_BYTES", len(original) - 1, raising=False
+    )
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.save(review_state())
+
+    assert path.read_bytes() == original
+
+
+def test_review_save_size_limit_matches_written_bytes_with_windows_newlines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    path = store.save(state)
+    expected_size = len(path.read_bytes())
+    original_temporary_file = json_store_module.tempfile.NamedTemporaryFile
+
+    def emulate_windows_default_newlines(*args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "w+b")
+        if "b" not in mode and "newline" not in kwargs:
+            kwargs["newline"] = "\r\n"
+        return original_temporary_file(*args, **kwargs)
+
+    monkeypatch.setattr(
+        json_store_module.tempfile, "NamedTemporaryFile", emulate_windows_default_newlines
+    )
+    monkeypatch.setattr(
+        json_store_module, "MAX_SAVED_RECORD_BYTES", expected_size, raising=False
+    )
+
+    store.save(state)
+
+    assert len(path.read_bytes()) == expected_size
+    assert store.load(state.review.review_id) == state
+
+
 def test_review_id_cannot_escape_store_directory(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
 

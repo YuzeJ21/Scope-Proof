@@ -118,6 +118,71 @@ def test_alpha_case_round_trips_as_validated_json(tmp_path: Path) -> None:
     assert store.list_case_ids() == [record.case_id]
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_alpha_case_load_rejects_one_byte_over_cap_on_both_backends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", not portable)
+    record = alpha_case()
+    store = JsonAlphaCaseStore(tmp_path)
+    path = store.save(record)
+    original = path.read_bytes()
+    monkeypatch.setattr(
+        alpha_storage_module, "MAX_SAVED_RECORD_BYTES", len(original), raising=False
+    )
+
+    assert store.load(record.case_id) == record
+    path.write_bytes(original + b" ")
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.load(record.case_id)
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_alpha_case_save_rejects_oversized_record_before_creating_a_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", not portable)
+    monkeypatch.setattr(alpha_storage_module, "MAX_SAVED_RECORD_BYTES", 1, raising=False)
+    store = JsonAlphaCaseStore(tmp_path / "alpha-cases")
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.save(alpha_case())
+
+    assert not store.directory.exists()
+
+
+def test_alpha_case_update_rejects_oversized_result_without_replacing_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopeproof_core.alpha.models import AlphaOutcome
+    from scopeproof_core.alpha.service import record_alpha_outcome
+
+    record = alpha_case()
+    store = JsonAlphaCaseStore(tmp_path)
+    path = store.save(record)
+    original = path.read_bytes()
+    completed = record_alpha_outcome(
+        record,
+        review_state=matching_review_state(),
+        outcome=AlphaOutcome.FOUND_USEFUL_GAP,
+    )
+    completed_size = len((completed.model_dump_json(indent=2) + "\n").encode())
+    assert completed_size > len(original)
+    monkeypatch.setattr(
+        alpha_storage_module, "MAX_SAVED_RECORD_BYTES", completed_size - 1, raising=False
+    )
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.update(completed)
+
+    assert path.read_bytes() == original
+
+
 def test_alpha_case_save_refuses_silent_overwrite(tmp_path: Path) -> None:
     record = alpha_case()
     store = JsonAlphaCaseStore(tmp_path)

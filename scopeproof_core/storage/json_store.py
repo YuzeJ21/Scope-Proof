@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, StrictInt, ValidationError
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewBundle, ReviewState
+from scopeproof_core.storage.atomic_files import MAX_SAVED_RECORD_BYTES, read_text_no_follow
 
 try:
     import fcntl
@@ -257,11 +258,14 @@ class JsonReviewStore:
             "state": validated.model_dump(mode="json"),
         }
         serialized = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+        serialized_bytes = serialized.encode("utf-8")
+        if len(serialized_bytes) > MAX_SAVED_RECORD_BYTES:
+            raise ValueError("saved review record exceeds the byte limit")
         with tempfile.NamedTemporaryFile(
-            "w", encoding="utf-8", dir=self.directory, prefix=f".{target.stem}-", delete=False
+            "wb", dir=self.directory, prefix=f".{target.stem}-", delete=False
         ) as handle:
             temporary = Path(handle.name)
-            handle.write(serialized)
+            handle.write(serialized_bytes)
         temporary.replace(target)
         return target
 
@@ -465,7 +469,12 @@ class JsonReviewStore:
 
     def load(self, review_id: str) -> ReviewState:
         """Load a known record format and validate all nested models."""
-        payload = json.loads(self._existing_record_path(review_id).read_text(encoding="utf-8"))
+        payload = json.loads(
+            read_text_no_follow(
+                self._existing_record_path(review_id),
+                max_bytes=MAX_SAVED_RECORD_BYTES,
+            )
+        )
         if not isinstance(payload, dict):
             raise ValueError("invalid review record envelope")
         record_version = payload.get("record_version")
