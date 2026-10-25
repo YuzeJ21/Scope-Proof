@@ -1740,6 +1740,46 @@ def test_save_rejects_a_symlinked_store_root(tmp_path: Path) -> None:
     assert list(outside.iterdir()) == []
 
 
+def test_store_rejects_symlinked_ancestor_before_save_or_discovery(tmp_path: Path) -> None:
+    real_workspace = tmp_path / "real-workspace"
+    real_workspace.mkdir()
+    linked_workspace = tmp_path / "linked-workspace"
+    try:
+        linked_workspace.symlink_to(real_workspace, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks are unavailable")
+    direct_store = JsonReviewStore(real_workspace / ".scopeproof" / "reviews")
+    saved_path = direct_store.save(review_state())
+    original_bytes = saved_path.read_bytes()
+    store = JsonReviewStore(linked_workspace / ".scopeproof" / "reviews")
+
+    with pytest.raises(UnsafeReviewStore, match="symbolic link"):
+        store.save(review_state())
+    with pytest.raises(UnsafeReviewStore, match="symbolic link"):
+        store.list_review_ids()
+    with pytest.raises(UnsafeReviewStore, match="symbolic link"):
+        store.load("review-1")
+    assert saved_path.read_bytes() == original_bytes
+
+
+def test_store_rejects_non_directory_ancestor_before_save(tmp_path: Path) -> None:
+    blocking_file = tmp_path / "workspace"
+    blocking_file.write_text("keep", encoding="utf-8")
+    store = JsonReviewStore(blocking_file / ".scopeproof" / "reviews")
+
+    with pytest.raises(UnsafeReviewStore, match="directory"):
+        store.save(review_state())
+    assert blocking_file.read_text(encoding="utf-8") == "keep"
+
+
+def test_store_rejects_parent_traversal_before_save(tmp_path: Path) -> None:
+    store = JsonReviewStore(tmp_path / "workspace" / ".." / "reviews")
+
+    with pytest.raises(UnsafeReviewStore, match="parent traversal"):
+        store.save(review_state())
+    assert not (tmp_path / "reviews").exists()
+
+
 def test_list_review_ids_rejects_a_regular_file_store_root(tmp_path: Path) -> None:
     store_root = tmp_path / "reviews"
     store_root.write_text("not a directory", encoding="utf-8")
@@ -1832,6 +1872,65 @@ def test_load_rejects_record_missing_state_without_key_error(tmp_path: Path) -> 
         store.load("review-1")
 
     assert not isinstance(error.value, KeyError)
+
+
+def test_review_load_rejects_one_byte_over_cap_before_json_parsing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    original = path.read_bytes()
+    monkeypatch.setattr(json_store_module, "MAX_SAVED_RECORD_BYTES", len(original), raising=False)
+
+    assert store.load("review-1").review.review_id == "review-1"
+    path.write_bytes(original + b" ")
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.load("review-1")
+
+
+def test_review_save_rejects_oversized_record_without_replacing_existing_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    path = store.save(review_state())
+    original = path.read_bytes()
+    monkeypatch.setattr(
+        json_store_module, "MAX_SAVED_RECORD_BYTES", len(original) - 1, raising=False
+    )
+
+    with pytest.raises(ValueError, match="byte limit"):
+        store.save(review_state())
+
+    assert path.read_bytes() == original
+
+
+def test_review_save_size_limit_matches_written_bytes_with_windows_newlines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    state = review_state()
+    path = store.save(state)
+    expected_size = len(path.read_bytes())
+    original_temporary_file = json_store_module.tempfile.NamedTemporaryFile
+
+    def emulate_windows_default_newlines(*args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "w+b")
+        if "b" not in mode and "newline" not in kwargs:
+            kwargs["newline"] = "\r\n"
+        return original_temporary_file(*args, **kwargs)
+
+    monkeypatch.setattr(
+        json_store_module.tempfile, "NamedTemporaryFile", emulate_windows_default_newlines
+    )
+    monkeypatch.setattr(
+        json_store_module, "MAX_SAVED_RECORD_BYTES", expected_size, raising=False
+    )
+
+    store.save(state)
+
+    assert len(path.read_bytes()) == expected_size
+    assert store.load(state.review.review_id) == state
 
 
 def test_review_id_cannot_escape_store_directory(tmp_path: Path) -> None:

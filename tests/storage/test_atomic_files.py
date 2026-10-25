@@ -492,6 +492,56 @@ def test_regular_file_read_rejects_directory_target(tmp_path: Path) -> None:
         read_text_no_follow(target)
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_saved_text_read_enforces_byte_limit_on_both_backends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", not portable)
+    target = tmp_path / "record.json"
+    target.write_bytes("éabc".encode())
+
+    assert read_text_no_follow(target, max_bytes=5) == "éabc"
+    with pytest.raises(ValueError, match="byte limit"):
+        read_text_no_follow(target, max_bytes=4)
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_saved_text_read_preserves_universal_newline_semantics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", not portable)
+    target = tmp_path / "record.json"
+    target.write_bytes(b"one\r\ntwo\rthree\n")
+
+    assert read_text_no_follow(target) == "one\ntwo\nthree\n"
+
+
+def test_saved_text_read_checks_actual_bytes_when_metadata_understates_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "record.json"
+    target.write_bytes(b"123456")
+    target_inode = target.stat().st_ino
+    original_fstat = os.fstat
+
+    def understate_record_size(descriptor: int) -> os.stat_result:
+        metadata = original_fstat(descriptor)
+        if metadata.st_ino != target_inode:
+            return metadata
+        fields = list(metadata)
+        fields[6] = 5
+        return os.stat_result(fields)
+
+    monkeypatch.setattr(os, "fstat", understate_record_size)
+
+    with pytest.raises(ValueError, match="byte limit"):
+        read_text_no_follow(target, max_bytes=5)
+
+
 def test_portable_read_rejects_directory_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

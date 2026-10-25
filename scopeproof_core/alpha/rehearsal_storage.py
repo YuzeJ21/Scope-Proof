@@ -14,11 +14,13 @@ from pathlib import Path
 
 from scopeproof_core.alpha.rehearsal import AlphaRehearsalRecord
 from scopeproof_core.storage.atomic_files import (
+    MAX_SAVED_RECORD_BYTES,
     PORTABLE_HARD_LINK_REQUIRED,
     UnsafeAtomicPath,
     _quarantine_and_remove_at,
     atomic_create_text,
     list_regular_files,
+    read_bounded_utf8,
     read_text_no_follow,
 )
 
@@ -180,11 +182,14 @@ class JsonAlphaRehearsalStore:
         validated = AlphaRehearsalRecord.model_validate(
             record.model_dump(mode="python")
         )
+        serialized = validated.model_dump_json(indent=2) + "\n"
+        if len(serialized.encode("utf-8")) > MAX_SAVED_RECORD_BYTES:
+            raise ValueError("alpha-rehearsal record exceeds the byte limit")
         target_name = self._target_name(validated.rehearsal_id)
         if not _DESCRIPTOR_BACKEND_SUPPORTED:
             target = self.directory / target_name
             try:
-                atomic_create_text(target, validated.model_dump_json(indent=2) + "\n")
+                atomic_create_text(target, serialized)
             except UnsafeAtomicPath as error:
                 raise UnsafeAlphaRehearsalStore(
                     _store_error_message(
@@ -206,7 +211,10 @@ class JsonAlphaRehearsalStore:
         else:
             try:
                 payload = json.loads(
-                    read_text_no_follow(self.directory / target_name)
+                    read_text_no_follow(
+                        self.directory / target_name,
+                        max_bytes=MAX_SAVED_RECORD_BYTES,
+                    )
                 )
             except UnsafeAtomicPath as error:
                 raise UnsafeAlphaRehearsalStore(
@@ -228,9 +236,9 @@ class JsonAlphaRehearsalStore:
         try:
             if not stat.S_ISREG(os.fstat(record_fd).st_mode):
                 raise FileNotFoundError(target_name)
-            with os.fdopen(record_fd, "r", encoding="utf-8") as handle:
+            with os.fdopen(record_fd, "rb") as handle:
                 record_fd = -1
-                return json.load(handle)
+                return json.loads(read_bounded_utf8(handle, max_bytes=MAX_SAVED_RECORD_BYTES))
         finally:
             if record_fd >= 0:
                 os.close(record_fd)

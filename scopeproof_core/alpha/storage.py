@@ -8,6 +8,7 @@ from pathlib import Path
 
 from scopeproof_core.alpha.models import AlphaCaseRecord
 from scopeproof_core.storage.atomic_files import (
+    MAX_SAVED_RECORD_BYTES,
     PORTABLE_HARD_LINK_REQUIRED,
     UnsafeAtomicPath,
     atomic_create_text,
@@ -19,6 +20,11 @@ from scopeproof_core.storage.atomic_files import (
 )
 
 _CASE_ID = re.compile(r"^alpha-[0-9a-f]{32}$")
+
+
+def _require_bounded_record(serialized: str) -> None:
+    if len(serialized.encode("utf-8")) > MAX_SAVED_RECORD_BYTES:
+        raise ValueError("alpha-case record exceeds the byte limit")
 
 
 def default_alpha_case_directory() -> Path:
@@ -69,7 +75,7 @@ class JsonAlphaCaseStore:
         self._require_safe_directory()
         target = self._path(case_id)
         try:
-            read_text_no_follow(target)
+            read_text_no_follow(target, max_bytes=MAX_SAVED_RECORD_BYTES)
         except FileNotFoundError:
             raise FileNotFoundError(case_id) from None
         except UnsafeAtomicPath as error:
@@ -104,12 +110,17 @@ class JsonAlphaCaseStore:
         target = self._path(validated.case_id)
         try:
             with exclusive_path_claim(target) as claim:
-                payload = json.loads(read_text_no_follow(target, claim=claim))
+                payload = json.loads(
+                    read_text_no_follow(
+                        target, claim=claim, max_bytes=MAX_SAVED_RECORD_BYTES
+                    )
+                )
                 existing = AlphaCaseRecord.model_validate(payload)
                 if existing.case_id != validated.case_id:
                     raise ValueError("stored alpha-case record does not match requested ID")
                 self._validate_update(existing, validated)
                 serialized = validated.model_dump_json(indent=2) + "\n"
+                _require_bounded_record(serialized)
                 try:
                     atomic_replace_text(target, serialized, claim=claim)
                     return target
@@ -162,7 +173,9 @@ class JsonAlphaCaseStore:
         validated_id = self._validate_case_id(case_id)
         target = self._existing_path(validated_id)
         try:
-            payload = json.loads(read_text_no_follow(target))
+            payload = json.loads(
+                read_text_no_follow(target, max_bytes=MAX_SAVED_RECORD_BYTES)
+            )
         except UnsafeAtomicPath as error:
             raise UnsafeAlphaCaseStore("alpha-case record must be a regular local file") from error
         validated = AlphaCaseRecord.model_validate(payload)
@@ -172,5 +185,6 @@ class JsonAlphaCaseStore:
 
     def _write(self, target: Path, record: AlphaCaseRecord) -> Path:
         serialized = record.model_dump_json(indent=2) + "\n"
+        _require_bounded_record(serialized)
         atomic_create_text(target, serialized)
         return target
