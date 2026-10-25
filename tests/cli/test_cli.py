@@ -2846,9 +2846,13 @@ def test_alpha_friction_requires_stage(tmp_path: Path, capsys) -> None:
 
 def save_exact_head_cli_review(storage: Path) -> ReviewState:
     state = new_review_state(build_demo_review()).model_copy(deep=True)
+    old_head = state.review.head_sha
     state.review.head_sha = "a" * 40
     assert state.bundle is not None
     state.bundle.review.head_sha = "a" * 40
+    for candidate in state.bundle.evidence:
+        candidate.commit_sha = state.review.head_sha
+        candidate.permalink = candidate.permalink.replace(old_head, state.review.head_sha)
     state = ReviewState.model_validate(state.model_dump(mode="python"))
     JsonReviewStore(storage).save(state)
     return state

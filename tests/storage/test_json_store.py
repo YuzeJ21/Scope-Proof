@@ -1851,9 +1851,13 @@ def test_load_rejects_a_review_record_symlink_that_escapes_the_store(tmp_path: P
 
 def exact_head_review_state(review_id: str = "junit-review"):
     state = review_state(review_id).model_copy(deep=True)
+    old_head = state.review.head_sha
     state.review.head_sha = "a" * 40
     assert state.bundle is not None
     state.bundle.review.head_sha = "a" * 40
+    for candidate in state.bundle.evidence:
+        candidate.commit_sha = state.review.head_sha
+        candidate.permalink = candidate.permalink.replace(old_head, state.review.head_sha)
     return type(state).model_validate(state.model_dump(mode="python"))
 
 

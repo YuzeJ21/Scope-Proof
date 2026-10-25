@@ -1576,6 +1576,12 @@ def exact_head_state() -> ReviewState:
     state.review.head_sha = "a" * 40
     assert state.bundle is not None
     state.bundle.review.head_sha = "a" * 40
+    for candidate in state.bundle.evidence:
+        candidate.commit_sha = state.review.head_sha
+        candidate.permalink = (
+            f"https://github.com/acme/widget/blob/{state.review.head_sha}/"
+            f"{candidate.file_path}#L{candidate.line_start}"
+        )
     return ReviewState.model_validate(state.model_dump(mode="python"))
 
 

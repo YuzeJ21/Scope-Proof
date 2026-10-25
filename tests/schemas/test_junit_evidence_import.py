@@ -18,7 +18,11 @@ ARTIFACT_SHA256 = "c" * 64
 
 def exact_head_bundle() -> ReviewBundle:
     bundle = build_demo_review().model_copy(deep=True)
+    old_head = bundle.review.head_sha
     bundle.review.head_sha = HEAD_SHA
+    for candidate in bundle.evidence:
+        candidate.commit_sha = HEAD_SHA
+        candidate.permalink = candidate.permalink.replace(old_head, HEAD_SHA)
     bundle.criteria_revision_number = 1
     return ReviewBundle.model_validate(bundle.model_dump(mode="python"))
 

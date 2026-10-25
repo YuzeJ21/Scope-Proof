@@ -29,7 +29,11 @@ TWO_CASE_XML = (
 
 def exact_head_state() -> ReviewState:
     bundle = build_demo_review().model_copy(deep=True)
+    old_head = bundle.review.head_sha
     bundle.review.head_sha = HEAD_SHA
+    for candidate in bundle.evidence:
+        candidate.commit_sha = HEAD_SHA
+        candidate.permalink = candidate.permalink.replace(old_head, HEAD_SHA)
     bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
     return new_review_state(bundle)
 
