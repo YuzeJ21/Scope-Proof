@@ -315,6 +315,32 @@ def _choose_combobox_option(
                 raise
 
 
+def _choose_multiselect_option(
+    page: Page,
+    combobox: Locator,
+    *,
+    query: str,
+    option_name: str,
+) -> None:
+    selected_values = combobox.locator("xpath=../..")
+    for attempt in range(3):
+        if option_name in selected_values.inner_text():
+            return
+        try:
+            combobox.click()
+            combobox.fill(query)
+            option = page.get_by_role("option", name=option_name, exact=True)
+            expect(option).to_be_visible(timeout=5_000)
+            _run_and_wait_for_streamlit_rerun(
+                page, lambda selected_option=option: selected_option.click(timeout=5_000)
+            )
+            expect(selected_values).to_contain_text(option_name, timeout=5_000)
+            return
+        except PlaywrightTimeoutError:
+            if attempt == 2:
+                raise
+
+
 def _download_with_retry(page: Page, *, button_name: str) -> Download:
     for attempt in range(3):
         download_button = page.get_by_role(
@@ -692,14 +718,12 @@ def _exercise_junit_import_round_trip(
         "combobox", name="Map JUnit scopes to the selected criterion", exact=True
     )
     expect(mapping).to_be_enabled()
-    mapping.click()
-    mapping.fill("suite-0001")
-    suite_option = page.get_by_role(
-        "option",
-        name="suite-0001 · suite · unit", exact=True
+    _choose_multiselect_option(
+        page,
+        mapping,
+        query="suite-0001",
+        option_name="suite-0001 · suite · unit",
     )
-    expect(suite_option).to_be_visible()
-    _run_and_wait_for_streamlit_rerun(page, suite_option.click)
     page.keyboard.press("Escape")
     expect(mapping.locator("xpath=../..")).to_contain_text(
         "suite-0001 · suite · unit"
