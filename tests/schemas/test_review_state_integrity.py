@@ -422,6 +422,12 @@ def test_review_state_allows_historical_commit_provenance() -> None:
     payload = revised.model_dump(mode="python")
     payload["analysis_history"][0]["review"]["base_sha"] = "historical-base"
     payload["analysis_history"][0]["review"]["head_sha"] = "historical-head"
+    for candidate in payload["analysis_history"][0]["evidence"]:
+        old_head = candidate["commit_sha"]
+        candidate["commit_sha"] = "historical-head"
+        candidate["permalink"] = candidate["permalink"].replace(
+            f"/blob/{old_head}/", "/blob/historical-head/"
+        )
 
     reopened = ReviewState.model_validate(payload)
 

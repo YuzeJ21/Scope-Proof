@@ -19,6 +19,7 @@ which provides the wheel, source archive, and checksum manifest.
 |---|---|
 | Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
 | Active source line | Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists |
+| 2026-10-25 observed main | `f586d90b72a14fd19d5a0add01f3d05532a88955`; integrity and portfolio draft work remains separate from the published v0.2.3 release |
 | Post-PR #193 resulting-main snapshot (2026-08-13) | PR #193 product-source baseline at `432371c4faec0b790f70fec32b4d3fc4d5132cfa` (PR head `8bb407079a0ff7098d2fc18af3d75b216725df2e`, base `9426e8714ffd2c3742bb074ae26fc788f1049c63`) |
 | Post-PR #196 resulting-main snapshot (2026-08-17) | Exact PR #196 head `5a6a25a6dff23cdfa8dcb4023b83144078620610` landed in merge `8387156fd6f6e90eef7caf58881b0cc5bb62b111`; hosted resulting-main CI run [`32093041685`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32093041685) succeeded as the exact-head engineering record |
 | Post-PR #197 resulting-main snapshot (2026-08-18) | Exact PR #197 head `5a69af4e92e2720adc524a32ea8c4eb94d013cb8`, base `8387156fd6f6e90eef7caf58881b0cc5bb62b111`, and merge `789950dc63d80ec24d8bca5974a3ae52955b1c4f`; resulting-main CI [`32194734107`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32194734107), CodeQL [`32194733033`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32194733033), Pages [`32194734125`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32194734125), and base-advance [`32194734440`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32194734440) succeeded as the dated engineering record. PR #197 owner workflow consolidation is complete and does not claim customer validation. |
@@ -43,6 +44,13 @@ PR #188 merged verified-public provenance enforcement at
 verified-public provenance enforcement is implemented. These changes form the `0.2.4.dev0`
 development line and earn no Stage 1 credit.
 
+The 2026-10-25 integrity draft adds per-test app storage isolation, SHA-addressed comparison of
+mutable PR lists, and shared saved/exported bundle relationship validation. It requires complete
+automated verification and review before any merge decision. Existing dependency PRs #200 and
+#201 remain separate lockfile reviews; JUnit PR #199 has repaired parser/comparison defects
+and remains pending exact-head and post-integrity integration checks. The [integration disposition](docs/audits/2026-10-25-integrity-integration-disposition.md)
+records the exact heads and reasons. None of this is published or customer validation.
+
 PR #189 established the post-release development identity; PR #190 preserved comparison
 relationship integrity; PR #191 remediated the GitPython dependency and security issue; PR #192
 bounded same-origin GitHub pagination; and PR #193 hardened cross-platform identity-bound alpha
@@ -58,6 +66,12 @@ completed owner workflow consolidation. PR #198 adds blocker-first decision-hand
 places the selected criterion evidence and controls before the secondary evidence matrix as a
 bounded Stage 2 follow-up. This remains Stage 2 engineering work and does not claim customer
 validation.
+
+The current bounded JUnit adapter slice adds the first separately typed, non-executing evidence
+adapter across the core, CLI, local workbench, saved records, exports, comparison, and installed
+browser proof. It accepts only bounded local bytes, stores sanitized exact-head and criteria-bound
+context, requires explicit human mapping, and never changes gate inputs or creates E1–E4, CI,
+runtime, decision, acceptance, correctness, or customer-validation claims.
 
 ### Verification and evidence boundaries
 
@@ -297,6 +311,11 @@ actions select the matching criterion. PR #198 adds blocker-first unresolved dec
 the selected criterion evidence and controls before the secondary evidence matrix. This bounded
 Stage 2 follow-up preserves every evidence boundary and keeps optional external research
 secondary.
+
+The bounded JUnit adapter is the first implemented non-executing adapter. Its locally supplied
+results remain exact-head/provenance-bound, separately rendered, explicitly mapped, and
+non-gating. Coverage summaries, contract reports, deployment records, and other adapter families
+remain separately scoped future decisions.
 
 The [Stage 2 productization packet](docs/commercialization/stage2-readiness-packet.md) is the
 operating boundary. External commercial discovery is optional and separate from owner-led

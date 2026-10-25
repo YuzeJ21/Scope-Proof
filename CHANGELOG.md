@@ -21,6 +21,16 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
+- Added a bounded, local JUnit XML adapter that accepts bytes only, rejects unsafe or over-limit
+  structures, persists only sanitized exact-head/provenance-bound results, and requires explicit
+  human criterion mapping. Imported results remain external non-gating context: they never become
+  E1–E4, observed CI, runtime verification, a reviewer decision, final acceptance, or correctness.
+  CLI inspection/import, Streamlit save/reopen, validated JSON/Markdown/HTML/CSV exports,
+  deterministic comparison, and an installed-wheel loopback-only Chromium round trip share the
+  same core contracts. Raw XML, output bodies, failure bodies, paths, URLs, and attachments are
+  neither persisted nor exported.
+- Capped retained JUnit imports at 20 per review and each warning or limitation at 1,000
+  characters each. A new analysis cannot inherit imports from an earlier criteria revision.
 - Consolidated the owner decision handoff around blocker-first unresolved decisions and a direct
   pre-matrix criterion handoff. This is a bounded Stage 2 workflow clarification, not a claim of
   acceptance-criteria correctness or runtime verification.

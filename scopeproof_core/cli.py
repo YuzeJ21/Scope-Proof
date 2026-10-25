@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
+
+from pydantic import ValidationError
 
 from scopeproof_core.alpha.models import AlphaFrictionStage, AlphaOutcome, ParticipantRole
 from scopeproof_core.alpha.rehearsal import initialize_alpha_rehearsal
@@ -29,6 +34,12 @@ from scopeproof_core.evals.metrics import EvidenceQualityMetrics
 from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
+from scopeproof_core.importers.junit import (
+    MAX_JUNIT_BYTES,
+    JUnitMappingDocument,
+    build_junit_evidence_import,
+    parse_junit_artifact,
+)
 from scopeproof_core.reporting.exporters import (
     export_comparison_json,
     export_comparison_markdown,
@@ -42,6 +53,7 @@ from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     acceptance_requires_comment,
     append_external_verification,
+    append_junit_evidence_import,
     append_resolution,
     new_review_state,
 )
@@ -51,6 +63,7 @@ from scopeproof_core.schemas.models import (
     Criterion,
     EvidenceLevel,
     HumanDecision,
+    JUnitImportMutationMetadata,
     LifecycleMutationMetadata,
     PullRequestSnapshot,
     ResearchContext,
@@ -71,6 +84,8 @@ from scopeproof_core.storage.atomic_files import (
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.verification.service import build_findings
 from scopeproof_core.version import __version__
+
+_BINARY = getattr(os, "O_BINARY", 0)
 
 EXPORT_RENDERERS = {
     "json": export_json,
@@ -445,6 +460,103 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _read_bounded_regular_file(
+    path: Path, *, max_bytes: int, label: str
+) -> bytes:
+    """Read one regular local file without buffering beyond its explicit budget."""
+
+    flags = os.O_RDONLY | _BINARY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError(f"{label} must be a regular file")
+        if metadata.st_size > max_bytes:
+            raise ValueError(f"{label} exceeds the byte limit")
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65_536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        artifact_bytes = b"".join(chunks)
+        if len(artifact_bytes) > max_bytes:
+            raise ValueError(f"{label} exceeds the byte limit")
+        return artifact_bytes
+    finally:
+        os.close(descriptor)
+
+
+def _read_bounded_junit_artifact(path: Path) -> bytes:
+    return _read_bounded_regular_file(
+        path,
+        max_bytes=MAX_JUNIT_BYTES,
+        label="JUnit artifact",
+    )
+
+
+def _inspect_junit(args: argparse.Namespace) -> int:
+    """Print a sanitized bytes-only JUnit projection without persistence."""
+
+    parsed = parse_junit_artifact(_read_bounded_junit_artifact(Path(args.artifact)))
+    print(parsed.model_dump_json(indent=2))
+    return 0
+
+
+def _import_junit(args: argparse.Namespace) -> int:
+    """Atomically append one validated external test-result import."""
+
+    mapping_bytes = _read_bounded_regular_file(
+        Path(args.mapping),
+        max_bytes=MAX_JUNIT_BYTES,
+        label="JUnit mapping",
+    )
+    try:
+        mapping = JUnitMappingDocument.model_validate_json(mapping_bytes)
+    except ValidationError:
+        raise ValueError("JUnit mapping document is invalid") from None
+    artifact_bytes = _read_bounded_junit_artifact(Path(args.artifact))
+    if sha256(artifact_bytes).hexdigest() != mapping.artifact_sha256:
+        raise ValueError("JUnit mapping digest does not match the selected artifact")
+    store = JsonReviewStore(Path(args.storage_dir))
+    imported = None
+
+    def transition(state: ReviewState) -> ReviewState:
+        nonlocal imported
+        imported = build_junit_evidence_import(
+            state,
+            artifact_bytes,
+            mapping.selections,
+            importer=args.importer,
+            limitations=args.limitation,
+        )
+        return append_junit_evidence_import(state, imported)
+
+    updated, path = store.mutate(args.review_id, transition)
+    if imported is None or updated.bundle is None:
+        raise ValueError("JUnit import transition did not produce an active record")
+    metadata = JUnitImportMutationMetadata(
+        review_id=updated.review.review_id,
+        record=str(path),
+        head_sha=updated.review.head_sha,
+        import_id=imported.import_id,
+        artifact_sha256=imported.artifact_sha256,
+        mapped_criterion_ids=sorted(
+            mapping.criterion_id for mapping in imported.criterion_mappings
+        ),
+        totals=imported.totals,
+        evidence_boundary="externally_supplied_non_gating",
+        verdict=updated.bundle.gate.verdict,
+    )
+    print(metadata.model_dump_json())
+    return 0
+
+
 def _validate_action_evidence(args: argparse.Namespace) -> int:
     """Validate owner-supplied external Action evidence without contacting GitHub."""
 
@@ -680,6 +792,23 @@ def _parser() -> argparse.ArgumentParser:
     compare.add_argument("--output")
     compare.add_argument("--storage-dir", default=".scopeproof/reviews")
     compare.set_defaults(handler=_compare)
+    inspect_junit = commands.add_parser(
+        "inspect-junit",
+        help="Inspect bounded local JUnit XML without saving or executing it",
+    )
+    inspect_junit.add_argument("artifact", help="Explicit local JUnit XML file")
+    inspect_junit.set_defaults(handler=_inspect_junit)
+    import_junit = commands.add_parser(
+        "import-junit",
+        help="Append mapped external JUnit results to one exact-head saved review",
+    )
+    import_junit.add_argument("review_id")
+    import_junit.add_argument("artifact", help="Explicit local JUnit XML file")
+    import_junit.add_argument("--mapping", required=True, help="Strict mapping JSON file")
+    import_junit.add_argument("--importer", required=True, help="Asserted importer identity")
+    import_junit.add_argument("--limitation", action="append", default=[])
+    import_junit.add_argument("--storage-dir", default=".scopeproof/reviews")
+    import_junit.set_defaults(handler=_import_junit)
     benchmark = commands.add_parser("benchmark", help="Run every labelled local benchmark case")
     benchmark.set_defaults(handler=lambda _: _benchmark())
     comparison_benchmark = commands.add_parser(
