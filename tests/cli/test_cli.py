@@ -1864,7 +1864,7 @@ def test_compare_command_rejects_different_confirmed_criterion_definitions(
     [
         ("criterion_order", "identical ordered criterion definitions"),
         ("criteria_source", "compatible criteria-source provenance"),
-        ("candidate_head", "evidence candidates must match the reviewed head"),
+        ("candidate_head", "candidate head must match review head"),
         ("live_head", "exact head SHAs"),
     ],
 )
@@ -1925,11 +1925,7 @@ def test_compare_command_uses_core_relationship_validator_before_render_or_outpu
         criteria_revision = criteria_revision.model_copy(
             update={"source_provenance": revised_provenance}
         )
-    elif invalid_relationship == "candidate_head":
-        evidence = [item.model_copy(deep=True) for item in bundle.evidence]
-        evidence[0] = evidence[0].model_copy(update={"commit_sha": "unrelated-head"})
-        bundle = bundle.model_copy(update={"evidence": evidence})
-    else:
+    elif invalid_relationship == "live_head":
         review = review.model_copy(
             update={
                 "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
@@ -1949,6 +1945,11 @@ def test_compare_command_uses_core_relationship_validator_before_render_or_outpu
             }
         )
     )
+    if invalid_relationship == "candidate_head":
+        record = storage / f"{current_id}.json"
+        payload = json.loads(record.read_text(encoding="utf-8"))
+        payload["state"]["bundle"]["evidence"][0]["commit_sha"] = "unrelated-head"
+        record.write_text(json.dumps(payload), encoding="utf-8")
     before = {
         review_id: (storage / f"{review_id}.json").read_bytes()
         for review_id in (previous_id, current_id)

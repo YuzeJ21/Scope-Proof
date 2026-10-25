@@ -23,6 +23,7 @@ from pydantic import (
     model_validator,
 )
 
+from scopeproof_core.provenance import candidate_permalink_matches
 from scopeproof_core.version import __version__
 
 RULESET_VERSION = "1.0.0"
@@ -957,7 +958,6 @@ class EvidenceItem(BaseModel):
             raise ValueError("line_end must be greater than or equal to line_start")
         return self
 
-
 class CriterionRetrievalDiagnostic(BaseModel):
     """Deterministic search metadata that is never criterion evidence."""
 
@@ -1369,6 +1369,29 @@ class ReviewBundle(BaseModel):
         evidence_by_id = {item.evidence_id: item for item in self.evidence}
         if any(item.criterion_id not in known_criteria for item in self.evidence):
             raise ValueError("evidence criterion IDs must reference known criteria")
+        for item in self.evidence:
+            expected_level = {
+                EvidenceType.IMPLEMENTATION: EvidenceLevel.E1,
+                EvidenceType.DOCUMENTATION: EvidenceLevel.E1,
+                EvidenceType.CONTRACT: EvidenceLevel.E1,
+                EvidenceType.TEST: EvidenceLevel.E2,
+            }.get(item.evidence_type)
+            if item.evidence_level is not expected_level:
+                raise ValueError("candidate evidence type and level must agree")
+            if item.commit_sha != self.review.head_sha:
+                raise ValueError("candidate head must match review head")
+            if (
+                self.review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+                and not candidate_permalink_matches(
+                    item.permalink,
+                    repository=self.review.repository,
+                    commit_sha=item.commit_sha,
+                    file_path=item.file_path,
+                    line_start=item.line_start,
+                    line_end=item.line_end,
+                )
+            ):
+                raise ValueError("candidate permalink must match review identity and location")
 
         if self.retrieval_diagnostics:
             diagnostic_ids = [
@@ -1397,6 +1420,10 @@ class ReviewBundle(BaseModel):
         if set(finding_ids) != known_criteria:
             raise ValueError("findings must match criteria exactly")
         for finding in self.findings:
+            if finding.status is FindingStatus.EVIDENCE_FOUND and not finding.evidence_ids:
+                raise ValueError("evidence_found requires cited candidates")
+            if not finding.evidence_ids and not finding.missing_evidence:
+                raise ValueError("findings require cited support or missing evidence")
             if len(finding.evidence_ids) != len(set(finding.evidence_ids)):
                 raise ValueError("finding evidence references must be unique")
             if any(evidence_id not in evidence_by_id for evidence_id in finding.evidence_ids):
@@ -1406,6 +1433,16 @@ class ReviewBundle(BaseModel):
                 for evidence_id in finding.evidence_ids
             ):
                 raise ValueError("finding evidence must belong to the same criterion")
+            expected_level = max(
+                (
+                    evidence_by_id[evidence_id].evidence_level
+                    for evidence_id in finding.evidence_ids
+                ),
+                key=lambda level: level.rank,
+                default=EvidenceLevel.E0,
+            )
+            if finding.evidence_level is not expected_level:
+                raise ValueError("finding level must match cited candidates")
 
         if any(item.criterion_id not in known_criteria for item in self.runtime_evidence):
             raise ValueError("runtime evidence criterion IDs must reference known criteria")
@@ -1417,6 +1454,11 @@ class ReviewBundle(BaseModel):
         if len(runtime_ids) != len(set(runtime_ids)):
             raise ValueError("runtime evidence IDs must be unique")
         for item in self.runtime_evidence:
+            if (
+                self.review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+                and item.runtime_evidence_id is None
+            ):
+                raise ValueError("live runtime evidence requires review identity")
             if item.runtime_evidence_id is None:
                 continue
             if (
