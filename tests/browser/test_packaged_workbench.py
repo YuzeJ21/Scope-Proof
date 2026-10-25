@@ -694,12 +694,16 @@ def _exercise_junit_import_round_trip(
     expect(mapping).to_be_enabled()
     mapping.click()
     mapping.fill("suite-0001")
-    suite_option = page.get_by_text(
-        "suite-0001 · suite · unit", exact=True
-    ).last
+    suite_option = page.get_by_role(
+        "option",
+        name="suite-0001 · suite · unit", exact=True
+    )
     expect(suite_option).to_be_visible()
     _run_and_wait_for_streamlit_rerun(page, suite_option.click)
     page.keyboard.press("Escape")
+    expect(mapping.locator("xpath=../..")).to_contain_text(
+        "suite-0001 · suite · unit"
+    )
     expect(preview).to_have_count(1)
     if not preview.is_visible():
         junit_expander.click()
