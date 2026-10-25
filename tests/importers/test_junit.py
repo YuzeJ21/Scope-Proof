@@ -70,6 +70,8 @@ def test_parser_returns_sanitized_cases_and_computed_totals() -> None:
     [
         (b"", b'status="failed"'),
         (b"", b'result="failure"'),
+        (b"", b'success="false"'),
+        (b"", b'verdict="failed"'),
         (b' xmlns:x="urn:test"', b'x:status="failed"'),
     ],
 )
@@ -93,6 +95,12 @@ def test_parser_rejects_namespaced_suite_count_attribute() -> None:
         b'<testcase name="t"/></testsuite>'
     )
     with pytest.raises(JUnitImportError, match="namespaces are unsupported"):
+        parse_junit_artifact(xml)
+
+
+def test_parser_rejects_unsupported_suite_outcome_attribute() -> None:
+    xml = b'<testsuite name="s" success="false"><testcase name="t"/></testsuite>'
+    with pytest.raises(JUnitImportError, match="unsupported attribute"):
         parse_junit_artifact(xml)
 
 

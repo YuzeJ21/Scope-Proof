@@ -226,7 +226,10 @@ def _parse_case(
     suite_name: str,
     case_number: int,
 ) -> tuple[JUnitCaseResult, bool, bool]:
-    if any(_local_name(name) in {"status", "result", "outcome"} for name in element.attrib):
+    if any(
+        name not in {"name", "classname", "time", "assertions", "file", "line"}
+        for name in element.attrib
+    ):
         raise JUnitImportError("JUnit test case has an unsupported outcome attribute.")
     result_markers: list[str] = []
     discarded = False
@@ -345,9 +348,23 @@ def parse_junit_artifact(artifact_bytes: bytes) -> ParsedJUnitArtifact:
     if len(elements) > MAX_JUNIT_ELEMENTS:
         raise JUnitImportError("JUnit artifact exceeds the element limit.")
     for element in elements:
-        _local_name(element.tag)
+        element_name = _local_name(element.tag)
         for attribute_name in element.attrib:
             _local_name(attribute_name)
+            if element_name in {"testsuite", "testsuites"} and attribute_name not in {
+                "name",
+                "tests",
+                "failures",
+                "errors",
+                "skipped",
+                "time",
+                "timestamp",
+                "hostname",
+                "id",
+                "package",
+                "file",
+            }:
+                raise JUnitImportError("JUnit test suite has an unsupported attribute.")
 
     root_name = _local_name(root.tag)
     if root_name == "testsuite":
