@@ -317,6 +317,12 @@ def write_legacy_runtime_record(
     historical = payload["state"]["analysis_history"][0]
     historical["review"]["head_sha"] = "historical-head"
     historical["runtime_evidence"][0]["head_sha"] = "historical-head"
+    for candidate in historical["evidence"]:
+        old_head = candidate["commit_sha"]
+        candidate["commit_sha"] = "historical-head"
+        candidate["permalink"] = candidate["permalink"].replace(
+            f"/blob/{old_head}/", "/blob/historical-head/"
+        )
     downgrade_runtime_provenance(payload, record_version)
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path, payload
@@ -331,6 +337,12 @@ def write_version_two_runtime_record_retaining_links(
     historical = payload["state"]["analysis_history"][0]
     historical["review"]["head_sha"] = "historical-head"
     historical["runtime_evidence"][0]["head_sha"] = "historical-head"
+    for candidate in historical["evidence"]:
+        old_head = candidate["commit_sha"]
+        candidate["commit_sha"] = "historical-head"
+        candidate["permalink"] = candidate["permalink"].replace(
+            f"/blob/{old_head}/", "/blob/historical-head/"
+        )
     downgrade_runtime_provenance(payload, remove_manual_links=False)
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path, payload

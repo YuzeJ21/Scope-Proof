@@ -29,7 +29,9 @@ from scopeproof_core.schemas.models import (
     CIObservation,
     CriteriaSourceProvenance,
     Criterion,
+    EvidenceItem,
     EvidenceLevel,
+    EvidenceType,
     Finding,
     FindingStatus,
     GateVerdict,
@@ -43,6 +45,24 @@ from scopeproof_core.schemas.models import (
     normalized_criteria_sha256,
     source_text_sha256,
 )
+
+
+def candidate_evidence() -> EvidenceItem:
+    return EvidenceItem(
+        evidence_id="EV-AC-01",
+        criterion_id="AC-01",
+        evidence_type=EvidenceType.IMPLEMENTATION,
+        evidence_level=EvidenceLevel.E1,
+        file_path="src/export.py",
+        line_start=1,
+        line_end=1,
+        commit_sha="head",
+        permalink="https://github.com/acme/widget/blob/head/src/export.py#L1",
+        excerpt="def export_csv():",
+        matching_rule="keyword_overlap",
+        relevance_reason="Matched export criterion",
+        relevance_score=0.8,
+    )
 
 
 def initial_state():
@@ -74,13 +94,14 @@ def initial_state():
         status=FindingStatus.EVIDENCE_FOUND,
         evidence_level=EvidenceLevel.E1,
         reason="Candidate found",
+        evidence_ids=["EV-AC-01"],
         recommended_action="Review evidence",
     )
     bundle = ReviewBundle(
         review=review,
         source_text="Export CSV",
         criteria=[criterion],
-        evidence=[],
+        evidence=[candidate_evidence()],
         findings=[finding],
         gate=evaluate_gate(review, [criterion], [finding], []),
     )
@@ -142,13 +163,14 @@ def test_new_review_state_copies_bundle_criteria_source_provenance() -> None:
         status=FindingStatus.EVIDENCE_FOUND,
         evidence_level=EvidenceLevel.E1,
         reason="Candidate found",
+        evidence_ids=["EV-AC-01"],
         recommended_action="Review evidence",
     )
     bundle = ReviewBundle(
         review=review,
         source_text="Export CSV",
         criteria=[criterion],
-        evidence=[],
+        evidence=[candidate_evidence()],
         findings=[finding],
         gate=evaluate_gate(review, [criterion], [finding], []),
     )
@@ -245,12 +267,34 @@ def analysis_bundle_for(
             analysis_review = analysis_review.model_copy(
                 update={"criteria_source_provenance": expected_provenance}
             )
+    analysis_evidence = [
+        EvidenceItem(
+            evidence_id=f"EV-{criterion.criterion_id}",
+            criterion_id=criterion.criterion_id,
+            evidence_type=EvidenceType.IMPLEMENTATION,
+            evidence_level=EvidenceLevel.E1,
+            file_path="src/export.py",
+            line_start=1,
+            line_end=1,
+            commit_sha=analysis_review.head_sha,
+            permalink=(
+                "https://github.com/acme/widget/blob/"
+                f"{analysis_review.head_sha}/src/export.py#L1"
+            ),
+            excerpt="def export_csv():",
+            matching_rule="keyword_overlap",
+            relevance_reason="Matched export criterion",
+            relevance_score=0.8,
+        )
+        for criterion in analysis_criteria
+    ]
     findings = [
         Finding(
             criterion_id=criterion.criterion_id,
             status=FindingStatus.EVIDENCE_FOUND,
             evidence_level=EvidenceLevel.E1,
             reason="Candidate found for the edited criterion",
+            evidence_ids=[f"EV-{criterion.criterion_id}"],
             recommended_action="Review evidence",
         )
         for criterion in analysis_criteria
@@ -260,7 +304,7 @@ def analysis_bundle_for(
         review=analysis_review,
         source_text=analysis_source_text,
         criteria=analysis_criteria,
-        evidence=[],
+        evidence=analysis_evidence,
         findings=findings,
         resolutions=analysis_resolutions,
         gate=evaluate_gate(

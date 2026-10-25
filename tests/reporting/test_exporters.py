@@ -635,6 +635,7 @@ def test_exports_make_observed_ci_research_and_verification_boundaries_inspectab
     payload["review"]["check_state"] = CheckState.UNAVAILABLE
     payload["evidence"][0]["evidence_type"] = EvidenceType.TEST
     payload["evidence"][0]["evidence_level"] = EvidenceLevel.E2
+    payload["findings"][0]["evidence_level"] = EvidenceLevel.E2
     payload["evidence"][0]["limitations"] = [
         "Test definition shows intent, not executed verification."
     ]
@@ -800,7 +801,7 @@ def test_exports_preserve_tool_and_ruleset_provenance() -> None:
 
 
 def test_json_export_preserves_verified_public_repository_provenance() -> None:
-    bundle = example_bundle()
+    bundle = linked_runtime_bundle()
     bundle.review = Review.model_validate(
         {
             **bundle.review.model_dump(mode="python"),
@@ -815,7 +816,7 @@ def test_json_export_preserves_verified_public_repository_provenance() -> None:
 
 
 def test_human_readable_exports_preserve_verified_public_repository_provenance() -> None:
-    bundle = example_bundle()
+    bundle = linked_runtime_bundle()
     bundle.review = Review.model_validate(
         {
             **bundle.review.model_dump(mode="python"),

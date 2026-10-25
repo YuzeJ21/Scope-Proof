@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -504,8 +505,17 @@ def test_download_with_retry_reissues_click_after_missed_event(
 
 
 def _exercise_primary_path(
-    page: Page, base_url: str, *, verify_persistence_and_downloads: bool
+    page: Page,
+    base_url: str,
+    *,
+    verify_persistence_and_downloads: bool,
+    capture_directory: Path | None = None,
 ) -> None:
+    def capture(name: str) -> None:
+        if capture_directory is not None:
+            capture_directory.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(capture_directory / f"{name}.png"))
+
     page.goto(base_url, wait_until="domcontentloaded")
     expect(page.get_by_role("heading", name="ScopeProof", exact=True)).to_be_visible()
 
@@ -522,6 +532,7 @@ def _exercise_primary_path(
     _focus_with_keyboard(page, confirmer, label="Confirmed by")
     page.keyboard.type("Packaged browser reviewer")
     expect(confirmer).to_have_value("Packaged browser reviewer")
+    capture("01-confirm-criteria")
 
     confirm = page.get_by_role(
         "button", name="Apply edits and confirm criteria", exact=True
@@ -533,6 +544,7 @@ def _exercise_primary_path(
         key="Space",
     )
     expect(page.get_by_text("Criteria confirmed by the reviewer.", exact=True)).to_be_visible()
+    capture("02-criteria-confirmed")
 
     run_analysis = page.get_by_role(
         "button", name="Run deterministic analysis", exact=True
@@ -559,6 +571,13 @@ def _exercise_primary_path(
         export = page.get_by_role("button", name=label, exact=True)
         expect(export).to_be_visible()
         expect(export).to_be_enabled()
+    capture("03-decision-progress")
+
+    page.get_by_text("Missing evidence", exact=True).first.scroll_into_view_if_needed()
+    capture("04-partial-support")
+
+    page.get_by_role("button", name="Download Markdown", exact=True).scroll_into_view_if_needed()
+    capture("05-export-controls")
 
     if verify_persistence_and_downloads:
         save_notice = page.get_by_text("Review saved automatically. ID:", exact=False)
@@ -597,6 +616,9 @@ def _exercise_primary_path(
     open_ac_02 = page.get_by_role(
         "button", name="Open AC-02 decision controls", exact=True
     )
+    expect(open_ac_02).to_be_visible()
+    open_ac_02.scroll_into_view_if_needed()
+    capture("06-criterion-review-card")
     _activate_with_keyboard(
         page,
         open_ac_02,
@@ -867,6 +889,12 @@ def test_installed_wheel_primary_path_in_chromium(
                         page,
                         base_url,
                         verify_persistence_and_downloads=viewport_index == 1,
+                        capture_directory=(
+                            tmp_path / "captures"
+                            if viewport_index == 0
+                            and "SCOPEPROOF_PORTFOLIO_CAPTURE_DIR" in os.environ
+                            else None
+                        ),
                     )
                     if viewport_index == 0:
                         _exercise_junit_import_round_trip(
@@ -880,6 +908,21 @@ def test_installed_wheel_primary_path_in_chromium(
                 browser.close()
         assert browser_errors == []
         assert external_requests == []
+        if "SCOPEPROOF_PORTFOLIO_CAPTURE_DIR" in os.environ:
+            expected_captures = (
+                "01-confirm-criteria.png",
+                "02-criteria-confirmed.png",
+                "03-decision-progress.png",
+                "04-partial-support.png",
+                "05-export-controls.png",
+                "06-criterion-review-card.png",
+            )
+            destination = Path(os.environ["SCOPEPROOF_PORTFOLIO_CAPTURE_DIR"])
+            captures = tmp_path / "captures"
+            assert all((captures / name).is_file() for name in expected_captures)
+            destination.mkdir(parents=True, exist_ok=True)
+            for name in expected_captures:
+                shutil.copy2(captures / name, destination / name)
     finally:
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGTERM)

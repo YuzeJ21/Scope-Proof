@@ -179,8 +179,10 @@ reviewer-confirmed criteria against a real public PR.
 
 ### Public PR CLI workflow
 
-The commands below describe the `0.2.3` source workflow. From a current source checkout, the CLI
-provides the same read-only public-PR ingestion and deterministic core without starting Streamlit.
+The commands below describe the unreleased `0.2.4.dev0` source workflow; they are not instructions
+for the published v0.2.3 wheel. Run them from a current source checkout with its development
+environment installed (`uv sync`). The CLI provides read-only public-PR ingestion and a
+deterministic core without starting Streamlit.
 Live ingestion labels a review public only when GitHub returns matching, unambiguous repository
 metadata (`private: false` and `visibility: public`). A token-accessible private repository and
 missing, malformed, or contradictory visibility metadata fail closed before review data is saved.

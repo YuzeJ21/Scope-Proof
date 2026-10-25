@@ -40,6 +40,11 @@ def fixture_transport(
     status_status: int = 200,
     requested_urls: list[httpx.URL] | None = None,
     pull_repository: object = _DEFAULT_PULL_REPOSITORY,
+    head_shas: tuple[str, ...] = ("head123",),
+    base_shas: tuple[str, ...] = ("base123",),
+    compare_files_override: list[dict] | None = None,
+    compare_commits_override: list[dict] | None = None,
+    compare_status: int = 200,
 ) -> httpx.MockTransport:
     default_files = [
         {
@@ -56,15 +61,17 @@ def fixture_transport(
         for index in range(file_count)
     ]
     files = files_override if files_override is not None else default_files
+    pull_reads = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal pull_reads
         if requested_urls is not None:
             requested_urls.append(request.url)
         path = request.url.path
         if path == "/repos/acme/widget/pulls/42":
             if pull_status != 200:
                 return _response(pull_status, {"message": "request failed"}, pull_headers)
-            base = {"sha": "base123"}
+            base = {"sha": base_shas[min(pull_reads, len(base_shas) - 1)]}
             if pull_repository is _DEFAULT_PULL_REPOSITORY:
                 base["repo"] = {
                     "full_name": "acme/widget",
@@ -73,6 +80,8 @@ def fixture_transport(
                 }
             elif pull_repository is not None:
                 base["repo"] = pull_repository
+            head_sha = head_shas[min(pull_reads, len(head_shas) - 1)]
+            pull_reads += 1
             return _response(
                 200,
                 {
@@ -81,11 +90,29 @@ def fixture_transport(
                     "body": "Adds export",
                     "html_url": "https://github.com/acme/widget/pull/42",
                     "base": base,
-                    "head": {"sha": "head123"},
+                    "head": {"sha": head_sha},
                 },
             )
         if path.endswith("/files"):
             return _response(200, files)
+        if "/compare/" in path:
+            immutable_files = (
+                compare_files_override if compare_files_override is not None else files
+            )
+            immutable_commits = (
+                compare_commits_override
+                if compare_commits_override is not None
+                else [{"sha": "head123"}]
+            )
+            return _response(
+                compare_status,
+                {
+                    "base_commit": {"sha": base_shas[0]},
+                    "total_commits": len(immutable_commits),
+                    "commits": immutable_commits,
+                    "files": immutable_files,
+                },
+            )
         if path.endswith("/commits"):
             return _response(
                 200,
@@ -112,6 +139,59 @@ def fixture_transport(
         return _response(404, {"message": f"Unhandled {path}"})
 
     return httpx.MockTransport(handler)
+
+
+@pytest.mark.parametrize(
+    ("head_shas", "base_shas"),
+    [
+        (("head123", "newhead"), ("base123",)),
+        (("head123",), ("base123", "newbase")),
+    ],
+)
+def test_fetch_rejects_pr_revision_moving_during_ingestion(
+    head_shas: tuple[str, ...], base_shas: tuple[str, ...]
+) -> None:
+    with pytest.raises(GitHubIngestionError, match="changed during ingestion"):
+        GitHubClient(
+            transport=fixture_transport(head_shas=head_shas, base_shas=base_shas)
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+
+def test_fetch_rejects_aba_revision_with_foreign_mutable_patch() -> None:
+    immutable_file = {
+        "filename": "src/revision_a.py",
+        "status": "modified",
+        "patch": "@@ -1 +1 @@\n+revision_a",
+    }
+    mutable_file = {
+        "filename": "src/revision_b.py",
+        "status": "modified",
+        "patch": "@@ -1 +1 @@\n+revision_b",
+    }
+    with pytest.raises(GitHubIngestionError, match="immutable comparison"):
+        GitHubClient(
+            transport=fixture_transport(
+                files_override=[mutable_file],
+                compare_files_override=[immutable_file],
+                head_shas=("head123", "head123"),
+            )
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+
+def test_fetch_rejects_aba_revision_with_foreign_mutable_commit() -> None:
+    with pytest.raises(GitHubIngestionError, match="immutable comparison"):
+        GitHubClient(
+            transport=fixture_transport(
+                compare_commits_override=[{"sha": "revision_a"}],
+            )
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+
+def test_fetch_fails_closed_when_immutable_comparison_is_unavailable() -> None:
+    with pytest.raises(GitHubIngestionError, match="immutable comparison was unavailable"):
+        GitHubClient(transport=fixture_transport(compare_status=503)).fetch_pull_request(
+            "https://github.com/acme/widget/pull/42"
+        )
 
 
 def test_parse_pr_url_accepts_only_github_pull_urls() -> None:
@@ -292,9 +372,7 @@ def test_unavailable_patch_does_not_discard_available_text_patches() -> None:
     }
 
     snapshot = GitHubClient(
-        transport=fixture_transport(
-            files_override=[available_patch, unavailable_patch]
-        )
+        transport=fixture_transport(files_override=[available_patch, unavailable_patch])
     ).fetch_pull_request("https://github.com/acme/widget/pull/42")
 
     assert snapshot.ingestion_state is IngestionState.PARTIAL
@@ -336,9 +414,9 @@ def test_malformed_filename_fails_with_bounded_ingestion_error(
     file_payload: dict,
 ) -> None:
     with pytest.raises(GitHubIngestionError, match="malformed file metadata"):
-        GitHubClient(
-            transport=fixture_transport(files_override=[file_payload])
-        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+        GitHubClient(transport=fixture_transport(files_override=[file_payload])).fetch_pull_request(
+            "https://github.com/acme/widget/pull/42"
+        )
 
 
 def test_check_runs_and_commit_status_aggregate_to_passing() -> None:
@@ -350,9 +428,9 @@ def test_check_runs_and_commit_status_aggregate_to_passing() -> None:
 
 def test_client_requests_maximum_bounded_ci_observation_pages() -> None:
     requested_urls: list[httpx.URL] = []
-    GitHubClient(
-        transport=fixture_transport(requested_urls=requested_urls)
-    ).fetch_pull_request("https://github.com/acme/widget/pull/42")
+    GitHubClient(transport=fixture_transport(requested_urls=requested_urls)).fetch_pull_request(
+        "https://github.com/acme/widget/pull/42"
+    )
 
     ci_queries = {
         url.path: url.params.get("per_page")
@@ -371,9 +449,7 @@ def test_client_requests_maximum_bounded_ci_observation_pages() -> None:
         (
             {
                 "total_count": 2,
-                "check_runs": [
-                    {"name": "verify", "status": "completed", "conclusion": "failure"}
-                ],
+                "check_runs": [{"name": "verify", "status": "completed", "conclusion": "failure"}],
             },
             CheckState.FAILING,
             "failing check run",
@@ -381,9 +457,7 @@ def test_client_requests_maximum_bounded_ci_observation_pages() -> None:
         (
             {
                 "total_count": 2,
-                "check_runs": [
-                    {"name": "verify", "status": "in_progress", "conclusion": None}
-                ],
+                "check_runs": [{"name": "verify", "status": "in_progress", "conclusion": None}],
             },
             CheckState.PENDING,
             "pending check run",
@@ -391,9 +465,7 @@ def test_client_requests_maximum_bounded_ci_observation_pages() -> None:
         (
             {
                 "total_count": 2,
-                "check_runs": [
-                    {"name": "verify", "status": "completed", "conclusion": "success"}
-                ],
+                "check_runs": [{"name": "verify", "status": "completed", "conclusion": "success"}],
             },
             CheckState.UNAVAILABLE,
             "passing cannot be concluded",
@@ -454,9 +526,7 @@ def test_unavailable_ci_endpoint_fails_closed_when_remaining_endpoint_succeeds(
             status_status=status_status,
             check_data={
                 "total_count": 1,
-                "check_runs": [
-                    {"name": "verify", "status": "completed", "conclusion": "success"}
-                ],
+                "check_runs": [{"name": "verify", "status": "completed", "conclusion": "success"}],
             },
             status_data={
                 "state": "success",
@@ -488,10 +558,13 @@ def test_empty_legacy_pending_does_not_override_completed_successful_check_run()
         successful_check_runs=1,
         concrete_legacy_status_count=0,
     )
-    assert GitHubClient._check_state(
-        {"check_runs": [{"name": "verify", "status": "completed", "conclusion": "success"}]},
-        {"state": "pending", "total_count": 0, "statuses": []},
-    ) is CheckState.PASSING
+    assert (
+        GitHubClient._check_state(
+            {"check_runs": [{"name": "verify", "status": "completed", "conclusion": "success"}]},
+            {"state": "pending", "total_count": 0, "statuses": []},
+        )
+        is CheckState.PASSING
+    )
 
 
 @pytest.mark.parametrize("status", ["queued", "in_progress", "requested", "waiting", "pending"])
@@ -659,9 +732,7 @@ def test_malformed_ci_structure_preserves_failure_or_pending_precedence(
         (
             {
                 "total_count": 0,
-                "check_runs": [
-                    {"name": "verify", "status": "completed", "conclusion": "success"}
-                ],
+                "check_runs": [{"name": "verify", "status": "completed", "conclusion": "success"}],
             },
             {"total_count": 0, "statuses": []},
         ),
@@ -672,9 +743,7 @@ def test_malformed_ci_structure_preserves_failure_or_pending_precedence(
         (
             {
                 "total_count": "one",
-                "check_runs": [
-                    {"name": "verify", "status": "completed", "conclusion": "success"}
-                ],
+                "check_runs": [{"name": "verify", "status": "completed", "conclusion": "success"}],
             },
             {"total_count": 0, "statuses": []},
         ),
@@ -806,8 +875,7 @@ def test_file_limit_marks_snapshot_partial_and_lists_skipped_files() -> None:
     assert len(snapshot.files) == 1
     assert snapshot.skipped_files == ["src/export_1.py"]
     assert any(
-        "additional changed files were not retrieved" in warning
-        for warning in snapshot.warnings
+        "additional changed files were not retrieved" in warning for warning in snapshot.warnings
     )
 
 
