@@ -1,6 +1,6 @@
 # ScopeProof Market Positioning Hypotheses
 
-Last researched: 2026-07-20
+Last researched: 2026-07-20; GitHub Copilot row refreshed: 2026-10-25
 
 This document is market research, not customer or market validation. It separates current public
 facts from hypotheses that still require genuine use. ScopeProof has no qualifying completed
@@ -30,7 +30,7 @@ The facts below come from current official documentation.
 | Qase requirements and traceability | Qase links requirements to test cases. Its traceability matrix can pull external requirements from tools including GitHub, show linked and unlinked test cases, show latest execution status, flag potentially stale cases, version snapshots, and export CSV or PDF. [Qase requirements](https://docs.qase.io/en/articles/5563700-requirements) and [traceability matrix](https://docs.qase.io/en/articles/9123660-requirements-traceability-matrix) | It does not prove that ScopeProof's criterion-to-PR-candidate review is novel, better, or wanted. |
 | Azure DevOps lifecycle traceability | Azure DevOps links work items with branches, commits, pull requests, builds, releases, tests, and deployments, and supports requirements-traceability reporting. [Microsoft end-to-end traceability](https://learn.microsoft.com/en-us/azure/devops/cross-service/end-to-end-traceability?view=azure-devops) | It does not validate a separate lightweight product for teams outside an integrated lifecycle suite. |
 | TestRail specification-first testing | TestRail supports defining test cases before automation, mapping cases to automated scripts, uploading test results, and preserving requirement, manual-test, and automation traceability. [TestRail specification-first workflow](https://support.testrail.com/hc/en-us/articles/12609869124116-Specification-first-workflow) | It does not establish that reviewers need deterministic candidate-evidence review before formal test management. |
-| GitHub Copilot code review | Copilot code review provides code feedback and suggested changes on pull requests. Its review is a comment rather than an approval or merge-blocking decision, and re-review can be requested after new pushes. [GitHub Copilot code review](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) | It does not establish ScopeProof as a general code reviewer, and ScopeProof should not position itself as one. |
+| GitHub Copilot code review | Copilot code review provides PR feedback and suggested changes. Optional Copilot approvals are now in public preview and may satisfy a required-approval rule when enabled; GitHub dismisses those approvals on new commits. [GitHub Copilot code review and approvals](https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/code-review#copilot-approvals) | It does not establish ScopeProof as a general code reviewer, and ScopeProof should not position itself as one. |
 
 These documented capabilities support a research hypothesis that “requirements traceability”
 alone may be too broad to distinguish ScopeProof. Genuine participant research must test that

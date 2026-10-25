@@ -1582,6 +1582,7 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     readme_quickstart = readme.split("## Quickstart", maxsplit=1)[1].split(
         "## Contributor setup", maxsplit=1
     )[0]
+    release_install = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[0]
     conditional_asset_rule = (
         "Use the v0.2.3 asset URLs only when the GitHub Releases page shows v0.2.3 with "
         f"`{PUBLIC_RELEASE_WHEEL_FILENAME}` and `SHA256SUMS.txt`; otherwise, do not use "
@@ -1602,7 +1603,10 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
         "v0.2.1 release",
         "no v0.2.3 tag or github release exists",
     ):
-        assert stale_predicate not in readme_quickstart.lower()
+        assert stale_predicate not in release_install.lower()
+    source_workflow = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[1]
+    assert "unreleased `0.2.4.dev0` source workflow" in source_workflow
+    assert "not instructions\nfor the published v0.2.3 wheel" in source_workflow
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
     assert "releases/download/v0.2.1/" not in quickstart
     assert f"ScopeProof v{PUBLIC_RELEASE_VERSION} can" in design_partner
@@ -1746,7 +1750,7 @@ def test_current_docs_index_and_market_refresh_preserve_owner_led_boundary() -> 
     for product in ("GitHub Copilot", "CodeRabbit", "Qodo", "Graphite"):
         assert product in market
     for official_source in (
-        "https://docs.github.com/en/copilot/concepts/agents/code-review",
+        "https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/code-review",
         "https://docs.coderabbit.ai/overview/pull-request-review",
         "https://docs.qodo.ai/code-review",
         "https://graphite.com/docs/ai-reviews",
@@ -3555,7 +3559,8 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
     case_url = "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml"
 
     assert quickstart.index(case_url) < quickstart.index("## Ten-minute path")
-    assert "Submit the inbound public-alpha case form before starting locally" in quickstart
+    assert "The historical inbound public-alpha case form was:" in quickstart
+    assert "Stage 1 is\nclosed as not pursued" in quickstart
     assert "submit the inbound\npublic-alpha case form before starting locally" in readme
     assert "incomplete review" not in site
 
