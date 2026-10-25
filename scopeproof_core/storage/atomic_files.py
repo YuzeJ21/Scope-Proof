@@ -314,7 +314,8 @@ def read_bounded_utf8(
     raw = handle.read(max_bytes + 1)
     if len(raw) > max_bytes:
         raise ValueError("app-owned record exceeds the byte limit")
-    return raw.decode("utf-8")
+    # Preserve the universal-newline behavior of the former text-mode reader.
+    return raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
 
 
 def read_text_no_follow(

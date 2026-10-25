@@ -507,6 +507,19 @@ def test_saved_text_read_enforces_byte_limit_on_both_backends(
         read_text_no_follow(target, max_bytes=4)
 
 
+@pytest.mark.parametrize("portable", [False, True])
+def test_saved_text_read_preserves_universal_newline_semantics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, portable: bool
+) -> None:
+    if not portable and not atomic_files_module._DESCRIPTOR_BACKEND_SUPPORTED:
+        pytest.skip("descriptor-relative storage backend is unavailable")
+    monkeypatch.setattr(atomic_files_module, "_DESCRIPTOR_BACKEND_SUPPORTED", not portable)
+    target = tmp_path / "record.json"
+    target.write_bytes(b"one\r\ntwo\rthree\n")
+
+    assert read_text_no_follow(target) == "one\ntwo\nthree\n"
+
+
 def test_saved_text_read_checks_actual_bytes_when_metadata_understates_size(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
