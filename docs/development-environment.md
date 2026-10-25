@@ -99,4 +99,13 @@ rename; that hostile local-account scenario remains unsupported and must not be 
 
 ## Known-good UI baseline
 
-The checked-in lock currently resolves Streamlit 1.59.1, which passes ScopeProof's complete AppTest suite. ScopeProof requires Streamlit 1.53 or newer because 1.53 is the first supported release that combines click-time deferred download generation with the per-widget upload limit used to keep JUnit artifacts at exactly 1 MiB while allowing multipart transport overhead. During this work, Streamlit 1.57.0 exposed a testing-interface regression; that observation is why the lock is the reproducible baseline rather than a claim that every version in the supported range behaves identically. CI still installs the newest versions allowed by `pyproject.toml` in the compatibility and verification lanes so future incompatibilities remain visible without a scheduled monitor or notification workflow.
+The checked-in lock now resolves Streamlit 1.66.1 and Pillow 13.0.0. Pillow 13.0.0 is the first
+patched version reported for the current Pillow advisories. Streamlit 1.66.1 permits Pillow 13 but
+excludes PyArrow 25.0.0, so the optional research extra moves to PyArrow 26.0.0. This changes the
+development environment, not the frozen R-002 source artifacts, labels, or recorded result; any
+new R-002 run must be reported as a new engineering observation. ScopeProof requires
+Streamlit 1.53 or newer because that release first combined click-time deferred download generation
+with the per-widget upload limit used to keep JUnit artifacts at exactly 1 MiB while allowing
+multipart transport overhead. Streamlit 1.57.0 previously exposed a testing-interface regression,
+so the lock is the reproducible baseline rather than a claim that every allowed version behaves
+identically. CI also installs the newest allowed versions in compatibility and verification lanes.

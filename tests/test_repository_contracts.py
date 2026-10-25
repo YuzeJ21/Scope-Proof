@@ -446,7 +446,7 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "uv sync --extra dev --extra research --locked" in guide
     assert "uv run pytest" in guide
     assert "uv run scopeproof benchmark" in guide
-    assert "Streamlit 1.59.1" in guide
+    assert "Streamlit 1.66.1" in guide
     assert "Streamlit 1.53 or newer" in guide
     assert "Streamlit 1.57.0" in guide
     assert "testing-interface regression" in guide
@@ -472,8 +472,22 @@ def test_locked_gitpython_excludes_known_command_execution_advisories() -> None:
         if package["name"].casefold() == "gitpython"
     ]
 
+    # Current Streamlit no longer pulls GitPython; if it returns, retain the patched floor.
+    assert len(versions) <= 1
+    if versions:
+        assert tuple(int(part) for part in versions[0].split(".")) >= (3, 2, 1)
+
+
+def test_locked_pillow_excludes_known_image_parser_advisories() -> None:
+    lock = tomllib.loads(Path("uv.lock").read_text(encoding="utf-8"))
+    versions = [
+        package["version"]
+        for package in lock["package"]
+        if package["name"].casefold() == "pillow"
+    ]
+
     assert len(versions) == 1
-    assert tuple(int(part) for part in versions[0].split(".")) >= (3, 2, 1)
+    assert tuple(int(part) for part in versions[0].split(".")) >= (13, 0, 0)
 
 
 def test_ci_avoids_duplicate_feature_branch_runs() -> None:
