@@ -183,9 +183,11 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
         Finding(
             criterion_id="AC-01",
             status=status,
+            evidence_level=EvidenceLevel.E1 if with_evidence else EvidenceLevel.E0,
             reason="Result",
             recommended_action="Review",
             evidence_ids=[item.evidence_id for item in evidence],
+            missing_evidence=[] if with_evidence else ["Implementation evidence"],
         )
     ]
     criteria = [Criterion(criterion_id="AC-01", text="Export CSV")]
@@ -580,11 +582,14 @@ def test_comparison_relationship_rejects_candidate_from_unrelated_head() -> None
         head_sha="old-head",
     )
     current = bundle_with(
-        evidence("EV-new", sha="unrelated-head"),
+        evidence("EV-new", sha="new-head"),
         head_sha="new-head",
     )
+    current.evidence[0] = current.evidence[0].model_copy(
+        update={"commit_sha": "unrelated-head"}
+    )
 
-    with pytest.raises(ValueError, match="evidence candidates must match the reviewed head"):
+    with pytest.raises(ValueError, match="candidate head must match review head"):
         compare_reviews(previous, current)
 
 

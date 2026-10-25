@@ -38,12 +38,15 @@ def pagination_transport(
     commit_pages: dict[int, object] | None = None,
     commit_links: dict[int, str] | None = None,
     pull_payload: dict | None = None,
+    pull_payloads: list[dict] | None = None,
+    compare_files: list[dict] | None = None,
 ) -> tuple[httpx.MockTransport, list[httpx.Request]]:
     requests: list[httpx.Request] = []
     file_pages = file_pages or {1: []}
     file_links = file_links or {}
     commit_pages = commit_pages or {1: []}
     commit_links = commit_links or {}
+    pull_reads = 0
 
     def response(
         data: object,
@@ -54,11 +57,34 @@ def pagination_transport(
         return httpx.Response(200, json=data, headers=headers)
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal pull_reads
         requests.append(request)
         path = request.url.path
         page = int(request.url.params.get("page", "1"))
         if path == "/repos/acme/widget/pulls/42":
+            if pull_payloads is not None:
+                payload = pull_payloads[min(pull_reads, len(pull_payloads) - 1)]
+                pull_reads += 1
+                return response(payload)
             return response(pull_payload or _pull_payload())
+        if "/compare/" in path:
+            selected_pull = pull_payload or _pull_payload()
+            immutable_files = (
+                compare_files
+                if compare_files is not None
+                else [item for number in sorted(file_pages) for item in file_pages[number]]
+            )
+            immutable_commits = [
+                item for number in sorted(commit_pages) for item in commit_pages[number]
+            ]
+            return response(
+                {
+                    "base_commit": {"sha": selected_pull["base"]["sha"]},
+                    "total_commits": len(immutable_commits),
+                    "commits": immutable_commits,
+                    "files": immutable_files,
+                }
+            )
         if path in {
             "/repos/acme/widget/pulls/42/files",
             f"/repositories/{REPOSITORY_ID}/pulls/42/files",
@@ -76,6 +102,48 @@ def pagination_transport(
         return httpx.Response(404, json={"message": path})
 
     return httpx.MockTransport(handler), requests
+
+
+def test_movement_after_paginated_files_is_rejected() -> None:
+    first_page = [{"filename": "src/first.py", "patch": "@@ -1 +1 @@\n+first"}]
+    second_page = [{"filename": "src/second.py", "patch": "@@ -1 +1 @@\n+second"}]
+    changed = _pull_payload()
+    changed["head"] = {"sha": "c" * 40}
+    transport, requests = pagination_transport(
+        file_pages={1: first_page, 2: second_page},
+        file_links={
+            1: (
+                "<https://api.github.com/repos/acme/widget/pulls/42/"
+                'files?page=2&per_page=100>; rel="next"'
+            )
+        },
+        pull_payloads=[_pull_payload(), changed],
+    )
+
+    with pytest.raises(GitHubIngestionError, match="changed during ingestion"):
+        GitHubClient(transport=transport).fetch_pull_request(PR_URL)
+
+    assert any(request.url.params.get("page") == "2" for request in requests)
+
+
+def test_aba_movement_between_file_pages_is_rejected_by_immutable_comparison() -> None:
+    first_page = [{"filename": "src/revision_a.py", "patch": "@@ -1 +1 @@\n+one"}]
+    foreign_page = [{"filename": "src/revision_b.py", "patch": "@@ -1 +1 @@\n+two"}]
+    transport, requests = pagination_transport(
+        file_pages={1: first_page, 2: foreign_page},
+        file_links={
+            1: (
+                '<https://api.github.com/repos/acme/widget/pulls/42/'
+                'files?page=2&per_page=100>; rel="next"'
+            )
+        },
+        compare_files=first_page,
+    )
+
+    with pytest.raises(GitHubIngestionError, match="immutable comparison"):
+        GitHubClient(transport=transport).fetch_pull_request(PR_URL)
+
+    assert any(request.url.params.get("page") == "2" for request in requests)
 
 
 def paged_transport() -> httpx.MockTransport:
@@ -101,6 +169,26 @@ def paged_transport() -> httpx.MockTransport:
                         },
                     },
                     "head": {"sha": "head"},
+                }
+            )
+        if "/compare/" in path:
+            return response(
+                {
+                    "base_commit": {"sha": "base"},
+                    "total_commits": 0,
+                    "commits": [],
+                    "files": [
+                        {
+                            "filename": "src/first.py",
+                            "status": "modified",
+                            "patch": "@@ -1 +1 @@\n+first",
+                        },
+                        {
+                            "filename": "src/second.py",
+                            "status": "modified",
+                            "patch": "@@ -1 +1 @@\n+second",
+                        },
+                    ],
                 }
             )
         if path.endswith("/files") and page == "1":
@@ -233,16 +321,12 @@ def test_pagination_accepts_github_numeric_repository_canonical_path(
     observed = snapshot.files if collection == "files" else snapshot.commits
     assert len(observed) == 1
     assert any(
-        request.url.path.startswith(f"/repositories/{REPOSITORY_ID}/")
-        for request in requests
+        request.url.path.startswith(f"/repositories/{REPOSITORY_ID}/") for request in requests
     )
 
 
 def test_pagination_rejects_numeric_canonical_path_for_another_repository() -> None:
-    escaped_link = (
-        "https://api.github.com/repositories/999999/pulls/42/"
-        "files?per_page=100&page=2"
-    )
+    escaped_link = "https://api.github.com/repositories/999999/pulls/42/files?per_page=100&page=2"
     transport, requests = pagination_transport(
         file_links={1: f'<{escaped_link}>; rel="next"'},
     )
@@ -484,8 +568,7 @@ def test_file_ingestion_stops_after_smallest_observed_overflow() -> None:
     assert snapshot.skipped_files == ["src/001.py"]
     assert snapshot.ingestion_state.value == "partial"
     assert any(
-        "additional changed files were not retrieved" in warning
-        for warning in snapshot.warnings
+        "additional changed files were not retrieved" in warning for warning in snapshot.warnings
     )
     file_requests = [request for request in requests if request.url.path.endswith("/files")]
     assert [request.url.params.get("page") for request in file_requests] == [None]
@@ -500,9 +583,7 @@ def test_commit_ingestion_is_bounded_and_preserves_source_order() -> None:
         }
         for index in range(1, 5)
     ]
-    second_page = (
-        "https://api.github.com/repos/acme/widget/pulls/42/commits?page=2&per_page=3"
-    )
+    second_page = "https://api.github.com/repos/acme/widget/pulls/42/commits?page=2&per_page=3"
     transport, requests = pagination_transport(
         commit_pages={1: commits[:3], 2: commits[3:]},
         commit_links={1: f'<{second_page}>; rel="next"'},
@@ -638,9 +719,7 @@ def test_candidate_file_rejects_response_not_anchored_to_request() -> None:
     other_sha = "c" * 40
 
     class UnanchoredResponseClient(GitHubClient):
-        def _get(
-            self, path: str, *, params: dict[str, str] | None = None
-        ) -> httpx.Response:
+        def _get(self, path: str, *, params: dict[str, str] | None = None) -> httpx.Response:
             content = base64.b64encode(b"candidate = True\n").decode()
             return httpx.Response(
                 200,
