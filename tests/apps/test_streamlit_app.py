@@ -21,12 +21,18 @@ from scopeproof_core.alpha.storage import (
 from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubNetworkError, GitHubPaginationError
+from scopeproof_core.importers.junit import (
+    JUnitMappingSelection,
+    build_junit_evidence_import,
+)
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
+    append_junit_evidence_import,
     append_resolution,
 )
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
+    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     RULESET_VERSION,
     CheckState,
     CIObservation,
@@ -3545,6 +3551,55 @@ def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_export
     assert all(not button.disabled for button in comparison_downloads.values())
 
 
+def test_comparison_view_shows_removed_external_junit_import_as_non_gating() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    current_state = app.session_state["review_state"]
+    criterion_id = current_state.criteria_revision.criteria[0].criterion_id
+    current_state = append_resolution(
+        current_state,
+        ResolutionEvent(
+            criterion_id=criterion_id,
+            decision=HumanDecision.ACCEPTED,
+            comment="Reviewed before the imported context changed.",
+        ),
+    )
+    imported = build_junit_evidence_import(
+        current_state,
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+        [
+            JUnitMappingSelection(
+                scope_id="suite-0001",
+                criterion_id=criterion_id,
+            )
+        ],
+        importer="QA owner",
+        import_id="junit-comparison-import",
+    )
+    previous_state = append_junit_evidence_import(current_state, imported)
+    assert previous_state.bundle is not None
+    app.session_state["comparison_base_bundle"] = previous_state.bundle
+    app.session_state["review_state"] = current_state
+    app.session_state["bundle"] = current_state.bundle
+
+    app = app.run()
+
+    assert app.exception == []
+    rendered = "\n".join(
+        item.value for item in [*app.markdown, *app.caption, *app.text, *app.code]
+    )
+    assert "Imported external test result changes" in rendered
+    assert "Removed" in rendered
+    assert imported.artifact_sha256 in rendered
+    assert "externally supplied, non-gating context" in rendered.lower()
+    assert "did not execute" in rendered.lower()
+    assert "imported bytes only" in rendered.lower()
+    assert "asserted, not authenticated" in rendered.lower()
+    assert "organizational context, not proof" in rendered.lower()
+    warnings = "\n".join(item.value for item in app.warning)
+    assert "does not carry a prior decision forward automatically" in warnings
+    assert "changed head" not in warnings
+
+
 def test_ineligible_comparison_base_is_cleared_without_hiding_current_analysis() -> None:
     app = analyzed_demo(new_app())
     current_bundle = app.session_state["bundle"].model_copy(deep=True)
@@ -5123,3 +5178,175 @@ def test_successful_runtime_evidence_save_clears_form_and_prevents_accidental_re
     assert "External verification and reviewer decision recorded together." in [
         item.value for item in app.success
     ]
+
+
+def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    before = app.session_state["review_state"].model_copy(deep=True)
+    assert before.bundle is not None
+    assert (
+        app.file_uploader(key="junit_artifact_upload").proto.max_upload_size_mb
+        == 1
+    )
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml",
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+        "application/xml",
+    ).run()
+    app = app.text_input(key="junit_importer").set_value("QA owner").run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(
+        ["suite-0001"]
+    ).run()
+    app = app.button(key="save_junit_import").click().run()
+
+    updated = app.session_state["review_state"]
+    assert updated.bundle is not None
+    assert len(updated.bundle.junit_evidence_imports) == 1
+    imported = updated.bundle.junit_evidence_imports[0]
+    assert imported.criterion_mappings[0].criterion_id == app.session_state[
+        "selected_criterion"
+    ]
+    assert imported.test_cases[0].test_case_id == "suite-0001-case-0001"
+    assert updated.bundle.gate == before.bundle.gate
+    assert updated.bundle.resolutions == before.bundle.resolutions
+    assert updated.bundle.runtime_evidence == before.bundle.runtime_evidence
+    assert updated.review.final_acceptance is before.review.final_acceptance
+    assert JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION in [
+        item.value for item in app.caption
+    ]
+    assert app.file_uploader(key="junit_artifact_upload_1").value is None
+    assert app.text_input(key="junit_importer").value == ""
+    assert app.multiselect(key="junit_mapping_scopes").value == []
+    assert app.button(key="save_junit_import").disabled is True
+
+
+def test_replacing_junit_upload_clears_mapping_even_when_scope_ids_match() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "first.xml",
+        b'<testsuite name="first"><testcase name="one"/></testsuite>',
+        "application/xml",
+    ).run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(
+        ["suite-0001"]
+    ).run()
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "second.xml",
+        b'<testsuite name="second"><testcase name="two"/></testsuite>',
+        "application/xml",
+    ).run()
+
+    assert app.multiselect(key="junit_mapping_scopes").value == []
+
+
+def test_junit_preview_and_saved_values_render_inertly_without_raw_output() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    hostile_name = "<script>alert('suite')</script>"
+    raw_output = "RAW-JUNIT-OUTPUT-SENTINEL"
+    xml = (
+        f'<testsuite name="{hostile_name.replace("<", "&lt;").replace(">", "&gt;")}">'
+        f'<testcase name="=1+1"/><system-out>{raw_output}</system-out></testsuite>'
+    ).encode()
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml", xml, "application/xml"
+    ).run()
+
+    assert app.exception == []
+    assert hostile_name not in [item.value for item in app.markdown]
+    assert raw_output not in "\n".join(
+        [
+            *(item.value for item in app.text),
+            *(item.value for item in app.code),
+            *(item.value for item in app.caption),
+            *(item.value for item in app.markdown),
+        ]
+    )
+    assert "JUnit properties and output content were discarded during import." in [
+        item.value for item in app.text
+    ]
+
+
+def test_junit_parser_failure_leaves_review_unchanged_and_hides_artifact_text() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    before = app.session_state["review_state"].model_copy(deep=True)
+    unsafe = (
+        b'<!DOCTYPE testsuite [<!ENTITY secret SYSTEM "file:///PRIVATE-SENTINEL">]>'
+        b'<testsuite name="x"><testcase name="&secret;"/></testsuite>'
+    )
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "unsafe.xml", unsafe, "application/xml"
+    ).run()
+
+    assert app.session_state["review_state"] == before
+    rendered_errors = "\n".join(item.value for item in app.error)
+    assert "could not be inspected" in rendered_errors
+    assert "PRIVATE-SENTINEL" not in rendered_errors
+    assert app.button(key="save_junit_import").disabled is True
+
+
+def test_junit_import_requires_exact_head_and_explicit_mapping() -> None:
+    app = analyzed_demo(new_app())
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml",
+        b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+        "application/xml",
+    ).run()
+    app = app.text_input(key="junit_importer").set_value("QA owner").run()
+
+    assert app.button(key="save_junit_import").disabled is True
+    assert "An exact 40-character reviewed head is required before import." in [
+        item.value for item in app.caption
+    ]
+
+
+@pytest.mark.parametrize(
+    ("xml", "importer", "mapping"),
+    [
+        (b'<testsuite name="empty"/>', "QA owner", ["suite-0001"]),
+        (
+            b'<testsuite name="unit"><testcase name="test_export"/></testsuite>',
+            "x" * 257,
+            ["suite-0001"],
+        ),
+    ],
+)
+def test_junit_import_save_stays_disabled_until_full_draft_is_valid(
+    xml: bytes,
+    importer: str,
+    mapping: list[str],
+) -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml", xml, "application/xml"
+    ).run()
+    app = app.text_input(key="junit_importer").set_value(importer).run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(mapping).run()
+
+    assert app.button(key="save_junit_import").disabled is True
+
+
+def test_junit_import_save_stays_disabled_for_already_imported_artifact() -> None:
+    xml = b'<testsuite name="unit"><testcase name="test_export"/></testsuite>'
+    app = analyzed_exact_head_standard_demo(new_app())
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "results.xml", xml, "application/xml"
+    ).run()
+    app = app.text_input(key="junit_importer").set_value("QA owner").run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(
+        ["suite-0001"]
+    ).run()
+    app = app.button(key="save_junit_import").click().run()
+
+    app = app.file_uploader(key="junit_artifact_upload_1").upload(
+        "results.xml", xml, "application/xml"
+    ).run()
+    app = app.text_input(key="junit_importer").set_value("QA owner").run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(
+        ["suite-0001"]
+    ).run()
+
+    assert app.button(key="save_junit_import").disabled is True

@@ -16,6 +16,10 @@ current product state.
 - [Development environment](development-environment.md) — supported and unsupported engineering
   environments.
 - [Privacy readiness](privacy-readiness.md) — current local-only data and trust boundaries.
+- [2026-10-25 integration disposition](audits/2026-10-25-integrity-integration-disposition.md)
+  — exact-head dependency, JUnit, and archival decisions pending integration.
+- [Unreleased integrity case study](portfolio/2026-10-25/case-study.md) — constructed
+  automated demonstration and publication boundaries for the draft source revision.
 
 ## Historical evidence records
 

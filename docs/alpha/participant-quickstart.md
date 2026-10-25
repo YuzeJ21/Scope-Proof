@@ -1,11 +1,12 @@
 # Public-alpha participant quickstart
 
-This optional ten-minute path is for a product manager, QA practitioner, or engineer who owns or
-is directly authorized to confirm requirements for a genuine public GitHub pull request.
+This archived ten-minute path describes the published v0.2.3 participant workflow. Stage 1 is
+closed as not pursued; it is not a current invitation to participate. It was written for a product
+manager, QA practitioner, or engineer authorized to confirm requirements for a genuine public PR.
 ScopeProof is an evidence assistant, not a correctness oracle. Use public sources only; never enter
 tokens, private code, customer data, secrets, or confidential material.
 
-Submit the inbound public-alpha case form before starting locally:
+The historical inbound public-alpha case form was:
 
 https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 
@@ -40,9 +41,10 @@ validation, or target-repository runtime verification.
    **Alpha feedback session**. Standard review mode creates no participant record.
 3. **Minute 3 — enter public sources.** Paste the canonical public PR URL and public HTTPS
    requirements source. Select only your role; ScopeProof does not collect names or contact data.
-4. **Minute 4 — load the PR.** Confirm source authority and no confidential information, then fetch
-   the PR. ScopeProof confirms public visibility from GitHub metadata; a session-only token is
-   optional under Advanced source options but cannot make a private repository eligible.
+4. **Minute 4 — load the PR.** Confirm source authority, public visibility, and no confidential
+   information, then fetch the PR. The v0.2.3 wheel did not enforce the later verified-public
+   GitHub metadata rule; that safeguard is present only in the unreleased `0.2.4.dev0` source.
+   A session-only token is optional under Advanced source options.
 5. **Minute 5 — confirm criteria.** Prepare one independently judgeable behavior per line, review
    the normalized set, and explicitly confirm it. This creates one validated local alpha case.
 6. **Minute 6 — review coverage.** Run analysis and inspect every Strong candidate, Weak candidate,

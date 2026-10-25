@@ -428,10 +428,10 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "scopeproof_core.evals.runner" in workflow
 
 
-def test_streamlit_floor_supports_click_time_deferred_exports() -> None:
+def test_streamlit_floor_supports_per_widget_junit_upload_limits() -> None:
     project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
-    assert "streamlit>=1.52,<2" in project["project"]["dependencies"]
+    assert "streamlit>=1.53,<2" in project["project"]["dependencies"]
 
 
 def test_locked_development_environment_is_documented_and_verified() -> None:
@@ -447,6 +447,7 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "uv run pytest" in guide
     assert "uv run scopeproof benchmark" in guide
     assert "Streamlit 1.59.1" in guide
+    assert "Streamlit 1.53 or newer" in guide
     assert "Streamlit 1.57.0" in guide
     assert "testing-interface regression" in guide
     assert "locked-environment:" in workflow
@@ -634,6 +635,7 @@ def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy()
         "secondaryBackgroundColor": "#171a1f",
         "textColor": "#f7f7f2",
     }
+    assert config["server"]["maxUploadSize"] == 2
     assert "):focus-visible" in app
     assert "[data-testid=\"stAppViewContainer\"]" in app
     assert "@media (prefers-reduced-motion: reduce)" in app
@@ -1582,6 +1584,7 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     readme_quickstart = readme.split("## Quickstart", maxsplit=1)[1].split(
         "## Contributor setup", maxsplit=1
     )[0]
+    release_install = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[0]
     conditional_asset_rule = (
         "Use the v0.2.3 asset URLs only when the GitHub Releases page shows v0.2.3 with "
         f"`{PUBLIC_RELEASE_WHEEL_FILENAME}` and `SHA256SUMS.txt`; otherwise, do not use "
@@ -1602,7 +1605,10 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
         "v0.2.1 release",
         "no v0.2.3 tag or github release exists",
     ):
-        assert stale_predicate not in readme_quickstart.lower()
+        assert stale_predicate not in release_install.lower()
+    source_workflow = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[1]
+    assert "unreleased `0.2.4.dev0` source workflow" in source_workflow
+    assert "not instructions\nfor the published v0.2.3 wheel" in source_workflow
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
     assert "releases/download/v0.2.1/" not in quickstart
     assert f"ScopeProof v{PUBLIC_RELEASE_VERSION} can" in design_partner
@@ -1746,7 +1752,7 @@ def test_current_docs_index_and_market_refresh_preserve_owner_led_boundary() -> 
     for product in ("GitHub Copilot", "CodeRabbit", "Qodo", "Graphite"):
         assert product in market
     for official_source in (
-        "https://docs.github.com/en/copilot/concepts/agents/code-review",
+        "https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/code-review",
         "https://docs.coderabbit.ai/overview/pull-request-review",
         "https://docs.qodo.ai/code-review",
         "https://graphite.com/docs/ai-reviews",
@@ -3555,7 +3561,8 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
     case_url = "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml"
 
     assert quickstart.index(case_url) < quickstart.index("## Ten-minute path")
-    assert "Submit the inbound public-alpha case form before starting locally" in quickstart
+    assert "The historical inbound public-alpha case form was:" in quickstart
+    assert "Stage 1 is\nclosed as not pursued" in quickstart
     assert "submit the inbound\npublic-alpha case form before starting locally" in readme
     assert "incomplete review" not in site
 
@@ -3779,3 +3786,21 @@ def test_informational_check_status_preserves_product_evidence_boundaries() -> N
             "0/2 reuse-intent signals",
         ):
             assert count in normalized
+
+
+def test_stage2_status_separates_delivered_junit_and_check_foundations_from_candidates() -> None:
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
+        encoding="utf-8"
+    )
+    delivered = status.split("## Delivered Stage 2 foundations", maxsplit=1)[1].split(
+        "## Prioritized post-release decision candidates", maxsplit=1
+    )[0]
+    candidates = status.split(
+        "## Prioritized post-release decision candidates", maxsplit=1
+    )[1].split("## Next executable queue", maxsplit=1)[0]
+
+    assert "exact-SHA informational GitHub Check lifecycle is implemented" in delivered
+    assert "bounded JUnit XML adapter is implemented" in delivered
+    assert "Exact-SHA GitHub Check lifecycle:" not in candidates
+    assert "JUnit-style results" not in candidates
+    assert "Additional non-executing evidence adapters" in candidates

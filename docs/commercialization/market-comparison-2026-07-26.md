@@ -1,7 +1,7 @@
 # ScopeProof market comparison and product adjustment
 
 Date: 2026-07-26
-Last refreshed: 2026-08-17
+Last refreshed: 2026-08-17; GitHub Copilot capability refreshed: 2026-10-25
 Status: current product and competitor-documentation audit
 Boundary: competitor capabilities below are vendor-advertised unless explicitly
 labelled as a ScopeProof implementation fact. This document is not customer or
@@ -60,9 +60,10 @@ criterion is supported at this exact head.”
 - [Qodo requirement-gap documentation](https://docs.qodo.ai/code-review/view-requirement-gaps-in-findings)
   labels its specification comparison as a Research Preview and advises users
   to validate outputs before relying on them.
-- [GitHub Copilot code review documentation](https://docs.github.com/en/copilot/concepts/agents/code-review)
-  describes AI-generated PR feedback and suggested fixes; it also states the
-  feature is available on paid Copilot plans and consumes AI credits.
+- [GitHub Copilot code review documentation](https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/code-review)
+  describes AI-generated PR feedback and suggested fixes, paid-plan availability,
+  and AI-credit usage. Optional Copilot approvals are in public preview; when
+  enabled, they may satisfy a required-approval rule and are dismissed on new commits.
 - [Graphite AI review documentation](https://graphite.com/docs/ai-reviews) describes automated PR
   findings and suggested fixes in Graphite's review workflow.
 - [Graphite code review documentation](https://graphite.com/docs/code-review) describes its pull

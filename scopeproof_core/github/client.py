@@ -103,13 +103,9 @@ class _FetchBudget:
     def charge_response(self, response: httpx.Response) -> None:
         decoded_bytes = len(response.content)
         if decoded_bytes > self.max_response_bytes:
-            raise GitHubPaginationError(
-                "GitHub decoded response byte budget was exhausted."
-            )
+            raise GitHubPaginationError("GitHub decoded response byte budget was exhausted.")
         if self.total_response_bytes + decoded_bytes > self.max_total_response_bytes:
-            raise GitHubPaginationError(
-                "GitHub total decoded response byte budget was exhausted."
-            )
+            raise GitHubPaginationError("GitHub total decoded response byte budget was exhausted.")
         self.total_response_bytes += decoded_bytes
 
 
@@ -206,7 +202,7 @@ class GitHubClient:
         max_commits: int = 250,
         max_candidate_files: int = 8,
         max_candidate_bytes: int = 200_000,
-        max_requests: int = 16,
+        max_requests: int = 18,
         max_pagination_pages: int = 10,
         max_pagination_items: int = 1_000,
         max_response_bytes: int = 4 * 1024 * 1024,
@@ -372,9 +368,7 @@ class GitHubClient:
                 strict_parsing=True,
             )
         except ValueError as error:
-            raise GitHubPaginationError(
-                "GitHub pagination target is malformed."
-            ) from error
+            raise GitHubPaginationError("GitHub pagination target is malformed.") from error
         if (
             parsed_target.scheme != "https"
             or parsed_target.hostname != "api.github.com"
@@ -394,18 +388,14 @@ class GitHubClient:
             "page",
             "per_page",
         }:
-            raise GitHubPaginationError(
-                "GitHub pagination target query is malformed or ambiguous."
-            )
+            raise GitHubPaginationError("GitHub pagination target query is malformed or ambiguous.")
         query = dict(query_items)
         page_text = query.get("page", "")
         per_page_text = query.get("per_page", "")
         if not re.fullmatch(r"[1-9][0-9]*", page_text) or not re.fullmatch(
             r"[1-9][0-9]*", per_page_text
         ):
-            raise GitHubPaginationError(
-                "GitHub pagination target query is malformed or ambiguous."
-            )
+            raise GitHubPaginationError("GitHub pagination target query is malformed or ambiguous.")
         try:
             page = int(page_text)
             target_per_page = int(per_page_text)
@@ -414,9 +404,7 @@ class GitHubClient:
                 "GitHub pagination target query is malformed or ambiguous."
             ) from error
         if page < 1 or target_per_page != per_page:
-            raise GitHubPaginationError(
-                "GitHub pagination target query is malformed or ambiguous."
-            )
+            raise GitHubPaginationError("GitHub pagination target query is malformed or ambiguous.")
         canonical_target = f"{canonical_path}?page={page}&per_page={per_page}"
         relative_target = f"{parsed_target.path}?page={page}&per_page={per_page}"
         return canonical_target, relative_target
@@ -580,9 +568,7 @@ class GitHubClient:
             conclusion = run.get("conclusion")
             status = run.get("status")
             normalized_status = (
-                status.strip().casefold()
-                if isinstance(status, str) and status.strip()
-                else None
+                status.strip().casefold() if isinstance(status, str) and status.strip() else None
             )
             normalized_conclusion = (
                 conclusion.strip().casefold()
@@ -703,11 +689,7 @@ class GitHubClient:
             )
         elif counts["successful_check_runs"]:
             state = CheckState.PASSING
-            suffix = (
-                "; no concrete legacy statuses."
-                if not concrete_legacy_status_count
-                else "."
-            )
+            suffix = "; no concrete legacy statuses." if not concrete_legacy_status_count else "."
             reason = (
                 f"Observed {counts['successful_check_runs']} successful completed check run"
                 f"{'s' if counts['successful_check_runs'] != 1 else ''}{suffix}"
@@ -728,9 +710,11 @@ class GitHubClient:
 
         collection_complete = not incomplete_collections
         if incomplete_collections:
-            incomplete_reason = "CI observation collection is incomplete: " + "; ".join(
-                incomplete_collections
-            ) + "."
+            incomplete_reason = (
+                "CI observation collection is incomplete: "
+                + "; ".join(incomplete_collections)
+                + "."
+            )
             if state is CheckState.PASSING:
                 state = CheckState.UNAVAILABLE
                 reason = f"{incomplete_reason} Passing cannot be concluded."
@@ -754,6 +738,71 @@ class GitHubClient:
         """Compatibility wrapper for callers that only need the aggregate state."""
         return GitHubClient._check_observation(check_runs, commit_status).state
 
+    @staticmethod
+    def _verify_immutable_comparison(
+        comparison: object,
+        *,
+        base_sha: str,
+        files: _PaginatedResult,
+        commits: _PaginatedResult,
+    ) -> None:
+        """Reject mutable PR lists that disagree with a SHA-addressed comparison."""
+        mismatch = (
+            "GitHub mutable PR data disagreed with the immutable comparison. Retry the review."
+        )
+        if not isinstance(comparison, dict):
+            raise GitHubIngestionError(mismatch)
+        base_commit = comparison.get("base_commit")
+        comparison_files = comparison.get("files")
+        comparison_commits = comparison.get("commits")
+        total_commits = comparison.get("total_commits")
+        if (
+            not isinstance(base_commit, dict)
+            or base_commit.get("sha") != base_sha
+            or not isinstance(comparison_files, list)
+            or not isinstance(comparison_commits, list)
+            or not isinstance(total_commits, int)
+            or isinstance(total_commits, bool)
+            or total_commits < 0
+            or total_commits > 250
+            or len(comparison_commits) != total_commits
+            or any(not isinstance(item, dict) for item in comparison_files)
+            or any(not isinstance(item, dict) for item in comparison_commits)
+        ):
+            raise GitHubIngestionError(mismatch)
+        # GitHub resolves the endpoint path from these exact SHAs. The response
+        # can have no ahead commits when the head is behind the selected base.
+
+        def file_identity(item: dict) -> tuple[object, ...]:
+            return tuple(
+                item.get(key, default)
+                for key, default in (
+                    ("filename", None),
+                    ("status", "modified"),
+                    ("patch", None),
+                    ("additions", 0),
+                    ("deletions", 0),
+                    ("changes", 0),
+                )
+            )
+
+        immutable_by_path = {item.get("filename"): file_identity(item) for item in comparison_files}
+        mutable_by_path = {item.get("filename"): file_identity(item) for item in files.items}
+        if (
+            len(immutable_by_path) != len(comparison_files)
+            or len(mutable_by_path) != len(files.items)
+            or any(immutable_by_path.get(path) != value for path, value in mutable_by_path.items())
+            or (not files.truncated and immutable_by_path != mutable_by_path)
+        ):
+            raise GitHubIngestionError(mismatch)
+
+        immutable_commit_ids = [item.get("sha") for item in comparison_commits]
+        mutable_commit_ids = [item.get("sha") for item in commits.items]
+        if immutable_commit_ids[: len(mutable_commit_ids)] != mutable_commit_ids or (
+            not commits.truncated and immutable_commit_ids != mutable_commit_ids
+        ):
+            raise GitHubIngestionError(mismatch)
+
     def fetch_pull_request(self, url: str) -> PullRequestSnapshot:
         owner, repository, pr_number = parse_pr_url(url)
         root = f"/repos/{owner}/{repository}"
@@ -773,9 +822,7 @@ class GitHubClient:
         )
         base = pr_data.get("base") if isinstance(pr_data, dict) else None
         repository_data = base.get("repo") if isinstance(base, dict) else None
-        repository_id = (
-            repository_data.get("id") if isinstance(repository_data, dict) else None
-        )
+        repository_id = repository_data.get("id") if isinstance(repository_data, dict) else None
         verified_repository_id = (
             repository_id
             if isinstance(repository_id, int)
@@ -787,9 +834,7 @@ class GitHubClient:
         files_path = f"{root}/pulls/{pr_number}/files"
         file_paths = {files_path}
         if verified_repository_id is not None:
-            file_paths.add(
-                f"/repositories/{verified_repository_id}/pulls/{pr_number}/files"
-            )
+            file_paths.add(f"/repositories/{verified_repository_id}/pulls/{pr_number}/files")
         file_result = self._get_paginated(
             files_path,
             expected_paths=frozenset(file_paths),
@@ -808,9 +853,7 @@ class GitHubClient:
         commits_path = f"{root}/pulls/{pr_number}/commits"
         commit_paths = {commits_path}
         if verified_repository_id is not None:
-            commit_paths.add(
-                f"/repositories/{verified_repository_id}/pulls/{pr_number}/commits"
-            )
+            commit_paths.add(f"/repositories/{verified_repository_id}/pulls/{pr_number}/commits")
         commit_result = self._get_paginated(
             commits_path,
             expected_paths=frozenset(commit_paths),
@@ -848,6 +891,26 @@ class GitHubClient:
         check_data = check_response.json() if check_response.is_success else {}
         status_data = status_response.json() if status_response.is_success else {}
 
+        # The PR list endpoints can switch revisions between pages (even A→B→A).
+        # Compare their retained data with GitHub's immutable base...head view.
+        comparison_response = self._get(
+            f"{root}/compare/{pr_data['base']['sha']}...{head_sha}",
+            budget=budget,
+        )
+        try:
+            comparison_response.raise_for_status()
+            comparison = comparison_response.json()
+        except (httpx.HTTPStatusError, ValueError) as error:
+            raise GitHubIngestionError(
+                "GitHub immutable comparison was unavailable or malformed. Retry the review."
+            ) from error
+        self._verify_immutable_comparison(
+            comparison,
+            base_sha=pr_data["base"]["sha"],
+            files=file_result,
+            commits=commit_result,
+        )
+
         warnings: list[str] = []
         skipped_files: list[str] = []
         ingestion_state = IngestionState.COMPLETE
@@ -856,14 +919,10 @@ class GitHubClient:
                 filename = item.get("filename")
                 if isinstance(filename, str) and filename:
                     skipped_files.append(filename)
-            warnings.append(
-                "File limit reached; additional changed files were not retrieved."
-            )
+            warnings.append("File limit reached; additional changed files were not retrieved.")
             ingestion_state = IngestionState.PARTIAL
         if commit_result.truncated:
-            warnings.append(
-                "Commit history limit reached; additional commits were not retrieved."
-            )
+            warnings.append("Commit history limit reached; additional commits were not retrieved.")
             ingestion_state = IngestionState.PARTIAL
 
         total_bytes = 0
@@ -875,9 +934,7 @@ class GitHubClient:
             if raw_patch is None or raw_patch == "":
                 if filename not in skipped_files:
                     skipped_files.append(filename)
-                warning = (
-                    f"Patch unavailable for {filename}; file excluded from analysis."
-                )
+                warning = f"Patch unavailable for {filename}; file excluded from analysis."
                 if warning not in warnings:
                     warnings.append(warning)
                 ingestion_state = IngestionState.PARTIAL
@@ -913,8 +970,7 @@ class GitHubClient:
             )
         if diff_limit_skipped_count:
             warnings.append(
-                "Total diff limit reached; skipped "
-                f"{diff_limit_skipped_count} changed files."
+                f"Total diff limit reached; skipped {diff_limit_skipped_count} changed files."
             )
 
         commits = all_commits[: self.max_commits]
@@ -924,6 +980,26 @@ class GitHubClient:
             check_runs_available=check_response.is_success,
             legacy_status_available=status_response.is_success,
         )
+        final_pr_response = self._get(f"{root}/pulls/{pr_number}", budget=budget)
+        self._raise_for_pr(final_pr_response)
+        try:
+            final_pr_data = final_pr_response.json()
+        except ValueError as error:
+            raise GitHubIngestionError(
+                "GitHub returned malformed final pull request metadata."
+            ) from error
+        self._verified_repository_visibility(
+            final_pr_data,
+            expected_repository=f"{owner}/{repository}",
+        )
+        final_base = final_pr_data.get("base") if isinstance(final_pr_data, dict) else None
+        final_head = final_pr_data.get("head") if isinstance(final_pr_data, dict) else None
+        if not isinstance(final_base, dict) or not isinstance(final_head, dict):
+            raise GitHubIngestionError("GitHub returned malformed final pull request metadata.")
+        if final_base.get("sha") != pr_data["base"]["sha"] or final_head.get("sha") != head_sha:
+            raise GitHubIngestionError(
+                "Pull request head or base changed during ingestion. Retry the review."
+            )
         return PullRequestSnapshot(
             repository=f"{owner}/{repository}",
             repository_visibility=repository_visibility,

@@ -17,10 +17,12 @@ from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
     HumanResolution,
+    RepositoryVisibility,
     ResearchContext,
     ResolutionEvent,
     Review,
     ReviewBundle,
+    ReviewInputOrigin,
     RuntimeEvidence,
 )
 
@@ -108,6 +110,102 @@ def valid_bundle() -> ReviewBundle:
 
 def bundle_payload() -> dict[str, object]:
     return valid_bundle().model_dump(mode="python")
+
+
+@pytest.mark.parametrize(
+    ("evidence_type", "evidence_level"),
+    [
+        (EvidenceType.IMPLEMENTATION, EvidenceLevel.E4),
+        (EvidenceType.TEST, EvidenceLevel.E1),
+        (EvidenceType.RUNTIME, EvidenceLevel.E3),
+        (EvidenceType.CI, EvidenceLevel.E1),
+    ],
+)
+def test_bundle_rejects_candidate_type_and_level_mismatch(
+    evidence_type: EvidenceType, evidence_level: EvidenceLevel
+) -> None:
+    payload = bundle_payload()
+    payload["evidence"][0].update(
+        {"evidence_type": evidence_type, "evidence_level": evidence_level}
+    )
+
+    with pytest.raises(ValidationError, match="candidate evidence type and level"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_bundle_rejects_finding_without_support_or_missing_explanation() -> None:
+    payload = bundle_payload()
+    payload["findings"][0].update(
+        {
+            "status": FindingStatus.PARTIAL,
+            "evidence_level": EvidenceLevel.E4,
+            "evidence_ids": [],
+            "missing_evidence": [],
+        }
+    )
+
+    with pytest.raises(ValidationError, match="support or missing evidence"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_bundle_rejects_found_status_with_only_a_missing_evidence_note() -> None:
+    payload = bundle_payload()
+    payload["findings"][0].update(
+        {
+            "status": FindingStatus.EVIDENCE_FOUND,
+            "evidence_level": EvidenceLevel.E0,
+            "evidence_ids": [],
+            "missing_evidence": ["No candidate was cited"],
+        }
+    )
+
+    with pytest.raises(ValidationError, match="evidence_found requires cited candidates"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_bundle_rejects_finding_level_above_its_candidate_support() -> None:
+    payload = bundle_payload()
+    payload["findings"][0]["evidence_level"] = EvidenceLevel.E4
+
+    with pytest.raises(ValidationError, match="finding level must match cited candidates"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_bundle_rejects_candidate_from_another_reviewed_head() -> None:
+    payload = bundle_payload()
+    payload["evidence"][0]["commit_sha"] = "other-head"
+
+    with pytest.raises(ValidationError, match="candidate head must match review head"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_live_bundle_rejects_permalink_to_a_different_path() -> None:
+    payload = bundle_payload()
+    payload["review"].update(
+        {
+            "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+        }
+    )
+    payload["evidence"][0]["permalink"] = (
+        "https://github.com/acme/widget/blob/head123/src/other.py#L42"
+    )
+
+    with pytest.raises(ValidationError, match="candidate permalink must match"):
+        ReviewBundle.model_validate(payload)
+
+
+def test_live_bundle_rejects_unscoped_runtime_record() -> None:
+    payload = bundle_payload()
+    payload["review"].update(
+        {
+            "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+            "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+        }
+    )
+
+    with pytest.raises(ValidationError, match="live runtime evidence requires review identity"):
+        ReviewBundle.model_validate(payload)
 
 
 def scoped_manual_bundle_payload() -> dict[str, object]:

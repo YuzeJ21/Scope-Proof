@@ -8,6 +8,7 @@ from scopeproof_core.reviews.comparison import (
 from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     append_external_verification,
+    append_junit_evidence_import,
     append_resolution,
     append_runtime_evidence,
     attach_analysis,
@@ -23,6 +24,7 @@ __all__ = [
     "ResolutionEventStatus",
     "ReviewComparison",
     "append_external_verification",
+    "append_junit_evidence_import",
     "append_resolution",
     "append_runtime_evidence",
     "attach_analysis",

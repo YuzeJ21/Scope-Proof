@@ -23,6 +23,7 @@ from pydantic import (
     model_validator,
 )
 
+from scopeproof_core.provenance import candidate_permalink_matches
 from scopeproof_core.version import __version__
 
 RULESET_VERSION = "1.0.0"
@@ -106,9 +107,21 @@ def require_verified_public_origin(
 
 
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+_EXACT_HEAD_PATTERN = r"^[a-f0-9]{40}$"
+MAX_JUNIT_IMPORTS_PER_REVIEW = 20
+MAX_JUNIT_NOTE_LENGTH = 1_000
+_PATH_OR_URI_LIKE = re.compile(
+    r"(?:[/\\]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:)"
+)
 CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI = (
     "scopeproof://constructed-demo/acceptance-criteria"
 )
+
+
+def junit_name_is_path_or_url_like(value: str) -> bool:
+    """Return whether a JUnit display name could disclose a path or URI."""
+
+    return _PATH_OR_URI_LIKE.search(value) is not None
 _CRITERIA_SOURCE_URI_ERROR = (
     "source URI must be an HTTPS URL or "
     "scopeproof://constructed-demo/acceptance-criteria"
@@ -957,7 +970,6 @@ class EvidenceItem(BaseModel):
             raise ValueError("line_end must be greater than or equal to line_start")
         return self
 
-
 class CriterionRetrievalDiagnostic(BaseModel):
     """Deterministic search metadata that is never criterion evidence."""
 
@@ -1088,6 +1100,263 @@ class RuntimeEvidence(BaseModel):
         if self.evidence_level not in {EvidenceLevel.E3, EvidenceLevel.E4}:
             raise ValueError("runtime evidence requires E3 or E4")
         return self
+
+
+class JUnitCaseStatus(StringEnum):
+    """Sanitized externally supplied JUnit result state."""
+
+    PASSED = "passed"
+    FAILURE = "failure"
+    ERROR = "error"
+    SKIPPED = "skipped"
+
+
+JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION = (
+    "Imported test results are externally supplied, non-gating context. "
+    "ScopeProof did not execute the tests or target-repository code; the artifact "
+    "digest covers imported bytes only; importer identity is asserted, not "
+    "authenticated; and criterion mapping is organizational context, not proof."
+)
+
+
+class JUnitCaseResult(BaseModel):
+    """One bounded result projection without raw XML or output bodies."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    test_case_id: str = Field(pattern=r"^suite-\d{4}-case-\d{4}$")
+    suite_id: str = Field(pattern=r"^suite-\d{4}$")
+    suite_name: str = Field(max_length=512)
+    class_name: str | None = Field(default=None, max_length=512)
+    test_name: str = Field(max_length=512)
+    status: JUnitCaseStatus
+
+    @field_validator("suite_name", "test_name")
+    @classmethod
+    def require_non_blank_names(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must contain non-whitespace text")
+        if junit_name_is_path_or_url_like(normalized):
+            raise ValueError("JUnit names must not contain path- or URL-like text")
+        return normalized
+
+    @field_validator("class_name")
+    @classmethod
+    def normalize_optional_class_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("class name must contain non-whitespace text")
+        if junit_name_is_path_or_url_like(normalized):
+            raise ValueError("JUnit names must not contain path- or URL-like text")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_case_to_belong_to_suite(self) -> JUnitCaseResult:
+        if not self.test_case_id.startswith(f"{self.suite_id}-case-"):
+            raise ValueError("JUnit test case ID must belong to its suite ID")
+        return self
+
+
+class JUnitResultTotals(BaseModel):
+    """Computed JUnit result totals; artifact-declared totals are not trusted."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    total: int = Field(ge=0)
+    passed: int = Field(ge=0)
+    failures: int = Field(ge=0)
+    errors: int = Field(ge=0)
+    skipped: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_categories_to_sum_to_total(self) -> JUnitResultTotals:
+        categorized = self.passed + self.failures + self.errors + self.skipped
+        if categorized != self.total:
+            raise ValueError("JUnit result categories must sum to total")
+        return self
+
+
+class JUnitCriterionMapping(BaseModel):
+    """Explicit human mapping from sanitized test cases to one criterion."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    criterion_id: str = Field(min_length=1)
+    test_case_ids: list[str] = Field(min_length=1)
+
+    @field_validator("criterion_id")
+    @classmethod
+    def require_non_blank_criterion_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("criterion ID must contain non-whitespace text")
+        return normalized
+
+    @field_validator("test_case_ids")
+    @classmethod
+    def require_canonical_case_ids(cls, value: list[str]) -> list[str]:
+        if value != sorted(set(value)):
+            raise ValueError("mapped test case IDs must be sorted and unique")
+        if any(re.fullmatch(r"suite-\d{4}-case-\d{4}", item) is None for item in value):
+            raise ValueError("mapped test case IDs must use stable JUnit case IDs")
+        return value
+
+
+class JUnitEvidenceBoundary(BaseModel):
+    """Fixed machine-readable trust semantics for every external JUnit import."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: Literal["externally_supplied"] = "externally_supplied"
+    gate_effect: Literal["non_gating"] = "non_gating"
+    execution: Literal["not_executed_by_scopeproof"] = "not_executed_by_scopeproof"
+    artifact_digest_scope: Literal["imported_bytes_only"] = "imported_bytes_only"
+    importer_identity: Literal["asserted_not_authenticated"] = (
+        "asserted_not_authenticated"
+    )
+    criterion_mapping: Literal["organizational_context_not_proof"] = (
+        "organizational_context_not_proof"
+    )
+
+
+class JUnitEvidenceImport(BaseModel):
+    """Versioned external test-result context that never enters gate truth."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["junit-import-v1"]
+    evidence_boundary: JUnitEvidenceBoundary
+    import_id: LocalReviewId
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    pr_number: int = Field(gt=0)
+    head_sha: str = Field(pattern=_EXACT_HEAD_PATTERN)
+    criteria_revision_number: Annotated[StrictInt, Field(gt=0)]
+    confirmed_criteria_sha256: str
+    criteria_source_provenance: CriteriaSourceProvenance
+    artifact_sha256: str
+    artifact_format: Literal["junit_xml"] = "junit_xml"
+    imported_by: str = Field(max_length=256)
+    imported_at: datetime
+    totals: JUnitResultTotals
+    test_cases: list[JUnitCaseResult] = Field(min_length=1, max_length=5_000)
+    criterion_mappings: list[JUnitCriterionMapping] = Field(min_length=1)
+    parser_warnings: list[str] = Field(default_factory=list, max_length=100)
+    limitations: list[str] = Field(min_length=1, max_length=100)
+
+    @field_validator("confirmed_criteria_sha256", "artifact_sha256")
+    @classmethod
+    def validate_sha256_digest(cls, value: str) -> str:
+        if not _SHA256_PATTERN.fullmatch(value):
+            raise ValueError("must be a lowercase SHA-256 digest")
+        return value
+
+    @field_validator("imported_by")
+    @classmethod
+    def normalize_importer(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("imported_by must contain non-whitespace text")
+        return normalized
+
+    @field_validator("imported_at")
+    @classmethod
+    def normalize_import_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("imported_at must be timezone-aware")
+        return value.astimezone(UTC)
+
+    @field_validator("parser_warnings", "limitations")
+    @classmethod
+    def require_unique_non_blank_notes(cls, value: list[str]) -> list[str]:
+        normalized = [item.strip() for item in value]
+        if any(not item for item in normalized):
+            raise ValueError("notes must contain non-whitespace text")
+        if any(len(item) > MAX_JUNIT_NOTE_LENGTH for item in normalized):
+            raise ValueError(
+                f"notes must be at most {MAX_JUNIT_NOTE_LENGTH} characters each"
+            )
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("notes must be unique")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_result_and_mapping_cross_references(self) -> JUnitEvidenceImport:
+        case_ids = [item.test_case_id for item in self.test_cases]
+        if case_ids != sorted(set(case_ids)):
+            raise ValueError("JUnit test case IDs must be sorted and unique")
+        observed = {
+            JUnitCaseStatus.PASSED: 0,
+            JUnitCaseStatus.FAILURE: 0,
+            JUnitCaseStatus.ERROR: 0,
+            JUnitCaseStatus.SKIPPED: 0,
+        }
+        for item in self.test_cases:
+            observed[item.status] += 1
+        if (
+            self.totals.total,
+            self.totals.passed,
+            self.totals.failures,
+            self.totals.errors,
+            self.totals.skipped,
+        ) != (
+            len(self.test_cases),
+            observed[JUnitCaseStatus.PASSED],
+            observed[JUnitCaseStatus.FAILURE],
+            observed[JUnitCaseStatus.ERROR],
+            observed[JUnitCaseStatus.SKIPPED],
+        ):
+            raise ValueError("JUnit totals must match sanitized test case results")
+        mapping_criteria = [item.criterion_id for item in self.criterion_mappings]
+        if mapping_criteria != sorted(set(mapping_criteria)):
+            raise ValueError("JUnit criterion mappings must be sorted and unique")
+        known_case_ids = set(case_ids)
+        if any(
+            case_id not in known_case_ids
+            for mapping in self.criterion_mappings
+            for case_id in mapping.test_case_ids
+        ):
+            raise ValueError("mapped test case IDs must resolve")
+        mapped_case_ids = [
+            case_id
+            for mapping in self.criterion_mappings
+            for case_id in mapping.test_case_ids
+        ]
+        if len(mapped_case_ids) != len(set(mapped_case_ids)):
+            raise ValueError("one JUnit test case must not map to multiple criteria")
+        return self
+
+
+class JUnitImportMutationMetadata(BaseModel):
+    """Validated CLI output for one persisted JUnit import mutation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    review_id: LocalReviewId
+    record: str = Field(min_length=1)
+    head_sha: str = Field(pattern=_EXACT_HEAD_PATTERN)
+    import_id: LocalReviewId
+    artifact_sha256: str
+    mapped_criterion_ids: list[str] = Field(min_length=1)
+    totals: JUnitResultTotals
+    evidence_boundary: Literal["externally_supplied_non_gating"]
+    verdict: GateVerdict
+
+    @field_validator("artifact_sha256")
+    @classmethod
+    def validate_artifact_digest(cls, value: str) -> str:
+        if not _SHA256_PATTERN.fullmatch(value):
+            raise ValueError("must be a lowercase SHA-256 digest")
+        return value
+
+    @field_validator("mapped_criterion_ids")
+    @classmethod
+    def require_canonical_criteria(cls, value: list[str]) -> list[str]:
+        if value != sorted(set(value)) or any(not item.strip() for item in value):
+            raise ValueError("mapped criterion IDs must be sorted unique IDs")
+        return value
 
 
 class Finding(BaseModel):
@@ -1295,6 +1564,9 @@ class ReviewBundle(BaseModel):
         default_factory=list
     )
     runtime_evidence: list[RuntimeEvidence] = Field(default_factory=list)
+    junit_evidence_imports: list[JUnitEvidenceImport] = Field(
+        default_factory=list, max_length=MAX_JUNIT_IMPORTS_PER_REVIEW
+    )
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
     gate: GateDecision
@@ -1369,6 +1641,29 @@ class ReviewBundle(BaseModel):
         evidence_by_id = {item.evidence_id: item for item in self.evidence}
         if any(item.criterion_id not in known_criteria for item in self.evidence):
             raise ValueError("evidence criterion IDs must reference known criteria")
+        for item in self.evidence:
+            expected_level = {
+                EvidenceType.IMPLEMENTATION: EvidenceLevel.E1,
+                EvidenceType.DOCUMENTATION: EvidenceLevel.E1,
+                EvidenceType.CONTRACT: EvidenceLevel.E1,
+                EvidenceType.TEST: EvidenceLevel.E2,
+            }.get(item.evidence_type)
+            if item.evidence_level is not expected_level:
+                raise ValueError("candidate evidence type and level must agree")
+            if item.commit_sha != self.review.head_sha:
+                raise ValueError("candidate head must match review head")
+            if (
+                self.review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+                and not candidate_permalink_matches(
+                    item.permalink,
+                    repository=self.review.repository,
+                    commit_sha=item.commit_sha,
+                    file_path=item.file_path,
+                    line_start=item.line_start,
+                    line_end=item.line_end,
+                )
+            ):
+                raise ValueError("candidate permalink must match review identity and location")
 
         if self.retrieval_diagnostics:
             diagnostic_ids = [
@@ -1397,6 +1692,10 @@ class ReviewBundle(BaseModel):
         if set(finding_ids) != known_criteria:
             raise ValueError("findings must match criteria exactly")
         for finding in self.findings:
+            if finding.status is FindingStatus.EVIDENCE_FOUND and not finding.evidence_ids:
+                raise ValueError("evidence_found requires cited candidates")
+            if not finding.evidence_ids and not finding.missing_evidence:
+                raise ValueError("findings require cited support or missing evidence")
             if len(finding.evidence_ids) != len(set(finding.evidence_ids)):
                 raise ValueError("finding evidence references must be unique")
             if any(evidence_id not in evidence_by_id for evidence_id in finding.evidence_ids):
@@ -1406,6 +1705,16 @@ class ReviewBundle(BaseModel):
                 for evidence_id in finding.evidence_ids
             ):
                 raise ValueError("finding evidence must belong to the same criterion")
+            expected_level = max(
+                (
+                    evidence_by_id[evidence_id].evidence_level
+                    for evidence_id in finding.evidence_ids
+                ),
+                key=lambda level: level.rank,
+                default=EvidenceLevel.E0,
+            )
+            if finding.evidence_level is not expected_level:
+                raise ValueError("finding level must match cited candidates")
 
         if any(item.criterion_id not in known_criteria for item in self.runtime_evidence):
             raise ValueError("runtime evidence criterion IDs must reference known criteria")
@@ -1417,6 +1726,11 @@ class ReviewBundle(BaseModel):
         if len(runtime_ids) != len(set(runtime_ids)):
             raise ValueError("runtime evidence IDs must be unique")
         for item in self.runtime_evidence:
+            if (
+                self.review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+                and item.runtime_evidence_id is None
+            ):
+                raise ValueError("live runtime evidence requires review identity")
             if item.runtime_evidence_id is None:
                 continue
             if (
@@ -1436,6 +1750,38 @@ class ReviewBundle(BaseModel):
             for item in self.runtime_evidence
             if item.runtime_evidence_id is not None
         }
+
+        junit_import_ids = [item.import_id for item in self.junit_evidence_imports]
+        if len(junit_import_ids) != len(set(junit_import_ids)):
+            raise ValueError("JUnit import IDs must be unique")
+        junit_artifact_digests = [
+            item.artifact_sha256 for item in self.junit_evidence_imports
+        ]
+        if len(junit_artifact_digests) != len(set(junit_artifact_digests)):
+            raise ValueError("JUnit artifact digests must be unique")
+        criteria_digest = normalized_criteria_sha256(self.criteria)
+        for item in self.junit_evidence_imports:
+            if (
+                item.repository,
+                item.pr_number,
+                item.head_sha,
+            ) != (
+                self.review.repository,
+                self.review.pr_number,
+                self.review.head_sha,
+            ):
+                raise ValueError("JUnit import identity must match the owning review")
+            if item.criteria_revision_number != self.criteria_revision_number:
+                raise ValueError("JUnit import criteria revision must match the bundle")
+            if item.confirmed_criteria_sha256 != criteria_digest:
+                raise ValueError("JUnit import criteria digest must match the bundle")
+            if item.criteria_source_provenance != self.review.criteria_source_provenance:
+                raise ValueError("JUnit import criteria provenance must match the review")
+            if any(
+                mapping.criterion_id not in known_criteria
+                for mapping in item.criterion_mappings
+            ):
+                raise ValueError("JUnit import mappings must reference known criteria")
 
         resolution_ids = [resolution.criterion_id for resolution in self.resolutions]
         if len(resolution_ids) != len(set(resolution_ids)):
