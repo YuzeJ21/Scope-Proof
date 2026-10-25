@@ -19,6 +19,7 @@ which provides the wheel, source archive, and checksum manifest.
 |---|---|
 | Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
 | Active source line | Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists |
+| Post-PR #202 resulting-main snapshot (2026-10-26) | `e1f798a05940c39f9aea1f7fbf62ece5f4f7b73e`; [CI run 40204676870](https://github.com/YuzeJ21/Scope-Proof/actions/runs/40204676870) succeeded with 2,523 passed, 2 intentional skips, 95.06% coverage, and 5/5 packaged-browser checks |
 | 2026-10-25 observed main | `f586d90b72a14fd19d5a0add01f3d05532a88955`; integrity and portfolio draft work remains separate from the published v0.2.3 release |
 | Post-PR #193 resulting-main snapshot (2026-08-13) | PR #193 product-source baseline at `432371c4faec0b790f70fec32b4d3fc4d5132cfa` (PR head `8bb407079a0ff7098d2fc18af3d75b216725df2e`, base `9426e8714ffd2c3742bb074ae26fc788f1049c63`) |
 | Post-PR #196 resulting-main snapshot (2026-08-17) | Exact PR #196 head `5a6a25a6dff23cdfa8dcb4023b83144078620610` landed in merge `8387156fd6f6e90eef7caf58881b0cc5bb62b111`; hosted resulting-main CI run [`32093041685`](https://github.com/YuzeJ21/Scope-Proof/actions/runs/32093041685) succeeded as the exact-head engineering record |
@@ -44,12 +45,15 @@ PR #188 merged verified-public provenance enforcement at
 verified-public provenance enforcement is implemented. These changes form the `0.2.4.dev0`
 development line and earn no Stage 1 credit.
 
-The 2026-10-25 integrity draft adds per-test app storage isolation, SHA-addressed comparison of
-mutable PR lists, and shared saved/exported bundle relationship validation. It requires complete
-automated verification and review before any merge decision. Existing dependency PRs #200 and
-#201 remain separate lockfile reviews; JUnit PR #199 has repaired parser/comparison defects
-and remains pending exact-head and post-integrity integration checks. The [integration disposition](docs/audits/2026-10-25-integrity-integration-disposition.md)
-records the exact heads and reasons. None of this is published or customer validation.
+PRs [#199](https://github.com/YuzeJ21/Scope-Proof/pull/199) through
+[#202](https://github.com/YuzeJ21/Scope-Proof/pull/202) merged the bounded JUnit adapter,
+urllib3 and GitPython lock updates, and the integrity work. The resulting-main
+[CI run 40204676870](https://github.com/YuzeJ21/Scope-Proof/actions/runs/40204676870)
+succeeded at `e1f798a05940c39f9aea1f7fbf62ece5f4f7b73e` with 2,523 tests passed,
+2 intentional skips, 95.06% coverage, and 5/5 packaged-browser checks. The
+[2026-10-25 integration disposition](docs/audits/2026-10-25-integrity-integration-disposition.md)
+remains a historical pre-merge review. These changes are on the unreleased `0.2.4.dev0`
+development line and provide engineering evidence only.
 
 PR #189 established the post-release development identity; PR #190 preserved comparison
 relationship integrity; PR #191 remediated the GitPython dependency and security issue; PR #192
