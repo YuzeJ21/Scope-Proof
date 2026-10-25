@@ -40,6 +40,8 @@ def fixture_transport(
     status_status: int = 200,
     requested_urls: list[httpx.URL] | None = None,
     pull_repository: object = _DEFAULT_PULL_REPOSITORY,
+    head_shas: tuple[str, ...] = ("head123",),
+    base_shas: tuple[str, ...] = ("base123",),
 ) -> httpx.MockTransport:
     default_files = [
         {
@@ -56,15 +58,17 @@ def fixture_transport(
         for index in range(file_count)
     ]
     files = files_override if files_override is not None else default_files
+    pull_reads = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal pull_reads
         if requested_urls is not None:
             requested_urls.append(request.url)
         path = request.url.path
         if path == "/repos/acme/widget/pulls/42":
             if pull_status != 200:
                 return _response(pull_status, {"message": "request failed"}, pull_headers)
-            base = {"sha": "base123"}
+            base = {"sha": base_shas[min(pull_reads, len(base_shas) - 1)]}
             if pull_repository is _DEFAULT_PULL_REPOSITORY:
                 base["repo"] = {
                     "full_name": "acme/widget",
@@ -73,6 +77,8 @@ def fixture_transport(
                 }
             elif pull_repository is not None:
                 base["repo"] = pull_repository
+            head_sha = head_shas[min(pull_reads, len(head_shas) - 1)]
+            pull_reads += 1
             return _response(
                 200,
                 {
@@ -81,7 +87,7 @@ def fixture_transport(
                     "body": "Adds export",
                     "html_url": "https://github.com/acme/widget/pull/42",
                     "base": base,
-                    "head": {"sha": "head123"},
+                    "head": {"sha": head_sha},
                 },
             )
         if path.endswith("/files"):
@@ -112,6 +118,22 @@ def fixture_transport(
         return _response(404, {"message": f"Unhandled {path}"})
 
     return httpx.MockTransport(handler)
+
+
+@pytest.mark.parametrize(
+    ("head_shas", "base_shas"),
+    [
+        (("head123", "newhead"), ("base123",)),
+        (("head123",), ("base123", "newbase")),
+    ],
+)
+def test_fetch_rejects_pr_revision_moving_during_ingestion(
+    head_shas: tuple[str, ...], base_shas: tuple[str, ...]
+) -> None:
+    with pytest.raises(GitHubIngestionError, match="changed during ingestion"):
+        GitHubClient(
+            transport=fixture_transport(head_shas=head_shas, base_shas=base_shas)
+        ).fetch_pull_request("https://github.com/acme/widget/pull/42")
 
 
 def test_parse_pr_url_accepts_only_github_pull_urls() -> None:

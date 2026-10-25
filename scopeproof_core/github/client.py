@@ -206,7 +206,7 @@ class GitHubClient:
         max_commits: int = 250,
         max_candidate_files: int = 8,
         max_candidate_bytes: int = 200_000,
-        max_requests: int = 16,
+        max_requests: int = 17,
         max_pagination_pages: int = 10,
         max_pagination_items: int = 1_000,
         max_response_bytes: int = 4 * 1024 * 1024,
@@ -924,6 +924,29 @@ class GitHubClient:
             check_runs_available=check_response.is_success,
             legacy_status_available=status_response.is_success,
         )
+        final_pr_response = self._get(f"{root}/pulls/{pr_number}", budget=budget)
+        self._raise_for_pr(final_pr_response)
+        try:
+            final_pr_data = final_pr_response.json()
+        except ValueError as error:
+            raise GitHubIngestionError(
+                "GitHub returned malformed final pull request metadata."
+            ) from error
+        self._verified_repository_visibility(
+            final_pr_data,
+            expected_repository=f"{owner}/{repository}",
+        )
+        final_base = final_pr_data.get("base") if isinstance(final_pr_data, dict) else None
+        final_head = final_pr_data.get("head") if isinstance(final_pr_data, dict) else None
+        if not isinstance(final_base, dict) or not isinstance(final_head, dict):
+            raise GitHubIngestionError("GitHub returned malformed final pull request metadata.")
+        if (
+            final_base.get("sha") != pr_data["base"]["sha"]
+            or final_head.get("sha") != head_sha
+        ):
+            raise GitHubIngestionError(
+                "Pull request head or base changed during ingestion. Retry the review."
+            )
         return PullRequestSnapshot(
             repository=f"{owner}/{repository}",
             repository_visibility=repository_visibility,

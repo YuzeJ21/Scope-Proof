@@ -38,12 +38,14 @@ def pagination_transport(
     commit_pages: dict[int, object] | None = None,
     commit_links: dict[int, str] | None = None,
     pull_payload: dict | None = None,
+    pull_payloads: list[dict] | None = None,
 ) -> tuple[httpx.MockTransport, list[httpx.Request]]:
     requests: list[httpx.Request] = []
     file_pages = file_pages or {1: []}
     file_links = file_links or {}
     commit_pages = commit_pages or {1: []}
     commit_links = commit_links or {}
+    pull_reads = 0
 
     def response(
         data: object,
@@ -54,10 +56,15 @@ def pagination_transport(
         return httpx.Response(200, json=data, headers=headers)
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal pull_reads
         requests.append(request)
         path = request.url.path
         page = int(request.url.params.get("page", "1"))
         if path == "/repos/acme/widget/pulls/42":
+            if pull_payloads is not None:
+                payload = pull_payloads[min(pull_reads, len(pull_payloads) - 1)]
+                pull_reads += 1
+                return response(payload)
             return response(pull_payload or _pull_payload())
         if path in {
             "/repos/acme/widget/pulls/42/files",
@@ -76,6 +83,28 @@ def pagination_transport(
         return httpx.Response(404, json={"message": path})
 
     return httpx.MockTransport(handler), requests
+
+
+def test_movement_after_paginated_files_is_rejected() -> None:
+    first_page = [{"filename": "src/first.py", "patch": "@@ -1 +1 @@\n+first"}]
+    second_page = [{"filename": "src/second.py", "patch": "@@ -1 +1 @@\n+second"}]
+    changed = _pull_payload()
+    changed["head"] = {"sha": "c" * 40}
+    transport, requests = pagination_transport(
+        file_pages={1: first_page, 2: second_page},
+        file_links={
+            1: (
+                '<https://api.github.com/repos/acme/widget/pulls/42/'
+                'files?page=2&per_page=100>; rel="next"'
+            )
+        },
+        pull_payloads=[_pull_payload(), changed],
+    )
+
+    with pytest.raises(GitHubIngestionError, match="changed during ingestion"):
+        GitHubClient(transport=transport).fetch_pull_request(PR_URL)
+
+    assert any(request.url.params.get("page") == "2" for request in requests)
 
 
 def paged_transport() -> httpx.MockTransport:
