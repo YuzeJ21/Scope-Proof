@@ -346,6 +346,8 @@ def parse_junit_artifact(artifact_bytes: bytes) -> ParsedJUnitArtifact:
         raise JUnitImportError("JUnit artifact exceeds the element limit.")
     for element in elements:
         _local_name(element.tag)
+        for attribute_name in element.attrib:
+            _local_name(attribute_name)
 
     root_name = _local_name(root.tag)
     if root_name == "testsuite":

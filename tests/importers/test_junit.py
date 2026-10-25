@@ -87,6 +87,15 @@ def test_parser_rejects_unsupported_outcome_attributes(namespace: bytes, attribu
         parse_junit_artifact(xml)
 
 
+def test_parser_rejects_namespaced_suite_count_attribute() -> None:
+    xml = (
+        b'<testsuite xmlns:x="urn:test" name="s" x:failures="1">'
+        b'<testcase name="t"/></testsuite>'
+    )
+    with pytest.raises(JUnitImportError, match="namespaces are unsupported"):
+        parse_junit_artifact(xml)
+
+
 def test_parser_discards_output_and_properties_with_one_bounded_warning() -> None:
     secret = "SENTINEL-OUTPUT-DO-NOT-PERSIST"
     xml = (
