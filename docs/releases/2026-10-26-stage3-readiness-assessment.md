@@ -1,9 +1,10 @@
 # ScopeProof Stage 3 readiness assessment — 2026-10-26
 
 Assessment target: unreleased `0.2.4.dev0` source derived from verified main
-`36358146a5167270fff7e52769ae66ee8f56f2da`. The exact implementation PR head and
-resulting main are recorded in the matching 2026-10-26 portfolio verification record after
-integration. Published v0.2.3 does not contain this change.
+`36358146a5167270fff7e52769ae66ee8f56f2da`. The implementation commit and local check
+matrix are recorded in the matching [portfolio verification record](../portfolio/2026-10-26/verification.md);
+the final exact head and resulting main belong to [PR #206](https://github.com/YuzeJ21/Scope-Proof/pull/206)
+after integration. Published v0.2.3 does not contain this change.
 
 **Decision: Stage 3 remains gated.** The changed-file scope repair supports a bounded
 engineering-readiness assessment; it does not supply independent-use evidence, an owner decision
