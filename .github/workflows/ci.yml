@@ -199,6 +199,19 @@ jobs:
           --cov-report=term-missing:skip-covered
           --cov-fail-under=95
           -q
+      - name: Enforce unrounded coverage floor
+        run: |
+          python - <<'PY'
+          from io import StringIO
+          from coverage import Coverage
+
+          measured = Coverage()
+          measured.load()
+          percent = measured.report(file=StringIO())
+          if percent < 95:
+              raise SystemExit(f"Unrounded coverage {percent:.4f}% is below 95%")
+          print(f"Unrounded coverage {percent:.4f}% meets 95%")
+          PY
       - name: Deterministic benchmark
         run: python -m scopeproof_core.evals.runner
       - name: Installed wheel smoke

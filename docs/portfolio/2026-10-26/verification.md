@@ -34,7 +34,7 @@ reviewers, and captured browser screens are engineering evidence only.
 
 | Check | Result |
 | --- | --- |
-| Isolated full suite: `uv run --no-sync pytest --cov=scopeproof_core --cov=apps --cov-report=term-missing:skip-covered --cov-fail-under=95 -q --maxfail=1 --tb=short` | 2,574 passed, 2 intentional skips in 572.80 seconds; combined coverage 95.04%, above the 95% requirement. An earlier run exposed a legacy-test expectation that assumed a migrated review could be accepted without a verified inventory; the corrected fail-closed regression passed in this final run. |
+| Isolated full suite: `uv run --no-sync pytest --cov=scopeproof_core --cov=apps --cov-report=term-missing:skip-covered --cov-fail-under=95 -q --maxfail=1 --tb=short` | 2,581 passed, 2 intentional skips in 551.53 seconds; combined unrounded coverage 95.0851%, above the 95% requirement. An earlier run exposed a legacy-test expectation that assumed a migrated review could be accepted without a verified inventory; the corrected fail-closed regression passed in this final run. |
 | Lint: `uv run --no-sync ruff check .`; whitespace: `git diff --check` | Passed. |
 | `uv run --no-sync scopeproof benchmark` | 12 constructed cases, 13 criteria, zero mismatches, zero must-have False Ready, zero uncited-file False Ready, zero false blockers. |
 | `uv run --no-sync scopeproof comparison-benchmark` | 2 constructed cases, zero mismatches. |
@@ -55,9 +55,13 @@ An initial exact-head Windows job passed the new scope regressions but failed it
 benchmark because Git's CRLF checkout changed the raw bytes of the frozen scope label. The
 follow-up checksum normalizes CRLF pairs only; a dedicated regression accepts that checkout form
 and still rejects an edited label. Independent review caught and resolved a Windows-only flaw in
-the test's own CRLF fixture construction. The final hosted matrix must pass at the replacement
-head before merge; [PR #206 checks](https://github.com/YuzeJ21/Scope-Proof/pull/206/checks)
-are the authoritative record.
+the test's own CRLF fixture construction. The next hosted head passed Windows but its full-suite
+log showed 12,635 statements with 632 missed, or 94.9980%: the coverage plugin printed a failure
+while GitHub marked the step successful. An explicit unrounded coverage check was added to CI,
+along with regressions for previously untested file-scope validation branches. The final hosted
+matrix must pass above 95% at the new exact head before merge;
+[PR #206 checks](https://github.com/YuzeJ21/Scope-Proof/pull/206/checks) are the authoritative
+record.
 
 R-002 remains a frozen 20-PR static research record. No target-repository code was executed, and
 neither the original constructed label nor historical benchmark results were retuned. The

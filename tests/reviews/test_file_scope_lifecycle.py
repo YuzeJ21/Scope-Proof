@@ -17,6 +17,7 @@ from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
     ResolutionEvent,
+    ReviewBundle,
 )
 
 
@@ -51,10 +52,15 @@ def scope_decision(state, *, head_sha="head-scope-001", path="src/auth.py"):
 
 def test_uncited_file_needs_attributable_decision_before_final_acceptance() -> None:
     state = scope_state()
-    state = append_resolution(state, ResolutionEvent(
-        criterion_id="AC-01", decision=HumanDecision.ACCEPTED,
-        reviewer="Fixture reviewer", comment="CSV candidate reviewed",
-    ))
+    state = append_resolution(
+        state,
+        ResolutionEvent(
+            criterion_id="AC-01",
+            decision=HumanDecision.ACCEPTED,
+            reviewer="Fixture reviewer",
+            comment="CSV candidate reviewed",
+        ),
+    )
     assert not can_record_final_acceptance(state)
 
     state = append_file_scope_decision(state, scope_decision(state))
@@ -62,9 +68,13 @@ def test_uncited_file_needs_attributable_decision_before_final_acceptance() -> N
     assert state.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
     assert state.bundle.file_scope_decisions[0].reviewer == "Fixture reviewer"
 
-    state = append_resolution(state, ResolutionEvent(
-        final_acceptance=True, reviewer="Fixture reviewer",
-    ))
+    state = append_resolution(
+        state,
+        ResolutionEvent(
+            final_acceptance=True,
+            reviewer="Fixture reviewer",
+        ),
+    )
     assert state.bundle.gate.verdict is GateVerdict.READY
 
 
@@ -103,3 +113,60 @@ def test_criteria_revision_preserves_old_file_decision_only_in_history() -> None
     assert revised.bundle is None
     assert revised.analysis_history[-1].file_scope_decisions == state.bundle.file_scope_decisions
     assert revised.review.criteria_confirmed is False
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"note": "   "}, "requires a reviewer and explanation"),
+        ({"reviewer": "   "}, "requires a reviewer and explanation"),
+        (
+            {"disposition": "within_confirmed_criteria", "criterion_id": None},
+            "within-criteria decision requires a criterion ID",
+        ),
+        ({"criterion_id": "AC-01"}, "outside-criteria decision cannot cite"),
+    ],
+)
+def test_file_decision_schema_rejects_ambiguous_review(
+    changes: dict[str, object], message: str
+) -> None:
+    decision = scope_decision(scope_state())
+    with pytest.raises(ValueError, match=message):
+        FileScopeDecision.model_validate({**decision.model_dump(), **changes})
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        (
+            {"criterion_id": "AC-UNKNOWN", "disposition": "within_confirmed_criteria"},
+            "criterion must be confirmed",
+        ),
+        ({"criteria_revision_number": 2}, "must match criteria revision"),
+    ],
+)
+def test_bundle_rejects_file_scope_decision_outside_confirmed_binding(
+    changes: dict[str, object], message: str
+) -> None:
+    state = scope_state()
+    bundle = state.bundle.model_copy(deep=True)
+    decision = scope_decision(state)
+    bundle.file_scope_decisions = [
+        FileScopeDecision.model_validate(
+            {
+                **decision.model_dump(),
+                **changes,
+            }
+        )
+    ]
+    with pytest.raises(ValueError, match=message):
+        ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+
+
+def test_bundle_rejects_duplicate_file_scope_decision_events() -> None:
+    state = scope_state()
+    bundle = state.bundle.model_copy(deep=True)
+    decision = scope_decision(state)
+    bundle.file_scope_decisions = [decision, decision.model_copy(deep=True)]
+    with pytest.raises(ValueError, match="event IDs must be unique"):
+        ReviewBundle.model_validate(bundle.model_dump(mode="python"))
