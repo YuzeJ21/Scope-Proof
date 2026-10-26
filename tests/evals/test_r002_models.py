@@ -1433,6 +1433,26 @@ def test_case_result_requires_sorted_reasons_bounded_disjoint_criteria_and_close
     with pytest.raises(ValidationError):
         R002CaseResult.model_validate_json(json.dumps(review))
 
+
+def test_r002_accepts_new_unknown_inventory_reason_without_rewriting_frozen_shape():
+    review = _safe_case_result_payload()
+    review["gate_verdict"] = "needs_review"
+    review["blocking_criteria"] = []
+    review["unresolved_criteria"] = ["AC-01"]
+    review["gate_reason_codes"] = [
+        "changed_file_inventory_unknown",
+        "checks_not_passing",
+        "criteria_source_provenance_missing",
+        "unresolved_criteria",
+    ]
+    assert R002CaseResult.model_validate_json(json.dumps(review)).gate_reason_codes == tuple(
+        review["gate_reason_codes"]
+    )
+    review["gate_reason_codes"].remove("changed_file_inventory_unknown")
+    assert R002CaseResult.model_validate_json(json.dumps(review)).gate_reason_codes == tuple(
+        review["gate_reason_codes"]
+    )
+
     blocked = _safe_case_result_payload()
     blocked["criterion_count"] = 17
     blocked["retrieved_candidates"][0]["hunk_id"] = "patch:a.py:H1"  # type: ignore[index]

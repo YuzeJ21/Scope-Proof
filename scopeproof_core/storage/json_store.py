@@ -33,8 +33,8 @@ try:
 except ImportError:  # pragma: no cover - exercised through the Windows-lock seam
     msvcrt = None  # type: ignore[assignment]
 
-RECORD_VERSION = 4
-_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4)
+RECORD_VERSION = 5
+_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _LEGACY_CI_CATEGORIES = {
     "successful_legacy_statuses",
@@ -364,6 +364,8 @@ class JsonReviewStore:
                     bundle.criteria,
                     bundle.findings,
                     bundle.resolutions,
+                    bundle.evidence,
+                    bundle.file_scope_decisions,
                 )
             }
         )
@@ -508,6 +510,21 @@ class JsonReviewStore:
         except ValidationError as error:
             raise ValueError("invalid review record envelope") from error
         state_payload = deepcopy(envelope.state)
+        if record_version < 5 and isinstance(state_payload, dict):
+            # Historical records never carried a complete exact-head file inventory.
+            # A newly added field in a downgraded record cannot establish that fact.
+            reviews = [state_payload.get("review")]
+            bundles = [state_payload.get("bundle")]
+            history = state_payload.get("analysis_history")
+            if isinstance(history, list):
+                bundles.extend(history)
+            for bundle in bundles:
+                if isinstance(bundle, dict):
+                    reviews.append(bundle.get("review"))
+                    bundle.pop("file_scope_decisions", None)
+            for review in reviews:
+                if isinstance(review, dict):
+                    review["changed_file_inventory"] = None
         if record_version == 1 and isinstance(state_payload, dict):
             active_bundle = state_payload.get("bundle")
             criteria_revision = state_payload.get("criteria_revision")

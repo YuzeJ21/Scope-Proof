@@ -82,6 +82,7 @@ from scopeproof_core.reviews.lifecycle import (
     ResolutionEventStatus,
     acceptance_requires_comment,
     append_external_verification,
+    append_file_scope_decision,
     append_junit_evidence_import,
     append_resolution,
     attach_analysis,
@@ -99,6 +100,7 @@ from scopeproof_core.schemas.models import (
     Criterion,
     EvidenceLevel,
     EvidenceSourceScope,
+    FileScopeDecision,
     HumanDecision,
     IngestionState,
     Priority,
@@ -715,6 +717,7 @@ def _analyze() -> ReviewBundle:
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
+        changed_file_inventory=snapshot.scope_inventory(),
         input_origin=input_origin,
     )
     retrieval_result = retrieve_evidence_with_diagnostics(
@@ -723,7 +726,7 @@ def _analyze() -> ReviewBundle:
     evidence = retrieval_result.evidence
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
     resolutions = st.session_state["resolutions"]
-    gate = evaluate_gate(review, criteria, findings, resolutions)
+    gate = evaluate_gate(review, criteria, findings, resolutions, evidence)
     return ReviewBundle(
         review=review,
         source_text=st.session_state["source_text"],
@@ -2949,6 +2952,140 @@ else:
                         row["Criterion"],
                     ),
                 )
+
+    st.markdown("### Changed-file scope")
+    inventory = bundle.review.changed_file_inventory
+    if inventory is None:
+        st.warning(
+            "This saved review has no verified changed-file inventory. Reload the exact "
+            "pull-request head and run a new confirmed analysis before Ready is possible."
+        )
+    else:
+        linked_evidence_ids = {
+            evidence_id for finding in bundle.findings for evidence_id in finding.evidence_ids
+        }
+        cited_paths = {
+            item.file_path for item in bundle.evidence
+            if item.source_scope is EvidenceSourceScope.CHANGED_FILE
+            and item.commit_sha == bundle.review.head_sha
+            and item.evidence_id in linked_evidence_ids
+        }
+        uncited_paths = sorted(
+            item.path for item in inventory.files if item.path not in cited_paths
+        )
+        latest_scope_decisions = {
+            item.path: item for item in bundle.file_scope_decisions
+        }
+        if uncited_paths:
+            st.caption(
+                "Every uncited changed file needs an explicit exact-head scope decision. "
+                "A within-criteria decision still needs a candidate citation before Ready. "
+                "A file name alone never establishes that a change is out of scope."
+            )
+            for path in uncited_paths:
+                prior = latest_scope_decisions.get(path)
+                st.code(path, language=None)
+                st.caption(
+                    "Unresolved" if prior is None else
+                    f"Reviewer decision: {_status_label(prior.disposition)}"
+                )
+                if prior is not None:
+                    st.text(
+                        f"Reviewer: {prior.reviewer}\n"
+                        f"Recorded: {prior.timestamp.isoformat()}\n"
+                        f"Head: {prior.head_sha}\n"
+                        f"Criteria revision: {prior.criteria_revision_number}\n"
+                        f"Explanation: {prior.note}"
+                    )
+            selected_scope_path = st.selectbox(
+                "Uncited changed file",
+                options=uncited_paths,
+                index=None,
+                placeholder="Select one changed file",
+                key="scope_file_path",
+            )
+            scope_disposition = st.selectbox(
+                "File scope decision",
+                options=["outside_confirmed_criteria", "within_confirmed_criteria"],
+                index=None,
+                placeholder="Select a scope decision",
+                format_func=_status_label,
+                key="scope_disposition",
+            )
+            scope_criterion_id = None
+            if scope_disposition == "within_confirmed_criteria":
+                scope_criterion_id = st.selectbox(
+                    "Confirmed criterion for this file",
+                    options=[item.criterion_id for item in bundle.criteria],
+                    index=None,
+                    key="scope_criterion_id",
+                )
+            scope_note = st.text_area(
+                "File scope explanation (required)", key="scope_note"
+            )
+            if st.button(
+                "Save file scope decision",
+                key="save_scope_decision",
+                disabled=(
+                    review_state is None
+                    or review_state.review.final_acceptance
+                    or selected_scope_path is None
+                    or scope_disposition is None
+                    or (
+                        scope_disposition == "within_confirmed_criteria"
+                        and scope_criterion_id is None
+                    )
+                    or not scope_note.strip()
+                    or not decision_reviewer_ready
+                ),
+            ):
+                try:
+                    assert review_state is not None
+                    review_state = append_file_scope_decision(
+                        review_state,
+                        FileScopeDecision(
+                            review_id=review_state.review.review_id,
+                            path=selected_scope_path,
+                            head_sha=review_state.review.head_sha,
+                            criteria_revision_number=review_state.criteria_revision.number,
+                            normalized_criteria_sha256=(
+                                review_state.review.criteria_source_provenance.normalized_criteria_sha256
+                                if review_state.review.criteria_source_provenance else ""
+                            ),
+                            disposition=scope_disposition,
+                            criterion_id=scope_criterion_id,
+                            note=scope_note,
+                            reviewer=decision_reviewer.strip(),
+                        ),
+                    )
+                except ValueError:
+                    st.error(
+                        "File scope decision could not be saved. "
+                        "Review the active head and try again."
+                    )
+                else:
+                    st.session_state["review_state"] = review_state
+                    st.session_state["bundle"] = review_state.bundle
+                    st.session_state["scope_save_notice"] = (
+                        "File scope decision appended to review history."
+                    )
+                    st.rerun()
+        if not uncited_paths:
+            st.caption("Every inspected changed file has a candidate citation.")
+        if bundle.file_scope_decisions:
+            with st.expander("File scope decision history"):
+                for item in bundle.file_scope_decisions:
+                    st.text(
+                        f"{item.path}: {item.disposition}\n"
+                        f"Reviewer: {item.reviewer}\n"
+                        f"Recorded: {item.timestamp.isoformat()}\n"
+                        f"Head: {item.head_sha}\n"
+                        f"Criteria revision: {item.criteria_revision_number}\n"
+                        f"Explanation: {item.note}"
+                    )
+        scope_notice = st.session_state.pop("scope_save_notice", None)
+        if scope_notice:
+            st.success(scope_notice)
 
     final_acceptance_save_notice = st.session_state.pop("final_acceptance_save_notice", None)
     final_acceptance_recorded = bool(

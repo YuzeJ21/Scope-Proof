@@ -53,6 +53,7 @@ from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     acceptance_requires_comment,
     append_external_verification,
+    append_file_scope_decision,
     append_junit_evidence_import,
     append_resolution,
     new_review_state,
@@ -62,6 +63,7 @@ from scopeproof_core.schemas.models import (
     CriteriaSourceProvenance,
     Criterion,
     EvidenceLevel,
+    FileScopeDecision,
     HumanDecision,
     JUnitImportMutationMetadata,
     LifecycleMutationMetadata,
@@ -152,12 +154,13 @@ def _build_bundle(
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
+        changed_file_inventory=snapshot.scope_inventory(),
         input_origin=input_origin,
     )
     retrieval_result = retrieve_evidence_with_diagnostics(snapshot, criteria)
     evidence = retrieval_result.evidence
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
-    gate = evaluate_gate(review, criteria, findings, [])
+    gate = evaluate_gate(review, criteria, findings, [], evidence)
     return ReviewBundle(
         review=review,
         source_text=source_text,
@@ -418,6 +421,35 @@ def _verify_runtime(args: argparse.Namespace) -> int:
 
     updated, path = store.mutate(args.review_id, transition)
     print(_mutation_metadata(updated, path, event.event_id).model_dump_json())
+    return 0
+
+
+def _scope_file(args: argparse.Namespace) -> int:
+    """Record one explicit changed-file scope decision on a saved exact-head review."""
+    store = JsonReviewStore(Path(args.storage_dir))
+    note = Path(args.comment_file).read_text(encoding="utf-8")
+    event_id = str(uuid4())
+
+    def transition(state: ReviewState) -> ReviewState:
+        decision = FileScopeDecision(
+            event_id=event_id,
+            review_id=state.review.review_id,
+            path=args.path,
+            head_sha=args.head_sha,
+            criteria_revision_number=state.criteria_revision.number,
+            normalized_criteria_sha256=(
+                state.review.criteria_source_provenance.normalized_criteria_sha256
+                if state.review.criteria_source_provenance else ""
+            ),
+            disposition=args.disposition,
+            criterion_id=args.criterion_id,
+            note=note,
+            reviewer=args.reviewer,
+        )
+        return append_file_scope_decision(state, decision)
+
+    updated, path = store.mutate(args.review_id, transition)
+    print(_mutation_metadata(updated, path, event_id).model_dump_json())
     return 0
 
 
@@ -753,6 +785,21 @@ def _parser() -> argparse.ArgumentParser:
     resolve.add_argument("--evidence-url")
     resolve.add_argument("--storage-dir", default=".scopeproof/reviews")
     resolve.set_defaults(handler=_resolve)
+    scope_file = commands.add_parser(
+        "scope-file", help="Record a reviewer decision for one uncited changed file"
+    )
+    scope_file.add_argument("review_id")
+    scope_file.add_argument("--head-sha", required=True)
+    scope_file.add_argument("--path", required=True)
+    scope_file.add_argument(
+        "--disposition", required=True,
+        choices=["outside_confirmed_criteria", "within_confirmed_criteria"],
+    )
+    scope_file.add_argument("--criterion-id")
+    scope_file.add_argument("--reviewer", required=True)
+    scope_file.add_argument("--comment-file", required=True)
+    scope_file.add_argument("--storage-dir", default=".scopeproof/reviews")
+    scope_file.set_defaults(handler=_scope_file)
     verify_runtime = commands.add_parser(
         "verify-runtime",
         help="Atomically record external runtime evidence and manual verification",
@@ -975,6 +1022,7 @@ def _benchmark() -> int:
     return int(
         bool(
             result.must_have_false_ready
+            or result.uncited_file_false_ready
             or result.false_blocker
             or result.mismatches
             or result.unexecuted_declared_categories

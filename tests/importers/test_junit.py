@@ -31,6 +31,7 @@ def exact_head_state() -> ReviewState:
     bundle = build_demo_review().model_copy(deep=True)
     old_head = bundle.review.head_sha
     bundle.review.head_sha = HEAD_SHA
+    bundle.review.changed_file_inventory.head_sha = HEAD_SHA
     for candidate in bundle.evidence:
         candidate.commit_sha = HEAD_SHA
         candidate.permalink = candidate.permalink.replace(old_head, HEAD_SHA)
@@ -448,8 +449,10 @@ def test_builder_requires_active_confirmed_exact_head_review() -> None:
     non_exact = state.model_copy(deep=True)
     old_head = non_exact.review.head_sha
     non_exact.review.head_sha = "constructed-head"
+    non_exact.review.changed_file_inventory.head_sha = "constructed-head"
     assert non_exact.bundle is not None
     non_exact.bundle.review.head_sha = "constructed-head"
+    non_exact.bundle.review.changed_file_inventory.head_sha = "constructed-head"
     for candidate in non_exact.bundle.evidence:
         candidate.commit_sha = "constructed-head"
         candidate.permalink = candidate.permalink.replace(old_head, "constructed-head")

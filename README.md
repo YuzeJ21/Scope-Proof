@@ -241,6 +241,14 @@ scopeproof resolve REVIEW_ID \
   --comment-file reviewer-note.txt \
   --storage-dir .scopeproof/reviews
 
+scopeproof scope-file REVIEW_ID \
+  --head-sha EXACT_HEAD_SHA \
+  --path src/generated-client.py \
+  --disposition outside_confirmed_criteria \
+  --reviewer "Reviewer name or role" \
+  --comment-file file-scope-note.txt \
+  --storage-dir .scopeproof/reviews
+
 scopeproof verify-runtime REVIEW_ID \
   --criterion-id AC-02 \
   --level E3 \
@@ -263,6 +271,14 @@ scopeproof compare PREVIOUS_REVIEW_ID CURRENT_REVIEW_ID \
   --output comparison.md \
   --storage-dir .scopeproof/reviews
 ```
+
+Each inspectable changed file is bound to the reviewed head. An uncited file prevents Ready until
+it has an explicit, explained reviewer decision that it falls outside the confirmed criteria.
+Use `--disposition within_confirmed_criteria --criterion-id AC-01` to record that a file belongs to
+a criterion; that decision does not replace a candidate citation. A skipped file leaves ingestion
+partial and cannot be waived through `scope-file`. Old saved reviews without a verified inventory
+remain Needs Review and require a new exact-head analysis. File decisions do not prove tests ran or
+that the implementation is correct.
 
 Current `0.2.4.dev0` source can also inspect and append one bounded local JUnit XML artifact
 without executing target-repository code. First inspect the sanitized scope IDs:
@@ -592,7 +608,8 @@ include and confirm it before analysis.
 
 `scopeproof benchmark` emits `evidence_quality_metrics` alongside its executed
 fixture results: immutable evidence-link precision, incorrect-line-citation
-rate, criterion agreement, and False Ready/False Blocker totals. These measure
+rate, criterion agreement, criterion-level and uncited-file False Ready totals, and False
+Blocker totals. These measure
 only the checked-in, executed labels; they do not prove runtime correctness or
 market validation. Human override, accepted-exception, and unresolved-ambiguity
 rates are intentionally `null` unless calculated from selected persisted review

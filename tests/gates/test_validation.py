@@ -118,6 +118,7 @@ def test_validated_review_state_rejects_forged_ready_historical_projection_witho
         historical.criteria,
         historical.findings,
         historical.resolutions,
+        historical.evidence,
     )
     assert historical.gate.verdict is GateVerdict.READY
 
@@ -144,6 +145,7 @@ def test_validated_review_state_rejects_forged_historical_final_acceptance_witho
         historical.criteria,
         historical.findings,
         historical.resolutions,
+        historical.evidence,
     )
 
     with pytest.raises(
@@ -172,6 +174,7 @@ def test_validated_review_state_rejects_resolutions_without_active_events() -> N
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
 
     with pytest.raises(
@@ -204,6 +207,7 @@ def test_validated_review_state_rejects_low_evidence_acceptance_without_comment(
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
 
     with pytest.raises(
@@ -221,6 +225,7 @@ def test_validated_review_bundle_rejects_final_acceptance_without_resolutions() 
         bundle.criteria,
         bundle.findings,
         bundle.resolutions,
+        bundle.evidence,
     )
 
     with pytest.raises(
@@ -245,6 +250,7 @@ def test_validated_review_bundle_accepts_legacy_unlinked_manual_as_unresolved() 
         bundle.criteria,
         bundle.findings,
         bundle.resolutions,
+        bundle.evidence,
     )
 
     validated = validated_review_bundle(bundle)
@@ -289,6 +295,7 @@ def test_validated_review_bundle_accepts_paired_manual_verification() -> None:
         bundle.criteria,
         bundle.findings,
         bundle.resolutions,
+        bundle.evidence,
     )
 
     assert validated_review_bundle(bundle) == bundle
@@ -322,6 +329,7 @@ def test_validated_review_state_accepts_legacy_unlinked_manual_event_as_unresolv
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
 
     validated = validated_review_state(state)
@@ -368,6 +376,7 @@ def test_validated_review_state_rejects_final_acceptance_recorded_too_early() ->
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
     assert state.bundle.gate.verdict is GateVerdict.READY
 
@@ -408,6 +417,7 @@ def test_validated_review_state_preserves_superseded_legacy_unlinked_manual_even
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
 
     validated = validated_review_state(state)
@@ -476,6 +486,7 @@ def test_validated_review_state_preserves_legacy_positive_acceptance_as_non_read
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
 
     validated = validated_review_state(state)
@@ -554,6 +565,7 @@ def test_validated_review_state_rejects_manual_replacement_before_legacy_revocat
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
     assert state.bundle.gate.verdict is GateVerdict.READY
 
@@ -574,6 +586,7 @@ def test_validated_review_state_rejects_final_acceptance_without_active_event() 
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
 
     with pytest.raises(

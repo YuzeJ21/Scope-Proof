@@ -20,6 +20,7 @@ def exact_head_bundle() -> ReviewBundle:
     bundle = build_demo_review().model_copy(deep=True)
     old_head = bundle.review.head_sha
     bundle.review.head_sha = HEAD_SHA
+    bundle.review.changed_file_inventory.head_sha = HEAD_SHA
     for candidate in bundle.evidence:
         candidate.commit_sha = HEAD_SHA
         candidate.permalink = candidate.permalink.replace(old_head, HEAD_SHA)

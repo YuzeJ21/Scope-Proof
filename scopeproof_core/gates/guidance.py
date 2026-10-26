@@ -95,6 +95,17 @@ def gate_guidance(gate: GateDecision) -> list[str]:
                 "Record new E3/E4 runtime verification at the active head for legacy-unlinked "
                 "manual criteria before acceptance."
             )
+        elif code == "changed_file_inventory_unknown":
+            message = (
+                "Reload the exact PR head and run a confirmed analysis to inspect the changed-file "
+                "inventory before acceptance."
+            )
+        elif code == "uncited_changed_files":
+            message = (
+                "Review each uncited changed file at this exact head. Record an explicit "
+                "outside-criteria "
+                "decision with a reason, or obtain a criterion citation before acceptance."
+            )
         else:
             message = f"Review gate reason `{code}` before acceptance."
         messages.append(message)

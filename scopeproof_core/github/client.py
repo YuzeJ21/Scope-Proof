@@ -778,6 +778,7 @@ class GitHubClient:
                 item.get(key, default)
                 for key, default in (
                     ("filename", None),
+                    ("previous_filename", None),
                     ("status", "modified"),
                     ("patch", None),
                     ("additions", 0),
@@ -960,6 +961,7 @@ class GitHubClient:
                 ChangedFile(
                     path=filename,
                     status=item.get("status", "modified"),
+                    previous_path=item.get("previous_filename"),
                     additions=item.get("additions", 0),
                     deletions=item.get("deletions", 0),
                     changes=item.get("changes", 0),

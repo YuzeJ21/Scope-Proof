@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from scopeproof_core.gates.evaluator import evaluate_gate
+from scopeproof_core.gates.evaluator import evaluate_gate, unresolved_changed_file_paths
 from scopeproof_core.gates.validation import (
     validated_review_bundle,
     validated_review_state,
@@ -18,6 +18,7 @@ from scopeproof_core.schemas.models import (
     CriteriaSourceProvenance,
     Criterion,
     EvidenceLevel,
+    FileScopeDecision,
     HumanDecision,
     IngestionState,
     JUnitEvidenceImport,
@@ -239,8 +240,47 @@ def _recalculate(state: ReviewState) -> ReviewState:
     bundle = state.bundle.model_copy(deep=True)
     bundle.review = review
     bundle.resolutions = resolutions
-    bundle.gate = evaluate_gate(bundle.review, bundle.criteria, bundle.findings, resolutions)
+    bundle.gate = evaluate_gate(
+        bundle.review, bundle.criteria, bundle.findings, resolutions,
+        bundle.evidence, bundle.file_scope_decisions,
+    )
     return state.model_copy(update={"review": review, "bundle": bundle})
+
+
+def append_file_scope_decision(
+    state: ReviewState, decision: FileScopeDecision
+) -> ReviewState:
+    """Append an attributable exact-head file disposition to the active analysis."""
+    state = _validated_state(state)
+    if state.bundle is None or not state.criteria_revision.confirmed:
+        raise ValueError("Run a confirmed analysis before recording file scope")
+    if state.review.final_acceptance:
+        raise ValueError("Revoke final acceptance before changing file scope")
+    decision = FileScopeDecision.model_validate(decision.model_dump(mode="python"))
+    if decision.head_sha != state.review.head_sha:
+        raise ValueError("file scope decision must match the active head")
+    if decision.review_id != state.review.review_id:
+        raise ValueError("file scope decision must match the active review")
+    if (
+        state.review.criteria_source_provenance is None
+        or decision.normalized_criteria_sha256
+        != state.review.criteria_source_provenance.normalized_criteria_sha256
+    ):
+        raise ValueError("file scope decision must match the confirmed criteria")
+    if decision.criteria_revision_number != state.criteria_revision.number:
+        raise ValueError("file scope decision must match the active criteria revision")
+    inventory = state.review.changed_file_inventory
+    if inventory is None or decision.path not in {item.path for item in inventory.files}:
+        raise ValueError("file scope decision requires an inventoried changed path")
+    if any(item.event_id == decision.event_id for item in state.bundle.file_scope_decisions):
+        raise ValueError("file scope decision event ID must be unique")
+    bundle = state.bundle.model_copy(deep=True)
+    bundle.file_scope_decisions.append(decision)
+    bundle.gate = evaluate_gate(
+        bundle.review, bundle.criteria, bundle.findings, bundle.resolutions,
+        bundle.evidence, bundle.file_scope_decisions,
+    )
+    return validated_review_state(state.model_copy(update={"bundle": bundle}))
 
 
 def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState:
@@ -528,6 +568,11 @@ def can_record_final_acceptance(state: ReviewState) -> bool:
     if state.review.ingestion_warnings or state.review.skipped_files:
         return False
     if state.review.check_state is not CheckState.PASSING:
+        return False
+    if unresolved_changed_file_paths(
+        state.review, state.bundle.findings, state.bundle.evidence,
+        state.bundle.file_scope_decisions,
+    ) != set():
         return False
 
     accepted_decisions = {

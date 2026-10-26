@@ -741,12 +741,39 @@ class ChangedLine(BaseModel):
 class ChangedFile(BaseModel):
     path: str = Field(min_length=1)
     status: str
+    previous_path: str | None = None
     additions: int = Field(default=0, ge=0)
     deletions: int = Field(default=0, ge=0)
     changes: int = Field(default=0, ge=0)
     patch: str = ""
     lines: list[ChangedLine] = Field(default_factory=list)
     truncated: bool = False
+
+
+class ChangedFileScope(BaseModel):
+    """One inspected changed path, without treating its name as a scope decision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = Field(min_length=1)
+    status: str = Field(min_length=1)
+    previous_path: str | None = None
+
+
+class ChangedFileInventory(BaseModel):
+    """The complete inspectable file list for one immutable review head."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    head_sha: str = Field(min_length=1)
+    files: list[ChangedFileScope]
+
+    @model_validator(mode="after")
+    def unique_paths(self) -> ChangedFileInventory:
+        paths = [item.path for item in self.files]
+        if len(paths) != len(set(paths)):
+            raise ValueError("changed-file inventory paths must be unique")
+        return self
 
 
 class CommitInfo(BaseModel):
@@ -818,6 +845,20 @@ class PullRequestSnapshot(BaseModel):
             raise ValueError("complete ingestion cannot include limitations")
         return self
 
+    def scope_inventory(self) -> ChangedFileInventory:
+        """Copy only observed changed paths and bind them to this snapshot's head."""
+        return ChangedFileInventory(
+            head_sha=self.head_sha,
+            files=[
+                ChangedFileScope(
+                    path=item.path,
+                    status=item.status,
+                    previous_path=item.previous_path,
+                )
+                for item in self.files
+            ],
+        )
+
 
 class Review(BaseModel):
     review_id: str = Field(default_factory=lambda: str(uuid4()))
@@ -837,6 +878,7 @@ class Review(BaseModel):
     ingestion_state: IngestionState = IngestionState.COMPLETE
     ingestion_warnings: list[str] = Field(default_factory=list)
     skipped_files: list[str] = Field(default_factory=list)
+    changed_file_inventory: ChangedFileInventory | None = None
     input_origin: ReviewInputOrigin = ReviewInputOrigin.LEGACY_UNKNOWN
     final_acceptance: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -905,6 +947,11 @@ class Review(BaseModel):
             self.ingestion_warnings or self.skipped_files
         ):
             raise ValueError("complete ingestion cannot include limitations")
+        if (
+            self.changed_file_inventory is not None
+            and self.changed_file_inventory.head_sha != self.head_sha
+        ):
+            raise ValueError("changed-file inventory head must match review head")
         return self
 
     @computed_field
@@ -1411,6 +1458,34 @@ class HumanResolution(BaseModel):
         return self
 
 
+class FileScopeDecision(BaseModel):
+    """Append-only reviewer disposition for one uncited file at an exact head."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    review_id: str = Field(min_length=1)
+    path: str = Field(min_length=1)
+    head_sha: str = Field(min_length=1)
+    criteria_revision_number: int = Field(gt=0)
+    normalized_criteria_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    disposition: Literal["outside_confirmed_criteria", "within_confirmed_criteria"]
+    criterion_id: str | None = None
+    note: str = Field(min_length=1)
+    reviewer: str = Field(min_length=1)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="after")
+    def validate_disposition(self) -> FileScopeDecision:
+        if not self.note.strip() or not self.reviewer.strip():
+            raise ValueError("file scope decision requires a reviewer and explanation")
+        if self.disposition == "within_confirmed_criteria" and self.criterion_id is None:
+            raise ValueError("within-criteria decision requires a criterion ID")
+        if self.disposition == "outside_confirmed_criteria" and self.criterion_id is not None:
+            raise ValueError("outside-criteria decision cannot cite a criterion ID")
+        return self
+
+
 class ResolutionEvent(BaseModel):
     """Append-only human decision or review-level final-acceptance event."""
 
@@ -1569,6 +1644,7 @@ class ReviewBundle(BaseModel):
     )
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
+    file_scope_decisions: list[FileScopeDecision] = Field(default_factory=list)
     gate: GateDecision
     research_context: ResearchContext | None = None
 
@@ -1635,6 +1711,27 @@ class ReviewBundle(BaseModel):
                 raise ValueError("criteria source provenance does not match criteria")
         known_criteria = set(criterion_ids)
 
+        inventory = self.review.changed_file_inventory
+        inventory_paths = {item.path for item in inventory.files} if inventory else set()
+        decision_ids = [item.event_id for item in self.file_scope_decisions]
+        if len(decision_ids) != len(set(decision_ids)):
+            raise ValueError("file scope decision event IDs must be unique")
+        for decision in self.file_scope_decisions:
+            if self.criteria_revision_number == "unknown":
+                raise ValueError("file scope decision requires known criteria revision")
+            if decision.review_id != self.review.review_id:
+                raise ValueError("file scope decision review must match owning review")
+            if decision.normalized_criteria_sha256 != normalized_criteria_sha256(self.criteria):
+                raise ValueError("file scope decision must match confirmed criteria digest")
+            if decision.head_sha != self.review.head_sha:
+                raise ValueError("file scope decision head must match review head")
+            if decision.path not in inventory_paths:
+                raise ValueError("file scope decision path must be in changed-file inventory")
+            if decision.criterion_id is not None and decision.criterion_id not in known_criteria:
+                raise ValueError("file scope decision criterion must be confirmed")
+            if decision.criteria_revision_number != self.criteria_revision_number:
+                raise ValueError("file scope decision must match criteria revision")
+
         evidence_ids = [item.evidence_id for item in self.evidence]
         if len(evidence_ids) != len(set(evidence_ids)):
             raise ValueError("evidence IDs must be unique")
@@ -1642,6 +1739,12 @@ class ReviewBundle(BaseModel):
         if any(item.criterion_id not in known_criteria for item in self.evidence):
             raise ValueError("evidence criterion IDs must reference known criteria")
         for item in self.evidence:
+            if (
+                inventory is not None
+                and item.source_scope is EvidenceSourceScope.CHANGED_FILE
+                and item.file_path not in inventory_paths
+            ):
+                raise ValueError("changed-file evidence path must be in inventory")
             expected_level = {
                 EvidenceType.IMPLEMENTATION: EvidenceLevel.E1,
                 EvidenceType.DOCUMENTATION: EvidenceLevel.E1,

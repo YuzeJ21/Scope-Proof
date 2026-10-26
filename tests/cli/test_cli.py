@@ -1827,6 +1827,8 @@ def test_compare_command_rejects_different_confirmed_criterion_definitions(
                 revised_criteria,
                 current.bundle.findings,
                 [],
+                current.bundle.evidence,
+                current.bundle.file_scope_decisions,
             ),
         },
         deep=True,
@@ -2849,8 +2851,10 @@ def save_exact_head_cli_review(storage: Path) -> ReviewState:
     state = new_review_state(build_demo_review()).model_copy(deep=True)
     old_head = state.review.head_sha
     state.review.head_sha = "a" * 40
+    state.review.changed_file_inventory.head_sha = state.review.head_sha
     assert state.bundle is not None
     state.bundle.review.head_sha = "a" * 40
+    state.bundle.review.changed_file_inventory.head_sha = state.review.head_sha
     for candidate in state.bundle.evidence:
         candidate.commit_sha = state.review.head_sha
         candidate.permalink = candidate.permalink.replace(old_head, state.review.head_sha)

@@ -1,5 +1,14 @@
-from scopeproof_core.demo import build_demo_review, load_demo_snapshot
-from scopeproof_core.evals.runner import run_bundled_benchmark
+import json
+from pathlib import Path
+
+import pytest
+
+from scopeproof_core.demo import build_demo_review, build_review_from_paths, load_demo_snapshot
+from scopeproof_core.evals.runner import (
+    CurrentGateExpectation,
+    _evaluate_case,
+    run_bundled_benchmark,
+)
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     FindingStatus,
@@ -55,8 +64,13 @@ def test_demo_records_one_retrieval_diagnostic_per_criterion() -> None:
 def test_benchmark_reports_zero_must_have_false_ready() -> None:
     result = run_bundled_benchmark()
     assert result.must_have_false_ready == 0
+    assert result.uncited_file_false_ready == 0
     assert result.false_blocker == 0
     assert result.mismatches == []
+    scope_case = next(item for item in result.case_results if item.case_id == "scope-expansion")
+    assert scope_case.historical_expected_gate == "ready"
+    assert scope_case.expected_gate == "needs_review"
+    assert scope_case.actual_gate == "needs_review"
 
 
 def test_benchmark_declares_required_case_coverage() -> None:
@@ -75,3 +89,38 @@ def test_benchmark_declares_required_case_coverage() -> None:
         "ambiguous_criterion",
         "unchanged_file_evidence",
     }
+
+
+def test_scope_expansion_uncited_changed_file_cannot_be_ready() -> None:
+    root = Path(__file__).resolve().parents[2] / "evals"
+    bundle = build_review_from_paths(
+        root / "fixtures/scope_expansion_pr.json",
+        root / "labels/benchmark_scope_expansion.json",
+    )
+
+    assert bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert "uncited_changed_files" in bundle.gate.reason_codes
+
+
+def test_historical_scope_label_hash_allows_windows_line_endings_only(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[2] / "evals"
+    original = (
+        root / "labels/benchmark_scope_expansion.json"
+    ).read_bytes().replace(b"\r\n", b"\n")
+    copied_label = tmp_path / "benchmark_scope_expansion.json"
+    copied_label.write_bytes(original.replace(b"\n", b"\r\n"))
+    assert b"\r\r\n" not in copied_label.read_bytes()
+    expectation = CurrentGateExpectation.model_validate(
+        json.loads((root / "constructed_scope/current_gate_expectations.json").read_text())[0]
+    )
+    fixture = root / "fixtures/scope_expansion_pr.json"
+
+    result, _, _ = _evaluate_case(fixture, copied_label, expectation)
+    assert result.actual_gate == "needs_review"
+    assert result.mismatches == []
+
+    copied_label.write_bytes(original.replace(b"Export reviewed", b"Export was reviewed"))
+    with pytest.raises(ValueError, match="historical gate label changed"):
+        _evaluate_case(fixture, copied_label, expectation)

@@ -321,6 +321,14 @@ results remain exact-head/provenance-bound, separately rendered, explicitly mapp
 non-gating. Coverage summaries, contract reports, deployment records, and other adapter families
 remain separately scoped future decisions.
 
+The 2026-10-26 changed-file scope integrity work on the unreleased `0.2.4.dev0` source carries an
+exact-head inventory into the deterministic gate. An uncited inspected file stays unresolved until
+an attributable reviewer decision explicitly places it outside confirmed criteria, while skipped
+files remain partial and historical unknown inventories fail closed. The original constructed
+scope-expansion label and frozen R-002 record remain unchanged. See the
+[Stage 3 readiness assessment](docs/releases/2026-10-26-stage3-readiness-assessment.md) for the
+engineering evidence boundary and missing independent-use gate.
+
 The [Stage 2 productization packet](docs/commercialization/stage2-readiness-packet.md) is the
 operating boundary. External commercial discovery is optional and separate from owner-led
 productization. It is not required to continue Stage 2 and needs separate owner authorization
@@ -338,6 +346,9 @@ unvalidated hypotheses unless genuine attributable evidence is later collected.
 ## Stage 3 — Limited beta
 
 Status: gated by a separate owner decision after Stage 2 engineering evidence is reviewed.
+
+The 2026-10-26 readiness assessment is an engineering review only. No genuine independent repeat
+use has been observed, so Stage 3 has not started.
 
 Stage 3 may define a bounded release candidate or beta only through a new owner-authorized plan.
 Owner-led productization cannot be presented as customer validation, and no release, tag, or

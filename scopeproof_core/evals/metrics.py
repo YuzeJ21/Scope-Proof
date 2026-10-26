@@ -25,6 +25,7 @@ class EvidenceQualityMetrics(BaseModel):
     incorrect_line_citation_rate: float = Field(ge=0, le=1)
     criterion_agreement_rate: float = Field(ge=0, le=1)
     must_have_false_ready: int = Field(ge=0)
+    uncited_file_false_ready: int = Field(ge=0)
     false_blocker: int = Field(ge=0)
     human_override_rate: float | None = None
     accepted_exception_rate: float | None = None
@@ -53,6 +54,7 @@ class EvidenceQualityMetrics(BaseModel):
             incorrect_line_citation_rate=1 - evidence_link_precision,
             criterion_agreement_rate=criterion_agreement_rate,
             must_have_false_ready=benchmark.must_have_false_ready,
+            uncited_file_false_ready=benchmark.uncited_file_false_ready,
             false_blocker=benchmark.false_blocker,
         )
 

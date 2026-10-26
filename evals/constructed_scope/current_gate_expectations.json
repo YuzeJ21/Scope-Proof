@@ -1,0 +1,9 @@
+[
+  {
+    "case_id": "scope-expansion",
+    "historical_expected_gate": "ready",
+    "current_expected_gate": "needs_review",
+    "historical_label_sha256": "55d448d59b72bb5c70683537c5087605fd5ccd2dd1963b3ff66a770275abd087",
+    "reason": "The original constructed label allowed Ready with an uncited changed auth file. The exact-head changed-file scope gate now requires an explicit reviewer disposition."
+  }
+]
