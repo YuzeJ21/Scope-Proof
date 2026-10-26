@@ -98,8 +98,10 @@ def _evaluate_case(
             raise ValueError("current gate expectation case ID does not match historical label")
         if current_expectation.historical_expected_gate.value != expected_gate:
             raise ValueError("historical gate expectation changed")
+        # Git may check out this frozen JSON label with CRLF on Windows.
+        # Canonicalize only that newline conversion before comparing its pinned hash.
         if (
-            sha256(label_path.read_bytes()).hexdigest()
+            sha256(label_path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
             != current_expectation.historical_label_sha256
         ):
             raise ValueError("historical gate label changed")
