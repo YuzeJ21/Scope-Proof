@@ -34,6 +34,7 @@ from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     RULESET_VERSION,
+    ChangedFile,
     CheckState,
     CIObservation,
     EvidenceLevel,
@@ -96,6 +97,71 @@ def analyzed_standard_demo(app: AppTest) -> AppTest:
     ).run()
     app = app.button(key="confirm_criteria").click().run()
     return app.button(key="run_analysis").click().run()
+
+
+def test_uncited_file_has_explicit_scope_decision_control() -> None:
+    app = load_demo(new_app())
+    app.session_state["snapshot"].files.append(
+        ChangedFile(path="src/unrelated.py", status="modified")
+    )
+    app = app.run()
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    bundle = app.session_state["review_state"].bundle
+    assert bundle is not None
+    cited = {
+        item.file_path for item in bundle.evidence
+        if item.source_scope is EvidenceSourceScope.CHANGED_FILE
+    }
+    uncited = sorted(
+        item.path for item in bundle.review.changed_file_inventory.files
+        if item.path not in cited
+    )
+    assert uncited
+    assert app.selectbox(key="scope_file_path").options == uncited
+
+    app = app.selectbox(key="scope_file_path").set_value(uncited[0]).run()
+    app = app.selectbox(key="scope_disposition").set_value(
+        "outside_confirmed_criteria"
+    ).run()
+    app = app.text_area(key="scope_note").set_value(
+        "Reviewed this exact-head file against the confirmed criteria."
+    ).run()
+    app = app.button(key="save_scope_decision").click().run()
+
+    decisions = app.session_state["review_state"].bundle.file_scope_decisions
+    assert decisions[-1].path == uncited[0]
+    assert decisions[-1].disposition == "outside_confirmed_criteria"
+    assert decisions[-1].head_sha == bundle.review.head_sha
+
+
+def test_orphan_candidate_does_not_hide_file_scope_control() -> None:
+    app = load_demo(new_app())
+    app.session_state["snapshot"].files.append(
+        ChangedFile(path="src/unrelated.py", status="modified")
+    )
+    app = app.run()
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    state = app.session_state["review_state"]
+    bundle = state.bundle
+    assert bundle is not None
+    orphan = bundle.evidence[0].model_copy(deep=True)
+    orphan.evidence_id = "EV-ORPHAN-UI"
+    orphan.file_path = "src/unrelated.py"
+    orphan.permalink = orphan.permalink.replace(bundle.evidence[0].file_path, orphan.file_path)
+    bundle.evidence.append(orphan)
+    bundle.retrieval_diagnostics = []
+    bundle.gate = evaluate_gate(
+        bundle.review, bundle.criteria, bundle.findings, bundle.resolutions,
+        bundle.evidence,
+    )
+    state.bundle = bundle
+    app.session_state["review_state"] = state
+    app.session_state["bundle"] = bundle
+    app = app.run()
+    assert bundle.gate.verdict is not GateVerdict.READY
+    assert "src/unrelated.py" in app.selectbox(key="scope_file_path").options
 
 
 def analyzed_exact_head_standard_demo(app: AppTest) -> AppTest:
@@ -4897,7 +4963,7 @@ def test_runtime_evidence_legacy_unlinked_warning_disables_final_acceptance() ->
     assert app.button(key="record_final_acceptance").disabled is True
 
 
-def test_reopened_legacy_verification_can_revoke_reverify_and_reaccept(
+def test_reopened_legacy_verification_can_reverify_but_not_reaccept_without_inventory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4975,6 +5041,10 @@ def test_reopened_legacy_verification_can_revoke_reverify_and_reaccept(
 
     reopened = select_saved_review(new_app(), review_id)
     reopened = reopened.button(key="reopen_review").click().run()
+    migrated = reopened.session_state["review_state"]
+    assert migrated.review.changed_file_inventory is None
+    assert "changed_file_inventory_unknown" in migrated.bundle.gate.reason_codes
+    assert any(event.final_acceptance is True for event in migrated.resolution_events)
 
     warning = "Legacy unlinked; re-record at the active head"
     assert warning in [item.value for item in reopened.warning]
@@ -5040,28 +5110,16 @@ def test_reopened_legacy_verification_can_revoke_reverify_and_reaccept(
         reverified.resolution_events[-1].runtime_evidence_id
         == new_runtime.runtime_evidence_id
     )
-    assert reopened.button(key="record_final_acceptance").disabled is False
-
-    reopened = reopened.button(key="record_final_acceptance").click().run()
-    recovered = reopened.session_state["review_state"]
-    assert recovered.review.final_acceptance is True
-    assert recovered.bundle.gate.verdict is GateVerdict.READY
-    assert [
-        (event.final_acceptance, event.decision)
-        for event in recovered.resolution_events[-3:]
-    ] == [
-        (False, None),
-        (None, HumanDecision.MANUALLY_VERIFIED),
-        (True, None),
-    ]
-    assert [
-        event.reviewer for event in recovered.resolution_events[-3:]
-    ] == ["Recovery reviewer"] * 3
-    assert JsonReviewStore(default_local_review_directory()).load(review_id) == recovered
+    assert reverified.review.changed_file_inventory is None
+    assert reverified.review.final_acceptance is False
+    assert "changed_file_inventory_unknown" in reverified.bundle.gate.reason_codes
+    assert reverified.bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert reopened.button(key="record_final_acceptance").disabled is True
+    assert JsonReviewStore(default_local_review_directory()).load(review_id) == reverified
 
     final_reopen = select_saved_review(new_app(), review_id)
     final_reopen = final_reopen.button(key="reopen_review").click().run()
-    assert final_reopen.session_state["review_state"] == recovered
+    assert final_reopen.session_state["review_state"] == reverified
     download_keys = [button.key for button in final_reopen.download_button]
     assert download_keys == ["download_markdown", "download_json", "download_csv"]
     assert all(

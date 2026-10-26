@@ -1,4 +1,6 @@
-from scopeproof_core.demo import build_demo_review, load_demo_snapshot
+from pathlib import Path
+
+from scopeproof_core.demo import build_demo_review, build_review_from_paths, load_demo_snapshot
 from scopeproof_core.evals.runner import run_bundled_benchmark
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
@@ -55,8 +57,13 @@ def test_demo_records_one_retrieval_diagnostic_per_criterion() -> None:
 def test_benchmark_reports_zero_must_have_false_ready() -> None:
     result = run_bundled_benchmark()
     assert result.must_have_false_ready == 0
+    assert result.uncited_file_false_ready == 0
     assert result.false_blocker == 0
     assert result.mismatches == []
+    scope_case = next(item for item in result.case_results if item.case_id == "scope-expansion")
+    assert scope_case.historical_expected_gate == "ready"
+    assert scope_case.expected_gate == "needs_review"
+    assert scope_case.actual_gate == "needs_review"
 
 
 def test_benchmark_declares_required_case_coverage() -> None:
@@ -75,3 +82,14 @@ def test_benchmark_declares_required_case_coverage() -> None:
         "ambiguous_criterion",
         "unchanged_file_evidence",
     }
+
+
+def test_scope_expansion_uncited_changed_file_cannot_be_ready() -> None:
+    root = Path(__file__).resolve().parents[2] / "evals"
+    bundle = build_review_from_paths(
+        root / "fixtures/scope_expansion_pr.json",
+        root / "labels/benchmark_scope_expansion.json",
+    )
+
+    assert bundle.gate.verdict is GateVerdict.NEEDS_REVIEW
+    assert "uncited_changed_files" in bundle.gate.reason_codes

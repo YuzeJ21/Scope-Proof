@@ -31,6 +31,10 @@ COERCIVE_REVISION_VALUES = [True, False, "1", "01", 1.0, 2.0]
 def test_review_state_rejects_divergent_active_bundle_review(review_overrides) -> None:
     payload = new_review_state(build_demo_review()).model_dump(mode="python")
     payload["review"].update(review_overrides)
+    if "head_sha" in review_overrides:
+        payload["review"]["changed_file_inventory"]["head_sha"] = review_overrides[
+            "head_sha"
+        ]
     if "check_state" in review_overrides:
         # Keep the deliberately divergent lifecycle review schema-valid so this
         # test reaches the ReviewState integrity boundary.
@@ -210,6 +214,7 @@ def test_new_review_state_does_not_alias_active_review_identity() -> None:
     original_bundle_head = state.bundle.review.head_sha
 
     state.review.head_sha = "different-but-valid-head"
+    state.review.changed_file_inventory.head_sha = state.review.head_sha
 
     assert state.bundle.review.head_sha == original_bundle_head
     with pytest.raises(
@@ -422,6 +427,9 @@ def test_review_state_allows_historical_commit_provenance() -> None:
     payload = revised.model_dump(mode="python")
     payload["analysis_history"][0]["review"]["base_sha"] = "historical-base"
     payload["analysis_history"][0]["review"]["head_sha"] = "historical-head"
+    payload["analysis_history"][0]["review"]["changed_file_inventory"]["head_sha"] = (
+        "historical-head"
+    )
     for candidate in payload["analysis_history"][0]["evidence"]:
         old_head = candidate["commit_sha"]
         candidate["commit_sha"] = "historical-head"

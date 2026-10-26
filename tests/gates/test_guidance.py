@@ -93,6 +93,17 @@ def test_decision_guidance_maps_every_human_decision(
             "Record new E3/E4 runtime verification at the active head for legacy-unlinked manual "
             "criteria before acceptance.",
         ),
+        (
+            "changed_file_inventory_unknown",
+            "Reload the exact PR head and run a confirmed analysis to inspect the changed-file "
+            "inventory before acceptance.",
+        ),
+        (
+            "uncited_changed_files",
+            "Review each uncited changed file at this exact head. Record an explicit "
+            "outside-criteria "
+            "decision with a reason, or obtain a criterion citation before acceptance.",
+        ),
     ],
 )
 def test_gate_guidance_maps_every_known_reason(reason_code: str, expected_text: str) -> None:

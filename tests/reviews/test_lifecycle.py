@@ -25,6 +25,8 @@ from scopeproof_core.reviews.lifecycle import (
     revise_criteria,
 )
 from scopeproof_core.schemas.models import (
+    ChangedFileInventory,
+    ChangedFileScope,
     CheckState,
     CIObservation,
     CriteriaSourceProvenance,
@@ -80,6 +82,10 @@ def initial_state():
             successful_check_runs=1,
         ),
         criteria_confirmed=True,
+        changed_file_inventory=ChangedFileInventory(
+            head_sha="head",
+            files=[ChangedFileScope(path="src/export.py", status="modified")],
+        ),
     )
     criterion = Criterion(criterion_id="AC-01", text="Export CSV")
     review.criteria_source_provenance = build_criteria_source_provenance(
@@ -103,7 +109,7 @@ def initial_state():
         criteria=[criterion],
         evidence=[candidate_evidence()],
         findings=[finding],
-        gate=evaluate_gate(review, [criterion], [finding], []),
+        gate=evaluate_gate(review, [criterion], [finding], [], [candidate_evidence()]),
     )
     return new_review_state(bundle)
 
@@ -172,7 +178,7 @@ def test_new_review_state_copies_bundle_criteria_source_provenance() -> None:
         criteria=[criterion],
         evidence=[candidate_evidence()],
         findings=[finding],
-        gate=evaluate_gate(review, [criterion], [finding], []),
+        gate=evaluate_gate(review, [criterion], [finding], [], [candidate_evidence()]),
     )
 
     state = new_review_state(bundle)
@@ -226,6 +232,7 @@ def test_new_review_state_rejects_bundle_without_criteria_source_provenance() ->
         bundle.criteria,
         bundle.findings,
         bundle.resolutions,
+        bundle.evidence,
     )
 
     with pytest.raises(
@@ -312,6 +319,7 @@ def analysis_bundle_for(
             analysis_criteria,
             findings,
             analysis_resolutions,
+            analysis_evidence,
         ),
     )
 
@@ -523,8 +531,10 @@ def test_attach_analysis_rejects_mismatched_review_identity() -> None:
     )
     confirmed = confirm_pending_revision(revised)
     mismatched_review = confirmed.review.model_copy(
-        update={"review_id": "generated-review", "head_sha": "different-head"}
+        update={"review_id": "generated-review", "head_sha": "different-head"},
+        deep=True,
     )
+    mismatched_review.changed_file_inventory.head_sha = "different-head"
 
     with pytest.raises(
         ValueError, match="attached analysis review must match the lifecycle review"
@@ -658,6 +668,7 @@ def test_new_review_state_rejects_preloaded_human_resolutions() -> None:
         bundle.criteria,
         bundle.findings,
         bundle.resolutions,
+        bundle.evidence,
     )
 
     with pytest.raises(
@@ -675,6 +686,7 @@ def test_new_review_state_rejects_preloaded_final_acceptance() -> None:
         bundle.criteria,
         bundle.findings,
         bundle.resolutions,
+        bundle.evidence,
     )
 
     with pytest.raises(
@@ -863,11 +875,9 @@ def test_confirmation_rejects_an_active_analysis_bundle() -> None:
 )
 def test_lifecycle_operations_revalidate_active_review_identity(operation: str) -> None:
     state = initial_state()
-    divergent = state.model_copy(
-        update={
-            "review": state.review.model_copy(update={"head_sha": "different-head"})
-        }
-    )
+    divergent = state.model_copy(deep=True)
+    divergent.review.head_sha = "different-head"
+    divergent.review.changed_file_inventory.head_sha = "different-head"
 
     with pytest.raises(
         ValueError, match="active bundle review must match lifecycle review"
@@ -1518,6 +1528,7 @@ def test_final_acceptance_is_unavailable_without_criteria_source_provenance() ->
         bundle.criteria,
         bundle.findings,
         bundle.resolutions,
+        bundle.evidence,
     ).model_dump(mode="python")
     legacy_state = type(resolved).model_validate(payload)
 
@@ -1620,6 +1631,8 @@ def exact_head_state() -> ReviewState:
     state.review.head_sha = "a" * 40
     assert state.bundle is not None
     state.bundle.review.head_sha = "a" * 40
+    state.review.changed_file_inventory.head_sha = state.review.head_sha
+    state.bundle.review.changed_file_inventory.head_sha = state.review.head_sha
     for candidate in state.bundle.evidence:
         candidate.commit_sha = state.review.head_sha
         candidate.permalink = (

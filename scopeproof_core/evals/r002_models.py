@@ -1520,7 +1520,14 @@ class R002CaseResult(R002StrictModel):
                     if criteria
                 )
             )
-        if self.gate_reason_codes != expected_reasons:
+        accepted_reason_shapes = {expected_reasons}
+        if self.gate_verdict is GateVerdict.NEEDS_REVIEW:
+            # Frozen results predate changed-file inventory. Current read-only
+            # reruns add this fail-closed reason; neither shape changes labels.
+            accepted_reason_shapes.add(
+                tuple(sorted((*expected_reasons, "changed_file_inventory_unknown")))
+            )
+        if self.gate_reason_codes not in accepted_reason_shapes:
             raise ValueError("R-002 gate reason codes must match the gate shape")
         if (
             self.check_state is not CheckState.UNAVAILABLE

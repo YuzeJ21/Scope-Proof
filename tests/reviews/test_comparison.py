@@ -15,6 +15,8 @@ from scopeproof_core.reviews.comparison import (
     compare_reviews,
 )
 from scopeproof_core.schemas.models import (
+    ChangedFileInventory,
+    ChangedFileScope,
     CheckState,
     CIObservation,
     Criterion,
@@ -104,8 +106,18 @@ def bundle_with(*items: EvidenceItem, head_sha: str) -> ReviewBundle:
         confirmed_at=review.created_at,
     )
     item_list = list(items)
+    review.changed_file_inventory = ChangedFileInventory(
+        head_sha=head_sha,
+        files=[
+            ChangedFileScope(path=path, status="modified")
+            for path in sorted({
+                item.file_path for item in item_list
+                if item.source_scope is EvidenceSourceScope.CHANGED_FILE
+            })
+        ],
+    )
     findings = build_findings(criteria, item_list, IngestionState.COMPLETE)
-    gate = evaluate_gate(review, criteria, findings, [])
+    gate = evaluate_gate(review, criteria, findings, [], item_list)
     return ReviewBundle(
         review=review,
         source_text=source_text,
@@ -262,11 +274,17 @@ def bundle(*, head_sha: str, status: FindingStatus, with_evidence: bool) -> Revi
         confirmed_by="Fixture owner",
         confirmed_at=review.created_at,
     )
+    review.changed_file_inventory = ChangedFileInventory(
+        head_sha=head_sha,
+        files=[ChangedFileScope(path="src/export.py", status="modified")]
+        if with_evidence else [],
+    )
     gate = evaluate_gate(
         review,
         criteria,
         findings,
         resolutions,
+        evidence,
     )
     return ReviewBundle(
         review=review,
@@ -746,7 +764,9 @@ def test_changed_junit_mapping_requires_review_only_for_previously_resolved_crit
         )
         for criterion_id in ("AC-01", "AC-02")
     ]
-    base.gate = evaluate_gate(base.review, base.criteria, base.findings, base.resolutions)
+    base.gate = evaluate_gate(
+        base.review, base.criteria, base.findings, base.resolutions, base.evidence
+    )
     previous = with_junit_import(
         base, artifact_digest="d" * 64, mapped_case_ids=["suite-0001-case-0001"]
     )

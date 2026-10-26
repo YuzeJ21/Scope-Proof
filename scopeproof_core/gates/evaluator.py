@@ -3,6 +3,9 @@
 from scopeproof_core.schemas.models import (
     CheckState,
     Criterion,
+    EvidenceItem,
+    EvidenceSourceScope,
+    FileScopeDecision,
     Finding,
     FindingStatus,
     GateDecision,
@@ -21,6 +24,43 @@ _RESOLVED_DECISIONS = {
     HumanDecision.MANUALLY_VERIFIED,
     HumanDecision.NOT_IN_SCOPE,
 }
+
+
+def unresolved_changed_file_paths(
+    review: Review,
+    findings: list[Finding],
+    evidence: list[EvidenceItem],
+    file_scope_decisions: list[FileScopeDecision],
+) -> set[str] | None:
+    """Return unresolved inspected paths, or None when historical scope is unknown."""
+    inventory = review.changed_file_inventory
+    if inventory is None or inventory.head_sha != review.head_sha:
+        return None
+    latest = {
+        item.path: item for item in file_scope_decisions
+        if item.head_sha == review.head_sha
+        and item.review_id == review.review_id
+        and review.criteria_source_provenance is not None
+        and item.normalized_criteria_sha256
+        == review.criteria_source_provenance.normalized_criteria_sha256
+    }
+    linked_evidence_ids = {
+        evidence_id for finding in findings for evidence_id in finding.evidence_ids
+    }
+    cited = {
+        item.file_path for item in evidence
+        if item.source_scope is EvidenceSourceScope.CHANGED_FILE
+        and item.commit_sha == review.head_sha
+        and item.evidence_id in linked_evidence_ids
+    }
+    return {
+        item.path for item in inventory.files
+        if item.path not in cited
+        and (
+            item.path not in latest
+            or latest[item.path].disposition != "outside_confirmed_criteria"
+        )
+    }
 
 
 def _invalid_gate_input(
@@ -67,6 +107,8 @@ def evaluate_gate(
     criteria: list[Criterion],
     findings: list[Finding],
     resolutions: list[HumanResolution],
+    evidence: list[EvidenceItem] | None = None,
+    file_scope_decisions: list[FileScopeDecision] | None = None,
 ) -> GateDecision:
     """Return the highest-severity verdict supported by explicit reason codes."""
     invalid_input = _invalid_gate_input(review, criteria, findings, resolutions)
@@ -82,6 +124,9 @@ def evaluate_gate(
     reason_codes: list[str] = []
     runtime_reconfirmation_required = False
     ingestion_limitations_present = bool(review.ingestion_warnings or review.skipped_files)
+    unresolved_files = unresolved_changed_file_paths(
+        review, findings, evidence or [], file_scope_decisions or []
+    )
 
     if not criteria:
         reason_codes.append("criteria_missing")
@@ -149,6 +194,10 @@ def evaluate_gate(
             reason_codes.append("checks_not_passing")
         if ingestion_limitations_present and review.ingestion_state is IngestionState.COMPLETE:
             reason_codes.append("ingestion_limitations_present")
+        if unresolved_files is None:
+            reason_codes.append("changed_file_inventory_unknown")
+        elif unresolved_files:
+            reason_codes.append("uncited_changed_files")
 
         needs_review = bool(
             not criteria
@@ -157,6 +206,8 @@ def evaluate_gate(
             or review.criteria_source_provenance is None
             or review.ingestion_state is not IngestionState.COMPLETE
             or ingestion_limitations_present
+            or unresolved_files is None
+            or unresolved_files
             or review.check_state in {CheckState.PENDING, CheckState.UNAVAILABLE}
         )
         if needs_review:

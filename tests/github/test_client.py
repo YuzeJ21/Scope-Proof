@@ -214,6 +214,38 @@ def test_client_uses_optional_token_without_placing_it_in_snapshot() -> None:
     assert client.last_request_authorized is True
 
 
+def test_renamed_file_inventory_uses_current_path_and_retains_previous_path() -> None:
+    files = [{
+        "filename": "src/new_name.py",
+        "previous_filename": "src/old_name.py",
+        "status": "renamed",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "patch": "@@ -1 +1 @@\n-old()\n+new()",
+    }]
+    snapshot = GitHubClient(transport=fixture_transport(files_override=files)).fetch_pull_request(
+        "https://github.com/acme/widget/pull/42"
+    )
+
+    assert snapshot.files[0].previous_path == "src/old_name.py"
+    assert snapshot.scope_inventory().files[0].path == "src/new_name.py"
+    assert snapshot.scope_inventory().files[0].previous_path == "src/old_name.py"
+
+
+def test_renamed_file_rejects_changed_source_path_between_github_views() -> None:
+    immutable_file = {
+        "filename": "src/new_name.py", "previous_filename": "src/old_name.py",
+        "status": "renamed", "additions": 1, "deletions": 1, "changes": 2,
+        "patch": "@@ -1 +1 @@\n-old()\n+new()",
+    }
+    mutable_file = {**immutable_file, "previous_filename": "src/unrelated.py"}
+    with pytest.raises(GitHubIngestionError, match="immutable comparison"):
+        GitHubClient(transport=fixture_transport(
+            files_override=[mutable_file], compare_files_override=[immutable_file],
+        )).fetch_pull_request("https://github.com/acme/widget/pull/42")
+
+
 @pytest.mark.parametrize(
     "repository_metadata",
     [

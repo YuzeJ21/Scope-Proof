@@ -297,6 +297,9 @@ def _choose_combobox_option(
             return
         try:
             if value_is_selected:
+                _run_and_wait_for_streamlit_rerun(page, lambda: combobox.press("Tab"))
+                if settled_control is None or settled_control.is_enabled():
+                    return
                 combobox.fill("")
             combobox.click()
             combobox.fill(option_name)
@@ -396,6 +399,9 @@ def test_choose_combobox_option_retries_after_detached_option(
 
         def fill(self, value: str) -> None:
             self.fills.append(value)
+
+        def press(self, key: str) -> None:
+            assert key == "Tab"
 
     class FakeControl:
         def __init__(self) -> None:
@@ -674,6 +680,7 @@ def _exercise_junit_import_round_trip(
     *,
     artifact_path: Path,
     artifact_digest: str,
+    capture_directory: Path | None = None,
 ) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     page.get_by_text("Resume a saved review", exact=True).click()
@@ -691,6 +698,45 @@ def _exercise_junit_import_round_trip(
             "Review reopened from local storage after validation.", exact=True
         )
     ).to_be_visible()
+
+    scope_path = page.get_by_role("combobox", name="Uncited changed file", exact=True)
+    scope_save = page.get_by_role("button", name="Save file scope decision", exact=True)
+    _choose_combobox_option(
+        page, scope_path, option_name="src/unrelated.py",
+    )
+    disposition = page.get_by_role("combobox", name="File scope decision", exact=True)
+    _choose_combobox_option(
+        page, disposition, option_name="Outside Confirmed Criteria",
+    )
+    scope_note = page.get_by_label("File scope explanation (required)", exact=True)
+    scope_note.fill(
+        "Reviewed this constructed file against the confirmed criterion."
+    )
+    _run_and_wait_for_streamlit_rerun(page, lambda: scope_note.press("Tab"))
+    expect(scope_path).to_have_value("src/unrelated.py")
+    expect(disposition).to_have_value("Outside Confirmed Criteria")
+    scope_reviewer = page.get_by_label("Decision reviewer (required)", exact=True)
+    scope_reviewer.fill("Automated browser reviewer (constructed)")
+    _run_and_wait_for_streamlit_rerun(page, lambda: scope_reviewer.press("Tab"))
+    expect(scope_save).to_be_enabled()
+    scope_save.click()
+    expect(page.get_by_text("File scope decision history", exact=True)).to_be_visible()
+    if capture_directory is not None:
+        capture_directory.mkdir(parents=True, exist_ok=True)
+        page.get_by_role("heading", name="Changed-file scope", exact=True).evaluate(
+            "element => element.scrollIntoView({block: 'start'})"
+        )
+        page.screenshot(path=str(capture_directory / "07-file-scope-decision.png"))
+
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.get_by_text("Resume a saved review", exact=True).click()
+    saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    _choose_combobox_option(
+        page, saved_review, option_name="junit-browser-review", settled_control=reopen,
+    )
+    reopen.click()
+    expect(page.get_by_text("File scope decision history", exact=True)).to_be_visible()
 
     junit_expander = page.get_by_text("Import external JUnit results", exact=True)
     junit_expander.click()
@@ -837,15 +883,21 @@ def test_installed_wheel_primary_path_in_chromium(
             "from pathlib import Path; import sys; "
             "from scopeproof_core.demo import build_demo_review; "
             "from scopeproof_core.reviews.lifecycle import new_review_state; "
-            "from scopeproof_core.schemas.models import ReviewBundle; "
+            "from scopeproof_core.schemas.models import ChangedFileScope, ReviewBundle; "
+            "from scopeproof_core.gates.evaluator import evaluate_gate; "
             "from scopeproof_core.storage.json_store import JsonReviewStore; "
             "bundle=build_demo_review().model_copy(deep=True); "
             "bundle.review.review_id='junit-browser-review'; "
             "bundle.review.head_sha='a'*40; "
+            "bundle.review.changed_file_inventory.head_sha=bundle.review.head_sha; "
+            "bundle.review.changed_file_inventory.files.append("
+            "ChangedFileScope(path='src/unrelated.py', status='modified')); "
             "bundle.criteria_revision_number=1; "
             "[(setattr(item, 'commit_sha', bundle.review.head_sha), "
             "setattr(item, 'permalink', item.permalink.replace('head-demo-002', "
             "bundle.review.head_sha))) for item in bundle.evidence]; "
+            "bundle.gate=evaluate_gate(bundle.review,bundle.criteria,bundle.findings,"
+            "bundle.resolutions,bundle.evidence); "
             "bundle=ReviewBundle.model_validate(bundle.model_dump(mode='python')); "
             "JsonReviewStore(Path(sys.argv[1])).save(new_review_state(bundle))"
         ),
@@ -930,6 +982,11 @@ def test_installed_wheel_primary_path_in_chromium(
                             base_url,
                             artifact_path=junit_artifact,
                             artifact_digest=junit_artifact_digest,
+                            capture_directory=(
+                                tmp_path / "captures"
+                                if "SCOPEPROOF_PORTFOLIO_CAPTURE_DIR" in os.environ
+                                else None
+                            ),
                         )
                     context.close()
             finally:
@@ -944,6 +1001,7 @@ def test_installed_wheel_primary_path_in_chromium(
                 "04-partial-support.png",
                 "05-export-controls.png",
                 "06-criterion-review-card.png",
+                "07-file-scope-decision.png",
             )
             destination = Path(os.environ["SCOPEPROOF_PORTFOLIO_CAPTURE_DIR"])
             captures = tmp_path / "captures"

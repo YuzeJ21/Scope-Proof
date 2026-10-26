@@ -9,6 +9,7 @@ import json
 import string
 from collections import defaultdict
 
+from scopeproof_core.gates.evaluator import unresolved_changed_file_paths
 from scopeproof_core.gates.guidance import gate_guidance
 from scopeproof_core.gates.validation import (
     validated_review_bundle,
@@ -74,6 +75,17 @@ def _csv_text(value: str) -> str:
     if candidate and candidate[0] in _SPREADSHEET_FORMULA_PREFIXES:
         return f"'{value}"
     return value
+
+
+def _scope_summary(bundle: ReviewBundle) -> tuple[str, list[str], list[str]]:
+    """Return auditable scope facts shared by the human-readable exports."""
+    inventory = bundle.review.changed_file_inventory
+    if inventory is None:
+        return "unknown legacy inventory", [], []
+    unresolved = unresolved_changed_file_paths(
+        bundle.review, bundle.findings, bundle.evidence, bundle.file_scope_decisions
+    )
+    return "verified", sorted(item.path for item in inventory.files), sorted(unresolved or [])
 
 
 def _validated_exportable(value: ExportableReview) -> ExportableReview:
@@ -804,6 +816,38 @@ def export_markdown(bundle: ExportableReview) -> str:
             history = f"{target}: {outcome} — {event.comment or 'No note provided'}"
             lines.append(f"- {_escape_markdown_text(history)}")
         lines.append("")
+    scope_status, changed_paths, unresolved_paths = _scope_summary(bundle)
+    lines.extend([
+        "## Changed-file Scope",
+        "",
+        f"**Inventory:** {_render_markdown_code(scope_status)}",
+        f"**Inventory head:** {_render_markdown_code(bundle.review.head_sha)}",
+        "**Changed paths:** " + (
+            ", ".join(_render_markdown_code(path) for path in changed_paths) or "None recorded"
+        ),
+        "**Unresolved changed paths:** " + (
+            ", ".join(_render_markdown_code(path) for path in unresolved_paths)
+            or "None recorded"
+        ),
+        "",
+        "### File decision history",
+        "",
+    ])
+    for item in bundle.file_scope_decisions:
+        lines.append(
+            "- " + _render_markdown_code(item.path) + ": "
+            + _render_markdown_code(item.disposition) + " by "
+            + _render_markdown_code(item.reviewer) + " at "
+            + _render_markdown_code(item.timestamp.isoformat()) + "; review "
+            + _render_markdown_code(item.review_id) + "; head "
+            + _render_markdown_code(item.head_sha) + "; criteria revision "
+            + str(item.criteria_revision_number) + "; digest "
+            + _render_markdown_code(item.normalized_criteria_sha256) + "; note: "
+            + _escape_markdown_text(item.note)
+        )
+    if not bundle.file_scope_decisions:
+        lines.append("- No file scope decisions recorded.")
+    lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -881,6 +925,10 @@ def export_csv(bundle: ExportableReview) -> str:
         "runtime_verification_state",
         "reviewer_decision_state",
         "criteria_revision",
+        "changed_file_inventory_state",
+        "changed_file_inventory_paths",
+        "unresolved_changed_paths",
+        "file_scope_decisions",
         "criteria_source_uri",
         "criteria_source_revision",
         "criteria_source_text_sha256",
@@ -927,6 +975,7 @@ def export_csv(bundle: ExportableReview) -> str:
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
     writer.writeheader()
     coverage_by_id = {row.criterion_id: row for row in criterion_coverage_rows(bundle)}
+    scope_status, changed_paths, unresolved_paths = _scope_summary(bundle)
     for criterion in bundle.criteria:
         finding = finding_by_id[criterion.criterion_id]
         resolution = resolution_by_id.get(criterion.criterion_id)
@@ -997,6 +1046,13 @@ def export_csv(bundle: ExportableReview) -> str:
                 "runtime_verification_state": bundle.runtime_verification_state.value,
                 "reviewer_decision_state": bundle.reviewer_decision_state.value,
                 "criteria_revision": state.criteria_revision.number if state else 1,
+                "changed_file_inventory_state": scope_status,
+                "changed_file_inventory_paths": _csv_text(json.dumps(changed_paths)),
+                "unresolved_changed_paths": _csv_text(json.dumps(unresolved_paths)),
+                "file_scope_decisions": _csv_text(json.dumps(
+                    [item.model_dump(mode="json") for item in bundle.file_scope_decisions],
+                    ensure_ascii=False, sort_keys=True,
+                )),
                 "criteria_source_uri": _csv_text(provenance.source_uri),
                 "criteria_source_revision": (
                     _csv_text(provenance.source_revision)
@@ -1388,6 +1444,39 @@ def export_html(value: ExportableReview) -> str:
                 else []
             ),
             *_junit_import_html(bundle),
+            "<h2>Changed-file Scope</h2>",
+            "<p>Inventory: <code>"
+            + html.escape(_scope_summary(bundle)[0])
+            + "</code>; head <code>"
+            + html.escape(bundle.review.head_sha)
+            + "</code></p>",
+            "<p>Changed paths: "
+            + (
+                ", ".join(html.escape(path) for path in _scope_summary(bundle)[1])
+                or "None recorded"
+            )
+            + "</p>",
+            "<p>Unresolved changed paths: "
+            + (
+                ", ".join(html.escape(path) for path in _scope_summary(bundle)[2])
+                or "None recorded"
+            )
+            + "</p>",
+            "<h3>File decision history</h3><ul>",
+            *[
+                "<li><code>" + html.escape(item.path) + "</code>: "
+                + html.escape(item.disposition) + " by " + html.escape(item.reviewer)
+                + " at " + html.escape(item.timestamp.isoformat())
+                + "; review <code>" + html.escape(item.review_id)
+                + "</code>; head <code>" + html.escape(item.head_sha)
+                + "</code>; criteria revision " + str(item.criteria_revision_number)
+                + "; digest <code>" + html.escape(item.normalized_criteria_sha256)
+                + "</code>; note: " + html.escape(item.note) + "</li>"
+                for item in bundle.file_scope_decisions
+            ],
+            *( ["<li>No file scope decisions recorded.</li>"]
+               if not bundle.file_scope_decisions else [] ),
+            "</ul>",
             "<h2>Runtime Verification Boundary</h2>",
             "<p>"
             + (

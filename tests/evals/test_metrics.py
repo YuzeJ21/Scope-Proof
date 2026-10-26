@@ -12,6 +12,7 @@ def test_metrics_are_derived_from_executed_case_results() -> None:
     assert metrics.executed_case_count == 12
     assert metrics.executed_criterion_count == 13
     assert metrics.must_have_false_ready == 0
+    assert metrics.uncited_file_false_ready == 0
     assert metrics.false_blocker == 0
     assert metrics.evidence_link_precision == 1.0
     assert metrics.incorrect_line_citation_rate == 0.0

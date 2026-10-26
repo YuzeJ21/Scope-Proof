@@ -61,6 +61,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
         ingestion_state=snapshot.ingestion_state,
         ingestion_warnings=snapshot.warnings,
         skipped_files=snapshot.skipped_files,
+        changed_file_inventory=snapshot.scope_inventory(),
         input_origin=ReviewInputOrigin.CONSTRUCTED_DEMO,
         final_acceptance=labels.get("final_acceptance", False),
     )
@@ -70,7 +71,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
     resolutions = [
         HumanResolution.model_validate(item) for item in labels.get("resolutions", [])
     ]
-    gate = evaluate_gate(review, criteria, findings, resolutions)
+    gate = evaluate_gate(review, criteria, findings, resolutions, evidence)
     return ReviewBundle(
         review=review,
         source_text=source_text,

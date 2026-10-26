@@ -4,6 +4,7 @@ import pytest
 
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.schemas.models import (
+    ChangedFileInventory,
     CheckState,
     CIObservation,
     CriteriaSourceProvenance,
@@ -71,6 +72,7 @@ def gate_case(
         ci_observation=ci_observation_for(check_state),
         criteria_confirmed=confirmed,
         criteria_source_provenance=valid_provenance([criterion]) if confirmed else None,
+        changed_file_inventory=ChangedFileInventory(head_sha="head", files=[]),
         final_acceptance=True,
     )
     finding = Finding(

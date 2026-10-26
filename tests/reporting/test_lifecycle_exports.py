@@ -250,6 +250,8 @@ def test_lifecycle_exports_reject_forged_ready_without_resolution_events(exporte
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
+        state.bundle.file_scope_decisions,
     )
     assert state.bundle.gate.verdict is GateVerdict.READY
     assert state.resolution_events == []
@@ -311,6 +313,8 @@ def test_lifecycle_exports_preserve_legacy_manual_verification_as_unlinked() -> 
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
+        state.bundle.file_scope_decisions,
     )
 
     json_payload = json.loads(export_json(state))

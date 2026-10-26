@@ -614,7 +614,7 @@ def test_new_save_writes_version_four_with_exact_analysis_lineage_and_provenance
     path = store.save(state)
     payload = json.loads(path.read_text(encoding="utf-8"))
 
-    assert payload["record_version"] == 4
+    assert payload["record_version"] == 5
     assert payload["state"]["bundle"]["criteria_revision_number"] == 2
     assert [
         bundle["criteria_revision_number"]
@@ -740,7 +740,7 @@ def test_legacy_criteria_provenance_migration_preserves_facts_and_fails_closed(
 
     resaved_path = store.save(first)
     resaved = json.loads(resaved_path.read_text(encoding="utf-8"))
-    assert resaved["record_version"] == 4
+    assert resaved["record_version"] == 5
     assert resaved["state"]["review"]["criteria_source_provenance"] is None
     assert resaved["state"]["criteria_revision"]["source_provenance"] is None
     assert resaved["state"]["bundle"]["review"][
@@ -835,7 +835,7 @@ def test_saving_migrated_version_one_state_preserves_unknown_history(
     migrated_path = store.save(migrated)
     migrated_payload = json.loads(migrated_path.read_text(encoding="utf-8"))
 
-    assert migrated_payload["record_version"] == 4
+    assert migrated_payload["record_version"] == 5
     assert migrated_payload["state"]["bundle"]["criteria_revision_number"] == 2
     assert [
         bundle["criteria_revision_number"]
@@ -994,7 +994,7 @@ def test_version_one_unknown_history_preserves_legacy_verification_audit(
 
     resaved_path = store.save(first)
     resaved = json.loads(resaved_path.read_text(encoding="utf-8"))
-    assert resaved["record_version"] == 4
+    assert resaved["record_version"] == 5
     assert resaved["state"]["analysis_history"][0][
         "criteria_revision_number"
     ] == "unknown"
@@ -1169,7 +1169,7 @@ def test_resaving_migrated_runtime_record_writes_version_four_without_history_lo
     migrated_path = store.save(migrated)
     resaved = json.loads(migrated_path.read_text(encoding="utf-8"))
 
-    assert resaved["record_version"] == 4
+    assert resaved["record_version"] == 5
     assert [
         event["comment"] for event in resaved["state"]["resolution_events"]
     ] == old_notes
@@ -1356,6 +1356,7 @@ def test_load_rejects_mismatched_active_bundle_review(tmp_path: Path) -> None:
     path = store.save(review_state())
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["state"]["review"]["head_sha"] = "different-head"
+    payload["state"]["review"]["changed_file_inventory"]["head_sha"] = "different-head"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(
@@ -1367,11 +1368,9 @@ def test_load_rejects_mismatched_active_bundle_review(tmp_path: Path) -> None:
 def test_save_revalidates_mismatched_active_bundle_review(tmp_path: Path) -> None:
     store = JsonReviewStore(tmp_path)
     state = review_state()
-    divergent = state.model_copy(
-        update={
-            "review": state.review.model_copy(update={"head_sha": "different-head"})
-        }
-    )
+    divergent = state.model_copy(deep=True)
+    divergent.review.head_sha = "different-head"
+    divergent.review.changed_file_inventory.head_sha = "different-head"
 
     with pytest.raises(
         ValueError, match="active bundle review must match lifecycle review"
@@ -1422,11 +1421,21 @@ def test_save_rejects_forged_ready_state_without_resolution_events(tmp_path: Pat
         )
         for criterion in state.bundle.criteria
     ]
+    cited_paths = {item.file_path for item in state.bundle.evidence}
+    state.review.changed_file_inventory.files = [
+        item for item in state.review.changed_file_inventory.files if item.path in cited_paths
+    ]
+    state.bundle.review.changed_file_inventory.files = [
+        item
+        for item in state.bundle.review.changed_file_inventory.files
+        if item.path in cited_paths
+    ]
     state.bundle.gate = evaluate_gate(
         state.bundle.review,
         state.bundle.criteria,
         state.bundle.findings,
         state.bundle.resolutions,
+        state.bundle.evidence,
     )
     assert state.bundle.gate.verdict is GateVerdict.READY
     assert state.resolution_events == []
@@ -1966,6 +1975,8 @@ def exact_head_review_state(review_id: str = "junit-review"):
     state.review.head_sha = "a" * 40
     assert state.bundle is not None
     state.bundle.review.head_sha = "a" * 40
+    state.review.changed_file_inventory.head_sha = state.review.head_sha
+    state.bundle.review.changed_file_inventory.head_sha = state.review.head_sha
     for candidate in state.bundle.evidence:
         candidate.commit_sha = state.review.head_sha
         candidate.permalink = candidate.permalink.replace(old_head, state.review.head_sha)
@@ -2003,7 +2014,7 @@ def test_junit_import_round_trips_in_record_version_four_without_raw_xml(
     payload = json.loads(path.read_text(encoding="utf-8"))
     reopened = store.load(state.review.review_id)
 
-    assert payload["record_version"] == 4
+    assert payload["record_version"] == 5
     assert payload["state"]["bundle"]["junit_evidence_imports"][0][
         "schema_version"
     ] == "junit-import-v1"

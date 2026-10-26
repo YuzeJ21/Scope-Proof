@@ -25,6 +25,8 @@ def _require_deterministic_gate(bundle: ReviewBundle, location: str) -> None:
         bundle.criteria,
         bundle.findings,
         bundle.resolutions,
+        bundle.evidence,
+        bundle.file_scope_decisions,
     )
     if bundle.gate != expected_gate:
         raise ValueError(f"{location} gate must match deterministic evaluation")
