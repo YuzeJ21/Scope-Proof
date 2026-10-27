@@ -21,7 +21,10 @@ participant contact.
 
 ## Owner-led productization scope
 
-Stage 2 may improve:
+The [roadmap's bounded maintenance rule](../../ROADMAP.md#stage-2--owner-led-productization)
+applies to every Stage 2 slice: address a demonstrated defect, required upkeep, or a named bounded
+research question. Define the outcome and completion evidence before work; stop when that outcome
+and the relevant checks are complete. Eligible areas, subject to that rule, are:
 
 - product and workflow clarity;
 - deterministic evidence quality and fail-closed lifecycle integrity;
@@ -45,8 +48,9 @@ Other adapter families remain unimplemented and require their own bounded design
 
 This stage does not authorize outreach, participant contact, a merge, release, tag, or package
 publication, R-002 retuning, R-003 generation, billing, accounts, private-repository support,
-hosted source processing, generic code review, security scanning, automatic fixes, or paid APIs.
-Each requires its own owner decision where applicable.
+hosted source processing, or paid APIs. Each requires its own owner decision where applicable.
+Generic code review, security scanning, and auto-fix features remain excluded under
+[AGENTS.md](../../AGENTS.md).
 
 ## Optional external discovery
 
