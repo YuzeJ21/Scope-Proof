@@ -22,6 +22,7 @@ from scopeproof_core.alpha.service import (
     record_alpha_outcome,
 )
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
+from scopeproof_core.build_identity import current_core_source_identity
 from scopeproof_core.criteria.confirmation import (
     build_criteria_source_provenance,
     read_exact_utf8_text,
@@ -156,6 +157,7 @@ def _build_bundle(
         skipped_files=snapshot.skipped_files,
         changed_file_inventory=snapshot.scope_inventory(),
         input_origin=input_origin,
+        analysis_source_identity=current_core_source_identity(),
     )
     retrieval_result = retrieve_evidence_with_diagnostics(snapshot, criteria)
     evidence = retrieval_result.evidence

@@ -1,12 +1,31 @@
 # ScopeProof Roadmap
 
-ScopeProof v0.2 is a reviewer-first public alpha. The deterministic engine, local workbench, CLI,
-exports, benchmark, packaging, and protected CI are engineering evidence only. They do not prove
+ScopeProof is a reviewer-first public-repository evidence assistant. The deterministic engine,
+local workbench, CLI, exports, benchmark, packaging, and protected CI are engineering evidence only.
+They do not prove
 runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`; this owner decision does not create customer validation.
+`owner_led_productization_active`, operated as bounded maintenance of an engineering reference
+product; this owner decision does not create customer validation. Stage 3 is dormant and gated.
+The owner is not pursuing personal testing or qualifying participant reviews.
+
+## Current operating decision
+
+Maintain the confirmed-criteria → exact-head candidate evidence → missing evidence → reviewer
+decisions → re-review workflow. Its usefulness and primary-operator hypothesis (engineer or
+technical QA reviewer, with a PM or requirements owner receiving the report) remain unvalidated.
+The [market comparison](docs/commercialization/market-comparison-2026-07-26.md) documents substantial
+overlap, including Tiden, CodeRabbit, Qodo, Qase, Spec Kit, and Kiro; it supports no novelty or
+superiority claim.
+
+Stage 2 has a finish line: close the specifically authorized defect, upkeep task, or research
+question; pass the relevant regression and repository checks; align current documentation; then
+stop. With no demonstrated defect, required upkeep, or named bounded research question, remain in
+maintenance. Do not create another feature, benchmark cohort, or validation request to keep work
+active. Additional adapters, authenticated identity, and integrations are evidence-gated options,
+not automatic next steps.
 
 ## Current release and validation state
 
@@ -14,6 +33,14 @@ The GitHub Release record is authoritative for publication availability.
 ScopeProof v0.2.3 is published. Public install: v0.2.3 is available from the
 [v0.2.3 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.3),
 which provides the wheel, source archive, and checksum manifest.
+
+The table and integration notes below preserve dated engineering references. They are not a
+moving-head ledger. Current browser coverage comprises seven checks: one full installed-wheel
+Chromium journey plus six helper/capture checks. Dated five-check CI results below remain
+historical results, not current suite counts.
+
+<details>
+<summary>Release baseline and dated integration references</summary>
 
 | Area | Current state |
 |---|---|
@@ -77,6 +104,8 @@ adapter across the core, CLI, local workbench, saved records, exports, compariso
 browser proof. It accepts only bounded local bytes, stores sanitized exact-head and criteria-bound
 context, requires explicit human mapping, and never changes gate inputs or creates E1–E4, CI,
 runtime, decision, acceptance, correctness, or customer-validation claims.
+
+</details>
 
 ### Verification and evidence boundaries
 
@@ -306,9 +335,17 @@ These distinctions remain binding if optional external research is separately au
 Status: `owner_led_productization_active`.
 
 The owner authorized owner-led productization on 2026-08-14. This status does not claim customer
-validation. Work may improve product and workflow clarity, deterministic evidence quality,
-fail-closed lifecycle integrity, packaging, installation, compatibility, accessibility
-engineering, documentation, public official-source research, and release readiness.
+validation. The current operating mode is bounded maintenance of the engineering reference
+product. A new slice must name a demonstrated defect, required upkeep (such as a supported
+dependency or compatibility change), or a bounded research question and its completion evidence.
+Product and workflow clarity, deterministic evidence quality, fail-closed lifecycle integrity,
+packaging, compatibility, accessibility engineering, documentation, and official-source research
+are eligible areas only when tied to that named need. There is no standing release-readiness or
+feature-expansion program.
+
+A slice finishes when its defined outcome, relevant regression coverage, required checks, and
+current-document alignment are complete. If no such need remains, stop and retain the reference
+product. Do not make the owner test it, recruit qualifying reviews, or reopen Stage 1 to create work.
 
 PR #197 owner workflow consolidation is complete: public PR and constructed-demo entry remain
 clear, explicit criteria confirmation remains unmistakable, and stable unresolved-criteria queue
@@ -335,9 +372,11 @@ operating boundary. External commercial discovery is optional and separate from 
 productization. It is not required to continue Stage 2 and needs separate owner authorization
 before outreach or participant contact.
 
-Stage 2 does not authorize a merge, release, tag, package publication, outreach, participant
+Stage 2 status does not authorize a merge, release, tag, package publication, outreach, participant
 contact, R-002 retuning, R-003 generation, billing, accounts, private-repository support, hosted
-source processing, generic code review, security scanning, automatic fixes, or paid APIs.
+source processing, generic code review, security scanning, automatic fixes, or paid APIs. Existing
+explicit merge authorization remains in force; Stage 2 status itself grants no new integration
+authority. Deployment is also a separate owner decision.
 
 The [30-day Design Partner Sprint](docs/commercialization/design-partner-sprint.md) is an optional
 research protocol, not a productization gate. The
@@ -346,7 +385,7 @@ unvalidated hypotheses unless genuine attributable evidence is later collected.
 
 ## Stage 3 — Limited beta
 
-Status: gated by a separate owner decision after Stage 2 engineering evidence is reviewed.
+Status: dormant and gated by a separate owner decision after Stage 2 engineering evidence is reviewed.
 
 The 2026-10-26 readiness assessment is an engineering review only. No genuine independent repeat
 use has been observed, so Stage 3 has not started.
@@ -384,6 +423,11 @@ approval. Missing external evidence remains missing; engineering work does not t
 evidence.
 
 ## Honest stop and pivot rules
+
+- Stop after the named maintenance or research outcome is verified. Green checks and no concrete
+  authorized need mean maintenance, not a reason to invent a follow-up feature.
+- Unsupported platform rows may remain unsupported; absence of an environment is not a mandate
+  for repeated attempts or for personal testing.
 
 - Do not create synthetic validation, invented users, or constructed outcomes.
 - Do not create recurring external-evidence monitors merely to manufacture activity.

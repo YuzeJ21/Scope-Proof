@@ -13,6 +13,9 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Product strategy
 
+- Operate Stage 2 as bounded maintenance of an engineering reference product, with a finish line
+  for each demonstrated defect, required upkeep task, or named research question. Refreshed
+  acceptance-evidence competitor research and operator hypotheses; Stage 3 stays dormant and gated.
 - Closed Stage 1 as `closed_not_pursued_by_owner` with all five external-evidence measurements
   still at zero; Stage 1 did not pass and no customer validation is claimed.
 - Activated owner-led Stage 2 productization as `owner_led_productization_active`. External product
@@ -21,6 +24,14 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
+- Capture an optional, validated core Python source fingerprint for new analyses and expose it in
+  exports. Preserve unknown historical identity; a newly attached analysis updates only its active
+  producer metadata while retaining archived identities. Declare ruleset `2.0.0` for the
+  already-merged changed-file scope policy without changing gate behavior. The source digest is
+  not a dependency/environment fingerprint, signature, or execution attestation.
+- Preserve trace, screenshot, accessibility snapshot, and server log on a failed constructed
+  packaged-browser journey, with failure-only CI artifact upload. The earlier intermittent
+  dropdown failure remains unexplained; selection and retry behavior are unchanged.
 - Added a bounded, local JUnit XML adapter that accepts bytes only, rejects unsafe or over-limit
   structures, persists only sanitized exact-head/provenance-bound results, and requires explicit
   human criterion mapping. Imported results remain external non-gating context: they never become

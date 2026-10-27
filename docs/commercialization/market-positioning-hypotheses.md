@@ -1,177 +1,109 @@
 # ScopeProof Market Positioning Hypotheses
 
-Last researched: 2026-07-20; GitHub Copilot row refreshed: 2026-10-25
+Last researched: 2026-10-27
 
-This document is market research, not customer or market validation. It separates current public
-facts from hypotheses that still require genuine use. ScopeProof has no qualifying completed
-participant case, repeat-use evidence, customer, revenue, validated buyer, or validated price.
-Stage 1 is `closed_not_pursued_by_owner`; Stage 2 owner-led productization does not change these
-zero-evidence facts.
+This is official-source market research, not customer or market validation. ScopeProof has zero
+qualifying participant reviews, independent repeat-use evidence, customers, or revenue, and no
+validated buyer or price. Stage 1 is `closed_not_pursued_by_owner`; Stage 2 engineering work does
+not change these facts. The owner is not pursuing personal testing or qualifying reviews.
 
-## Implemented ScopeProof workflow
+## Implemented workflow and strongest value hypothesis
 
-ScopeProof's implemented public-alpha workflow is:
+`public PR → explicitly confirmed criteria → exact-head candidate evidence → missing evidence →`
+`reviewer decisions → export → changed-head re-review`
 
-`public PR → user-confirmed criteria → deterministic candidate evidence → criterion findings →`
-`reviewer decisions → export → immutable-head comparison`
+The CLI and workbench keep implementation, test, supplied runtime, and human-decision evidence
+separate, preserve incomplete ingestion and unresolved criteria, and never execute PR code.
+Engineering verification supports these implementation statements; it does not establish usefulness
+in independent work, accuracy in production, or demand.
 
-The workbench and CLI keep implementation, test, runtime, and human-decision evidence distinct.
-They preserve missing and partial evidence, bind a review to an exact commit SHA, and do not execute
-pull-request code. These are implemented capabilities with engineering verification; they do not
-prove accuracy in production, customer value, or demand.
+The strongest value hypothesis is the combined record: **confirmed criteria, inspectable candidates
+at an exact head, explicit missing evidence, attributable reviewer decisions, and re-review when
+that head changes**. This may help a technical reviewer explain an acceptance decision to a PM or
+requirements owner. No part of the combination is claimed novel, superior, or uniquely available.
 
-## Verified adjacent-workflow facts
+## Documented overlap
 
-These products overlap with parts of the problem but are not assumed to be direct substitutes.
-The facts below come from current official documentation.
+The [current market comparison](market-comparison-2026-07-26.md) records the primary-source refresh
+and its limits. These vendor-described capabilities are not independently verified efficacy:
 
-| Adjacent workflow | Verified capability | What the source does not establish about ScopeProof |
-| --- | --- | --- |
-| Qase requirements and traceability | Qase links requirements to test cases. Its traceability matrix can pull external requirements from tools including GitHub, show linked and unlinked test cases, show latest execution status, flag potentially stale cases, version snapshots, and export CSV or PDF. [Qase requirements](https://docs.qase.io/en/articles/5563700-requirements) and [traceability matrix](https://docs.qase.io/en/articles/9123660-requirements-traceability-matrix) | It does not prove that ScopeProof's criterion-to-PR-candidate review is novel, better, or wanted. |
-| Azure DevOps lifecycle traceability | Azure DevOps links work items with branches, commits, pull requests, builds, releases, tests, and deployments, and supports requirements-traceability reporting. [Microsoft end-to-end traceability](https://learn.microsoft.com/en-us/azure/devops/cross-service/end-to-end-traceability?view=azure-devops) | It does not validate a separate lightweight product for teams outside an integrated lifecycle suite. |
-| TestRail specification-first testing | TestRail supports defining test cases before automation, mapping cases to automated scripts, uploading test results, and preserving requirement, manual-test, and automation traceability. [TestRail specification-first workflow](https://support.testrail.com/hc/en-us/articles/12609869124116-Specification-first-workflow) | It does not establish that reviewers need deterministic candidate-evidence review before formal test management. |
-| GitHub Copilot code review | Copilot code review provides PR feedback and suggested changes. Optional Copilot approvals are now in public preview and may satisfy a required-approval rule when enabled; GitHub dismisses those approvals on new commits. [GitHub Copilot code review and approvals](https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/code-review#copilot-approvals) | It does not establish ScopeProof as a general code reviewer, and ScopeProof should not position itself as one. |
+| Workflow | Direct relevance |
+| --- | --- |
+| Tiden | Closest documented overlap: intent verification, spec/test traceability, gate signals, and risk acceptance. Its branches are product-model workspaces, distinct from source PRs; automatic intent-branch merges do not wait for that branch's gate. [Quality gates](https://docs.tiden.ai/docs/product/quality-gates), [branches](https://docs.tiden.ai/docs/product/branches) |
+| CodeRabbit | Directly assesses linked issue acceptance criteria against PR changes. Requirement validation alone does not distinguish ScopeProof. [Issue trackers](https://docs.coderabbit.ai/connections/issue-trackers) |
+| Qodo | Uses ticket requirements in review findings; may surface missing intent or unrelated changes. [Ticket integrations](https://docs.qodo.ai/integrations/ticketing-integrations) |
+| Qase | Maps external requirements to tests and results with staleness indicators and versioned snapshots. [Traceability](https://docs.qase.io/en/articles/9123660-requirements-traceability-matrix) |
+| GitHub Spec Kit | Convergence checks implementation against spec, plan, and tasks and appends remaining work. [Evolving specs](https://github.github.com/spec-kit/guides/evolving-specs.html) |
+| Kiro | Specifications structure acceptance criteria, design, and tracked implementation tasks. [Specs](https://kiro.dev/docs/specs/) |
 
-These documented capabilities support a research hypothesis that “requirements traceability”
-alone may be too broad to distinguish ScopeProof. Genuine participant research must test that
-positioning.
+These sources weaken any broad claim that acceptance checking, traceability, or intent alignment
+is a new category. They do not prove whether a narrow local review record is useful or redundant.
 
-## Narrow positioning hypothesis
+## Operator, recipient, and buyer hypotheses
 
-For a practitioner who must decide whether a public pull request has inspectable candidate evidence
-for explicitly confirmed acceptance criteria, ScopeProof provides a local, deterministic,
-reviewer-controlled coverage review at an immutable commit. It explains why each candidate matched,
-keeps missing or ambiguous evidence visible, separates static evidence from runtime verification,
-and requires the human reviewer to make the acceptance decision.
+The primary-operator hypothesis is an **engineer or technical QA reviewer** able to inspect source
+candidates, evidence limits, and CI context. A **PM or requirements owner** may confirm intent and
+receive the report or acceptance handoff. Actual roles, authority, and frequency of use remain
+unvalidated; an exported report does not establish stakeholder participation.
 
-The proposed category is **pre-merge acceptance-evidence review**, not generic requirements
-management, test management, lifecycle traceability, AI code review, or proof of correctness. This
-category and wording are hypotheses until genuine participants recognize the job in their own work.
+A possible initial setting is a team reviewing public GitHub PRs against explicit criteria without
+a satisfactory criterion-level handoff. Public-only access and local setup substantially narrow
+that setting. Team size, regulated-industry fit, and private-repository demand are unknown.
 
-## ICP, user, and buyer hypotheses
-
-### Initial ideal-customer-profile hypothesis
-
-A small or medium product-engineering team that:
-
-- reviews public GitHub pull requests against explicit acceptance criteria;
-- has product, QA, and engineering participants crossing the intent-to-implementation boundary;
-- lacks a trusted, inspectable criterion-level handoff before merge; and
-- can evaluate a local public-repository workflow without private data or procurement work.
-
-Team size, company size, regulated-industry fit, and private-repository demand are unvalidated.
-
-### User hypothesis
-
-The direct user may be a product manager, QA practitioner, or engineer who can confirm the criteria
-and inspect the evidence matrix. Genuine sessions must determine which role experiences the
-strongest recurring pain; the repository currently provides no basis for choosing one primary
-persona.
-
-### Likely-buyer hypothesis
-
-If a team product is eventually justified, the likely buyer may be the QA or engineering leader
-accountable for release confidence and review consistency. A product-operations or product leader
-could instead own the problem when acceptance intent is the main failure point. No buyer has been
-validated, and no procurement or budget claim is made.
+If a team product were later justified, a QA or engineering leader might own the budget; a product
+leader might own acceptance intent. There is no validated buyer, procurement path, or budget.
 
 ## Job-to-be-done hypothesis
 
-> Before approving a pull request—or after its head changes—help me see which confirmed acceptance
-> criteria have current candidate evidence, why it matched, what evidence is missing or stale, and
-> which human decisions must be revisited, without treating static code as proof that the behavior
-> works.
+> Before approving a PR, or after its head changes, show me which confirmed criteria have current
+> candidate evidence, what remains missing or stale, and which human decisions need another look,
+> so I can explain my acceptance decision without treating static code as runtime proof.
 
-## Differentiated-value hypotheses
+## Alternatives and adoption constraints
 
-The potentially differentiated combination is:
+A manual checklist with immutable diff links, CI results, and reviewer notes may already solve the
+job. Teams can use PR templates, spreadsheets, existing issue/test-management links, or spec-driven
+workflows without adopting another evidence application. No paid AI service is necessary for the
+manual baseline. This research makes no vendor pricing or free-tier claims.
 
-- criteria are normalized and explicitly confirmed before analysis;
-- every finding cites an immutable SHA, path, line range, excerpt, and provenance or names the
-  missing evidence;
-- ambiguous candidates and incomplete ingestion fail closed;
-- candidate strength, runtime observations, and human decisions remain separate;
-- re-review compares evidence and decisions across immutable revisions; and
-- the default workflow is local, deterministic, public-repository-only, and requires no paid LLM
-  API.
+ScopeProof would have to justify its setup and review cost against those habits. Current risks are
+hypotheses: public criteria may be unavailable; normalization adds work; conservative candidates
+may leave many unresolved rows; the candidate/proof distinction may be misunderstood; and local
+records may complicate collaboration. No observed participant result establishes these costs.
 
-Each item is an implemented or policy-backed property. Their value, uniqueness, and importance to
-a buyer remain hypotheses.
+The public-repository-only boundary excludes private commercial source. The
+[evaluation-only use policy](../../USE_POLICY.md) grants no open-source license. Public visibility,
+local operation, and no paid LLM dependency do not grant broader adoption rights. Licensing remains
+an explicit constraint; no licensing change or commercial offer is proposed here.
 
-## Current alternatives a participant may choose
+## What remains fixed
 
-A practitioner may reasonably continue with:
+Every verdict must cite evidence or identify its absence. Criteria require human confirmation
+before analysis. Immutable provenance, typed persisted/exported records, deterministic fail-closed
+gates, and separate candidate/runtime/acceptance states remain required. ScopeProof does not run PR
+code, invent requirements, provide generic code review, scan for security issues, auto-fix code,
+manage test execution, or replace QA and human acceptance.
 
-- a pull-request checklist or description template;
-- manual comparison between acceptance criteria, the diff, and CI results;
-- linked work items and tests in an integrated lifecycle suite;
-- a test-management traceability matrix;
-- human or AI-assisted code review; or
-- a spreadsheet or release checklist maintained by the team.
+## Evidence that could change the hypothesis
 
-ScopeProof must outperform the coordination cost of these existing habits for the narrow job. A
-feature comparison cannot prove that advantage; only observed genuine use can.
+Only separately authorized genuine use could determine whether the workflow exposes an actionable
+gap, affects a review decision, is understood, and is used again on a later PR without prompting.
+Relevant observations would identify the operator and recipient, prior alternative, exact head,
+confirmed criteria, missing evidence, actual human decision, friction, and independent repeat use.
+These are possible future observations, not an active participant program or an assignment to the
+owner. Stage 1 remains closed at zero and Stage 3 dormant and gated.
 
-## Adoption friction hypotheses
+Narrow or reject the hypothesis if existing workflows suffice, useful gaps are rare, review cost
+exceeds value, or people confuse candidates with correctness. Engineering checks, a new benchmark,
+competitor claims, stars, downloads, or another release cannot supply that evidence.
 
-- Criteria must already be public, explicit, and confirmable by an authorized person.
-- Public-repository-only scope excludes many commercial teams from the current alpha.
-- Users may resist normalizing criteria before seeing a result.
-- Deterministic matching may surface more unresolved work than familiar checklist workflows.
-- The candidate-versus-proof boundary may feel slower than a simple “pass” signal.
-- Local setup, GitHub access, and evidence review may exceed the value of one-off pull requests.
-- Evaluation-only licensing may block broader adoption even if the workflow is useful.
+## Current product decision
 
-These are risks to observe, not findings from participants.
+Maintain the bounded engineering reference product. Work only on a demonstrated defect, required
+upkeep, or a named bounded research question, then stop after its defined outcome and checks.
+Additional adapters, authenticated identity, integrations, and collaboration remain evidence-gated
+options. There is no standing feature-expansion or commercial-discovery backlog.
 
-## Trust requirements
-
-A credible product must continue to:
-
-- explain every verdict and every missing-evidence state;
-- bind citations and review state to immutable revisions;
-- never execute untrusted pull-request code in the application server;
-- keep implementation, test, runtime, and human-decision evidence distinct;
-- make ambiguity, truncation, retrieval failure, and stale decisions visible;
-- validate saved and exported objects and preserve deterministic output;
-- keep False Ready at zero in confirmed participant outcomes; and
-- avoid collecting private code, credentials, confidential requirements, or customer data in the
-  public alpha.
-
-## What ScopeProof does not do
-
-ScopeProof does not invent product requirements, prove correctness, replace QA, run pull-request
-code, perform generic code review, scan for security issues, auto-fix code, manage test cases,
-orchestrate releases, or provide full lifecycle traceability. The current product has no private
-repository support, hosted source processing, accounts, teams, enterprise controls, billing, or
-paid API dependency.
-
-## Optional evidence that could validate or reject the hypotheses
-
-External validation is not required for owner-led productization. If the owner separately
-authorizes external discovery, relevant evidence would be a genuine completed public-alpha review
-with source-owner-confirmed criteria, an exact reviewed head SHA, a saved review, and a participant-
-selected outcome—not another release, benchmark case, star, download, or owner rehearsal.
-
-Across five completed reviews, record:
-
-- who performed criteria confirmation, evidence review, and the final decision by role;
-- the alternative workflow they would otherwise have used;
-- whether the report exposed a useful, attributable gap;
-- whether the result affected a review or release decision;
-- time to an inspectable report and the largest friction point;
-- whether the candidate-versus-proof distinction was understood; and
-- whether the participant independently intends to use ScopeProof on another pull request.
-
-Disconfirm or narrow the positioning if participants do not recognize the job, existing tools are
-good enough, useful gaps are rare, the workflow costs more than manual review, or reviewers mistake
-candidate evidence for correctness. Do not solve a failed hypothesis by broadening into generic
-code review, security scanning, billing, or paid AI features.
-
-## Commercial boundary
-
-External commercial discovery is optional and separate from owner-led productization. The existing
-USD 99 per team per month and USD 999 per team per year figures remain research-only price anchors
-in the design-partner sprint. They are not active prices, an offer for sale, evidence of willingness
-to pay, or customer validation. The owner must separately authorize external discovery before any
-commercial or price question is asked.
+External discovery is optional and separate and needs authorization before contact. Historical
+price anchors are research context, not active prices, an offer, willingness-to-pay evidence, or
+customer validation. The [roadmap](../../ROADMAP.md) governs stage and release decisions.

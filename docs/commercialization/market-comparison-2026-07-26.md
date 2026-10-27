@@ -1,168 +1,112 @@
 # ScopeProof market comparison and product adjustment
 
-Date: 2026-07-26
-Last refreshed: 2026-08-17; GitHub Copilot capability refreshed: 2026-10-25
-Status: current product and competitor-documentation audit
-Boundary: competitor capabilities below are vendor-advertised unless explicitly
-labelled as a ScopeProof implementation fact. This document is not customer or
-market validation.
+Date: 2026-07-26 (original research)
+Last refreshed: 2026-10-27
+Status: official-source capability research and bounded roadmap decision
 
-Version boundary: public install remains v0.2.3; current source is the unreleased `0.2.4.dev0`
-development line. Post-release engineering changes do not constitute market validation.
+Vendor documentation records advertised capabilities, not independently observed efficacy.
+This document establishes no customer validation, competitive superiority, or novelty. Public
+install remains v0.2.3; source is the unreleased `0.2.4.dev0` development line. Historical engineering
+results and frozen R-002 research remain unchanged.
 
-## Product category
+## Product category and value hypothesis
 
-ScopeProof is not a general AI code reviewer, test-management system, or static
-analysis quality gate. It is a reviewer-controlled acceptance-coverage
-assistant for public GitHub pull requests:
+ScopeProof is a reviewer-controlled acceptance-coverage assistant for public GitHub pull requests.
+Its implemented workflow is confirmed criteria → exact public PR head → inspectable implementation
+and test candidates → explicit missing evidence → reviewer decisions → export and changed-head
+re-review. Static candidates, observed CI, supplied runtime records, and human acceptance remain
+separate. ScopeProof never executes target-repository code.
 
-1. load an immutable public PR snapshot;
-2. normalize requirements into criteria;
-3. require explicit human confirmation before analysis;
-4. retrieve inspectable implementation and test candidates;
-5. keep candidate evidence, observed CI, runtime verification, and human
-   decisions separate;
-6. fail closed when evidence or decisions are incomplete;
-7. compare evidence across PR heads; and
-8. export a reproducible review record.
+The strongest value hypothesis is that this combination makes a specific acceptance decision more
+inspectable and keeps decisions current after a head change. Each component has substantial
+market overlap. This is a positioning hypothesis, not customer or market validation.
 
-The proposed wedge is the handoff gap between “the PR has been reviewed for
-code quality” and “a PM, QA, or engineer can inspect how each agreed acceptance
-criterion is supported at this exact head.”
+The primary-operator hypothesis is an engineer or technical QA reviewer able to inspect candidate
+code and evidence. A PM or requirements owner may confirm intent and receive the resulting report.
+These role assignments, recurring need, and willingness to adopt remain unvalidated.
 
 ## Current competitor map
 
-| Category and products | Vendor-advertised job | Overlap with ScopeProof | ScopeProof distinction today |
-| --- | --- | --- | --- |
-| AI PR review — GitHub Copilot, CodeRabbit, Qodo, Graphite | Find bugs or rule violations, summarize changes, suggest fixes, and automate or repeat reviews in the PR workflow. | PR context, changed-code inspection, review guidance, re-review. | ScopeProof does not generate general review comments or fixes. It starts from reviewer-confirmed criteria, exposes deterministic candidate lines at an exact public PR head, and leaves acceptance unresolved until a human decides. |
-| Static analysis — SonarQube | Analyze issues introduced on new code and report a pass/fail quality gate to the repository platform. | Changed-code analysis, status/gate vocabulary, merge-time use. | ScopeProof does not scan for generic quality or security issues. Its gate is tied to criterion evidence, observed CI, runtime records, and current human decisions. |
-| Test management and requirements traceability — Qase, TestRail | Link requirements to test cases and results; show covered/uncovered requirements and stale test results. | Requirement-to-test coverage, missing-coverage visibility, snapshots or reports. | ScopeProof works at a single public PR head, includes implementation candidates, and keeps linked/static candidates distinct from executed runtime verification. It is not a test repository or execution manager. |
-| Work tracking — Azure Boards and GitHub controls | Link work items, PRs, commits, builds, reviews, and required status checks to provide traceability and merge controls. | Requirement/source linkage, PR identity, CI state, policy enforcement. | ScopeProof inspects criterion-level evidence inside the PR rather than treating an item link, template, approval, or passing check as proof that each criterion is covered. |
+| Workflow | Documented capability and overlap | Limit on the comparison |
+| --- | --- | --- |
+| Tiden — closest documented overlap | Intent verification, spec/test traceability, freshness-aware quality gates, and risk acceptance overlap strongly with acceptance-evidence review. [Product](https://tiden.ai) and [quality gates](https://docs.tiden.ai/docs/product/quality-gates) | Closest is a research judgment about workflow overlap, not a measured substitute or efficacy ranking. |
+| CodeRabbit — issue-aware PR review | Fetches acceptance criteria and assesses linked requirements against changes, flagging gaps. [Issue trackers](https://docs.coderabbit.ai/connections/issue-trackers) | Requirement checking is already a direct documented capability; it is not a unique ScopeProof claim. |
+| Qodo — ticket-aware review | Uses ticket intent for requirement-alignment findings and can flag unrelated changes. Acceptance-criteria fields vary by provider. [Ticket integrations](https://docs.qodo.ai/integrations/ticketing-integrations) | Its current docs describe findings rather than explicit compliance statuses. This is not evidence that either approach is more reliable. |
+| Qase — requirements traceability | Connects external requirements to test cases and latest results, with linked/unlinked views, stale-case flags, versioned snapshots, and exports. [Traceability matrix](https://docs.qase.io/en/articles/9123660-requirements-traceability-matrix) | Traceability, missing coverage, and staleness are established adjacent jobs; a matrix alone does not distinguish ScopeProof. |
+| GitHub Spec Kit — specification and convergence | `converge` assesses implementation against the spec, plan, tasks, and constitution; remaining work can be appended to tasks. [Evolving specs](https://github.github.com/spec-kit/guides/evolving-specs.html) | Intent-to-implementation reconciliation is already part of a development workflow, beyond conventional code review. |
+| Kiro — spec-driven development | Specs contain requirements/acceptance criteria, design, and executable task tracking. [Specs](https://kiro.dev/docs/specs/) | Explicit criteria and tracked implementation are not novel. This comparison does not establish a matching saved-review or evidence model. |
+| GitHub Copilot and Graphite — PR review | Provide AI review feedback and suggested changes. [Copilot review](https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/code-review), [Graphite AI reviews](https://graphite.com/docs/ai-reviews) | ScopeProof is not a general code reviewer; these can still be alternatives to an additional review step. |
 
-## Official evidence used
+### Tiden branch and gate distinction
 
-- [CodeRabbit pull-request review documentation](https://docs.coderabbit.ai/overview/pull-request-review)
-  advertises
-  context-aware PR reviews, bug detection, standards enforcement, suggested
-  fixes, and IDE/CLI/PR surfaces.
-- [CodeRabbit linked-issue validation](https://docs.coderabbit.ai/issues/pr-validation)
-  compares issue requirements with PR changes and reports Addressed, Not
-  addressed, or Unclear. Requirement checking alone is therefore not a
-  ScopeProof distinction.
-- [CodeRabbit rate-limit documentation](https://docs.coderabbit.ai/management/plans)
-  states that a rate-limited push receives a passing check even though no new
-  review ran and a prior approval remains. This supports ScopeProof's proposed
-  fail-closed wedge: no valid current-head evidence means no valid current-head
-  decision.
-- [Qodo code review documentation](https://docs.qodo.ai/code-review) advertises
-  multi-agent PR findings, rule enforcement, repository context, and
-  requirement-gap detection.
-- [Qodo requirement-gap documentation](https://docs.qodo.ai/code-review/view-requirement-gaps-in-findings)
-  labels its specification comparison as a Research Preview and advises users
-  to validate outputs before relying on them.
-- [GitHub Copilot code review documentation](https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/code-review)
-  describes AI-generated PR feedback and suggested fixes, paid-plan availability,
-  and AI-credit usage. Optional Copilot approvals are in public preview; when
-  enabled, they may satisfy a required-approval rule and are dismissed on new commits.
-- [Graphite AI review documentation](https://graphite.com/docs/ai-reviews) describes automated PR
-  findings and suggested fixes in Graphite's review workflow.
-- [Graphite code review documentation](https://graphite.com/docs/code-review) describes its pull
-  request review, inbox, and merge workflow.
-- [GitHub status-check documentation](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks)
-  describes pending, passing, and failing checks attached to commits.
-- [SonarQube pull-request analysis documentation](https://docs.sonarsource.com/sonarqube-server/2026.1/analyzing-source-code/pull-request-analysis/introduction)
-  describes new-code issue analysis and PR quality-gate reporting.
-- [Qase traceability-matrix documentation](https://docs.qase.io/en/articles/9123660-requirements-traceability-matrix)
-  describes requirement-to-test coverage, execution status, versioned
-  snapshots, and stale-case detection.
-- [TestRail Jira Coverage Check documentation](https://support.testrail.com/hc/en-us/articles/47341662234772-Jira-Coverage-Check)
-  describes covered and uncovered Jira entities based on linked test cases or
-  results.
-- [Azure Boards linking documentation](https://learn.microsoft.com/en-us/azure/devops/boards/backlogs/add-link?view=azure-devops)
-  describes traceability links among work items, GitHub PRs, commits, builds,
-  and test objects.
-- [GitHub pull-request standardization documentation](https://docs.github.com/en/pull-requests/reference/managing-and-standardizing-pull-requests)
-  describes templates, linked issues, required checks, signed commits, and
-  approving reviews.
+Tiden branches are product-model workspaces for specs, tests, and components, linked to source
+PRs; they are not source-code PR branches. Its documentation says automatic intent-branch merges
+occur after linked PRs merge and do not wait for the branch Quality Gate, including when blocked
+or unavailable. That describes product-model merging, not bypassing source-PR branch protection.
+Do not generalize it into a claim that Tiden has no gates or that ScopeProof is safer.
+[Branches](https://docs.tiden.ai/docs/product/branches)
 
-## Competitive assessment
+### Additional primary documentation
 
-### Where ScopeProof is credible
+[CodeRabbit PR review](https://docs.coderabbit.ai/overview/pull-request-review) and
+[Qodo code review](https://docs.qodo.ai/code-review) describe broader review surfaces. The refreshed
+issue/ticket pages above are the basis for the direct acceptance-criteria overlap. Older feature,
+rate-limit, preview, or pricing descriptions are not carried forward as current facts.
 
-- Deterministic, local-first inspection with no paid LLM API.
-- Explicit source-owner criteria confirmation before analysis.
-- Strong separation among implementation candidates, test candidates, observed
-  CI, manually recorded runtime verification, and acceptance.
-- Immutable evidence references and changed-head comparison.
-- Conservative False Ready posture and inspectable missing-evidence
-  explanations.
-- Portable exports and versioned local records.
-- CLI lifecycle parity is implemented for core-backed resolution, external runtime verification,
-  final acceptance, and changed-head comparison.
-- Bounded keyboard-only and visible-focus engineering evidence is implemented for the installed
-  Chromium path; it is not accessibility conformance.
+## ScopeProof implementation and adoption limits
 
-### Where ScopeProof is immature
+CLI lifecycle parity is implemented. Bounded keyboard-only and visible-focus engineering evidence
+is implemented for the installed Chromium path. Current packaged-browser coverage comprises seven
+checks: one full installed-wheel Chromium journey and six helper/capture checks. This total is not
+a count of full end-to-end journeys.
+These are engineering results, not accessibility conformance or independent use. Real screen-reader
+operation, Windows desktop, Linux desktop, non-Chromium behavior, and WCAG conformance remain
+unsupported by the available evidence.
 
-- Genuine independent use remains zero; the current wedge is a hypothesis.
-- The public-PR-only, local-first workflow creates setup and collaboration
-  friction compared with installed PR applications.
-- Criteria must be supplied and confirmed manually; there is no validated
-  integration with an issue or test-management source.
-- Retrieval coverage is intentionally conservative and the completed R-002
-  baseline found candidates for only 5 of 20 research criteria.
-- Real screen-reader operation, Windows desktop, Linux desktop, non-Chromium browser behavior, and
-  WCAG conformance remain unsupported. The bounded keyboard/focus and native-zoom checks do not
-  establish those broader claims.
-- There is no evidence yet that users will repeat the workflow or pay for a team
-  product.
+Independent qualifying reviews and repeat-use evidence remain zero. Conservative R-002 retrieval
+found candidates for 5 of 20 research criteria; that frozen result is not a production accuracy
+estimate or a reason to retune the benchmark. Reviewer identity remains asserted rather than
+authenticated. The local setup and manual criteria confirmation have unmeasured coordination cost.
+
+Public-repository-only scope excludes many private commercial workflows. The
+[evaluation-only use policy](../../USE_POLICY.md) grants no open-source license; public visibility
+and no paid LLM API dependency do not grant broader use rights. Licensing is an adoption constraint,
+not a pricing or demand finding, and no licensing change is proposed.
+
+## Existing alternatives and the decision threshold
+
+A manual acceptance checklist with immutable diff links, CI results, reviewer notes, and a later
+head comparison is a practical baseline requiring no new paid AI service. Existing issue templates,
+spreadsheets, and team review habits may be sufficient. Spec Kit also supplies a repository-based
+intent/convergence workflow. This research makes no current vendor pricing or free-tier claim.
+
+The unvalidated question is whether ScopeProof's combined confirmed-criteria, exact-head candidate,
+missing-evidence, reviewer-decision, and re-review record is worth its setup and review cost against
+those alternatives. A feature table cannot answer it. Neither automated research nor another
+release can create independent-use evidence.
 
 ## Roadmap adjustment
 
-### Build now — evidence trust and first-use quality
+Maintain a bounded engineering reference product. Start a slice only for a demonstrated defect,
+required upkeep, or a named bounded research question; define its outcome and completion evidence
+before implementation. Finish the relevant regression and repository checks, align documentation,
+then stop. If no concrete need remains, stay in maintenance.
 
-1. Keep v0.2.3 dependency health, exact-head verification, packaging, and
-   release-status evidence aligned after the source merge and before any
-   owner-controlled tag or GitHub Release decision.
-2. Preserve retrieval diagnostics as explanations, never verdict evidence.
-3. Improve conservative retrieval only through new constructed regressions and
-   a prospectively frozen holdout; do not retune on R-002.
-4. Attempt real assistive-technology and available desktop-platform checks only in genuine,
-   observable environments; keep unavailable rows unsupported.
-5. Keep export, changed-head re-review, and missing-evidence explanations clear.
-
-### Design now, implement only after genuine use evidence
-
-1. A source-adapter contract for importing owner-confirmed criteria from issue
-   trackers without treating the link itself as evidence.
-2. A portable handoff bundle for another reviewer to inspect and decide without
-   an account system.
-3. A repository policy file for team-owned criterion vocabulary and evidence
-   expectations.
-4. A lightweight history view for review deltas and unresolved handoffs.
-
-### Do not build yet
-
-- Generic AI code review, security scanning, style comments, or automatic fixes.
-- Hosted accounts, private-repository access, billing, or paid APIs.
-- Broad project-management or test-execution management.
-- Team dashboards, enterprise controls, or integrations justified only by
-  competitor feature parity.
-- Any feature described as validated without genuine participant evidence.
+Additional adapters, authenticated identity, tracker intake, and collaboration are evidence-gated
+options, not pilot-critical prerequisites or a standing feature backlog. Do not copy competitors'
+breadth, broaden into generic review/security/auto-fix, or add accounts, private repositories,
+hosted processing, billing, or paid APIs to create activity. Unsupported platform checks may stay
+unsupported. No personal testing or qualifying-review request is required by this direction.
 
 ## Stage implications
 
-- Stage 0 engineering evidence remains historical product foundation.
-- Stage 1 is `closed_not_pursued_by_owner` with every external-evidence measurement at zero; it did
-  not pass and no customer validation is claimed.
-- Stage 2 is `owner_led_productization_active`. External commercial discovery is optional and
-  separate, and the existing comparison does not establish willingness to pay.
-- Stage 3 remains a separate owner decision for a bounded release candidate or beta.
-- Stage 4 remains a separate owner and evidence gate; competitor breadth is not a reason to copy
-  features.
+- Stage 1 is `closed_not_pursued_by_owner` with all external-evidence counts at zero; it did not pass.
+- Stage 2 is `owner_led_productization_active` in bounded maintenance/reference-product mode.
+- Stage 3 is dormant and gated. No beta, release, deployment, outreach, or participant program is
+  authorized by this research or by completed engineering checks.
+- Stage 4 expansion requires a named constraint, appropriate evidence, and a separate owner decision.
+- R-003 generation and label confirmation remain separate owner gates; R-002 stays frozen.
 
-The best near-term positioning is therefore: **“Inspect acceptance coverage at
-an exact public PR head without confusing candidate code, CI, runtime proof, or
-human acceptance.”** This is a positioning hypothesis, not customer or market validation. It
-should remain a hypothesis unless genuine users later demonstrate that this job is important and
-repeated.
+The [roadmap](../../ROADMAP.md) governs current scope. External commercial discovery remains
+optional and separate; it requires authorization before contact and creates no adoption or
+willingness-to-pay claim in advance.

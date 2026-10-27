@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from scopeproof_core.build_identity import current_core_source_identity
 from scopeproof_core.criteria.confirmation import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     build_criteria_source_provenance,
@@ -64,6 +65,7 @@ def build_review(snapshot: PullRequestSnapshot, labels: dict) -> ReviewBundle:
         changed_file_inventory=snapshot.scope_inventory(),
         input_origin=ReviewInputOrigin.CONSTRUCTED_DEMO,
         final_acceptance=labels.get("final_acceptance", False),
+        analysis_source_identity=current_core_source_identity(),
     )
     retrieval_result = retrieve_evidence_with_diagnostics(snapshot, criteria)
     evidence = retrieval_result.evidence
