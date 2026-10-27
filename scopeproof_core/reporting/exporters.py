@@ -42,6 +42,17 @@ from scopeproof_core.schemas.models import (
 
 ExportableReview = ReviewBundle | ReviewState
 
+
+def _analysis_source_text(bundle: ReviewBundle) -> str:
+    identity = bundle.review.analysis_source_identity
+    return f"{identity.scheme}:{identity.sha256}" if identity else "Not captured"
+
+
+_ENGINE_BOUNDARY = (
+    "Analysis source records the observed core Python files, not dependencies, UI, "
+    "or an execution attestation; validation uses the installed policy."
+)
+
 _MARKDOWN_PUNCTUATION = frozenset(set(string.punctuation) - {"&", ";"})
 _SPREADSHEET_FORMULA_PREFIXES = frozenset(("=", "+", "-", "@", "\t", "\r"))
 _RETRIEVAL_BOUNDARY = (
@@ -540,6 +551,8 @@ def export_markdown(bundle: ExportableReview) -> str:
         f"**Review created:** {_render_markdown_code(review_created_at)}",
         f"**Tool version:** {_render_markdown_code(bundle.review.tool_version)}",
         f"**Ruleset:** {_render_markdown_code(bundle.review.ruleset_version)}",
+        f"**Analysis core source:** {_render_markdown_code(_analysis_source_text(bundle))}",
+        _ENGINE_BOUNDARY,
         f"**Ingestion state:** {_render_markdown_code(bundle.review.ingestion_state.value)}",
         f"**Observed CI:** {bundle.review.ci_observation.state.value}",
         f"**Observed CI reason:** {_escape_markdown_text(bundle.review.ci_observation.reason)}",
@@ -902,6 +915,7 @@ def export_csv(bundle: ExportableReview) -> str:
         "review_created_at",
         "tool_version",
         "ruleset_version",
+        "analysis_core_source",
         "ingestion_state",
         "ingestion_warnings",
         "skipped_files",
@@ -1002,6 +1016,7 @@ def export_csv(bundle: ExportableReview) -> str:
                 "review_created_at": bundle.review.model_dump(mode="json")["created_at"],
                 "tool_version": _csv_text(bundle.review.tool_version),
                 "ruleset_version": _csv_text(bundle.review.ruleset_version),
+                "analysis_core_source": _csv_text(_analysis_source_text(bundle)),
                 "ingestion_state": bundle.review.ingestion_state.value,
                 "ingestion_warnings": json.dumps(
                     bundle.review.ingestion_warnings, ensure_ascii=False
@@ -1309,10 +1324,12 @@ def export_html(value: ExportableReview) -> str:
             f"Review created <code>{html.escape(review_created_at)}</code> · "
             f"Tool <code>{html.escape(bundle.review.tool_version)}</code> · "
             f"Ruleset <code>{html.escape(bundle.review.ruleset_version)}</code> · "
+            f"Analysis core source: <code>{html.escape(_analysis_source_text(bundle))}</code> · "
             f"Ingestion <code>{html.escape(bundle.review.ingestion_state.value)}</code> · "
             f"Criteria revision {revision}</p>",
             '<p class="note">ScopeProof surfaces auditable candidate evidence. '
             "It does not replace QA or prove correctness.</p>",
+            f'<p class="note">{html.escape(_ENGINE_BOUNDARY)}</p>',
             "<h2>Criteria Source</h2>",
             '<table aria-label="Criteria Source"><tbody>',
             "<tr><td>Source reference</td><td><code>"

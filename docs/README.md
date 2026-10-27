@@ -4,6 +4,10 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
+Current direction: bounded maintenance of an engineering reference product. v0.2.3 remains the
+published install; `0.2.4.dev0` is unreleased. Stage 1 is closed at zero; Stage 3 is dormant and
+gated. Begin with the roadmap's finish line before starting any new slice.
+
 ## Current operating documents
 
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
@@ -12,16 +16,19 @@ current product state.
 - [Stage 2 productization packet](commercialization/stage2-readiness-packet.md) — authorized
   owner-led engineering scope; it does not claim customer validation.
 - [Current official-source market comparison](commercialization/market-comparison-2026-07-26.md)
-  — dated competitive research and positioning hypotheses.
+  — official-source capability refresh dated 2026-10-27; vendor claims and unvalidated positioning.
 - [Development environment](development-environment.md) — supported and unsupported engineering
   environments.
+- [Engine identity boundary](development/engine-identity.md) — captured core-source identity and
+  unknown legacy identity; no claim of full environment reproducibility or signed execution.
 - [Privacy readiness](privacy-readiness.md) — current local-only data and trust boundaries.
-- [2026-10-25 integration disposition](audits/2026-10-25-integrity-integration-disposition.md)
-  — exact-head dependency, JUnit, and archival decisions pending integration.
-- [Unreleased integrity case study](portfolio/2026-10-25/case-study.md) — constructed
-  automated demonstration and publication boundaries for the draft source revision.
 
 ## Historical evidence records
+
+- [2026-10-25 integration disposition](audits/2026-10-25-integrity-integration-disposition.md)
+  preserves the pre-merge dependency, JUnit, and archival decisions.
+- [Unreleased integrity case study](portfolio/2026-10-25/case-study.md) preserves its constructed
+  demonstration and publication boundaries at the named source revision.
 
 - `docs/audits/` contains exact-head implementation, verification, and review snapshots.
 - `docs/releases/` contains published-release and post-merge evidence records. The current status

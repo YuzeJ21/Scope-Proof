@@ -8,13 +8,15 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from hashlib import sha256
 from importlib.metadata import version
 from importlib.util import find_spec
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import urlopen
+from zipfile import ZipFile
 
 import pytest
 from playwright.sync_api import (
@@ -382,6 +384,41 @@ def _click_until_text_visible(
                 raise
 
 
+@contextmanager
+def _capture_browser_failure(
+    page: Page, destination: Path, server_log: Path,
+) -> Iterator[None]:
+    """Keep constructed-journey evidence without replacing its original failure."""
+    page.context.tracing.start(screenshots=True, snapshots=True, sources=False)
+    try:
+        yield
+    except Exception as failure:
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+        except Exception as capture_error:
+            failure.add_note(f"Could not create browser diagnostics: {capture_error}")
+        captures: tuple[tuple[str, Callable[[], object]], ...] = (
+            ("failure.png", lambda: page.screenshot(path=str(destination / "failure.png"))),
+            (
+                "failure.aria.txt",
+                lambda: (destination / "failure.aria.txt").write_text(
+                    page.locator("body").aria_snapshot(), encoding="utf-8"
+                ),
+            ),
+            ("server.log", lambda: shutil.copy2(server_log, destination / "server.log")),
+            ("trace.zip", lambda: page.context.tracing.stop(path=str(destination / "trace.zip"))),
+        )
+        for name, capture in captures:
+            try:
+                capture()
+            except Exception as capture_error:
+                failure.add_note(f"Could not capture {name}: {capture_error}")
+        failure.add_note(f"Constructed browser failure diagnostics: {destination}")
+        raise
+    else:
+        page.context.tracing.stop()
+
+
 def test_choose_combobox_option_retries_after_detached_option(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -534,6 +571,45 @@ def test_download_with_retry_reissues_click_after_missed_event(
     assert download.suggested_filename == "review.md"
     assert page.download_attempts == 2
     assert button.clicks == 2
+
+
+@pytest.mark.parametrize("server_log_exists", [True, False])
+def test_browser_failure_capture_preserves_original_error_and_collects_evidence(
+    tmp_path: Path, request: pytest.FixtureRequest, server_log_exists: bool,
+) -> None:
+    if "browser" not in request.config.option.markexpr:
+        pytest.skip("run explicitly with -m browser after installing Playwright Chromium")
+    server_log = tmp_path / "server.log"
+    if server_log_exists:
+        server_log.write_text("constructed server diagnostic\n", encoding="utf-8")
+    destination = tmp_path / "diagnostics"
+    original = RuntimeError("constructed journey failure")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            with (
+                pytest.raises(RuntimeError, match="constructed journey failure") as caught,
+                _capture_browser_failure(page, destination, server_log),
+            ):
+                page.set_content('<h1>Constructed failure state</h1>')
+                raise original
+            assert caught.value is original
+        finally:
+            browser.close()
+
+    assert (destination / "failure.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert "Constructed failure state" in (destination / "failure.aria.txt").read_text(
+        encoding="utf-8"
+    )
+    with ZipFile(destination / "trace.zip") as trace:
+        assert any(name.endswith(".trace") for name in trace.namelist())
+    if server_log_exists:
+        assert (destination / "server.log").read_text(encoding="utf-8") == (
+            "constructed server diagnostic\n"
+        )
+    else:
+        assert any("server.log" in note for note in original.__notes__)
 
 
 def _exercise_primary_path(
@@ -965,29 +1041,33 @@ def test_installed_wheel_primary_path_in_chromium(
                             else None
                         ),
                     )
-                    _exercise_primary_path(
-                        page,
-                        base_url,
-                        verify_persistence_and_downloads=viewport_index == 1,
-                        capture_directory=(
-                            tmp_path / "captures"
-                            if viewport_index == 0
-                            and "SCOPEPROOF_PORTFOLIO_CAPTURE_DIR" in os.environ
-                            else None
-                        ),
-                    )
-                    if viewport_index == 0:
-                        _exercise_junit_import_round_trip(
+                    diagnostics = Path(os.environ.get(
+                        "SCOPEPROOF_BROWSER_DIAGNOSTIC_DIR", str(tmp_path / "diagnostics")
+                    )) / f"viewport-{viewport_index}"
+                    with _capture_browser_failure(page, diagnostics, log_path):
+                        _exercise_primary_path(
                             page,
                             base_url,
-                            artifact_path=junit_artifact,
-                            artifact_digest=junit_artifact_digest,
+                            verify_persistence_and_downloads=viewport_index == 1,
                             capture_directory=(
                                 tmp_path / "captures"
-                                if "SCOPEPROOF_PORTFOLIO_CAPTURE_DIR" in os.environ
+                                if viewport_index == 0
+                                and "SCOPEPROOF_PORTFOLIO_CAPTURE_DIR" in os.environ
                                 else None
                             ),
                         )
+                        if viewport_index == 0:
+                            _exercise_junit_import_round_trip(
+                                page,
+                                base_url,
+                                artifact_path=junit_artifact,
+                                artifact_digest=junit_artifact_digest,
+                                capture_directory=(
+                                    tmp_path / "captures"
+                                    if "SCOPEPROOF_PORTFOLIO_CAPTURE_DIR" in os.environ
+                                    else None
+                                ),
+                            )
                     context.close()
             finally:
                 browser.close()

@@ -1762,7 +1762,7 @@ def test_current_docs_index_and_market_refresh_preserve_owner_led_boundary() -> 
 
     normalized_market = " ".join(market.split())
     assert "Date: 2026-07-26" in market
-    assert "Last refreshed: 2026-08-17" in market
+    assert "Last refreshed: 2026-10-27" in market
     for product in ("GitHub Copilot", "CodeRabbit", "Qodo", "Graphite"):
         assert product in market
     for official_source in (

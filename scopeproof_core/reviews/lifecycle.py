@@ -191,7 +191,14 @@ def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
             "created_at": state.review.created_at,
         }
     )
-    if rebound_review != state.review:
+    # A new analysis has new producer metadata; all other owning-review facts
+    # remain exact. Archived bundles retain their original source and policy.
+    active_review = state.review.model_copy(update={
+        "tool_version": bundle.review.tool_version,
+        "ruleset_version": bundle.review.ruleset_version,
+        "analysis_source_identity": bundle.review.analysis_source_identity,
+    })
+    if rebound_review != active_review:
         raise ValueError("attached analysis review must match the lifecycle review")
     active_bundle = bundle.model_copy(
         update={
@@ -199,8 +206,10 @@ def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
         },
         deep=True,
     )
-    active_bundle.review = state.review.model_copy(deep=True)
-    return validated_review_state(state.model_copy(update={"bundle": active_bundle}))
+    active_bundle.review = active_review.model_copy(deep=True)
+    return validated_review_state(state.model_copy(update={
+        "review": active_review, "bundle": active_bundle,
+    }))
 
 
 def resolution_event_statuses(

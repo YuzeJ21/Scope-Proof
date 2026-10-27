@@ -23,10 +23,11 @@ from pydantic import (
     model_validator,
 )
 
+from scopeproof_core.build_identity import CoreSourceIdentity
 from scopeproof_core.provenance import candidate_permalink_matches
 from scopeproof_core.version import __version__
 
-RULESET_VERSION = "1.0.0"
+RULESET_VERSION = "2.0.0"
 GITHUB_REPOSITORY_PATTERN = r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$"
 LocalReviewId = Annotated[
     str,
@@ -884,6 +885,7 @@ class Review(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tool_version: str = Field(default_factory=lambda: __version__)
     ruleset_version: str = RULESET_VERSION
+    analysis_source_identity: CoreSourceIdentity | None = None
 
     @field_validator("base_sha", "head_sha")
     @classmethod

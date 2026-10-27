@@ -29,6 +29,7 @@ from scopeproof_core.alpha.storage import (
     JsonAlphaCaseStore,
     default_alpha_case_directory,
 )
+from scopeproof_core.build_identity import current_core_source_identity
 from scopeproof_core.criteria.confirmation import (
     build_criteria_source_provenance,
     canonical_criteria_sha256,
@@ -719,6 +720,7 @@ def _analyze() -> ReviewBundle:
         skipped_files=snapshot.skipped_files,
         changed_file_inventory=snapshot.scope_inventory(),
         input_origin=input_origin,
+        analysis_source_identity=current_core_source_identity(),
     )
     retrieval_result = retrieve_evidence_with_diagnostics(
         snapshot, criteria, unchanged_files=st.session_state["candidate_files"]
@@ -3303,7 +3305,7 @@ else:
             st.caption("Save the validated review locally or download an export below.")
         st.caption(
             f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
-            "results are reproducible from the exported review"
+            "export preserves review inputs; validation uses the installed policy"
         )
     if has_pending_review_input:
         st.warning(

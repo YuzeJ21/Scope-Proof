@@ -3,13 +3,24 @@
 **See which acceptance criteria have credible PR evidence—and which still need review.**
 
 ScopeProof is a reviewer-controlled acceptance-coverage assistant for public GitHub pull requests.
-It maps each confirmed criterion to inspectable implementation or test candidates, makes missing
-evidence visible, records attributable human decisions, and exports a reproducible review. The
+The primary-operator hypothesis is an engineer or technical QA reviewer, with a PM or requirements
+owner receiving the report; these roles remain unvalidated. It maps each confirmed criterion to
+inspectable implementation or test candidates, makes missing evidence visible, records attributable
+human decisions, and exports a reproducible review. The
 primary workflow has a product target of reaching an inspectable coverage report in under five
 minutes. That target has not yet been independently observed. The former Stage 1 under-ten-minute
 target closed unmet when the owner chose not to pursue Stage 1.
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
+
+Current direction: maintain a bounded engineering reference product. Public install remains
+**v0.2.3**; source is **unreleased `0.2.4.dev0`**. Stage 1 is closed as not pursued with all external
+counts at zero; Stage 3 is dormant and gated. Stage 2 work requires a demonstrated defect, required
+upkeep, or a named bounded research question. Once that work and its checks are complete, stop;
+there is no standing feature backlog or request for personal testing or qualifying reviews.
+See the [public roadmap](ROADMAP.md) for the maintenance finish line and
+[official-source market comparison](docs/commercialization/market-comparison-2026-07-26.md) for
+substantial competing workflows and the remaining value hypothesis.
 
 The [R-001 Microsoft public-PR research record](docs/research/r001-microsoft-hve-core/summary.md)
 shows a compact, hash-bound engineering rerun: observed CI and static candidates remain distinct
@@ -66,6 +77,11 @@ candidate**, **Analysis incomplete**, **Reviewer verified**, or **Rejected**. Ca
 not correctness. Implementation, test, runtime, documentation, and contract evidence remain
 separate types.
 
+New source analyses record a bounded core-source identity for later inspection; older reviews
+retain an unknown identity. That hash covers ScopeProof core Python source, not the UI,
+dependencies, environment, signed provenance, or proof of execution. See the
+[engine identity boundary](docs/development/engine-identity.md).
+
 The release gate uses explicit precedence:
 
 1. **Action required** for failed checks, change-required decisions, or unresolved must-have gaps.
@@ -74,6 +90,9 @@ The release gate uses explicit precedence:
 3. **Accepted with exceptions** for explicitly accepted exceptions.
 4. **Review complete** only after complete ingestion, passing observed CI, current decisions for
    every criterion, and final human acceptance.
+
+<details>
+<summary>Release and historical engineering references</summary>
 
 The earlier post-merge v0.2.3 audit found two core integrity defects in the
 intended flow. [PR #177](https://github.com/YuzeJ21/Scope-Proof/pull/177)
@@ -117,6 +136,8 @@ saved-record validation, installed Chromium coverage, Python 3.13 and bounded ke
 evidence, and verified-public provenance enforcement. Those changes remain engineering evidence
 only. The public install continues to be the immutable v0.2.3 release, and Stage 1 remains closed
 as not pursued with every count at zero.
+
+</details>
 
 GitHub exposes visible check runs but does not reliably expose every repository's required-check
 policy to anonymous clients. ScopeProof therefore labels this value **Observed CI state** and counts
@@ -445,6 +466,10 @@ The review status is **Action required** because must-have gaps remain.
 
 ## Verification
 
+The packaged-browser suite currently contains **seven checks: one full installed-wheel Chromium
+journey and six helper/capture checks**. The total is not a count of full end-to-end journeys.
+These constructed engineering checks do not establish independent use or accessibility conformance.
+
 Run lint and all offline tests:
 
 ```bash
@@ -541,8 +566,8 @@ read-only private-repository boundary. It does not claim private support exists.
 
 ## Product status
 
-This is a public-repository product under owner-led productization. That operating strategy does
-not establish customer validation, demand, adoption, repeat use, or willingness to pay.
+This is a public-repository reference product under bounded owner-led maintenance. That strategy
+does not establish customer validation, demand, adoption, repeat use, or willingness to pay.
 
 The [public roadmap](ROADMAP.md) defines the closed Stage 1 record, active owner-led Stage 2 scope,
 and separate owner gates for later stages. The [changelog](CHANGELOG.md) summarizes the active

@@ -1061,8 +1061,9 @@ def test_markdown_groups_version_provenance_before_criteria_revision() -> None:
 
 
 def test_json_is_stable_and_contains_ruleset_version() -> None:
-    payload = json.loads(export_json(example_bundle()))
-    assert payload["review"]["ruleset_version"] == "1.0.0"
+    bundle = example_bundle()
+    payload = json.loads(export_json(bundle))
+    assert payload["review"]["ruleset_version"] == bundle.review.ruleset_version
     assert payload["gate"]["verdict"] == "blocked"
     assert export_json(example_bundle()) == export_json(example_bundle())
 
