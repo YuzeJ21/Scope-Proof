@@ -3751,12 +3751,15 @@ def test_r001_public_engineering_research_record_is_hash_bound_and_stage_safe() 
     assert "R-001" in changelog
 
 
-def test_pages_workflow_is_sha_pinned_minimal_and_deploys_only_static_site() -> None:
+def test_pages_workflow_requires_explicit_dispatch_and_deploys_only_static_site() -> None:
     workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
 
-    assert "  push:\n    branches: [main]\n  workflow_dispatch:" in workflow
+    triggers = workflow.split("permissions:", maxsplit=1)[0]
+    assert triggers == "name: Pages\n\non:\n  workflow_dispatch:\n\n"
+    assert "  push:" not in triggers
     assert "pull_request_target" not in workflow
     assert "schedule:" not in workflow
+    assert "  deploy:\n    if: github.event_name == 'workflow_dispatch'\n" in workflow
     assert "contents: read" in workflow
     assert "pages: write" in workflow
     assert "id-token: write" in workflow
