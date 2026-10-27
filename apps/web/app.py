@@ -3356,6 +3356,7 @@ else:
                 or not export_has_provenance
             ),
             key="download_markdown",
+            on_click="ignore",
         )
     with json_column:
         st.download_button(
@@ -3369,6 +3370,7 @@ else:
                 or not export_has_provenance
             ),
             key="download_json",
+            on_click="ignore",
         )
     with csv_column:
         st.download_button(
@@ -3382,6 +3384,7 @@ else:
                 or not export_has_provenance
             ),
             key="download_csv",
+            on_click="ignore",
         )
     if review_save_notice is not None:
         st.success(review_save_notice)

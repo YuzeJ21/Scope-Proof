@@ -99,6 +99,20 @@ def analyzed_standard_demo(app: AppTest) -> AppTest:
     return app.button(key="run_analysis").click().run()
 
 
+def test_review_downloads_do_not_rerun_during_deferred_generation() -> None:
+    app = analyzed_demo(new_app())
+
+    assert not app.exception
+    assert {button.key for button in app.download_button} == {
+        "download_markdown", "download_json", "download_csv",
+    }
+    for button in app.download_button:
+        assert button.proto.ignore_rerun, button.key
+        assert button.proto.deferred_file_id, button.key
+        assert not button.proto.url, button.key
+        assert not button.disabled, button.key
+
+
 def test_uncited_file_has_explicit_scope_decision_control() -> None:
     app = load_demo(new_app())
     app.session_state["snapshot"].files.append(
