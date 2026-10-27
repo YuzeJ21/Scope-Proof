@@ -415,8 +415,9 @@ Status: gated by a separate owner decision and evidence appropriate to the propo
 
 Only recurring behavior can justify broader scope. Candidate directions include clearer
 requirements intake, better evidence explanations, and narrower collaboration handoffs. Private
-repositories, billing, accounts, generic code review, security scanning, automatic fixes, and paid
-LLM APIs require a separate owner decision and are not implied by beta progress.
+repositories, billing, accounts, and paid LLM APIs require a separate owner decision and are not
+implied by beta progress. Generic code review, security scanning, and auto-fix features remain
+excluded under [AGENTS.md](AGENTS.md).
 
 Stage 4 requires a named constraint, evidence appropriate to that constraint, and separate owner
 approval. Missing external evidence remains missing; engineering work does not turn into customer
