@@ -19,6 +19,7 @@ which provides the wheel, source archive, and checksum manifest.
 |---|---|
 | Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
 | Active source line | Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists |
+| Post-PR #207 resulting-main snapshot (2026-10-27) | `8f01cf237b75da30796d1879f3fbde7b8a5ef6d5`; [CI run 40431365174](https://github.com/YuzeJ21/Scope-Proof/actions/runs/40431365174) passed 2,581 tests, 2 intentional skips, 95.0534% unrounded coverage, and 5/5 packaged-browser checks. Pages did not run or create a deployment for this merge. See the [dated engineering record](docs/portfolio/2026-10-27/verification.md). |
 | Post-PR #202 resulting-main snapshot (2026-10-26) | `e1f798a05940c39f9aea1f7fbf62ece5f4f7b73e`; [CI run 40204676870](https://github.com/YuzeJ21/Scope-Proof/actions/runs/40204676870) succeeded with 2,523 passed, 2 intentional skips, 95.06% coverage, and 5/5 packaged-browser checks |
 | 2026-10-25 observed main | `f586d90b72a14fd19d5a0add01f3d05532a88955`; integrity and portfolio draft work remains separate from the published v0.2.3 release |
 | Post-PR #193 resulting-main snapshot (2026-08-13) | PR #193 product-source baseline at `432371c4faec0b790f70fec32b4d3fc4d5132cfa` (PR head `8bb407079a0ff7098d2fc18af3d75b216725df2e`, base `9426e8714ffd2c3742bb074ae26fc788f1049c63`) |
