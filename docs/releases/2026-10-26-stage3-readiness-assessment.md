@@ -1,5 +1,12 @@
 # ScopeProof Stage 3 readiness assessment — 2026-10-26
 
+## 2026-10-27 owner direction
+
+The owner does not want to pursue qualifying participant reviews or personally test the product.
+This changes no historical count or engineering result. Stage 3 remains gated because genuine
+independent-use evidence is absent; automation cannot replace it. No participant outreach, beta,
+release, or deployment is authorized by this assessment.
+
 Assessment target: unreleased `0.2.4.dev0` source derived from verified main
 `36358146a5167270fff7e52769ae66ee8f56f2da`. The implementation commit and local check
 matrix are recorded in the matching [portfolio verification record](../portfolio/2026-10-26/verification.md);

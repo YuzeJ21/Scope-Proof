@@ -350,6 +350,11 @@ Status: gated by a separate owner decision after Stage 2 engineering evidence is
 The 2026-10-26 readiness assessment is an engineering review only. No genuine independent repeat
 use has been observed, so Stage 3 has not started.
 
+On 2026-10-27 the owner reaffirmed that qualifying participant reviews and personal product
+testing are not being pursued. Automated reviewers, browser journeys, and constructed cases must
+not stand in for independent use. Stage 3 therefore remains gated under the current direction;
+do not initiate outreach, a beta, or a release to manufacture progress.
+
 Stage 3 may define a bounded release candidate or beta only through a new owner-authorized plan.
 Owner-led productization cannot be presented as customer validation, and no release, tag, or
 publication is implied by Stage 2 progress.
