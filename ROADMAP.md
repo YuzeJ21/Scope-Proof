@@ -44,6 +44,11 @@ The [2026-10-28 browser maintenance investigation](docs/audits/2026-10-28-browse
 separates reproduced helper/download defects from the original missing-dropdown trigger, which
 remains unexplained. This is bounded maintenance, with no change to stage or release status.
 
+The [2026-10-28 CI maintenance slice](docs/audits/2026-10-28-ci-required-gate.md) addresses
+documented skipped-dependency gate risk and observed serial verification delay. The unchanged
+engineering workload runs independently; the final required `verify` check accepts only success
+from all five engineering lanes. This does not reduce verification or create a feature queue.
+
 <details>
 <summary>Release baseline and dated integration references</summary>
 
