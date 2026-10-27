@@ -466,8 +466,9 @@ The review status is **Action required** because must-have gaps remain.
 
 ## Verification
 
-The packaged-browser suite currently contains **seven checks: one full installed-wheel Chromium
-journey and six helper/capture checks**. The total is not a count of full end-to-end journeys.
+The packaged-browser suite currently contains **eleven checks: one full installed-wheel Chromium
+journey, four constructed Streamlit selection checks, and six helper/capture checks**. The total
+is not a count of full end-to-end journeys.
 These constructed engineering checks do not establish independent use or accessibility conformance.
 
 Run lint and all offline tests:

@@ -35,9 +35,14 @@ ScopeProof v0.2.3 is published. Public install: v0.2.3 is available from the
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
-moving-head ledger. Current browser coverage comprises seven checks: one full installed-wheel
-Chromium journey plus six helper/capture checks. Dated five-check CI results below remain
+moving-head ledger. Current browser coverage comprises eleven checks: one full installed-wheel
+Chromium journey, four constructed Streamlit selection checks, and six helper/capture checks.
+Dated five-check CI results below remain
 historical results, not current suite counts.
+
+The [2026-10-28 browser maintenance investigation](docs/audits/2026-10-28-browser-maintenance.md)
+separates reproduced helper/download defects from the original missing-dropdown trigger, which
+remains unexplained. This is bounded maintenance, with no change to stage or release status.
 
 <details>
 <summary>Release baseline and dated integration references</summary>

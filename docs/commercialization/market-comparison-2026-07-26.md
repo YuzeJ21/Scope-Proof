@@ -56,8 +56,9 @@ rate-limit, preview, or pricing descriptions are not carried forward as current 
 ## ScopeProof implementation and adoption limits
 
 CLI lifecycle parity is implemented. Bounded keyboard-only and visible-focus engineering evidence
-is implemented for the installed Chromium path. Current packaged-browser coverage comprises seven
-checks: one full installed-wheel Chromium journey and six helper/capture checks. This total is not
+is implemented for the installed Chromium path. Current packaged-browser coverage comprises eleven
+checks: one full installed-wheel Chromium journey, four constructed Streamlit selection checks,
+and six helper/capture checks. This total is not
 a count of full end-to-end journeys.
 These are engineering results, not accessibility conformance or independent use. Real screen-reader
 operation, Windows desktop, Linux desktop, non-Chromium behavior, and WCAG conformance remain

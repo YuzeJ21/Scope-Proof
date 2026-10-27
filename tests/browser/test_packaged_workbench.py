@@ -291,22 +291,17 @@ def _choose_combobox_option(
     settled_control: Locator | None = None,
 ) -> None:
     for attempt in range(3):
-        value_is_selected = combobox.input_value() == option_name
-        control_is_settled = (
-            settled_control is None or settled_control.is_enabled()
-        )
-        if value_is_selected and control_is_settled:
-            return
         try:
-            if value_is_selected:
-                _run_and_wait_for_streamlit_rerun(page, lambda: combobox.press("Tab"))
-                if settled_control is None or settled_control.is_enabled():
-                    return
-                combobox.fill("")
             combobox.click()
             combobox.fill(option_name)
             option = page.get_by_role("option", name=option_name, exact=True)
-            expect(option).to_be_visible(timeout=5_000)
+            option.wait_for(state="visible", timeout=5_000)
+            if option.get_attribute("aria-selected") == "true":
+                combobox.press("Tab")
+                expect(combobox).to_have_value(option_name, timeout=5_000)
+                if settled_control is not None:
+                    expect(settled_control).to_be_enabled(timeout=5_000)
+                return
             _run_and_wait_for_streamlit_rerun(
                 page,
                 lambda selected_option=option: selected_option.click(timeout=5_000),
@@ -453,6 +448,13 @@ def test_choose_combobox_option_retries_after_detached_option(
             self.control = control
             self.clicks = 0
 
+        def wait_for(self, *, state: str, timeout: int) -> None:
+            assert state == "visible"
+
+        def get_attribute(self, name: str) -> str:
+            assert name == "aria-selected"
+            return "false"
+
         def click(self, *, timeout: int | None = None) -> None:
             self.clicks += 1
             self.combobox.value = "junit-browser-review"
@@ -507,10 +509,141 @@ def test_choose_combobox_option_retries_after_detached_option(
     assert combobox.clicks == 2
     assert combobox.fills == [
         "junit-browser-review",
-        "",
         "junit-browser-review",
     ]
     assert control.enabled is True
+
+
+@pytest.fixture
+def selectbox_page(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[Page]:
+    if "browser" not in request.config.option.markexpr:
+        pytest.skip("run explicitly with -m browser after installing Playwright Chromium")
+    if os.name != "posix":
+        pytest.skip("fixture server cleanup requires POSIX process groups")
+    application = tmp_path / "selectbox_fixture.py"
+    application.write_text(
+        "import time\nimport streamlit as st\n"
+        "st.session_state['runs'] = st.session_state.get('runs', 0) + 1\n"
+        # Keep the constructed server run observable, like the larger workbench.
+        "time.sleep(0.15)\n"
+        "selected = st.selectbox('File scope decision', "
+        "['outside_confirmed_criteria', 'within_confirmed_criteria'], index=None, "
+        "format_func=lambda value: value.replace('_', ' ').title(), key='scope')\n"
+        "st.text(f'SERVER_SELECTION={selected}')\n"
+        "st.text(f'SERVER_RUN={st.session_state[\"runs\"]}')\n",
+        encoding="utf-8",
+    )
+    port = _available_port()
+    base_url = f"http://127.0.0.1:{port}"
+    log_path = tmp_path / "server.log"
+    environment = os.environ.copy()
+    environment["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    fixture_home = tmp_path / "home"
+    fixture_home.mkdir()
+    environment["HOME"] = str(fixture_home)
+    with log_path.open("w", encoding="utf-8") as log:
+        process = subprocess.Popen(
+            [
+                sys.executable, "-m", "streamlit", "run", str(application),
+                "--server.address=127.0.0.1", f"--server.port={port}",
+                "--server.headless=true", "--server.fileWatcherType=none",
+            ],
+            cwd=tmp_path, env=environment, stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True, text=True,
+        )
+    try:
+        _wait_until_healthy(base_url, process, log_path)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                context = browser.new_context()
+                external_requests: list[str] = []
+                context.route(
+                    "**/*", lambda route: _route_loopback_only(route, external_requests)
+                )
+                page = context.new_page()
+                page.goto(base_url, wait_until="domcontentloaded")
+                expect(page.get_by_text("SERVER_SELECTION=None", exact=True)).to_be_visible()
+                yield page
+                assert external_requests == []
+            finally:
+                browser.close()
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=10)
+
+
+@pytest.mark.parametrize("initial_state", ["query_only", "already_selected"])
+def test_choose_combobox_option_requires_committed_selection(
+    selectbox_page: Page, initial_state: str,
+) -> None:
+    page = selectbox_page
+    combobox = page.get_by_role("combobox", name="File scope decision", exact=True)
+    option_name = "Outside Confirmed Criteria"
+    combobox.click()
+    combobox.fill(option_name)
+    option = page.get_by_role("option", name=option_name, exact=True)
+    expect(option).to_have_attribute("aria-selected", "false")
+    if initial_state == "already_selected":
+        _run_and_wait_for_streamlit_rerun(page, option.click)
+        expect(
+            page.get_by_text("SERVER_SELECTION=outside_confirmed_criteria", exact=True)
+        ).to_be_visible()
+    else:
+        expect(page.get_by_text("SERVER_SELECTION=None", exact=True)).to_be_visible()
+
+    _choose_combobox_option(page, combobox, option_name=option_name)
+
+    expect(combobox).to_have_value(option_name, timeout=1_000)
+    expect(
+        page.get_by_text("SERVER_SELECTION=outside_confirmed_criteria", exact=True)
+    ).to_be_visible(timeout=1_000)
+    expect(page.get_by_text("SERVER_RUN=2", exact=True)).to_be_visible()
+
+
+def test_choose_combobox_option_recovers_after_constructed_dropdown_dismissal(
+    selectbox_page: Page, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = selectbox_page
+    combobox = page.get_by_role("combobox", name="File scope decision", exact=True)
+    original_fill = combobox.fill
+    dismissed = False
+
+    def fill_and_dismiss_once(value: str) -> None:
+        nonlocal dismissed
+        original_fill(value)
+        if not dismissed:
+            # A constructed loss of the popup, not the original CI race's cause.
+            combobox.press("Escape")
+            dismissed = True
+
+    monkeypatch.setattr(combobox, "fill", fill_and_dismiss_once)
+
+    _choose_combobox_option(page, combobox, option_name="Outside Confirmed Criteria")
+
+    expect(
+        page.get_by_text("SERVER_SELECTION=outside_confirmed_criteria", exact=True)
+    ).to_be_visible()
+    assert dismissed
+
+
+def test_choose_combobox_option_rejects_an_unavailable_matching_query(
+    selectbox_page: Page,
+) -> None:
+    page = selectbox_page
+    combobox = page.get_by_role("combobox", name="File scope decision", exact=True)
+    combobox.click()
+    combobox.fill("Unavailable decision")
+
+    with pytest.raises((AssertionError, PlaywrightTimeoutError)):
+        _choose_combobox_option(page, combobox, option_name="Unavailable decision")
+
+    expect(page.get_by_text("SERVER_SELECTION=None", exact=True)).to_be_visible()
 
 
 def test_download_with_retry_reissues_click_after_missed_event(
