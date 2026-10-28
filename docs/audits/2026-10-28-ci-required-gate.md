@@ -134,6 +134,15 @@ These repairs change test IDs and fault isolation only. Frozen R-002 inputs, lab
 runtime verifier behavior and storage behavior remain unchanged. The failed run is preserved;
 the repaired source requires a new exact-head run, not a same-head retry into a green claim.
 
+A broader check of the same fault-injection pattern found one additional unconditional global
+mock in the descriptor rehearsal-storage tests. Its original test failed under 9.2; the same
+module-local proxy and unrelated-descriptor probe repair it without changing the storage behavior
+or existing assertions. Candidate run 40618327039 at `79f948a` was cancelled after this local
+reproduction because that revision was known to need the follow-up repair; it is not passing
+evidence and was not merged. The final non-app selection under 9.2 passed 2,374 cases with eight
+intentional skips. The expanded locked selection passed 483 cases. App tests remain part of
+the mandatory fresh hosted full-suite run; no local non-app result substitutes for that gate.
+
 No product gate, criteria confirmation, reviewer decision, Pydantic review schema, rule/version,
 frozen R-002 input/result, external-evidence count, release asset or deployment is changed.
 The browser suite remains eleven checks, including one full installed-wheel journey. Stage 3
