@@ -83,6 +83,13 @@ checks dependencies and both CLI versions, runs both installed benchmarks, and r
 loopback workbench health before the required `verify` job. These Linux-runner checks are package
 and CLI evidence, not Linux desktop evidence.
 
+The five engineering lanes run independently. `engineering-validation` owns the Python 3.12
+coverage suite, lint, benchmarks, installed-wheel checks, and packaged-browser checks. The final
+required `verify` job uses `always()` and passes only when all five lanes explicitly report
+`success`; failed, cancelled, skipped, missing, or unexpected results cannot satisfy it. CodeQL
+remains a separate required check. This removes a dependency delay without reducing the checks;
+actual timing depends on runner availability and workload duration.
+
 A separate hosted Windows Python 3.12 lane imports the package, CLI, and both alpha-storage
 backends; runs the portable storage, process-concurrency, and no-clobber report regressions; builds
 and installs the wheel; checks dependencies and both CLI versions; and runs both installed

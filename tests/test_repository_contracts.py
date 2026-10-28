@@ -293,17 +293,19 @@ def test_python_312_ci_enforces_local_coverage_floor() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     gitignore = Path(".gitignore").read_text(encoding="utf-8")
     compatibility = workflow.split("  compatibility-python-311:", maxsplit=1)[1].split(
+        "\n  compatibility-python-313:", maxsplit=1
+    )[0]
+    engineering = workflow.split("\n  engineering-validation:", maxsplit=1)[1].split(
         "\n  verify:", maxsplit=1
     )[0]
-    verify = workflow.split("\n  verify:", maxsplit=1)[1]
 
     assert "pytest-cov>=6,<7" in dev_dependencies
     assert "python -m pytest -q" in compatibility
     assert "--cov" not in compatibility
-    assert "--cov=scopeproof_core" in verify
-    assert "--cov=apps" in verify
-    assert "--cov-report=term-missing:skip-covered" in verify
-    assert "--cov-fail-under=95" in verify
+    assert "--cov=scopeproof_core" in engineering
+    assert "--cov=apps" in engineering
+    assert "--cov-report=term-missing:skip-covered" in engineering
+    assert "--cov-fail-under=95" in engineering
     assert "codecov" not in workflow.lower()
     assert "coverage.xml" not in workflow
     assert ".coverage" in gitignore.splitlines()
@@ -458,7 +460,7 @@ def test_locked_development_environment_is_documented_and_verified() -> None:
     assert "python -m uv run scopeproof benchmark" in workflow
     assert (
         "needs: [compatibility-python-311, compatibility-python-313, "
-        "compatibility-windows, locked-environment]"
+        "compatibility-windows, locked-environment, engineering-validation]"
         in workflow
     )
     assert "[reproducible development environment](docs/development-environment.md)" in readme
@@ -513,7 +515,7 @@ def test_ci_builds_and_executes_installed_wheel() -> None:
 def test_ci_executes_comparison_benchmark_in_locked_and_installed_environments() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     locked = workflow.split("  locked-environment:", maxsplit=1)[1].split(
-        "\n  verify:", maxsplit=1
+        "\n  engineering-validation:", maxsplit=1
     )[0]
     installed_wheel = workflow.split("      - name: Installed wheel smoke", maxsplit=1)[1]
 
@@ -554,7 +556,9 @@ def test_packaged_browser_regression_is_dev_only_and_runs_after_wheel_smoke() ->
     dev_dependencies = config["project"]["optional-dependencies"]["dev"]
     markers = config["tool"]["pytest"]["ini_options"]["markers"]
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    verify = workflow.split("\n  verify:", maxsplit=1)[1]
+    engineering = workflow.split("\n  engineering-validation:", maxsplit=1)[1].split(
+        "\n  verify:", maxsplit=1
+    )[0]
 
     assert "playwright==1.62.0" in dev_dependencies
     assert [
@@ -564,9 +568,11 @@ def test_packaged_browser_regression_is_dev_only_and_runs_after_wheel_smoke() ->
     ] == ["1.62.0"]
     assert not any(dependency.startswith("playwright") for dependency in runtime_dependencies)
     assert "browser: installed-wheel real-browser regression" in markers
-    assert "python -m playwright install --with-deps chromium" in verify
-    assert "python -m pytest -q -m browser tests/browser" in verify
-    assert verify.index("Installed wheel smoke") < verify.index("Packaged browser regression")
+    assert "python -m playwright install --with-deps chromium" in engineering
+    assert "python -m pytest -q -m browser tests/browser" in engineering
+    assert engineering.index("Installed wheel smoke") < engineering.index(
+        "Packaged browser regression"
+    )
     browser_test = Path("tests/browser/test_packaged_workbench.py").read_text(
         encoding="utf-8"
     )
@@ -1496,7 +1502,7 @@ def test_ci_validates_declared_python_compatibility() -> None:
     assert "scopeproof comparison-benchmark" in windows_compatibility
     assert (
         "needs: [compatibility-python-311, compatibility-python-313, "
-        "compatibility-windows, locked-environment]"
+        "compatibility-windows, locked-environment, engineering-validation]"
         in verify
     )
 

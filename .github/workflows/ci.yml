@@ -168,14 +168,13 @@ jobs:
       - name: Sync locked environment
         run: python -m uv sync --extra dev --extra research --locked
       - name: Repository contracts
-        run: python -m uv run python -m pytest -q tests/test_repository_contracts.py
+        run: python -m uv run python -m pytest -q tests/test_repository_contracts.py tests/test_ci_gate.py
       - name: Deterministic benchmark
         run: python -m uv run scopeproof benchmark
       - name: Deterministic comparison benchmark
         run: python -m uv run scopeproof comparison-benchmark
 
-  verify:
-    needs: [compatibility-python-311, compatibility-python-313, compatibility-windows, locked-environment]
+  engineering-validation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -275,3 +274,32 @@ jobs:
           path: ${{ runner.temp }}/scopeproof-browser-diagnostics
           if-no-files-found: ignore
           retention-days: 7
+
+  verify:
+    name: verify
+    if: ${{ always() }}
+    needs: [compatibility-python-311, compatibility-python-313, compatibility-windows, locked-environment, engineering-validation]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every engineering lane to succeed
+        shell: bash
+        env:
+          PYTHON_311_RESULT: ${{ needs.compatibility-python-311.result }}
+          PYTHON_313_RESULT: ${{ needs.compatibility-python-313.result }}
+          WINDOWS_RESULT: ${{ needs.compatibility-windows.result }}
+          LOCKED_RESULT: ${{ needs.locked-environment.result }}
+          ENGINEERING_RESULT: ${{ needs.engineering-validation.result }}
+        run: |
+          for dependency in \
+            PYTHON_311_RESULT \
+            PYTHON_313_RESULT \
+            WINDOWS_RESULT \
+            LOCKED_RESULT \
+            ENGINEERING_RESULT; do
+            if [[ "${!dependency}" != "success" ]]; then
+              printf '::error::Required CI lane %s did not succeed\n' "$dependency"
+              exit 1
+            fi
+          done
+          printf '%s\n' 'All five engineering jobs succeeded.'

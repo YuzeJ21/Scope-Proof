@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from threading import Barrier
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -212,7 +213,15 @@ def test_descriptor_rehearsal_metadata_failure_preserves_ambiguous_temporary(
             raise OSError("simulated rehearsal metadata failure")
         return metadata
 
-    monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
+    monkeypatch.setattr(
+        rehearsal_storage_module,
+        "os",
+        SimpleNamespace(**(vars(os) | {"fstat": fail_regular_descriptor_metadata})),
+    )
+    probe = tmp_path / "unrelated.txt"
+    probe.write_bytes(b"probe")
+    with probe.open("rb") as handle:
+        assert os.fstat(handle.fileno()).st_size == 5
 
     with pytest.raises(OSError, match="rehearsal metadata failure"):
         JsonAlphaRehearsalStore(tmp_path).save(alpha_rehearsal())

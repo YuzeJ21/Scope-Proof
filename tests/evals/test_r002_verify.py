@@ -327,6 +327,7 @@ def test_bytes_subclass_cannot_spoof_verified_head_content(
             "TRACE_BYTES_REPLACE_SENTINEL",
         ),
     ],
+    ids=["throwing-length", "throwing-replace"],
 )
 def test_bytes_subclass_hooks_fail_closed_without_traceback_input(
     r002_case_manifest: R002CaseManifest,
