@@ -5,6 +5,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -854,7 +855,15 @@ def test_temporary_metadata_failure_preserves_ambiguous_temporary(
             raise OSError("simulated temporary metadata failure")
         return metadata
 
-    monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
+    monkeypatch.setattr(
+        atomic_files_module,
+        "os",
+        SimpleNamespace(**(vars(os) | {"fstat": fail_regular_descriptor_metadata})),
+    )
+    probe = tmp_path / "unrelated.txt"
+    probe.write_bytes(b"probe")
+    with probe.open("rb") as handle:
+        assert os.fstat(handle.fileno()).st_size == 5
 
     with pytest.raises(OSError, match="temporary metadata failure"):
         atomic_create_text(tmp_path / "record.json", "validated\n")
@@ -2502,7 +2511,15 @@ def test_claim_metadata_failure_preserves_ambiguous_claim_file(
             raise OSError("simulated claim metadata failure")
         return metadata
 
-    monkeypatch.setattr(os, "fstat", fail_regular_descriptor_metadata)
+    monkeypatch.setattr(
+        atomic_files_module,
+        "os",
+        SimpleNamespace(**(vars(os) | {"fstat": fail_regular_descriptor_metadata})),
+    )
+    probe = tmp_path / "unrelated.txt"
+    probe.write_bytes(b"probe")
+    with probe.open("rb") as handle:
+        assert os.fstat(handle.fileno()).st_size == 5
 
     with (
         pytest.raises(OSError, match="claim metadata failure"),

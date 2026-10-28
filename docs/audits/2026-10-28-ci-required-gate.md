@@ -101,6 +101,39 @@ actual hosted head. Compare hosted job start/end timestamps to establish overlap
 actual duration without attributing all variation to the graph change. The PR's verification
 record carries these integration and resulting-main run links after execution.
 
+### First hosted run and test-tool compatibility repair
+
+At initial head `7d143d2153992842bd13c8d421076164c034efe1`,
+[run 40617239996](https://github.com/YuzeJ21/Scope-Proof/actions/runs/40617239996) started all
+five engineering lanes at 2026-10-28 01:48:41 UTC, demonstrating the intended scheduling overlap.
+The unlocked lanes installed pytest 9.2.0, while the locked lane retained 9.1.1. That run failed;
+it is not successful performance evidence.
+
+Pytest 9.2's automatic byte-parameter naming called a deliberately throwing byte subclass's
+`__len__` during R-002 verifier test collection. The same error was reproduced locally with
+an isolated 9.2 overlay. Explicit IDs for the two existing adversarial cases avoid framework
+introspection while preserving the exact byte objects, sentinels and verifier assertions.
+The complete verifier module then passed under both versions: 104 cases each.
+
+Windows reported two storage-test failures from unconditional process-global `os.fstat` mocks.
+All four backend variants failed locally under 9.2. A full traceback confirmed pytest capture's
+`FDCapture.snap` called the patched function on its own output file. The two test injections now
+replace only the storage module's OS binding with a proxy; product code and real filesystem
+operations stay unchanged. Added unrelated-descriptor probes verify global file metadata access
+still works while the intended storage faults and ambiguous-file preservation assertions remain.
+The full verifier/storage selection passed under 9.2 (276 cases); the expanded locked selection
+passed 443 cases. The local older AnyIO plugin emits a pytest deprecation warning under the overlay;
+no dependency pin or runtime change was introduced to hide it.
+
+The final `verify` job actually ran after those upstream failures and exited 1 on the failed
+Python 3.11 result. Its check was failure, CodeQL was success, and the PR reported `BLOCKED`.
+No failing-head merge was attempted. This is observed hosted rejection, beyond the synthetic
+script cases, but still not exhaustive evidence for every cancellation ordering.
+
+These repairs change test IDs and fault isolation only. Frozen R-002 inputs, labels, results,
+runtime verifier behavior and storage behavior remain unchanged. The failed run is preserved;
+the repaired source requires a new exact-head run, not a same-head retry into a green claim.
+
 No product gate, criteria confirmation, reviewer decision, Pydantic review schema, rule/version,
 frozen R-002 input/result, external-evidence count, release asset or deployment is changed.
 The browser suite remains eleven checks, including one full installed-wheel journey. Stage 3

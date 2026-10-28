@@ -40,6 +40,8 @@ No new runtime dependency, human testing, qualifying review, publication, deploy
 - [ ] Add a final `verify` job with `always()`, exact five dependencies, and strict result checks.
 - [ ] Update existing job-bounded contracts to inspect the correct payload and aggregate.
 - [ ] Run gate/config tests, Ruff, actionlint, whitespace and deterministic benchmarks.
+- [ ] If current supported test tools expose a harness incompatibility, reproduce it and repair
+  only fixture naming or fault isolation; preserve assertions, dependencies and frozen inputs.
 
 ## Task 3: Review and integration
 
