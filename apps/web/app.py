@@ -2508,12 +2508,21 @@ else:
                 st.caption(
                     "An exact 40-character reviewed head is required before import."
                 )
+            st.caption(
+                f"JUnit XML payload limit: 1 MiB ({MAX_JUNIT_BYTES:,} bytes). "
+                "Larger files remain unsaved."
+            )
             uploaded_junit = st.file_uploader(
                 "Local JUnit XML artifact",
                 type=["xml"],
                 accept_multiple_files=False,
                 key=_junit_artifact_upload_key(),
-                max_upload_size=1,
+                # The frontend's MB can be decimal; the exact binary limit is checked below.
+                max_upload_size=2,
+                help=(
+                    "The upload control has a larger allowance so a full 1 MiB XML file "
+                    "can reach ScopeProof's exact size check."
+                ),
             )
             junit_importer = st.text_input(
                 "Asserted JUnit importer (required)", key="junit_importer"
