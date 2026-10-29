@@ -137,6 +137,8 @@ jobs:
           tests/alpha/test_storage.py::test_alpha_case_update_rejects_oversized_result_without_replacing_record
           tests/alpha/test_rehearsal_storage.py::test_rehearsal_load_rejects_one_byte_over_cap_on_both_backends
           tests/alpha/test_rehearsal_storage.py::test_rehearsal_save_rejects_oversized_record_before_creating_a_file
+      - name: Released-record upgrade regressions
+        run: python -m pytest -q tests/storage/test_released_v023_upgrade.py
       - name: Build and install wheel
         shell: pwsh
         run: |
