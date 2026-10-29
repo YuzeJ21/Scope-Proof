@@ -29,6 +29,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 ## Historical evidence records
 
+- [Covered-suite performance maintenance](audits/2026-10-29-verification-performance.md) records
+  the controlled timing/accounting comparison, CI-only scope and unchanged verification gates.
 - [v0.2.4 evaluation preparation](releases/v0.2.4-evaluation-candidate.md) preserves the candidate
   plan and version-bound upgrade guidance; its publication status is superseded by the record above.
 - [Native v0.2.3 → v0.2.4 upgrade rehearsal](research/2026-10-29-v023-v024-upgrade.md) preserves

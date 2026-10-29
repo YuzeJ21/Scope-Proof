@@ -11,6 +11,10 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5.dev0`, unreleased.
 
+- Reduce measured coverage overhead in the Python 3.12 CI job using a verified SysMonitor
+  collector, with real thread/subprocess accounting regressions and timing diagnostics. Preserve
+  the full suites, coverage targets, unrounded 95% floor and all required gates. This changes no
+  application behavior; see the [bounded maintenance record](docs/audits/2026-10-29-verification-performance.md).
 - Retain a native published-v0.2.3 saved-review fixture and offline upgrade regression after a
   successful constructed rehearsal with the published v0.2.4 reader. History and linked decisions
   survive while unknown changed-file scope prevents Ready. No engine or policy change was needed;
