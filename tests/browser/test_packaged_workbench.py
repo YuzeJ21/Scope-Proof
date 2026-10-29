@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import csv
+import io
+import json
 import os
 import re
 import shutil
@@ -833,6 +836,19 @@ def _exercise_primary_path(
         download = _download_with_retry(page, button_name="Download Markdown")
         assert download.suggested_filename.endswith(".md")
         assert b"head-demo-002" in download.path().read_bytes()
+
+        csv_download = _download_with_retry(page, button_name="Download CSV")
+        assert csv_download.suggested_filename.endswith(".csv")
+        csv_rows = list(csv.DictReader(io.StringIO(
+            csv_download.path().read_text(encoding="utf-8")
+        )))
+        assert len(csv_rows) == 4
+        for row in csv_rows:
+            assert row["head_sha"] == "head-demo-002"
+            assert row["review_status"] == "Action required"
+            assert "blocking_criteria" in json.loads(row["gate_reason_codes"])
+            assert json.loads(row["gate_blocking_criteria"]) == ["AC-02", "AC-03"]
+            assert json.loads(row["gate_guidance"])
 
         page.get_by_text("Resume a saved review", exact=True).click()
         expect(page.get_by_text(re.compile(r"saved local reviews? found"))).to_be_visible()

@@ -362,6 +362,13 @@ can contain multiple values (`ingestion_warnings`, `skipped_files`, `evidence_li
 arrays inside their CSV cells so delimiters in repository or reviewer text do not destroy
 provenance.
 
+On the unreleased `0.2.4.dev0` source line, every CSV criterion row also carries the review-level
+`gate_reason_codes`, `gate_blocking_criteria`, `gate_conditional_criteria`,
+`gate_unresolved_criteria`, `gate_resolved_exceptions`, and `gate_guidance` as JSON arrays.
+These appended columns preserve the reason and next action when a row is filtered or shared;
+for example, accepted criterion decisions can still require final acceptance. They explain the
+existing validated gate and do not change a decision or establish correctness.
+
 Anonymous public-repository access is the default. `--token` is optional and can increase GitHub's
 free rate limit, but it is not required or persisted. The CLI never comments on the pull request,
 executes its code, or converts static candidates into runtime verification.

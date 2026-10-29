@@ -985,6 +985,18 @@ def export_csv(bundle: ExportableReview) -> str:
         "junit_parser_warnings",
         "junit_limitations",
     ]
+    gate_context = {
+        name: json.dumps(values, ensure_ascii=False)
+        for name, values in {
+            "gate_reason_codes": bundle.gate.reason_codes,
+            "gate_blocking_criteria": bundle.gate.blocking_criteria,
+            "gate_conditional_criteria": bundle.gate.conditional_criteria,
+            "gate_unresolved_criteria": bundle.gate.unresolved_criteria,
+            "gate_resolved_exceptions": bundle.gate.resolved_exceptions,
+            "gate_guidance": gate_guidance(bundle.gate),
+        }.items()
+    }
+    fieldnames.extend(gate_context)
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
     writer.writeheader()
@@ -1200,6 +1212,7 @@ def export_csv(bundle: ExportableReview) -> str:
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
+                **gate_context,
             }
         )
     return output.getvalue()

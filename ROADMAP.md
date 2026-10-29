@@ -49,6 +49,12 @@ documented skipped-dependency gate risk and observed serial verification delay. 
 engineering workload runs independently; the final required `verify` check accepts only success
 from all five engineering lanes. This does not reduce verification or create a feature queue.
 
+The owner-authorized [CSV decision-handoff slice](docs/superpowers/specs/2026-10-29-csv-decision-handoff-design.md)
+addresses a reproduced product gap: CSV previously omitted the review-level reason and next action
+when accepted criteria still required final acceptance. Six appended JSON-array columns preserve
+the existing gate context on each criterion row. This is an unreleased source capability and
+engineering evidence only; it does not advance Stage 3 or change the published v0.2.3 package.
+
 <details>
 <summary>Release baseline and dated integration references</summary>
 
