@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -1027,6 +1029,47 @@ def test_export_command_reads_saved_review_without_credentials(tmp_path: Path, c
     output = capsys.readouterr().out
     assert "ScopeProof Acceptance Review" in output
     assert "ghp_" not in output
+
+
+def test_csv_export_preserves_review_level_final_acceptance_blocker(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    state = new_review_state(build_demo_review())
+    assert state.bundle is not None
+    for criterion in state.bundle.criteria:
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                reviewer="Constructed CSV CLI actor",
+                comment="Constructed explicit acceptance; not independent-use evidence.",
+            ),
+        )
+    JsonReviewStore(storage).save(state)
+    record = storage / f"{state.review.review_id}.json"
+    saved_bytes = record.read_bytes()
+    arguments = [
+        "export", state.review.review_id, "--storage-dir", str(storage), "--format", "csv"
+    ]
+    assert main(arguments) == 0
+
+    captured = capsys.readouterr()
+    rows = list(csv.DictReader(io.StringIO(captured.out)))
+    assert len(rows) == 4
+    assert {row["head_sha"] for row in rows} == {"head-demo-002"}
+    assert {row["human_decision"] for row in rows} == {"accepted"}
+    assert {row["review_status"] for row in rows} == {"Review incomplete"}
+    for row in rows:
+        assert json.loads(row["gate_reason_codes"]) == ["final_acceptance_required"]
+        assert json.loads(row["gate_unresolved_criteria"]) == []
+        assert json.loads(row["gate_guidance"]) == [
+            "Record final acceptance only after a reviewer has reviewed every criterion and "
+            "its evidence."
+        ]
+    assert record.read_bytes() == saved_bytes
+    assert captured.err == ""
 
 
 def test_export_command_supports_self_contained_html(tmp_path: Path, capsys) -> None:
