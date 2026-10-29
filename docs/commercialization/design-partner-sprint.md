@@ -5,11 +5,22 @@ required for owner-led Stage 2 productization, not customer validation, and not 
 No paid product or billing is active.
 
 Stage 1 is `closed_not_pursued_by_owner`; it did not pass and all recorded counts remain zero.
-Stage 2 is `owner_led_productization_active`. Neither status supplies a participant, customer,
+Stage 2 is `owner_led_productization_active` with bounded maintenance of the engineering reference
+product. Stage 3 remains dormant and gated. Neither status supplies a participant, customer,
 demand, adoption, repeat-use, price, or paid-demand signal.
 
-ScopeProof v0.2.3 can run the documented local public-PR workflow. That implemented capability is
-engineering evidence, not proof of product value.
+The maintained source/package candidate is v0.2.4. The published download remains v0.2.3 until
+[GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases) contains a matching v0.2.4 release
+with its wheel, source archive, and checksums. See the
+[evaluation candidate notes](../releases/v0.2.4-evaluation-candidate.md) and
+[current quickstart](../../README.md#quickstart) for installation and upgrade boundaries. The
+implemented local public-PR workflow is engineering evidence, not proof of product value.
+
+Downloading or evaluating the package requires no personal testing, qualifying review, or
+participant feedback. For ordinary reproducible problems, use the
+[sanitized defect form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=defect.yml).
+Report security concerns through [private vulnerability reporting](https://github.com/YuzeJ21/Scope-Proof/security/advisories/new).
+Neither reporting path activates discovery.
 
 ## Optional discovery activation gate
 

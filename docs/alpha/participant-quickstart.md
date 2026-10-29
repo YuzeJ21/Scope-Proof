@@ -1,4 +1,32 @@
-# Public-alpha participant quickstart
+# Evaluation setup and historical public-alpha participant path
+
+The source/package candidate is **v0.2.4**. Public install remains **v0.2.3** until a matching
+[GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases) contains the v0.2.4 wheel, source
+archive, and `SHA256SUMS.txt`. Use the [current evaluation quickstart](../../README.md#quickstart)
+for conditional v0.2.4 installation, checksum verification, supported environments, and saved-record
+v5 upgrade guidance. Before publication, use the published v0.2.3 release or explicitly choose the
+[current source setup](../development-environment.md); candidate CLI commands are not v0.2.3
+wheel instructions.
+
+No personal testing, public case, qualifying review, or participant feedback is required to
+download and evaluate ScopeProof. Start a local Standard review or the deliberately constructed
+demo. Installation, benchmarks, and demo results are engineering evidence only; ScopeProof is an
+evidence assistant, not a correctness oracle. Confirm normalized criteria before analysis; target
+repository code is never executed. Use public sources only and never enter private code, customer
+data, secrets, or confidential material. An optional session-only GitHub token belongs only in the
+local token control and must never appear in a report.
+
+For an ordinary problem, use the [sanitized defect form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=defect.yml)
+with the version or commit, minimal safe steps, expected behavior, and actual behavior. Report
+security concerns through [private vulnerability reporting](https://github.com/YuzeJ21/Scope-Proof/security/advisories/new)
+and follow the [security policy](../../SECURITY.md).
+
+Stage 1 is closed as not pursued with every external count at zero. Stage 3 is dormant and gated.
+The participant path below is an archive of the published v0.2.3 workflow, not a current invitation
+or an evaluation-download requirement. Optional external discovery requires separate owner
+authorization under the [design-partner protocol](../commercialization/design-partner-sprint.md).
+
+## Archived v0.2.3 public-alpha participant quickstart
 
 This archived ten-minute path describes the published v0.2.3 participant workflow. Stage 1 is
 closed as not pursued; it is not a current invitation to participate. It was written for a product
@@ -13,7 +41,7 @@ https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
 The form is the only public-alpha intake. If it is not appropriate to submit a genuine public case,
 use Standard review instead; do not treat a technical smoke or constructed example as alpha use.
 
-## Install once
+### Install once
 
 The commands below are the v0.2.3 post-publication install path. First check the
 GitHub Releases page: https://github.com/YuzeJ21/Scope-Proof/releases.
@@ -33,7 +61,7 @@ Installation and benchmark success are setup evidence only. Stage 1 is closed as
 this setup creates no external-evidence credit. It does not establish correctness, customer
 validation, or target-repository runtime verification.
 
-## Ten-minute path
+### Ten-minute path
 
 1. **Minute 1 — qualify the case.** Confirm the PR and requirements source are public, you have
    authority to confirm the criteria, and no confidential information is involved.
@@ -61,7 +89,7 @@ validation, or target-repository runtime verification.
 If the PR, criteria authority, public source, or confidentiality boundary cannot be confirmed, stop
 the alpha session. A constructed demo or technical smoke is not participant validation.
 
-## Optional post-review external feedback
+### Optional post-review external feedback
 
 After saving the review and recording the participant-selected outcome, read the
 [30-day Design Partner Sprint](../commercialization/design-partner-sprint.md). A completed

@@ -14,7 +14,8 @@ target closed unmet when the owner chose not to pursue Stage 1.
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
 Current direction: maintain a bounded engineering reference product. Public install remains
-**v0.2.3**; source is **unreleased `0.2.4.dev0`**. Stage 1 is closed as not pursued with all external
+**v0.2.3** until GitHub Releases publishes v0.2.4 with its matching wheel, source archive, and checksums;
+source/package identity is the **v0.2.4 evaluation candidate**. Stage 1 is closed as not pursued with all external
 counts at zero; Stage 3 is dormant and gated. Stage 2 work requires a demonstrated defect, required
 upkeep, or a named bounded research question. Once that work and its checks are complete, stop;
 there is no standing feature backlog or request for personal testing or qualifying reviews.
@@ -130,8 +131,8 @@ evidence count still at zero. The
 [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
 records the product-tree engineering evidence and remaining gaps.
 
-The repository's current source line is the unreleased development version `0.2.4.dev0`; it is
-not a replacement release asset. Post-v0.2.3 engineering merged CLI lifecycle commands, strict
+The repository's current source/package identity is the v0.2.4 evaluation candidate; it is
+not a published replacement release asset. Post-v0.2.3 engineering merged CLI lifecycle commands, strict
 saved-record validation, installed Chromium coverage, Python 3.13 and bounded keyboard/focus
 evidence, and verified-public provenance enforcement. Those changes remain engineering evidence
 only. The public install continues to be the immutable v0.2.3 release, and Stage 1 remains closed
@@ -145,65 +146,72 @@ only explicit success as passing.
 
 ## Quickstart
 
-Python 3.11 or newer is required.
+Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
+for the tested Python versions, platform limits, and contributor setup.
 
-The commands below are the v0.2.3 post-publication install path and do not
-require cloning the repository. First check the GitHub Releases page:
-https://github.com/YuzeJ21/Scope-Proof/releases.
+**Public install remains v0.2.3 until a matching v0.2.4 GitHub Release and its exact assets exist.**
+Check [GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases) first. A source version,
+changelog entry, private candidate, or passing CI run is not publication evidence. Use the
+[published v0.2.3 release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.3) while v0.2.4
+is unavailable; candidate CLI features below require the current source or the v0.2.4 wheel once published.
 
-Use the v0.2.3 asset URLs only when the GitHub Releases page shows v0.2.3 with `scopeproof-0.2.3-py3-none-any.whl` and `SHA256SUMS.txt`; otherwise, do not use an unpublished branch or candidate.
-Release publication and its exact-tree checks are engineering evidence only;
-they do not establish correctness, customer validation, or Stage 1 progress.
-
-See the
-[v0.2.3 status and next-stage audit](docs/releases/v0.2.3-status-and-next-stages.md)
-for the implemented feature ledger, current gaps, and owner-led Stage 2 roadmap.
-The [documentation map](docs/README.md) separates current operating documents from historical
-evidence snapshots.
+The commands below are the **conditional v0.2.4 post-publication install path** and require no
+clone. Use these URLs only when GitHub Releases shows v0.2.4 with
+`scopeproof-0.2.4-py3-none-any.whl`, `scopeproof-0.2.4.tar.gz`, and `SHA256SUMS.txt`.
+See the [v0.2.4 evaluation candidate notes](docs/releases/v0.2.4-evaluation-candidate.md) for
+release boundaries and upgrade guidance. The [documentation map](docs/README.md) separates
+current guidance from historical observations. No personal testing or qualifying review is
+required to download or evaluate the package.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install \
-  https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3/scopeproof-0.2.3-py3-none-any.whl
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4/scopeproof-0.2.4-py3-none-any.whl
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4/SHA256SUMS.txt
+```
+
+Select the wheel entry from the published manifest and use the command for your platform:
+
+```bash
+# macOS
+grep " scopeproof-0.2.4-py3-none-any.whl$" SHA256SUMS.txt | shasum -a 256 -c -
+
+# Linux
+grep " scopeproof-0.2.4-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
+```
+
+Continue only after the checksum check succeeds:
+
+```bash
+python -m pip install ./scopeproof-0.2.4-py3-none-any.whl
+scopeproof --version
 scopeproof benchmark
 scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
-To verify the release bytes before installation, download the wheel and its checksum:
+A matching checksum verifies the downloaded bytes against the published manifest; it does not
+provide code-signing or product-correctness assurance. The offline benchmark checks the installed package
+and bundled constructed regression corpus. It is engineering evidence, not runtime evidence for
+a target pull request or customer validation. Stop the local workbench with `Ctrl+C`.
 
-```bash
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3/scopeproof-0.2.3-py3-none-any.whl
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3/SHA256SUMS.txt
-```
+### Upgrade existing reviews
 
-Select the wheel entry from the published manifest, use the command for your platform, then install
-the verified local file:
-
-```bash
-# macOS
-grep " scopeproof-0.2.3-py3-none-any.whl$" SHA256SUMS.txt | shasum -a 256 -c -
-
-# Linux
-grep " scopeproof-0.2.3-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
-
-python -m pip install ./scopeproof-0.2.3-py3-none-any.whl
-```
-
-A matching checksum verifies the downloaded bytes against the digest published with this release.
-It does not provide code-signing or product-correctness assurance.
-
-The offline benchmark verifies that the installed package and bundled regression corpus execute.
-It is not runtime evidence for any pull request. `scopeproof-web` starts the packaged local
-workbench; stop it with `Ctrl+C`. Continue with the public-PR CLI workflow below to review
-reviewer-confirmed criteria against a real public PR.
+The v0.2.4 candidate writes saved-record format **v5**. Back up local review storage and retain
+any exported reports before upgrading. Pre-v5 records are conservatively reassessed: missing
+criteria-source provenance, verified-public metadata, or exact-head changed-file inventory is not
+invented, and prior acceptance may require renewed confirmation or analysis. Historical engine
+identity and candidate-selection counts remain unknown when absent. Reopening a record does not
+establish current-head correctness. Compatibility with older versions after saving in v0.2.4 is
+not promised; see the [candidate upgrade notes](docs/releases/v0.2.4-evaluation-candidate.md).
 
 ### Public PR CLI workflow
 
-The commands below describe the unreleased `0.2.4.dev0` source workflow; they are not instructions
-for the published v0.2.3 wheel. Run them from a current source checkout with its development
-environment installed (`uv sync`). The CLI provides read-only public-PR ingestion and a
-deterministic core without starting Streamlit.
+The commands below describe the v0.2.4 candidate CLI. They apply to its installed wheel once
+published, or to the current source checkout after the
+[locked source setup](docs/development-environment.md); they do not apply to the published v0.2.3
+wheel. The examples use the installed `scopeproof` command. In a source checkout, prefix it with
+`uv run`. The CLI provides read-only public-PR ingestion and a deterministic core without
+starting Streamlit.
 Live ingestion labels a review public only when GitHub returns matching, unambiguous repository
 metadata (`private: false` and `visibility: public`). A token-accessible private repository and
 missing, malformed, or contradictory visibility metadata fail closed before review data is saved.
@@ -216,18 +224,18 @@ correctness. Every retained line is therefore reviewer-confirmed criteria, not c
 or approved by ScopeProof.
 
 ```bash
-uv run scopeproof prepare-requirements-confirmation \
+scopeproof prepare-requirements-confirmation \
   --requirements requirements.txt \
   --source-uri https://github.com/OWNER/REPOSITORY/blob/FULL_SHA/path/to/requirements.txt \
   --source-revision FULL_SHA \
   --confirmed-by "Requirements owner or authorized role" \
   --output requirements-confirmation.json
 
-uv run scopeproof validate-requirements-confirmation \
+scopeproof validate-requirements-confirmation \
   --requirements requirements.txt \
   --confirmation requirements-confirmation.json
 
-uv run scopeproof review --pr https://github.com/OWNER/REPOSITORY/pull/123 \
+scopeproof review --pr https://github.com/OWNER/REPOSITORY/pull/123 \
   --requirements requirements.txt \
   --confirmation requirements-confirmation.json \
   --storage-dir .scopeproof/reviews \
@@ -301,7 +309,7 @@ partial and cannot be waived through `scope-file`. Old saved reviews without a v
 remain Needs Review and require a new exact-head analysis. File decisions do not prove tests ran or
 that the implementation is correct.
 
-Current `0.2.4.dev0` source can also inspect and append one bounded local JUnit XML artifact
+The v0.2.4 candidate can also inspect and append one bounded local JUnit XML artifact
 without executing target-repository code. First inspect the sanitized scope IDs:
 
 ```bash
@@ -362,14 +370,14 @@ can contain multiple values (`ingestion_warnings`, `skipped_files`, `evidence_li
 arrays inside their CSV cells so delimiters in repository or reviewer text do not destroy
 provenance.
 
-On the unreleased `0.2.4.dev0` source line, every CSV criterion row also carries the review-level
+In the v0.2.4 candidate, every CSV criterion row also carries the review-level
 `gate_reason_codes`, `gate_blocking_criteria`, `gate_conditional_criteria`,
 `gate_unresolved_criteria`, `gate_resolved_exceptions`, and `gate_guidance` as JSON arrays.
 These appended columns preserve the reason and next action when a row is filtered or shared;
 for example, accepted criterion decisions can still require final acceptance. They explain the
 existing validated gate and do not change a decision or establish correctness.
 
-Unreleased source analyses also record `eligible_candidate_count`, `candidate_limit`, and
+New v0.2.4 analyses also record `eligible_candidate_count`, `candidate_limit`, and
 `omitted_candidate_count` in retrieval diagnostics. The workbench and human-readable reports
 explain how many passing matches were shown or omitted during the existing bounded selection;
 JSON and CSV retain the validated counts. The limit remains eight, and identical duplicates may
@@ -589,26 +597,26 @@ and separate owner gates for later stages. The [changelog](CHANGELOG.md) summari
 development line and links to authoritative published release notes. Neither document turns
 engineering work into customer evidence or human acceptance.
 
-Standard reviews create no research record. To volunteer genuine feedback, submit the inbound
-public-alpha case form before starting locally:
-
-https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml
-
-Then explicitly enable the **Alpha feedback session** and follow the
-[public-alpha participant quickstart](docs/alpha/participant-quickstart.md).
-Qualification and consent stay local and off by
-default; the constructed demo never counts as participant validation.
+Standard reviews create no research record. Evaluation downloads do not require personal testing,
+a public case, a qualifying review, or participant feedback. Report a reproducible problem through
+the [sanitized defect form](https://github.com/YuzeJ21/Scope-Proof/issues/new?template=defect.yml),
+including the version or commit, minimal steps, and expected and actual behavior. Remove private
+code, tokens, customer data, and confidential material. Report security concerns through
+[GitHub private vulnerability reporting](https://github.com/YuzeJ21/Scope-Proof/security/advisories/new),
+following the [security policy](SECURITY.md).
 
 ScopeProof is an acceptance-coverage assistant, not an AI code reviewer. Stage 1 is closed as not
-pursued (`closed_not_pursued_by_owner`); owner-led Stage 2 productization is active without
-claiming customer validation. The optional **free design-partner review** is public-repository-only. No paid product
-or billing is active. External commercial discovery is optional and separate from productization;
-the public feedback form contains no pricing question. The
-[30-day commercial-validation guide](docs/commercialization/design-partner-sprint.md) defines the
-inbound workflow, evidence gates, stop rules, and capabilities that remain deferred. The
-[market-positioning research](docs/commercialization/market-positioning-hypotheses.md) compares
-adjacent traceability, test-management, and code-review workflows and records only hypotheses that
-still require genuine participant evidence.
+pursued (`closed_not_pursued_by_owner`) with all external counts at zero; owner-led Stage 2 remains
+bounded maintenance. Stage 3 is dormant and gated. The
+[public-alpha participant quickstart](docs/alpha/participant-quickstart.md) preserves the historical alpha path;
+the [optional design-partner protocol](docs/commercialization/design-partner-sprint.md) remains
+inactive until separately authorized. In that archived or separately authorized participant path,
+**Alpha feedback session** remains an explicit local opt-in under research options; Standard reviews
+create no research record. Only a completed genuine review with a participant-selected outcome can
+supply participant evidence; incomplete reviews earn no completed-review credit. No outreach,
+recruitment, paid product, billing, or customer validation follows from this evaluation release. The
+[market-positioning research](docs/commercialization/market-positioning-hypotheses.md) records
+hypotheses that still require genuine participant evidence.
 
 The [launch evidence matrix](docs/launch/evidence-matrix.md) and archived LinkedIn preparation in
 the [draft](docs/launch/linkedin-draft.md) and
