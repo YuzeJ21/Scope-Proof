@@ -1310,6 +1310,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "coverage" },
     { name = "playwright" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -1321,6 +1322,7 @@ research = [
 
 [package.metadata]
 requires-dist = [
+    { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.15.2,<8" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "playwright", marker = "extra == 'dev'", specifier = "==1.62.0" },
     { name = "pyarrow", marker = "extra == 'research'", specifier = "==26.0.0" },

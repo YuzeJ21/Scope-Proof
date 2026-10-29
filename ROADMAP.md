@@ -19,9 +19,11 @@ binds those results to release source `11bcdc66f7d8f5a29055688208de1ed337eed07f`
 Current source is unreleased `0.2.5.dev0`. The [native saved-review upgrade rehearsal](docs/research/2026-10-29-v023-v024-upgrade.md)
 verified one constructed published-v0.2.3 writer → published-v0.2.4 reader history: original
 facts and linked decisions survived, while missing changed-file inventory correctly changed
-both old Ready gates to Needs review. It required no product fix or policy change. Preserve
-the published assets and return to bounded maintenance after this regression/evidence slice,
-review and required checks. This is evaluation distribution, not a
+both old Ready gates to Needs review. That question is closed and required no product fix or
+policy change. The [covered-suite maintenance record](docs/audits/2026-10-29-verification-performance.md)
+addresses observed verification delay with a measured CI-only engine change, unchanged coverage
+accounting and all existing gates. Preserve the published assets and return to bounded maintenance
+after its review and required checks. This is evaluation distribution, not a
 Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
 

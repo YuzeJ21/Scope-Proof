@@ -24,7 +24,7 @@ jobs:
       - name: Install
         run: python -m pip install -e '.[dev,research]'
       - name: Test
-        run: python -m pytest -q
+        run: python -m pytest -q --durations=40 --durations-min=0.5
       - name: Deterministic benchmark
         run: python -m scopeproof_core.evals.runner
       - name: Installed wheel compatibility smoke
@@ -53,7 +53,7 @@ jobs:
       - name: Install
         run: python -m pip install -e '.[dev,research]'
       - name: Test
-        run: python -m pytest -q
+        run: python -m pytest -q --durations=40 --durations-min=0.5
       - name: Deterministic benchmarks
         run: |
           python -m scopeproof_core.evals.runner
@@ -139,6 +139,8 @@ jobs:
           tests/alpha/test_rehearsal_storage.py::test_rehearsal_save_rejects_oversized_record_before_creating_a_file
       - name: Released-record upgrade regressions
         run: python -m pytest -q tests/storage/test_released_v023_upgrade.py
+      - name: Coverage accounting compatibility
+        run: python -m pytest -q tests/test_coverage_accounting.py
       - name: Build and install wheel
         shell: pwsh
         run: |
@@ -178,6 +180,8 @@ jobs:
 
   engineering-validation:
     runs-on: ubuntu-latest
+    env:
+      COVERAGE_CORE: sysmon
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -192,6 +196,21 @@ jobs:
         run: python -m pip install -e '.[dev,research]'
       - name: Lint
         run: python -m ruff check .
+      - name: Verify coverage engine
+        run: |
+          python - <<'PY'
+          import coverage
+
+          observed = coverage.Coverage(source=["scopeproof_core", "apps"])
+          observed.start()
+          try:
+              core = observed._collector.tracer_name()
+              if core != "SysMonitor":
+                  raise SystemExit(f"Expected SysMonitor coverage core, observed {core}")
+              print(f"Coverage {coverage.__version__}: observed {core}")
+          finally:
+              observed.stop()
+          PY
       - name: Test
         run: >-
           python -m pytest
@@ -199,6 +218,8 @@ jobs:
           --cov=apps
           --cov-report=term-missing:skip-covered
           --cov-fail-under=95
+          --durations=40
+          --durations-min=0.5
           -q
       - name: Enforce unrounded coverage floor
         run: |
