@@ -23,6 +23,7 @@ from scopeproof_core.schemas.models import (
 )
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
+_CANDIDATE_LIMIT = 8
 _STOP_WORDS = {
     "a",
     "all",
@@ -226,7 +227,7 @@ def retrieve_evidence_with_diagnostics(
         for match in matches:
             if match not in selected_matches:
                 selected_matches.append(match)
-            if len(selected_matches) == 8:
+            if len(selected_matches) == _CANDIDATE_LIMIT:
                 break
 
         for index, (
@@ -239,7 +240,7 @@ def retrieve_evidence_with_diagnostics(
             source_scope,
             commit_sha,
         ) in enumerate(
-            selected_matches[:8], start=1
+            selected_matches[:_CANDIDATE_LIMIT], start=1
         ):
             kind = _evidence_type(changed_file)
             level = EvidenceLevel.E2 if kind is EvidenceType.TEST else EvidenceLevel.E1
@@ -272,7 +273,7 @@ def retrieve_evidence_with_diagnostics(
                 )
             )
 
-        accepted_candidate_count = len(selected_matches[:8])
+        accepted_candidate_count = len(selected_matches[:_CANDIDATE_LIMIT])
         if accepted_candidate_count:
             outcome = RetrievalOutcome.CANDIDATES_FOUND
         elif not criterion_terms:
@@ -301,6 +302,9 @@ def retrieve_evidence_with_diagnostics(
                 term_overlap_line_count=term_overlap_line_count,
                 below_threshold_line_count=below_threshold_line_count,
                 accepted_candidate_count=accepted_candidate_count,
+                eligible_candidate_count=len(matches),
+                candidate_limit=_CANDIDATE_LIMIT,
+                omitted_candidate_count=len(matches) - accepted_candidate_count,
             )
         )
 

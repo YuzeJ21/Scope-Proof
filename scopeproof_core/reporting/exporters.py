@@ -16,6 +16,7 @@ from scopeproof_core.gates.validation import (
     validated_review_state,
 )
 from scopeproof_core.presentation import (
+    candidate_selection_text,
     criterion_coverage_rows,
     evidence_status_text,
     review_status_label,
@@ -174,6 +175,7 @@ def _retrieval_diagnostic_markdown(
             f"{diagnostic.below_threshold_line_count} below threshold; "
             f"{diagnostic.accepted_candidate_count} accepted candidates."
         ),
+        f"- Candidate selection: {candidate_selection_text(diagnostic)}",
         _RETRIEVAL_BOUNDARY,
     ]
 
@@ -217,6 +219,7 @@ def _retrieval_diagnostic_html(
             f"{diagnostic.term_overlap_line_count} term-overlap lines; "
             f"{diagnostic.below_threshold_line_count} below threshold; "
             f"{diagnostic.accepted_candidate_count} accepted candidates.</li>",
+            f"<li>Candidate selection: {html.escape(candidate_selection_text(diagnostic))}</li>",
             "</ul>",
             f'<p class="note">{html.escape(_RETRIEVAL_BOUNDARY)}</p>',
         ]

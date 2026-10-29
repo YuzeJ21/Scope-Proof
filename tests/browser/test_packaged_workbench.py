@@ -35,6 +35,7 @@ from playwright.sync_api import (
 )
 
 from scopeproof_core.schemas.models import JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
+from tests.candidate_selection_fixture import selection_criteria, selection_snapshot
 
 pytestmark = pytest.mark.browser
 
@@ -899,6 +900,39 @@ def _exercise_primary_path(
     assert page.evaluate("document.body.scrollWidth <= window.innerWidth")
 
 
+def _exercise_selection_completeness(page: Page, base_url: str) -> None:
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.get_by_text("Resume a saved review", exact=True).click()
+    saved_review = page.get_by_role("combobox", name="Saved review ID", exact=True)
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    _choose_combobox_option(
+        page, saved_review, option_name="selection-browser-review", settled_control=reopen
+    )
+    reopen.click()
+    expect(page.get_by_text(
+        "8 of 12 candidates passing search filters shown; "
+        "4 omitted during selection (limit: 8).", exact=True,
+    )).to_be_visible()
+    for label, report_format in (("Download CSV", "csv"), ("Download JSON", "json")):
+        download = _download_with_retry(page, button_name=label)
+        contents = download.path().read_text(encoding="utf-8")
+        if report_format == "csv":
+            row = next(csv.DictReader(io.StringIO(contents)))
+            diagnostic = json.loads(row["retrieval_diagnostic"])
+            assert row["head_sha"] == "a" * 40
+            assert row["verdict"] == "needs_review"
+        else:
+            report = json.loads(contents)
+            bundle = report.get("bundle", report)
+            diagnostic = bundle["retrieval_diagnostics"][0]
+            assert bundle["review"]["head_sha"] == "a" * 40
+            assert len(bundle["evidence"]) == 8
+        assert diagnostic["eligible_candidate_count"] == 12
+        assert diagnostic["accepted_candidate_count"] == 8
+        assert diagnostic["candidate_limit"] == 8
+        assert diagnostic["omitted_candidate_count"] == 4
+
+
 def _exercise_junit_import_round_trip(
     page: Page,
     base_url: str,
@@ -1101,6 +1135,34 @@ def test_installed_wheel_primary_path_in_chromium(
     _run(str(environment_python), "-c", "import playwright, scopeproof_core, streamlit")
 
     review_store_dir = home_dir / ".scopeproof" / "reviews"
+    selection_snapshot_path = runtime_dir / "constructed-selection-snapshot.json"
+    selection_snapshot_path.write_text(selection_snapshot().model_dump_json(), encoding="utf-8")
+    selection_labels_path = runtime_dir / "constructed-selection-labels.json"
+    selection_labels_path.write_text(json.dumps({
+        "fixture": "constructed-candidate-selection",
+        "deliberately_constructed_demo": True,
+        "source_text": "Export CSV",
+        "criteria": [item.model_dump(mode="json") for item in selection_criteria()],
+        "criteria_confirmed": True,
+        "resolutions": [],
+    }), encoding="utf-8")
+    _run(
+        str(environment_python), "-c",
+        (
+            "from pathlib import Path; import sys; "
+            "from scopeproof_core.demo import build_review_from_paths; "
+            "from scopeproof_core.reviews.lifecycle import new_review_state; "
+            "from scopeproof_core.storage.json_store import JsonReviewStore; "
+            "import scopeproof_core; "
+            "assert Path(scopeproof_core.__file__).resolve().is_relative_to("
+            "Path(sys.prefix).resolve()); "
+            "bundle=build_review_from_paths(Path(sys.argv[2]),Path(sys.argv[3])); "
+            "bundle.review.review_id='selection-browser-review'; "
+            "JsonReviewStore(Path(sys.argv[1])).save(new_review_state(bundle))"
+        ),
+        str(review_store_dir), str(selection_snapshot_path), str(selection_labels_path),
+        cwd=runtime_dir,
+    )
     _run(
         str(environment_python),
         "-c",
@@ -1206,6 +1268,7 @@ def test_installed_wheel_primary_path_in_chromium(
                             ),
                         )
                         if viewport_index == 0:
+                            _exercise_selection_completeness(page, base_url)
                             _exercise_junit_import_round_trip(
                                 page,
                                 base_url,
