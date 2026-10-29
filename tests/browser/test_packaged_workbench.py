@@ -1095,7 +1095,10 @@ def _exercise_junit_upload_byte_boundary(page: Page, artifact_directory: Path) -
     exact = artifact_directory / "exact-one-mib.xml"
     exact.write_bytes(payload)
     _run_and_wait_for_streamlit_rerun(page, lambda: uploader.set_input_files(exact))
-    expect(page.get_by_text("Sanitized JUnit preview", exact=True)).to_be_visible()
+    preview = page.get_by_text("Sanitized JUnit preview", exact=True)
+    if not preview.is_visible():
+        page.get_by_text("Import external JUnit results", exact=True).click()
+    expect(preview).to_be_visible()
     expect(page.get_by_text(
         "Computed results: 1 total · 1 passed · 0 failed · 0 errors · 0 skipped", exact=True
     )).to_be_visible()
@@ -1103,10 +1106,13 @@ def _exercise_junit_upload_byte_boundary(page: Page, artifact_directory: Path) -
     oversized = artifact_directory / "one-byte-over.xml"
     oversized.write_bytes(payload + b" ")
     _run_and_wait_for_streamlit_rerun(page, lambda: uploader.set_input_files(oversized))
-    expect(page.get_by_text(
+    rejection = page.get_by_text(
         "JUnit artifact could not be inspected. It exceeds the local "
         "import byte limit and remains unsaved.", exact=True
-    )).to_be_visible()
+    )
+    if not rejection.is_visible():
+        page.get_by_text("Import external JUnit results", exact=True).click()
+    expect(rejection).to_be_visible()
     expect(page.get_by_text("Sanitized JUnit preview", exact=True)).to_have_count(0)
     expect(page.get_by_role(
         "button", name="Save imported JUnit results", exact=True
