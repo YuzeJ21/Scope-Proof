@@ -184,7 +184,7 @@ grep " scopeproof-0.2.4-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
 Continue only after the checksum check succeeds:
 
 ```bash
-python -m pip install ./scopeproof-0.2.4-py3-none-any.whl "streamlit>=1.66.1,<2" "Pillow>=13,<14"
+python -m pip install ./scopeproof-0.2.4-py3-none-any.whl "pydantic>=2.13.4,<3" "streamlit>=1.66.1,<2" "Pillow>=13,<14"
 python -m pip check
 scopeproof --version
 scopeproof benchmark
@@ -200,6 +200,8 @@ The explicit dependency constraints follow the current maintained UI baseline. T
 Streamlit API minimum is not a promise that every permitted resolution satisfies current patch
 guidance. In the [dated dependency assessment](docs/audits/2026-10-29-runtime-dependency-floor.md),
 Streamlit 1.53.0 required Pillow below 13 and could not use the documented patched Pillow baseline.
+Pydantic 2.8.0 passed the smaller package journeys but failed existing R-002 strict JSON validation
+tests; the guidance uses the locked Pydantic baseline instead of promising full floor compatibility.
 The published wheel and its checksum remain unchanged; the constraints select its dependencies.
 
 ### Upgrade existing reviews

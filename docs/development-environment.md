@@ -118,8 +118,12 @@ new R-002 run must be reported as a new engineering observation. The historical 
 Streamlit 1.53 or newer because that release first combined click-time deferred download generation
 with a per-widget upload allowance. That lower bound alone is not a current patch-policy support
 promise: a fresh exact-1.53.0 install selected Pillow 12.3.0, and its `pillow<13` requirement conflicts
-with the maintained Pillow baseline. For public v0.2.4, follow the README's explicit
-`streamlit>=1.66.1,<2` and `Pillow>=13,<14` install constraints. The locked contributor environment
+with the maintained Pillow baseline. The broader Python 3.11 source suite also found 55 existing
+R-002 validation failures with Pydantic 2.8.0; canonical JSON containing criterion enums was rejected
+by strict revalidation. This predates the upload repair and remains a declared-minimum compatibility
+limit, not a change to frozen research. For public v0.2.4, follow the README's explicit
+`pydantic>=2.13.4,<3`, `streamlit>=1.66.1,<2` and `Pillow>=13,<14` install constraints. The locked
+contributor environment
 is reproducible; those ranges do not establish that every later combination has been verified.
 
 The [dated dependency and upload assessment](audits/2026-10-29-runtime-dependency-floor.md)
