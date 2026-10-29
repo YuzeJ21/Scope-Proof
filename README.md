@@ -184,7 +184,8 @@ grep " scopeproof-0.2.4-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
 Continue only after the checksum check succeeds:
 
 ```bash
-python -m pip install ./scopeproof-0.2.4-py3-none-any.whl
+python -m pip install ./scopeproof-0.2.4-py3-none-any.whl "streamlit>=1.66.1,<2" "Pillow>=13,<14"
+python -m pip check
 scopeproof --version
 scopeproof benchmark
 scopeproof-web --host 127.0.0.1 --port 8501
@@ -194,6 +195,12 @@ A matching checksum verifies the downloaded bytes against the published manifest
 provide code-signing or product-correctness assurance. The offline benchmark checks the installed package
 and bundled constructed regression corpus. It is engineering evidence, not runtime evidence for
 a target pull request or customer validation. Stop the local workbench with `Ctrl+C`.
+
+The explicit dependency constraints follow the current maintained UI baseline. The wheel's older
+Streamlit API minimum is not a promise that every permitted resolution satisfies current patch
+guidance. In the [dated dependency assessment](docs/audits/2026-10-29-runtime-dependency-floor.md),
+Streamlit 1.53.0 required Pillow below 13 and could not use the documented patched Pillow baseline.
+The published wheel and its checksum remain unchanged; the constraints select its dependencies.
 
 ### Upgrade existing reviews
 
@@ -340,7 +347,11 @@ scopeproof import-junit REVIEW_ID results.xml \
 
 The adapter accepts at most 1 MiB, 100 suites, 5,000 cases, and 20,000 XML elements. Each review
 can retain at most 20 imports, and each retained warning or asserted limitation is capped at 1,000
-characters. It accepts UTF-8 only and rejects DTDs, entities, non-declaration processing
+characters. The byte cap is exactly 1,048,576 bytes. In published v0.2.4, the browser upload control
+can reject a valid file at that exact cap on non-Windows browsers; use `inspect-junit` and
+`import-junit` above for the full byte range. The unreleased `0.2.5.dev0` source fixes the upload
+allowance while preserving the exact parser cap; see the [version-bound reproduction](docs/audits/2026-10-29-runtime-dependency-floor.md).
+The adapter accepts UTF-8 only and rejects DTDs, entities, non-declaration processing
 instructions, XInclude, remote references, unsupported nesting, and ambiguous result markers. It
 stores computed statuses,
 stable local scope IDs, the artifact SHA-256, exact review and criteria provenance, explicit

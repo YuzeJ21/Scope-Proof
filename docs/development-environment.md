@@ -114,9 +114,22 @@ The checked-in lock now resolves Streamlit 1.66.1 and Pillow 13.0.0. Pillow 13.0
 patched version reported for the current Pillow advisories. Streamlit 1.66.1 permits Pillow 13 but
 excludes PyArrow 25.0.0, so the optional research extra moves to PyArrow 26.0.0. This changes the
 development environment, not the frozen R-002 source artifacts, labels, or recorded result; any
-new R-002 run must be reported as a new engineering observation. ScopeProof requires
+new R-002 run must be reported as a new engineering observation. The historical API minimum is
 Streamlit 1.53 or newer because that release first combined click-time deferred download generation
-with the per-widget upload limit used to keep JUnit artifacts at exactly 1 MiB while allowing
-multipart transport overhead. Streamlit 1.57.0 previously exposed a testing-interface regression,
+with a per-widget upload allowance. That lower bound alone is not a current patch-policy support
+promise: a fresh exact-1.53.0 install selected Pillow 12.3.0, and its `pillow<13` requirement conflicts
+with the maintained Pillow baseline. For public v0.2.4, follow the README's explicit
+`streamlit>=1.66.1,<2` and `Pillow>=13,<14` install constraints. The locked contributor environment
+is reproducible; those ranges do not establish that every later combination has been verified.
+
+The [dated dependency and upload assessment](audits/2026-10-29-runtime-dependency-floor.md)
+separates installed-package results from an older-Streamlit browser-helper mismatch. It also
+records a reproduced upload-boundary defect in published v0.2.4. The unreleased source uses a
+bounded 2 MB widget allowance so the exact 1 MiB (1,048,576-byte) payload reaches the existing
+application size check. Larger payloads are rejected before reading or parsing; the allowance is
+not the import limit. Public v0.2.4 retains the defect and has the CLI workaround documented in
+the README. No package metadata, lock or published asset changed in that repair.
+
+Streamlit 1.57.0 previously exposed a testing-interface regression,
 so the lock is the reproducible baseline rather than a claim that every allowed version behaves
 identically. CI also installs the newest allowed versions in compatibility and verification lanes.

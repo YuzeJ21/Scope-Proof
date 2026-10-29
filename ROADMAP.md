@@ -22,8 +22,15 @@ facts and linked decisions survived, while missing changed-file inventory correc
 both old Ready gates to Needs review. That question is closed and required no product fix or
 policy change. The [covered-suite maintenance record](docs/audits/2026-10-29-verification-performance.md)
 addresses observed verification delay with a measured CI-only engine change, unchanged coverage
-accounting and all existing gates. Preserve the published assets and return to bounded maintenance
-after its review and required checks. This is evaluation distribution, not a
+accounting and all existing gates. That CI-only question is closed by merged PR #218. The
+[dependency-floor assessment](docs/audits/2026-10-29-runtime-dependency-floor.md) then found that
+the historical Streamlit minimum cannot use the maintained Pillow baseline, and reproduced a
+separate browser upload defect at exactly 1 MiB. Current install guidance names the maintained
+dependency constraints. One narrow unreleased-source repair lets the full-size artifact reach the
+unchanged fail-closed parser limit, with unit and installed-browser regressions. The older-stack
+browser observation remains partial because its saved-review selector differs from the current
+test helper; it is not a full compatibility pass. Preserve the published assets and return to
+bounded maintenance after this repair's reviewed passing integration. This is evaluation distribution, not a
 Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
 
