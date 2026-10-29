@@ -9,7 +9,14 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 release.
+No subsequent changes recorded.
+
+## 0.2.4 — Downloadable evaluation candidate
+
+Source/package identity: `0.2.4`. This entry prepares a downloadable evaluation release; it does
+not publish it. Public install remains v0.2.3 until a matching v0.2.4 GitHub Release with its
+wheel, source archive, and `SHA256SUMS.txt` exists. See the
+[candidate notes and upgrade guidance](docs/releases/v0.2.4-evaluation-candidate.md).
 
 ### Product strategy
 
@@ -24,6 +31,24 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
 
 ### Post-release engineering
 
+- Repaired packaged-browser selection synchronization to require a committed dropdown selection,
+  with bounded rerun waits and constructed regression cases; deferred workbench downloads now
+  avoid unnecessary reruns ([PR #211](https://github.com/YuzeJ21/Scope-Proof/pull/211)). The
+  constructed dismissal case is not proof of the original intermittent failure's cause.
+- Required every one of the five parallel CI lanes to report explicit success before the final
+  `verify` gate can pass; failed, cancelled, skipped, missing, or unexpected results fail closed.
+  CodeQL remains separate ([PR #212](https://github.com/YuzeJ21/Scope-Proof/pull/212)).
+- Appended validated review-level gate reasons, blocking/conditional/unresolved criteria, resolved
+  exceptions, and next-action guidance to every CSV criterion row as JSON arrays. Existing
+  spreadsheet-formula neutralization remains in place; these columns explain the gate without
+  changing it ([PR #213](https://github.com/YuzeJ21/Scope-Proof/pull/213)).
+- Disclosed eligible, shown, and omitted candidate counts for the existing bounded selection in
+  the workbench and reports. Persisted diagnostics retain `eligible_candidate_count`,
+  `candidate_limit`, and `omitted_candidate_count`; historical missing counts remain unknown,
+  never zero. The limit remains eight and selection behavior is unchanged
+  ([PR #214](https://github.com/YuzeJ21/Scope-Proof/pull/214)).
+- Documented saved-record format v5 and conservative pre-v5 reassessment, with backups and export
+  retention recommended before upgrading and no downgrade-compatibility promise.
 - Capture an optional, validated core Python source fingerprint for new analyses and expose it in
   exports. Preserve unknown historical identity; a newly attached analysis updates only its active
   producer metadata while retaining archived identities. Declare ruleset `2.0.0` for the
@@ -31,7 +56,7 @@ Development version: `0.2.4.dev0`. Public install remains the immutable v0.2.3 r
   not a dependency/environment fingerprint, signature, or execution attestation.
 - Preserve trace, screenshot, accessibility snapshot, and server log on a failed constructed
   packaged-browser journey, with failure-only CI artifact upload. The earlier intermittent
-  dropdown failure remains unexplained; selection and retry behavior are unchanged.
+  dropdown failure was subsequently addressed in the bounded browser synchronization repair above.
 - Added a bounded, local JUnit XML adapter that accepts bytes only, rejects unsafe or over-limit
   structures, persists only sanitized exact-head/provenance-bound results, and requires explicit
   human criterion mapping. Imported results remain external non-gating context: they never become

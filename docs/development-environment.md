@@ -1,7 +1,10 @@
 # Reproducible development environment
 
-The public install remains v0.2.3; the current repository source is the unreleased `0.2.4.dev0`
-development line. Python 3.11, Python 3.12, and Python 3.13 have current package/CLI engineering
+The public install remains v0.2.3 at preparation time; the current repository source/package
+version is the `0.2.4` evaluation candidate. Consult the
+[candidate guide](releases/v0.2.4-evaluation-candidate.md) and GitHub Releases for availability;
+a final version string does not establish publication. Python 3.11, Python 3.12, and Python 3.13
+have current package/CLI engineering
 coverage. Python 3.11 is the declared floor, Python 3.12 is the locked contributor baseline, and
 Python 3.13 is exercised in protected compatibility CI and a genuine local interpreter check.
 Python 3.14 is unverified pending a clean, genuine compatibility run; the current `>=3.11`

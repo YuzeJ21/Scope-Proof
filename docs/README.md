@@ -4,13 +4,17 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: bounded maintenance of an engineering reference product. v0.2.3 remains the
-published install; `0.2.4.dev0` is unreleased. Stage 1 is closed at zero; Stage 3 is dormant and
-gated. Begin with the roadmap's finish line before starting any new slice.
+Current direction: prepare the v0.2.4 downloadable evaluation candidate, then return to bounded
+maintenance of the engineering reference product. Source/package identity is `0.2.4`; v0.2.3
+remains the published baseline until GitHub Releases provides v0.2.4 assets. Stage 1 is closed
+at zero; Stage 3 is dormant and gated. No personal testing or qualifying reviews are required
+for evaluation distribution. Begin with the roadmap's finish line before starting any new slice.
 
 ## Current operating documents
 
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
+- [v0.2.4 evaluation candidate](releases/v0.2.4-evaluation-candidate.md) — conditional availability,
+  changes, upgrade limits, exact-main verification and remaining publication steps.
 - [v0.2.3 status and next stages](releases/v0.2.3-status-and-next-stages.md) — published-release
   boundary, current development line, feature ledger, gaps, and stage status.
 - [Stage 2 productization packet](commercialization/stage2-readiness-packet.md) — authorized

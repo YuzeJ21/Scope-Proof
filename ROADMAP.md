@@ -13,6 +13,15 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current operating decision
 
+Prepare the **v0.2.4 downloadable evaluation release** as a bounded distribution task.
+The source/package version is `0.2.4`; treat it as a candidate until the GitHub Release record
+provides the matching assets. v0.2.3 remains the published baseline at preparation time.
+The [candidate and upgrade guide](docs/releases/v0.2.4-evaluation-candidate.md) defines the
+release-alignment PR, exact-main package verification, and separately authorized publication
+and public re-download checks. This is evaluation distribution, not a Stage 3 beta.
+No personal testing or qualifying reviews are required for this distribution task. Stop after
+the reviewed merge and private candidate packet; do not tag, publish or deploy under this task.
+
 Maintain the confirmed-criteria → exact-head candidate evidence → missing evidence → reviewer
 decisions → re-review workflow. Its usefulness and primary-operator hypothesis (engineer or
 technical QA reviewer, with a PM or requirements owner receiving the report) remain unvalidated.
@@ -63,7 +72,11 @@ exports without changing retrieval, gate decisions, frozen research or stage sta
 <details>
 <summary>Release baseline and dated integration references</summary>
 
-| Area | Current state |
+The rows below preserve dated integration and pre-v0.2.4 preparation snapshots. Their source
+versions and availability statements are historical; use the candidate guide and GitHub Releases
+for the current source identity and publication availability.
+
+| Area | Snapshot state |
 |---|---|
 | Published install | v0.2.3 GitHub Release with wheel, source archive, and checksum manifest |
 | Active source line | Unreleased `0.2.4.dev0`; no v0.2.4 release, tag, or package publication exists |

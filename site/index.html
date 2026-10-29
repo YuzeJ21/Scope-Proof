@@ -18,7 +18,7 @@
       <nav aria-label="Primary navigation">
         <a href="#workflow">Workflow</a>
         <a href="#demo">Demo</a>
-        <a href="#alpha">Public alpha</a>
+        <a href="#alpha">Evaluation</a>
       </nav>
     </header>
 
@@ -29,9 +29,10 @@
           <h1 id="hero-title">Review acceptance coverage before merge</h1>
           <p class="lede">ScopeProof shows which confirmed acceptance criteria have credible implementation or test candidates—and which still need human review.</p>
           <div class="actions">
-            <a class="button button-primary" href="https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.3">Download v0.2.3</a>
+            <a class="button button-primary" href="https://github.com/YuzeJ21/Scope-Proof/releases">View evaluation releases</a>
             <a class="button button-secondary" href="https://github.com/YuzeJ21/Scope-Proof">View the repository</a>
           </div>
+          <p class="disclosure">Source candidate: v0.2.4. The published download remains v0.2.3 until a matching v0.2.4 GitHub Release includes its wheel, source archive, and checksums. No personal testing or qualifying review is required to evaluate a download.</p>
           <p class="boundary">Evidence assistant, not a correctness oracle. ScopeProof does not execute pull-request code, replace QA, or turn static evidence into runtime verification.</p>
         </div>
         <div class="hero-visual">
@@ -69,23 +70,24 @@
 
       <section id="alpha" class="section alpha-section" aria-labelledby="alpha-title">
         <div>
-          <p class="eyebrow">Optional free design-partner review</p>
-          <h2 id="alpha-title">Bring one genuine public PR</h2>
-          <p>ScopeProof is an acceptance-coverage assistant, not an AI code reviewer or correctness oracle. Stage 1 is closed as not pursued, with every external-evidence count at zero. Owner-led Stage 2 productization is active without claiming customer validation. This optional free design-partner review is public-repository-only. No paid product or billing is active. External commercial discovery is optional and separate from productization; the public feedback form contains no pricing question.</p>
-          <p>Product managers, QA practitioners, and engineers must own or be directly authorized to confirm the public acceptance criteria. Completed-review outcomes are a useful previously unknown gap, already-known information, or material product friction. Incomplete reviews do not become completed feedback outcomes.</p>
-          <p class="metric-boundary">Likes, views, stars, impressions, and downloads are not product validation. Owner activity and submissions without completed participant-selected outcomes also do not count.</p>
+          <p class="eyebrow">Bounded evaluation</p>
+          <h2 id="alpha-title">Evaluate locally; report a reproducible problem</h2>
+          <p>ScopeProof is an acceptance-coverage assistant, not an AI code reviewer or correctness oracle. Stage 1 is closed as not pursued, with every external-evidence count at zero. Owner-led Stage 2 maintains a bounded engineering reference product. Stage 3 is dormant and gated. No paid product or billing is active.</p>
+          <p>Evaluation downloads require no public case, qualifying review, or participant feedback. Optional design-partner discovery remains inactive until separately authorized; a download does not authorize outreach or establish customer validation.</p>
+          <p class="metric-boundary">Likes, views, stars, impressions, downloads, constructed demos, and automated checks are not product validation.</p>
+          <p>In the <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md">archived or separately authorized participant path</a>, genuine feedback requires a completed review and a participant-selected outcome: a useful previously unknown gap, already-known information, or material product friction. Incomplete reviews receive no completed-review credit. Alpha feedback remains an explicit local opt-in; Standard reviews create no research record.</p>
         </div>
         <div class="alpha-actions">
-          <a class="button button-primary alpha-actions-primary" href="https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml">Submit a public alpha case</a>
-          <a class="button button-secondary alpha-actions-secondary" href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md">Open the ten-minute quickstart</a>
-          <div class="alpha-actions-resources" aria-label="Public alpha resources">
-            <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/public-pr-qualification-checklist.md">Check whether your PR qualifies</a>
+          <a class="button button-primary alpha-actions-primary" href="https://github.com/YuzeJ21/Scope-Proof/issues/new?template=defect.yml">Report a reproducible defect</a>
+          <a class="button button-secondary alpha-actions-secondary" href="https://github.com/YuzeJ21/Scope-Proof/blob/main/README.md#quickstart">Open the evaluation quickstart</a>
+          <div class="alpha-actions-resources" aria-label="Evaluation resources">
+            <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/development-environment.md">Supported environment and limits</a>
             <span aria-hidden="true">·</span>
-            <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/commercialization/design-partner-sprint.md">Read the research and stop gates</a>
+            <a href="https://github.com/YuzeJ21/Scope-Proof/security/advisories/new">Report a security concern privately</a>
             <span aria-hidden="true">·</span>
-            <a href="https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml">Post-review: share a completed review outcome</a>
+            <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/commercialization/design-partner-sprint.md">Read the optional discovery gates</a>
           </div>
-          <p>The case form is the only inbound intake. Use the feedback form only after a genuine review. Submit no private code, credentials, customer data, private links, or confidential information.</p>
+          <p>Include the version or commit, minimal reproduction, and expected and actual behavior. Submit no private code, credentials, customer data, private links, or confidential information. Use private vulnerability reporting for security concerns.</p>
         </div>
       </section>
     </main>

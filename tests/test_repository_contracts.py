@@ -27,11 +27,13 @@ from scopeproof_core.version import __version__
 
 PUBLIC_RELEASE_VERSION = "0.2.3"
 PUBLIC_RELEASE_TAG = "v0.2.3"
-DEVELOPMENT_VERSION = "0.2.4.dev0"
+SOURCE_VERSION = "0.2.4"
 PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.3-py3-none-any.whl"
-PUBLIC_RELEASE_DOWNLOAD_ROOT = (
-    "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
-)
+PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
+TARGET_RELEASE_VERSION = "0.2.4"
+TARGET_RELEASE_TAG = "v0.2.4"
+TARGET_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.4-py3-none-any.whl"
+TARGET_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4"
 PUBLIC_RELEASES_INDEX = "https://github.com/YuzeJ21/Scope-Proof/releases"
 PR183_SOURCE_MERGE_SHA = "cd362a85a558645a0f56d6540f6bf035e5821809"
 PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
@@ -604,7 +606,7 @@ def test_public_product_surfaces_use_reviewer_first_vocabulary() -> None:
 def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
+    assert f"{TARGET_RELEASE_DOWNLOAD_ROOT}/{TARGET_RELEASE_WHEEL_FILENAME}" in readme
     assert "scopeproof benchmark" in readme
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in readme
     assert "## Contributor setup" in readme
@@ -616,19 +618,17 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
 def test_readme_documents_optional_release_checksum_verification() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
-    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/SHA256SUMS.txt" in readme
+    assert f"{TARGET_RELEASE_DOWNLOAD_ROOT}/{TARGET_RELEASE_WHEEL_FILENAME}" in readme
+    assert f"{TARGET_RELEASE_DOWNLOAD_ROOT}/SHA256SUMS.txt" in readme
     assert (
-        f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | '
-        "shasum -a 256 -c -"
+        f'grep " {TARGET_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | shasum -a 256 -c -'
     ) in readme
-    assert (
-        f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | '
-        "sha256sum -c -"
-    ) in readme
-    assert f"{PUBLIC_RELEASE_WHEEL_FILENAME}.sha256" not in readme
-    assert f"python -m pip install ./{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
-    assert "does not provide code-signing or product-correctness assurance" in readme
+    assert (f'grep " {TARGET_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | sha256sum -c -') in readme
+    assert f"{TARGET_RELEASE_WHEEL_FILENAME}.sha256" not in readme
+    assert f"python -m pip install ./{TARGET_RELEASE_WHEEL_FILENAME}" in readme
+    assert "does not provide code-signing or product-correctness assurance" in " ".join(
+        readme.split()
+    )
 
 
 def test_project_exposes_web_launcher_without_coupling_core_to_ui() -> None:
@@ -657,7 +657,7 @@ def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy()
     }
     assert config["server"]["maxUploadSize"] == 2
     assert "):focus-visible" in app
-    assert "[data-testid=\"stAppViewContainer\"]" in app
+    assert '[data-testid="stAppViewContainer"]' in app
     assert "@media (prefers-reduced-motion: reduce)" in app
     assert "alpha-actions-primary" in site
     assert "alpha-actions-secondary" in site
@@ -669,17 +669,20 @@ def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy()
         "alpha-actions-resources",
     ):
         assert f".{action_class} {{ order:" not in css
-    alpha_urls = {
-        "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml",
-        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md",
-        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/public-pr-qualification-checklist.md",
+    evaluation_urls = {
+        "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=defect.yml",
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/README.md#quickstart",
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/development-environment.md",
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/commercialization/design-partner-sprint.md",
-        "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-feedback.yml",
+        "https://github.com/YuzeJ21/Scope-Proof/security/advisories/new",
     }
-    assert alpha_urls.issubset(parser.links)
-    assert "Submit a public alpha case" in site
-    assert "Open the ten-minute quickstart" in site
-    assert "Post-review: share a completed review outcome" in site
+    assert evaluation_urls.issubset(parser.links)
+    assert "Report a reproducible defect" in site
+    assert "Open the evaluation quickstart" in site
+    assert (
+        "Evaluation downloads require no public case, qualifying review, or participant feedback"
+        in site
+    )
     assert (
         "Submit no private code, credentials, customer data, private links, or confidential "
         "information."
@@ -693,17 +696,24 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
     assert config["project"]["dynamic"] == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "scopeproof_core/version.py"
-    assert f'__version__ = "{DEVELOPMENT_VERSION}"' in version_source
+    assert f'__version__ = "{SOURCE_VERSION}"' in version_source
 
 
-def _assert_published_version_matches_repository(
-    *, repository: Path, current_version: str
-) -> None:
+def _assert_published_version_matches_repository(*, repository: Path, current_version: str) -> None:
     published_final_tags = {PUBLIC_RELEASE_VERSION: PUBLIC_RELEASE_TAG}
+    candidate_tag_exists = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{TARGET_RELEASE_TAG}^{{commit}}"],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+    )
+    assert candidate_tag_exists.returncode in {0, 1}, "Git could not inspect the candidate tag"
+    if candidate_tag_exists.returncode == 0:
+        published_final_tags[TARGET_RELEASE_VERSION] = TARGET_RELEASE_TAG
     published_tag = published_final_tags.get(current_version)
 
     if published_tag is None:
-        assert current_version == DEVELOPMENT_VERSION
+        assert current_version == SOURCE_VERSION
         return
 
     current_tree = subprocess.run(
@@ -799,7 +809,10 @@ def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
     )
 
 
-def test_published_final_contract_rejects_dirty_tracked_tree(tmp_path: Path) -> None:
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4"])
+def test_published_final_contract_rejects_dirty_tracked_tree(
+    tmp_path: Path, final_version: str
+) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
@@ -817,17 +830,20 @@ def test_published_final_contract_rejects_dirty_tracked_tree(tmp_path: Path) -> 
     tracked.write_text("published\n", encoding="utf-8")
     subprocess.run(["git", "add", "versioned.txt"], cwd=repository, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
-    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", f"v{final_version}"], cwd=repository, check=True)
     tracked.write_text("different package bytes\n", encoding="utf-8")
 
     with pytest.raises(AssertionError, match="tracked working tree differs"):
         _assert_published_version_matches_repository(
             repository=repository,
-            current_version="0.2.3",
+            current_version=final_version,
         )
 
 
-def test_published_final_contract_rejects_untracked_package_input(tmp_path: Path) -> None:
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4"])
+def test_published_final_contract_rejects_untracked_package_input(
+    tmp_path: Path, final_version: str
+) -> None:
     repository = tmp_path / "repository"
     package = repository / "scopeproof_core"
     package.mkdir(parents=True)
@@ -845,7 +861,7 @@ def test_published_final_contract_rejects_untracked_package_input(tmp_path: Path
     (package / "__init__.py").write_text("published = True\n", encoding="utf-8")
     subprocess.run(["git", "add", "scopeproof_core"], cwd=repository, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
-    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", f"v{final_version}"], cwd=repository, check=True)
     (repository / ".coverage 2").write_text("preserve me\n", encoding="utf-8")
     untracked_package_input = package / "untracked_probe.py"
     untracked_package_input.write_text("different_package_bytes = True\n", encoding="utf-8")
@@ -853,15 +869,17 @@ def test_published_final_contract_rejects_untracked_package_input(tmp_path: Path
     with pytest.raises(AssertionError, match="untracked package inputs") as error:
         _assert_published_version_matches_repository(
             repository=repository,
-            current_version="0.2.3",
+            current_version=final_version,
         )
 
     assert "scopeproof_core/untracked_probe.py" in str(error.value)
     assert ".coverage 2" not in str(error.value)
 
 
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4"])
 def test_published_final_contract_rejects_ignored_force_included_input(
     tmp_path: Path,
+    final_version: str,
 ) -> None:
     repository = tmp_path / "repository"
     force_included = repository / "evals"
@@ -885,14 +903,14 @@ def test_published_final_contract_rejects_ignored_force_included_input(
     (force_included / "README.md").write_text("published\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=repository, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
-    subprocess.run(["git", "tag", "v0.2.3"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", f"v{final_version}"], cwd=repository, check=True)
     ignored_package_input = force_included / "probe.pyc"
     ignored_package_input.write_bytes(b"different package bytes\n")
 
     with pytest.raises(AssertionError, match="untracked package inputs") as error:
         _assert_published_version_matches_repository(
             repository=repository,
-            current_version="0.2.3",
+            current_version=final_version,
         )
 
     assert "evals/probe.pyc" in str(error.value)
@@ -1551,15 +1569,15 @@ def test_changelog_points_to_authoritative_release_history() -> None:
     assert "does not reconstruct" in changelog
 
 
-def test_unreleased_ledger_records_post_v023_engineering_without_stage_credit() -> None:
+def test_v024_candidate_ledger_records_post_v023_engineering_without_stage_credit() -> None:
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    unreleased = changelog.split("## Unreleased", maxsplit=1)[1].split(
-        "## 0.2.3", maxsplit=1
-    )[0]
+    unreleased = changelog.split("## 0.2.4 — Downloadable evaluation candidate", maxsplit=1)[
+        1
+    ].split("## 0.2.3", maxsplit=1)[0]
     normalized_unreleased = " ".join(unreleased.split())
 
     for expected in (
-        "Development version: `0.2.4.dev0`",
+        "Source/package identity: `0.2.4`",
         "CLI lifecycle parity",
         "strict saved-record envelope",
         "packaged Chromium",
@@ -1587,16 +1605,14 @@ def test_changelog_discloses_v021_rereview_evidence_boundaries() -> None:
     assert "does not advance Stage 1" in changelog
 
 
-def test_active_public_release_surfaces_align_to_v023_without_rewriting_history() -> None:
+def test_candidate_release_surfaces_are_phase_safe_without_rewriting_history() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
     design_partner = Path("docs/commercialization/design-partner-sprint.md").read_text(
         encoding="utf-8"
     )
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
-    status_page = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
-        encoding="utf-8"
-    )
+    status_page = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     candidate = Path("docs/releases/v0.2.3-internal-candidate.md").read_text(encoding="utf-8")
     site = Path("site/index.html").read_text(encoding="utf-8")
@@ -1605,34 +1621,24 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
         "## Contributor setup", maxsplit=1
     )[0]
     release_install = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[0]
-    conditional_asset_rule = (
-        "Use the v0.2.3 asset URLs only when the GitHub Releases page shows v0.2.3 with "
-        f"`{PUBLIC_RELEASE_WHEEL_FILENAME}` and `SHA256SUMS.txt`; otherwise, do not use "
-        "an unpublished branch or candidate."
-    )
-    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme_quickstart
-    assert "releases/download/v0.2.1/" not in readme_quickstart
-    assert conditional_asset_rule in readme_quickstart
-    assert conditional_asset_rule in quickstart
+    for filename in (TARGET_RELEASE_WHEEL_FILENAME, "scopeproof-0.2.4.tar.gz", "SHA256SUMS.txt"):
+        assert filename in release_install
+    assert f"{TARGET_RELEASE_DOWNLOAD_ROOT}/{TARGET_RELEASE_WHEEL_FILENAME}" in release_install
+    assert "conditional v0.2.4 post-publication install path" in release_install
+    assert "until a matching v0.2.4 GitHub Release and its exact assets exist" in release_install
+    assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in release_install
+    assert "No personal testing or qualifying review" in release_install
     assert PUBLIC_RELEASES_INDEX in readme_quickstart
     assert PUBLIC_RELEASES_INDEX in quickstart
-    for stale_predicate in (
-        "untagged",
-        "unreleased",
-        "not published",
-        "source candidate",
-        "still-public v0.2.1",
-        "v0.2.1 release",
-        "no v0.2.3 tag or github release exists",
-    ):
-        assert stale_predicate not in release_install.lower()
+    assert "../../README.md#quickstart" in quickstart
     source_workflow = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[1]
-    assert "unreleased `0.2.4.dev0` source workflow" in source_workflow
-    assert "not instructions\nfor the published v0.2.3 wheel" in source_workflow
+    normalized_workflow = " ".join(source_workflow.split())
+    assert "v0.2.4 candidate CLI" in normalized_workflow
+    assert "they do not apply to the published v0.2.3 wheel" in normalized_workflow
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
-    assert "releases/download/v0.2.1/" not in quickstart
-    assert f"ScopeProof v{PUBLIC_RELEASE_VERSION} can" in design_partner
-    assert "ScopeProof v0.2.1 can" not in design_partner
+    assert "Archived v0.2.3" in quickstart
+    assert "v0.2.4" in design_partner
+    assert "candidate" in design_partner
     assert "ScopeProof v0.2.3 is published" in readme
     assert "PR #184" in readme
     assert f"`{PR184_RELEASE_MERGE_SHA}`" in readme
@@ -1680,28 +1686,34 @@ def test_active_public_release_surfaces_align_to_v023_without_rewriting_history(
     assert "70bdca1a0d609c81ac8cd2274dc4915612067cfdb1c2205276faafd7c6358ac8" in candidate
     assert "7fff8ba0b6b6c85ae0f22fe487762de8a525d04145c50eab46792233b798573e" in candidate
     assert (
-        f'<a class="button button-primary" href="{PUBLIC_RELEASES_INDEX}/tag/'
-        f'{PUBLIC_RELEASE_TAG}">Download {PUBLIC_RELEASE_TAG}</a>'
+        f'<a class="button button-primary" href="{PUBLIC_RELEASES_INDEX}">'
+        "View evaluation releases</a>"
     ) in site
+    candidate_notes = Path("docs/releases/v0.2.4-evaluation-candidate.md").read_text(
+        encoding="utf-8"
+    )
+    assert "saved-record format v5" in candidate_notes
+    assert "version 5 local JSON" in status_page
+    assert "Downgrade and\nforward compatibility are not promised" in candidate_notes
+    assert "Private candidate success is not public-download verification" in candidate_notes
 
 
 def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_progress() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     roadmap = Path("ROADMAP.md").read_text(encoding="utf-8")
     environment = Path("docs/development-environment.md").read_text(encoding="utf-8")
-    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(
-        encoding="utf-8"
-    )
-    platform = Path("docs/releases/v0.2.3-platform-package-matrix.md").read_text(
-        encoding="utf-8"
-    )
+    status = Path("docs/releases/v0.2.3-status-and-next-stages.md").read_text(encoding="utf-8")
+    platform = Path("docs/releases/v0.2.3-platform-package-matrix.md").read_text(encoding="utf-8")
     market = Path("docs/commercialization/market-comparison-2026-07-26.md").read_text(
         encoding="utf-8"
     )
 
-    for active_surface in (readme, roadmap, environment, status, platform, market):
-        assert "0.2.4.dev0" in active_surface
+    for active_surface in (readme, roadmap, environment, status):
+        assert "0.2.4" in active_surface
         assert "v0.2.3" in active_surface
+    for dated_surface in (platform, market):
+        assert "0.2.4.dev0" in dated_surface
+        assert "v0.2.3" in dated_surface
 
     for active_status in (roadmap, status):
         assert all(pr in active_status for pr in ("PR #185", "PR #187", "PR #188"))
@@ -1721,15 +1733,12 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
 
     assert "Python 3.11, Python 3.12, and Python 3.13" in environment
     assert "Python 3.14" in environment
-    python_314_line = environment.split("Python 3.14", maxsplit=1)[1].split(
-        "\n", maxsplit=1
-    )[0]
+    python_314_line = environment.split("Python 3.14", maxsplit=1)[1].split("\n", maxsplit=1)[0]
     assert "unverified" in python_314_line
 
     normalized_market = " ".join(market.split())
     assert (
-        "keyboard-only and visible-focus engineering evidence is implemented"
-        in normalized_market
+        "keyboard-only and visible-focus engineering evidence is implemented" in normalized_market
     )
     assert "CLI lifecycle parity is implemented" in normalized_market
     assert "not yet verified with keyboard-only completion" not in normalized_market
@@ -2344,7 +2353,7 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     prohibited = ("participant name", "email address", "linkedin profile", "dm transcript")
     combined = "\n".join((quickstart, qualification, criteria, outcome)).lower()
     assert all(term not in combined for term in prohibited)
-    assert "[public-alpha participant quickstart](docs/alpha/participant-quickstart.md)" in readme
+    assert "docs/alpha/participant-quickstart.md" in readme
     assert "docs/alpha/participant-quickstart.md" in protocol
 
 
@@ -2401,8 +2410,8 @@ def test_inbound_alpha_case_submission_path_is_public_safe_and_owner_passive() -
     ):
         assert forbidden in template
 
-    assert issue_url in site
-    assert "Submit a public alpha case" in site
+    assert issue_url not in site
+    assert "Report a reproducible defect" in site
     assert "Use LinkedIn DM only" not in site
     assert "inbound-only" in unblocker
     assert issue_url in unblocker
@@ -2438,20 +2447,13 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert disclosure in html
     assert disclosure in transcript
     assert "Public PR → Confirm criteria → Review coverage → Record decisions → Export" in html
-    assert "Likes, views, stars, impressions, and downloads are not product validation." in html
+    assert "downloads, constructed demos, and automated checks are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
     assert PUBLIC_RELEASES_INDEX in html
-    assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in html
-    assert (
-        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/alpha/participant-quickstart.md"
-        in html
-    )
-    qualification_url = (
-        "https://github.com/YuzeJ21/Scope-Proof/blob/main/"
-        "docs/alpha/public-pr-qualification-checklist.md"
-    )
-    assert qualification_url in parser.links
-    assert "Check whether your PR qualifies" in html
+    assert 'href="https://github.com/YuzeJ21/Scope-Proof/releases"' in html
+    assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/README.md#quickstart" in html
+    assert "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=defect.yml" in parser.links
+    assert "Stage 3 is dormant and gated" in html
     assert not any(urlsplit(link).hostname == "www.linkedin.com" for link in parser.links)
     assert "DM me" not in html
     assert "https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md" in html
@@ -3580,11 +3582,11 @@ def test_public_alpha_onboarding_requires_inbound_case_and_completed_outcome() -
     sprint = Path("docs/commercialization/design-partner-sprint.md").read_text(encoding="utf-8")
     case_url = "https://github.com/YuzeJ21/Scope-Proof/issues/new?template=public-alpha-case.yml"
 
-    assert quickstart.index(case_url) < quickstart.index("## Ten-minute path")
+    assert quickstart.index(case_url) < quickstart.index("### Ten-minute path")
     assert "The historical inbound public-alpha case form was:" in quickstart
     assert "Stage 1 is\nclosed as not pursued" in quickstart
-    assert "submit the inbound\npublic-alpha case form before starting locally" in readme
-    assert "incomplete review" not in site
+    assert "Evaluation downloads do not require personal testing" in readme
+    assert "Incomplete reviews receive no completed-review credit" in site
 
     outcome_block = feedback.split("id: outcome", maxsplit=1)[1].split("validations:", maxsplit=1)[
         0
@@ -3613,19 +3615,20 @@ def test_public_alpha_mobile_navigation_and_closed_stage_state_are_truthful() ->
     site = Path("site/index.html").read_text(encoding="utf-8")
     css = Path("site/styles.css").read_text(encoding="utf-8")
     current_sections = (
-        Path("ROADMAP.md").read_text(encoding="utf-8").split(
-            "## Stage 1 — Genuine public alpha", maxsplit=1
-        )[1],
-        Path("CHANGELOG.md").read_text(encoding="utf-8").split(
-            "## Unreleased", maxsplit=1
-        )[1].split("## 0.2.3", maxsplit=1)[0],
+        Path("ROADMAP.md")
+        .read_text(encoding="utf-8")
+        .split("## Stage 1 — Genuine public alpha", maxsplit=1)[1],
+        Path("CHANGELOG.md")
+        .read_text(encoding="utf-8")
+        .split("## Unreleased", maxsplit=1)[1]
+        .split("## 0.2.3", maxsplit=1)[0],
         Path("docs/alpha/participant-evidence-unblocker.md").read_text(encoding="utf-8"),
         Path("docs/alpha/concierge-host-checklist.md").read_text(encoding="utf-8"),
         Path("docs/commercialization/design-partner-sprint.md").read_text(encoding="utf-8"),
     )
 
     mobile_css = css.split("@media (max-width: 600px)", maxsplit=1)[1]
-    assert '<a href="#alpha">Public alpha</a>' in site
+    assert '<a href="#alpha">Evaluation</a>' in site
     assert ".site-header {" in mobile_css
     assert "align-items: stretch" in mobile_css
     assert "flex-direction: column" in mobile_css
@@ -3645,9 +3648,7 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     readme_status = readme.split("## Product status", maxsplit=1)[1].split(
         "## GitHub Action advanced preview", maxsplit=1
     )[0]
-    site_alpha = site.split('<section id="alpha"', maxsplit=1)[1].split(
-        "</section>", maxsplit=1
-    )[0]
+    site_alpha = site.split('<section id="alpha"', maxsplit=1)[1].split("</section>", maxsplit=1)[0]
 
     guide = "docs/commercialization/design-partner-sprint.md"
     feedback_url = (
@@ -3656,7 +3657,7 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     assert guide in readme
     assert "../commercialization/design-partner-sprint.md" in quickstart
     assert guide in site
-    assert feedback_url in site
+    assert feedback_url not in site
     assert feedback_url in quickstart
     assert "../commercialization/design-partner-sprint.md" in outcome
     assert "../commercialization/design-partner-sprint.md" in checklist
@@ -3664,15 +3665,11 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
     for public_surface in (readme_status, site_alpha):
         normalized_surface = " ".join(public_surface.split()).lower()
         for required in (
-            "free design-partner review",
-            "no paid product or billing is active",
-            "external commercial discovery is optional and separate",
-            "public-repository-only",
+            "stage 3 is dormant and gated",
             "acceptance-coverage assistant",
             "not an ai code reviewer",
             "stage 1 is closed as not pursued",
-            "owner-led stage 2 productization is active without claiming customer validation",
-            "public feedback form contains no pricing question",
+            "qualifying review",
         ):
             assert required in normalized_surface
         for unsupported_claim in (
@@ -3687,7 +3684,7 @@ def test_public_design_partner_positioning_is_free_inbound_and_noncommercial() -
         ):
             assert unsupported_claim not in normalized_surface
 
-    assert "Incomplete reviews do not become completed feedback outcomes" in site
+    assert "Incomplete reviews receive no completed-review credit" in site
     assert "participant-selected outcome" in quickstart
     assert "not commercial validation" in outcome
 
