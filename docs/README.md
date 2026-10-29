@@ -4,17 +4,17 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: prepare the v0.2.4 downloadable evaluation candidate, then return to bounded
-maintenance of the engineering reference product. Source/package identity is `0.2.4`; v0.2.3
-remains the published baseline until GitHub Releases provides v0.2.4 assets. Stage 1 is closed
+Current direction: bounded maintenance after v0.2.4 evaluation-release publication and automatic
+public-download verification. Public install is v0.2.4; current source is unreleased `0.2.5.dev0`.
+The dated verification record binds released bytes to their own source commit. Stage 1 is closed
 at zero; Stage 3 is dormant and gated. No personal testing or qualifying reviews are required
 for evaluation distribution. Begin with the roadmap's finish line before starting any new slice.
 
 ## Current operating documents
 
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
-- [v0.2.4 evaluation candidate](releases/v0.2.4-evaluation-candidate.md) — conditional availability,
-  changes, upgrade limits, exact-main verification and remaining publication steps.
+- [v0.2.4 public verification](releases/v0.2.4-public-verification.md) — published source/tag/assets,
+  automatic public-download checks, upgrade limits and evidence boundaries.
 - [v0.2.3 status and next stages](releases/v0.2.3-status-and-next-stages.md) — published-release
   boundary, current development line, feature ledger, gaps, and stage status.
 - [Stage 2 productization packet](commercialization/stage2-readiness-packet.md) — authorized
@@ -29,6 +29,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 ## Historical evidence records
 
+- [v0.2.4 evaluation preparation](releases/v0.2.4-evaluation-candidate.md) preserves the candidate
+  plan and version-bound upgrade guidance; its publication status is superseded by the record above.
 - [2026-10-25 integration disposition](audits/2026-10-25-integrity-integration-disposition.md)
   preserves the pre-merge dependency, JUnit, and archival decisions.
 - [Unreleased integrity case study](portfolio/2026-10-25/case-study.md) preserves its constructed

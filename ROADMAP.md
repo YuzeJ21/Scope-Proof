@@ -13,14 +13,14 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current operating decision
 
-Prepare the **v0.2.4 downloadable evaluation release** as a bounded distribution task.
-The source/package version is `0.2.4`; treat it as a candidate until the GitHub Release record
-provides the matching assets. v0.2.3 remains the published baseline at preparation time.
-The [candidate and upgrade guide](docs/releases/v0.2.4-evaluation-candidate.md) defines the
-release-alignment PR, exact-main package verification, and separately authorized publication
-and public re-download checks. This is evaluation distribution, not a Stage 3 beta.
-No personal testing or qualifying reviews are required for this distribution task. Stop after
-the reviewed merge and private candidate packet; do not tag, publish or deploy under this task.
+**v0.2.4 is published as a downloadable evaluation release.** Its public wheel, source archive
+and checksums were automatically verified. The [dated public verification record](docs/releases/v0.2.4-public-verification.md)
+binds those results to release source `11bcdc66f7d8f5a29055688208de1ed337eed07f`.
+Current source is unreleased `0.2.5.dev0`; no new product capability is introduced by this
+post-release closeout. Preserve the published v0.2.4 assets and return to bounded maintenance
+after the closeout PR, review and required checks. This is evaluation distribution, not a
+Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
+deployment, outreach or participant program follows automatically.
 
 Maintain the confirmed-criteria → exact-head candidate evidence → missing evidence → reviewer
 decisions → re-review workflow. Its usefulness and primary-operator hypothesis (engineer or
@@ -39,8 +39,8 @@ not automatic next steps.
 ## Current release and validation state
 
 The GitHub Release record is authoritative for publication availability.
-ScopeProof v0.2.3 is published. Public install: v0.2.3 is available from the
-[v0.2.3 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.3),
+ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
+[v0.2.4 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4),
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
@@ -61,8 +61,8 @@ from all five engineering lanes. This does not reduce verification or create a f
 The owner-authorized [CSV decision-handoff slice](docs/superpowers/specs/2026-10-29-csv-decision-handoff-design.md)
 addresses a reproduced product gap: CSV previously omitted the review-level reason and next action
 when accepted criteria still required final acceptance. Six appended JSON-array columns preserve
-the existing gate context on each criterion row. This is an unreleased source capability and
-engineering evidence only; it does not advance Stage 3 or change the published v0.2.3 package.
+the existing gate context on each criterion row. This is included in published v0.2.4 and remains
+engineering evidence only; it does not advance Stage 3 or change the historical v0.2.3 package.
 
 The [candidate-selection completeness slice](docs/superpowers/specs/2026-10-29-candidate-selection-completeness-design.md)
 discloses eligible, shown and omitted candidate counts around the unchanged eight-candidate

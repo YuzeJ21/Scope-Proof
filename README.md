@@ -13,9 +13,10 @@ target closed unmet when the owner chose not to pursue Stage 1.
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
-Current direction: maintain a bounded engineering reference product. Public install remains
-**v0.2.3** until GitHub Releases publishes v0.2.4 with its matching wheel, source archive, and checksums;
-source/package identity is the **v0.2.4 evaluation candidate**. Stage 1 is closed as not pursued with all external
+Current direction: maintain a bounded engineering reference product. The published evaluation
+download is **v0.2.4**, with its wheel, source archive, and checksums verified in the
+[public verification record](docs/releases/v0.2.4-public-verification.md). The current source/package
+identity is **0.2.5.dev0**, unreleased. Stage 1 is closed as not pursued with all external
 counts at zero; Stage 3 is dormant and gated. Stage 2 work requires a demonstrated defect, required
 upkeep, or a named bounded research question. Once that work and its checks are complete, stop;
 there is no standing feature backlog or request for personal testing or qualifying reviews.
@@ -131,12 +132,13 @@ evidence count still at zero. The
 [exact-head verification audit](docs/audits/exact-head-runtime-evidence/verification.md)
 records the product-tree engineering evidence and remaining gaps.
 
-The repository's current source/package identity is the v0.2.4 evaluation candidate; it is
-not a published replacement release asset. Post-v0.2.3 engineering merged CLI lifecycle commands, strict
-saved-record validation, installed Chromium coverage, Python 3.13 and bounded keyboard/focus
-evidence, and verified-public provenance enforcement. Those changes remain engineering evidence
-only. The public install continues to be the immutable v0.2.3 release, and Stage 1 remains closed
-as not pursued with every count at zero.
+ScopeProof v0.2.4 is published from
+`11bcdc66f7d8f5a29055688208de1ed337eed07f`, with its wheel, source archive, and checksums
+verified in the [public verification record](docs/releases/v0.2.4-public-verification.md).
+Post-v0.2.3 engineering merged CLI lifecycle commands, strict saved-record validation, installed
+Chromium coverage, Python 3.13 and bounded keyboard/focus evidence, and verified-public provenance
+enforcement. Those changes remain engineering evidence only. Current source/package identity is
+`0.2.5.dev0`, unreleased; Stage 1 remains closed as not pursued with every count at zero.
 
 </details>
 
@@ -149,17 +151,16 @@ only explicit success as passing.
 Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
 for the tested Python versions, platform limits, and contributor setup.
 
-**Public install remains v0.2.3 until a matching v0.2.4 GitHub Release and its exact assets exist.**
-Check [GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases) first. A source version,
-changelog entry, private candidate, or passing CI run is not publication evidence. Use the
-[published v0.2.3 release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.3) while v0.2.4
-is unavailable; candidate CLI features below require the current source or the v0.2.4 wheel once published.
-
-The commands below are the **conditional v0.2.4 post-publication install path** and require no
-clone. Use these URLs only when GitHub Releases shows v0.2.4 with
+**The published evaluation download is v0.2.4.** Its
+[GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4) contains
 `scopeproof-0.2.4-py3-none-any.whl`, `scopeproof-0.2.4.tar.gz`, and `SHA256SUMS.txt`.
-See the [v0.2.4 evaluation candidate notes](docs/releases/v0.2.4-evaluation-candidate.md) for
-release boundaries and upgrade guidance. The [documentation map](docs/README.md) separates
+The [public verification record](docs/releases/v0.2.4-public-verification.md) binds the published
+assets to source `11bcdc66f7d8f5a29055688208de1ed337eed07f`. A source version, changelog entry,
+or passing CI run alone is not publication evidence. Current source `0.2.5.dev0` is unreleased.
+
+The commands below install the **published v0.2.4 wheel** and require no clone. Verify its checksum
+before installation. See the [release preparation and upgrade notes](docs/releases/v0.2.4-evaluation-candidate.md)
+for release boundaries and saved-record guidance. The [documentation map](docs/README.md) separates
 current guidance from historical observations. No personal testing or qualifying review is
 required to download or evaluate the package.
 
@@ -196,21 +197,20 @@ a target pull request or customer validation. Stop the local workbench with `Ctr
 
 ### Upgrade existing reviews
 
-The v0.2.4 candidate writes saved-record format **v5**. Back up local review storage and retain
+The v0.2.4 release writes saved-record format **v5**. Back up local review storage and retain
 any exported reports before upgrading. Pre-v5 records are conservatively reassessed: missing
 criteria-source provenance, verified-public metadata, or exact-head changed-file inventory is not
 invented, and prior acceptance may require renewed confirmation or analysis. Historical engine
 identity and candidate-selection counts remain unknown when absent. Reopening a record does not
 establish current-head correctness. Compatibility with older versions after saving in v0.2.4 is
-not promised; see the [candidate upgrade notes](docs/releases/v0.2.4-evaluation-candidate.md).
+not promised; see the [release preparation and upgrade notes](docs/releases/v0.2.4-evaluation-candidate.md).
 
 ### Public PR CLI workflow
 
-The commands below describe the v0.2.4 candidate CLI. They apply to its installed wheel once
-published, or to the current source checkout after the
-[locked source setup](docs/development-environment.md); they do not apply to the published v0.2.3
-wheel. The examples use the installed `scopeproof` command. In a source checkout, prefix it with
-`uv run`. The CLI provides read-only public-PR ingestion and a deterministic core without
+The commands below describe the published v0.2.4 CLI. They also apply to the current unreleased
+`0.2.5.dev0` source checkout after the [locked source setup](docs/development-environment.md);
+they do not apply to the historical v0.2.3 wheel. The examples use the installed `scopeproof`
+command. In a source checkout, prefix it with `uv run`. The CLI provides read-only public-PR ingestion and a deterministic core without
 starting Streamlit.
 Live ingestion labels a review public only when GitHub returns matching, unambiguous repository
 metadata (`private: false` and `visibility: public`). A token-accessible private repository and
@@ -309,7 +309,7 @@ partial and cannot be waived through `scope-file`. Old saved reviews without a v
 remain Needs Review and require a new exact-head analysis. File decisions do not prove tests ran or
 that the implementation is correct.
 
-The v0.2.4 candidate can also inspect and append one bounded local JUnit XML artifact
+The v0.2.4 release can also inspect and append one bounded local JUnit XML artifact
 without executing target-repository code. First inspect the sanitized scope IDs:
 
 ```bash
@@ -370,7 +370,7 @@ can contain multiple values (`ingestion_warnings`, `skipped_files`, `evidence_li
 arrays inside their CSV cells so delimiters in repository or reviewer text do not destroy
 provenance.
 
-In the v0.2.4 candidate, every CSV criterion row also carries the review-level
+In v0.2.4, every CSV criterion row also carries the review-level
 `gate_reason_codes`, `gate_blocking_criteria`, `gate_conditional_criteria`,
 `gate_unresolved_criteria`, `gate_resolved_exceptions`, and `gate_guidance` as JSON arrays.
 These appended columns preserve the reason and next action when a row is filtered or shared;

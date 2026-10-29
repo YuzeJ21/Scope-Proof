@@ -1,12 +1,12 @@
 # Evaluation setup and historical public-alpha participant path
 
-The source/package candidate is **v0.2.4**. Public install remains **v0.2.3** until a matching
-[GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases) contains the v0.2.4 wheel, source
-archive, and `SHA256SUMS.txt`. Use the [current evaluation quickstart](../../README.md#quickstart)
-for conditional v0.2.4 installation, checksum verification, supported environments, and saved-record
-v5 upgrade guidance. Before publication, use the published v0.2.3 release or explicitly choose the
-[current source setup](../development-environment.md); candidate CLI commands are not v0.2.3
-wheel instructions.
+The published evaluation download is **v0.2.4**, with its wheel, source archive, and
+`SHA256SUMS.txt` verified in the [public verification record](../releases/v0.2.4-public-verification.md).
+Current source/package identity is **0.2.5.dev0**, unreleased. Use the
+[current evaluation quickstart](../../README.md#quickstart) for v0.2.4 installation, checksum
+verification, supported environments, and saved-record v5 upgrade guidance. The
+[current source setup](../development-environment.md) describes the unreleased development line.
+The archived v0.2.3 participant instructions below retain their historical version boundaries.
 
 No personal testing, public case, qualifying review, or participant feedback is required to
 download and evaluate ScopeProof. Start a local Standard review or the deliberately constructed
