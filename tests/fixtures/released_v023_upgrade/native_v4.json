@@ -1,0 +1,1284 @@
+{
+  "record_version": 4,
+  "saved_at": "2026-10-29T18:07:12.323448+00:00",
+  "state": {
+    "analysis_history": [
+      {
+        "candidate_evidence_proves_correctness": false,
+        "criteria": [
+          {
+            "criterion_id": "AC-01",
+            "criterion_source": "user_confirmed",
+            "criterion_type": "behavior",
+            "priority": "must_have",
+            "required_evidence_level": "E1",
+            "source_span": null,
+            "text": "User can export the research list as CSV"
+          },
+          {
+            "criterion_id": "AC-02",
+            "criterion_source": "user_confirmed",
+            "criterion_type": "behavior",
+            "priority": "must_have",
+            "required_evidence_level": "E1",
+            "source_span": null,
+            "text": "Export respects all active filters"
+          },
+          {
+            "criterion_id": "AC-03",
+            "criterion_source": "user_confirmed",
+            "criterion_type": "error_state",
+            "priority": "must_have",
+            "required_evidence_level": "E1",
+            "source_span": null,
+            "text": "Failed export shows an error message"
+          },
+          {
+            "criterion_id": "AC-04",
+            "criterion_source": "user_confirmed",
+            "criterion_type": "analytics",
+            "priority": "should_have",
+            "required_evidence_level": "E1",
+            "source_span": null,
+            "text": "Successful export records research_exported"
+          }
+        ],
+        "criteria_revision_number": 1,
+        "evidence": [
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "def export_research_list_csv(rows, active_sector=None):\n    filtered_rows = apply_filters(rows, sector=active_sector)",
+            "criterion_id": "AC-01",
+            "evidence_id": "EV-AC-01-01",
+            "evidence_level": "E1",
+            "evidence_type": "implementation",
+            "excerpt": "def export_research_list_csv(rows, active_sector=None):",
+            "file_path": "src/export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+            ],
+            "line_end": 42,
+            "line_start": 42,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L42-L42",
+            "relevance_reason": "Matched terms: csv, export, list, research",
+            "relevance_score": 1.0,
+            "source_scope": "changed_file"
+          },
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "def test_export_research_list_csv_uses_sector_filter():\n    assert export_research_list_csv(rows, active_sector=\"energy\")",
+            "criterion_id": "AC-01",
+            "evidence_id": "EV-AC-01-02",
+            "evidence_level": "E2",
+            "evidence_type": "test",
+            "excerpt": "def test_export_research_list_csv_uses_sector_filter():",
+            "file_path": "tests/test_export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied",
+              "Constructed automation only; no actual target runtime or human use. Candidate test evidence requires reviewer confirmation",
+              "Constructed automation only; no actual target runtime or human use. Candidate test/eval definition shows test intent, not execution"
+            ],
+            "line_end": 18,
+            "line_start": 18,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/tests/test_export.py#L18-L18",
+            "relevance_reason": "Matched terms: csv, export, list, research",
+            "relevance_score": 1.0,
+            "source_scope": "changed_file"
+          },
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "def test_export_research_list_csv_uses_sector_filter():\n    assert export_research_list_csv(rows, active_sector=\"energy\")",
+            "criterion_id": "AC-01",
+            "evidence_id": "EV-AC-01-03",
+            "evidence_level": "E2",
+            "evidence_type": "test",
+            "excerpt": "assert export_research_list_csv(rows, active_sector=\"energy\")",
+            "file_path": "tests/test_export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied",
+              "Constructed automation only; no actual target runtime or human use. Candidate test evidence requires reviewer confirmation",
+              "Constructed automation only; no actual target runtime or human use. Candidate test/eval definition shows test intent, not execution"
+            ],
+            "line_end": 19,
+            "line_start": 19,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/tests/test_export.py#L19-L19",
+            "relevance_reason": "Matched terms: csv, export, list, research",
+            "relevance_score": 1.0,
+            "source_scope": "changed_file"
+          },
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "    filtered_rows = apply_filters(rows, sector=active_sector)\n    return to_csv(filtered_rows)",
+            "criterion_id": "AC-01",
+            "evidence_id": "EV-AC-01-04",
+            "evidence_level": "E1",
+            "evidence_type": "implementation",
+            "excerpt": "return to_csv(filtered_rows)",
+            "file_path": "src/export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+            ],
+            "line_end": 44,
+            "line_start": 44,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L44-L44",
+            "relevance_reason": "Matched terms: csv",
+            "relevance_score": 0.25,
+            "source_scope": "changed_file"
+          },
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "def export_research_list_csv(rows, active_sector=None):\n    filtered_rows = apply_filters(rows, sector=active_sector)",
+            "criterion_id": "AC-02",
+            "evidence_id": "EV-AC-02-01",
+            "evidence_level": "E1",
+            "evidence_type": "implementation",
+            "excerpt": "def export_research_list_csv(rows, active_sector=None):",
+            "file_path": "src/export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+            ],
+            "line_end": 42,
+            "line_start": 42,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L42-L42",
+            "relevance_reason": "Matched terms: active, export",
+            "relevance_score": 0.5,
+            "source_scope": "changed_file"
+          },
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "def test_export_research_list_csv_uses_sector_filter():\n    assert export_research_list_csv(rows, active_sector=\"energy\")",
+            "criterion_id": "AC-02",
+            "evidence_id": "EV-AC-02-02",
+            "evidence_level": "E2",
+            "evidence_type": "test",
+            "excerpt": "def test_export_research_list_csv_uses_sector_filter():",
+            "file_path": "tests/test_export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied",
+              "Constructed automation only; no actual target runtime or human use. Candidate test evidence requires reviewer confirmation",
+              "Constructed automation only; no actual target runtime or human use. Candidate test/eval definition shows test intent, not execution"
+            ],
+            "line_end": 18,
+            "line_start": 18,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/tests/test_export.py#L18-L18",
+            "relevance_reason": "Matched terms: export, filter",
+            "relevance_score": 0.5,
+            "source_scope": "changed_file"
+          },
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "def export_research_list_csv(rows, active_sector=None):\n    filtered_rows = apply_filters(rows, sector=active_sector)\n    return to_csv(filtered_rows)",
+            "criterion_id": "AC-02",
+            "evidence_id": "EV-AC-02-03",
+            "evidence_level": "E1",
+            "evidence_type": "implementation",
+            "excerpt": "filtered_rows = apply_filters(rows, sector=active_sector)",
+            "file_path": "src/export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+            ],
+            "line_end": 43,
+            "line_start": 43,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L43-L43",
+            "relevance_reason": "Matched terms: active, filter",
+            "relevance_score": 0.5,
+            "source_scope": "changed_file"
+          },
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "def test_export_research_list_csv_uses_sector_filter():\n    assert export_research_list_csv(rows, active_sector=\"energy\")",
+            "criterion_id": "AC-02",
+            "evidence_id": "EV-AC-02-04",
+            "evidence_level": "E2",
+            "evidence_type": "test",
+            "excerpt": "assert export_research_list_csv(rows, active_sector=\"energy\")",
+            "file_path": "tests/test_export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied",
+              "Constructed automation only; no actual target runtime or human use. Candidate test evidence requires reviewer confirmation",
+              "Constructed automation only; no actual target runtime or human use. Candidate test/eval definition shows test intent, not execution"
+            ],
+            "line_end": 19,
+            "line_start": 19,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/tests/test_export.py#L19-L19",
+            "relevance_reason": "Matched terms: active, export",
+            "relevance_score": 0.5,
+            "source_scope": "changed_file"
+          },
+          {
+            "commit_sha": "head-demo-002",
+            "context_excerpt": "    filtered_rows = apply_filters(rows, sector=active_sector)\n    return to_csv(filtered_rows)",
+            "criterion_id": "AC-02",
+            "evidence_id": "EV-AC-02-05",
+            "evidence_level": "E1",
+            "evidence_type": "implementation",
+            "excerpt": "return to_csv(filtered_rows)",
+            "file_path": "src/export.py",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+            ],
+            "line_end": 44,
+            "line_start": 44,
+            "matching_rule": "keyword_overlap",
+            "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L44-L44",
+            "relevance_reason": "Matched terms: filter",
+            "relevance_score": 0.25,
+            "source_scope": "changed_file"
+          }
+        ],
+        "findings": [
+          {
+            "confidence_band": "high",
+            "contradictions": [],
+            "criterion_id": "AC-01",
+            "evidence_ids": [
+              "EV-AC-01-01",
+              "EV-AC-01-02",
+              "EV-AC-01-03",
+              "EV-AC-01-04"
+            ],
+            "evidence_level": "E2",
+            "missing_evidence": [],
+            "reason": "Strong candidate evidence was found; a reviewer must still judge sufficiency.",
+            "recommended_action": "Open the cited lines and accept, reject, or supplement the candidate evidence.",
+            "status": "evidence_found"
+          },
+          {
+            "confidence_band": "medium",
+            "contradictions": [],
+            "criterion_id": "AC-02",
+            "evidence_ids": [
+              "EV-AC-02-01",
+              "EV-AC-02-02",
+              "EV-AC-02-03",
+              "EV-AC-02-04",
+              "EV-AC-02-05"
+            ],
+            "evidence_level": "E2",
+            "missing_evidence": [
+              "Stronger evidence covering the remaining criterion terms"
+            ],
+            "reason": "Candidate evidence covers only part of the wording or is below the required level.",
+            "recommended_action": "Review the candidate and provide stronger or additional evidence.",
+            "status": "partial"
+          },
+          {
+            "confidence_band": "low",
+            "contradictions": [],
+            "criterion_id": "AC-03",
+            "evidence_ids": [],
+            "evidence_level": "E0",
+            "missing_evidence": [
+              "Required evidence level E1"
+            ],
+            "reason": "No candidate evidence was found in the complete changed-file analysis.",
+            "recommended_action": "Add implementation evidence or identify evidence for reviewer inspection.",
+            "status": "missing"
+          },
+          {
+            "confidence_band": "low",
+            "contradictions": [],
+            "criterion_id": "AC-04",
+            "evidence_ids": [],
+            "evidence_level": "E0",
+            "missing_evidence": [
+              "Required evidence level E1"
+            ],
+            "reason": "No candidate evidence was found in the complete changed-file analysis.",
+            "recommended_action": "Add implementation evidence or identify evidence for reviewer inspection.",
+            "status": "missing"
+          }
+        ],
+        "gate": {
+          "blocking_criteria": [],
+          "conditional_criteria": [],
+          "reason_codes": [],
+          "resolved_exceptions": [],
+          "unresolved_criteria": [],
+          "verdict": "ready"
+        },
+        "research_context": null,
+        "resolutions": [
+          {
+            "claimed_evidence_level": "E3",
+            "comment": "Constructed automation only; no actual target runtime or human use. Constructed linked manual decision for persistence coverage.",
+            "criterion_id": "AC-01",
+            "decision": "manually_verified",
+            "evidence_url": null,
+            "reviewer": "Constructed automation only; no actual target runtime or human use.",
+            "runtime_evidence_id": "constructed-historical-runtime",
+            "timestamp": "2026-10-29T18:07:12.304429Z"
+          },
+          {
+            "claimed_evidence_level": null,
+            "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+            "criterion_id": "AC-02",
+            "decision": "accepted",
+            "evidence_url": null,
+            "reviewer": "Constructed automation only; no actual target runtime or human use.",
+            "runtime_evidence_id": null,
+            "timestamp": "2026-10-29T18:07:12.305663Z"
+          },
+          {
+            "claimed_evidence_level": null,
+            "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+            "criterion_id": "AC-03",
+            "decision": "accepted",
+            "evidence_url": null,
+            "reviewer": "Constructed automation only; no actual target runtime or human use.",
+            "runtime_evidence_id": null,
+            "timestamp": "2026-10-29T18:07:12.306539Z"
+          },
+          {
+            "claimed_evidence_level": null,
+            "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+            "criterion_id": "AC-04",
+            "decision": "accepted",
+            "evidence_url": null,
+            "reviewer": "Constructed automation only; no actual target runtime or human use.",
+            "runtime_evidence_id": null,
+            "timestamp": "2026-10-29T18:07:12.307397Z"
+          }
+        ],
+        "retrieval_diagnostics": [
+          {
+            "accepted_candidate_count": 4,
+            "below_threshold_line_count": 0,
+            "changed_file_count": 2,
+            "criterion_id": "AC-01",
+            "exact_identifier_match_line_count": 0,
+            "exact_identifiers": [],
+            "inspectable_line_count": 5,
+            "outcome": "candidates_found",
+            "searched_evidence_types": [
+              "implementation",
+              "test"
+            ],
+            "searched_paths": [
+              "src/export.py",
+              "tests/test_export.py"
+            ],
+            "searched_terms": [
+              "csv",
+              "export",
+              "list",
+              "research"
+            ],
+            "term_overlap_line_count": 4,
+            "unchanged_candidate_file_count": 0
+          },
+          {
+            "accepted_candidate_count": 5,
+            "below_threshold_line_count": 0,
+            "changed_file_count": 2,
+            "criterion_id": "AC-02",
+            "exact_identifier_match_line_count": 0,
+            "exact_identifiers": [],
+            "inspectable_line_count": 5,
+            "outcome": "candidates_found",
+            "searched_evidence_types": [
+              "implementation",
+              "test"
+            ],
+            "searched_paths": [
+              "src/export.py",
+              "tests/test_export.py"
+            ],
+            "searched_terms": [
+              "active",
+              "export",
+              "filter",
+              "respect"
+            ],
+            "term_overlap_line_count": 5,
+            "unchanged_candidate_file_count": 0
+          },
+          {
+            "accepted_candidate_count": 0,
+            "below_threshold_line_count": 3,
+            "changed_file_count": 2,
+            "criterion_id": "AC-03",
+            "exact_identifier_match_line_count": 0,
+            "exact_identifiers": [],
+            "inspectable_line_count": 5,
+            "outcome": "below_relevance_threshold",
+            "searched_evidence_types": [
+              "implementation",
+              "test"
+            ],
+            "searched_paths": [
+              "src/export.py",
+              "tests/test_export.py"
+            ],
+            "searched_terms": [
+              "error",
+              "export",
+              "fail",
+              "message",
+              "show"
+            ],
+            "term_overlap_line_count": 3,
+            "unchanged_candidate_file_count": 0
+          },
+          {
+            "accepted_candidate_count": 0,
+            "below_threshold_line_count": 0,
+            "changed_file_count": 2,
+            "criterion_id": "AC-04",
+            "exact_identifier_match_line_count": 0,
+            "exact_identifiers": [
+              "research_exported"
+            ],
+            "inspectable_line_count": 5,
+            "outcome": "exact_identifier_not_found",
+            "searched_evidence_types": [
+              "implementation",
+              "test"
+            ],
+            "searched_paths": [
+              "src/export.py",
+              "tests/test_export.py"
+            ],
+            "searched_terms": [
+              "export",
+              "record",
+              "research",
+              "research_exported",
+              "successful"
+            ],
+            "term_overlap_line_count": 3,
+            "unchanged_candidate_file_count": 0
+          }
+        ],
+        "review": {
+          "base_sha": "base-demo-001",
+          "can_analyze": true,
+          "check_state": "passing",
+          "ci_observation": {
+            "collection_complete": true,
+            "collection_notes": [],
+            "concrete_legacy_status_count": 0,
+            "failing_check_runs": 0,
+            "failing_legacy_statuses": 0,
+            "neutral_check_runs": 0,
+            "neutral_legacy_statuses": 0,
+            "pending_check_runs": 0,
+            "pending_legacy_statuses": 0,
+            "reason": "Observed 1 successful completed check run; no concrete legacy statuses.",
+            "reason_code": "successful_check_runs",
+            "skipped_check_names": [],
+            "skipped_check_runs": 0,
+            "state": "passing",
+            "successful_check_runs": 1,
+            "successful_legacy_statuses": 0,
+            "total_check_runs": 1
+          },
+          "created_at": "2026-10-29T18:07:12.302165Z",
+          "criteria_confirmed": true,
+          "criteria_source_provenance": {
+            "confirmed_at": "2026-10-29T18:07:12.303175Z",
+            "confirmed_by": "Constructed automation only; no actual target runtime or human use.",
+            "normalized_criteria_sha256": "a8c7880b2ce96ae5666e9cc7994f37c14c0eb63297d7c0fa10138acb44bcb020",
+            "source_revision": "constructed-automation-v023-upgrade-revision-1",
+            "source_text_sha256": "2715450ebddbb8f836023e398f2f4b0e52e46a018cb28c50e521ab92df5f29e7",
+            "source_uri": "scopeproof://constructed-demo/acceptance-criteria"
+          },
+          "final_acceptance": true,
+          "head_sha": "head-demo-002",
+          "ingestion_state": "complete",
+          "ingestion_warnings": [],
+          "input_origin": "constructed_demo",
+          "pr_number": 17,
+          "repository": "scopeproof/demo-stock-research",
+          "review_id": "constructed-v023-upgrade",
+          "ruleset_version": "1.0.0",
+          "skipped_files": [],
+          "tool_version": "0.2.3"
+        },
+        "reviewer_decision_state": "recorded",
+        "runtime_evidence": [
+          {
+            "artifact_reference": "scopeproof://constructed-automation/historical",
+            "criterion_id": "AC-01",
+            "environment": "Constructed automation only; no actual target runtime or human use. Offline packaged-fixture rehearsal.",
+            "evidence_level": "E3",
+            "head_sha": "head-demo-002",
+            "limitations": [
+              "Constructed automation only; no actual target runtime or human use. E3/E4 is a constructed schema value only."
+            ],
+            "pr_number": 17,
+            "repository": "scopeproof/demo-stock-research",
+            "result": "Constructed automation only; no actual target runtime or human use. Constructed passed value for persistence coverage.",
+            "reviewer": "Constructed automation only; no actual target runtime or human use.",
+            "runtime_evidence_id": "constructed-historical-runtime",
+            "scenario": "Constructed automation only; no actual target runtime or human use. Synthetic historical CSV-export scenario.",
+            "timestamp": "2026-10-29T18:07:12.304415Z"
+          }
+        ],
+        "runtime_verification_state": "recorded",
+        "source_text": "Users can export the filtered research list as CSV. The export must respect all active filters, show an error if export fails, and record a research_exported analytics event."
+      }
+    ],
+    "bundle": {
+      "candidate_evidence_proves_correctness": false,
+      "criteria": [
+        {
+          "criterion_id": "AC-01",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E1",
+          "source_span": null,
+          "text": "User can export the research list as CSV (constructed automation revision 2)"
+        },
+        {
+          "criterion_id": "AC-02",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E1",
+          "source_span": null,
+          "text": "Export respects all active filters"
+        },
+        {
+          "criterion_id": "AC-03",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "error_state",
+          "priority": "must_have",
+          "required_evidence_level": "E1",
+          "source_span": null,
+          "text": "Failed export shows an error message"
+        },
+        {
+          "criterion_id": "AC-04",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "analytics",
+          "priority": "should_have",
+          "required_evidence_level": "E1",
+          "source_span": null,
+          "text": "Successful export records research_exported"
+        }
+      ],
+      "criteria_revision_number": 2,
+      "evidence": [
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "def export_research_list_csv(rows, active_sector=None):\n    filtered_rows = apply_filters(rows, sector=active_sector)",
+          "criterion_id": "AC-01",
+          "evidence_id": "EV-AC-01-01",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "def export_research_list_csv(rows, active_sector=None):",
+          "file_path": "src/export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 42,
+          "line_start": 42,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L42-L42",
+          "relevance_reason": "Matched terms: csv, export, list, research",
+          "relevance_score": 1.0,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "def test_export_research_list_csv_uses_sector_filter():\n    assert export_research_list_csv(rows, active_sector=\"energy\")",
+          "criterion_id": "AC-01",
+          "evidence_id": "EV-AC-01-02",
+          "evidence_level": "E2",
+          "evidence_type": "test",
+          "excerpt": "def test_export_research_list_csv_uses_sector_filter():",
+          "file_path": "tests/test_export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied",
+            "Constructed automation only; no actual target runtime or human use. Candidate test evidence requires reviewer confirmation",
+            "Constructed automation only; no actual target runtime or human use. Candidate test/eval definition shows test intent, not execution"
+          ],
+          "line_end": 18,
+          "line_start": 18,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/tests/test_export.py#L18-L18",
+          "relevance_reason": "Matched terms: csv, export, list, research",
+          "relevance_score": 1.0,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "def test_export_research_list_csv_uses_sector_filter():\n    assert export_research_list_csv(rows, active_sector=\"energy\")",
+          "criterion_id": "AC-01",
+          "evidence_id": "EV-AC-01-03",
+          "evidence_level": "E2",
+          "evidence_type": "test",
+          "excerpt": "assert export_research_list_csv(rows, active_sector=\"energy\")",
+          "file_path": "tests/test_export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied",
+            "Constructed automation only; no actual target runtime or human use. Candidate test evidence requires reviewer confirmation",
+            "Constructed automation only; no actual target runtime or human use. Candidate test/eval definition shows test intent, not execution"
+          ],
+          "line_end": 19,
+          "line_start": 19,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/tests/test_export.py#L19-L19",
+          "relevance_reason": "Matched terms: csv, export, list, research",
+          "relevance_score": 1.0,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "    filtered_rows = apply_filters(rows, sector=active_sector)\n    return to_csv(filtered_rows)",
+          "criterion_id": "AC-01",
+          "evidence_id": "EV-AC-01-04",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "return to_csv(filtered_rows)",
+          "file_path": "src/export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 44,
+          "line_start": 44,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L44-L44",
+          "relevance_reason": "Matched terms: csv",
+          "relevance_score": 0.25,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "def export_research_list_csv(rows, active_sector=None):\n    filtered_rows = apply_filters(rows, sector=active_sector)",
+          "criterion_id": "AC-02",
+          "evidence_id": "EV-AC-02-01",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "def export_research_list_csv(rows, active_sector=None):",
+          "file_path": "src/export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 42,
+          "line_start": 42,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L42-L42",
+          "relevance_reason": "Matched terms: active, export",
+          "relevance_score": 0.5,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "def test_export_research_list_csv_uses_sector_filter():\n    assert export_research_list_csv(rows, active_sector=\"energy\")",
+          "criterion_id": "AC-02",
+          "evidence_id": "EV-AC-02-02",
+          "evidence_level": "E2",
+          "evidence_type": "test",
+          "excerpt": "def test_export_research_list_csv_uses_sector_filter():",
+          "file_path": "tests/test_export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied",
+            "Constructed automation only; no actual target runtime or human use. Candidate test evidence requires reviewer confirmation",
+            "Constructed automation only; no actual target runtime or human use. Candidate test/eval definition shows test intent, not execution"
+          ],
+          "line_end": 18,
+          "line_start": 18,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/tests/test_export.py#L18-L18",
+          "relevance_reason": "Matched terms: export, filter",
+          "relevance_score": 0.5,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "def export_research_list_csv(rows, active_sector=None):\n    filtered_rows = apply_filters(rows, sector=active_sector)\n    return to_csv(filtered_rows)",
+          "criterion_id": "AC-02",
+          "evidence_id": "EV-AC-02-03",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "filtered_rows = apply_filters(rows, sector=active_sector)",
+          "file_path": "src/export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 43,
+          "line_start": 43,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L43-L43",
+          "relevance_reason": "Matched terms: active, filter",
+          "relevance_score": 0.5,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "def test_export_research_list_csv_uses_sector_filter():\n    assert export_research_list_csv(rows, active_sector=\"energy\")",
+          "criterion_id": "AC-02",
+          "evidence_id": "EV-AC-02-04",
+          "evidence_level": "E2",
+          "evidence_type": "test",
+          "excerpt": "assert export_research_list_csv(rows, active_sector=\"energy\")",
+          "file_path": "tests/test_export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied",
+            "Constructed automation only; no actual target runtime or human use. Candidate test evidence requires reviewer confirmation",
+            "Constructed automation only; no actual target runtime or human use. Candidate test/eval definition shows test intent, not execution"
+          ],
+          "line_end": 19,
+          "line_start": 19,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/tests/test_export.py#L19-L19",
+          "relevance_reason": "Matched terms: active, export",
+          "relevance_score": 0.5,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "head-demo-002",
+          "context_excerpt": "    filtered_rows = apply_filters(rows, sector=active_sector)\n    return to_csv(filtered_rows)",
+          "criterion_id": "AC-02",
+          "evidence_id": "EV-AC-02-05",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "return to_csv(filtered_rows)",
+          "file_path": "src/export.py",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 44,
+          "line_start": 44,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/scopeproof/demo-stock-research/blob/head-demo-002/src/export.py#L44-L44",
+          "relevance_reason": "Matched terms: filter",
+          "relevance_score": 0.25,
+          "source_scope": "changed_file"
+        }
+      ],
+      "findings": [
+        {
+          "confidence_band": "high",
+          "contradictions": [],
+          "criterion_id": "AC-01",
+          "evidence_ids": [
+            "EV-AC-01-01",
+            "EV-AC-01-02",
+            "EV-AC-01-03",
+            "EV-AC-01-04"
+          ],
+          "evidence_level": "E2",
+          "missing_evidence": [],
+          "reason": "Strong candidate evidence was found; a reviewer must still judge sufficiency.",
+          "recommended_action": "Open the cited lines and accept, reject, or supplement the candidate evidence.",
+          "status": "evidence_found"
+        },
+        {
+          "confidence_band": "medium",
+          "contradictions": [],
+          "criterion_id": "AC-02",
+          "evidence_ids": [
+            "EV-AC-02-01",
+            "EV-AC-02-02",
+            "EV-AC-02-03",
+            "EV-AC-02-04",
+            "EV-AC-02-05"
+          ],
+          "evidence_level": "E2",
+          "missing_evidence": [
+            "Stronger evidence covering the remaining criterion terms"
+          ],
+          "reason": "Candidate evidence covers only part of the wording or is below the required level.",
+          "recommended_action": "Review the candidate and provide stronger or additional evidence.",
+          "status": "partial"
+        },
+        {
+          "confidence_band": "low",
+          "contradictions": [],
+          "criterion_id": "AC-03",
+          "evidence_ids": [],
+          "evidence_level": "E0",
+          "missing_evidence": [
+            "Required evidence level E1"
+          ],
+          "reason": "No candidate evidence was found in the complete changed-file analysis.",
+          "recommended_action": "Add implementation evidence or identify evidence for reviewer inspection.",
+          "status": "missing"
+        },
+        {
+          "confidence_band": "low",
+          "contradictions": [],
+          "criterion_id": "AC-04",
+          "evidence_ids": [],
+          "evidence_level": "E0",
+          "missing_evidence": [
+            "Required evidence level E1"
+          ],
+          "reason": "No candidate evidence was found in the complete changed-file analysis.",
+          "recommended_action": "Add implementation evidence or identify evidence for reviewer inspection.",
+          "status": "missing"
+        }
+      ],
+      "gate": {
+        "blocking_criteria": [],
+        "conditional_criteria": [],
+        "reason_codes": [],
+        "resolved_exceptions": [],
+        "unresolved_criteria": [],
+        "verdict": "ready"
+      },
+      "research_context": null,
+      "resolutions": [
+        {
+          "claimed_evidence_level": "E4",
+          "comment": "Constructed automation only; no actual target runtime or human use. Constructed linked manual decision for persistence coverage.",
+          "criterion_id": "AC-01",
+          "decision": "manually_verified",
+          "evidence_url": null,
+          "reviewer": "Constructed automation only; no actual target runtime or human use.",
+          "runtime_evidence_id": "constructed-active-runtime",
+          "timestamp": "2026-10-29T18:07:12.313509Z"
+        },
+        {
+          "claimed_evidence_level": null,
+          "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+          "criterion_id": "AC-02",
+          "decision": "accepted",
+          "evidence_url": null,
+          "reviewer": "Constructed automation only; no actual target runtime or human use.",
+          "runtime_evidence_id": null,
+          "timestamp": "2026-10-29T18:07:12.315198Z"
+        },
+        {
+          "claimed_evidence_level": null,
+          "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+          "criterion_id": "AC-03",
+          "decision": "accepted",
+          "evidence_url": null,
+          "reviewer": "Constructed automation only; no actual target runtime or human use.",
+          "runtime_evidence_id": null,
+          "timestamp": "2026-10-29T18:07:12.316576Z"
+        },
+        {
+          "claimed_evidence_level": null,
+          "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+          "criterion_id": "AC-04",
+          "decision": "accepted",
+          "evidence_url": null,
+          "reviewer": "Constructed automation only; no actual target runtime or human use.",
+          "runtime_evidence_id": null,
+          "timestamp": "2026-10-29T18:07:12.317948Z"
+        }
+      ],
+      "retrieval_diagnostics": [
+        {
+          "accepted_candidate_count": 4,
+          "below_threshold_line_count": 0,
+          "changed_file_count": 2,
+          "criterion_id": "AC-01",
+          "exact_identifier_match_line_count": 0,
+          "exact_identifiers": [],
+          "inspectable_line_count": 5,
+          "outcome": "candidates_found",
+          "searched_evidence_types": [
+            "implementation",
+            "test"
+          ],
+          "searched_paths": [
+            "src/export.py",
+            "tests/test_export.py"
+          ],
+          "searched_terms": [
+            "csv",
+            "export",
+            "list",
+            "research"
+          ],
+          "term_overlap_line_count": 4,
+          "unchanged_candidate_file_count": 0
+        },
+        {
+          "accepted_candidate_count": 5,
+          "below_threshold_line_count": 0,
+          "changed_file_count": 2,
+          "criterion_id": "AC-02",
+          "exact_identifier_match_line_count": 0,
+          "exact_identifiers": [],
+          "inspectable_line_count": 5,
+          "outcome": "candidates_found",
+          "searched_evidence_types": [
+            "implementation",
+            "test"
+          ],
+          "searched_paths": [
+            "src/export.py",
+            "tests/test_export.py"
+          ],
+          "searched_terms": [
+            "active",
+            "export",
+            "filter",
+            "respect"
+          ],
+          "term_overlap_line_count": 5,
+          "unchanged_candidate_file_count": 0
+        },
+        {
+          "accepted_candidate_count": 0,
+          "below_threshold_line_count": 3,
+          "changed_file_count": 2,
+          "criterion_id": "AC-03",
+          "exact_identifier_match_line_count": 0,
+          "exact_identifiers": [],
+          "inspectable_line_count": 5,
+          "outcome": "below_relevance_threshold",
+          "searched_evidence_types": [
+            "implementation",
+            "test"
+          ],
+          "searched_paths": [
+            "src/export.py",
+            "tests/test_export.py"
+          ],
+          "searched_terms": [
+            "error",
+            "export",
+            "fail",
+            "message",
+            "show"
+          ],
+          "term_overlap_line_count": 3,
+          "unchanged_candidate_file_count": 0
+        },
+        {
+          "accepted_candidate_count": 0,
+          "below_threshold_line_count": 0,
+          "changed_file_count": 2,
+          "criterion_id": "AC-04",
+          "exact_identifier_match_line_count": 0,
+          "exact_identifiers": [
+            "research_exported"
+          ],
+          "inspectable_line_count": 5,
+          "outcome": "exact_identifier_not_found",
+          "searched_evidence_types": [
+            "implementation",
+            "test"
+          ],
+          "searched_paths": [
+            "src/export.py",
+            "tests/test_export.py"
+          ],
+          "searched_terms": [
+            "export",
+            "record",
+            "research",
+            "research_exported",
+            "successful"
+          ],
+          "term_overlap_line_count": 3,
+          "unchanged_candidate_file_count": 0
+        }
+      ],
+      "review": {
+        "base_sha": "base-demo-001",
+        "can_analyze": true,
+        "check_state": "passing",
+        "ci_observation": {
+          "collection_complete": true,
+          "collection_notes": [],
+          "concrete_legacy_status_count": 0,
+          "failing_check_runs": 0,
+          "failing_legacy_statuses": 0,
+          "neutral_check_runs": 0,
+          "neutral_legacy_statuses": 0,
+          "pending_check_runs": 0,
+          "pending_legacy_statuses": 0,
+          "reason": "Observed 1 successful completed check run; no concrete legacy statuses.",
+          "reason_code": "successful_check_runs",
+          "skipped_check_names": [],
+          "skipped_check_runs": 0,
+          "state": "passing",
+          "successful_check_runs": 1,
+          "successful_legacy_statuses": 0,
+          "total_check_runs": 1
+        },
+        "created_at": "2026-10-29T18:07:12.302165Z",
+        "criteria_confirmed": true,
+        "criteria_source_provenance": {
+          "confirmed_at": "2026-10-29T18:07:12.310079Z",
+          "confirmed_by": "Constructed automation only; no actual target runtime or human use.",
+          "normalized_criteria_sha256": "5f764de4d0260442c65fa70b115025ae6a18d2e31cc669f16adb3465f30b07cd",
+          "source_revision": "constructed-automation-v023-upgrade-revision-2",
+          "source_text_sha256": "660ca992026e2f5f90b5d319150ba44bfd47d6ee093d649d12e7ba7056239103",
+          "source_uri": "scopeproof://constructed-demo/acceptance-criteria"
+        },
+        "final_acceptance": true,
+        "head_sha": "head-demo-002",
+        "ingestion_state": "complete",
+        "ingestion_warnings": [],
+        "input_origin": "constructed_demo",
+        "pr_number": 17,
+        "repository": "scopeproof/demo-stock-research",
+        "review_id": "constructed-v023-upgrade",
+        "ruleset_version": "1.0.0",
+        "skipped_files": [],
+        "tool_version": "0.2.3"
+      },
+      "reviewer_decision_state": "recorded",
+      "runtime_evidence": [
+        {
+          "artifact_reference": "scopeproof://constructed-automation/active",
+          "criterion_id": "AC-01",
+          "environment": "Constructed automation only; no actual target runtime or human use. Offline packaged-fixture rehearsal.",
+          "evidence_level": "E4",
+          "head_sha": "head-demo-002",
+          "limitations": [
+            "Constructed automation only; no actual target runtime or human use. E3/E4 is a constructed schema value only."
+          ],
+          "pr_number": 17,
+          "repository": "scopeproof/demo-stock-research",
+          "result": "Constructed automation only; no actual target runtime or human use. Constructed passed value for persistence coverage.",
+          "reviewer": "Constructed automation only; no actual target runtime or human use.",
+          "runtime_evidence_id": "constructed-active-runtime",
+          "scenario": "Constructed automation only; no actual target runtime or human use. Synthetic active CSV-export scenario.",
+          "timestamp": "2026-10-29T18:07:12.313497Z"
+        }
+      ],
+      "runtime_verification_state": "recorded",
+      "source_text": "Users can export the filtered research list as CSV. The export must respect all active filters, show an error if export fails, and record a research_exported analytics event.\nConstructed automation only; no actual target runtime or human use. Constructed revision 2."
+    },
+    "criteria_revision": {
+      "confirmed": true,
+      "confirmed_at": "2026-10-29T18:07:12.310079Z",
+      "created_at": "2026-10-29T18:07:12.310062Z",
+      "criteria": [
+        {
+          "criterion_id": "AC-01",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E1",
+          "source_span": null,
+          "text": "User can export the research list as CSV (constructed automation revision 2)"
+        },
+        {
+          "criterion_id": "AC-02",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E1",
+          "source_span": null,
+          "text": "Export respects all active filters"
+        },
+        {
+          "criterion_id": "AC-03",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "error_state",
+          "priority": "must_have",
+          "required_evidence_level": "E1",
+          "source_span": null,
+          "text": "Failed export shows an error message"
+        },
+        {
+          "criterion_id": "AC-04",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "analytics",
+          "priority": "should_have",
+          "required_evidence_level": "E1",
+          "source_span": null,
+          "text": "Successful export records research_exported"
+        }
+      ],
+      "number": 2,
+      "source_provenance": {
+        "confirmed_at": "2026-10-29T18:07:12.310079Z",
+        "confirmed_by": "Constructed automation only; no actual target runtime or human use.",
+        "normalized_criteria_sha256": "5f764de4d0260442c65fa70b115025ae6a18d2e31cc669f16adb3465f30b07cd",
+        "source_revision": "constructed-automation-v023-upgrade-revision-2",
+        "source_text_sha256": "660ca992026e2f5f90b5d319150ba44bfd47d6ee093d649d12e7ba7056239103",
+        "source_uri": "scopeproof://constructed-demo/acceptance-criteria"
+      },
+      "source_text": "Users can export the filtered research list as CSV. The export must respect all active filters, show an error if export fails, and record a research_exported analytics event.\nConstructed automation only; no actual target runtime or human use. Constructed revision 2."
+    },
+    "resolution_events": [
+      {
+        "claimed_evidence_level": "E3",
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed linked manual decision for persistence coverage.",
+        "criteria_revision_number": 1,
+        "criterion_id": "AC-01",
+        "decision": "manually_verified",
+        "event_id": "constructed-historical-manual",
+        "evidence_url": null,
+        "final_acceptance": null,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": "constructed-historical-runtime",
+        "timestamp": "2026-10-29T18:07:12.304429Z"
+      },
+      {
+        "claimed_evidence_level": null,
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+        "criteria_revision_number": 1,
+        "criterion_id": "AC-02",
+        "decision": "accepted",
+        "event_id": "constructed-historical-accepted-AC-02",
+        "evidence_url": null,
+        "final_acceptance": null,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": null,
+        "timestamp": "2026-10-29T18:07:12.305663Z"
+      },
+      {
+        "claimed_evidence_level": null,
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+        "criteria_revision_number": 1,
+        "criterion_id": "AC-03",
+        "decision": "accepted",
+        "event_id": "constructed-historical-accepted-AC-03",
+        "evidence_url": null,
+        "final_acceptance": null,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": null,
+        "timestamp": "2026-10-29T18:07:12.306539Z"
+      },
+      {
+        "claimed_evidence_level": null,
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+        "criteria_revision_number": 1,
+        "criterion_id": "AC-04",
+        "decision": "accepted",
+        "event_id": "constructed-historical-accepted-AC-04",
+        "evidence_url": null,
+        "final_acceptance": null,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": null,
+        "timestamp": "2026-10-29T18:07:12.307397Z"
+      },
+      {
+        "claimed_evidence_level": null,
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed final-acceptance value for persistence coverage.",
+        "criteria_revision_number": 1,
+        "criterion_id": null,
+        "decision": null,
+        "event_id": "constructed-historical-final-acceptance",
+        "evidence_url": null,
+        "final_acceptance": true,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": null,
+        "timestamp": "2026-10-29T18:07:12.308565Z"
+      },
+      {
+        "claimed_evidence_level": "E4",
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed linked manual decision for persistence coverage.",
+        "criteria_revision_number": 2,
+        "criterion_id": "AC-01",
+        "decision": "manually_verified",
+        "event_id": "constructed-active-manual",
+        "evidence_url": null,
+        "final_acceptance": null,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": "constructed-active-runtime",
+        "timestamp": "2026-10-29T18:07:12.313509Z"
+      },
+      {
+        "claimed_evidence_level": null,
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+        "criteria_revision_number": 2,
+        "criterion_id": "AC-02",
+        "decision": "accepted",
+        "event_id": "constructed-active-accepted-AC-02",
+        "evidence_url": null,
+        "final_acceptance": null,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": null,
+        "timestamp": "2026-10-29T18:07:12.315198Z"
+      },
+      {
+        "claimed_evidence_level": null,
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+        "criteria_revision_number": 2,
+        "criterion_id": "AC-03",
+        "decision": "accepted",
+        "event_id": "constructed-active-accepted-AC-03",
+        "evidence_url": null,
+        "final_acceptance": null,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": null,
+        "timestamp": "2026-10-29T18:07:12.316576Z"
+      },
+      {
+        "claimed_evidence_level": null,
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed accepted value for persistence coverage.",
+        "criteria_revision_number": 2,
+        "criterion_id": "AC-04",
+        "decision": "accepted",
+        "event_id": "constructed-active-accepted-AC-04",
+        "evidence_url": null,
+        "final_acceptance": null,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": null,
+        "timestamp": "2026-10-29T18:07:12.317948Z"
+      },
+      {
+        "claimed_evidence_level": null,
+        "comment": "Constructed automation only; no actual target runtime or human use. Constructed final-acceptance value for persistence coverage.",
+        "criteria_revision_number": 2,
+        "criterion_id": null,
+        "decision": null,
+        "event_id": "constructed-active-final-acceptance",
+        "evidence_url": null,
+        "final_acceptance": true,
+        "reviewer": "Constructed automation only; no actual target runtime or human use.",
+        "runtime_evidence_id": null,
+        "timestamp": "2026-10-29T18:07:12.320386Z"
+      }
+    ],
+    "review": {
+      "base_sha": "base-demo-001",
+      "can_analyze": true,
+      "check_state": "passing",
+      "ci_observation": {
+        "collection_complete": true,
+        "collection_notes": [],
+        "concrete_legacy_status_count": 0,
+        "failing_check_runs": 0,
+        "failing_legacy_statuses": 0,
+        "neutral_check_runs": 0,
+        "neutral_legacy_statuses": 0,
+        "pending_check_runs": 0,
+        "pending_legacy_statuses": 0,
+        "reason": "Observed 1 successful completed check run; no concrete legacy statuses.",
+        "reason_code": "successful_check_runs",
+        "skipped_check_names": [],
+        "skipped_check_runs": 0,
+        "state": "passing",
+        "successful_check_runs": 1,
+        "successful_legacy_statuses": 0,
+        "total_check_runs": 1
+      },
+      "created_at": "2026-10-29T18:07:12.302165Z",
+      "criteria_confirmed": true,
+      "criteria_source_provenance": {
+        "confirmed_at": "2026-10-29T18:07:12.310079Z",
+        "confirmed_by": "Constructed automation only; no actual target runtime or human use.",
+        "normalized_criteria_sha256": "5f764de4d0260442c65fa70b115025ae6a18d2e31cc669f16adb3465f30b07cd",
+        "source_revision": "constructed-automation-v023-upgrade-revision-2",
+        "source_text_sha256": "660ca992026e2f5f90b5d319150ba44bfd47d6ee093d649d12e7ba7056239103",
+        "source_uri": "scopeproof://constructed-demo/acceptance-criteria"
+      },
+      "final_acceptance": true,
+      "head_sha": "head-demo-002",
+      "ingestion_state": "complete",
+      "ingestion_warnings": [],
+      "input_origin": "constructed_demo",
+      "pr_number": 17,
+      "repository": "scopeproof/demo-stock-research",
+      "review_id": "constructed-v023-upgrade",
+      "ruleset_version": "1.0.0",
+      "skipped_files": [],
+      "tool_version": "0.2.3"
+    }
+  }
+}

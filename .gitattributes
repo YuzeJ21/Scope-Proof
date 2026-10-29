@@ -1,0 +1,3 @@
+# Preserve the observed old-writer bytes and the recipe bound by provenance hashes.
+tests/fixtures/released_v023_upgrade/native_v4.json -text
+tests/fixtures/released_v023_upgrade/generate_record.py -text

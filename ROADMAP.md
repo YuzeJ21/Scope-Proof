@@ -16,9 +16,12 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 **v0.2.4 is published as a downloadable evaluation release.** Its public wheel, source archive
 and checksums were automatically verified. The [dated public verification record](docs/releases/v0.2.4-public-verification.md)
 binds those results to release source `11bcdc66f7d8f5a29055688208de1ed337eed07f`.
-Current source is unreleased `0.2.5.dev0`; no new product capability is introduced by this
-post-release closeout. Preserve the published v0.2.4 assets and return to bounded maintenance
-after the closeout PR, review and required checks. This is evaluation distribution, not a
+Current source is unreleased `0.2.5.dev0`. The [native saved-review upgrade rehearsal](docs/research/2026-10-29-v023-v024-upgrade.md)
+verified one constructed published-v0.2.3 writer → published-v0.2.4 reader history: original
+facts and linked decisions survived, while missing changed-file inventory correctly changed
+both old Ready gates to Needs review. It required no product fix or policy change. Preserve
+the published assets and return to bounded maintenance after this regression/evidence slice,
+review and required checks. This is evaluation distribution, not a
 Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
 

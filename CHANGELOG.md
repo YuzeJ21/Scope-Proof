@@ -11,6 +11,10 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5.dev0`, unreleased.
 
+- Retain a native published-v0.2.3 saved-review fixture and offline upgrade regression after a
+  successful constructed rehearsal with the published v0.2.4 reader. History and linked decisions
+  survive while unknown changed-file scope prevents Ready. No engine or policy change was needed;
+  see the [version-bound observation](docs/research/2026-10-29-v023-v024-upgrade.md).
 - Complete v0.2.4 post-release upkeep: advance the development identity, align active installation
   and support guidance with the published release, preserve final-version reuse safeguards, and
   record version-bound public verification. This closeout changes no engine policy or gate behavior.
