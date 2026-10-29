@@ -22,6 +22,7 @@ from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.github.client import GitHubNetworkError, GitHubPaginationError
 from scopeproof_core.importers.junit import (
+    MAX_JUNIT_BYTES,
     JUnitMappingSelection,
     build_junit_evidence_import,
 )
@@ -5264,7 +5265,7 @@ def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -
     assert before.bundle is not None
     assert (
         app.file_uploader(key="junit_artifact_upload").proto.max_upload_size_mb
-        == 1
+        * 1_000_000 >= MAX_JUNIT_BYTES
     )
 
     app = app.file_uploader(key="junit_artifact_upload").upload(
@@ -5297,6 +5298,62 @@ def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -
     assert app.text_input(key="junit_importer").value == ""
     assert app.multiselect(key="junit_mapping_scopes").value == []
     assert app.button(key="save_junit_import").disabled is True
+
+
+def test_junit_exact_one_mib_payload_fits_upload_envelope_and_remains_non_gating() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    before = app.session_state["review_state"].model_copy(deep=True)
+    assert before.bundle is not None
+    envelope_mb = app.file_uploader(key="junit_artifact_upload").proto.max_upload_size_mb
+    assert MAX_JUNIT_BYTES <= envelope_mb * 1_000_000 <= 2_000_000
+    xml = b'<testsuite name="boundary"><testcase name="exact-one-mib"/></testsuite>'
+    payload = xml + b" " * (MAX_JUNIT_BYTES - len(xml))
+    assert len(payload) == MAX_JUNIT_BYTES
+
+    app = app.file_uploader(key="junit_artifact_upload").upload(
+        "exact-one-mib.xml", payload, "application/xml"
+    ).run()
+    assert not app.exception
+    assert "Sanitized JUnit preview" in [item.value for item in app.caption]
+    app = app.text_input(key="junit_importer").set_value(
+        "Constructed automated byte-boundary probe"
+    ).run()
+    app = app.multiselect(key="junit_mapping_scopes").set_value(["suite-0001"]).run()
+    app = app.button(key="save_junit_import").click().run()
+
+    updated = app.session_state["review_state"]
+    assert updated.bundle is not None
+    assert updated.bundle.junit_evidence_imports[0].artifact_sha256 == sha256(payload).hexdigest()
+    assert updated.bundle.gate == before.bundle.gate
+    assert updated.bundle.resolutions == before.bundle.resolutions
+    assert updated.bundle.runtime_evidence == before.bundle.runtime_evidence
+    assert updated.review.final_acceptance is before.review.final_acceptance
+
+
+def test_junit_one_byte_over_limit_is_rejected_before_reading_and_preserves_review() -> None:
+    app = analyzed_exact_head_standard_demo(new_app())
+    before = app.session_state["review_state"].model_copy(deep=True)
+    assert before.bundle is not None
+    with patch(
+        "streamlit.runtime.uploaded_file_manager.UploadedFile.getvalue",
+        side_effect=AssertionError("Oversized XML must not be read"),
+    ) as read:
+        app = app.file_uploader(key="junit_artifact_upload").upload(
+            "one-byte-over.xml", b" " * (MAX_JUNIT_BYTES + 1), "application/xml"
+        ).run()
+        read.assert_not_called()
+
+    assert not app.exception
+    assert any("exceeds the local import byte limit" in item.value for item in app.error)
+    assert "Sanitized JUnit preview" not in [item.value for item in app.caption]
+    assert app.button(key="save_junit_import").disabled is True
+    updated = app.session_state["review_state"]
+    assert updated.bundle is not None
+    assert updated.bundle.junit_evidence_imports == before.bundle.junit_evidence_imports
+    assert updated.bundle.gate == before.bundle.gate
+    assert updated.bundle.resolutions == before.bundle.resolutions
+    assert updated.bundle.runtime_evidence == before.bundle.runtime_evidence
+    assert updated.review.final_acceptance is before.review.final_acceptance
 
 
 def test_replacing_junit_upload_clears_mapping_even_when_scope_ids_match() -> None:

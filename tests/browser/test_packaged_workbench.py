@@ -34,6 +34,7 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
+from scopeproof_core.importers.junit import MAX_JUNIT_BYTES
 from scopeproof_core.schemas.models import JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
 from tests.candidate_selection_fixture import selection_criteria, selection_snapshot
 
@@ -1085,6 +1086,40 @@ def _exercise_junit_import_round_trip(
         assert b"FAILURE-BODY-SENTINEL" not in downloaded_bytes
 
 
+def _exercise_junit_upload_byte_boundary(page: Page, artifact_directory: Path) -> None:
+    """The frontend allowance must let the exact core limit reach bounded inspection."""
+    page.get_by_text("Import external JUnit results", exact=True).click()
+    uploader = page.get_by_label("Local JUnit XML artifact", exact=True).locator("input[type=file]")
+    xml = b'<testsuite name="boundary"><testcase name="exact-one-mib"/></testsuite>'
+    payload = xml + b" " * (MAX_JUNIT_BYTES - len(xml))
+    exact = artifact_directory / "exact-one-mib.xml"
+    exact.write_bytes(payload)
+    _run_and_wait_for_streamlit_rerun(page, lambda: uploader.set_input_files(exact))
+    preview = page.get_by_text("Sanitized JUnit preview", exact=True)
+    if not preview.is_visible():
+        page.get_by_text("Import external JUnit results", exact=True).click()
+    expect(preview).to_be_visible()
+    expect(page.get_by_text(
+        "Computed results: 1 total · 1 passed · 0 failed · 0 errors · 0 skipped", exact=True
+    )).to_be_visible()
+
+    oversized = artifact_directory / "one-byte-over.xml"
+    oversized.write_bytes(payload + b" ")
+    _run_and_wait_for_streamlit_rerun(page, lambda: uploader.set_input_files(oversized))
+    rejection = page.get_by_text(
+        "JUnit artifact could not be inspected. It exceeds the local "
+        "import byte limit and remains unsaved.", exact=True
+    )
+    if not rejection.is_visible():
+        page.get_by_text("Import external JUnit results", exact=True).click()
+    expect(rejection).to_be_visible()
+    expect(page.get_by_text("Sanitized JUnit preview", exact=True)).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Save imported JUnit results", exact=True
+    )).to_be_disabled()
+    expect(page.get_by_text("Recorded imported JUnit results (1)", exact=True)).to_be_visible()
+
+
 def test_installed_wheel_primary_path_in_chromium(
     tmp_path: Path, request: pytest.FixtureRequest
 ) -> None:
@@ -1280,6 +1315,7 @@ def test_installed_wheel_primary_path_in_chromium(
                                     else None
                                 ),
                             )
+                            _exercise_junit_upload_byte_boundary(page, runtime_dir)
                     context.close()
             finally:
                 browser.close()

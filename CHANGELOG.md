@@ -11,6 +11,10 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5.dev0`, unreleased.
 
+- Let a valid exact-1-MiB JUnit artifact reach the workbench's existing byte check. Retain rejection
+  of larger files before reading or parsing, and preserve all review decisions and evidence gates.
+  Clarify maintained installation constraints without changing published v0.2.4 bytes or metadata;
+  see the [version-bound assessment](docs/audits/2026-10-29-runtime-dependency-floor.md).
 - Reduce measured coverage overhead in the Python 3.12 CI job using a verified SysMonitor
   collector, with real thread/subprocess accounting regressions and timing diagnostics. Preserve
   the full suites, coverage targets, unrounded 95% floor and all required gates. This changes no

@@ -29,6 +29,9 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 ## Historical evidence records
 
+- [Dependency-floor and JUnit upload assessment](audits/2026-10-29-runtime-dependency-floor.md)
+  records exact installed combinations, partial older-UI evidence, and the reproduced byte-boundary
+  defect plus unreleased-source repair. Published v0.2.4 remains unchanged.
 - [Covered-suite performance maintenance](audits/2026-10-29-verification-performance.md) records
   the controlled timing/accounting comparison, CI-only scope and unchanged verification gates.
 - [v0.2.4 evaluation preparation](releases/v0.2.4-evaluation-candidate.md) preserves the candidate
