@@ -48,6 +48,7 @@ from scopeproof_core.schemas.models import (
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
 from scopeproof_core.version import __version__
+from tests.candidate_selection_fixture import selection_bundle
 
 
 def action_evidence_data() -> dict:
@@ -1069,6 +1070,45 @@ def test_csv_export_preserves_review_level_final_acceptance_blocker(
             "its evidence."
         ]
     assert record.read_bytes() == saved_bytes
+    assert captured.err == ""
+
+
+@pytest.mark.parametrize("report_format", ["json", "csv"])
+@pytest.mark.parametrize("historical", [False, True])
+def test_saved_export_discloses_selection_counts_without_inventing_historical_counts(
+    tmp_path: Path, capsys, report_format: str, historical: bool
+) -> None:
+    state = new_review_state(selection_bundle())
+    storage = tmp_path / "reviews"
+    JsonReviewStore(storage).save(state)
+    record = storage / f"{state.review.review_id}.json"
+    if historical:
+        payload = json.loads(record.read_text(encoding="utf-8"))
+        for diagnostic in payload["state"]["bundle"]["retrieval_diagnostics"]:
+            for key in ("eligible_candidate_count", "candidate_limit", "omitted_candidate_count"):
+                diagnostic.pop(key, None)
+        record.write_text(json.dumps(payload), encoding="utf-8")
+    before = record.read_bytes()
+
+    assert main([
+        "export", state.review.review_id, "--storage-dir", str(storage),
+        "--format", report_format,
+    ]) == 0
+
+    captured = capsys.readouterr()
+    if report_format == "json":
+        report = json.loads(captured.out)
+        diagnostic = report["bundle"]["retrieval_diagnostics"][0]
+        assert report["review"]["head_sha"] == "a" * 40
+    else:
+        row = next(csv.DictReader(io.StringIO(captured.out)))
+        diagnostic = json.loads(row["retrieval_diagnostic"])
+        assert row["head_sha"] == "a" * 40
+    assert diagnostic["accepted_candidate_count"] == 8
+    assert diagnostic["eligible_candidate_count"] == (None if historical else 12)
+    assert diagnostic["candidate_limit"] == (None if historical else 8)
+    assert diagnostic["omitted_candidate_count"] == (None if historical else 4)
+    assert record.read_bytes() == before
     assert captured.err == ""
 
 

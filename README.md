@@ -369,6 +369,13 @@ These appended columns preserve the reason and next action when a row is filtere
 for example, accepted criterion decisions can still require final acceptance. They explain the
 existing validated gate and do not change a decision or establish correctness.
 
+Unreleased source analyses also record `eligible_candidate_count`, `candidate_limit`, and
+`omitted_candidate_count` in retrieval diagnostics. The workbench and human-readable reports
+explain how many passing matches were shown or omitted during the existing bounded selection;
+JSON and CSV retain the validated counts. The limit remains eight, and identical duplicates may
+also be suppressed. Historical diagnostics keep these fields unknown (`null`), never inferred
+as zero. Selection counts explain the search and do not prove criterion satisfaction.
+
 Anonymous public-repository access is the default. `--token` is optional and can increase GitHub's
 free rate limit, but it is not required or persisted. The CLI never comments on the pull request,
 executes its code, or converts static candidates into runtime verification.

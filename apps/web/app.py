@@ -61,6 +61,7 @@ from scopeproof_core.importers.junit import (
 )
 from scopeproof_core.presentation import (
     EvidenceStatus,
+    candidate_selection_text,
     criterion_coverage_rows,
     evidence_status_text,
     review_status_label,
@@ -2346,6 +2347,8 @@ else:
                 "Accepted candidates: "
                 f"{selected_diagnostic.accepted_candidate_count}"
             )
+            st.caption("Candidate selection")
+            st.text(candidate_selection_text(selected_diagnostic))
             st.caption(
                 "Search diagnostics explain retrieval; they are not evidence that the criterion "
                 "is satisfied or missing from the repository."

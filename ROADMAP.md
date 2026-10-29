@@ -55,6 +55,11 @@ when accepted criteria still required final acceptance. Six appended JSON-array 
 the existing gate context on each criterion row. This is an unreleased source capability and
 engineering evidence only; it does not advance Stage 3 or change the published v0.2.3 package.
 
+The [candidate-selection completeness slice](docs/superpowers/specs/2026-10-29-candidate-selection-completeness-design.md)
+discloses eligible, shown and omitted candidate counts around the unchanged eight-candidate
+selector. Historical counts remain unknown. This adds explanation across the workbench and
+exports without changing retrieval, gate decisions, frozen research or stage status.
+
 <details>
 <summary>Release baseline and dated integration references</summary>
 

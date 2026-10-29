@@ -1037,6 +1037,9 @@ class CriterionRetrievalDiagnostic(BaseModel):
     term_overlap_line_count: int = Field(ge=0)
     below_threshold_line_count: int = Field(ge=0)
     accepted_candidate_count: int = Field(ge=0)
+    eligible_candidate_count: int | None = Field(default=None, ge=0, strict=True)
+    candidate_limit: int | None = Field(default=None, gt=0, strict=True)
+    omitted_candidate_count: int | None = Field(default=None, ge=0, strict=True)
 
     @field_validator("criterion_id")
     @classmethod
@@ -1072,6 +1075,23 @@ class CriterionRetrievalDiagnostic(BaseModel):
         cls, value: list[EvidenceType]
     ) -> list[EvidenceType]:
         return sorted(set(value), key=lambda item: item.value)
+
+    @model_validator(mode="after")
+    def validate_selection_completeness(self) -> CriterionRetrievalDiagnostic:
+        eligible = self.eligible_candidate_count
+        limit = self.candidate_limit
+        omitted = self.omitted_candidate_count
+        if eligible is None and limit is None and omitted is None:
+            return self
+        if eligible is None or limit is None or omitted is None:
+            raise ValueError("candidate selection counters must be recorded together")
+        if eligible > self.inspectable_line_count:
+            raise ValueError("eligible candidates cannot exceed inspectable lines")
+        if self.accepted_candidate_count > min(eligible, limit):
+            raise ValueError("selected candidates cannot exceed eligible count or limit")
+        if omitted != eligible - self.accepted_candidate_count:
+            raise ValueError("omitted candidates must equal eligible minus selected")
+        return self
 
 
 class EvidenceRetrievalResult(BaseModel):

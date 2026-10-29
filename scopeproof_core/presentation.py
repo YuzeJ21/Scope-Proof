@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.gates.validation import validated_review_bundle
 from scopeproof_core.schemas.models import (
+    CriterionRetrievalDiagnostic,
     Finding,
     FindingStatus,
     GateVerdict,
@@ -82,6 +83,18 @@ def review_status_label(verdict: GateVerdict) -> str:
     """Translate an internal deterministic gate into reviewer-owned language."""
 
     return _REVIEW_STATUS[verdict]
+
+
+def candidate_selection_text(diagnostic: CriterionRetrievalDiagnostic) -> str:
+    """Disclose a recorded selection bound without inferring historical counts."""
+    if diagnostic.eligible_candidate_count is None:
+        return "Candidate selection completeness was not recorded for this review."
+    return (
+        f"{diagnostic.accepted_candidate_count} of {diagnostic.eligible_candidate_count} "
+        "candidates passing search filters shown; "
+        f"{diagnostic.omitted_candidate_count} omitted during selection "
+        f"(limit: {diagnostic.candidate_limit})."
+    )
 
 
 def evidence_status_text(status: EvidenceStatus) -> str:
