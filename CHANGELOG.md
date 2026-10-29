@@ -9,14 +9,19 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-No subsequent changes recorded.
+Source/package identity: `0.2.5.dev0`, unreleased.
 
-## 0.2.4 — Downloadable evaluation candidate
+- Complete v0.2.4 post-release upkeep: advance the development identity, align active installation
+  and support guidance with the published release, preserve final-version reuse safeguards, and
+  record version-bound public verification. This closeout changes no engine policy or gate behavior.
+  See the [v0.2.4 public verification record](docs/releases/v0.2.4-public-verification.md).
 
-Source/package identity: `0.2.4`. This entry prepares a downloadable evaluation release; it does
-not publish it. Public install remains v0.2.3 until a matching v0.2.4 GitHub Release with its
-wheel, source archive, and `SHA256SUMS.txt` exists. See the
-[candidate notes and upgrade guidance](docs/releases/v0.2.4-evaluation-candidate.md).
+## 0.2.4 — Downloadable evaluation release
+
+Published as [v0.2.4](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4) from
+`11bcdc66f7d8f5a29055688208de1ed337eed07f`, with its wheel, source archive, and
+`SHA256SUMS.txt` verified in the [public verification record](docs/releases/v0.2.4-public-verification.md).
+See the [release preparation and upgrade notes](docs/releases/v0.2.4-evaluation-candidate.md).
 
 ### Product strategy
 

@@ -2,9 +2,10 @@
 
 ## Maintained evaluation versions
 
-The maintained source/package candidate is v0.2.4. The currently published evaluation version
-remains v0.2.3 until [GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases) contains a
-matching v0.2.4 record and assets. Maintenance is bounded owner-led upkeep, with no support-service,
+The published evaluation version is [v0.2.4](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4);
+its wheel, source archive, and checksums are bound in the
+[public verification record](docs/releases/v0.2.4-public-verification.md). The current source/package
+identity is `0.2.5.dev0`, unreleased. Maintenance is bounded owner-led upkeep, with no support-service,
 response-time, or security-resolution promise. See the
 [supported environment and engineering coverage](docs/development-environment.md). ScopeProof is local-first,
 public-repository-only, and does not accept or require credentials beyond an

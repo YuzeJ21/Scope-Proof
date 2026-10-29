@@ -9,10 +9,11 @@ Stage 2 is `owner_led_productization_active` with bounded maintenance of the eng
 product. Stage 3 remains dormant and gated. Neither status supplies a participant, customer,
 demand, adoption, repeat-use, price, or paid-demand signal.
 
-The maintained source/package candidate is v0.2.4. The published download remains v0.2.3 until
-[GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases) contains a matching v0.2.4 release
-with its wheel, source archive, and checksums. See the
-[evaluation candidate notes](../releases/v0.2.4-evaluation-candidate.md) and
+The published evaluation download is [v0.2.4](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4),
+with its wheel, source archive, and checksums verified in the
+[public verification record](../releases/v0.2.4-public-verification.md). Current source/package
+identity is `0.2.5.dev0`, unreleased. See the
+[release preparation and upgrade notes](../releases/v0.2.4-evaluation-candidate.md) and
 [current quickstart](../../README.md#quickstart) for installation and upgrade boundaries. The
 implemented local public-PR workflow is engineering evidence, not proof of product value.
 

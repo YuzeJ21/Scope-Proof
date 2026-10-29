@@ -1,0 +1,86 @@
+{
+  "record_version": 1,
+  "version": "0.2.4",
+  "tag": "v0.2.4",
+  "release_id": 428120360,
+  "release_url": "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4",
+  "source_sha": "11bcdc66f7d8f5a29055688208de1ed337eed07f",
+  "source_tree": "9b5bd8f6c468299f2d39c677a7b61c3cccb86a29",
+  "annotated_tag_object": "8d99d3d6b337e5a670c0947b707083e2ac822751",
+  "published_at": "2026-10-29T16:30:44Z",
+  "verified_at": "2026-10-29T16:34:11.975644Z",
+  "assets": [
+    {
+      "name": "scopeproof-0.2.4-py3-none-any.whl",
+      "bytes": 320694,
+      "sha256": "350ec7375ddab278f4dfef9737c341b5f26fe6e23dff7d0568df363cd4f3a287",
+      "url": "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4/scopeproof-0.2.4-py3-none-any.whl"
+    },
+    {
+      "name": "scopeproof-0.2.4.tar.gz",
+      "bytes": 7227148,
+      "sha256": "773c922b6abd7da0191b676c77fc2787d44abc022d3656e0921260dd1180daa8",
+      "url": "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4/scopeproof-0.2.4.tar.gz"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 190,
+      "sha256": "ab2de99af4bfbbd595794f7cb7d11254f2acdd27c3ca258bf1a6e0a0cc53d7c7",
+      "url": "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4/SHA256SUMS.txt"
+    }
+  ],
+  "public_checks": {
+    "actor": "automated_checks",
+    "http_authentication": "none; curl configuration disabled",
+    "successful_http_requests": 5,
+    "verified_assets": 3,
+    "fresh_install_formats": [
+      "wheel",
+      "source"
+    ],
+    "python_version": "3.12.0",
+    "package_core_review_cli_web_version": "0.2.4",
+    "dependency_checks": "passed for both installations",
+    "acceptance_cases_per_install": 12,
+    "comparison_cases_per_install": 2,
+    "benchmark_mismatches": 0,
+    "must_have_false_ready": 0,
+    "uncited_file_false_ready": 0,
+    "workbench_health": "ok",
+    "workbench_process_stopped": true
+  },
+  "prior_candidate_compatibility": {
+    "actor": "automated_checks",
+    "evidence": "same final wheel bytes before publication",
+    "platform": "macOS",
+    "python_versions": [
+      "3.11.15",
+      "3.13.14"
+    ],
+    "checks": "fresh installs, identity, dependencies and both constructed benchmarks passed"
+  },
+  "release_source_ci": {
+    "source_sha": "11bcdc66f7d8f5a29055688208de1ed337eed07f",
+    "ci_run_id": 40907232114,
+    "codeql_run_id": 40907230758,
+    "base_advance_run_id": 40907231657,
+    "conclusion": "success",
+    "tests_passed": 2700,
+    "tests_skipped": 8,
+    "unrounded_coverage_percent": 95.0834,
+    "packaged_browser_checks": 11,
+    "full_browser_journeys": 1,
+    "constructed_selection_checks": 4,
+    "helper_capture_checks": 6
+  },
+  "boundaries": {
+    "evidence": "engineering only",
+    "source_review_actor": "independent automated agent",
+    "target_repository_code_executed": false,
+    "genuine_independent_use_credit": 0,
+    "qualifying_review_credit": 0,
+    "stage_1": "closed_not_pursued_by_owner",
+    "stage_3": "dormant"
+  },
+  "operational_note": "The draft-by-tag lookup returned HTTP 404. The parent shell continued to the authorized publication command before remote-draft verification completed. The published source/tag, reviewed notes, exact three assets, sizes, digests and latest-release identity matched; subsequent anonymous-download and fresh-install public verification passed. No incorrect public artifact was identified, and no release deletion or asset replacement was performed."
+}

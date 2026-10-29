@@ -1,9 +1,10 @@
 # Reproducible development environment
 
-The public install remains v0.2.3 at preparation time; the current repository source/package
-version is the `0.2.4` evaluation candidate. Consult the
-[candidate guide](releases/v0.2.4-evaluation-candidate.md) and GitHub Releases for availability;
-a final version string does not establish publication. Python 3.11, Python 3.12, and Python 3.13
+The public evaluation install is v0.2.4; current repository source is unreleased `0.2.5.dev0`.
+The [public verification record](releases/v0.2.4-public-verification.md) binds the published
+archives to their release source and separates public installation checks from earlier candidate
+compatibility evidence. GitHub Releases remains authoritative for availability. Python 3.11,
+Python 3.12, and Python 3.13
 have current package/CLI engineering
 coverage. Python 3.11 is the declared floor, Python 3.12 is the locked contributor baseline, and
 Python 3.13 is exercised in protected compatibility CI and a genuine local interpreter check.

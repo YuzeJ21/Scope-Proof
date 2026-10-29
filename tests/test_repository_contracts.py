@@ -25,15 +25,13 @@ from scopeproof_core.evals.r002_models import (
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
 from scopeproof_core.version import __version__
 
-PUBLIC_RELEASE_VERSION = "0.2.3"
-PUBLIC_RELEASE_TAG = "v0.2.3"
-SOURCE_VERSION = "0.2.4"
-PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.3-py3-none-any.whl"
-PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
-TARGET_RELEASE_VERSION = "0.2.4"
-TARGET_RELEASE_TAG = "v0.2.4"
-TARGET_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.4-py3-none-any.whl"
-TARGET_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4"
+PUBLIC_RELEASE_VERSION = "0.2.4"
+PUBLIC_RELEASE_TAG = "v0.2.4"
+SOURCE_VERSION = "0.2.5.dev0"
+PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.4-py3-none-any.whl"
+PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4"
+V023_RELEASE_WHEEL = "scopeproof-0.2.3-py3-none-any.whl"
+V023_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
 PUBLIC_RELEASES_INDEX = "https://github.com/YuzeJ21/Scope-Proof/releases"
 PR183_SOURCE_MERGE_SHA = "cd362a85a558645a0f56d6540f6bf035e5821809"
 PR183_EXACT_MAIN_RUN_IDS = ("30847416893", "30847415556", "30847417705")
@@ -606,7 +604,7 @@ def test_public_product_surfaces_use_reviewer_first_vocabulary() -> None:
 def test_readme_separates_release_install_from_contributor_setup() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert f"{TARGET_RELEASE_DOWNLOAD_ROOT}/{TARGET_RELEASE_WHEEL_FILENAME}" in readme
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
     assert "scopeproof benchmark" in readme
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in readme
     assert "## Contributor setup" in readme
@@ -618,14 +616,14 @@ def test_readme_separates_release_install_from_contributor_setup() -> None:
 def test_readme_documents_optional_release_checksum_verification() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert f"{TARGET_RELEASE_DOWNLOAD_ROOT}/{TARGET_RELEASE_WHEEL_FILENAME}" in readme
-    assert f"{TARGET_RELEASE_DOWNLOAD_ROOT}/SHA256SUMS.txt" in readme
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/SHA256SUMS.txt" in readme
     assert (
-        f'grep " {TARGET_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | shasum -a 256 -c -'
+        f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | shasum -a 256 -c -'
     ) in readme
-    assert (f'grep " {TARGET_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | sha256sum -c -') in readme
-    assert f"{TARGET_RELEASE_WHEEL_FILENAME}.sha256" not in readme
-    assert f"python -m pip install ./{TARGET_RELEASE_WHEEL_FILENAME}" in readme
+    assert (f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | sha256sum -c -') in readme
+    assert f"{PUBLIC_RELEASE_WHEEL_FILENAME}.sha256" not in readme
+    assert f"python -m pip install ./{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
     assert "does not provide code-signing or product-correctness assurance" in " ".join(
         readme.split()
     )
@@ -700,16 +698,7 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
 
 
 def _assert_published_version_matches_repository(*, repository: Path, current_version: str) -> None:
-    published_final_tags = {PUBLIC_RELEASE_VERSION: PUBLIC_RELEASE_TAG}
-    candidate_tag_exists = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{TARGET_RELEASE_TAG}^{{commit}}"],
-        cwd=repository,
-        check=False,
-        capture_output=True,
-    )
-    assert candidate_tag_exists.returncode in {0, 1}, "Git could not inspect the candidate tag"
-    if candidate_tag_exists.returncode == 0:
-        published_final_tags[TARGET_RELEASE_VERSION] = TARGET_RELEASE_TAG
+    published_final_tags = {"0.2.3": "v0.2.3", PUBLIC_RELEASE_VERSION: PUBLIC_RELEASE_TAG}
     published_tag = published_final_tags.get(current_version)
 
     if published_tag is None:
@@ -1569,15 +1558,15 @@ def test_changelog_points_to_authoritative_release_history() -> None:
     assert "does not reconstruct" in changelog
 
 
-def test_v024_candidate_ledger_records_post_v023_engineering_without_stage_credit() -> None:
+def test_v024_release_ledger_records_post_v023_engineering_without_stage_credit() -> None:
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    unreleased = changelog.split("## 0.2.4 — Downloadable evaluation candidate", maxsplit=1)[
+    unreleased = changelog.split("## 0.2.4 — Downloadable evaluation release", maxsplit=1)[
         1
     ].split("## 0.2.3", maxsplit=1)[0]
     normalized_unreleased = " ".join(unreleased.split())
 
     for expected in (
-        "Source/package identity: `0.2.4`",
+        "Published as",
         "CLI lifecycle parity",
         "strict saved-record envelope",
         "packaged Chromium",
@@ -1605,7 +1594,7 @@ def test_changelog_discloses_v021_rereview_evidence_boundaries() -> None:
     assert "does not advance Stage 1" in changelog
 
 
-def test_candidate_release_surfaces_are_phase_safe_without_rewriting_history() -> None:
+def test_published_release_surfaces_align_without_rewriting_history() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
     quickstart = Path("docs/alpha/participant-quickstart.md").read_text(encoding="utf-8")
     design_partner = Path("docs/commercialization/design-partner-sprint.md").read_text(
@@ -1621,11 +1610,12 @@ def test_candidate_release_surfaces_are_phase_safe_without_rewriting_history() -
         "## Contributor setup", maxsplit=1
     )[0]
     release_install = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[0]
-    for filename in (TARGET_RELEASE_WHEEL_FILENAME, "scopeproof-0.2.4.tar.gz", "SHA256SUMS.txt"):
+    for filename in (PUBLIC_RELEASE_WHEEL_FILENAME, "scopeproof-0.2.4.tar.gz", "SHA256SUMS.txt"):
         assert filename in release_install
-    assert f"{TARGET_RELEASE_DOWNLOAD_ROOT}/{TARGET_RELEASE_WHEEL_FILENAME}" in release_install
-    assert "conditional v0.2.4 post-publication install path" in release_install
-    assert "until a matching v0.2.4 GitHub Release and its exact assets exist" in release_install
+    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in release_install
+    assert "published v0.2.4 wheel" in release_install
+    assert "Current source `0.2.5.dev0` is unreleased" in release_install
+    assert "conditional v0.2.4" not in release_install
     assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in release_install
     assert "No personal testing or qualifying review" in release_install
     assert PUBLIC_RELEASES_INDEX in readme_quickstart
@@ -1633,12 +1623,13 @@ def test_candidate_release_surfaces_are_phase_safe_without_rewriting_history() -
     assert "../../README.md#quickstart" in quickstart
     source_workflow = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[1]
     normalized_workflow = " ".join(source_workflow.split())
-    assert "v0.2.4 candidate CLI" in normalized_workflow
-    assert "they do not apply to the published v0.2.3 wheel" in normalized_workflow
-    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
+    assert "published v0.2.4 CLI" in normalized_workflow
+    assert "they do not apply to the historical v0.2.3 wheel" in normalized_workflow
+    assert f"{V023_DOWNLOAD_ROOT}/{V023_RELEASE_WHEEL}" in quickstart
     assert "Archived v0.2.3" in quickstart
     assert "v0.2.4" in design_partner
-    assert "candidate" in design_partner
+    assert "0.2.5.dev0" in design_partner
+    assert "public verification record" in design_partner
     assert "ScopeProof v0.2.3 is published" in readme
     assert "PR #184" in readme
     assert f"`{PR184_RELEASE_MERGE_SHA}`" in readme
@@ -1647,7 +1638,7 @@ def test_candidate_release_surfaces_are_phase_safe_without_rewriting_history() -
 
     for active_status in (roadmap, status_page):
         assert f"Public install: v{PUBLIC_RELEASE_VERSION}" in active_status
-        assert "v0.2.3 is published" in active_status
+        assert "v0.2.4 is published" in active_status
         assert "PR #184" in active_status
         assert f"`{PR184_RELEASE_MERGE_SHA}`" in active_status
         assert all(run_id in active_status for run_id in PR184_EXACT_MAIN_RUN_IDS)
@@ -1655,7 +1646,7 @@ def test_candidate_release_surfaces_are_phase_safe_without_rewriting_history() -
         assert "The GitHub Release record is authoritative for publication availability." in (
             active_status
         )
-        assert "Public install: v0.2.3 is available" in active_status
+        assert "0.2.5.dev0" in active_status
         assert "PR #183" in active_status
         assert f"`{PR183_SOURCE_MERGE_SHA}`" in active_status
         assert all(run_id in active_status for run_id in PR183_EXACT_MAIN_RUN_IDS)
@@ -1692,6 +1683,8 @@ def test_candidate_release_surfaces_are_phase_safe_without_rewriting_history() -
     candidate_notes = Path("docs/releases/v0.2.4-evaluation-candidate.md").read_text(
         encoding="utf-8"
     )
+    assert "Historical preparation record" in candidate_notes
+    assert "v0.2.4-public-verification.md" in candidate_notes
     assert "saved-record format v5" in candidate_notes
     assert "version 5 local JSON" in status_page
     assert "Downgrade and\nforward compatibility are not promised" in candidate_notes
@@ -1709,8 +1702,9 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
     )
 
     for active_surface in (readme, roadmap, environment, status):
-        assert "0.2.4" in active_surface
-        assert "v0.2.3" in active_surface
+        assert "v0.2.4" in active_surface
+        assert "0.2.5.dev0" in active_surface
+        assert "v0.2.4-public-verification.md" in active_surface
     for dated_surface in (platform, market):
         assert "0.2.4.dev0" in dated_surface
         assert "v0.2.3" in dated_surface
@@ -1731,7 +1725,7 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
     assert "**CLI lifecycle parity:**" not in prioritized
     assert "**Real-browser regression coverage:**" not in prioritized
 
-    assert "Python 3.11, Python 3.12, and Python 3.13" in environment
+    assert "Python 3.11, Python 3.12, and Python 3.13" in " ".join(environment.split())
     assert "Python 3.14" in environment
     python_314_line = environment.split("Python 3.14", maxsplit=1)[1].split("\n", maxsplit=1)[0]
     assert "unverified" in python_314_line
@@ -2332,7 +2326,7 @@ def test_public_alpha_participant_kit_is_safe_complete_and_actionable() -> None:
     protocol = Path("docs/dogfood/public-pr-protocol.md").read_text(encoding="utf-8")
 
     assert all(f"Minute {minute}" in quickstart for minute in range(1, 11))
-    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in quickstart
+    assert f"{V023_DOWNLOAD_ROOT}/{V023_RELEASE_WHEEL}" in quickstart
     assert "scopeproof benchmark" in quickstart
     assert "scopeproof-web --host 127.0.0.1 --port 8501" in quickstart
     assert "setup evidence only" in quickstart
