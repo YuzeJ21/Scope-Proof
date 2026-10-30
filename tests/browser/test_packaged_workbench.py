@@ -1416,7 +1416,7 @@ def _assert_saved_comparison_downloads(
     assert "Changed-file Scope Comparison" in text
     assert previous_head in text and CURRENT_HEAD in text
     assert "src/unrelated.py" in text and "notes.md" in text
-    assert "Constructed saved-comparison reviewer" in text
+    assert "Constructed saved\\-comparison reviewer" in text
     assert "No prior scope decision is carried forward" in text
     assert "Previously decided paths now unresolved" in text
 
@@ -1568,6 +1568,14 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                 "heading", name="Re-review comparison", exact=True,
                             ).scroll_into_view_if_needed()
                             page.screenshot(path=str(captures / "02-history-comparison.png"))
+                            page.set_viewport_size(VIEWPORTS[1])
+                            baseline.scroll_into_view_if_needed()
+                            expect(baseline).to_be_visible()
+                            expect(compare).to_be_enabled()
+                            assert page.evaluate(
+                                "document.documentElement.scrollWidth <= window.innerWidth"
+                            )
+                            page.screenshot(path=str(captures / "03-phone-comparison-controls.png"))
                     finally:
                         context.close()
                 assert_records_unchanged()
@@ -1578,3 +1586,4 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
     assert external_requests == []
     assert (captures / "01-before-restart.png").is_file()
     assert (captures / "02-history-comparison.png").is_file()
+    assert (captures / "03-phone-comparison-controls.png").is_file()

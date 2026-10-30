@@ -39,11 +39,11 @@ baseline_review_id, history_index=None)`; `locked_saved_comparison(store, select
 validated ReviewComparison. Web `render_saved_comparison_selector(...)` returns comparison and
 selection; `deferred_saved_comparison_export(...)` captures a volatile selection lease.
 
-- [ ] Write and observe failing core tests for explicit other-record/history selection,
+- [x] Write and observe failing core tests for explicit other-record/history selection,
       incompatibility, stale fingerprints and record-byte preservation; implement the pure API.
-- [ ] Write and observe failing deferred-export tests for either-record change, selection lease
+- [x] Write and observe failing deferred-export tests for either-record change, selection lease
       invalidation and concurrent serialization; implement click-time rendering under both locks.
-- [ ] Write and observe failing AppTests for reopened explicit selection, missing analysis,
+- [x] Write and observe failing AppTests for reopened explicit selection, missing analysis,
       pending input, invalidation and source identity display; wire the selector to existing view.
 - [ ] Add an installed-wheel browser restart/reopen/comparison/download regression using shared
       install setup, isolated storage and accurately labelled constructed records; verify bytes.

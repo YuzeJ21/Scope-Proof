@@ -30,6 +30,11 @@ class SavedComparisonExportLease:
     """Volatile per-session guard shared with older deferred download callbacks."""
 
     selection: SavedComparisonSelection | None = None
+    generation: int = 0
+
+    def invalidate(self) -> None:
+        self.generation += 1
+        self.selection = None
 
 
 def deferred_saved_comparison_export(
@@ -40,18 +45,19 @@ def deferred_saved_comparison_export(
     lease: SavedComparisonExportLease,
 ) -> Callable[[], str]:
     captured = selection.model_copy(deep=True)
+    generation = lease.generation
     message = (
         "ScopeProof comparison export was blocked because a saved review or selection changed. "
         "Reopen the current review and select the baseline again before exporting."
     )
 
     def render() -> str:
-        if lease.selection != captured:
+        if lease.generation != generation or lease.selection != captured:
             raise DeferredExportUnavailable(message)
         try:
             with locked_saved_comparison(store, captured) as comparison:
                 rendered = renderer(comparison)
-                if lease.selection != captured:
+                if lease.generation != generation or lease.selection != captured:
                     raise DeferredExportUnavailable(message)
                 return rendered
         except (OSError, ValueError):

@@ -459,7 +459,9 @@ choose a **Comparison baseline**: another saved review or a retained history ent
 analysis, and both analyses must describe the same PR with identical confirmed criteria and
 criteria-source identity. An incompatible choice leaves the current review unchanged.
 
-The comparison shows both saved identities and exact heads, including changed-file scope from
+Unsubmitted file-scope inputs must be saved or cleared using **Clear pending file-scope inputs**;
+clearing inputs preserves recorded decisions. The comparison shows both saved identities and
+exact heads, including changed-file scope from
 the existing reports. Markdown/JSON downloads recheck the selected saved records. Changing the
 baseline, reopening or editing the current review, or changing/deleting a selected saved record
 expires the applied comparison; select again to continue. This path does not fetch GitHub,

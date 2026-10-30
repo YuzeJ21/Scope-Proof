@@ -4,6 +4,11 @@ from unittest.mock import patch
 
 import pytest
 
+from apps.web.deferred_exports import (
+    DeferredExportUnavailable,
+    deferred_saved_comparison_export,
+)
+from scopeproof_core.reporting.exporters import export_comparison_json
 from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import HumanDecision, ResolutionEvent
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
@@ -195,3 +200,59 @@ def test_deleted_current_and_missing_analysis_cannot_offer_comparison() -> None:
     assert not app.exception
     assert comparison_downloads(app) == []
     assert "requires a saved active analysis" in rendered(app)
+
+
+@pytest.mark.parametrize("transition", ["reopen", "change_away_and_back"])
+def test_old_download_callback_never_reactivates_after_reselecting_same_pair(
+    transition: str,
+) -> None:
+    app, store = reopened_comparison_app()
+    app = apply_other_baseline(app)
+    lease = app.session_state["saved_comparison_export_lease"]
+    old_download = deferred_saved_comparison_export(
+        lease.selection, export_comparison_json, store=store, lease=lease,
+    )
+    if transition == "reopen":
+        app = app.button(key="reopen_review").click().run()
+    else:
+        app = app.selectbox(key="saved_comparison_baseline").set_value("history:0").run()
+    app = apply_other_baseline(app)
+    assert not app.exception
+    assert len(comparison_downloads(app)) == 2
+    with pytest.raises(DeferredExportUnavailable):
+        old_download()
+
+
+def test_pending_file_scope_inputs_invalidate_comparison_and_can_be_cleared_read_only() -> None:
+    app, store = reopened_comparison_app()
+    app = apply_other_baseline(app)
+    lease = app.session_state["saved_comparison_export_lease"]
+    before = {p.name: p.read_bytes() for p in store.directory.glob("*.json")}
+    app = app.text_area(key="scope_note").set_value("Unsubmitted scope explanation").run()
+    assert not app.exception
+    assert comparison_downloads(app) == []
+    assert lease.selection is None
+    assert app.button(key="compare_saved_analysis").disabled
+    app = app.button(key="clear_saved_comparison_scope_draft").click().run()
+    assert not app.exception
+    assert app.text_area(key="scope_note").value == ""
+    assert not app.selectbox(key="saved_comparison_baseline").disabled
+    app = apply_other_baseline(app)
+    assert len(comparison_downloads(app)) == 2
+    assert before == {p.name: p.read_bytes() for p in store.directory.glob("*.json")}
+
+
+def test_submitted_scope_controls_do_not_permanently_block_saved_comparison() -> None:
+    app, _ = reopened_comparison_app()
+    app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
+    app = app.text_area(key="scope_note").set_value("Recorded current-head scope explanation").run()
+    app = app.button(key="save_scope_decision").click().run()
+    assert not app.exception
+    assert app.session_state["review_state"].bundle.file_scope_decisions[-1].note == (
+        "Recorded current-head scope explanation"
+    )
+    assert not app.selectbox(key="saved_comparison_baseline").disabled
+    app = apply_other_baseline(app)
+    assert not app.exception
+    assert len(comparison_downloads(app)) == 2
