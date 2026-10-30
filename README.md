@@ -449,10 +449,13 @@ JSON, and CSV review records.
 ### Select an exact-head source reference (unreleased source)
 
 After a confirmed analysis with matching source loaded, open **Select a source reference** in
-Criterion Review. Choose **Reference source** and **Reference line**, inspect the preview, enter
+Criterion Review. Choose **Reference source**, **Reference page** and **Reference line**, inspect the preview, enter
 **Reference reviewer (required)** and **Why this reference matters**, then **Save selected reference**.
-The bounded view offers the first 1,000 eligible lines (maximum 4,096 UTF-8 bytes each), with at
-most 32 saved references per analysis. Removed, skipped, truncated or ambiguous sources are unavailable.
+The file catalog includes all eligible already-ingested files. Each page offers at most 100 eligible
+lines in the chosen file (maximum 4,096 UTF-8 bytes each), including locations beyond the legacy
+global first 1,000. Page ranges count eligible lines; the line selector retains physical Git line
+numbers. Changing file or page clears the line choice. At most 32 references may be saved per
+analysis. Removed, skipped, truncated or ambiguous sources remain unavailable.
 
 **Reviewer-selected references** remain separate from automatic candidates. They do not change
 findings, confidence, gate, file-scope coverage, decisions or runtime verification. Test/eval

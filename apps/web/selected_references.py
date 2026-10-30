@@ -9,10 +9,11 @@ import streamlit as st
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.reviews.selected_references import (
     MAX_REFERENCE_LINE_BYTES,
-    MAX_SELECTABLE_REFERENCE_LINES,
+    MAX_REFERENCE_PAGE_LINES,
     REVIEWER_SELECTED_REFERENCE_BOUNDARY,
     append_reviewer_selected_reference,
-    selectable_reference_lines,
+    selectable_reference_page,
+    selectable_reference_sources,
 )
 from scopeproof_core.schemas.models import (
     EvidenceSourceScope,
@@ -38,8 +39,20 @@ def selected_reference_draft_pending() -> bool:
 def clear_selected_reference_draft() -> None:
     st.session_state["selected_reference_source"] = None
     st.session_state["selected_reference_line"] = None
+    st.session_state["selected_reference_page"] = None
     st.session_state["selected_reference_reviewer"] = ""
     st.session_state["selected_reference_rationale"] = ""
+
+
+def _source_changed() -> None:
+    st.session_state["selected_reference_page"] = (
+        0 if st.session_state.get("selected_reference_source") else None
+    )
+    st.session_state["selected_reference_line"] = None
+
+
+def _page_changed() -> None:
+    st.session_state["selected_reference_line"] = None
 
 
 def _source_key(scope: EvidenceSourceScope, path: str) -> str:
@@ -125,36 +138,66 @@ def render_selected_references(
             st.caption("Revoke final acceptance before adding a source reference.")
             return None
         try:
-            lines = selectable_reference_lines(state, snapshot, unchanged_files=unchanged_files)
+            catalog = selectable_reference_sources(state, snapshot, unchanged_files=unchanged_files)
         except ValueError:
             st.warning("Matching inspectable source is unavailable for this confirmed review.")
             return None
-        if not lines:
+        if not catalog:
             st.caption("No inspectable source lines are available for explicit selection.")
             return None
         st.caption(
-            f"Bounded source view: first {MAX_SELECTABLE_REFERENCE_LINES:,} eligible lines; "
+            f"Bounded source view: {MAX_REFERENCE_PAGE_LINES:,} eligible lines per file page; "
             f"at most {MAX_REFERENCE_LINE_BYTES:,} UTF-8 bytes per line. "
             "Removed, skipped, truncated and ambiguous sources are unavailable."
         )
         st.text(f"Criterion {criterion_id} · revision {state.criteria_revision.number}")
         st.code(state.review.head_sha, language=None)
-        sources = list(
-            dict.fromkeys(_source_key(line.source_scope, line.file_path) for line in lines)
-        )
+        sources = {_source_key(item.source_scope, item.file_path): item for item in catalog}
         source = st.selectbox(
             "Reference source",
-            sources,
+            list(sources),
             index=None,
             key="selected_reference_source",
             format_func=_source_label,
+            on_change=_source_changed,
         )
-        if source != st.session_state.get("selected_reference_previous_source"):
-            st.session_state["selected_reference_line"] = None
-            st.session_state["selected_reference_previous_source"] = source
-        source_lines = [
-            line for line in lines if _source_key(line.source_scope, line.file_path) == source
-        ]
+        selected_source = sources.get(source)
+        page_count = (
+            (selected_source.eligible_line_count + MAX_REFERENCE_PAGE_LINES - 1)
+            // MAX_REFERENCE_PAGE_LINES
+            if selected_source is not None
+            else 0
+        )
+        page_index = st.selectbox(
+            "Reference page",
+            list(range(page_count)),
+            index=0 if page_count else None,
+            key="selected_reference_page",
+            format_func=lambda index: f"Page {index + 1} of {page_count}",
+            disabled=selected_source is None,
+            on_change=_page_changed,
+        )
+        source_lines = []
+        if selected_source is not None and page_index is not None:
+            try:
+                page = selectable_reference_page(
+                    state,
+                    snapshot,
+                    source_scope=selected_source.source_scope,
+                    file_path=selected_source.file_path,
+                    page_index=page_index,
+                    unchanged_files=unchanged_files,
+                )
+            except ValueError:
+                st.warning("This source page is unavailable. Refresh the source selection.")
+                return None
+            source_lines = page.lines
+            first = page_index * MAX_REFERENCE_PAGE_LINES + 1
+            st.caption(
+                f"{first:,} to {first + len(source_lines) - 1:,} of "
+                f"{page.source.eligible_line_count:,} eligible lines in this file. "
+                "Reference line values are physical Git line numbers."
+            )
         number = st.selectbox(
             "Reference line",
             [line.line_number for line in source_lines],
@@ -179,10 +222,16 @@ def render_selected_references(
             st.caption(
                 "Resolve other pending review inputs or local save conflicts before recording."
             )
-        if st.button(
-            "Save selected reference",
-            key="save_selected_reference",
-            disabled=blocked or selected is None or not reviewer.strip() or not rationale.strip(),
+        if (
+            st.button(
+                "Save selected reference",
+                key="save_selected_reference",
+                disabled=blocked
+                or selected is None
+                or not reviewer.strip()
+                or not rationale.strip(),
+            )
+            and selected is not None
         ):
             try:
                 return append_reviewer_selected_reference(

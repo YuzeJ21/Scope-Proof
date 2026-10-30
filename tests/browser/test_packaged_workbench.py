@@ -34,9 +34,15 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
+from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.importers.junit import MAX_JUNIT_BYTES
 from scopeproof_core.reviews.comparison import ReviewComparison
-from scopeproof_core.schemas.models import JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
+from scopeproof_core.schemas.models import (
+    JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
+    ChangedFile,
+    ChangedLine,
+    LineChangeType,
+)
 from tests.candidate_selection_fixture import selection_criteria, selection_snapshot
 from tests.saved_comparison_fixture import (
     CURRENT_HEAD,
@@ -1306,6 +1312,7 @@ def installed_wheel(
 @contextmanager
 def _installed_workbench_server(
     environment_dir: Path, runtime_dir: Path, home_dir: Path, *, log_name: str,
+    constructed_snapshot: Path | None = None,
 ) -> Iterator[tuple[str, Path]]:
     port = _available_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -1314,12 +1321,36 @@ def _installed_workbench_server(
     environment["HOME"] = str(home_dir)
     environment["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
     environment.pop("PYTHONPATH", None)
+    command = [
+        str(environment_dir / "bin" / "scopeproof-web"),
+        "--host", "127.0.0.1", "--port", str(port),
+    ]
+    if constructed_snapshot is not None:
+        # Inject validated constructed data without editing installed modules or
+        # executing any source text carried by that data. Other journeys exercise
+        # the ordinary installed CLI launcher.
+        bootstrap = runtime_dir / "constructed-reference-bootstrap.py"
+        bootstrap.write_text(
+            "from pathlib import Path\nimport runpy\nimport sys\n"
+            "import apps\nimport scopeproof_core\nimport scopeproof_core.demo as demo\n"
+            "from scopeproof_core.schemas.models import PullRequestSnapshot\n"
+            "assert all(Path(module.__file__).resolve().is_relative_to("
+            "Path(sys.prefix).resolve()) for module in (apps, scopeproof_core))\n"
+            f"fixture = Path({str(constructed_snapshot)!r})\n"
+            "def constructed_snapshot():\n"
+            "    return PullRequestSnapshot.model_validate_json(fixture.read_text())\n"
+            "demo.load_demo_snapshot = constructed_snapshot\n"
+            "runpy.run_module('apps.web.app', run_name='__main__')\n",
+            encoding="utf-8",
+        )
+        command = [
+            str(environment_dir / "bin" / "python"), "-I", "-m", "streamlit", "run",
+            str(bootstrap), "--server.headless=true", "--server.address=127.0.0.1",
+            f"--server.port={port}",
+        ]
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
-            [
-                str(environment_dir / "bin" / "scopeproof-web"),
-                "--host", "127.0.0.1", "--port", str(port),
-            ],
+            command,
             cwd=runtime_dir, env=environment, stdout=log, stderr=subprocess.STDOUT,
             start_new_session=True, text=True,
         )
@@ -1520,12 +1551,31 @@ def _assert_selected_reference_is_nongating(before: dict, after: dict) -> dict:
 def test_installed_wheel_selected_reference_survives_restart_without_gate_change(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
-    """A constructed static test line is explicitly selected, never executed or accepted."""
+    """An injected constructed late-page test line stays static through restart/export."""
     runtime_dir = tmp_path / "selected-reference-runtime"
     home_dir = runtime_dir / "home"
     home_dir.mkdir(parents=True)
     captures = runtime_dir / "captures"
     captures.mkdir()
+    snapshot = load_demo_snapshot().model_copy(deep=True)
+    target_path = "tests/test_late_reference.py"
+    target_excerpt = "def test_constructed_late_reference():"
+    for path in ("aaa/prefix.py", target_path):
+        snapshot.files.append(ChangedFile(
+            path=path, status="added",
+            lines=[
+                ChangedLine(
+                    change_type=LineChangeType.ADDED, line_number=number,
+                    content=(
+                        target_excerpt if path == target_path and number == 1002
+                        else f"constructed_value_{number} = {number}"
+                    ),
+                )
+                for number in range(1, 1003)
+            ],
+        ))
+    fixture = runtime_dir / "constructed-reference-snapshot.json"
+    fixture.write_text(snapshot.model_dump_json(), encoding="utf-8")
     diagnostics = Path(os.environ.get(
         "SCOPEPROOF_BROWSER_DIAGNOSTIC_DIR", str(tmp_path / "diagnostics"),
     )) / "selected-reference"
@@ -1541,6 +1591,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
             with _installed_workbench_server(
                 installed_wheel, runtime_dir, home_dir,
                 log_name=f"selected-reference-{generation}.log",
+                constructed_snapshot=fixture,
             ) as (base_url, log_path):
                 browser = playwright.chromium.launch(headless=True)
                 try:
@@ -1592,8 +1643,8 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             assert finding["evidence_ids"] == []
                             assert not any(
                                 item["criterion_id"] == "AC-03"
-                                and item["file_path"] == "tests/test_export.py"
-                                and item["line_start"] <= 18 <= item["line_end"]
+                                and item["file_path"] == target_path
+                                and item["line_start"] <= 1002 <= item["line_end"]
                                 for item in before["bundle"]["evidence"]
                             )
                             criterion = page.get_by_role(
@@ -1607,12 +1658,20 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                                 "combobox", name="Reference source", exact=True,
                             )
                             _choose_combobox_option(
-                                page, source, option_name="Changed file · tests/test_export.py",
+                                page, source, option_name=f"Changed file · {target_path}",
+                            )
+                            reference_page = page.get_by_role(
+                                "combobox", name="Reference page", exact=True,
+                            )
+                            expect(reference_page).to_have_value("Page 1 of 11")
+                            _choose_combobox_option(
+                                page, reference_page, option_name="Page 11 of 11",
                             )
                             line = page.get_by_role(
                                 "combobox", name="Reference line", exact=True,
                             )
-                            _choose_combobox_option(page, line, option_name="18")
+                            expect(line).to_have_value("")
+                            _choose_combobox_option(page, line, option_name="1002")
                             save = page.get_by_role(
                                 "button", name="Save selected reference", exact=True,
                             )
@@ -1637,7 +1696,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             page.screenshot(path=str(captures / "01-explicit-source-selection.png"))
                             _run_and_wait_for_streamlit_rerun(page, save.click)
                             expect(page.get_by_text(
-                                "Selected reference · tests/test_export.py:18", exact=True,
+                                f"Selected reference · {target_path}:1002", exact=True,
                             )).to_be_visible()
                             page.wait_for_function(STREAMLIT_RERUN_FINISHED_SCRIPT, timeout=10_000)
                             authoritative_json = page.get_by_role(
@@ -1653,11 +1712,9 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             assert reference["head_sha"] == "head-demo-002"
                             assert reference["review_id"] == before["review"]["review_id"]
                             assert reference["criteria_revision_number"] == 1
-                            assert reference["file_path"] == "tests/test_export.py"
-                            assert reference["line_number"] == 18
-                            assert reference["excerpt"] == (
-                                "def test_export_research_list_csv_uses_sector_filter():"
-                            )
+                            assert reference["file_path"] == target_path
+                            assert reference["line_number"] == 1002
+                            assert reference["excerpt"] == target_excerpt
                             assert reference["evidence_type"] == "test"
                             assert reference["evidence_level"] == "E2"
                             assert reference["reviewer"] == reviewer
@@ -1678,7 +1735,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             ).hexdigest()
                             assert reference["permalink"] == (
                                 "https://github.com/scopeproof/demo-stock-research/blob/"
-                                "head-demo-002/tests/test_export.py#L18-L18"
+                                "head-demo-002/tests/test_late_reference.py#L1002-L1002"
                             )
                         else:
                             assert before is not None and selected_state is not None
@@ -1706,7 +1763,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                                 "Reviewer-selected references", exact=True,
                             )).to_be_visible()
                             page.get_by_text(
-                                "Selected reference · tests/test_export.py:18", exact=True,
+                                f"Selected reference · {target_path}:1002", exact=True,
                             ).click()
                             expect(page.get_by_text(reviewer, exact=True)).to_be_visible()
                             expect(page.get_by_text(rationale, exact=True)).to_be_visible()
@@ -1728,7 +1785,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             report = re.sub(r"\\([^\w\s])", r"\1", report)
                             for expected in (
                                 "AC-03", "head-demo-002", reviewer, rationale,
-                                "test_export.py", "E2",
+                                "test_late_reference.py", "1002", target_excerpt, "E2",
                             ):
                                 assert expected in report
                             assert "non-gating static context" in report
