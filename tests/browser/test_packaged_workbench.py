@@ -1961,11 +1961,12 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                     exact=True,
                                 )).to_be_visible()
                                 expect(page.get_by_text(
-                                    "Recorded reference context:", exact=False,
-                                )).to_contain_text("Only previous: 1")
+                                    "Identical record: 0 · Only previous: 1 · Only current: 1",
+                                    exact=False,
+                                )).to_be_visible()
                                 for kind in ("Only Previous", "Only Current"):
                                     disclosure = page.get_by_text(
-                                        f"{kind} · AC-01 · notes.md:1", exact=True,
+                                        re.compile(rf"^{kind} · Reference \d+$"),
                                     )
                                     if not disclosure.evaluate(
                                         "node => node.closest('details').open"

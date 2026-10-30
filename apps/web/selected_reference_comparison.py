@@ -22,12 +22,11 @@ def render_selected_reference_comparison(context: SelectedReferenceComparison | 
     )
     if not context.previous and not context.current:
         st.caption("No selected references recorded in either analysis.")
-    for change in context.record_changes:
+    for index, change in enumerate(context.record_changes, start=1):
         reference = change.current or change.previous
-        with st.expander(
-            f"{change.kind.replace('_', ' ').title()} · {reference.criterion_id} · "
-            f"{reference.file_path}:{reference.line_number}"
-        ):
+        with st.expander(f"{change.kind.replace('_', ' ').title()} · Reference {index}"):
+            st.caption("Exact criterion and source location")
+            st.text(f"{reference.criterion_id} · {reference.file_path}:{reference.line_number}")
             for label, item in (
                 ("Previous selected reference", change.previous),
                 ("Current selected reference", change.current),
@@ -53,6 +52,20 @@ def render_selected_reference_comparison(context: SelectedReferenceComparison | 
                 st.text(item.rationale)
                 st.caption("Recorded at")
                 st.text(item.selected_at.isoformat())
-                st.caption("Confirmed criteria source and excerpt digest")
-                st.text(item.criteria_source_provenance.source_uri)
+                provenance = item.criteria_source_provenance
+                st.caption("Criteria source")
+                st.text(provenance.source_uri)
+                st.caption("Criteria source revision")
+                st.code(
+                    provenance.source_revision or "(not recorded)", language=None, wrap_lines=True
+                )
+                st.caption("Criteria confirmed by")
+                st.text(provenance.confirmed_by)
+                st.caption("Criteria confirmed at")
+                st.text(provenance.confirmed_at.isoformat())
+                st.caption("Criteria source-text digest")
+                st.code(provenance.source_text_sha256, language=None, wrap_lines=True)
+                st.caption("Normalized criteria digest")
+                st.code(provenance.normalized_criteria_sha256, language=None, wrap_lines=True)
+                st.caption("Excerpt digest")
                 st.code(item.excerpt_sha256, language=None, wrap_lines=True)

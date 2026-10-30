@@ -89,6 +89,7 @@ def test_comparison_preserves_both_attributed_records_with_safe_markdown() -> No
     assert "&lt;script&gt;" in report and "<script>" not in report
     assert "&lt;img src=x&gt;" in report and "<img src=x>" not in report
     assert "non-gating static context" in report and "intent, not execution" in report
+    assert "candidate-reference changes only" not in report
 
 
 def test_legacy_comparison_does_not_invent_empty_selected_snapshots() -> None:

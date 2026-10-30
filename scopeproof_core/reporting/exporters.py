@@ -695,8 +695,9 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
             "## Comparison Boundary",
             "",
             (
-                "This report describes deterministic candidate-reference changes only. It does "
-                "not carry forward a prior human decision or replace review of the current head."
+                "This report describes deterministic automatic candidate changes and separate "
+                "recorded selected-reference context when available. It does not carry forward "
+                "a prior human decision or replace review of the current head."
             ),
             "",
         ]
