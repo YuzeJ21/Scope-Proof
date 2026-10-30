@@ -274,6 +274,36 @@ class ReviewComparison(BaseModel):
             or self.file_scope.current.head_sha != self.current_head_sha
         ):
             raise ValueError("scope snapshots must match comparison heads")
+        if self.file_scope is not None:
+            for side in ("previous", "current"):
+                snapshot = getattr(self.file_scope, side)
+                references = {
+                    reference.evidence_id: reference
+                    for change in self.evidence_changes
+                    if (reference := getattr(change, side)) is not None
+                }
+                cited_paths: set[str] = set()
+                inventory_paths = (
+                    {item.path for item in snapshot.inventory.files}
+                    if snapshot.inventory is not None else set()
+                )
+                for criterion_id, evidence_ids in snapshot.finding_evidence_ids.items():
+                    for evidence_id in evidence_ids:
+                        reference = references.get(evidence_id)
+                        if reference is None or reference.criterion_id != criterion_id:
+                            raise ValueError(
+                                "scope finding links require matching evidence references"
+                            )
+                        if (
+                            reference.commit_sha == snapshot.head_sha
+                            and reference.source_scope is EvidenceSourceScope.CHANGED_FILE
+                            and reference.file_path in inventory_paths
+                        ):
+                            cited_paths.add(reference.file_path)
+                if snapshot.cited_paths != sorted(cited_paths):
+                    raise ValueError(
+                        "scope citations must match linked exact-head changed evidence"
+                    )
         return self
 
     @field_validator("criteria_requiring_decision_review")

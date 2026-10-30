@@ -4,6 +4,7 @@ from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.schemas.models import IngestionState
+from tests.reviews.test_comparison import bundle_with
 from tests.reviews.test_scope_comparison import NEW, OLD, decide, revalidated, scoped_bundle
 
 
@@ -45,6 +46,7 @@ def test_scope_comparison_ui_keeps_unknown_and_partial_ingestion_visible() -> No
     assert not app.exception
     text = rendered_text(app)
     assert "unknown" in text.lower()
+    assert any("src/export.py" in item.value and "modified" in item.value for item in app.text)
     assert "Partial" in text and "large.bin" in text
     assert any("Current ingestion: Partial" in item.value for item in app.warning)
     assert any("<img src=x>" in item.value for item in app.text)
@@ -79,3 +81,7 @@ def test_scope_comparison_ui_current_unknown_and_known_empty_are_distinct() -> N
     assert not app.exception
     assert "No recorded inventory metadata differences" in rendered_text(app)
     assert "No unresolved inspected paths" in rendered_text(app)
+    app = render_scope(compare_reviews(bundle_with(head_sha=OLD),
+                                       bundle_with(head_sha=NEW)).file_scope)
+    assert not app.exception
+    assert "Known empty inventory" in rendered_text(app)

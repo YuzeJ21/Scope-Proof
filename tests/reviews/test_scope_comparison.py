@@ -204,3 +204,82 @@ def test_scope_markdown_renders_untrusted_paths_notes_and_warnings_inertly() -> 
     assert "<code>[click](https://host.invalid)/&lt;script&gt;.py</code>" in report
     assert "[go](https://evil.invalid)" not in report
     assert "Constructed reviewer" in report
+
+
+def test_export_rejects_fabricated_scope_citation_without_linked_changed_file_evidence() -> None:
+    comparison = compare_reviews(scoped_bundle(OLD), scoped_bundle(NEW, "notes.md"))
+    comparison.file_scope.current.cited_paths = ["notes.md", "src/export.py"]
+    for exporter in (export_comparison_json, export_comparison_markdown):
+        with pytest.raises(ValidationError):
+            exporter(comparison)
+
+
+def test_export_rejects_scope_decision_for_a_foreign_criterion() -> None:
+    current = decide(scoped_bundle(NEW, "notes.md"), "notes.md", "within_confirmed_criteria")
+    comparison = compare_reviews(scoped_bundle(OLD), current)
+    comparison.file_scope.current.latest_decisions[0].criterion_id = "nonexistent"
+    for exporter in (export_comparison_json, export_comparison_markdown):
+        with pytest.raises(ValidationError):
+            exporter(comparison)
+
+
+@pytest.mark.parametrize("mutation", ["digest", "complete_with_skip", "complete_with_warning"])
+def test_export_rejects_contradictory_scope_context(mutation: str) -> None:
+    comparison = compare_reviews(scoped_bundle(OLD), scoped_bundle(NEW))
+    if mutation == "digest":
+        comparison.file_scope.current.normalized_criteria_sha256 = "c" * 64
+    elif mutation == "complete_with_skip":
+        comparison.file_scope.current.skipped_files = ["large.bin"]
+    else:
+        comparison.file_scope.current.ingestion_warnings = ["File limit"]
+    for exporter in (export_comparison_json, export_comparison_markdown):
+        with pytest.raises(ValidationError):
+            exporter(comparison)
+
+
+def test_unknown_previous_inventory_still_exports_known_current_inventory_metadata() -> None:
+    previous, current = scoped_bundle(OLD), scoped_bundle(NEW)
+    previous.review.changed_file_inventory = None
+    report = export_comparison_markdown(compare_reviews(revalidated(previous), current))
+    current_section = report.split("### Current Scope", 1)[1]
+    assert "src/export.py" in current_section and "modified" in current_section
+    empty = export_comparison_markdown(compare_reviews(bundle_with(head_sha=OLD),
+                                                      bundle_with(head_sha=NEW)))
+    assert "Known empty inventory" in empty
+
+
+@pytest.mark.parametrize("mutation", [
+    "blank_review", "duplicate_citations", "duplicate_decisions", "missing_finding",
+    "foreign_evidence", "noncanonical_criteria", "different_criteria",
+])
+def test_export_rejects_inconsistent_scope_projection(mutation: str) -> None:
+    current = decide(scoped_bundle(NEW, "notes.md"), "notes.md", "outside_confirmed_criteria")
+    comparison = compare_reviews(scoped_bundle(OLD), current)
+    snapshot = comparison.file_scope.current
+    if mutation == "blank_review":
+        snapshot.review_id = " "
+    elif mutation == "duplicate_citations":
+        snapshot.cited_paths *= 2
+    elif mutation == "duplicate_decisions":
+        snapshot.latest_decisions *= 2
+    elif mutation == "missing_finding":
+        snapshot.finding_evidence_ids = {}
+    elif mutation == "foreign_evidence":
+        snapshot.finding_evidence_ids = {"AC-01": ["foreign-candidate"]}
+    elif mutation == "noncanonical_criteria":
+        snapshot.criterion_ids = ["AC-01", "AC-01"]
+    else:
+        snapshot.criterion_ids = ["AC-01", "AC-02"]
+        snapshot.finding_evidence_ids["AC-02"] = []
+    with pytest.raises(ValidationError):
+        export_comparison_json(comparison)
+
+
+def test_scope_projection_is_order_independent_and_detached_from_input_inventory() -> None:
+    previous, current = scoped_bundle(OLD), scoped_bundle(NEW, "z.py", "a.py")
+    first = compare_reviews(previous, current)
+    current.review.changed_file_inventory.files.reverse()
+    second = compare_reviews(previous, current)
+    assert export_comparison_json(first) == export_comparison_json(second)
+    first.file_scope.current.inventory.files[0].status = "removed"
+    assert all(item.status != "removed" for item in current.review.changed_file_inventory.files)

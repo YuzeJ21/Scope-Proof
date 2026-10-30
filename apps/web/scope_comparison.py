@@ -59,6 +59,15 @@ def render_file_scope_comparison(scope: FileScopeComparison | None) -> None:
             st.caption(f"{label} ingestion: {snapshot.ingestion_state.value.capitalize()}")
             if snapshot.inventory is None:
                 st.caption(f"{label} inventory: unknown")
+            elif not snapshot.inventory.files:
+                st.caption(f"{label}: Known empty inventory")
+            else:
+                st.caption(f"{label} inspected inventory (recorded metadata only)")
+                for item in snapshot.inventory.files:
+                    st.text(
+                        f"{item.path} · status: {item.status} · "
+                        f"previous path: {item.previous_path or 'Not recorded'}"
+                    )
             for path in snapshot.skipped_files:
                 st.text(f"{label} skipped, uninspected path: {path}")
             for warning in snapshot.ingestion_warnings:

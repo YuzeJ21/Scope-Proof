@@ -414,6 +414,18 @@ def _comparison_file_scope_markdown(comparison: ReviewComparison) -> list[str]:
             f"- Head: {_render_markdown_code(snapshot.head_sha)}",
             f"- Ingestion: {_render_markdown_code(snapshot.ingestion_state.value)}",
         ])
+        if snapshot.inventory is None:
+            lines.append("- Inventory: unknown")
+        elif not snapshot.inventory.files:
+            lines.append("- Known empty inventory")
+        else:
+            lines.append("- Known inspected inventory (recorded metadata only):")
+            for item in snapshot.inventory.files:
+                lines.append(
+                    f"  - {_render_markdown_code(item.path)}; "
+                    f"status: {_render_markdown_code(item.status)}; previous path: "
+                    f"{_render_markdown_code(item.previous_path or 'Not recorded')}"
+                )
         unresolved = snapshot.unresolved_paths
         lines.append(
             "- Unresolved inspected paths: " + (

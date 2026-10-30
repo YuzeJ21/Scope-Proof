@@ -24,6 +24,8 @@ class FileScopeSnapshot(BaseModel):
     head_sha: str
     criteria_revision_number: Annotated[StrictInt, Field(gt=0)] | Literal["unknown"]
     normalized_criteria_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None
+    criterion_ids: list[str]
+    finding_evidence_ids: dict[str, list[str]]
     inventory: ChangedFileInventory | None
     cited_paths: list[str]
     latest_decisions: list[FileScopeDecision]
@@ -42,6 +44,18 @@ class FileScopeSnapshot(BaseModel):
     def _validate_identity(self) -> FileScopeSnapshot:
         if not self.head_sha.strip() or not self.review_id.strip():
             raise ValueError("scope snapshot requires nonblank review and head identity")
+        if self.criterion_ids != sorted(set(self.criterion_ids)) or any(
+            not item.strip() for item in self.criterion_ids
+        ):
+            raise ValueError("scope criterion IDs must be canonical")
+        if set(self.finding_evidence_ids) != set(self.criterion_ids) or any(
+            values != sorted(set(values)) for values in self.finding_evidence_ids.values()
+        ):
+            raise ValueError("scope finding links must match the confirmed criteria")
+        if self.ingestion_state is IngestionState.COMPLETE and (
+            self.skipped_files or self.ingestion_warnings
+        ):
+            raise ValueError("complete scope ingestion cannot include limitations")
         if self.inventory is not None and self.inventory.head_sha != self.head_sha:
             raise ValueError("scope inventory must match snapshot head")
         paths = {item.path for item in self.inventory.files} if self.inventory else set()
@@ -57,6 +71,10 @@ class FileScopeSnapshot(BaseModel):
                 or decision.criteria_revision_number != self.criteria_revision_number
                 or decision.normalized_criteria_sha256 != self.normalized_criteria_sha256
                 or decision.path not in paths
+                or (
+                    decision.criterion_id is not None
+                    and decision.criterion_id not in self.criterion_ids
+                )
             ):
                 raise ValueError("scope decision must match its owning snapshot identity")
         return self
@@ -99,6 +117,10 @@ class FileScopeSnapshot(BaseModel):
             normalized_criteria_sha256=(
                 provenance.normalized_criteria_sha256 if provenance else None
             ),
+            criterion_ids=sorted(item.criterion_id for item in bundle.criteria),
+            finding_evidence_ids={
+                item.criterion_id: sorted(set(item.evidence_ids)) for item in bundle.findings
+            },
             inventory=copied_inventory,
             cited_paths=sorted(cited),
             latest_decisions=[latest[path].model_copy(deep=True) for path in sorted(latest)],
@@ -126,6 +148,15 @@ class FileScopeComparison(BaseModel):
 
     previous: FileScopeSnapshot
     current: FileScopeSnapshot
+
+    @model_validator(mode="after")
+    def _criteria_identity_matches(self) -> FileScopeComparison:
+        if (
+            self.previous.normalized_criteria_sha256 != self.current.normalized_criteria_sha256
+            or self.previous.criterion_ids != self.current.criterion_ids
+        ):
+            raise ValueError("scope snapshots require matching confirmed criteria identity")
+        return self
 
     @model_validator(mode="before")
     @classmethod

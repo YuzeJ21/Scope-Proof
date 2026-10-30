@@ -39,7 +39,7 @@ target-repository runtime proof, accessibility conformance, customer use, demand
 
 ### Ordered development outcomes
 
-1. **Active: scope-aware re-review comparison.** Show inventory differences, unresolved paths
+1. **Implemented in source: scope-aware re-review comparison ([PR #222](https://github.com/YuzeJ21/Scope-Proof/pull/222)).** Show inventory differences, unresolved paths
    and historical unknown scope alongside candidate changes in the workbench and comparison
    JSON/Markdown. Finish with validated deterministic projections, constructed regressions and
    required automated checks; preserve the existing gate and explicit reviewer decisions.

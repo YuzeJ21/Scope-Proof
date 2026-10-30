@@ -37,12 +37,12 @@ gains optional `file_scope: FileScopeComparison | None`. New comparisons always 
 legacy missing fields stay unknown. `FileScopeComparison.previous/current` hold typed snapshots;
 `inventory_changes` and each snapshot's `unresolved_paths` are computed from retained facts.
 
-- [ ] Write core and export tests for the reproduced uncited-file omission; observe failure.
-- [ ] Add snapshots/deltas and bind them to comparison heads; test latest decisions, unknowns,
+- [x] Write core and export tests for the reproduced uncited-file omission; observe failure.
+- [x] Add snapshots/deltas and bind them to comparison heads; test latest decisions, unknowns,
       native rename metadata, skips, generated paths, order independence and nonmutation.
-- [ ] Render scope context in Markdown/JSON and workbench; add behavior-based AppTests and
+- [x] Render scope context in Markdown/JSON and workbench; add behavior-based AppTests and
       escaping/tampering regressions. Capture constructed before/after screens automatically.
-- [ ] Update four current guidance documents to a bounded ranked Stage 2 queue: scope comparison
+- [x] Update four current guidance documents to a bounded ranked Stage 2 queue: scope comparison
       now, durable saved-history re-review next, explicit evidence selection design-only later.
 - [ ] Run focused tests, lint, full suite at 95%, deterministic benchmarks and installed-browser
       journey; retain command logs. Review the complete branch independently.
