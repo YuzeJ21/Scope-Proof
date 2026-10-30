@@ -408,7 +408,7 @@ for a bounded engineering improvement, not proof that practitioners need or will
 | --- | --- | --- |
 | M1 — implemented in source: scope-aware re-review | Explain changed-file scope across reviewed heads. Candidate-only comparison previously omitted the changed-file inventory, so an uncited file could appear without a corresponding candidate delta. | Deterministic, Pydantic-validated scope comparison in the workbench and comparison JSON/Markdown; constructed regressions for inventory differences, explicit rename metadata, unresolved paths and historical unknown inventory; relevant full-suite, coverage, lint, package/browser and exact-head CI checks. Keep gate semantics and reviewer decisions unchanged. |
 | M2 — implemented in source: durable saved comparison | Reopen a saved review and explicitly select another saved record or a retained compatible historical analysis. Changed heads can live in distinct saved records. | Validated read-only selection bound to both saved-state fingerprints; explicit compatibility checks; stale selection/download invalidation; unchanged saved JSON bytes and decisions; core, AppTest and installed-browser restart/reopen/download regressions. |
-| M3 — implemented in source: reviewer-selected references | Explicitly cite an already-ingested exact-head static location omitted by conservative matching, with criterion mapping, reviewer and rationale. Usefulness remains unvalidated. | Separate non-gating, Pydantic-validated references; source/fingerprint/provenance checks; bounded line selection; safe v6 persistence and legacy rejection; core, report, AppTest and installed-browser save/restart/reopen/download regressions. Preserve automatic findings, confidence, scope coverage, decisions and runtime truth. |
+| M3 — implemented in source: reviewer-selected references | Explicitly cite an already-ingested exact-head static location omitted by conservative matching, with criterion mapping, reviewer and rationale, and audited correction/withdrawal. Usefulness remains unvalidated. | Separate non-gating, Pydantic-validated references/events; source/fingerprint/provenance checks; bounded selection/history; safe v7 persistence and legacy rejection; core, report, AppTest and installed-browser save/restart/reopen/download regressions. Preserve automatic findings, confidence, scope coverage, decisions and runtime truth. |
 
 M1 is implemented by [PR #222](https://github.com/YuzeJ21/Scope-Proof/pull/222); its review and
 exact-head integration checks are recorded there. Finish its outcome, regression coverage,
@@ -455,6 +455,17 @@ match. Newly observed contradictions suppress current workbench authority and ex
 rewriting the historical gate; current-head re-review remains explicit. See the
 [bounded continuation assessment](docs/audits/2026-10-30-resume-reviewed-source.md).
 This is the selected outcome, not a new standing queue or evidence of independent usefulness.
+
+The owner next selected **audited correction and withdrawal of selected references**. The
+unreleased source retains immutable original records and appends attributed terminal events.
+Correction links a fresh source-validated replacement; withdrawal works on a reopened record
+without source. Workbench, reports and saved comparisons show lifecycle status and history,
+separately from original-record presence counts. New records use version 7; older records gain
+no invented events and load without rewriting. Limits are 32 active references, 128 retained
+records and 128 events per analysis. See the [bounded audit design](docs/superpowers/specs/2026-10-30-selected-reference-audit-design.md)
+and [engineering assessment](docs/audits/2026-10-30-selected-reference-audit.md).
+This completes a correction/review outcome; it creates no standing feature queue or Stage 3 credit.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

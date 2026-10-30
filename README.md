@@ -454,7 +454,7 @@ Criterion Review. Choose **Reference source**, **Reference page** and **Referenc
 The file catalog includes all eligible already-ingested files. Each page offers at most 100 eligible
 lines in the chosen file (maximum 4,096 UTF-8 bytes each), including locations beyond the legacy
 global first 1,000. Page ranges count eligible lines; the line selector retains physical Git line
-numbers. Changing file or page clears the line choice. At most 32 references may be saved per
+numbers. Changing file or page clears the line choice. At most 32 active references may be saved per
 analysis. Removed, skipped, truncated or ambiguous sources remain unavailable.
 
 **Reviewer-selected references** remain separate from automatic candidates. They do not change
@@ -463,15 +463,27 @@ definitions show intent, not execution. Saved references retain their criterion,
 location, attribution and rationale in JSON/Markdown/CSV/HTML. A saved excerpt digest establishes
 internal consistency, not independent authenticity. After reopening, references remain inspectable
 and exportable; adding new references requires matching loaded source. Pending inputs must be
-saved or cleared. Final acceptance must be revoked before adding references.
+saved or cleared. Final acceptance must be revoked before adding or changing references.
+
+Choose **Correct** or **Withdraw** under **Selected-reference action**, then explicitly choose an
+active reference in the inspected criterion. Both require an asserted reviewer and an action
+reason. Correction also requires selecting a matching source line and a new selection rationale.
+It appends a new reference linked to the original; withdrawal appends a terminal event and needs
+no source reload. Original excerpts, attribution and rationale remain inspectable alongside
+**Active**, **Corrected** and **Withdrawn** status and the event actor, reason, time and links.
+Attribution is asserted locally, not authenticated identity. An inactive record cannot be changed
+again; correct its active replacement instead. History is bounded to 128 retained references and
+128 terminal events per analysis; correction can proceed at the 32-active limit, while exhausted
+retained history rejects further additions/corrections explicitly. Withdrawal remains available.
+No action changes automatic findings, gate decisions, scope coverage or runtime verification.
 
 After reopening a saved review, **Load matching reviewed source** restores source for continued
 inspection without replacing the analysis or reconfirming unchanged criteria. It is available for
 complete confirmed analyses with verified-public live origin or the explicit constructed demo.
 The repository, PR, base/head, inventory, visibility and complete CI observation must match;
-even different passing-check counts require explicit re-review. Recorded selected references
+even different passing-check counts require explicit re-review. Active selected references
 must still match eligible raw source. Only unchanged paths recorded in automatic evidence or
-selected references are restored, within the existing eight-file / 200,000 UTF-8-byte total bound.
+active selected references are restored, within the existing eight-file / 200,000 UTF-8-byte total bound.
 Unrecorded source inputs are not reconstructed. Constructed loading stays offline and never
 becomes genuine-public evidence. Original producer metadata, decisions and saved bytes remain
 unchanged until an explicit review operation is saved.
@@ -492,7 +504,10 @@ Inspect previous/current locations, heads, attribution and rationale without loa
 Its counts distinguish complete identical records, records only in the previous analysis and
 records only in the current analysis. Different heads or attribution never imply equivalence,
 relocation, acceptance or decision carry-forward. Automatic candidate counts and gates stay
-unchanged. Comparison JSON/Markdown retain the context; older comparison projections that omitted
+unchanged. Original-record presence counts do not imply the same active status: per-side lifecycle
+snapshots retain all original records, active IDs and events, with a separate count of lifecycle
+changes on shared original records. Missing lifecycle snapshots in older comparisons remain
+explicitly unknown. Comparison JSON/Markdown retain the context; older comparison projections that omitted
 it remain explicitly unavailable. A saved-reference change expires an existing comparison/download
 selection, so select the saved baseline again.
 
@@ -505,8 +520,10 @@ If the selected record changes, choices and downloads expire and require reselec
 selected analyses are rejected without changing the current review or automatically using another
 analysis. Saved history remains usable without reloading GitHub or rerunning analysis.
 
-New saves use record version 6; versions 1–5 remain readable without invented selections.
-Older application readers may reject version-6 records. Keep original saved records before
+New saves use record version 7; versions 1–6 remain readable without invented audit events.
+Version 7 requires an explicit event list, including an empty list. Downgraded older records
+with nonempty or malformed events are rejected. Older application readers may reject version-7
+records. Keep original saved records before
 opening copies in unreleased source; loading alone does not rewrite them.
 
 ### Durable local review workflow

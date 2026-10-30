@@ -202,6 +202,7 @@ def test_omitted_line_selection_preserves_all_automatic_and_human_truth():
     assert reference.selected_at.tzinfo is not None
     after = updated.model_dump(mode="json")
     after["bundle"]["reviewer_selected_references"] = []
+    after["bundle"]["active_reviewer_selected_reference_ids"] = []
     assert after == before
     assert state.bundle.reviewer_selected_references == []
     assert validated_review_state(updated) == updated

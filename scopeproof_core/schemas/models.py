@@ -116,6 +116,8 @@ MAX_JUNIT_NOTE_LENGTH = 1_000
 MAX_SELECTABLE_REFERENCE_LINES = 1_000
 MAX_REFERENCE_LINE_BYTES = 4_096
 MAX_REVIEWER_SELECTED_REFERENCES = 32
+MAX_SELECTED_REFERENCE_RECORDS = 128
+MAX_SELECTED_REFERENCE_EVENTS = 128
 _PATH_OR_URI_LIKE = re.compile(
     r"(?:[/\\]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:)"
 )
@@ -1138,6 +1140,51 @@ class ReviewerSelectedReference(SelectableReferenceLine):
         return self
 
 
+class SelectedReferenceEvent(BaseModel):
+    """Asserted local attribution for a terminal reference action, never authentication."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    event_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    action: Literal["corrected", "withdrawn"]
+    reference_id: str = Field(min_length=1)
+    replacement_reference_id: str | None = None
+    review_id: str = Field(min_length=1)
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    pr_number: StrictInt = Field(gt=0)
+    head_sha: str = Field(min_length=1)
+    criteria_revision_number: StrictInt = Field(gt=0)
+    confirmed_criteria_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reviewer: str = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=2_000)
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("reviewer", "reason", mode="before")
+    @classmethod
+    def required_attribution(cls, value: object) -> object:
+        return ReviewerSelectedReference.normalize_required_attribution(value)
+
+    @field_validator(
+        "event_id", "reference_id", "replacement_reference_id", "review_id", "head_sha"
+    )
+    @classmethod
+    def nonblank_identity(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("reference audit identity must be nonblank")
+        return value
+
+    @field_validator("occurred_at")
+    @classmethod
+    def aware_time(cls, value: datetime) -> datetime:
+        return ReviewerSelectedReference.require_aware_selection_time(value)
+
+    @model_validator(mode="after")
+    def action_payload(self) -> SelectedReferenceEvent:
+        if (self.action == "corrected") != (self.replacement_reference_id is not None):
+            raise ValueError("only a correction requires a replacement reference")
+        return self
+
+
 class CriterionRetrievalDiagnostic(BaseModel):
     """Deterministic search metadata that is never criterion evidence."""
 
@@ -1787,7 +1834,10 @@ class ReviewBundle(BaseModel):
     resolutions: list[HumanResolution] = Field(default_factory=list)
     file_scope_decisions: list[FileScopeDecision] = Field(default_factory=list)
     reviewer_selected_references: list[ReviewerSelectedReference] = Field(
-        default_factory=list, max_length=MAX_REVIEWER_SELECTED_REFERENCES
+        default_factory=list, max_length=MAX_SELECTED_REFERENCE_RECORDS
+    )
+    selected_reference_events: list[SelectedReferenceEvent] = Field(
+        default_factory=list, max_length=MAX_SELECTED_REFERENCE_EVENTS
     )
     gate: GateDecision
     research_context: ResearchContext | None = None
@@ -1806,8 +1856,18 @@ class ReviewBundle(BaseModel):
                 "candidate_evidence_proves_correctness",
                 "runtime_verification_state",
                 "reviewer_decision_state",
+                "active_reviewer_selected_reference_ids",
             }
         }
+
+    @computed_field
+    @property
+    def active_reviewer_selected_reference_ids(self) -> list[str]:
+        terminal = {event.reference_id for event in self.selected_reference_events}
+        return [
+            item.reference_id for item in self.reviewer_selected_references
+            if item.reference_id not in terminal
+        ]
 
     @computed_field
     @property
@@ -1858,14 +1918,11 @@ class ReviewBundle(BaseModel):
         inventory = self.review.changed_file_inventory
         inventory_paths = {item.path for item in inventory.files} if inventory else set()
         reference_ids = [item.reference_id for item in self.reviewer_selected_references]
-        reference_locations = [
-            (item.criterion_id, item.source_scope, item.file_path, item.line_number)
-            for item in self.reviewer_selected_references
-        ]
         if len(reference_ids) != len(set(reference_ids)):
             raise ValueError("selected reference IDs must be unique")
-        if len(reference_locations) != len(set(reference_locations)):
-            raise ValueError("selected reference criterion locations must be unique")
+        from scopeproof_core.reviews.reference_audit import validate_reference_audit
+
+        validate_reference_audit(self.reviewer_selected_references, self.selected_reference_events)
         for reference in self.reviewer_selected_references:
             if (
                 not self.review.criteria_confirmed

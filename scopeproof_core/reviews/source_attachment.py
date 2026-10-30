@@ -10,6 +10,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.gates.validation import validated_review_state
+from scopeproof_core.reviews.reference_audit import active_references
 from scopeproof_core.reviews.selected_references import _eligible_reference_lines
 from scopeproof_core.schemas.models import (
     EvidenceSourceScope,
@@ -115,7 +116,7 @@ def required_source_candidate_paths(state: ReviewState) -> list[str]:
     paths = sorted(
         {
             item.file_path
-            for item in [*state.bundle.evidence, *state.bundle.reviewer_selected_references]
+            for item in [*state.bundle.evidence, *active_references(state.bundle)]
             if item.source_scope is EvidenceSourceScope.UNCHANGED_CANDIDATE
         }
     )
@@ -240,7 +241,7 @@ def _validated_source(
         (r.source_scope, r.file_path, r.line_number): SelectableReferenceLine.model_validate(
             {name: getattr(r, name) for name in SelectableReferenceLine.model_fields}
         )
-        for r in state.bundle.reviewer_selected_references
+        for r in active_references(state.bundle)
     }
     if recorded:
         for line in _eligible_reference_lines(state, snapshot, list(candidates)):

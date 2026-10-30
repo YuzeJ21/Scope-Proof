@@ -67,5 +67,5 @@ def test_version_four_ready_reopens_with_unknown_file_scope_and_preserved_events
     assert "changed_file_inventory_unknown" in reopened.bundle.gate.reason_codes
 
     resaved = store.save(reopened)
-    assert json.loads(resaved.read_text(encoding="utf-8"))["record_version"] == 6
+    assert json.loads(resaved.read_text(encoding="utf-8"))["record_version"] == 7
     assert store.load(state.review.review_id).bundle.gate.verdict is GateVerdict.NEEDS_REVIEW

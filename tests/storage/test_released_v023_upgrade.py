@@ -152,7 +152,7 @@ def test_native_old_writer_resave_preserves_history_and_original_bytes(tmp_path:
 
     assert store.save(reopened) == copied_record
     resaved = json.loads(copied_record.read_bytes())
-    assert resaved["record_version"] == 6
+    assert resaved["record_version"] == 7
     assert resaved["state"] == before_save
     assert store.load(REVIEW_ID).model_dump(mode="json") == before_save
     _assert_conservative_upgrade(store.load(REVIEW_ID))
