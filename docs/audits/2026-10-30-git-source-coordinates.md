@@ -18,7 +18,9 @@ produce a nonexistent current-head candidate.
 A pure shared LF splitter preserves complete records, internal blanks and final unterminated
 content. It drops only the terminal empty sentinel and explicitly handles CRLF. Changed-patch
 parsing retains raw CR until checking Git's following no-final-newline marker: a protocol LF
-must not erase a real final source CR. Ordinary CRLF presentation remains unchanged.
+must not erase a real final source CR. GitHub can omit the final protocol LF for a normal
+CRLF-terminated source; its absence does not imply an unterminated source line. The following
+marker governs CR preservation, and ordinary CRLF presentation remains unchanged.
 
 Only production source coordinate boundaries use the helper. Matching terms, thresholds,
 candidate limit, source typing, schema/version 6, gate policy/ruleset 2.0.0, reviewer decisions
@@ -49,6 +51,13 @@ The pre-fix independent matrix had 108 assertion failures. The first LF correcti
 108 cases. Subsequent EOF-CR and complete verification results belong to their exact PR head;
 the PR and resulting-main CI are the integration authority. Failed and passing evidence are
 retained separately in the private version-bound audit packet.
+
+Independent review identified one minor CRLF presentation inconsistency in the initial fix:
+the final API patch record could retain a CR when GitHub omitted its protocol LF. An offline
+API-shaped regression reproduced the extra character before the marker-based correction;
+changed and unchanged candidates must now have identical normalized context. The real-Git EOF-CR
+regression continues to require preservation of actual final source content. No comparison
+classification or gate impact is claimed for this minor finding.
 
 ## Verification boundary
 

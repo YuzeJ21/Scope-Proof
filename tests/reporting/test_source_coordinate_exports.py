@@ -15,12 +15,14 @@ from scopeproof_core.reporting.exporters import (
     export_json,
     export_markdown,
 )
+from scopeproof_core.retrieval.engine import retrieve_evidence
 from scopeproof_core.reviews.lifecycle import new_review_state, revise_criteria
 from scopeproof_core.schemas.models import (
     ChangedFile,
     ChangedLine,
     LineChangeType,
     PullRequestSnapshot,
+    RetrievedFile,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
 
@@ -30,6 +32,39 @@ _LABELS = {
     "criteria_confirmed": True,
     "criteria": [{"criterion_id": "AC-01", "text": "Find target_identifier"}],
 }
+
+
+def test_github_crlf_patch_without_protocol_lf_matches_unchanged_source_context():
+    # GitHub's patch field can omit its final protocol LF for a CRLF-terminated blob.
+    patch = "@@ -0,0 +1 @@\n+target_identifier()\r"
+    lines = _parse_patch(patch)
+    assert lines[0].content == "target_identifier()"
+    snapshot = PullRequestSnapshot(
+        repository="acme/widget",
+        pr_number=7,
+        title="Constructed API-shaped CRLF patch",
+        html_url="https://github.com/acme/widget/pull/7",
+        base_sha="1" * 40,
+        head_sha=_HEAD,
+        files=[ChangedFile(path="src/coordinates.txt", status="added", patch=patch, lines=lines)],
+    )
+    state = new_review_state(build_review(snapshot, _LABELS))
+    changed = state.bundle.evidence[0]
+    unchanged = retrieve_evidence(
+        snapshot.model_copy(update={"files": []}),
+        state.criteria_revision.criteria,
+        [
+            RetrievedFile(
+                path="src/coordinates.txt",
+                content="target_identifier()\r\n",
+                commit_sha=_HEAD,
+                retrieval_reason="Constructed immutable CRLF source",
+            )
+        ],
+    )[0]
+    assert changed.excerpt == unchanged.excerpt == "target_identifier()"
+    assert changed.context_excerpt == unchanged.context_excerpt == "target_identifier()"
+    assert changed.line_start == changed.line_end == unchanged.line_start == unchanged.line_end == 1
 
 
 def coordinate_state(*, legacy: bool = False):

@@ -15,7 +15,9 @@ final record remain. No stripping, broad Unicode splitting or global newline rep
 
 Patch parsing requests raw CR retention until it inspects the following Git no-final-newline
 marker. Git adds a protocol LF even after an unterminated source line; a CR before that LF is
-real content when the marker follows. Ordinary CRLF records retain existing normalization.
+real content when the marker follows. GitHub may omit the final protocol LF for a normal
+CRLF-terminated source, so the following marker governs CR preservation, rather than whether
+the patch string ends in LF. Ordinary CRLF records retain existing normalization.
 
 Two inline fixes would duplicate subtle CRLF/EOF handling. Globally replacing every splitlines
 would alter requirement parsing and frozen research normalization. The shared narrow helper is

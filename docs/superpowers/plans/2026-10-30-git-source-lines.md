@@ -15,7 +15,9 @@ unchanged-source enumeration. Existing typed evidence/context/export consumes co
 
 ## Global Constraints
 
-- LF only; strip one CR only immediately before terminating LF; no phantom trailing record.
+- Full source uses LF only and strips one CR only immediately before terminating LF; no phantom
+  trailing record. Patch CR normalization uses the following no-final-newline marker because
+  GitHub may omit the final protocol LF.
 - Preserve embedded CR/VT/FF/FS/GS/RS/NEL/LS/PS and real internal blank/final unterminated lines.
 - Frozen R-002 inputs/labels/results/scores and ignored research cache remain untouched.
 - No historical reparse/renumber, M3 guard relaxation, schema/policy/dependency/gate change.
@@ -39,7 +41,8 @@ documentation/Windows targeted test configuration. Leave all frozen research unt
 **Interfaces:** `split_git_source_lines(text: str, *, strip_crlf: bool = True) -> list[str]`; use it from `_parse_patch`
 and `_candidate_file`. No other public/core model signature changes.
 Patch parsing retains raw CR until checking the following no-final-newline marker; protocol LF
-must not erase a real final source CR.
+must not erase a real final source CR; absent a marker, normalize CRLF even when GitHub omits
+the final protocol LF.
 
 - [ ] Write and observe failing independent parser/retrieval coordinate and helper boundary tests.
 - [ ] Implement the small helper and two call sites; run targeted sources/context/history/export

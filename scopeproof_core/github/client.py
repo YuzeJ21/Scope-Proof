@@ -152,13 +152,14 @@ def _parse_patch(patch: str) -> list[ChangedLine]:
     old_line = 0
     new_line = 0
     records = split_git_source_lines(patch, strip_crlf=False)
-    terminated_records = patch.count("\n")
     for index, raw in enumerate(records):
         no_final_newline = (
             index + 1 < len(records)
             and records[index + 1].startswith("\\ No newline")
         )
-        if index < terminated_records and not no_final_newline:
+        # GitHub may omit the final protocol LF even for a CRLF-terminated source.
+        # The following Git marker, rather than patch termination, identifies EOF content.
+        if not no_final_newline:
             raw = raw.removesuffix("\r")
         header = _HUNK_HEADER.match(raw)
         if header:
