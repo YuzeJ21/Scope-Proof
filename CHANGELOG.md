@@ -11,6 +11,10 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5.dev0`, unreleased.
 
+- Align source requirements with the verified maintained baseline: Pydantic `>=2.13.4,<3`,
+  Streamlit `>=1.66.1,<2`, and direct Pillow `>=13,<14`, retaining HTTPX `>=0.27,<1` and every
+  resolved lock version. This excludes known incompatible older combinations without changing
+  application behavior or the public v0.2.4 package; see the [alignment record](docs/audits/2026-10-29-dependency-baseline-alignment.md).
 - Let a valid exact-1-MiB JUnit artifact reach the workbench's existing byte check. Retain rejection
   of larger files before reading or parsing, and preserve all review decisions and evidence gates.
   Clarify maintained installation constraints without changing published v0.2.4 bytes or metadata;

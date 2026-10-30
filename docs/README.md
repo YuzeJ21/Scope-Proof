@@ -29,6 +29,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 ## Historical evidence records
 
+- [Dependency declaration alignment](audits/2026-10-29-dependency-baseline-alignment.md) records
+  the unreleased source correction, unchanged lock versions and isolated exact-floor verification.
 - [Dependency-floor and JUnit upload assessment](audits/2026-10-29-runtime-dependency-floor.md)
   records exact installed combinations, partial older-UI evidence, and the reproduced byte-boundary
   defect plus unreleased-source repair. Published v0.2.4 remains unchanged.

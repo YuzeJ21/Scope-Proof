@@ -27,13 +27,16 @@ accounting and all existing gates. That CI-only question is closed by merged PR 
 the historical Streamlit minimum cannot use the maintained Pillow baseline, and reproduced a
 separate browser upload defect at exactly 1 MiB. Current install guidance names the maintained
 dependency constraints, including the locked Pydantic baseline after broader source checks exposed
-R-002 strict-validation failures at Pydantic 2.8.0. The old minimum is not fully compatible; its
-metadata remains permissive and is a documented support limit. One narrow unreleased-source repair
-lets the full-size artifact reach the
-unchanged fail-closed parser limit, with unit and installed-browser regressions. The older-stack
+R-002 strict-validation failures at Pydantic 2.8.0. The published package's metadata still permits
+that incompatible older combination. PR #219 integrated the unreleased upload repair, letting the
+full-size artifact reach the unchanged fail-closed parser limit, with unit and installed-browser
+regressions. The [source declaration alignment](docs/audits/2026-10-29-dependency-baseline-alignment.md)
+now enforces the maintained Pydantic, Streamlit and direct Pillow floors, retaining all resolved
+lock versions. These are verified baseline choices, not proven earliest compatible versions.
+The older-stack
 browser observation remains partial because its saved-review selector differs from the current
 test helper; it is not a full compatibility pass. Preserve the published assets and return to
-bounded maintenance after this repair's reviewed passing integration. This is evaluation distribution, not a
+bounded maintenance after this alignment's reviewed passing integration. This is evaluation distribution, not a
 Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
 
