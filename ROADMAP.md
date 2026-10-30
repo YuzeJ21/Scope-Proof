@@ -438,8 +438,13 @@ per-record active/history selector, with record/head/revision identity and whole
 binding through locked preparation and downloads. Historical-only records and compatible histories
 beneath incompatible active analyses remain selectable; changed records require explicit reselection,
 without falling back to another analysis. See the [bounded history design](docs/superpowers/specs/2026-10-30-foreign-history-baseline-design.md).
-Expanded source-line selection remains unselected; broader adapters, accounts, hosted processing
-and external validation retain their separate gates.
+After PR #228, the owner selected **file-scoped source reference paging**. Unreleased source now
+uses an eligible-file catalog and pages of 100 eligible lines per selected file, reaching beyond
+the legacy global first 1,000. Explicit line choice, exact-source/fingerprint revalidation, the
+4,096-byte line and 32-reference limits, and existing source exclusions remain in force. Switching
+file/page clears the line choice; static references remain non-gating. See the [bounded paging
+assessment](docs/audits/2026-10-30-paged-source-references.md). This completes that selected outcome;
+broader adapters, accounts, hosted processing and external validation retain separate gates.
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

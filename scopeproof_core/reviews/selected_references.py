@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterator
 from hashlib import sha256
+from itertools import islice
 from urllib.parse import quote
 
-from pydantic import ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.retrieval.engine import classify_changed_path_evidence_type
@@ -94,12 +104,79 @@ def _line(
         return None
 
 
-def selectable_reference_lines(
+MAX_REFERENCE_PAGE_LINES = 100
+
+
+class _ReferenceSourceIdentity(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
+
+    source_scope: EvidenceSourceScope
+    file_path: str
+
+    @field_validator("file_path")
+    @classmethod
+    def canonical_path(cls, value: str) -> str:
+        return SelectableReferenceLine.require_canonical_repository_path(value)
+
+
+class SelectableReferenceSource(_ReferenceSourceIdentity):
+    """Eligible file metadata without retaining every source excerpt in the catalog."""
+
+    eligible_line_count: StrictInt = Field(ge=1)
+
+
+class _ReferencePageRequest(_ReferenceSourceIdentity):
+    page_index: StrictInt = Field(ge=0)
+
+
+class SelectableReferencePage(BaseModel):
+    """One bounded, ordered page of eligible records, retaining physical Git coordinates."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
+
+    source: SelectableReferenceSource
+    page_index: StrictInt = Field(ge=0)
+    lines: tuple[SelectableReferenceLine, ...] = Field(
+        min_length=1, max_length=MAX_REFERENCE_PAGE_LINES
+    )
+
+    @property
+    def page_count(self) -> int:
+        return (
+            self.source.eligible_line_count + MAX_REFERENCE_PAGE_LINES - 1
+        ) // MAX_REFERENCE_PAGE_LINES
+
+    @model_validator(mode="after")
+    def validate_page(self) -> SelectableReferencePage:
+        start = self.page_index * MAX_REFERENCE_PAGE_LINES
+        if start >= self.source.eligible_line_count:
+            raise ValueError("reference page is outside the eligible source")
+        if len(self.lines) != min(
+            MAX_REFERENCE_PAGE_LINES, self.source.eligible_line_count - start
+        ):
+            raise ValueError("reference page must contain its complete bounded window")
+        numbers = []
+        for line in self.lines:
+            line = SelectableReferenceLine.model_validate(line.model_dump(mode="python"))
+            if (line.source_scope, line.file_path) != (
+                self.source.source_scope,
+                self.source.file_path,
+            ):
+                raise ValueError("reference page lines must match their source")
+            numbers.append(line.line_number)
+        if numbers != sorted(set(numbers)):
+            raise ValueError("reference page lines must be unique and ordered")
+        return self
+
+
+def _eligible_reference_lines(
     state: ReviewState,
     snapshot: PullRequestSnapshot,
     unchanged_files: list[RetrievedFile] | None = None,
-) -> list[SelectableReferenceLine]:
-    """Return a bounded deterministic selection from already-ingested exact-head sources."""
+    *,
+    source: tuple[EvidenceSourceScope, str] | None = None,
+) -> Iterator[SelectableReferenceLine]:
+    """Apply the same source policy to discovery, pages, legacy views and saves."""
     state, snapshot = _validated_context(state, snapshot)
     unchanged = [
         RetrievedFile.model_validate(item.model_dump(mode="python"))
@@ -112,8 +189,9 @@ def selectable_reference_lines(
         *(item.path for item in snapshot.files),
         *(item.previous_path for item in snapshot.files if item.previous_path is not None),
     }
-    lines: list[SelectableReferenceLine] = []
-    for file in snapshot.files:
+    for file in sorted(snapshot.files, key=lambda item: item.path):
+        if source is not None and source != (EvidenceSourceScope.CHANGED_FILE, file.path):
+            continue
         if (
             file.status.casefold() not in {"added", "modified", "renamed", "copied", "changed"}
             or file.truncated
@@ -131,7 +209,7 @@ def selectable_reference_lines(
         numbers = [line.line_number for line in current_lines]
         if len(numbers) != len(set(numbers)):
             continue
-        for source_line in current_lines:
+        for source_line in sorted(current_lines, key=lambda item: item.line_number):
             assert source_line.line_number is not None
             selected = _line(
                 EvidenceSourceScope.CHANGED_FILE,
@@ -140,10 +218,12 @@ def selectable_reference_lines(
                 source_line.content,
             )
             if selected is not None:
-                lines.append(selected)
+                yield selected
 
     unchanged_path_counts = Counter(file.path for file in unchanged)
-    for file in unchanged:
+    for file in sorted(unchanged, key=lambda item: item.path):
+        if source is not None and source != (EvidenceSourceScope.UNCHANGED_CANDIDATE, file.path):
+            continue
         if (
             file.source_scope is not EvidenceSourceScope.UNCHANGED_CANDIDATE
             or file.commit_sha != state.review.head_sha
@@ -160,10 +240,72 @@ def selectable_reference_lines(
                 excerpt = excerpt[:-1]
             selected = _line(EvidenceSourceScope.UNCHANGED_CANDIDATE, file.path, number, excerpt)
             if selected is not None:
-                lines.append(selected)
+                yield selected
 
-    lines.sort(key=lambda item: (item.source_scope.value, item.file_path, item.line_number))
-    return lines[:MAX_SELECTABLE_REFERENCE_LINES]
+
+def selectable_reference_sources(
+    state: ReviewState,
+    snapshot: PullRequestSnapshot,
+    unchanged_files: list[RetrievedFile] | None = None,
+) -> list[SelectableReferenceSource]:
+    """List every eligible already-ingested file, without a global line cutoff."""
+    counts = Counter(
+        (line.source_scope, line.file_path)
+        for line in _eligible_reference_lines(state, snapshot, unchanged_files)
+    )
+    return [
+        SelectableReferenceSource(source_scope=scope, file_path=path, eligible_line_count=count)
+        for (scope, path), count in counts.items()
+    ]
+
+
+def selectable_reference_page(
+    state: ReviewState,
+    snapshot: PullRequestSnapshot,
+    *,
+    source_scope: EvidenceSourceScope,
+    file_path: str,
+    page_index: int = 0,
+    unchanged_files: list[RetrievedFile] | None = None,
+) -> SelectableReferencePage:
+    """Select one explicit file window; invalid requests never fall back to other source."""
+    request = _ReferencePageRequest(
+        source_scope=source_scope, file_path=file_path, page_index=page_index
+    )
+    start = request.page_index * MAX_REFERENCE_PAGE_LINES
+    lines = []
+    count = 0
+    for line in _eligible_reference_lines(
+        state, snapshot, unchanged_files, source=(request.source_scope, request.file_path)
+    ):
+        if start <= count < start + MAX_REFERENCE_PAGE_LINES:
+            lines.append(line)
+        count += 1
+    if not lines:
+        raise ValueError("reference source or page is unavailable")
+    return SelectableReferencePage(
+        source=SelectableReferenceSource(
+            source_scope=request.source_scope,
+            file_path=request.file_path,
+            eligible_line_count=count,
+        ),
+        page_index=request.page_index,
+        lines=tuple(lines),
+    )
+
+
+def selectable_reference_lines(
+    state: ReviewState,
+    snapshot: PullRequestSnapshot,
+    unchanged_files: list[RetrievedFile] | None = None,
+) -> list[SelectableReferenceLine]:
+    """Legacy deterministic global prefix; use file pages to reach later source."""
+    return list(
+        islice(
+            _eligible_reference_lines(state, snapshot, unchanged_files),
+            MAX_SELECTABLE_REFERENCE_LINES,
+        )
+    )
 
 
 def append_reviewer_selected_reference(
@@ -184,8 +326,10 @@ def append_reviewer_selected_reference(
         raise ValueError("selected reference request is stale; refresh the active review")
     if state.review.final_acceptance:
         raise ValueError("revoke final acceptance before adding selected references")
-    available = selectable_reference_lines(state, snapshot, unchanged_files)
     selected = SelectableReferenceLine.model_validate(selected.model_dump(mode="python"))
+    available = _eligible_reference_lines(
+        state, snapshot, unchanged_files, source=(selected.source_scope, selected.file_path)
+    )
     source = next((line for line in available if line == selected), None)
     if source is None:
         raise ValueError("selected reference must equal an available exact-head source line")
@@ -231,11 +375,16 @@ def append_reviewer_selected_reference(
 
 __all__ = [
     "MAX_REFERENCE_LINE_BYTES",
+    "MAX_REFERENCE_PAGE_LINES",
     "MAX_REVIEWER_SELECTED_REFERENCES",
     "MAX_SELECTABLE_REFERENCE_LINES",
     "REVIEWER_SELECTED_REFERENCE_BOUNDARY",
     "ReviewerSelectedReference",
     "SelectableReferenceLine",
+    "SelectableReferencePage",
+    "SelectableReferenceSource",
     "append_reviewer_selected_reference",
     "selectable_reference_lines",
+    "selectable_reference_page",
+    "selectable_reference_sources",
 ]
