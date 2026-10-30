@@ -32,6 +32,9 @@ New `scopeproof_core/reviews/selected_references.py` provides:
   context lines, or exact-head unchanged-file content. Removed/deleted, skipped, truncated,
   ambiguous, missing and noncanonical paths are unavailable. Whitespace-only/oversized lines
   are unavailable. Renames use their current path. Generated inspectable lines remain static.
+  Git line numbers use LF boundaries; CRLF is handled explicitly. Reject unsupported embedded
+  separator lines without shifting later LF-based numbers. A raw changed patch with ambiguous
+  separators is unavailable to M3; the existing automatic patch parser is unchanged.
 - Limits: first 1,000 eligible lines in deterministic scope/path/line order, maximum 4,096 UTF-8
   bytes per line, at most 32 saved references per active analysis. UI states the bounded limit.
 - `append_reviewer_selected_reference(state, *, snapshot, selected, criterion_id, reviewer,

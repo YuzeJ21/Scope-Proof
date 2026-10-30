@@ -88,6 +88,89 @@ def test_bundle_starts_without_invented_reviewer_references():
     assert state.bundle.reviewer_selected_references == []
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\f", "\v", "\x85", "\r"])
+def test_unchanged_separators_do_not_shift_git_line_numbers(separator):
+    state, snapshot = source_state()
+    unchanged = [
+        RetrievedFile(
+            path="src/unchanged.py",
+            commit_sha=snapshot.head_sha,
+            retrieval_reason="Constructed source",
+            content=f"label = 'alpha{separator}beta'\nrun()\n",
+        )
+    ]
+    offered = [
+        line
+        for line in api().selectable_reference_lines(state, snapshot, unchanged)
+        if line.file_path == "src/unchanged.py"
+    ]
+    assert [(line.line_number, line.excerpt) for line in offered] == [(2, "run()")]
+    updated = append(state, snapshot, selected=offered[0], unchanged_files=unchanged)
+    reference = updated.bundle.reviewer_selected_references[0]
+    assert reference.line_number == 2 and reference.permalink.endswith("#L2-L2")
+    assert reference.excerpt == "run()"
+
+
+def test_unchanged_source_handles_crlf_without_reinterpreting_embedded_or_final_cr():
+    state, snapshot = source_state()
+    unchanged = [
+        RetrievedFile(
+            path="src/unchanged.py",
+            commit_sha=snapshot.head_sha,
+            retrieval_reason="Constructed source",
+            content="first()\r\nsecond()\r\nfinal()\r",
+        )
+    ]
+    offered = [
+        line
+        for line in api().selectable_reference_lines(state, snapshot, unchanged)
+        if line.file_path == "src/unchanged.py"
+    ]
+    assert [(line.line_number, line.excerpt) for line in offered] == [
+        (1, "first()"),
+        (2, "second()"),
+    ]
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\f", "\v", "\x85", "\r"])
+def test_changed_source_with_ambiguous_raw_patch_cannot_supply_exact_references(separator):
+    from scopeproof_core.github.client import _parse_patch
+
+    patch = f"@@ -0,0 +1,2 @@\n+label = 'alpha{separator}beta'\n+run()\n"
+    state, snapshot = source_state(
+        [
+            ChangedFile(
+                path="src/ambiguous.py",
+                status="added",
+                patch=patch,
+                lines=_parse_patch(patch),
+            )
+        ]
+    )
+    assert api().selectable_reference_lines(state, snapshot) == []
+
+
+def test_changed_crlf_patch_retains_current_head_line_numbers():
+    from scopeproof_core.github.client import _parse_patch
+
+    patch = "@@ -0,0 +1,2 @@\r\n+first()\r\n+second()\r\n"
+    state, snapshot = source_state(
+        [
+            ChangedFile(
+                path="src/crlf.py",
+                status="added",
+                patch=patch,
+                lines=_parse_patch(patch),
+            )
+        ]
+    )
+    offered = api().selectable_reference_lines(state, snapshot)
+    assert [(line.line_number, line.excerpt) for line in offered] == [
+        (1, "first()"),
+        (2, "second()"),
+    ]
+
+
 def test_omitted_line_selection_preserves_all_automatic_and_human_truth():
     state, snapshot = source_state()
     state = append_resolution(

@@ -33,6 +33,15 @@ REVIEWER_SELECTED_REFERENCE_BOUNDARY = (
     "internal consistency, not independent source authenticity."
 )
 
+# Git numbers source lines by LF. The existing automatic patch parser accepts
+# additional Python splitlines boundaries; M3 must not cite that ambiguous output.
+_UNSUPPORTED_LINE_SEPARATORS = frozenset("\v\f\x1c\x1d\x1e\x85\u2028\u2029")
+
+
+def _ambiguous_patch_lines(patch: str) -> bool:
+    normalized = patch.replace("\r\n", "\n")
+    return "\r" in normalized or bool(_UNSUPPORTED_LINE_SEPARATORS.intersection(normalized))
+
 
 def _validated_context(
     state: ReviewState, snapshot: PullRequestSnapshot
@@ -110,6 +119,7 @@ def selectable_reference_lines(
             or file.truncated
             or file.path in state.review.skipped_files
             or file.path in snapshot.skipped_files
+            or _ambiguous_patch_lines(file.patch)
         ):
             continue
         current_lines = [
@@ -141,7 +151,13 @@ def selectable_reference_lines(
             or unchanged_path_counts[file.path] != 1
         ):
             continue
-        for number, excerpt in enumerate(file.content.splitlines(), start=1):
+        source_lines = file.content.split("\n")
+        for number, excerpt in enumerate(source_lines, start=1):
+            # Strip CR only when it belongs to a CRLF delimiter, never an embedded
+            # or final lone CR. Unsupported separator-bearing lines are rejected
+            # by the raw-line model without shifting subsequent Git line numbers.
+            if number < len(source_lines) and excerpt.endswith("\r"):
+                excerpt = excerpt[:-1]
             selected = _line(EvidenceSourceScope.UNCHANGED_CANDIDATE, file.path, number, excerpt)
             if selected is not None:
                 lines.append(selected)
