@@ -465,6 +465,24 @@ internal consistency, not independent authenticity. After reopening, references 
 and exportable; adding new references requires matching loaded source. Pending inputs must be
 saved or cleared. Final acceptance must be revoked before adding references.
 
+After reopening a saved review, **Load matching reviewed source** restores source for continued
+inspection without replacing the analysis or reconfirming unchanged criteria. It is available for
+complete confirmed analyses with verified-public live origin or the explicit constructed demo.
+The repository, PR, base/head, inventory, visibility and complete CI observation must match;
+even different passing-check counts require explicit re-review. Recorded selected references
+must still match eligible raw source. Only unchanged paths recorded in automatic evidence or
+selected references are restored, within the existing eight-file / 200,000 UTF-8-byte total bound.
+Unrecorded source inputs are not reconstructed. Constructed loading stays offline and never
+becomes genuine-public evidence. Original producer metadata, decisions and saved bytes remain
+unchanged until an explicit review operation is saved.
+
+Observed source contradictions preserve the saved record but make current workbench status
+**Refresh required** and block final acceptance and authoritative downloads, including older
+deferred callbacks. Clearing a draft or reopening the same context does not clear that session
+guard. Explicit matching-source recovery or a new analysis is required. **Check current head**
+remains the separate source-replacement/re-review path. The session guard does not rewrite
+historical records, refresh their CI automatically or revoke previously downloaded reports.
+
 Unreleased saved comparisons now include a separate **Reviewer-selected reference comparison**.
 Inspect previous/current locations, heads, attribution and rationale without loading source again.
 Its counts distinguish complete identical records, records only in the previous analysis and

@@ -446,6 +446,16 @@ file/page clears the line choice; static references remain non-gating. See the [
 assessment](docs/audits/2026-10-30-paged-source-references.md). This completes that selected outcome;
 broader adapters, accounts, hosted processing and external validation retain separate gates.
 
+The next owner-delegated gap review selected **continue a reopened saved analysis with matching
+source**. The prior current-head reload reset the analysis even when source identity was unchanged.
+Unreleased source now provides a separate explicit source attachment, preserving confirmation,
+decisions, producer identity and saved bytes while enabling further static-reference selection.
+Complete source/CI facts, bounded recorded unchanged paths and optimistic saved-state checks must
+match. Newly observed contradictions suppress current workbench authority and exports without
+rewriting the historical gate; current-head re-review remains explicit. See the
+[bounded continuation assessment](docs/audits/2026-10-30-resume-reviewed-source.md).
+This is the selected outcome, not a new standing queue or evidence of independent usefulness.
+
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic
 references while preserving historical evidence and frozen research; it is bounded defect upkeep,

@@ -72,21 +72,33 @@ def deferred_review_export(
     *,
     store: JsonReviewStore,
     expected_fingerprint: str | None,
+    authority_check: Callable[[], bool] | None = None,
 ) -> Callable[[], str]:
     """Return a click-time renderer that refuses stale persisted review state."""
 
     captured = source.model_copy(deep=True)
 
+    def require_authority() -> None:
+        if authority_check is not None and not authority_check():
+            raise DeferredExportUnavailable(
+                "ScopeProof export was blocked because fresh source observations require re-review."
+            )
+
     def render() -> str:
+        require_authority()
         authoritative: ExportSource = captured
         if isinstance(captured, ReviewState) and expected_fingerprint is not None:
             try:
                 with store.locked_load(captured.review.review_id) as persisted:
                     if JsonReviewStore.state_fingerprint(persisted) != expected_fingerprint:
                         raise DeferredExportUnavailable(_EXPORT_REVALIDATION_MESSAGE)
-                    return renderer(persisted)
+                    rendered = renderer(persisted)
+                    require_authority()
+                    return rendered
             except (OSError, ValueError):
                 raise DeferredExportUnavailable(_EXPORT_REVALIDATION_MESSAGE) from None
-        return renderer(authoritative)
+        rendered = renderer(authoritative)
+        require_authority()
+        return rendered
 
     return render

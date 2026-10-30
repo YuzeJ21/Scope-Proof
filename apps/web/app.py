@@ -24,6 +24,13 @@ from apps.web.selected_references import (
     render_selected_references,
     selected_reference_draft_pending,
 )
+from apps.web.source_attachment import (
+    clear_source_attachment,
+    render_source_attachment,
+    source_authority_check,
+    source_authority_guard,
+    validate_current_source_attachment,
+)
 from apps.web.view_models import (
     default_criterion_detail_id,
     group_candidate_evidence,
@@ -295,6 +302,7 @@ elif _active_source_provenance is not None:
 
 
 def _reset_analysis() -> None:
+    clear_source_attachment()
     clear_saved_comparison_selection()
     st.session_state["criteria_confirmed"] = False
     st.session_state["bundle"] = None
@@ -649,6 +657,7 @@ def _prepare_from_text(text: str) -> None:
 
 def _hydrate_reopened_review(state: ReviewState) -> None:
     """Restore persisted review state without claiming its source snapshot is loaded."""
+    clear_source_attachment()
     clear_saved_comparison_selection()
     st.session_state["snapshot"] = None
     st.session_state["criteria"] = state.criteria_revision.criteria
@@ -670,7 +679,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
         sorted(
             {
                 item.file_path
-                for item in state.bundle.evidence
+                for item in [*state.bundle.evidence, *state.bundle.reviewer_selected_references]
                 if item.source_scope is EvidenceSourceScope.UNCHANGED_CANDIDATE
             }
         )
@@ -1190,6 +1199,18 @@ requirements_submission_blocked = bool(
     and not replace_unsaved_review_confirmed
 )
 
+
+# Observation conflicts are separate from discardable drafts and storage conflicts.
+# Compute replacement guards from actual drafts first, so explicit re-review stays available.
+actual_pending_review_input = has_pending_review_input
+validate_current_source_attachment(current_review_state)
+source_observation_conflict = not source_authority_guard().allows(current_review_state)
+has_pending_review_input = has_pending_review_input or source_observation_conflict
+if source_observation_conflict:
+    pending_storage_messages.append(
+        "Fresh source observations require re-review or matching source before current authority."
+    )
+
 st.header("1 · Start Review")
 st.markdown("**Public PR → Confirm criteria → Review coverage → Record decisions → Export**")
 st.caption(
@@ -1401,6 +1422,15 @@ if fetch_action_placeholder.button(
             f"{error} No review data was changed. Verify that the PR is public and "
             "try again. Use the optional token only if GitHub reports a rate limit."
         )
+
+
+render_source_attachment(
+    st.session_state["review_state"], store=review_store,
+    current_is_saved=(review_store_available and st.session_state["review_state"] is not None
+                      and _review_matches_local_save(st.session_state["review_state"])),
+    has_pending_inputs=actual_pending_review_input, token=github_token or None,
+    research_mode=alpha_feedback_mode,
+)
 
 with st.expander("Resume a saved review", expanded=False):
     if not review_store_available:
@@ -1993,7 +2023,9 @@ saved_comparison, saved_comparison_selection = render_saved_comparison_selector(
     review_state,
     store=review_store,
     saved_review_ids=saved_review_ids,
-    current_is_saved=review_matches_local_save and review_store_available,
+    current_is_saved=(
+        review_matches_local_save and review_store_available and not source_observation_conflict
+    ),
 )
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
@@ -2039,7 +2071,7 @@ else:
                 "request, exact head identity, confirmed criteria, or criteria source changed. "
                 "No prior decisions were carried forward."
             )
-    if comparison is not None:
+    if comparison is not None and not source_observation_conflict:
         st.markdown("### Re-review comparison")
         st.caption("Automatic candidates and recorded selected-reference context stay separate.")
         st.caption(f"Previous head: {comparison.previous_head_sha}")
@@ -3344,7 +3376,7 @@ else:
             if status_review_state.bundle is not None:
                 bundle = status_review_state.bundle
         st.header("6 · Summary & Export")
-        review_truth_conflict = bool(
+        review_truth_conflict = source_observation_conflict or bool(
             review_state is not None
             and st.session_state["review_save_conflict"]
             and st.session_state["failed_review_save_fingerprint"]
@@ -3356,7 +3388,14 @@ else:
             else review_status_label(bundle.gate.verdict)
         )
         st.markdown(f"**Review status: {review_status}**")
-        if review_truth_conflict:
+        if source_observation_conflict:
+            st.warning(
+                "Fresh source facts conflict with this saved analysis. "
+                "The saved gate is historical; "
+                "load matching reviewed source or use Check current head and re-review before "
+                "relying on current status, final acceptance or exports."
+            )
+        elif review_truth_conflict:
             st.warning(
                 "The persisted review could not be revalidated. Reopen it before relying on the "
                 "status or exporting this review."
@@ -3404,18 +3443,21 @@ else:
             export_markdown,
             store=review_store,
             expected_fingerprint=expected_export_fingerprint,
+            authority_check=source_authority_check(review_state),
         )
         json_report = deferred_review_export(
             export_source,
             export_json,
             store=review_store,
             expected_fingerprint=expected_export_fingerprint,
+            authority_check=source_authority_check(review_state),
         )
         csv_report = deferred_review_export(
             export_source,
             export_csv,
             store=review_store,
             expected_fingerprint=expected_export_fingerprint,
+            authority_check=source_authority_check(review_state),
         )
     else:
         markdown_report = ""
