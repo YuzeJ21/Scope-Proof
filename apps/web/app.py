@@ -11,7 +11,11 @@ from uuid import uuid4
 
 import streamlit as st
 
-from apps.web.deferred_exports import deferred_review_export
+from apps.web.deferred_exports import deferred_review_export, deferred_saved_comparison_export
+from apps.web.saved_comparison import (
+    clear_saved_comparison_selection,
+    render_saved_comparison_selector,
+)
 from apps.web.scope_comparison import render_file_scope_comparison
 from apps.web.view_models import (
     default_criterion_detail_id,
@@ -284,6 +288,7 @@ elif _active_source_provenance is not None:
 
 
 def _reset_analysis() -> None:
+    clear_saved_comparison_selection()
     st.session_state["criteria_confirmed"] = False
     st.session_state["bundle"] = None
     st.session_state["resolutions"] = []
@@ -637,6 +642,7 @@ def _prepare_from_text(text: str) -> None:
 
 def _hydrate_reopened_review(state: ReviewState) -> None:
     """Restore persisted review state without claiming its source snapshot is loaded."""
+    clear_saved_comparison_selection()
     st.session_state["snapshot"] = None
     st.session_state["criteria"] = state.criteria_revision.criteria
     st.session_state["criteria_confirmed"] = state.review.criteria_confirmed
@@ -1972,6 +1978,12 @@ review_matches_local_save = bool(
 )
 review_save_notice = st.session_state.pop("review_save_notice", None)
 st.header("3 · Decision Progress")
+saved_comparison, saved_comparison_selection = render_saved_comparison_selector(
+    review_state,
+    store=review_store,
+    saved_review_ids=saved_review_ids,
+    current_is_saved=review_matches_local_save and review_store_available,
+)
 if bundle is None:
     st.info("Confirm criteria and run analysis to generate the evidence matrix.")
     if review_save_notice is not None:
@@ -2005,8 +2017,8 @@ if bundle is None:
         )
 else:
     comparison_base: ReviewBundle | None = st.session_state["comparison_base_bundle"]
-    comparison: ReviewComparison | None = None
-    if comparison_base is not None:
+    comparison: ReviewComparison | None = saved_comparison
+    if comparison is None and comparison_base is not None:
         try:
             comparison = compare_reviews(comparison_base, bundle)
         except ValueError:
@@ -2041,22 +2053,40 @@ else:
         with comparison_markdown_column:
             st.download_button(
                 "Download comparison Markdown",
-                export_comparison_markdown(comparison),
+                (
+                    deferred_saved_comparison_export(
+                        saved_comparison_selection, export_comparison_markdown,
+                        store=review_store,
+                        lease=st.session_state["saved_comparison_export_lease"],
+                    )
+                    if saved_comparison_selection is not None
+                    else export_comparison_markdown(comparison)
+                ),
                 file_name=(
                     f"scopeproof-pr-{bundle.review.pr_number}-comparison.md"
                 ),
                 mime="text/markdown",
                 key="download_comparison_markdown",
+                on_click="ignore" if saved_comparison_selection is not None else "rerun",
             )
         with comparison_json_column:
             st.download_button(
                 "Download comparison JSON",
-                export_comparison_json(comparison),
+                (
+                    deferred_saved_comparison_export(
+                        saved_comparison_selection, export_comparison_json,
+                        store=review_store,
+                        lease=st.session_state["saved_comparison_export_lease"],
+                    )
+                    if saved_comparison_selection is not None
+                    else export_comparison_json(comparison)
+                ),
                 file_name=(
                     f"scopeproof-pr-{bundle.review.pr_number}-comparison.json"
                 ),
                 mime="application/json",
                 key="download_comparison_json",
+                on_click="ignore" if saved_comparison_selection is not None else "rerun",
             )
         changed_evidence = [
             change

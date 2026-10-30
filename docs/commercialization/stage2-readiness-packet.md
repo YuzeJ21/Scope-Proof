@@ -43,9 +43,11 @@ target-repository runtime proof, accessibility conformance, customer use, demand
    and historical unknown scope alongside candidate changes in the workbench and comparison
    JSON/Markdown. Finish with validated deterministic projections, constructed regressions and
    required automated checks; preserve the existing gate and explicit reviewer decisions.
-2. **Next: durable compatible-history comparison.** Let a reopened saved review expose a
-   compatible prior analysis without repeated source loading. Finish with read-only selection,
-   relationship validation, preserved history/decisions and core plus installed-browser evidence.
+2. **Implemented in source: durable saved-baseline comparison.** A reopened review can explicitly
+   select another saved record or a compatible retained analysis without repeated source loading.
+   Both saved-state fingerprints bind the comparison; changed records or selection invalidate
+   downloads. Preserve saved JSON bytes, history and decisions, with core, AppTest and
+   installed-browser restart/reopen/download evidence.
 3. **Design only: reviewer-selected exact-head evidence.** Specify a bounded explicit citation
    path for locations omitted by conservative retrieval, including source identity, criterion
    mapping, attribution, evidence type and rejection cases. This is not an implementation task
