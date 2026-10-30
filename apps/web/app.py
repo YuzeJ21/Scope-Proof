@@ -12,6 +12,7 @@ from uuid import uuid4
 import streamlit as st
 
 from apps.web.deferred_exports import deferred_review_export
+from apps.web.scope_comparison import render_file_scope_comparison
 from apps.web.view_models import (
     default_criterion_detail_id,
     group_candidate_evidence,
@@ -2035,6 +2036,7 @@ else:
             "Candidate comparison does not prove criterion satisfaction. Review the current "
             "evidence before recording a new decision."
         )
+        render_file_scope_comparison(comparison.file_scope)
         comparison_markdown_column, comparison_json_column = st.columns(2)
         with comparison_markdown_column:
             st.download_button(

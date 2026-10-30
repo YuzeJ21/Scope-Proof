@@ -10,6 +10,7 @@ from hashlib import sha256
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from scopeproof_core.gates.validation import validated_review_bundle
+from scopeproof_core.reviews.scope_comparison import FileScopeComparison, FileScopeSnapshot
 from scopeproof_core.schemas.models import (
     EvidenceItem,
     EvidenceLevel,
@@ -260,10 +261,50 @@ class ReviewComparison(BaseModel):
     changed_finding_statuses: list[FindingStatusChange]
     changed_human_resolutions: list[ResolutionChange]
     junit_import_changes: list[JUnitImportChange] = Field(default_factory=list)
+    file_scope: FileScopeComparison | None = None
     previous_gate: GateVerdict
     current_gate: GateVerdict
     ruleset_version_changed: bool
     criteria_requiring_decision_review: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _scope_heads_match_comparison(self) -> ReviewComparison:
+        if self.file_scope is not None and (
+            self.file_scope.previous.head_sha != self.previous_head_sha
+            or self.file_scope.current.head_sha != self.current_head_sha
+        ):
+            raise ValueError("scope snapshots must match comparison heads")
+        if self.file_scope is not None:
+            for side in ("previous", "current"):
+                snapshot = getattr(self.file_scope, side)
+                references = {
+                    reference.evidence_id: reference
+                    for change in self.evidence_changes
+                    if (reference := getattr(change, side)) is not None
+                }
+                cited_paths: set[str] = set()
+                inventory_paths = (
+                    {item.path for item in snapshot.inventory.files}
+                    if snapshot.inventory is not None else set()
+                )
+                for criterion_id, evidence_ids in snapshot.finding_evidence_ids.items():
+                    for evidence_id in evidence_ids:
+                        reference = references.get(evidence_id)
+                        if reference is None or reference.criterion_id != criterion_id:
+                            raise ValueError(
+                                "scope finding links require matching evidence references"
+                            )
+                        if (
+                            reference.commit_sha == snapshot.head_sha
+                            and reference.source_scope is EvidenceSourceScope.CHANGED_FILE
+                            and reference.file_path in inventory_paths
+                        ):
+                            cited_paths.add(reference.file_path)
+                if snapshot.cited_paths != sorted(cited_paths):
+                    raise ValueError(
+                        "scope citations must match linked exact-head changed evidence"
+                    )
+        return self
 
     @field_validator("criteria_requiring_decision_review")
     @classmethod
@@ -674,6 +715,10 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
     return ReviewComparison(
         previous_head_sha=previous.review.head_sha,
         current_head_sha=current.review.head_sha,
+        file_scope=FileScopeComparison(
+            previous=FileScopeSnapshot.from_bundle(previous),
+            current=FileScopeSnapshot.from_bundle(current),
+        ),
         evidence_changes=evidence_changes,
         changed_finding_statuses=changed_findings,
         changed_human_resolutions=changed_resolutions,

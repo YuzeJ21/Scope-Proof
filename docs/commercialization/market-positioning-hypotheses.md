@@ -1,6 +1,7 @@
 # ScopeProof Market Positioning Hypotheses
 
 Last researched: 2026-10-27
+Product direction updated: 2026-10-30; competitor documentation was not refreshed by this change.
 
 This is official-source market research, not customer or market validation. ScopeProof has zero
 qualifying participant reviews, independent repeat-use evidence, customers, or revenue, and no
@@ -99,10 +100,20 @@ competitor claims, stars, downloads, or another release cannot supply that evide
 
 ## Current product decision
 
-Maintain the bounded engineering reference product. Work only on a demonstrated defect, required
-upkeep, or a named bounded research question, then stop after its defined outcome and checks.
-Additional adapters, authenticated identity, integrations, and collaboration remain evidence-gated
-options. There is no standing feature-expansion or commercial-discovery backlog.
+Develop the existing reviewer workflow through the
+[ordered Stage 2 roadmap](../../ROADMAP.md#stage-2--owner-led-productization). The immediate
+engineering gap is that candidate-reference comparison does not explain changed-file inventory
+differences; scope-aware re-review is the active milestone. Durable comparison of compatible
+saved history is next. Reviewer-selected exact-head evidence is a later design-only option for
+conservative retrieval limits. These choices follow inspectable implementation gaps and an owner
+decision to keep developing, not observed demand or a new competitive claim.
+
+Each milestone has a reviewer outcome and automated finish line. Finish the selected slice before
+starting another; do not generate an endless feature queue or repeat closed release preparation.
+Additional adapters, authenticated identity, integrations and broader collaboration remain
+separately scoped options. There is no active commercial-discovery program. No personal testing
+or qualifying reviews are required for these engineering milestones; Stage 1 remains closed at
+zero and Stage 3 dormant and gated.
 
 External discovery is optional and separate and needs authorization before contact. Historical
 price anchors are research context, not active prices, an offer, willingness-to-pay evidence, or

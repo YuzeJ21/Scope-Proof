@@ -21,10 +21,12 @@ participant contact.
 
 ## Owner-led productization scope
 
-The [roadmap's bounded maintenance rule](../../ROADMAP.md#stage-2--owner-led-productization)
-applies to every Stage 2 slice: address a demonstrated defect, required upkeep, or a named bounded
-research question. Define the outcome and completion evidence before work; stop when that outcome
-and the relevant checks are complete. Eligible areas, subject to that rule, are:
+On 2026-10-30 the owner delegated continued product development through the
+[roadmap's ordered Stage 2 milestones](../../ROADMAP.md#stage-2--owner-led-productization).
+Each slice names an inspectable workflow gap, reviewer outcome and automated finish line. The
+selected slice ends when that outcome, relevant checks and current-document alignment are
+complete; a new task follows the recorded order instead of restarting closed maintenance or
+release-preparation work. Eligible areas, subject to that bounded rule, are:
 
 - product and workflow clarity;
 - deterministic evidence quality and fail-closed lifecycle integrity;
@@ -34,6 +36,26 @@ and the relevant checks are complete. Eligible areas, subject to that rule, are:
 
 Every result remains bounded to its actual evidence. Tests and CI are engineering evidence, not
 target-repository runtime proof, accessibility conformance, customer use, demand, or adoption.
+
+### Ordered development outcomes
+
+1. **Implemented in source: scope-aware re-review comparison ([PR #222](https://github.com/YuzeJ21/Scope-Proof/pull/222)).** Show inventory differences, unresolved paths
+   and historical unknown scope alongside candidate changes in the workbench and comparison
+   JSON/Markdown. Finish with validated deterministic projections, constructed regressions and
+   required automated checks; preserve the existing gate and explicit reviewer decisions.
+2. **Next: durable compatible-history comparison.** Let a reopened saved review expose a
+   compatible prior analysis without repeated source loading. Finish with read-only selection,
+   relationship validation, preserved history/decisions and core plus installed-browser evidence.
+3. **Design only: reviewer-selected exact-head evidence.** Specify a bounded explicit citation
+   path for locations omitted by conservative retrieval, including source identity, criterion
+   mapping, attribution, evidence type and rejection cases. This is not an implementation task
+   or authorization to alter retrieval benchmarks.
+
+These outcomes improve engineering capability; their benefit in genuine independent work remains
+unvalidated. No personal testing or qualifying reviews are prerequisites. Stage 1 stays closed
+at zero and Stage 3 dormant. The completed private v0.2.5 candidate from PR #221 remains bound to
+source `4f12ae02dee277705d17ac6ab94f0a74f99be346` and its retained bytes; subsequent source work
+does not rebuild, publish or replace it. The public evaluation download remains v0.2.4.
 
 ### Current bounded adapter slice
 

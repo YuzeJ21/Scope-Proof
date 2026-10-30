@@ -469,14 +469,14 @@ def test_comparison_output_is_stable_when_evidence_input_order_changes() -> None
         evidence("EV-new-2", sha="new", path="src/c.py", excerpt="added()"),
     ]
 
-    ordered = compare_reviews(
-        bundle_with(*old_items, head_sha="old"),
-        bundle_with(*new_items, head_sha="new"),
-    )
-    reversed_input = compare_reviews(
-        bundle_with(*reversed(old_items), head_sha="old"),
-        bundle_with(*reversed(new_items), head_sha="new"),
-    )
+    previous = bundle_with(*old_items, head_sha="old")
+    current = bundle_with(*new_items, head_sha="new")
+    ordered = compare_reviews(previous, current)
+    reversed_previous = previous.model_copy(deep=True)
+    reversed_current = current.model_copy(deep=True)
+    reversed_previous.evidence.reverse()
+    reversed_current.evidence.reverse()
+    reversed_input = compare_reviews(reversed_previous, reversed_current)
 
     assert ordered.model_dump(mode="json") == reversed_input.model_dump(mode="json")
 

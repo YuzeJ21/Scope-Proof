@@ -7,8 +7,8 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, operated as bounded maintenance of an engineering reference
-product; this owner decision does not create customer validation. Stage 3 is dormant and gated.
+`owner_led_productization_active`, following a short, outcome-driven development queue;
+this owner decision does not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current operating decision
@@ -16,11 +16,13 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 **v0.2.4 is published as a downloadable evaluation release.** Its public wheel, source archive
 and checksums were automatically verified. The [dated public verification record](docs/releases/v0.2.4-public-verification.md)
 binds those results to release source `11bcdc66f7d8f5a29055688208de1ed337eed07f`.
-Current source is the unreleased `0.2.5` evaluation candidate. The
-[candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) bounds the next authorized automatic
-task: compare direct/source-built distributions, install them outside the checkout, rehearse a
-native v0.2.4 review upgrade, and retain an exact-main private packet. This prepares the existing
-upload and dependency corrections for a separate publication decision; it does not publish them.
+Current source/package identity is unreleased `0.2.5`.
+[PR #221](https://github.com/YuzeJ21/Scope-Proof/pull/221) completed private candidate preparation:
+direct/source-built distribution checks, isolated installs, a constructed native v0.2.4 review
+upgrade, and an exact-main packet at `4f12ae02dee277705d17ac6ab94f0a74f99be346`.
+The [candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) retains the separate publication
+gate. Those private archives and their original source binding remain unchanged; later development
+does not update their evidence or trigger another candidate-preparation cycle or publication.
 The [native saved-review upgrade rehearsal](docs/research/2026-10-29-v023-v024-upgrade.md)
 verified one constructed published-v0.2.3 writer → published-v0.2.4 reader history: original
 facts and linked decisions survived, while missing changed-file inventory correctly changed
@@ -40,9 +42,10 @@ now enforces the maintained Pydantic, Streamlit and direct Pillow floors, retain
 lock versions. These are verified baseline choices, not proven earliest compatible versions.
 The older-stack
 browser observation remains partial because its saved-review selector differs from the current
-test helper; it is not a full compatibility pass. Preserve the published assets and return to
-bounded maintenance after candidate preparation and its reviewed passing integration. This is evaluation distribution, not a
-Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
+test helper; it is not a full compatibility pass. The upload, dependency, CI and candidate
+preparation questions are closed. The next work improves the existing reviewer workflow through
+the [ordered Stage 2 milestones](#stage-2--owner-led-productization). This is evaluation
+distribution, not a Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
 
 Maintain the confirmed-criteria → exact-head candidate evidence → missing evidence → reviewer
@@ -52,12 +55,12 @@ The [market comparison](docs/commercialization/market-comparison-2026-07-26.md) 
 overlap, including Tiden, CodeRabbit, Qodo, Qase, Spec Kit, and Kiro; it supports no novelty or
 superiority claim.
 
-Stage 2 has a finish line: close the specifically authorized defect, upkeep task, or research
-question; pass the relevant regression and repository checks; align current documentation; then
-stop. With no demonstrated defect, required upkeep, or named bounded research question, remain in
-maintenance. Do not create another feature, benchmark cohort, or validation request to keep work
-active. Additional adapters, authenticated identity, and integrations are evidence-gated options,
-not automatic next steps.
+On 2026-10-30 the owner asked to review product gaps and continue development instead of repeating
+maintenance and release preparation. Stage 2 therefore follows named reviewer outcomes with
+automated acceptance evidence. Finish the selected milestone, its checks and current-document
+alignment before selecting another item. Do not generate an endless queue, repeat closed
+investigations or request participant reviews to create activity. Additional adapters,
+authenticated identity and integrations remain separately scoped options.
 
 ## Current release and validation state
 
@@ -74,7 +77,7 @@ historical results, not current suite counts.
 
 The [2026-10-28 browser maintenance investigation](docs/audits/2026-10-28-browser-maintenance.md)
 separates reproduced helper/download defects from the original missing-dropdown trigger, which
-remains unexplained. This is bounded maintenance, with no change to stage or release status.
+remains unexplained. That bounded maintenance did not change stage or release status.
 
 The [2026-10-28 CI maintenance slice](docs/audits/2026-10-28-ci-required-gate.md) addresses
 documented skipped-dependency gate risk and observed serial verification delay. The unchanged
@@ -391,18 +394,29 @@ These distinctions remain binding if optional external research is separately au
 
 Status: `owner_led_productization_active`.
 
-The owner authorized owner-led productization on 2026-08-14. This status does not claim customer
-validation. The current operating mode is bounded maintenance of the engineering reference
-product. A new slice must name a demonstrated defect, required upkeep (such as a supported
-dependency or compatibility change), or a bounded research question and its completion evidence.
-Product and workflow clarity, deterministic evidence quality, fail-closed lifecycle integrity,
-packaging, compatibility, accessibility engineering, documentation, and official-source research
-are eligible areas only when tied to that named need. There is no standing release-readiness or
-feature-expansion program.
+The owner authorized owner-led productization on 2026-08-14 and on 2026-10-30 delegated the move
+from maintenance to a short product-development queue. This status does not claim customer
+validation. Each milestone addresses an inspectable gap in the implemented reviewer workflow,
+with a user outcome and automated completion evidence. A gap in the implementation is a reason
+for a bounded engineering improvement, not proof that practitioners need or will adopt it.
 
-A slice finishes when its defined outcome, relevant regression coverage, required checks, and
-current-document alignment are complete. If no such need remains, stop and retain the reference
-product. Do not make the owner test it, recruit qualifying reviews, or reopen Stage 1 to create work.
+| Order and status | Reviewer outcome and current gap | Automated finish line |
+| --- | --- | --- |
+| M1 — implemented in source: scope-aware re-review | Explain changed-file scope across reviewed heads. Candidate-only comparison previously omitted the changed-file inventory, so an uncited file could appear without a corresponding candidate delta. | Deterministic, Pydantic-validated scope comparison in the workbench and comparison JSON/Markdown; constructed regressions for inventory differences, explicit rename metadata, unresolved paths and historical unknown inventory; relevant full-suite, coverage, lint, package/browser and exact-head CI checks. Keep gate semantics and reviewer decisions unchanged. |
+| M2 — next bounded task: durable history comparison | Reopen a saved review and inspect a compatible prior analysis. The workbench currently resets its comparison base on reopen even though analysis history is persisted. | Explicit selection of compatible saved history, clear rejection of incompatible criteria/source relationships, and read-only comparison/export without altering current decisions or history; core and installed-browser regressions for reopening and selection. |
+| M3 — design-only option: reviewer-selected evidence | Evaluate whether a reviewer can explicitly cite an exact-head implementation/test location omitted by conservative matching. Retrieval limits remain an engineering constraint; usefulness is unvalidated. | A bounded design defining exact-head source identity, explicit criterion mapping, attribution, evidence typing, limits and rejection cases. No implementation, new retrieval score claim or automatic acceptance follows from listing this option. |
+
+M1 is implemented by [PR #222](https://github.com/YuzeJ21/Scope-Proof/pull/222); its review and
+exact-head integration checks are recorded there. Finish its outcome, regression coverage,
+required checks and documentation, then stop this slice. M2 remains next in order for a subsequent bounded task. M3 requires its own
+design before any implementation. Do not expand the queue or repeat candidate preparation to
+manufacture progress. Required defect and dependency upkeep may interrupt the sequence when
+needed. Do not make the owner test the product, recruit qualifying reviews or reopen Stage 1.
+
+The verified engineering foundation includes confirmed criteria, immutable candidate references,
+explicit missing evidence, fail-closed scope gates, reviewer decisions, local persistence and
+exports. Independent usefulness, operator/recipient fit, repeat use and demand remain unknown.
+None of these milestones supplies genuine independent-use evidence or advances Stage 3.
 
 PR #197 owner workflow consolidation is complete: public PR and constructed-demo entry remain
 clear, explicit criteria confirmation remains unmistakable, and stable unresolved-criteria queue
@@ -482,8 +496,9 @@ evidence.
 
 ## Honest stop and pivot rules
 
-- Stop after the named maintenance or research outcome is verified. Green checks and no concrete
-  authorized need mean maintenance, not a reason to invent a follow-up feature.
+- Stop the current slice after its named reviewer outcome and required checks are complete.
+  Select subsequent work from the bounded order above; do not invent a follow-up feature, repeat
+  a closed investigation or rebuild the completed candidate merely because checks are green.
 - Unsupported platform rows may remain unsupported; absence of an environment is not a mandate
   for repeated attempts or for personal testing.
 

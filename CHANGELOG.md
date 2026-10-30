@@ -11,6 +11,11 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5`, unreleased.
 
+- Explain changed-file inventory metadata, current unresolved file scope, prior attributable scope
+  decisions and ingestion limits in re-review comparisons, comparison Markdown/JSON and the local
+  workbench. Inventory comparisons do not establish content equality or transfer a decision.
+  Gates, saved-record format and frozen research remain unchanged. The owner-directed Stage 2
+  roadmap now prioritizes bounded workflow improvements; Stage 3 remains dormant.
 - Prepare the final-version v0.2.5 evaluation candidate and private exact-main wheel/source
   verification packet. Public install remains v0.2.4; no tag, Release, asset upload or deployment
   is performed by preparation. See the [candidate guide](docs/releases/v0.2.5-evaluation-candidate.md).

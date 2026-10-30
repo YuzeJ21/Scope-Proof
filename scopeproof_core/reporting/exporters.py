@@ -382,6 +382,89 @@ def _comparison_reference_markdown(label: str, reference: EvidenceReference) -> 
     ]
 
 
+def _comparison_file_scope_markdown(comparison: ReviewComparison) -> list[str]:
+    lines = [
+        "## Changed-file Scope Comparison", "",
+        "Inventory metadata does not establish file-content equality, source deletion, "
+        "criterion satisfaction or acceptance. No prior scope decision is carried forward.", "",
+    ]
+    scope = comparison.file_scope
+    if scope is None:
+        return [*lines, "Scope context is unknown in this older comparison.", ""]
+    changes = scope.inventory_changes
+    if changes is None:
+        lines.extend(["Inventory differences are unknown because an inventory is unavailable.", ""])
+    elif not changes:
+        lines.extend(["No recorded inventory metadata differences.", ""])
+    for change in changes or []:
+        lines.append(
+            f"- {_render_markdown_code(change.path)}: "
+            f"{_escape_markdown_text(change.kind.replace('_', ' '))}"
+        )
+        for label, item in (("Previous", change.previous), ("Current", change.current)):
+            if item is not None:
+                lines.append(
+                    f"  - {label} status: {_render_markdown_code(item.status)}; "
+                    f"previous path: {_render_markdown_code(item.previous_path or 'Not recorded')}"
+                )
+    lines.append("")
+    for label, snapshot in (("Previous", scope.previous), ("Current", scope.current)):
+        lines.extend([
+            f"### {label} Scope", "",
+            f"- Head: {_render_markdown_code(snapshot.head_sha)}",
+            f"- Ingestion: {_render_markdown_code(snapshot.ingestion_state.value)}",
+        ])
+        if snapshot.inventory is None:
+            lines.append("- Inventory: unknown")
+        elif not snapshot.inventory.files:
+            lines.append("- Known empty inventory")
+        else:
+            lines.append("- Known inspected inventory (recorded metadata only):")
+            for item in snapshot.inventory.files:
+                lines.append(
+                    f"  - {_render_markdown_code(item.path)}; "
+                    f"status: {_render_markdown_code(item.status)}; previous path: "
+                    f"{_render_markdown_code(item.previous_path or 'Not recorded')}"
+                )
+        unresolved = snapshot.unresolved_paths
+        lines.append(
+            "- Unresolved inspected paths: " + (
+                "unknown" if unresolved is None else
+                ", ".join(_render_markdown_code(path) for path in unresolved) or "none"
+            )
+        )
+        for path in snapshot.skipped_files:
+            lines.append(f"- Skipped, uninspected path: {_render_markdown_code(path)}")
+        for warning in snapshot.ingestion_warnings:
+            lines.append(f"- Ingestion limitation: {_escape_markdown_text(warning)}")
+        for decision in snapshot.latest_decisions:
+            lines.extend([
+                f"- Scope decision for {_render_markdown_code(decision.path)}: "
+                f"{_render_markdown_code(decision.disposition)}",
+                f"  - Reviewer: {_escape_markdown_text(decision.reviewer)}; "
+                f"recorded: {_render_markdown_code(decision.timestamp.isoformat())}",
+                f"  - Event: {_render_markdown_code(decision.event_id)}; "
+                f"criteria revision: {decision.criteria_revision_number}",
+                "  - Criterion: "
+                f"{_render_markdown_code(decision.criterion_id or 'Not applicable')}",
+                f"  - Explanation: {_escape_markdown_text(decision.note)}",
+            ])
+        lines.append("")
+    needs_review = scope.previously_decided_paths_now_unresolved
+    if needs_review:
+        lines.extend([
+            "Previously decided paths now unresolved: "
+            + ", ".join(_render_markdown_code(path) for path in needs_review) + ".",
+            "",
+        ])
+    lines.extend([
+        "Unresolved inspected files need explicit current-head scope review. A within-criteria "
+        "decision still needs a candidate citation. Skipped files remain uninspected; "
+        "an empty unresolved list does not establish complete ingestion or acceptance.", "",
+    ])
+    return lines
+
+
 def export_comparison_markdown(comparison: ReviewComparison) -> str:
     """Render an inspectable, evidence-bound re-review comparison."""
 
@@ -408,9 +491,9 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
         f"- Removed: {counts.removed}",
         f"- Unchanged: {counts.unchanged}",
         "",
-        "## Evidence Changes",
-        "",
     ]
+    lines.extend(_comparison_file_scope_markdown(comparison))
+    lines.extend(["## Evidence Changes", ""])
     for change in comparison.evidence_changes:
         kind = change.kind.value.replace("_", " ").title()
         lines.extend(
