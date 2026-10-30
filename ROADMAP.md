@@ -425,6 +425,11 @@ explicit missing evidence, fail-closed scope gates, reviewer decisions, local pe
 exports. Independent usefulness, operator/recipient fit, repeat use and demand remain unknown.
 None of these milestones supplies genuine independent-use evidence or advances Stage 3.
 
+The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
+addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic
+references while preserving historical evidence and frozen research; it is bounded defect upkeep,
+not a fourth product milestone or a retrieval-performance claim.
+
 PR #197 owner workflow consolidation is complete: public PR and constructed-demo entry remain
 clear, explicit criteria confirmation remains unmistakable, and stable unresolved-criteria queue
 actions select the matching criterion. PR #198 adds blocker-first unresolved decisions and places

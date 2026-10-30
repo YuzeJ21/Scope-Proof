@@ -11,6 +11,10 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5`, unreleased.
 
+- Correct automatic candidate line numbers and context for embedded non-LF separators in changed
+  patches and unchanged source. Preserve Git LF/CRLF and no-final-newline semantics, prevent
+  embedded diff markers from becoming fake current-head evidence, and retain saved historical
+  coordinates and frozen R-002 results. See the [source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md).
 - Select an already-ingested exact-head source line for a confirmed criterion, with reviewer and
   rationale. Keep references separate from automatic candidates, findings, gates, scope closure,
   decisions and runtime proof. Retain attributed references in saved records and all review
