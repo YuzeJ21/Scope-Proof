@@ -1,6 +1,7 @@
 """Saved comparison is explicit, read-only and bound to both complete records."""
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from importlib import import_module
 from pathlib import Path
 from threading import Event
@@ -127,7 +128,9 @@ def test_replaced_history_cannot_silently_retarget_selected_index(tmp_path: Path
         current.review.review_id,
         history_index=0,
     )
-    current.analysis_history[0].review.created_at = current.review.created_at
+    original_created_at = current.analysis_history[0].review.created_at
+    current.analysis_history[0].review.created_at = original_created_at + timedelta(seconds=1)
+    assert current.analysis_history[0].review.created_at != original_created_at
     store.save(current)
     with (
         pytest.raises(api().SavedComparisonUnavailable),
