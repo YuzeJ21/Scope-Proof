@@ -33,8 +33,8 @@ try:
 except ImportError:  # pragma: no cover - exercised through the Windows-lock seam
     msvcrt = None  # type: ignore[assignment]
 
-RECORD_VERSION = 5
-_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5)
+RECORD_VERSION = 6
+_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5, 6)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _LEGACY_CI_CATEGORIES = {
     "successful_legacy_statuses",
@@ -510,6 +510,18 @@ class JsonReviewStore:
         except ValidationError as error:
             raise ValueError("invalid review record envelope") from error
         state_payload = deepcopy(envelope.state)
+        if record_version < 6 and isinstance(state_payload, dict):
+            bundles = [state_payload.get("bundle")]
+            history = state_payload.get("analysis_history")
+            if isinstance(history, list):
+                bundles.extend(history)
+            for bundle in bundles:
+                if (
+                    isinstance(bundle, dict)
+                    and "reviewer_selected_references" in bundle
+                    and bundle["reviewer_selected_references"] != []
+                ):
+                    raise ValueError("selected references require saved record version 6")
         if record_version < 5 and isinstance(state_payload, dict):
             # Historical records never carried a complete exact-head file inventory.
             # A newly added field in a downgraded record cannot establish that fact.

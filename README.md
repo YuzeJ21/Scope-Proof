@@ -19,8 +19,9 @@ download is **v0.2.4**, with its wheel, source archive, and checksums verified i
 [public verification record](docs/releases/v0.2.4-public-verification.md). The current source/package
 identity is **0.2.5**, unreleased. Stage 1 is closed as not pursued with all external
 counts at zero; Stage 3 is dormant and gated. Source supports scope-aware re-review and explicit
-comparison of compatible saved analyses after reopening. Reviewer-selected exact-head evidence
-remains a later design option. Each milestone has an automated finish line;
+comparison of compatible saved analyses after reopening, plus attributable reviewer-selected
+exact-head static references. Selected references are separate non-gating context; they do not
+upgrade automatic findings, resolve file scope or prove execution. Each milestone has an automated finish line;
 no personal testing or qualifying reviews are required. Engineering progress does not establish
 customer value. The completed private v0.2.5 candidate remains bound to its original source and
 bytes; subsequent source work does not update or publish that candidate.
@@ -440,9 +441,31 @@ The six review sections are:
 5. Evidence Matrix.
 6. Summary & Export.
 
-Criterion Review contains the selected criterion evidence, separate external JUnit context,
+Criterion Review contains the selected criterion evidence, separate reviewer-selected static
+references and external JUnit context,
 external verification, and human resolution controls. Summary & Export provides the Markdown,
 JSON, and CSV review records.
+
+### Select an exact-head source reference (unreleased source)
+
+After a confirmed analysis with matching source loaded, open **Select a source reference** in
+Criterion Review. Choose **Reference source** and **Reference line**, inspect the preview, enter
+**Reference reviewer (required)** and **Why this reference matters**, then **Save selected reference**.
+The bounded view offers the first 1,000 eligible lines (maximum 4,096 UTF-8 bytes each), with at
+most 32 saved references per analysis. Removed, skipped, truncated or ambiguous sources are unavailable.
+
+**Reviewer-selected references** remain separate from automatic candidates. They do not change
+findings, confidence, gate, file-scope coverage, decisions or runtime verification. Test/eval
+definitions show intent, not execution. Saved references retain their criterion, source head,
+location, attribution and rationale in JSON/Markdown/CSV/HTML. A saved excerpt digest establishes
+internal consistency, not independent authenticity. After reopening, references remain inspectable
+and exportable; adding new references requires matching loaded source. Pending inputs must be
+saved or cleared. Final acceptance must be revoked before adding references. Comparisons exclude
+these references and disclose that limit.
+
+New saves use record version 6; versions 1–5 remain readable without invented selections.
+Older application readers may reject version-6 records. Keep original saved records before
+opening copies in unreleased source; loading alone does not rewrite them.
 
 ### Durable local review workflow
 
@@ -526,7 +549,7 @@ The review status is **Action required** because must-have gaps remain.
 
 ## Verification
 
-The packaged-browser suite currently contains **twelve checks: two installed-wheel Chromium
+The packaged-browser suite currently contains **thirteen checks: three installed-wheel Chromium
 journeys, four constructed Streamlit selection checks, and six helper/capture checks**. The total
 is not a count of full end-to-end journeys.
 These constructed engineering checks do not establish independent use or accessibility conformance.

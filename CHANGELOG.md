@@ -11,6 +11,11 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5`, unreleased.
 
+- Select an already-ingested exact-head source line for a confirmed criterion, with reviewer and
+  rationale. Keep references separate from automatic candidates, findings, gates, scope closure,
+  decisions and runtime proof. Retain attributed references in saved records and all review
+  exports; adding after reopen requires loaded source. Save record version 6 with legacy-safe
+  migration and reject pre-version-6 selected attribution. Public v0.2.4 is unchanged.
 - Reopen saved reviews and explicitly compare a compatible other record or retained historical
   analysis. Bind selection and deferred downloads to both saved-state fingerprints, preserve
   original JSON bytes and decisions, and expire comparisons after record or selection changes.

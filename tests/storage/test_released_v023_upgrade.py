@@ -145,14 +145,14 @@ def test_native_old_writer_load_preserves_facts_without_inventing_ready(tmp_path
 
 
 def test_native_old_writer_resave_preserves_history_and_original_bytes(tmp_path: Path) -> None:
-    """Catch a v5 save that discards migrated facts, promotes scope or rewrites history."""
+    """Catch a v6 save that discards migrated facts, promotes scope or rewrites history."""
     store, copied_record, original = _native_store(tmp_path)
     reopened = store.load(REVIEW_ID)
     before_save = reopened.model_dump(mode="json")
 
     assert store.save(reopened) == copied_record
     resaved = json.loads(copied_record.read_bytes())
-    assert resaved["record_version"] == 5
+    assert resaved["record_version"] == 6
     assert resaved["state"] == before_save
     assert store.load(REVIEW_ID).model_dump(mode="json") == before_save
     _assert_conservative_upgrade(store.load(REVIEW_ID))

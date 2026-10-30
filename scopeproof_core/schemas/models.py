@@ -7,7 +7,9 @@ import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
+from hashlib import sha256
 from itertools import pairwise
+from pathlib import PurePosixPath
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -111,6 +113,9 @@ _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _EXACT_HEAD_PATTERN = r"^[a-f0-9]{40}$"
 MAX_JUNIT_IMPORTS_PER_REVIEW = 20
 MAX_JUNIT_NOTE_LENGTH = 1_000
+MAX_SELECTABLE_REFERENCE_LINES = 1_000
+MAX_REFERENCE_LINE_BYTES = 4_096
+MAX_REVIEWER_SELECTED_REFERENCES = 32
 _PATH_OR_URI_LIKE = re.compile(
     r"(?:[/\\]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:)"
 )
@@ -1019,6 +1024,120 @@ class EvidenceItem(BaseModel):
             raise ValueError("line_end must be greater than or equal to line_start")
         return self
 
+
+class SelectableReferenceLine(BaseModel):
+    """One exact raw static line available from an already-ingested source."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_scope: EvidenceSourceScope
+    file_path: str = Field(min_length=1)
+    line_number: StrictInt = Field(ge=1)
+    excerpt: str = Field(min_length=1)
+    evidence_type: EvidenceType
+    evidence_level: EvidenceLevel
+
+    @field_validator("file_path")
+    @classmethod
+    def require_canonical_repository_path(cls, value: str) -> str:
+        path = PurePosixPath(value)
+        if (
+            not value.strip()
+            or not value.isprintable()
+            or "\\" in value
+            or path.is_absolute()
+            or ".." in path.parts
+            or value != path.as_posix()
+            or value == "."
+        ):
+            raise ValueError("reference file path must be a canonical repository-relative path")
+        return value
+
+    @field_validator("excerpt")
+    @classmethod
+    def require_bounded_raw_single_line(cls, value: str) -> str:
+        if not value.strip() or value.splitlines() != [value]:
+            raise ValueError("reference excerpt must be one nonblank raw source line")
+        if len(value.encode("utf-8")) > MAX_REFERENCE_LINE_BYTES:
+            raise ValueError("reference source line exceeds the byte limit")
+        return value
+
+    @model_validator(mode="after")
+    def require_derived_static_type_and_level(self) -> SelectableReferenceLine:
+        # Import at validation time to keep schema/retrieval module loading acyclic.
+        from scopeproof_core.retrieval.engine import classify_changed_path_evidence_type
+
+        expected_type = classify_changed_path_evidence_type(self.file_path)
+        expected_level = (
+            EvidenceLevel.E2 if expected_type is EvidenceType.TEST else EvidenceLevel.E1
+        )
+        if self.evidence_type is not expected_type or self.evidence_level is not expected_level:
+            raise ValueError("reference type and level must derive from its static source path")
+        return self
+
+
+class ReviewerSelectedReference(SelectableReferenceLine):
+    """Attributable non-gating context; its digest establishes internal consistency."""
+
+    reference_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    review_id: str = Field(min_length=1)
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    pr_number: StrictInt = Field(gt=0)
+    head_sha: str = Field(min_length=1)
+    criteria_revision_number: StrictInt = Field(gt=0)
+    confirmed_criteria_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    criteria_source_provenance: CriteriaSourceProvenance
+    criterion_id: str = Field(min_length=1)
+    excerpt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    permalink: str = Field(min_length=1)
+    reviewer: str = Field(min_length=1, max_length=200)
+    rationale: str = Field(min_length=1, max_length=2_000)
+    selected_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("reference_id", "review_id", "head_sha", "criterion_id", "permalink")
+    @classmethod
+    def require_nonblank_reference_identity(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reference identity must contain non-whitespace text")
+        return value
+
+    @field_validator("reviewer", "rationale", mode="before")
+    @classmethod
+    def normalize_required_attribution(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("selected reference requires reviewer attribution and rationale")
+        return value
+
+    @field_validator("selected_at")
+    @classmethod
+    def require_aware_selection_time(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("selected reference timestamp must be timezone-aware")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def require_exact_reference_provenance(self) -> ReviewerSelectedReference:
+        if self.excerpt_sha256 != sha256(self.excerpt.encode("utf-8")).hexdigest():
+            raise ValueError("selected reference excerpt digest must match its raw source line")
+        if (
+            self.confirmed_criteria_sha256
+            != self.criteria_source_provenance.normalized_criteria_sha256
+        ):
+            raise ValueError("selected reference criteria digest must match confirmed provenance")
+        if not candidate_permalink_matches(
+            self.permalink,
+            repository=self.repository,
+            commit_sha=self.head_sha,
+            file_path=self.file_path,
+            line_start=self.line_number,
+            line_end=self.line_number,
+        ):
+            raise ValueError("selected reference permalink must match its exact source location")
+        return self
+
+
 class CriterionRetrievalDiagnostic(BaseModel):
     """Deterministic search metadata that is never criterion evidence."""
 
@@ -1667,6 +1786,9 @@ class ReviewBundle(BaseModel):
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
     file_scope_decisions: list[FileScopeDecision] = Field(default_factory=list)
+    reviewer_selected_references: list[ReviewerSelectedReference] = Field(
+        default_factory=list, max_length=MAX_REVIEWER_SELECTED_REFERENCES
+    )
     gate: GateDecision
     research_context: ResearchContext | None = None
 
@@ -1735,6 +1857,66 @@ class ReviewBundle(BaseModel):
 
         inventory = self.review.changed_file_inventory
         inventory_paths = {item.path for item in inventory.files} if inventory else set()
+        reference_ids = [item.reference_id for item in self.reviewer_selected_references]
+        reference_locations = [
+            (item.criterion_id, item.source_scope, item.file_path, item.line_number)
+            for item in self.reviewer_selected_references
+        ]
+        if len(reference_ids) != len(set(reference_ids)):
+            raise ValueError("selected reference IDs must be unique")
+        if len(reference_locations) != len(set(reference_locations)):
+            raise ValueError("selected reference criterion locations must be unique")
+        for reference in self.reviewer_selected_references:
+            if (
+                not self.review.criteria_confirmed
+                or self.criteria_revision_number == "unknown"
+                or self.review.criteria_source_provenance is None
+                or inventory is None
+            ):
+                raise ValueError("selected references require a confirmed inventoried analysis")
+            if (
+                reference.review_id,
+                reference.repository,
+                reference.pr_number,
+                reference.head_sha,
+                reference.criteria_revision_number,
+            ) != (
+                self.review.review_id,
+                self.review.repository,
+                self.review.pr_number,
+                self.review.head_sha,
+                self.criteria_revision_number,
+            ):
+                raise ValueError("selected reference identity must match the owning analysis")
+            if (
+                reference.confirmed_criteria_sha256 != normalized_criteria_sha256(self.criteria)
+                or reference.criteria_source_provenance != self.review.criteria_source_provenance
+                or reference.criterion_id not in known_criteria
+            ):
+                raise ValueError("selected reference must map to the owning confirmed criteria")
+            if reference.file_path in self.review.skipped_files:
+                raise ValueError("selected reference cannot cite a skipped source")
+            if reference.source_scope is EvidenceSourceScope.CHANGED_FILE:
+                source_file = next(
+                    (item for item in inventory.files if item.path == reference.file_path), None
+                )
+                if source_file is None or source_file.status.casefold() not in {
+                    "added", "modified", "renamed", "copied", "changed"
+                }:
+                    raise ValueError(
+                        "selected changed reference must cite an inspected current path"
+                    )
+            elif reference.file_path in inventory_paths or any(
+                item.previous_path == reference.file_path for item in inventory.files
+            ):
+                raise ValueError(
+                    "selected unchanged reference cannot cite a changed or previous path"
+                )
+            if (
+                self.review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+                and re.fullmatch(_EXACT_HEAD_PATTERN, reference.head_sha) is None
+            ):
+                raise ValueError("live selected reference requires a full exact head SHA")
         decision_ids = [item.event_id for item in self.file_scope_decisions]
         if len(decision_ids) != len(set(decision_ids)):
             raise ValueError("file scope decision event IDs must be unique")

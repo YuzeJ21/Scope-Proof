@@ -1378,6 +1378,263 @@ def test_installed_wheel_primary_path_in_chromium(
                 shutil.copy2(captures / name, destination / name)
 
 
+def _download_review_state(page: Page) -> dict:
+    download = _download_with_retry(page, button_name="Download JSON")
+    return json.loads(download.path().read_text(encoding="utf-8"))
+
+
+def _assert_selected_reference_is_nongating(before: dict, after: dict) -> dict:
+    before_bundle = dict(before["bundle"])
+    after_bundle = dict(after["bundle"])
+    assert before_bundle.pop("reviewer_selected_references", []) == []
+    references = after_bundle.pop("reviewer_selected_references")
+    assert len(references) == 1
+    assert after_bundle == before_bundle
+    assert {key: value for key, value in after.items() if key != "bundle"} == {
+        key: value for key, value in before.items() if key != "bundle"
+    }
+    assert after["resolution_events"] == []
+    assert after_bundle["resolutions"] == []
+    assert after_bundle["runtime_evidence"] == []
+    assert after_bundle["review"]["final_acceptance"] is False
+    return references[0]
+
+
+def test_installed_wheel_selected_reference_survives_restart_without_gate_change(
+    tmp_path: Path, installed_wheel: Path,
+) -> None:
+    """A constructed static test line is explicitly selected, never executed or accepted."""
+    runtime_dir = tmp_path / "selected-reference-runtime"
+    home_dir = runtime_dir / "home"
+    home_dir.mkdir(parents=True)
+    captures = runtime_dir / "captures"
+    captures.mkdir()
+    diagnostics = Path(os.environ.get(
+        "SCOPEPROOF_BROWSER_DIAGNOSTIC_DIR", str(tmp_path / "diagnostics"),
+    )) / "selected-reference"
+    reviewer = "Constructed automated reference reviewer"
+    rationale = "Constructed static definition selected for inspection; no execution observed."
+    external_requests: list[str] = []
+    browser_errors: list[str] = []
+    before: dict | None = None
+    selected_state: dict | None = None
+
+    with sync_playwright() as playwright:
+        for generation in range(2):
+            with _installed_workbench_server(
+                installed_wheel, runtime_dir, home_dir,
+                log_name=f"selected-reference-{generation}.log",
+            ) as (base_url, log_path):
+                browser = playwright.chromium.launch(headless=True)
+                try:
+                    context = browser.new_context(viewport=VIEWPORTS[generation])
+                    context.route(
+                        "**/*", lambda route: _route_loopback_only(route, external_requests),
+                    )
+                    page = context.new_page()
+                    page.on("console", lambda message: (
+                        browser_errors.append(f"console: {message.text}")
+                        if message.type == "error" else None
+                    ))
+                    page.on("pageerror", lambda error: browser_errors.append(f"page: {error}"))
+                    page.on("websocket", lambda websocket: (
+                        external_requests.append(websocket.url)
+                        if not _is_loopback_request(websocket.url) else None
+                    ))
+                    with _capture_browser_failure(
+                        page, diagnostics / f"generation-{generation}", log_path,
+                    ):
+                        page.goto(base_url, wait_until="domcontentloaded")
+                        if generation == 0:
+                            page.get_by_role(
+                                "button", name="Load deliberately constructed demo", exact=True,
+                            ).click()
+                            confirmer = page.get_by_label("Confirmed by", exact=True)
+                            confirmer.fill("Constructed automated criteria confirmer")
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=confirmer: control.press("Tab"),
+                            )
+                            page.get_by_role(
+                                "button", name="Apply edits and confirm criteria", exact=True,
+                            ).click()
+                            expect(page.get_by_text(
+                                "Criteria confirmed by the reviewer.", exact=True,
+                            )).to_be_visible()
+                            page.get_by_role(
+                                "button", name="Run deterministic analysis", exact=True,
+                            ).click()
+                            expect(page.get_by_role(
+                                "heading", name="4 · Criterion Review", exact=True,
+                            )).to_be_visible()
+                            before = _download_review_state(page)
+                            assert before["bundle"]["review"]["head_sha"] == "head-demo-002"
+                            finding = next(
+                                item for item in before["bundle"]["findings"]
+                                if item["criterion_id"] == "AC-03"
+                            )
+                            assert finding["evidence_ids"] == []
+                            assert not any(
+                                item["criterion_id"] == "AC-03"
+                                and item["file_path"] == "tests/test_export.py"
+                                and item["line_start"] <= 18 <= item["line_end"]
+                                for item in before["bundle"]["evidence"]
+                            )
+                            criterion = page.get_by_role(
+                                "combobox", name="Inspect criterion", exact=True,
+                            )
+                            _choose_combobox_option(page, criterion, option_name="AC-03")
+                            selector = page.get_by_text("Select a source reference", exact=True)
+                            expect(selector).to_be_visible()
+                            selector.click()
+                            source = page.get_by_role(
+                                "combobox", name="Reference source", exact=True,
+                            )
+                            _choose_combobox_option(
+                                page, source, option_name="Changed file · tests/test_export.py",
+                            )
+                            line = page.get_by_role(
+                                "combobox", name="Reference line", exact=True,
+                            )
+                            _choose_combobox_option(page, line, option_name="18")
+                            save = page.get_by_role(
+                                "button", name="Save selected reference", exact=True,
+                            )
+                            expect(save).to_be_disabled()
+                            note = page.get_by_label("Why this reference matters", exact=True)
+                            note.fill(rationale)
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=note: control.press("Tab"),
+                            )
+                            expect(save).to_be_disabled()
+                            author = page.get_by_label("Reference reviewer (required)", exact=True)
+                            author.fill(reviewer)
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=author: control.press("Tab"),
+                            )
+                            for label in ("Download JSON", "Download Markdown", "Download CSV"):
+                                expect(page.get_by_role(
+                                    "button", name=label, exact=True,
+                                )).to_be_disabled()
+                            expect(save).to_be_enabled()
+                            source.scroll_into_view_if_needed()
+                            page.screenshot(path=str(captures / "01-explicit-source-selection.png"))
+                            save.click()
+                            expect(page.get_by_text(
+                                "Reviewer-selected references", exact=True,
+                            )).to_be_visible()
+                            selected_state = _download_review_state(page)
+                            reference = _assert_selected_reference_is_nongating(
+                                before, selected_state,
+                            )
+                            assert reference["criterion_id"] == "AC-03"
+                            assert reference["head_sha"] == "head-demo-002"
+                            assert reference["review_id"] == before["review"]["review_id"]
+                            assert reference["criteria_revision_number"] == 1
+                            assert reference["file_path"] == "tests/test_export.py"
+                            assert reference["line_number"] == 18
+                            assert reference["excerpt"] == (
+                                "def test_export_research_list_csv_uses_sector_filter():"
+                            )
+                            assert reference["evidence_type"] == "test"
+                            assert reference["evidence_level"] == "E2"
+                            assert reference["reviewer"] == reviewer
+                            assert reference["rationale"] == rationale
+                            assert reference["source_scope"] == "changed_file"
+                            assert reference["repository"] == before["review"]["repository"]
+                            assert reference["pr_number"] == before["review"]["pr_number"]
+                            assert reference["criteria_source_provenance"] == (
+                                before["review"]["criteria_source_provenance"]
+                            )
+                            assert reference["confirmed_criteria_sha256"] == (
+                                before["review"]["criteria_source_provenance"][
+                                    "normalized_criteria_sha256"
+                                ]
+                            )
+                            assert reference["excerpt_sha256"] == sha256(
+                                reference["excerpt"].encode("utf-8")
+                            ).hexdigest()
+                            assert reference["permalink"] == (
+                                "https://github.com/scopeproof/demo-stock-research/blob/"
+                                "head-demo-002/tests/test_export.py#L18-L18"
+                            )
+                        else:
+                            assert before is not None and selected_state is not None
+                            page.get_by_text("Resume a saved review", exact=True).click()
+                            saved_review = page.get_by_role(
+                                "combobox", name="Saved review ID", exact=True,
+                            )
+                            reopen = page.get_by_role(
+                                "button", name="Reopen local review", exact=True,
+                            )
+                            _choose_combobox_option(
+                                page, saved_review,
+                                option_name=selected_state["review"]["review_id"],
+                                settled_control=reopen,
+                            )
+                            reopen.click()
+                            expect(page.get_by_text(
+                                "Review reopened from local storage after validation.", exact=True,
+                            )).to_be_visible()
+                            criterion = page.get_by_role(
+                                "combobox", name="Inspect criterion", exact=True,
+                            )
+                            _choose_combobox_option(page, criterion, option_name="AC-03")
+                            expect(page.get_by_text(
+                                "Reviewer-selected references", exact=True,
+                            )).to_be_visible()
+                            page.get_by_text(
+                                "Selected reference · tests/test_export.py:18", exact=True,
+                            ).click()
+                            expect(page.get_by_text(reviewer, exact=True)).to_be_visible()
+                            expect(page.get_by_text(rationale, exact=True)).to_be_visible()
+                            page.get_by_text(reviewer, exact=True).scroll_into_view_if_needed()
+                            page.screenshot(path=str(captures / "02-reference-after-restart.png"))
+                            page.get_by_text("Select a source reference", exact=True).click()
+                            expect(page.get_by_text(
+                                "Load matching source before adding a reference. "
+                                "Saved references remain available.", exact=True,
+                            )).to_be_visible()
+                            expect(page.get_by_role(
+                                "button", name="Save selected reference", exact=True,
+                            )).to_have_count(0)
+                            reopened = _download_review_state(page)
+                            assert reopened == selected_state
+                            _assert_selected_reference_is_nongating(before, reopened)
+                            markdown = _download_with_retry(page, button_name="Download Markdown")
+                            report = markdown.path().read_text(encoding="utf-8")
+                            report = re.sub(r"\\([^\w\s])", r"\1", report)
+                            for expected in (
+                                "AC-03", "head-demo-002", reviewer, rationale,
+                                "test_export.py", "E2",
+                            ):
+                                assert expected in report
+                            assert "non-gating static context" in report
+                            assert re.search(
+                                r"test/eval definitions.{0,60}not (?:execution|executed)",
+                                report, re.IGNORECASE,
+                            )
+                            csv_download = _download_with_retry(page, button_name="Download CSV")
+                            rows = list(csv.DictReader(io.StringIO(
+                                csv_download.path().read_text(encoding="utf-8")
+                            )))
+                            assert len(rows) == len(before["bundle"]["criteria"])
+                            for row in rows:
+                                references = json.loads(row["reviewer_selected_references"])
+                                expected = (
+                                    reopened["bundle"]["reviewer_selected_references"]
+                                    if row["criterion_id"] == "AC-03" else []
+                                )
+                                assert references == expected
+                        assert page.evaluate(
+                            "document.documentElement.scrollWidth <= window.innerWidth"
+                        )
+                    context.close()
+                finally:
+                    browser.close()
+    assert external_requests == []
+    assert browser_errors == []
+
+
 def _reopen_saved_comparison_current(page: Page, base_url: str) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     page.get_by_text("Resume a saved review", exact=True).click()

@@ -70,7 +70,7 @@ ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
-moving-head ledger. Current browser coverage comprises twelve checks: two installed-wheel
+moving-head ledger. Current browser coverage comprises thirteen checks: three installed-wheel
 Chromium journeys, four constructed Streamlit selection checks, and six helper/capture checks.
 Dated five-check CI results below remain
 historical results, not current suite counts.
@@ -404,13 +404,15 @@ for a bounded engineering improvement, not proof that practitioners need or will
 | --- | --- | --- |
 | M1 — implemented in source: scope-aware re-review | Explain changed-file scope across reviewed heads. Candidate-only comparison previously omitted the changed-file inventory, so an uncited file could appear without a corresponding candidate delta. | Deterministic, Pydantic-validated scope comparison in the workbench and comparison JSON/Markdown; constructed regressions for inventory differences, explicit rename metadata, unresolved paths and historical unknown inventory; relevant full-suite, coverage, lint, package/browser and exact-head CI checks. Keep gate semantics and reviewer decisions unchanged. |
 | M2 — implemented in source: durable saved comparison | Reopen a saved review and explicitly select another saved record or a retained compatible historical analysis. Changed heads can live in distinct saved records. | Validated read-only selection bound to both saved-state fingerprints; explicit compatibility checks; stale selection/download invalidation; unchanged saved JSON bytes and decisions; core, AppTest and installed-browser restart/reopen/download regressions. |
-| M3 — design-only option: reviewer-selected evidence | Evaluate whether a reviewer can explicitly cite an exact-head implementation/test location omitted by conservative matching. Retrieval limits remain an engineering constraint; usefulness is unvalidated. | A bounded design defining exact-head source identity, explicit criterion mapping, attribution, evidence typing, limits and rejection cases. No implementation, new retrieval score claim or automatic acceptance follows from listing this option. |
+| M3 — implemented in source: reviewer-selected references | Explicitly cite an already-ingested exact-head static location omitted by conservative matching, with criterion mapping, reviewer and rationale. Usefulness remains unvalidated. | Separate non-gating, Pydantic-validated references; source/fingerprint/provenance checks; bounded line selection; safe v6 persistence and legacy rejection; core, report, AppTest and installed-browser save/restart/reopen/download regressions. Preserve automatic findings, confidence, scope coverage, decisions and runtime truth. |
 
 M1 is implemented by [PR #222](https://github.com/YuzeJ21/Scope-Proof/pull/222); its review and
 exact-head integration checks are recorded there. Finish its outcome, regression coverage,
 required checks and documentation, then stop that slice. M2's source implementation now restores
-explicit saved-baseline access without reanalysis or a record-format change. M3 remains a
-design-only option requiring its own bounded design before implementation. Do not expand the queue or repeat candidate preparation to
+explicit saved-baseline access without reanalysis or a record-format change. M3 adds separately
+attributed non-gating static references under its [bounded design](docs/superpowers/specs/2026-10-30-reviewer-selected-evidence-design.md).
+Saved references remain viewable/exportable after reopen; new selections require matching loaded
+source. They do not resolve missing automatic evidence or uncited changed files. Do not expand the queue or repeat candidate preparation to
 manufacture progress. Required defect and dependency upkeep may interrupt the sequence when
 needed. Do not make the owner test the product, recruit qualifying reviews or reopen Stage 1.
 

@@ -103,8 +103,9 @@ competitor claims, stars, downloads, or another release cannot supply that evide
 Develop the existing reviewer workflow through the
 [ordered Stage 2 roadmap](../../ROADMAP.md#stage-2--owner-led-productization). Current source
 capabilities include changed-file scope context and durable comparison of compatible
-saved records or retained analyses after reopening. Reviewer-selected exact-head evidence is a
-later design-only option for conservative retrieval limits. These choices follow inspectable
+saved records or retained analyses after reopening, and separately attributable exact-head
+static references selected from already-ingested source. Selected references are non-gating
+context and do not improve an automatic retrieval score or establish execution. These choices follow inspectable
 implementation gaps and an owner
 decision to keep developing, not observed demand or a new competitive claim.
 

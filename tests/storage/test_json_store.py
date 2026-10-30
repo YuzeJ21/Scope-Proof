@@ -614,7 +614,7 @@ def test_new_save_writes_version_four_with_exact_analysis_lineage_and_provenance
     path = store.save(state)
     payload = json.loads(path.read_text(encoding="utf-8"))
 
-    assert payload["record_version"] == 5
+    assert payload["record_version"] == 6
     assert payload["state"]["bundle"]["criteria_revision_number"] == 2
     assert [
         bundle["criteria_revision_number"]
@@ -740,7 +740,7 @@ def test_legacy_criteria_provenance_migration_preserves_facts_and_fails_closed(
 
     resaved_path = store.save(first)
     resaved = json.loads(resaved_path.read_text(encoding="utf-8"))
-    assert resaved["record_version"] == 5
+    assert resaved["record_version"] == 6
     assert resaved["state"]["review"]["criteria_source_provenance"] is None
     assert resaved["state"]["criteria_revision"]["source_provenance"] is None
     assert resaved["state"]["bundle"]["review"][
@@ -835,7 +835,7 @@ def test_saving_migrated_version_one_state_preserves_unknown_history(
     migrated_path = store.save(migrated)
     migrated_payload = json.loads(migrated_path.read_text(encoding="utf-8"))
 
-    assert migrated_payload["record_version"] == 5
+    assert migrated_payload["record_version"] == 6
     assert migrated_payload["state"]["bundle"]["criteria_revision_number"] == 2
     assert [
         bundle["criteria_revision_number"]
@@ -994,7 +994,7 @@ def test_version_one_unknown_history_preserves_legacy_verification_audit(
 
     resaved_path = store.save(first)
     resaved = json.loads(resaved_path.read_text(encoding="utf-8"))
-    assert resaved["record_version"] == 5
+    assert resaved["record_version"] == 6
     assert resaved["state"]["analysis_history"][0][
         "criteria_revision_number"
     ] == "unknown"
@@ -1169,7 +1169,7 @@ def test_resaving_migrated_runtime_record_writes_version_four_without_history_lo
     migrated_path = store.save(migrated)
     resaved = json.loads(migrated_path.read_text(encoding="utf-8"))
 
-    assert resaved["record_version"] == 5
+    assert resaved["record_version"] == 6
     assert [
         event["comment"] for event in resaved["state"]["resolution_events"]
     ] == old_notes
@@ -2014,7 +2014,7 @@ def test_junit_import_round_trips_in_record_version_four_without_raw_xml(
     payload = json.loads(path.read_text(encoding="utf-8"))
     reopened = store.load(state.review.review_id)
 
-    assert payload["record_version"] == 5
+    assert payload["record_version"] == 6
     assert payload["state"]["bundle"]["junit_evidence_imports"][0][
         "schema_version"
     ] == "junit-import-v1"
