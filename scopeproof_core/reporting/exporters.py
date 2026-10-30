@@ -1124,14 +1124,14 @@ def export_csv(bundle: ExportableReview) -> str:
         "runtime_pr_numbers",
         "runtime_head_shas",
         "manual_runtime_evidence_id",
+        "reviewer_selected_references",
+        "reviewer_selected_reference_boundary",
         "junit_artifact_digests",
         "junit_mapped_cases",
         "junit_evidence_boundary",
         "junit_importers",
         "junit_parser_warnings",
         "junit_limitations",
-        "reviewer_selected_references",
-        "reviewer_selected_reference_boundary",
     ]
     gate_context = {
         name: json.dumps(values, ensure_ascii=False)
