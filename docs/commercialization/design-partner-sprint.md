@@ -5,8 +5,8 @@ required for owner-led Stage 2 productization, not customer validation, and not 
 No paid product or billing is active.
 
 Stage 1 is `closed_not_pursued_by_owner`; it did not pass and all recorded counts remain zero.
-Stage 2 is `owner_led_productization_active` with bounded maintenance of the engineering reference
-product. Stage 3 remains dormant and gated. Neither status supplies a participant, customer,
+Stage 2 is `owner_led_productization_active` with a bounded development queue in the
+[roadmap](../../ROADMAP.md). Stage 3 remains dormant and gated. Neither status supplies a participant, customer,
 demand, adoption, repeat-use, price, or paid-demand signal.
 
 The published evaluation download is [v0.2.4](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4),

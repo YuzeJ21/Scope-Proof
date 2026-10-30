@@ -4,6 +4,11 @@ Date: 2026-07-26 (original research)
 Last refreshed: 2026-10-27
 Status: official-source capability research and bounded roadmap decision
 
+Operating-decision update, 2026-10-30: the [current roadmap](../../ROADMAP.md) supersedes the
+maintenance-only recommendation below with bounded Stage 2 reviewer-workflow development.
+The vendor research and release references below remain the dated 2026-10-27 snapshot; they
+have not been re-researched. This update supplies no genuine-use or competitive-value evidence.
+
 Vendor documentation records advertised capabilities, not independently observed efficacy.
 This document establishes no customer validation, competitive superiority, or novelty. Public
 install remains v0.2.3; source is the unreleased `0.2.4.dev0` development line. Historical engineering

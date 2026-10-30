@@ -10,6 +10,7 @@ from hashlib import sha256
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from scopeproof_core.gates.validation import validated_review_bundle
+from scopeproof_core.reviews.scope_comparison import FileScopeComparison, FileScopeSnapshot
 from scopeproof_core.schemas.models import (
     EvidenceItem,
     EvidenceLevel,
@@ -260,10 +261,20 @@ class ReviewComparison(BaseModel):
     changed_finding_statuses: list[FindingStatusChange]
     changed_human_resolutions: list[ResolutionChange]
     junit_import_changes: list[JUnitImportChange] = Field(default_factory=list)
+    file_scope: FileScopeComparison | None = None
     previous_gate: GateVerdict
     current_gate: GateVerdict
     ruleset_version_changed: bool
     criteria_requiring_decision_review: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _scope_heads_match_comparison(self) -> ReviewComparison:
+        if self.file_scope is not None and (
+            self.file_scope.previous.head_sha != self.previous_head_sha
+            or self.file_scope.current.head_sha != self.current_head_sha
+        ):
+            raise ValueError("scope snapshots must match comparison heads")
+        return self
 
     @field_validator("criteria_requiring_decision_review")
     @classmethod
@@ -674,6 +685,10 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
     return ReviewComparison(
         previous_head_sha=previous.review.head_sha,
         current_head_sha=current.review.head_sha,
+        file_scope=FileScopeComparison(
+            previous=FileScopeSnapshot.from_bundle(previous),
+            current=FileScopeSnapshot.from_bundle(current),
+        ),
         evidence_changes=evidence_changes,
         changed_finding_statuses=changed_findings,
         changed_human_resolutions=changed_resolutions,

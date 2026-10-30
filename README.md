@@ -13,14 +13,18 @@ target closed unmet when the owner chose not to pursue Stage 1.
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
-Current direction: maintain a bounded engineering reference product. The published evaluation
+Current direction: develop the reviewer workflow through a short, outcome-driven Stage 2 roadmap.
+The published evaluation
 download is **v0.2.4**, with its wheel, source archive, and checksums verified in the
 [public verification record](docs/releases/v0.2.4-public-verification.md). The current source/package
 identity is **0.2.5**, unreleased. Stage 1 is closed as not pursued with all external
-counts at zero; Stage 3 is dormant and gated. Stage 2 work requires a demonstrated defect, required
-upkeep, or a named bounded research question. Once that work and its checks are complete, stop;
-there is no standing feature backlog or request for personal testing or qualifying reviews.
-See the [public roadmap](ROADMAP.md) for the maintenance finish line and
+counts at zero; Stage 3 is dormant and gated. The current milestone makes changed-file scope
+visible in re-review comparisons; saved-history comparison is next, with reviewer-selected
+exact-head evidence only a later design option. Each milestone has an automated finish line;
+no personal testing or qualifying reviews are required. Engineering progress does not establish
+customer value. The completed private v0.2.5 candidate remains bound to its original source and
+bytes; subsequent source work does not update or publish that candidate.
+See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and
 [official-source market comparison](docs/commercialization/market-comparison-2026-07-26.md) for
 substantial competing workflows and the remaining value hypothesis.
 
@@ -606,8 +610,9 @@ read-only private-repository boundary. It does not claim private support exists.
 
 ## Product status
 
-This is a public-repository reference product under bounded owner-led maintenance. That strategy
-does not establish customer validation, demand, adoption, repeat use, or willingness to pay.
+This is a public-repository evidence assistant in bounded owner-led development. The roadmap
+prioritizes gaps in the existing reviewer workflow; that strategy does not establish customer
+validation, demand, adoption, repeat use, or willingness to pay.
 
 The [public roadmap](ROADMAP.md) defines the closed Stage 1 record, active owner-led Stage 2 scope,
 and separate owner gates for later stages. The [changelog](CHANGELOG.md) summarizes the active
@@ -623,8 +628,8 @@ code, tokens, customer data, and confidential material. Report security concerns
 following the [security policy](SECURITY.md).
 
 ScopeProof is an acceptance-coverage assistant, not an AI code reviewer. Stage 1 is closed as not
-pursued (`closed_not_pursued_by_owner`) with all external counts at zero; owner-led Stage 2 remains
-bounded maintenance. Stage 3 is dormant and gated. The
+pursued (`closed_not_pursued_by_owner`) with all external counts at zero; owner-led Stage 2 follows
+the ordered engineering milestones. Stage 3 is dormant and gated. The
 [public-alpha participant quickstart](docs/alpha/participant-quickstart.md) preserves the historical alpha path;
 the [optional design-partner protocol](docs/commercialization/design-partner-sprint.md) remains
 inactive until separately authorized. In that archived or separately authorized participant path,
