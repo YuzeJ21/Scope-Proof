@@ -57,6 +57,7 @@ def prepare_saved_comparison(
     baseline_review_id: str,
     *,
     history_index: int | None = None,
+    expected_baseline_fingerprint: Fingerprint | None = None,
 ) -> SavedComparisonSelection:
     """Explicitly select compatible saved truth, rejecting unsaved current changes."""
     expected_current = store.state_fingerprint(current)
@@ -69,13 +70,19 @@ def prepare_saved_comparison(
             raise SavedComparisonUnavailable(
                 "current saved review changed; reopen and select again"
             )
+        baseline_fingerprint = store.state_fingerprint(baseline)
         selection = SavedComparisonSelection(
             current_review_id=saved_current.review.review_id,
             baseline_review_id=baseline.review.review_id,
             current_fingerprint=current_fingerprint,
-            baseline_fingerprint=store.state_fingerprint(baseline),
+            baseline_fingerprint=(
+                baseline_fingerprint
+                if expected_baseline_fingerprint is None else expected_baseline_fingerprint
+            ),
             history_index=history_index,
         )
+        if baseline_fingerprint != selection.baseline_fingerprint:
+            raise SavedComparisonUnavailable("selected saved baseline changed; select again")
         _compare(saved_current, baseline, selection.history_index)
         return selection
 

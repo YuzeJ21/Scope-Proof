@@ -11,6 +11,12 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5`, unreleased.
 
+- Choose another saved review, then its active or historical analysis as a comparison baseline.
+  Bind displayed choices to complete saved-record fingerprints and recheck them under locks, so
+  history replacement/removal/reordering or reference changes require reselection. Support useful
+  retained history even without a compatible active analysis. Comparisons remain read-only; no
+  gate, decision, record migration, frozen research or release change follows.
+
 - Include separately attributed selected-reference context in saved re-review comparisons,
   workbench and comparison JSON/Markdown. Distinguish identical complete records from records
   present only on one side, without inferring cross-head equivalence or changing automatic

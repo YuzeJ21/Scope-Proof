@@ -471,6 +471,15 @@ unchanged. Comparison JSON/Markdown retain the context; older comparison project
 it remain explicitly unavailable. A saved-reference change expires an existing comparison/download
 selection, so select the saved baseline again.
 
+To compare a historical analysis in another saved review, choose its record under
+**Comparison baseline**, then select **History …** under **Baseline analysis** before comparing.
+The analysis options identify the saved head and criteria revision; the applied summary identifies
+the owning record and historical position. An available active analysis remains the initial option
+for the existing workflow; records containing only history require an explicit analysis choice.
+If the selected record changes, choices and downloads expire and require reselection. Incompatible
+selected analyses are rejected without changing the current review or automatically using another
+analysis. Saved history remains usable without reloading GitHub or rerunning analysis.
+
 New saves use record version 6; versions 1–5 remain readable without invented selections.
 Older application readers may reject version-6 records. Keep original saved records before
 opening copies in unreleased source; loading alone does not rewrite them.

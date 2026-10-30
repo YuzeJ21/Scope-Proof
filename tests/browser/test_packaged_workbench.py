@@ -41,6 +41,7 @@ from tests.candidate_selection_fixture import selection_criteria, selection_snap
 from tests.saved_comparison_fixture import (
     CURRENT_HEAD,
     CURRENT_REVIEW_ID,
+    FOREIGN_HISTORY_HEAD,
     HISTORY_HEAD,
     PREVIOUS_HEAD,
     PREVIOUS_REVIEW_ID,
@@ -1785,7 +1786,7 @@ def _reopen_saved_comparison_current(page: Page, base_url: str) -> None:
 
 
 def _assert_saved_comparison_downloads(
-    page: Page, *, previous_head: str, previous_review_id: str,
+    page: Page, *, previous_head: str, previous_review_id: str, previous_revision: int = 1,
 ) -> None:
     markdown = _download_with_retry(
         page, button_name="Download comparison Markdown",
@@ -1834,7 +1835,7 @@ def _assert_saved_comparison_downloads(
     }
     scope = payload["file_scope"]
     assert scope["previous"]["review_id"] == previous_review_id
-    assert scope["previous"]["criteria_revision_number"] == 1
+    assert scope["previous"]["criteria_revision_number"] == previous_revision
     assert scope["previous"]["head_sha"] == previous_head
     assert scope["previous"]["unresolved_paths"] == []
     assert len(scope["previous"]["latest_decisions"]) == 1
@@ -1874,7 +1875,7 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
             "recipe=runpy.run_path(sys.argv[1]); "
             "store=JsonReviewStore(Path(sys.argv[2])); "
             "[store.save(state) for state in recipe['saved_comparison_states']("
-            "selected_references=True)]"
+            "selected_references=True, foreign_history=True)]"
         ),
         str(recipe), str(review_store_dir), cwd=runtime_dir,
     )
@@ -1931,15 +1932,29 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                             compare = page.get_by_role(
                                 "button", name="Compare selected saved analysis", exact=True,
                             )
-                            for option, previous_head, previous_id in (
+                            for (
+                                option, analysis_option, previous_head, previous_id,
+                                previous_revision, previous_actor,
+                            ) in (
                                 (f"Saved review · {PREVIOUS_REVIEW_ID}",
-                                 PREVIOUS_HEAD, PREVIOUS_REVIEW_ID),
+                                 None, PREVIOUS_HEAD, PREVIOUS_REVIEW_ID, 2, "previous"),
                                 (f"History 1 · criteria revision 1 · head {HISTORY_HEAD}",
-                                 HISTORY_HEAD, CURRENT_REVIEW_ID),
+                                 None, HISTORY_HEAD, CURRENT_REVIEW_ID, 1, "historical"),
+                                (f"Saved review · {PREVIOUS_REVIEW_ID}",
+                                 f"History 1 · criteria revision 1 · head {FOREIGN_HISTORY_HEAD}",
+                                 FOREIGN_HISTORY_HEAD, PREVIOUS_REVIEW_ID, 1, "foreign-history"),
                             ):
                                 _choose_combobox_option(
                                     page, baseline, option_name=option, settled_control=compare,
                                 )
+                                if analysis_option is not None:
+                                    analysis = page.get_by_role(
+                                        "combobox", name="Baseline analysis", exact=True,
+                                    )
+                                    _choose_combobox_option(
+                                        page, analysis, option_name=analysis_option,
+                                        settled_control=compare,
+                                    )
                                 expect(page.get_by_role(
                                     "heading", name="Re-review comparison", exact=True,
                                 )).to_have_count(0)
@@ -1973,9 +1988,6 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                     reference_details[kind] = detail
                                     if not detail.evaluate("node => node.open"):
                                         disclosure.click()
-                                previous_actor = (
-                                    "historical" if previous_head == HISTORY_HEAD else "previous"
-                                )
                                 expect(reference_details["Only Previous"].get_by_text(
                                     f"Constructed {previous_actor} reference reviewer", exact=True,
                                 )).to_be_visible()
@@ -1991,6 +2003,7 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                 _assert_saved_comparison_downloads(
                                     page, previous_head=previous_head,
                                     previous_review_id=previous_id,
+                                    previous_revision=previous_revision,
                                 )
                                 assert_records_unchanged()
                             page.get_by_role(
@@ -2000,6 +2013,9 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                             page.set_viewport_size(VIEWPORTS[1])
                             baseline.scroll_into_view_if_needed()
                             expect(baseline).to_be_visible()
+                            expect(page.get_by_role(
+                                "combobox", name="Baseline analysis", exact=True,
+                            )).to_be_visible()
                             expect(compare).to_be_enabled()
                             assert page.evaluate(
                                 "document.documentElement.scrollWidth <= window.innerWidth"
