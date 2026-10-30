@@ -2,7 +2,7 @@
 
 The published evaluation download is **v0.2.4**, with its wheel, source archive, and
 `SHA256SUMS.txt` verified in the [public verification record](../releases/v0.2.4-public-verification.md).
-Current source/package identity is **0.2.5.dev0**, unreleased. Use the
+Current source/package identity is **0.2.5**, unreleased. Use the
 [current evaluation quickstart](../../README.md#quickstart) for v0.2.4 installation, checksum
 verification, supported environments, and saved-record v5 upgrade guidance. The
 [current source setup](../development-environment.md) describes the unreleased development line.

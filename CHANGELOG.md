@@ -9,8 +9,11 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Source/package identity: `0.2.5.dev0`, unreleased.
+Source/package identity: `0.2.5`, unreleased.
 
+- Prepare the final-version v0.2.5 evaluation candidate and private exact-main wheel/source
+  verification packet. Public install remains v0.2.4; no tag, Release, asset upload or deployment
+  is performed by preparation. See the [candidate guide](docs/releases/v0.2.5-evaluation-candidate.md).
 - Align source requirements with the verified maintained baseline: Pydantic `>=2.13.4,<3`,
   Streamlit `>=1.66.1,<2`, and direct Pillow `>=13,<14`, retaining HTTPX `>=0.27,<1` and every
   resolved lock version. This excludes known incompatible older combinations without changing

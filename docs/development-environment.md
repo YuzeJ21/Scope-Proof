@@ -1,6 +1,6 @@
 # Reproducible development environment
 
-The public evaluation install is v0.2.4; current repository source is unreleased `0.2.5.dev0`.
+The public evaluation install is v0.2.4; current repository source is unreleased `0.2.5`.
 The [public verification record](releases/v0.2.4-public-verification.md) binds the published
 archives to their release source and separates public installation checks from earlier candidate
 compatibility evidence. GitHub Releases remains authoritative for availability. Python 3.11,
@@ -23,6 +23,16 @@ uv sync --extra dev --extra research --locked
 ```
 
 `--locked` refuses to change the lock file. If dependency declarations intentionally change, run `uv lock`, inspect the resulting diff, and repeat the locked checks below.
+
+After changing the checked-in version source, refresh editable build metadata explicitly:
+
+```bash
+uv sync --extra dev --extra research --locked --reinstall-package scopeproof --refresh-package scopeproof
+uv run python -c "from importlib.metadata import version; from scopeproof_core import __version__; assert version('scopeproof') == __version__"
+```
+
+Source imports can reflect a version-file edit while cached editable metadata still reports the
+previous identity. Fresh candidate wheel/source installations verify both identities separately.
 
 ## Opt-in R-002 engineering benchmark
 

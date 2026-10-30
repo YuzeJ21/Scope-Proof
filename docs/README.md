@@ -5,7 +5,7 @@ snapshots: they preserve what was observed at a named commit or release and must
 current product state.
 
 Current direction: bounded maintenance after v0.2.4 evaluation-release publication and automatic
-public-download verification. Public install is v0.2.4; current source is unreleased `0.2.5.dev0`.
+public-download verification. Public install is v0.2.4; current source is unreleased `0.2.5`.
 The dated verification record binds released bytes to their own source commit. Stage 1 is closed
 at zero; Stage 3 is dormant and gated. No personal testing or qualifying reviews are required
 for evaluation distribution. Begin with the roadmap's finish line before starting any new slice.
@@ -13,6 +13,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 ## Current operating documents
 
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
+- [v0.2.5 evaluation candidate](releases/v0.2.5-evaluation-candidate.md) — unreleased final-version
+  candidate, private distribution/upgrade verification and separate publication authorization.
 - [v0.2.4 public verification](releases/v0.2.4-public-verification.md) — published source/tag/assets,
   automatic public-download checks, upgrade limits and evidence boundaries.
 - [v0.2.3 status and next stages](releases/v0.2.3-status-and-next-stages.md) — published-release

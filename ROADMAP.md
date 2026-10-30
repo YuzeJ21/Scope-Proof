@@ -16,7 +16,12 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 **v0.2.4 is published as a downloadable evaluation release.** Its public wheel, source archive
 and checksums were automatically verified. The [dated public verification record](docs/releases/v0.2.4-public-verification.md)
 binds those results to release source `11bcdc66f7d8f5a29055688208de1ed337eed07f`.
-Current source is unreleased `0.2.5.dev0`. The [native saved-review upgrade rehearsal](docs/research/2026-10-29-v023-v024-upgrade.md)
+Current source is the unreleased `0.2.5` evaluation candidate. The
+[candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) bounds the next authorized automatic
+task: compare direct/source-built distributions, install them outside the checkout, rehearse a
+native v0.2.4 review upgrade, and retain an exact-main private packet. This prepares the existing
+upload and dependency corrections for a separate publication decision; it does not publish them.
+The [native saved-review upgrade rehearsal](docs/research/2026-10-29-v023-v024-upgrade.md)
 verified one constructed published-v0.2.3 writer → published-v0.2.4 reader history: original
 facts and linked decisions survived, while missing changed-file inventory correctly changed
 both old Ready gates to Needs review. That question is closed and required no product fix or
@@ -36,7 +41,7 @@ lock versions. These are verified baseline choices, not proven earliest compatib
 The older-stack
 browser observation remains partial because its saved-review selector differs from the current
 test helper; it is not a full compatibility pass. Preserve the published assets and return to
-bounded maintenance after this alignment's reviewed passing integration. This is evaluation distribution, not a
+bounded maintenance after candidate preparation and its reviewed passing integration. This is evaluation distribution, not a
 Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
 

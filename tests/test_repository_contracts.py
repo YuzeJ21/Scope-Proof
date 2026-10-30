@@ -27,7 +27,7 @@ from scopeproof_core.version import __version__
 
 PUBLIC_RELEASE_VERSION = "0.2.4"
 PUBLIC_RELEASE_TAG = "v0.2.4"
-SOURCE_VERSION = "0.2.5.dev0"
+SOURCE_VERSION = "0.2.5"
 PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.4-py3-none-any.whl"
 PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4"
 V023_RELEASE_WHEEL = "scopeproof-0.2.3-py3-none-any.whl"
@@ -1608,7 +1608,7 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
         assert filename in release_install
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in release_install
     assert "published v0.2.4 wheel" in release_install
-    assert "Current source `0.2.5.dev0` is unreleased" in release_install
+    assert f"Current source `{SOURCE_VERSION}` is unreleased" in release_install
     assert "conditional v0.2.4" not in release_install
     assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in release_install
     assert "No personal testing or qualifying review" in release_install
@@ -1622,7 +1622,7 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
     assert f"{V023_DOWNLOAD_ROOT}/{V023_RELEASE_WHEEL}" in quickstart
     assert "Archived v0.2.3" in quickstart
     assert "v0.2.4" in design_partner
-    assert "0.2.5.dev0" in design_partner
+    assert SOURCE_VERSION in design_partner
     assert "public verification record" in design_partner
     assert "ScopeProof v0.2.3 is published" in readme
     assert "PR #184" in readme
@@ -1640,7 +1640,7 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
         assert "The GitHub Release record is authoritative for publication availability." in (
             active_status
         )
-        assert "0.2.5.dev0" in active_status
+        assert SOURCE_VERSION in active_status
         assert "PR #183" in active_status
         assert f"`{PR183_SOURCE_MERGE_SHA}`" in active_status
         assert all(run_id in active_status for run_id in PR183_EXACT_MAIN_RUN_IDS)
@@ -1697,7 +1697,7 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
 
     for active_surface in (readme, roadmap, environment, status):
         assert "v0.2.4" in active_surface
-        assert "0.2.5.dev0" in active_surface
+        assert SOURCE_VERSION in active_surface
         assert "v0.2.4-public-verification.md" in active_surface
     for dated_surface in (platform, market):
         assert "0.2.4.dev0" in dated_surface
