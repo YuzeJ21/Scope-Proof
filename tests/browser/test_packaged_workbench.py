@@ -1531,12 +1531,14 @@ def _download_review_state(page: Page) -> dict:
     return json.loads(download.path().read_text(encoding="utf-8"))
 
 
-def _assert_selected_reference_is_nongating(before: dict, after: dict) -> dict:
+def _assert_selected_reference_is_nongating(
+    before: dict, after: dict, *, expected_count: int = 1,
+) -> dict:
     before_bundle = dict(before["bundle"])
     after_bundle = dict(after["bundle"])
     assert before_bundle.pop("reviewer_selected_references", []) == []
     references = after_bundle.pop("reviewer_selected_references")
-    assert len(references) == 1
+    assert len(references) == expected_count
     assert after_bundle == before_bundle
     assert {key: value for key, value in after.items() if key != "bundle"} == {
         key: value for key, value in before.items() if key != "bundle"
@@ -1551,7 +1553,7 @@ def _assert_selected_reference_is_nongating(before: dict, after: dict) -> dict:
 def test_installed_wheel_selected_reference_survives_restart_without_gate_change(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
-    """An injected constructed late-page test line stays static through restart/export."""
+    """Constructed late-page references can resume after restart without new analysis."""
     runtime_dir = tmp_path / "selected-reference-runtime"
     home_dir = runtime_dir / "home"
     home_dir.mkdir(parents=True)
@@ -1581,6 +1583,8 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
     )) / "selected-reference"
     reviewer = "Constructed automated reference reviewer"
     rationale = "Constructed static definition selected for inspection; no execution observed."
+    resumed_reviewer = "Constructed resumed reference reviewer"
+    resumed_rationale = "Constructed resumed static context; no new analysis or execution."
     external_requests: list[str] = []
     browser_errors: list[str] = []
     before: dict | None = None
@@ -1780,12 +1784,91 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             reopened = _download_review_state(page)
                             assert reopened == selected_state
                             _assert_selected_reference_is_nongating(before, reopened)
+                            page.get_by_role(
+                                "button", name="Load matching reviewed source", exact=True,
+                            ).click()
+                            expect(page.get_by_text(
+                                "Matching reviewed source loaded. "
+                                "Saved analysis and decisions were preserved.", exact=True,
+                            )).to_be_visible()
+                            assert _download_review_state(page) == selected_state
+                            selector = page.get_by_text("Select a source reference", exact=True)
+                            source = page.get_by_role(
+                                "combobox", name="Reference source", exact=True,
+                            )
+                            if not source.is_visible():
+                                selector.click()
+                            _choose_combobox_option(
+                                page, source, option_name=f"Changed file · {target_path}",
+                            )
+                            reference_page = page.get_by_role(
+                                "combobox", name="Reference page", exact=True,
+                            )
+                            _choose_combobox_option(
+                                page, reference_page, option_name="Page 11 of 11",
+                            )
+                            line = page.get_by_role(
+                                "combobox", name="Reference line", exact=True,
+                            )
+                            _choose_combobox_option(page, line, option_name="1001")
+                            note = page.get_by_label("Why this reference matters", exact=True)
+                            note.fill(resumed_rationale)
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=note: control.press("Tab"),
+                            )
+                            author = page.get_by_label("Reference reviewer (required)", exact=True)
+                            author.fill(resumed_reviewer)
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=author: control.press("Tab"),
+                            )
+                            save = page.get_by_role(
+                                "button", name="Save selected reference", exact=True,
+                            )
+                            expect(save).to_be_enabled()
+                            _run_and_wait_for_streamlit_rerun(page, save.click)
+                            expect(page.get_by_text(
+                                f"Selected reference · {target_path}:1001", exact=True,
+                            )).to_be_visible()
+                            reopened = _download_review_state(page)
+                            original_reference = _assert_selected_reference_is_nongating(
+                                before, reopened, expected_count=2,
+                            )
+                            assert original_reference == (
+                                selected_state["bundle"]["reviewer_selected_references"][0]
+                            )
+                            resumed_reference = (
+                                reopened["bundle"]["reviewer_selected_references"][1]
+                            )
+                            assert resumed_reference["criterion_id"] == "AC-03"
+                            assert resumed_reference["line_number"] == 1001
+                            assert resumed_reference["file_path"] == target_path
+                            assert resumed_reference["excerpt"] == "constructed_value_1001 = 1001"
+                            assert resumed_reference["reviewer"] == resumed_reviewer
+                            assert resumed_reference["rationale"] == resumed_rationale
+                            assert resumed_reference["evidence_type"] == "test"
+                            assert resumed_reference["evidence_level"] == "E2"
+                            probe = subprocess.run(
+                                [
+                                    str(installed_wheel / "bin" / "python"), "-I", "-c",
+                                    "import sys; from pathlib import Path; "
+                                    "from scopeproof_core.storage.json_store "
+                                    "import JsonReviewStore; "
+                                    "print(JsonReviewStore(Path(sys.argv[1]))"
+                                    ".load(sys.argv[2]).model_dump_json())",
+                                    str(home_dir / ".scopeproof" / "reviews"),
+                                    reopened["review"]["review_id"],
+                                ],
+                                cwd=runtime_dir, check=True, capture_output=True, text=True,
+                            )
+                            assert json.loads(probe.stdout) == reopened
                             markdown = _download_with_retry(page, button_name="Download Markdown")
                             report = markdown.path().read_text(encoding="utf-8")
                             report = re.sub(r"\\([^\w\s])", r"\1", report)
                             for expected in (
                                 "AC-03", "head-demo-002", reviewer, rationale,
                                 "test_late_reference.py", "1002", target_excerpt, "E2",
+                                resumed_reviewer, resumed_rationale, "1001",
+                                "constructed_value_1001 = 1001",
                             ):
                                 assert expected in report
                             assert "non-gating static context" in report
