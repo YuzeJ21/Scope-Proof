@@ -28,6 +28,7 @@ PREVIOUS_REVIEW_ID = "saved-comparison-previous"
 CURRENT_HEAD = "b" * 40
 PREVIOUS_HEAD = "a" * 40
 HISTORY_HEAD = "c" * 40
+FOREIGN_HISTORY_HEAD = "e" * 40
 
 
 def _constructed_state(
@@ -125,7 +126,7 @@ def _with_prior_scope_decision(state: ReviewState) -> ReviewState:
 
 
 def saved_comparison_states(
-    *, selected_references: bool = False,
+    *, selected_references: bool = False, foreign_history: bool = False,
 ) -> tuple[ReviewState, ReviewState]:
     """Return compatible constructed active/history and separate-record analyses."""
     current = _constructed_state(
@@ -141,6 +142,7 @@ def saved_comparison_states(
     previous = _with_prior_scope_decision(
         _constructed_state(
             PREVIOUS_REVIEW_ID, PREVIOUS_HEAD, added_path=False,
+            revision_number=2 if foreign_history else 1,
             selected_context="previous" if selected_references else None,
         )
     )
@@ -148,6 +150,12 @@ def saved_comparison_states(
     current.criteria_revision.number = 2
     current.bundle.criteria_revision_number = 2
     current.analysis_history = [historical.bundle]
+    if foreign_history:
+        foreign_historical = _with_prior_scope_decision(_constructed_state(
+            PREVIOUS_REVIEW_ID, FOREIGN_HISTORY_HEAD, added_path=False,
+            selected_context="foreign-history" if selected_references else None,
+        ))
+        previous.analysis_history = [foreign_historical.bundle]
     return (
         ReviewState.model_validate(current.model_dump(mode="python")),
         ReviewState.model_validate(previous.model_dump(mode="python")),

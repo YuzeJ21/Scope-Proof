@@ -23,11 +23,74 @@ def clear_saved_comparison_selection(*, clear_choice: bool = True) -> None:
     st.session_state["saved_comparison_selection"] = None
     if clear_choice:
         st.session_state["saved_comparison_baseline"] = None
+        st.session_state["saved_comparison_analysis"] = None
+        st.session_state["saved_comparison_analysis_context"] = None
 
 
 def _baseline_changed() -> None:
+    _analysis_changed()
+    st.session_state["saved_comparison_analysis"] = None
+    st.session_state["saved_comparison_analysis_context"] = None
+
+
+def _analysis_changed() -> None:
     clear_saved_comparison_selection(clear_choice=False)
     st.session_state["comparison_base_bundle"] = None
+
+
+def _render_foreign_analysis_selector(
+    store: JsonReviewStore, baseline_id: str, *, eligible: bool,
+) -> tuple[int | None, str | None, bool]:
+    """Load only the chosen record and bind displayed positions to its complete snapshot."""
+    try:
+        baseline = store.load(baseline_id)
+        fingerprint = store.state_fingerprint(baseline)
+    except (OSError, ValueError):
+        _analysis_changed()
+        st.session_state["saved_comparison_analysis"] = None
+        st.session_state["saved_comparison_analysis_context"] = (baseline_id, "unavailable")
+        st.warning("Selected saved record is unavailable. Reopen or select another saved baseline.")
+        st.selectbox(
+            "Baseline analysis", options=[], index=None, disabled=True,
+            key="saved_comparison_analysis",
+        )
+        return None, None, False
+
+    options: dict[str, tuple[int | None, str]] = {}
+    if baseline.bundle is not None:
+        options["active"] = (
+            None, f"Active analysis · criteria revision {baseline.bundle.criteria_revision_number} "
+            f"· head {baseline.bundle.review.head_sha}",
+        )
+    for index, historical in enumerate(baseline.analysis_history):
+        options[f"history:{index}"] = (
+            index, f"History {index + 1} · criteria revision {historical.criteria_revision_number} "
+            f"· head {historical.review.head_sha}",
+        )
+    context = (baseline_id, fingerprint)
+    previous_context = st.session_state.get("saved_comparison_analysis_context")
+    if previous_context != context:
+        _analysis_changed()
+        st.session_state["saved_comparison_analysis"] = (
+            "active" if previous_context is None and "active" in options else None
+        )
+        st.session_state["saved_comparison_analysis_context"] = context
+        if previous_context is not None:
+            st.warning("Saved baseline changed. Select its analysis again before comparing.")
+    if not options:
+        st.caption("No active or retained historical analysis is available in this saved record.")
+    st.text(f"Baseline source record: {baseline_id}")
+    choice = st.selectbox(
+        "Baseline analysis", options=list(options), index=None,
+        key="saved_comparison_analysis", format_func=lambda value: options[value][1],
+        placeholder="Select an analysis from this saved record",
+        disabled=not eligible or not options, on_change=_analysis_changed,
+    )
+    return (
+        options[choice][0] if choice is not None else None,
+        fingerprint,
+        choice is not None,
+    )
 
 
 def _scope_draft_pending(current: ReviewState | None) -> bool:
@@ -107,7 +170,8 @@ def render_saved_comparison_selector(
             f"Criteria revision: {current.criteria_revision.number}"
         )
         st.caption(
-            "Choose another saved review or a retained analysis. Comparing is read-only; "
+            "Choose another saved review, then its active or historical analysis, or choose "
+            "a retained analysis from this review. Comparing is read-only; "
             "it does not reload GitHub, rerun analysis or carry forward a decision."
         )
         if not eligible:
@@ -133,15 +197,24 @@ def render_saved_comparison_selector(
             format_func=lambda key: sources[key][2], disabled=not eligible or not sources,
             on_change=_baseline_changed,
         )
+        has_analysis = candidate is not None
+        baseline_id, history_index, _ = sources.get(candidate, (None, None, ""))
+        expected_baseline_fingerprint = None
+        if baseline_id is not None and baseline_id != current.review.review_id:
+            history_index, expected_baseline_fingerprint, has_analysis = (
+                _render_foreign_analysis_selector(store, baseline_id, eligible=eligible)
+            )
+        elif baseline_id is not None:
+            expected_baseline_fingerprint = store.state_fingerprint(current)
         if st.button(
             "Compare selected saved analysis", key="compare_saved_analysis",
-            disabled=not eligible or candidate is None,
+            disabled=not eligible or not has_analysis,
         ):
-            _baseline_changed()
-            baseline_id, history_index, _ = sources[candidate]
+            _analysis_changed()
             try:
                 selection = prepare_saved_comparison(
                     store, current, baseline_id, history_index=history_index,
+                    expected_baseline_fingerprint=expected_baseline_fingerprint,
                 )
             except (OSError, ValueError):
                 st.warning(

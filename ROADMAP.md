@@ -432,9 +432,14 @@ to the workbench and comparison JSON/Markdown. It never infers cross-head equiva
 decision forward, or changes automatic counts, findings, scope or gates. Missing historical
 comparison projections stay unavailable rather than becoming invented empty snapshots. See the
 [bounded follow-on design](docs/superpowers/specs/2026-10-30-selected-reference-comparison-design.md).
-This completes this selected outcome, not an open-ended fourth-milestone queue. Other-record
-history browsing and expanded source-line selection remain unselected options; broader adapters,
-accounts, hosted processing and external validation retain their separate gates.
+This completes this selected outcome, not an open-ended fourth-milestone queue. The owner then
+explicitly selected **historical baselines from other saved reviews**. Unreleased source now adds a
+per-record active/history selector, with record/head/revision identity and whole-record fingerprint
+binding through locked preparation and downloads. Historical-only records and compatible histories
+beneath incompatible active analyses remain selectable; changed records require explicit reselection,
+without falling back to another analysis. See the [bounded history design](docs/superpowers/specs/2026-10-30-foreign-history-baseline-design.md).
+Expanded source-line selection remains unselected; broader adapters, accounts, hosted processing
+and external validation retain their separate gates.
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic
