@@ -31,6 +31,10 @@ the same confirmed criterion; no previous decision is carried forward.
 - Source continuation restores active manual references and original automatic candidate paths;
   inactive selected-reference history does not force unnecessary file reads. This does not clear
   the session source-conflict guard or turn historical records into current verification.
+  Existing fingerprint-bound attachments retain previously validated candidates after a neutral
+  audit action; initial preparation still requires exact requested paths. A GitHub automated
+  review exposed a false-conflict edge case here, reproduced in core and workbench regressions
+  and fixed before merge. Source bytes, receipt/context binding and all candidate bounds remain.
 - Writer version 7 requires explicit lifecycle event lists. Versions 1–6 load without invented
   events or automatic file rewrites; nonempty/malformed pre-7 events reject. Version 6 reference
   provenance is preserved. New analyses do not inherit selected context or audit events.

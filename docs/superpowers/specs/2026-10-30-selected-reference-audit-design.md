@@ -54,6 +54,10 @@ includes per-side lifecycle snapshots/status/history; identical record does not 
 active status. Older comparisons without lifecycle snapshots say availability is unknown.
 Source continuation reproduces active selected references only; historical references do not
 force unnecessary source retrieval. Original automatic evidence remains required.
+An existing fingerprint-bound receipt may retain previously validated candidates when an audit
+action retires their last active reference. Validation still requires every current path and
+unchanged receipt/source bytes, uniqueness and all path/head/size limits. New attachment
+preparation continues requiring exactly the requested path set, with no surplus fetching.
 
 ## Verification and boundaries
 

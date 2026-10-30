@@ -487,6 +487,9 @@ active selected references are restored, within the existing eight-file / 200,00
 Unrecorded source inputs are not reconstructed. Constructed loading stays offline and never
 becomes genuine-public evidence. Original producer metadata, decisions and saved bytes remain
 unchanged until an explicit review operation is saved.
+Correcting or withdrawing a reference preserves already validated source in the current
+attachment; retiring its last active use does not by itself create a source conflict. This
+retains the same bounded source bytes and permits no extra fetches or changed content.
 
 Observed source contradictions preserve the saved record but make current workbench status
 **Refresh required** and block final acceptance and authoritative downloads, including older

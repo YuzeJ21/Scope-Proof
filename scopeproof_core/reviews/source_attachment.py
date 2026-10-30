@@ -206,6 +206,8 @@ def _validated_source(
     snapshot: PullRequestSnapshot,
     candidate_files: list[RetrievedFile] | tuple[RetrievedFile, ...],
     source_origin: ReviewInputOrigin,
+    *,
+    allow_retained_candidates: bool = False,
 ) -> tuple[PullRequestSnapshot, tuple[RetrievedFile, ...]]:
     snapshot = validate_review_source_snapshot(state, snapshot, source_origin=source_origin)
     review = state.review
@@ -215,7 +217,16 @@ def _validated_source(
         )
         paths = required_source_candidate_paths(state)
         observed_paths = [f.path for f in candidates]
-        if len(candidates) > MAX_ATTACHED_CANDIDATE_FILES or sorted(observed_paths) != paths:
+        coverage_matches = (
+            set(paths).issubset(observed_paths)
+            if allow_retained_candidates
+            else sorted(observed_paths) == paths
+        )
+        if (
+            len(candidates) > MAX_ATTACHED_CANDIDATE_FILES
+            or len(observed_paths) != len(set(observed_paths))
+            or not coverage_matches
+        ):
             raise ValueError(
                 "Candidate responses must match every recorded requested path exactly once."
             )
@@ -326,7 +337,16 @@ def validate_source_attachment(
             or receipt.source_fingerprint != _source_fingerprint(snapshot, candidate_files)
         ):
             raise ValueError("Source attachment expired because its context or source changed.")
-        _validated_source(state, snapshot, candidate_files, receipt.source_origin)
+        # Neutral audit actions may retire a manual-only path. Keep the already
+        # bound source intact; this permits no new fetch or changed candidate bytes.
+        # Initial preparation still requires the exact requested path set.
+        _validated_source(
+            state,
+            snapshot,
+            candidate_files,
+            receipt.source_origin,
+            allow_retained_candidates=True,
+        )
     except SourceAttachmentUnavailable:
         raise
     except ValueError as error:
