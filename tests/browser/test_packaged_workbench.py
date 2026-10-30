@@ -1964,21 +1964,22 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                     "Identical record: 0 · Only previous: 1 · Only current: 1",
                                     exact=False,
                                 )).to_be_visible()
+                                reference_details = {}
                                 for kind in ("Only Previous", "Only Current"):
                                     disclosure = page.get_by_text(
                                         re.compile(rf"^{kind} · Reference \d+$"),
                                     )
-                                    if not disclosure.evaluate(
-                                        "node => node.closest('details').open"
-                                    ):
+                                    detail = disclosure.locator("xpath=ancestor::details[1]")
+                                    reference_details[kind] = detail
+                                    if not detail.evaluate("node => node.open"):
                                         disclosure.click()
                                 previous_actor = (
                                     "historical" if previous_head == HISTORY_HEAD else "previous"
                                 )
-                                expect(page.get_by_text(
+                                expect(reference_details["Only Previous"].get_by_text(
                                     f"Constructed {previous_actor} reference reviewer", exact=True,
                                 )).to_be_visible()
-                                expect(page.get_by_text(
+                                expect(reference_details["Only Current"].get_by_text(
                                     "Constructed current reference reviewer", exact=True,
                                 )).to_be_visible()
                                 expect(page.get_by_text(
