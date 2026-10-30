@@ -101,11 +101,11 @@ competitor claims, stars, downloads, or another release cannot supply that evide
 ## Current product decision
 
 Develop the existing reviewer workflow through the
-[ordered Stage 2 roadmap](../../ROADMAP.md#stage-2--owner-led-productization). The immediate
-engineering gap is that candidate-reference comparison does not explain changed-file inventory
-differences; scope-aware re-review is the active milestone. Durable comparison of compatible
-saved history is next. Reviewer-selected exact-head evidence is a later design-only option for
-conservative retrieval limits. These choices follow inspectable implementation gaps and an owner
+[ordered Stage 2 roadmap](../../ROADMAP.md#stage-2--owner-led-productization). Current source
+capabilities include changed-file scope context and durable comparison of compatible
+saved records or retained analyses after reopening. Reviewer-selected exact-head evidence is a
+later design-only option for conservative retrieval limits. These choices follow inspectable
+implementation gaps and an owner
 decision to keep developing, not observed demand or a new competitive claim.
 
 Each milestone has a reviewer outcome and automated finish line. Finish the selected slice before

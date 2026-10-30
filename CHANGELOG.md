@@ -11,6 +11,10 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5`, unreleased.
 
+- Reopen saved reviews and explicitly compare a compatible other record or retained historical
+  analysis. Bind selection and deferred downloads to both saved-state fingerprints, preserve
+  original JSON bytes and decisions, and expire comparisons after record or selection changes.
+  A new installed-wheel journey restarts the workbench and verifies both source types and exports.
 - Explain changed-file inventory metadata, current unresolved file scope, prior attributable scope
   decisions and ingestion limits in re-review comparisons, comparison Markdown/JSON and the local
   workbench. Inventory comparisons do not establish content equality or transfer a decision.

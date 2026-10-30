@@ -70,8 +70,8 @@ ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
-moving-head ledger. Current browser coverage comprises eleven checks: one full installed-wheel
-Chromium journey, four constructed Streamlit selection checks, and six helper/capture checks.
+moving-head ledger. Current browser coverage comprises twelve checks: two installed-wheel
+Chromium journeys, four constructed Streamlit selection checks, and six helper/capture checks.
 Dated five-check CI results below remain
 historical results, not current suite counts.
 
@@ -403,13 +403,14 @@ for a bounded engineering improvement, not proof that practitioners need or will
 | Order and status | Reviewer outcome and current gap | Automated finish line |
 | --- | --- | --- |
 | M1 — implemented in source: scope-aware re-review | Explain changed-file scope across reviewed heads. Candidate-only comparison previously omitted the changed-file inventory, so an uncited file could appear without a corresponding candidate delta. | Deterministic, Pydantic-validated scope comparison in the workbench and comparison JSON/Markdown; constructed regressions for inventory differences, explicit rename metadata, unresolved paths and historical unknown inventory; relevant full-suite, coverage, lint, package/browser and exact-head CI checks. Keep gate semantics and reviewer decisions unchanged. |
-| M2 — next bounded task: durable history comparison | Reopen a saved review and inspect a compatible prior analysis. The workbench currently resets its comparison base on reopen even though analysis history is persisted. | Explicit selection of compatible saved history, clear rejection of incompatible criteria/source relationships, and read-only comparison/export without altering current decisions or history; core and installed-browser regressions for reopening and selection. |
+| M2 — implemented in source: durable saved comparison | Reopen a saved review and explicitly select another saved record or a retained compatible historical analysis. Changed heads can live in distinct saved records. | Validated read-only selection bound to both saved-state fingerprints; explicit compatibility checks; stale selection/download invalidation; unchanged saved JSON bytes and decisions; core, AppTest and installed-browser restart/reopen/download regressions. |
 | M3 — design-only option: reviewer-selected evidence | Evaluate whether a reviewer can explicitly cite an exact-head implementation/test location omitted by conservative matching. Retrieval limits remain an engineering constraint; usefulness is unvalidated. | A bounded design defining exact-head source identity, explicit criterion mapping, attribution, evidence typing, limits and rejection cases. No implementation, new retrieval score claim or automatic acceptance follows from listing this option. |
 
 M1 is implemented by [PR #222](https://github.com/YuzeJ21/Scope-Proof/pull/222); its review and
 exact-head integration checks are recorded there. Finish its outcome, regression coverage,
-required checks and documentation, then stop this slice. M2 remains next in order for a subsequent bounded task. M3 requires its own
-design before any implementation. Do not expand the queue or repeat candidate preparation to
+required checks and documentation, then stop that slice. M2's source implementation now restores
+explicit saved-baseline access without reanalysis or a record-format change. M3 remains a
+design-only option requiring its own bounded design before implementation. Do not expand the queue or repeat candidate preparation to
 manufacture progress. Required defect and dependency upkeep may interrupt the sequence when
 needed. Do not make the owner test the product, recruit qualifying reviews or reopen Stage 1.
 

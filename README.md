@@ -18,9 +18,9 @@ The published evaluation
 download is **v0.2.4**, with its wheel, source archive, and checksums verified in the
 [public verification record](docs/releases/v0.2.4-public-verification.md). The current source/package
 identity is **0.2.5**, unreleased. Stage 1 is closed as not pursued with all external
-counts at zero; Stage 3 is dormant and gated. The current milestone makes changed-file scope
-visible in re-review comparisons; saved-history comparison is next, with reviewer-selected
-exact-head evidence only a later design option. Each milestone has an automated finish line;
+counts at zero; Stage 3 is dormant and gated. Source supports scope-aware re-review and explicit
+comparison of compatible saved analyses after reopening. Reviewer-selected exact-head evidence
+remains a later design option. Each milestone has an automated finish line;
 no personal testing or qualifying reviews are required. Engineering progress does not establish
 customer value. The completed private v0.2.5 candidate remains bound to its original source and
 bytes; subsequent source work does not update or publish that candidate.
@@ -451,6 +451,21 @@ splitting, reordering, or editing criteria invalidates the previous analysis and
 reconfirmation before another review run. Human decisions and final acceptance are recorded as
 history rather than silently replacing earlier decisions.
 
+### Compare saved analyses after reopening (unreleased source)
+
+In unreleased `0.2.5` source, reopen the current review, expand **Compare saved analyses**, and
+choose a **Comparison baseline**: another saved review or a retained history entry. Click
+**Compare selected saved analysis** to apply that choice. The current review needs a clean saved
+analysis, and both analyses must describe the same PR with identical confirmed criteria and
+criteria-source identity. An incompatible choice leaves the current review unchanged.
+
+The comparison shows both saved identities and exact heads, including changed-file scope from
+the existing reports. Markdown/JSON downloads recheck the selected saved records. Changing the
+baseline, reopening or editing the current review, or changing/deleting a selected saved record
+expires the applied comparison; select again to continue. This path does not fetch GitHub,
+reanalyze code, modify saved review bytes, or carry forward a decision. The published v0.2.4
+download does not contain this new entry point.
+
 ### Local review storage
 
 The workbench stores versioned JSON records under `~/.scopeproof/reviews`. The reopen panel lists
@@ -509,8 +524,8 @@ The review status is **Action required** because must-have gaps remain.
 
 ## Verification
 
-The packaged-browser suite currently contains **eleven checks: one full installed-wheel Chromium
-journey, four constructed Streamlit selection checks, and six helper/capture checks**. The total
+The packaged-browser suite currently contains **twelve checks: two installed-wheel Chromium
+journeys, four constructed Streamlit selection checks, and six helper/capture checks**. The total
 is not a count of full end-to-end journeys.
 These constructed engineering checks do not establish independent use or accessibility conformance.
 

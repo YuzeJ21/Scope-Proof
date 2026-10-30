@@ -35,8 +35,16 @@ from playwright.sync_api import (
 )
 
 from scopeproof_core.importers.junit import MAX_JUNIT_BYTES
+from scopeproof_core.reviews.comparison import ReviewComparison
 from scopeproof_core.schemas.models import JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION
 from tests.candidate_selection_fixture import selection_criteria, selection_snapshot
+from tests.saved_comparison_fixture import (
+    CURRENT_HEAD,
+    CURRENT_REVIEW_ID,
+    HISTORY_HEAD,
+    PREVIOUS_HEAD,
+    PREVIOUS_REVIEW_ID,
+)
 
 pytestmark = pytest.mark.browser
 
@@ -1120,20 +1128,20 @@ def _exercise_junit_upload_byte_boundary(page: Page, artifact_directory: Path) -
     expect(page.get_by_text("Recorded imported JUnit results (1)", exact=True)).to_be_visible()
 
 
-def test_installed_wheel_primary_path_in_chromium(
-    tmp_path: Path, request: pytest.FixtureRequest
-) -> None:
+@pytest.fixture(scope="module")
+def installed_wheel(
+    tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest,
+) -> Path:
+    """Build and install once while keeping each browser journey's records isolated."""
     if "browser" not in request.config.option.markexpr:
         pytest.skip("run explicitly with -m browser after installing Playwright Chromium")
     if os.name != "posix":
         pytest.skip("process-group cleanup is verified only on POSIX in this regression")
 
-    distribution_dir = tmp_path / "dist"
-    environment_dir = tmp_path / "venv"
-    runtime_dir = tmp_path / "runtime"
-    home_dir = runtime_dir / "home"
+    installation_dir = tmp_path_factory.mktemp("installed-workbench")
+    distribution_dir = installation_dir / "dist"
+    environment_dir = installation_dir / "venv"
     distribution_dir.mkdir()
-    home_dir.mkdir(parents=True)
 
     if find_spec("pip") is not None:
         _run(
@@ -1167,7 +1175,59 @@ def test_installed_wheel_primary_path_in_chromium(
         str(wheel),
         f"playwright=={version('playwright')}",
     )
-    _run(str(environment_python), "-c", "import playwright, scopeproof_core, streamlit")
+    _run(
+        str(environment_python), "-I", "-c",
+        "from pathlib import Path; import sys; "
+        "import apps, playwright, scopeproof_core, streamlit; "
+        "assert all(Path(module.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()) "
+        "for module in (apps, scopeproof_core))",
+        cwd=installation_dir,
+    )
+    return environment_dir
+
+
+@contextmanager
+def _installed_workbench_server(
+    environment_dir: Path, runtime_dir: Path, home_dir: Path, *, log_name: str,
+) -> Iterator[tuple[str, Path]]:
+    port = _available_port()
+    base_url = f"http://127.0.0.1:{port}"
+    log_path = runtime_dir / log_name
+    environment = os.environ.copy()
+    environment["HOME"] = str(home_dir)
+    environment["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    environment.pop("PYTHONPATH", None)
+    with log_path.open("w", encoding="utf-8") as log:
+        process = subprocess.Popen(
+            [
+                str(environment_dir / "bin" / "scopeproof-web"),
+                "--host", "127.0.0.1", "--port", str(port),
+            ],
+            cwd=runtime_dir, env=environment, stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True, text=True,
+        )
+    try:
+        _wait_until_healthy(base_url, process, log_path)
+        yield base_url, log_path
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=10)
+        assert process.poll() is not None
+
+
+def test_installed_wheel_primary_path_in_chromium(
+    tmp_path: Path, installed_wheel: Path,
+) -> None:
+    environment_dir = installed_wheel
+    environment_python = environment_dir / "bin" / "python"
+    runtime_dir = tmp_path / "runtime"
+    home_dir = runtime_dir / "home"
+    home_dir.mkdir(parents=True)
 
     review_store_dir = home_dir / ".scopeproof" / "reviews"
     selection_snapshot_path = runtime_dir / "constructed-selection-snapshot.json"
@@ -1224,6 +1284,7 @@ def test_installed_wheel_primary_path_in_chromium(
             "JsonReviewStore(Path(sys.argv[1])).save(new_review_state(bundle))"
         ),
         str(review_store_dir),
+        cwd=runtime_dir,
     )
     junit_artifact = runtime_dir / "junit-results.xml"
     junit_artifact_bytes = (
@@ -1233,31 +1294,9 @@ def test_installed_wheel_primary_path_in_chromium(
     junit_artifact.write_bytes(junit_artifact_bytes)
     junit_artifact_digest = sha256(junit_artifact_bytes).hexdigest()
 
-    port = _available_port()
-    base_url = f"http://127.0.0.1:{port}"
-    log_path = runtime_dir / "scopeproof-web.log"
-    environment = os.environ.copy()
-    environment["HOME"] = str(home_dir)
-    environment["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    with log_path.open("w", encoding="utf-8") as log:
-        process = subprocess.Popen(
-            [
-                str(environment_dir / "bin" / "scopeproof-web"),
-                "--host",
-                "127.0.0.1",
-                "--port",
-                str(port),
-            ],
-            cwd=runtime_dir,
-            env=environment,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            text=True,
-        )
-
-    try:
-        _wait_until_healthy(base_url, process, log_path)
+    with _installed_workbench_server(
+        environment_dir, runtime_dir, home_dir, log_name="scopeproof-web.log",
+    ) as (base_url, log_path):
         browser_errors: list[str] = []
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
@@ -1337,12 +1376,205 @@ def test_installed_wheel_primary_path_in_chromium(
             destination.mkdir(parents=True, exist_ok=True)
             for name in expected_captures:
                 shutil.copy2(captures / name, destination / name)
-    finally:
-        if process.poll() is None:
-            os.killpg(process.pid, signal.SIGTERM)
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait(timeout=10)
-        assert process.poll() is not None
+
+
+def _reopen_saved_comparison_current(page: Page, base_url: str) -> None:
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.get_by_text("Resume a saved review", exact=True).click()
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    _choose_combobox_option(
+        page, page.get_by_role("combobox", name="Saved review ID", exact=True),
+        option_name=CURRENT_REVIEW_ID, settled_control=reopen,
+    )
+    reopen.click()
+    expect(page.get_by_text(
+        "Review reopened from local storage after validation.", exact=True,
+    )).to_be_visible()
+    page.get_by_text("Compare saved analyses", exact=True).click()
+    expect(page.get_by_role(
+        "combobox", name="Comparison baseline", exact=True,
+    )).to_have_value("")
+    expect(page.get_by_role(
+        "button", name="Compare selected saved analysis", exact=True,
+    )).to_be_disabled()
+    expect(page.get_by_role(
+        "heading", name="Re-review comparison", exact=True,
+    )).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Download comparison JSON", exact=True,
+    )).to_have_count(0)
+
+
+def _assert_saved_comparison_downloads(
+    page: Page, *, previous_head: str, previous_review_id: str,
+) -> None:
+    markdown = _download_with_retry(
+        page, button_name="Download comparison Markdown",
+    )
+    assert markdown.suggested_filename.endswith("-comparison.md")
+    text = markdown.path().read_text(encoding="utf-8")
+    assert "Changed-file Scope Comparison" in text
+    assert previous_head in text and CURRENT_HEAD in text
+    assert "src/unrelated.py" in text and "notes.md" in text
+    assert "Constructed saved-comparison reviewer" in text
+    assert "No prior scope decision is carried forward" in text
+    assert "Previously decided paths now unresolved" in text
+
+    download = _download_with_retry(page, button_name="Download comparison JSON")
+    assert download.suggested_filename.endswith("-comparison.json")
+    payload = json.loads(download.path().read_text(encoding="utf-8"))
+    comparison = ReviewComparison.model_validate(payload)
+    assert comparison.previous_head_sha == previous_head
+    assert comparison.current_head_sha == CURRENT_HEAD
+    assert payload["previous_gate"] == payload["current_gate"] == "blocked"
+    assert payload["evidence_change_counts"] == {
+        "unchanged": 0, "relocated": 1, "modified": 0, "added": 0, "removed": 0,
+    }
+    scope = payload["file_scope"]
+    assert scope["previous"]["review_id"] == previous_review_id
+    assert scope["previous"]["criteria_revision_number"] == 1
+    assert scope["previous"]["head_sha"] == previous_head
+    assert scope["previous"]["unresolved_paths"] == []
+    assert len(scope["previous"]["latest_decisions"]) == 1
+    assert scope["previous"]["latest_decisions"][0]["path"] == "notes.md"
+    assert scope["previous"]["latest_decisions"][0]["disposition"] == (
+        "outside_confirmed_criteria"
+    )
+    assert scope["current"]["review_id"] == CURRENT_REVIEW_ID
+    assert scope["current"]["criteria_revision_number"] == 2
+    assert scope["current"]["head_sha"] == CURRENT_HEAD
+    assert scope["current"]["unresolved_paths"] == ["notes.md", "src/unrelated.py"]
+    assert scope["current"]["latest_decisions"] == []
+    assert scope["previously_decided_paths_now_unresolved"] == ["notes.md"]
+    assert scope["inventory_changes"] == [{
+        "path": "src/unrelated.py", "kind": "added_to_inventory", "previous": None,
+        "current": {"path": "src/unrelated.py", "status": "added", "previous_path": None},
+    }]
+
+
+def test_installed_wheel_saved_comparison_survives_restart_without_record_writes(
+    tmp_path: Path, installed_wheel: Path,
+) -> None:
+    """Persisted sources, not prior Streamlit state, supply both explicit comparisons."""
+    runtime_dir = tmp_path / "runtime"
+    home_dir = runtime_dir / "home"
+    home_dir.mkdir(parents=True)
+    review_store_dir = home_dir / ".scopeproof" / "reviews"
+    recipe = runtime_dir / "constructed-saved-comparison.py"
+    shutil.copy2(REPOSITORY_ROOT / "tests" / "saved_comparison_fixture.py", recipe)
+    _run(
+        str(installed_wheel / "bin" / "python"), "-I", "-c",
+        (
+            "from pathlib import Path; import runpy, sys; import apps, scopeproof_core; "
+            "from scopeproof_core.storage.json_store import JsonReviewStore; "
+            "assert all(Path(module.__file__).resolve().is_relative_to("
+            "Path(sys.prefix).resolve()) for module in (apps, scopeproof_core)); "
+            "recipe=runpy.run_path(sys.argv[1]); "
+            "store=JsonReviewStore(Path(sys.argv[2])); "
+            "[store.save(state) for state in recipe['saved_comparison_states']()]"
+        ),
+        str(recipe), str(review_store_dir), cwd=runtime_dir,
+    )
+    saved_bytes = {path.name: path.read_bytes() for path in review_store_dir.glob("*.json")}
+    assert set(saved_bytes) == {f"{CURRENT_REVIEW_ID}.json", f"{PREVIOUS_REVIEW_ID}.json"}
+
+    def assert_records_unchanged() -> None:
+        assert {
+            path.name: path.read_bytes() for path in review_store_dir.glob("*.json")
+        } == saved_bytes
+
+    captures = tmp_path / "captures"
+    captures.mkdir()
+    diagnostics = Path(os.environ.get(
+        "SCOPEPROOF_BROWSER_DIAGNOSTIC_DIR", str(tmp_path / "diagnostics"),
+    )) / "saved-comparison"
+    browser_errors: list[str] = []
+    external_requests: list[str] = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            for generation in range(2):
+                with _installed_workbench_server(
+                    installed_wheel, runtime_dir, home_dir,
+                    log_name=f"saved-comparison-{generation}.log",
+                ) as (base_url, log_path):
+                    context = browser.new_context(viewport=VIEWPORTS[0])
+                    try:
+                        context.route(
+                            "**/*", lambda route: _route_loopback_only(route, external_requests),
+                        )
+                        page = context.new_page()
+                        page.on("console", lambda message: (
+                            browser_errors.append(f"console: {message.text}")
+                            if message.type == "error" else None
+                        ))
+                        page.on("pageerror", lambda error: browser_errors.append(f"page: {error}"))
+                        page.on("websocket", lambda websocket: (
+                            external_requests.append(websocket.url)
+                            if not _is_loopback_request(websocket.url) else None
+                        ))
+                        with _capture_browser_failure(
+                            page, diagnostics / f"generation-{generation}", log_path,
+                        ):
+                            _reopen_saved_comparison_current(page, base_url)
+                            assert_records_unchanged()
+                            if generation == 0:
+                                page.screenshot(path=str(captures / "01-before-restart.png"))
+                                continue
+
+                            baseline = page.get_by_role(
+                                "combobox", name="Comparison baseline", exact=True,
+                            )
+                            compare = page.get_by_role(
+                                "button", name="Compare selected saved analysis", exact=True,
+                            )
+                            for option, previous_head, previous_id in (
+                                (f"Saved review · {PREVIOUS_REVIEW_ID}",
+                                 PREVIOUS_HEAD, PREVIOUS_REVIEW_ID),
+                                (f"History 1 · criteria revision 1 · head {HISTORY_HEAD}",
+                                 HISTORY_HEAD, CURRENT_REVIEW_ID),
+                            ):
+                                _choose_combobox_option(
+                                    page, baseline, option_name=option, settled_control=compare,
+                                )
+                                expect(page.get_by_role(
+                                    "heading", name="Re-review comparison", exact=True,
+                                )).to_have_count(0)
+                                expect(page.get_by_role(
+                                    "button", name="Download comparison JSON", exact=True,
+                                )).to_have_count(0)
+                                compare.click()
+                                expect(page.get_by_role(
+                                    "heading", name="Re-review comparison", exact=True,
+                                )).to_be_visible()
+                                expect(page.get_by_text(
+                                    f"Previous head: {previous_head}", exact=True,
+                                )).to_be_visible()
+                                expect(page.get_by_text(
+                                    f"Current head: {CURRENT_HEAD}", exact=True,
+                                )).to_be_visible()
+                                expect(page.get_by_text(
+                                    "Added to inventory: src/unrelated.py", exact=True,
+                                )).to_be_visible()
+                                expect(page.get_by_text(
+                                    "Previously decided paths now unresolved:", exact=True,
+                                )).to_be_visible()
+                                _assert_saved_comparison_downloads(
+                                    page, previous_head=previous_head,
+                                    previous_review_id=previous_id,
+                                )
+                                assert_records_unchanged()
+                            page.get_by_role(
+                                "heading", name="Re-review comparison", exact=True,
+                            ).scroll_into_view_if_needed()
+                            page.screenshot(path=str(captures / "02-history-comparison.png"))
+                    finally:
+                        context.close()
+                assert_records_unchanged()
+        finally:
+            browser.close()
+    assert_records_unchanged()
+    assert browser_errors == []
+    assert external_requests == []
+    assert (captures / "01-before-restart.png").is_file()
+    assert (captures / "02-history-comparison.png").is_file()
