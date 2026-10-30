@@ -16,7 +16,7 @@ ScopeProof is an evidence assistant. It does not replace QA, engineering review,
 Current direction: maintain a bounded engineering reference product. The published evaluation
 download is **v0.2.4**, with its wheel, source archive, and checksums verified in the
 [public verification record](docs/releases/v0.2.4-public-verification.md). The current source/package
-identity is **0.2.5.dev0**, unreleased. Stage 1 is closed as not pursued with all external
+identity is **0.2.5**, unreleased. Stage 1 is closed as not pursued with all external
 counts at zero; Stage 3 is dormant and gated. Stage 2 work requires a demonstrated defect, required
 upkeep, or a named bounded research question. Once that work and its checks are complete, stop;
 there is no standing feature backlog or request for personal testing or qualifying reviews.
@@ -138,7 +138,7 @@ verified in the [public verification record](docs/releases/v0.2.4-public-verific
 Post-v0.2.3 engineering merged CLI lifecycle commands, strict saved-record validation, installed
 Chromium coverage, Python 3.13 and bounded keyboard/focus evidence, and verified-public provenance
 enforcement. Those changes remain engineering evidence only. Current source/package identity is
-`0.2.5.dev0`, unreleased; Stage 1 remains closed as not pursued with every count at zero.
+`0.2.5`, unreleased; Stage 1 remains closed as not pursued with every count at zero.
 
 </details>
 
@@ -156,7 +156,9 @@ for the tested Python versions, platform limits, and contributor setup.
 `scopeproof-0.2.4-py3-none-any.whl`, `scopeproof-0.2.4.tar.gz`, and `SHA256SUMS.txt`.
 The [public verification record](docs/releases/v0.2.4-public-verification.md) binds the published
 assets to source `11bcdc66f7d8f5a29055688208de1ed337eed07f`. A source version, changelog entry,
-or passing CI run alone is not publication evidence. Current source `0.2.5.dev0` is unreleased.
+or passing CI run alone is not publication evidence. Current source `0.2.5` is unreleased.
+The [v0.2.5 candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) describes private
+preparation and its separate publication gate. It does not provide another public download.
 
 The commands below install the **published v0.2.4 wheel** and require no clone. Verify its checksum
 before installation. See the [release preparation and upgrade notes](docs/releases/v0.2.4-evaluation-candidate.md)
@@ -203,7 +205,7 @@ Streamlit 1.53.0 required Pillow below 13 and could not use the documented patch
 Pydantic 2.8.0 passed the smaller package journeys but failed existing R-002 strict JSON validation
 tests; the guidance uses the locked Pydantic baseline instead of promising full floor compatibility.
 The published wheel and its checksum remain unchanged; the constraints select its dependencies.
-Unreleased `0.2.5.dev0` source now declares these maintained floors directly, including Pillow;
+Unreleased `0.2.5` source now declares these maintained floors directly, including Pillow;
 see the [source declaration alignment](docs/audits/2026-10-29-dependency-baseline-alignment.md).
 
 ### Upgrade existing reviews
@@ -219,7 +221,7 @@ not promised; see the [release preparation and upgrade notes](docs/releases/v0.2
 ### Public PR CLI workflow
 
 The commands below describe the published v0.2.4 CLI. They also apply to the current unreleased
-`0.2.5.dev0` source checkout after the [locked source setup](docs/development-environment.md);
+`0.2.5` source checkout after the [locked source setup](docs/development-environment.md);
 they do not apply to the historical v0.2.3 wheel. The examples use the installed `scopeproof`
 command. In a source checkout, prefix it with `uv run`. The CLI provides read-only public-PR ingestion and a deterministic core without
 starting Streamlit.
@@ -353,7 +355,7 @@ The adapter accepts at most 1 MiB, 100 suites, 5,000 cases, and 20,000 XML eleme
 can retain at most 20 imports, and each retained warning or asserted limitation is capped at 1,000
 characters. The byte cap is exactly 1,048,576 bytes. In published v0.2.4, the browser upload control
 can reject a valid file at that exact cap on non-Windows browsers; use `inspect-junit` and
-`import-junit` above for the full byte range. The unreleased `0.2.5.dev0` source fixes the upload
+`import-junit` above for the full byte range. The unreleased `0.2.5` source fixes the upload
 allowance while preserving the exact parser cap; see the [version-bound reproduction](docs/audits/2026-10-29-runtime-dependency-floor.md).
 The adapter accepts UTF-8 only and rejects DTDs, entities, non-declaration processing
 instructions, XInclude, remote references, unsupported nesting, and ambiguous result markers. It
