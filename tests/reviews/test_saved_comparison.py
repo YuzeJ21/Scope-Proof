@@ -91,7 +91,7 @@ def test_unavailable_baseline_rejects_without_changing_current(tmp_path: Path, d
     selection = api().prepare_saved_comparison(store, current, previous.review.review_id)
     path = store.directory / f"{previous.review.review_id}.json"
     if damage == "delete":
-        store.delete(previous.review.review_id)
+        path.unlink()  # Simulate external removal; app deletion is platform-dependent.
     elif damage == "corrupt":
         path.write_text("broken", encoding="utf-8")
     else:

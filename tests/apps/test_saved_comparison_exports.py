@@ -49,7 +49,7 @@ def test_deferred_saved_comparison_rejects_stale_record_or_selection(
     if change == "selection":
         lease.selection = None
     elif change == "delete":
-        store.delete(previous.review.review_id)
+        (store.directory / f"{previous.review.review_id}.json").unlink()
     else:
         target = current if change == "current" else previous
         store.mutate(
