@@ -482,6 +482,10 @@ deferred callbacks. Clearing a draft or reopening the same context does not clea
 guard. Explicit matching-source recovery or a new analysis is required. **Check current head**
 remains the separate source-replacement/re-review path. The session guard does not rewrite
 historical records, refresh their CI automatically or revoke previously downloaded reports.
+Explicit non-public repository metadata also blocks authority when loading stops before a
+snapshot is returned; transport/access errors alone do not invent a visibility observation.
+Editing and reconfirming criteria expires the old receipt while keeping loaded source available
+for the newly confirmed analysis. Previous decisions remain historical and are not carried forward.
 
 Unreleased saved comparisons now include a separate **Reviewer-selected reference comparison**.
 Inspect previous/current locations, heads, attribution and rationale without loading source again.

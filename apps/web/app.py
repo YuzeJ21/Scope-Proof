@@ -1911,6 +1911,7 @@ else:
                 )
             if state is not None:
                 st.session_state["review_state"] = state
+            clear_source_attachment()
             st.session_state["criteria"] = edited_criteria
             st.session_state["criteria_confirmed"] = True
             st.session_state["criteria_source_provenance"] = provenance

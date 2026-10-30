@@ -9,7 +9,11 @@ import streamlit as st
 
 from apps.web.saved_comparison import clear_saved_comparison_selection
 from scopeproof_core.demo import load_demo_snapshot
-from scopeproof_core.github.client import GitHubClient, GitHubIngestionError
+from scopeproof_core.github.client import (
+    GitHubClient,
+    GitHubIngestionError,
+    PrivateOrInaccessibleRepository,
+)
 from scopeproof_core.reviews.source_attachment import (
     SourceAttachmentUnavailable,
     prepare_saved_source_attachment,
@@ -183,6 +187,13 @@ def render_source_attachment(
         )
         # A fetch may race a saved-record update. Reconcile at the top of a fresh
         # render, before comparison and criteria widgets have been instantiated.
+        st.rerun()
+    except PrivateOrInaccessibleRepository as unavailable:
+        if unavailable.observed_non_public:
+            _block_source_context(state)
+        st.session_state["reviewed_source_error"] = (
+            "Matching source could not be loaded. The saved analysis was not changed."
+        )
         st.rerun()
     except (GitHubIngestionError, OSError, ValueError):
         st.session_state["reviewed_source_error"] = (

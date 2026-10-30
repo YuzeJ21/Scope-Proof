@@ -50,6 +50,14 @@ appends, source tampering, conflict persistence and old export callbacks. Additi
 authored concurrency coverage exposed a widget-reset failure after stale attachment rejection;
 the failed path now reconciles at the top of a fresh render before comparison widgets exist.
 
+Pre-merge automated GitHub review identified two additional supported cases. Explicit non-public
+repository metadata can stop ingestion before a snapshot exists; the client now retains that
+observation on its typed error and the continuation UI blocks current authority. Generic access
+failures retain their ambiguous meaning. Reconfirming edited criteria now expires only the old
+receipt, retaining loaded source so the new analysis can run; old reference/decision history is
+preserved without silently carrying acceptance forward. Independent RED regressions reproduce
+both cases, and exception argument compatibility remains intact.
+
 The constructed installed-wheel journey reopens, loads matching source explicitly, saves a second
 reference and validates unchanged first-reference/analysis/decision facts plus JSON/Markdown/CSV
 and persisted-store results. Simulated live actors and demo actors are labeled constructed;

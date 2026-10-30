@@ -68,6 +68,11 @@ source attachment can restore authority for its own context. Network/unavailable
 without an observed contradiction do not invent fresh CI facts. Storage conflicts retain their
 existing separate meaning. Check current head remains the explicit replacement/re-review path.
 
+Explicit non-public metadata surfaced by ingestion errors is also a contradictory observation;
+the client distinguishes it from ambiguous HTTP access failures. Successful criteria reconfirmation
+expires the old attachment before the next render, preserving loaded source for the new analysis
+without carrying decisions or acceptance into the new revision.
+
 ## Evidence and boundaries
 
 Observe RED for healthy resume and failure cases before implementation. Cover state/byte equality,
