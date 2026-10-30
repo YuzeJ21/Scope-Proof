@@ -23,9 +23,9 @@ from tests.saved_comparison_fixture import (
 )
 
 
-def reopened_comparison_app():
+def reopened_comparison_app(*, selected_references=False):
     store = JsonReviewStore(default_local_review_directory())
-    current, previous = saved_comparison_states()
+    current, previous = saved_comparison_states(selected_references=selected_references)
     store.save(current)
     store.save(previous)
     app = new_app()
@@ -62,6 +62,53 @@ def rendered(app):
         )
         for item in group
     )
+
+
+def test_saved_comparison_shows_separate_attributed_reference_context_without_mutation():
+    app, store = reopened_comparison_app(selected_references=True)
+    before = {path.name: path.read_bytes() for path in store.directory.glob("*.json")}
+    app = apply_other_baseline(app)
+    assert not app.exception
+    text = rendered(app)
+    assert "Reviewer-selected reference comparison" in text
+    assert "Only previous: 1" in text and "Only current: 1" in text
+    assert "Constructed previous reference reviewer" in text
+    assert "Constructed current reference reviewer" in text
+    assert "Constructed previous source context; not execution evidence." in text
+    assert "Constructed current source context; not execution evidence." in text
+    assert "non-gating static context" in text
+    assert {path.name: path.read_bytes() for path in store.directory.glob("*.json")} == before
+
+
+@pytest.mark.parametrize("side", ["previous", "current"])
+def test_selected_reference_only_mutation_expires_saved_download(side):
+    app, store = reopened_comparison_app(selected_references=True)
+    app = apply_other_baseline(app)
+    selection = app.session_state["saved_comparison_selection"]
+    lease = app.session_state["saved_comparison_export_lease"]
+    download = deferred_saved_comparison_export(
+        selection, export_comparison_json, store=store, lease=lease,
+    )
+    target = PREVIOUS_REVIEW_ID if side == "previous" else CURRENT_REVIEW_ID
+
+    def change_reference_only(state):
+        from scopeproof_core.schemas.models import ReviewState
+
+        reference = state.bundle.reviewer_selected_references[0]
+        state.bundle.reviewer_selected_references[0] = reference.model_copy(update={
+            "rationale": "Constructed external change to selected context only.",
+        })
+        return ReviewState.model_validate(state.model_dump(mode="python"))
+
+    store.mutate(target, change_reference_only)
+    before = {path.name: path.read_bytes() for path in store.directory.glob("*.json")}
+    with pytest.raises(DeferredExportUnavailable):
+        download()
+    app = app.run()
+    assert not app.exception
+    assert comparison_downloads(app) == []
+    assert app.session_state["saved_comparison_selection"] is None
+    assert {path.name: path.read_bytes() for path in store.directory.glob("*.json")} == before
 
 
 def test_reopened_record_requires_explicit_baseline_then_renders_both_saved_identities() -> None:

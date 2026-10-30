@@ -460,8 +460,16 @@ definitions show intent, not execution. Saved references retain their criterion,
 location, attribution and rationale in JSON/Markdown/CSV/HTML. A saved excerpt digest establishes
 internal consistency, not independent authenticity. After reopening, references remain inspectable
 and exportable; adding new references requires matching loaded source. Pending inputs must be
-saved or cleared. Final acceptance must be revoked before adding references. Comparisons exclude
-these references and disclose that limit.
+saved or cleared. Final acceptance must be revoked before adding references.
+
+Unreleased saved comparisons now include a separate **Reviewer-selected reference comparison**.
+Inspect previous/current locations, heads, attribution and rationale without loading source again.
+Its counts distinguish complete identical records, records only in the previous analysis and
+records only in the current analysis. Different heads or attribution never imply equivalence,
+relocation, acceptance or decision carry-forward. Automatic candidate counts and gates stay
+unchanged. Comparison JSON/Markdown retain the context; older comparison projections that omitted
+it remain explicitly unavailable. A saved-reference change expires an existing comparison/download
+selection, so select the saved baseline again.
 
 New saves use record version 6; versions 1–5 remain readable without invented selections.
 Older application readers may reject version-6 records. Keep original saved records before

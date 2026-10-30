@@ -6,12 +6,12 @@ import json
 import re
 from enum import StrEnum
 from hashlib import sha256
-from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from scopeproof_core.gates.validation import validated_review_bundle
 from scopeproof_core.reviews.scope_comparison import FileScopeComparison, FileScopeSnapshot
+from scopeproof_core.reviews.selected_reference_comparison import SelectedReferenceComparison
 from scopeproof_core.schemas.models import (
     EvidenceItem,
     EvidenceLevel,
@@ -263,6 +263,7 @@ class ReviewComparison(BaseModel):
     changed_human_resolutions: list[ResolutionChange]
     junit_import_changes: list[JUnitImportChange] = Field(default_factory=list)
     file_scope: FileScopeComparison | None = None
+    selected_reference_comparison: SelectedReferenceComparison | None = None
     previous_gate: GateVerdict
     current_gate: GateVerdict
     ruleset_version_changed: bool
@@ -270,12 +271,48 @@ class ReviewComparison(BaseModel):
 
     @computed_field
     @property
-    def reviewer_selected_references_compared(self) -> Literal[False]:
-        """Non-gating selected references are outside this comparison projection."""
-        return False
+    def reviewer_selected_references_compared(self) -> bool:
+        """Missing historical projections remain unavailable rather than empty."""
+        return self.selected_reference_comparison is not None
 
     @model_validator(mode="after")
     def _scope_heads_match_comparison(self) -> ReviewComparison:
+        if self.selected_reference_comparison is not None:
+            if self.file_scope is None:
+                raise ValueError("selected comparison context requires owning scope snapshots")
+            for side in ("previous", "current"):
+                owner = getattr(self.file_scope, side)
+                provenance = getattr(
+                    self.selected_reference_comparison, f"{side}_criteria_source_provenance"
+                )
+                if provenance.normalized_criteria_sha256 != owner.normalized_criteria_sha256:
+                    raise ValueError("selected comparison provenance must match owning criteria")
+                for reference in getattr(self.selected_reference_comparison, side):
+                    if (
+                        reference.review_id != owner.review_id
+                        or reference.head_sha != owner.head_sha
+                        or reference.criteria_revision_number != owner.criteria_revision_number
+                        or reference.confirmed_criteria_sha256 != owner.normalized_criteria_sha256
+                        or reference.criterion_id not in owner.criterion_ids
+                    ):
+                        raise ValueError("selected comparison reference must match owning scope")
+                    if owner.inventory is None or reference.file_path in owner.skipped_files:
+                        raise ValueError("selected comparison requires an inspected source")
+                    source = next((
+                        item for item in owner.inventory.files
+                        if item.path == reference.file_path
+                    ), None)
+                    if reference.source_scope is EvidenceSourceScope.CHANGED_FILE:
+                        if source is None or source.status.casefold() not in {
+                            "added", "modified", "renamed", "copied", "changed"
+                        }:
+                            raise ValueError(
+                                "selected comparison requires an inspected current path"
+                            )
+                    elif source is not None or any(
+                        item.previous_path == reference.file_path for item in owner.inventory.files
+                    ):
+                        raise ValueError("selected unchanged context cannot cite changed paths")
         if self.file_scope is not None and (
             self.file_scope.previous.head_sha != self.previous_head_sha
             or self.file_scope.current.head_sha != self.current_head_sha
@@ -722,6 +759,7 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
     return ReviewComparison(
         previous_head_sha=previous.review.head_sha,
         current_head_sha=current.review.head_sha,
+        selected_reference_comparison=SelectedReferenceComparison.from_bundles(previous, current),
         file_scope=FileScopeComparison(
             previous=FileScopeSnapshot.from_bundle(previous),
             current=FileScopeSnapshot.from_bundle(current),

@@ -11,6 +11,12 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.5`, unreleased.
 
+- Include separately attributed selected-reference context in saved re-review comparisons,
+  workbench and comparison JSON/Markdown. Distinguish identical complete records from records
+  present only on one side, without inferring cross-head equivalence or changing automatic
+  evidence, scope, gates or decisions. Retain historical missing-context visibility and saved-record
+  fingerprint invalidation; no record migration or public release follows.
+
 - Correct automatic candidate line numbers and context for embedded non-LF separators in changed
   patches and unchanged source. Preserve Git LF/CRLF and no-final-newline semantics, prevent
   embedded diff markers from becoming fake current-head evidence, and retain saved historical

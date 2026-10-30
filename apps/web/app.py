@@ -17,6 +17,7 @@ from apps.web.saved_comparison import (
     render_saved_comparison_selector,
 )
 from apps.web.scope_comparison import render_file_scope_comparison
+from apps.web.selected_reference_comparison import render_selected_reference_comparison
 from apps.web.selected_references import (
     clear_selected_reference_draft,
     render_selected_reference_records,
@@ -2040,7 +2041,7 @@ else:
             )
     if comparison is not None:
         st.markdown("### Re-review comparison")
-        st.caption("Reviewer-selected references are excluded from this comparison.")
+        st.caption("Automatic candidates and recorded selected-reference context stay separate.")
         st.caption(f"Previous head: {comparison.previous_head_sha}")
         st.caption(f"Current head: {comparison.current_head_sha}")
         st.markdown(
@@ -2060,6 +2061,7 @@ else:
             "evidence before recording a new decision."
         )
         render_file_scope_comparison(comparison.file_scope)
+        render_selected_reference_comparison(comparison.selected_reference_comparison)
         comparison_markdown_column, comparison_json_column = st.columns(2)
         with comparison_markdown_column:
             st.download_button(
