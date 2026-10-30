@@ -336,22 +336,34 @@ def _choose_multiselect_option(
     option_name: str,
 ) -> None:
     selected_values = combobox.locator("xpath=../..")
+    selected_chip = selected_values.get_by_text(option_name, exact=True)
     for attempt in range(3):
-        if option_name in selected_values.inner_text():
+        if selected_chip.count():
             return
         try:
-            combobox.click()
+            if combobox.get_attribute("aria-expanded") != "true":
+                combobox.press("ArrowDown")
             combobox.fill(query)
+            if combobox.get_attribute("aria-expanded") != "true":
+                combobox.press("ArrowDown")
+                combobox.fill(query)
             option = page.get_by_role("option", name=option_name, exact=True)
-            expect(option).to_be_visible(timeout=5_000)
-            _run_and_wait_for_streamlit_rerun(
-                page, lambda selected_option=option: selected_option.click(timeout=5_000)
-            )
-            expect(selected_values).to_contain_text(option_name, timeout=5_000)
-            return
+            option.wait_for(state="visible", timeout=5_000)
         except PlaywrightTimeoutError:
-            if attempt == 2:
+            if attempt == 2 or (
+                combobox.get_attribute("aria-expanded") == "true"
+                and combobox.input_value() == query
+            ):
                 raise
+            continue
+        if option.get_attribute("aria-selected") == "true":
+            expect(selected_chip).to_be_visible(timeout=5_000)
+            return
+        _run_and_wait_for_streamlit_rerun(
+            page, lambda selected_option=option: selected_option.click(timeout=5_000)
+        )
+        expect(selected_chip).to_be_visible(timeout=5_000)
+        return
 
 
 def _download_with_retry(page: Page, *, button_name: str) -> Download:
@@ -543,7 +555,12 @@ def selectbox_page(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[P
         "['outside_confirmed_criteria', 'within_confirmed_criteria'], index=None, "
         "format_func=lambda value: value.replace('_', ' ').title(), key='scope')\n"
         "st.text(f'SERVER_SELECTION={selected}')\n"
-        "st.text(f'SERVER_RUN={st.session_state[\"runs\"]}')\n",
+        "st.text(f'SERVER_RUN={st.session_state[\"runs\"]}')\n"
+        "st.text_input('Constructed focus target', key='focus_target')\n"
+        "mapping = st.multiselect('Map JUnit scopes to the selected criterion', "
+        "['suite-0001 · suite · unit', 'suite-0001 · suite · unit extra'], "
+        "key='mapping')\n"
+        "st.text(f'SERVER_MAPPING={mapping}')\n",
         encoding="utf-8",
     )
     port = _available_port()
@@ -657,6 +674,105 @@ def test_choose_combobox_option_rejects_an_unavailable_matching_query(
         _choose_combobox_option(page, combobox, option_name="Unavailable decision")
 
     expect(page.get_by_text("SERVER_SELECTION=None", exact=True)).to_be_visible()
+
+
+def test_choose_multiselect_option_recovers_from_constructed_popup_loss(
+    selectbox_page: Page, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = selectbox_page
+    page.set_default_timeout(2_000)
+    combobox = page.get_by_role(
+        "combobox", name="Map JUnit scopes to the selected criterion", exact=True,
+    )
+    original_fill = combobox.fill
+    lost_popup = False
+
+    def fill_and_lose_popup_once(value: str) -> None:
+        nonlocal lost_popup
+        original_fill(value)
+        if not lost_popup:
+            combobox.press("Escape")
+            if combobox.get_attribute("aria-expanded") == "true":
+                combobox.press("Escape")
+            page.get_by_role("textbox", name="Constructed focus target", exact=True).click()
+            expect(combobox).to_have_attribute("aria-expanded", "false")
+            expect(page.get_by_text("SERVER_MAPPING=[]", exact=True)).to_be_visible()
+            expect(page.get_by_text("SERVER_RUN=2", exact=True)).to_be_visible()
+            lost_popup = True
+
+    monkeypatch.setattr(combobox, "fill", fill_and_lose_popup_once)
+    option_name = "suite-0001 · suite · unit"
+
+    _choose_multiselect_option(page, combobox, query="suite-0001", option_name=option_name)
+    _choose_multiselect_option(page, combobox, query="suite-0001", option_name=option_name)
+
+    assert lost_popup
+    expect(page.get_by_text(f"SERVER_MAPPING={[option_name]}", exact=True)).to_be_visible()
+    expect(page.get_by_text("SERVER_RUN=3", exact=True)).to_be_visible()
+
+
+def test_choose_multiselect_option_preserves_an_open_popup_and_commits_once(
+    selectbox_page: Page,
+) -> None:
+    page = selectbox_page
+    page.set_default_timeout(2_000)
+    combobox = page.get_by_role(
+        "combobox", name="Map JUnit scopes to the selected criterion", exact=True,
+    )
+    option_name = "suite-0001 · suite · unit"
+    combobox.press("ArrowDown")
+    combobox.fill("suite-0001")
+    expect(combobox).to_have_attribute("aria-expanded", "true")
+
+    _choose_multiselect_option(page, combobox, query="suite-0001", option_name=option_name)
+    _choose_multiselect_option(page, combobox, query="suite-0001", option_name=option_name)
+
+    expect(page.get_by_text(f"SERVER_MAPPING={[option_name]}", exact=True)).to_be_visible()
+    expect(page.get_by_text("SERVER_RUN=2", exact=True)).to_be_visible()
+
+
+def test_choose_multiselect_option_distinguishes_selected_prefix_and_preserves_exact_choice(
+    selectbox_page: Page,
+) -> None:
+    page = selectbox_page
+    page.set_default_timeout(2_000)
+    combobox = page.get_by_role(
+        "combobox", name="Map JUnit scopes to the selected criterion", exact=True,
+    )
+    option_name = "suite-0001 · suite · unit"
+    distractor = f"{option_name} extra"
+    combobox.press("ArrowDown")
+    combobox.fill("unit extra")
+    _run_and_wait_for_streamlit_rerun(
+        page, page.get_by_role("option", name=distractor, exact=True).click,
+    )
+    expect(page.get_by_text(f"SERVER_MAPPING={[distractor]}", exact=True)).to_be_visible()
+
+    _choose_multiselect_option(page, combobox, query="suite-0001", option_name=option_name)
+    _choose_multiselect_option(page, combobox, query="suite-0001", option_name=option_name)
+
+    expect(page.get_by_text(
+        f"SERVER_MAPPING={[distractor, option_name]}", exact=True,
+    )).to_be_visible()
+    expect(page.get_by_text("SERVER_RUN=3", exact=True)).to_be_visible()
+
+
+def test_choose_multiselect_option_rejects_an_unavailable_option_without_selection(
+    selectbox_page: Page,
+) -> None:
+    page = selectbox_page
+    page.set_default_timeout(2_000)
+    combobox = page.get_by_role(
+        "combobox", name="Map JUnit scopes to the selected criterion", exact=True,
+    )
+
+    with pytest.raises((AssertionError, PlaywrightTimeoutError)):
+        _choose_multiselect_option(
+            page, combobox, query="unavailable", option_name="unavailable",
+        )
+
+    expect(page.get_by_text("SERVER_MAPPING=[]", exact=True)).to_be_visible()
+    expect(page.get_by_text("SERVER_RUN=1", exact=True)).to_be_visible()
 
 
 def test_download_with_retry_reissues_click_after_missed_event(
@@ -1518,10 +1634,16 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             expect(save).to_be_enabled()
                             source.scroll_into_view_if_needed()
                             page.screenshot(path=str(captures / "01-explicit-source-selection.png"))
-                            save.click()
+                            _run_and_wait_for_streamlit_rerun(page, save.click)
                             expect(page.get_by_text(
-                                "Reviewer-selected references", exact=True,
+                                "Selected reference · tests/test_export.py:18", exact=True,
                             )).to_be_visible()
+                            page.wait_for_function(STREAMLIT_RERUN_FINISHED_SCRIPT, timeout=10_000)
+                            authoritative_json = page.get_by_role(
+                                "button", name="Download JSON", exact=True,
+                            )
+                            expect(authoritative_json).to_have_count(1)
+                            expect(authoritative_json).to_be_enabled()
                             selected_state = _download_review_state(page)
                             reference = _assert_selected_reference_is_nongating(
                                 before, selected_state,
