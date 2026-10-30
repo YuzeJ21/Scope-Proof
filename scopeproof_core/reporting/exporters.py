@@ -29,6 +29,10 @@ from scopeproof_core.reviews.comparison import (
     EvidenceReference,
     ReviewComparison,
 )
+from scopeproof_core.reviews.selected_reference_comparison import (
+    SELECTED_REFERENCE_COMPARISON_BOUNDARY,
+    SelectedReferenceComparison,
+)
 from scopeproof_core.reviews.selected_references import REVIEWER_SELECTED_REFERENCE_BOUNDARY
 from scopeproof_core.schemas.models import (
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
@@ -39,6 +43,7 @@ from scopeproof_core.schemas.models import (
     JUnitCaseResult,
     JUnitEvidenceImport,
     ReviewBundle,
+    ReviewerSelectedReference,
     ReviewState,
 )
 
@@ -347,11 +352,9 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
     return lines
 
 
-def _selected_reference_markdown(bundle: ReviewBundle) -> list[str]:
-    if not bundle.reviewer_selected_references:
-        return []
-    lines = ["## Reviewer-selected references", "", REVIEWER_SELECTED_REFERENCE_BOUNDARY, ""]
-    for item in bundle.reviewer_selected_references:
+def _selected_reference_record_markdown(items: list[ReviewerSelectedReference]) -> list[str]:
+    lines: list[str] = []
+    for item in items:
         fields = {
             "Reference ID": item.reference_id,
             "Review ID": item.review_id,
@@ -359,6 +362,7 @@ def _selected_reference_markdown(bundle: ReviewBundle) -> list[str]:
             "Criterion / revision": f"{item.criterion_id} / {item.criteria_revision_number}",
             "Confirmed criteria digest": item.confirmed_criteria_sha256,
             "Criteria source": item.criteria_source_provenance.source_uri,
+            "Criteria source provenance": item.criteria_source_provenance.model_dump_json(),
             "Head": item.head_sha,
             "Location": f"{item.file_path}:{item.line_number}",
             "Source scope": item.source_scope.value,
@@ -375,6 +379,42 @@ def _selected_reference_markdown(bundle: ReviewBundle) -> list[str]:
             f"- **Source:** {render_artifact_reference_markdown(item.permalink)}",
             f"- **Exact source line:** {_render_markdown_code(item.excerpt)}", "",
         ])
+    return lines
+
+
+def _selected_reference_markdown(bundle: ReviewBundle) -> list[str]:
+    if not bundle.reviewer_selected_references:
+        return []
+    return [
+        "## Reviewer-selected references", "", REVIEWER_SELECTED_REFERENCE_BOUNDARY, "",
+        *_selected_reference_record_markdown(bundle.reviewer_selected_references),
+    ]
+
+
+def _selected_reference_comparison_markdown(
+    context: SelectedReferenceComparison | None,
+) -> list[str]:
+    lines = ["## Reviewer-selected Reference Comparison", "",
+             SELECTED_REFERENCE_COMPARISON_BOUNDARY, ""]
+    if context is None:
+        return [*lines, "Selected-reference context was not included in this older comparison.", ""]
+    counts = context.change_counts
+    lines.extend([
+        f"- Identical record: {counts.identical_record}",
+        f"- Only previous: {counts.only_previous}",
+        f"- Only current: {counts.only_current}", "",
+    ])
+    if not context.previous and not context.current:
+        lines.extend(["No selected references recorded in either analysis.", ""])
+    for change in context.record_changes:
+        lines.extend([f"### {change.kind.replace('_', ' ').title()}", ""])
+        for label, reference in (
+            ("Previous selected reference", change.previous),
+            ("Current selected reference", change.current),
+        ):
+            if reference is not None:
+                lines.extend([f"**{label}**", "",
+                              *_selected_reference_record_markdown([reference])])
     return lines
 
 
@@ -539,7 +579,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
         (
             "> ScopeProof compares auditable candidate references. Candidate comparison does not "
             "prove criterion satisfaction. "
-            "Reviewer-selected references are excluded from this comparison."
+            "Recorded reviewer-selected context is compared separately when available."
         ),
         "",
         "## Evidence Change Counts",
@@ -552,6 +592,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
         "",
     ]
     lines.extend(_comparison_file_scope_markdown(comparison))
+    lines.extend(_selected_reference_comparison_markdown(comparison.selected_reference_comparison))
     lines.extend(["## Evidence Changes", ""])
     for change in comparison.evidence_changes:
         kind = change.kind.value.replace("_", " ").title()
@@ -654,8 +695,9 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
             "## Comparison Boundary",
             "",
             (
-                "This report describes deterministic candidate-reference changes only. It does "
-                "not carry forward a prior human decision or replace review of the current head."
+                "This report describes deterministic automatic candidate changes and separate "
+                "recorded selected-reference context when available. It does not carry forward "
+                "a prior human decision or replace review of the current head."
             ),
             "",
         ]

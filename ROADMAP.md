@@ -425,6 +425,17 @@ explicit missing evidence, fail-closed scope gates, reviewer decisions, local pe
 exports. Independent usefulness, operator/recipient fit, repeat use and demand remain unknown.
 None of these milestones supplies genuine independent-use evidence or advances Stage 3.
 
+After PR #226, the owner authorized one bounded follow-on: **recorded selected-reference context
+in saved re-review comparisons**. M3 deliberately excluded that context from comparisons; the new
+source adds a separate attributed previous/current view and exact full-record presence distinctions
+to the workbench and comparison JSON/Markdown. It never infers cross-head equivalence, carries a
+decision forward, or changes automatic counts, findings, scope or gates. Missing historical
+comparison projections stay unavailable rather than becoming invented empty snapshots. See the
+[bounded follow-on design](docs/superpowers/specs/2026-10-30-selected-reference-comparison-design.md).
+This completes this selected outcome, not an open-ended fourth-milestone queue. Other-record
+history browsing and expanded source-line selection remain unselected options; broader adapters,
+accounts, hosted processing and external validation retain their separate gates.
+
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic
 references while preserving historical evidence and frozen research; it is bounded defect upkeep,

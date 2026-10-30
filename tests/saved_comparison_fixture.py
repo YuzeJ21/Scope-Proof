@@ -4,6 +4,10 @@ from datetime import UTC, datetime
 
 from scopeproof_core.demo import build_review
 from scopeproof_core.reviews.lifecycle import append_file_scope_decision, new_review_state
+from scopeproof_core.reviews.selected_references import (
+    append_reviewer_selected_reference,
+    selectable_reference_lines,
+)
 from scopeproof_core.schemas.models import (
     ChangedFile,
     ChangedLine,
@@ -26,7 +30,10 @@ PREVIOUS_HEAD = "a" * 40
 HISTORY_HEAD = "c" * 40
 
 
-def _constructed_state(review_id: str, head: str, *, added_path: bool) -> ReviewState:
+def _constructed_state(
+    review_id: str, head: str, *, added_path: bool,
+    revision_number: int = 1, selected_context: str | None = None,
+) -> ReviewState:
     files = [
         ChangedFile(
             path="src/export.py", status="modified",
@@ -78,7 +85,28 @@ def _constructed_state(review_id: str, head: str, *, added_path: bool) -> Review
         "resolutions": [],
     })
     bundle.review.review_id = review_id
-    return new_review_state(bundle)
+    state = new_review_state(bundle)
+    state.criteria_revision.number = revision_number
+    state.bundle.criteria_revision_number = revision_number
+    if selected_context is not None:
+        from scopeproof_core.storage.json_store import JsonReviewStore
+
+        selected = next(
+            item for item in selectable_reference_lines(state, snapshot)
+            if item.file_path == "notes.md"
+        )
+        state = append_reviewer_selected_reference(
+            state, snapshot=snapshot, selected=selected, criterion_id="AC-01",
+            reviewer=f"Constructed {selected_context} reference reviewer",
+            rationale=f"Constructed {selected_context} source context; not execution evidence.",
+            expected_state_fingerprint=JsonReviewStore.state_fingerprint(state),
+        )
+        reference = state.bundle.reviewer_selected_references[0]
+        state.bundle.reviewer_selected_references[0] = reference.model_copy(update={
+            "reference_id": f"constructed-{selected_context}-reference",
+            "selected_at": datetime(2026, 10, 30, 12, tzinfo=UTC),
+        })
+    return ReviewState.model_validate(state.model_dump(mode="python"))
 
 
 def _with_prior_scope_decision(state: ReviewState) -> ReviewState:
@@ -96,14 +124,25 @@ def _with_prior_scope_decision(state: ReviewState) -> ReviewState:
     ))
 
 
-def saved_comparison_states() -> tuple[ReviewState, ReviewState]:
+def saved_comparison_states(
+    *, selected_references: bool = False,
+) -> tuple[ReviewState, ReviewState]:
     """Return compatible constructed active/history and separate-record analyses."""
-    current = _constructed_state(CURRENT_REVIEW_ID, CURRENT_HEAD, added_path=True)
+    current = _constructed_state(
+        CURRENT_REVIEW_ID, CURRENT_HEAD, added_path=True, revision_number=2,
+        selected_context="current" if selected_references else None,
+    )
     historical = _with_prior_scope_decision(
-        _constructed_state(CURRENT_REVIEW_ID, HISTORY_HEAD, added_path=False)
+        _constructed_state(
+            CURRENT_REVIEW_ID, HISTORY_HEAD, added_path=False,
+            selected_context="historical" if selected_references else None,
+        )
     )
     previous = _with_prior_scope_decision(
-        _constructed_state(PREVIOUS_REVIEW_ID, PREVIOUS_HEAD, added_path=False)
+        _constructed_state(
+            PREVIOUS_REVIEW_ID, PREVIOUS_HEAD, added_path=False,
+            selected_context="previous" if selected_references else None,
+        )
     )
     assert current.bundle is not None and historical.bundle is not None
     current.criteria_revision.number = 2

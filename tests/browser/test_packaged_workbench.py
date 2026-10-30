@@ -1798,6 +1798,10 @@ def _assert_saved_comparison_downloads(
     assert "Constructed saved\\-comparison reviewer" in text
     assert "No prior scope decision is carried forward" in text
     assert "Previously decided paths now unresolved" in text
+    assert "Reviewer-selected Reference Comparison" in text
+    assert "Only previous: 1" in text and "Only current: 1" in text
+    assert "non-gating static context" in text
+    assert "cross-head equivalence" in text and "intent, not execution" in text
 
     download = _download_with_retry(page, button_name="Download comparison JSON")
     assert download.suggested_filename.endswith("-comparison.json")
@@ -1805,6 +1809,25 @@ def _assert_saved_comparison_downloads(
     comparison = ReviewComparison.model_validate(payload)
     assert comparison.previous_head_sha == previous_head
     assert comparison.current_head_sha == CURRENT_HEAD
+    context = payload["selected_reference_comparison"]
+    assert payload["reviewer_selected_references_compared"] is True
+    assert context["change_counts"] == {
+        "identical_record": 0, "only_previous": 1, "only_current": 1,
+    }
+    for side, head in (("previous", previous_head), ("current", CURRENT_HEAD)):
+        assert len(context[side]) == 1
+        reference = context[side][0]
+        assert reference["head_sha"] == head
+        assert reference["criterion_id"] == "AC-01"
+        assert reference["file_path"] == "notes.md" and reference["line_number"] == 1
+        assert reference["evidence_level"] == "E1"
+        assert reference["excerpt"] == "Constructed unrelated project note."
+        assert reference["reviewer"].startswith("Constructed ")
+        assert reference["rationale"].endswith("not execution evidence.")
+        assert reference["reviewer"] in text and reference["rationale"] in text
+        assert reference["permalink"] == (
+            f"https://github.com/acme/widget/blob/{head}/notes.md#L1-L1"
+        )
     assert payload["previous_gate"] == payload["current_gate"] == "blocked"
     assert payload["evidence_change_counts"] == {
         "unchanged": 0, "relocated": 1, "modified": 0, "added": 0, "removed": 0,
@@ -1850,7 +1873,8 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
             "Path(sys.prefix).resolve()) for module in (apps, scopeproof_core)); "
             "recipe=runpy.run_path(sys.argv[1]); "
             "store=JsonReviewStore(Path(sys.argv[2])); "
-            "[store.save(state) for state in recipe['saved_comparison_states']()]"
+            "[store.save(state) for state in recipe['saved_comparison_states']("
+            "selected_references=True)]"
         ),
         str(recipe), str(review_store_dir), cwd=runtime_dir,
     )
@@ -1931,6 +1955,32 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                 )).to_be_visible()
                                 expect(page.get_by_text(
                                     f"Current head: {CURRENT_HEAD}", exact=True,
+                                )).to_be_visible()
+                                expect(page.get_by_role(
+                                    "heading", name="Reviewer-selected reference comparison",
+                                    exact=True,
+                                )).to_be_visible()
+                                expect(page.get_by_text(
+                                    "Identical record: 0 · Only previous: 1 · Only current: 1",
+                                    exact=False,
+                                )).to_be_visible()
+                                reference_details = {}
+                                for kind in ("Only Previous", "Only Current"):
+                                    disclosure = page.get_by_text(
+                                        re.compile(rf"^{kind} · Reference \d+$"),
+                                    )
+                                    detail = disclosure.locator("xpath=ancestor::details[1]")
+                                    reference_details[kind] = detail
+                                    if not detail.evaluate("node => node.open"):
+                                        disclosure.click()
+                                previous_actor = (
+                                    "historical" if previous_head == HISTORY_HEAD else "previous"
+                                )
+                                expect(reference_details["Only Previous"].get_by_text(
+                                    f"Constructed {previous_actor} reference reviewer", exact=True,
+                                )).to_be_visible()
+                                expect(reference_details["Only Current"].get_by_text(
+                                    "Constructed current reference reviewer", exact=True,
                                 )).to_be_visible()
                                 expect(page.get_by_text(
                                     "Added to inventory: src/unrelated.py", exact=True,

@@ -60,12 +60,49 @@ def selected_state():
     )
 
 
-def test_comparison_explicitly_discloses_selected_references_are_excluded() -> None:
+def test_comparison_empty_selected_context_is_explicitly_available() -> None:
     current, previous = saved_comparison_states()
     comparison = compare_reviews(previous.bundle, current.bundle)
     payload = json.loads(export_comparison_json(comparison))
+    assert payload["reviewer_selected_references_compared"] is True
+    assert payload["selected_reference_comparison"]["previous"] == []
+    assert payload["selected_reference_comparison"]["current"] == []
+    report = export_comparison_markdown(comparison)
+    assert "No selected references recorded in either analysis" in report
+    assert "excluded from this comparison" not in report
+
+
+def test_comparison_preserves_both_attributed_records_with_safe_markdown() -> None:
+    state = selected_state()
+    comparison = compare_reviews(state.bundle, state.bundle)
+    payload = json.loads(export_comparison_json(comparison))
+    context = payload["selected_reference_comparison"]
+    reference = state.bundle.reviewer_selected_references[0]
+    assert context["previous"] == context["current"] == [reference.model_dump(mode="json")]
+    assert context["change_counts"] == {
+        "identical_record": 1, "only_previous": 0, "only_current": 0,
+    }
+    report = export_comparison_markdown(comparison)
+    assert "Previous selected reference" in report and "Current selected reference" in report
+    for expected in (reference.reference_id, reference.head_sha, reference.excerpt_sha256):
+        assert expected in report
+    assert "&lt;script&gt;" in report and "<script>" not in report
+    assert "&lt;img src=x&gt;" in report and "<img src=x>" not in report
+    assert "non-gating static context" in report and "intent, not execution" in report
+    assert "candidate-reference changes only" not in report
+
+
+def test_legacy_comparison_does_not_invent_empty_selected_snapshots() -> None:
+    from scopeproof_core.reviews.comparison import ReviewComparison
+
+    current, previous = saved_comparison_states()
+    data = compare_reviews(previous.bundle, current.bundle).model_dump(mode="json")
+    data.pop("selected_reference_comparison")
+    legacy = ReviewComparison.model_validate(data)
+    payload = json.loads(export_comparison_json(legacy))
     assert payload["reviewer_selected_references_compared"] is False
-    assert "Reviewer-selected references are excluded" in export_comparison_markdown(comparison)
+    assert payload["selected_reference_comparison"] is None
+    assert "Selected-reference context was not included" in export_comparison_markdown(legacy)
 
 
 def test_all_report_formats_preserve_attribution_source_and_non_gating_boundary() -> None:
