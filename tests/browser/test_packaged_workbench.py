@@ -1634,10 +1634,16 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             expect(save).to_be_enabled()
                             source.scroll_into_view_if_needed()
                             page.screenshot(path=str(captures / "01-explicit-source-selection.png"))
-                            save.click()
+                            _run_and_wait_for_streamlit_rerun(page, save.click)
                             expect(page.get_by_text(
-                                "Reviewer-selected references", exact=True,
+                                "Selected reference · tests/test_export.py:18", exact=True,
                             )).to_be_visible()
+                            page.wait_for_function(STREAMLIT_RERUN_FINISHED_SCRIPT, timeout=10_000)
+                            authoritative_json = page.get_by_role(
+                                "button", name="Download JSON", exact=True,
+                            )
+                            expect(authoritative_json).to_have_count(1)
+                            expect(authoritative_json).to_be_enabled()
                             selected_state = _download_review_state(page)
                             reference = _assert_selected_reference_is_nongating(
                                 before, selected_state,

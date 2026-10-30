@@ -1,4 +1,4 @@
-# JUnit browser selection recovery — 2026-10-30
+# Browser selection and save synchronization recovery — 2026-10-30
 
 M3 was integrated by [PR #224](https://github.com/YuzeJ21/Scope-Proof/pull/224) after exact-head
 CI passed at `43c4eb9af264a9d483004dcc8cfa82df799e7013`. Resulting main
@@ -36,6 +36,15 @@ The final targeted matrix first produced two valid failures and two already-pass
 in 24.01 seconds. After the helper repair, all four passed in 13.98 seconds. Early outside-click,
 replacement and Escape setups did not establish the intended boundary and are excluded from
 that reproduction claim. Full-suite and hosted results are recorded in the integration PR.
+
+The first full seventeen-check batch passed the JUnit journey and new helper cases but failed
+the M3 journey after Save: the test waited for a section heading already present before saving,
+then queried downloads while old and new controls overlapped. The trace places Save at 10.880s,
+the old-heading check at 10.927s and the download lookup at 11.055s. That failed batch remains
+sixteen passes and one failure. The corrected test observes the existing rerun boundary, waits
+for the newly created exact reference card and script completion, and requires one enabled JSON
+control before the unchanged download helper. Its focused installed-wheel journey passed in
+44.11 seconds, retaining all saved-state and export assertions.
 
 The current suite contains seventeen checks: three installed-wheel Chromium journeys, eight
 constructed Streamlit selection checks and six helper/capture checks. These are not seventeen
