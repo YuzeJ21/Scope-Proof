@@ -70,14 +70,18 @@ ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
-moving-head ledger. Current browser coverage comprises thirteen checks: three installed-wheel
-Chromium journeys, four constructed Streamlit selection checks, and six helper/capture checks.
+moving-head ledger. Current browser coverage comprises seventeen checks: three installed-wheel
+Chromium journeys, eight constructed Streamlit selection checks, and six helper/capture checks.
 Dated five-check CI results below remain
 historical results, not current suite counts.
 
 The [2026-10-28 browser maintenance investigation](docs/audits/2026-10-28-browser-maintenance.md)
 separates reproduced helper/download defects from the original missing-dropdown trigger, which
 remains unexplained. That bounded maintenance did not change stage or release status.
+
+The [2026-10-30 JUnit selection follow-up](docs/audits/2026-10-30-junit-browser-recovery.md)
+records the recurring multiselect verification failure and bounded helper recovery. It adds no
+product milestone or genuine-use evidence; the original popup-disappearance cause remains unproven.
 
 The [2026-10-28 CI maintenance slice](docs/audits/2026-10-28-ci-required-gate.md) addresses
 documented skipped-dependency gate risk and observed serial verification delay. The unchanged
