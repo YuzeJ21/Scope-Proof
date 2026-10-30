@@ -23,6 +23,7 @@ from scopeproof_core.schemas.models import (
     RepositoryVisibility,
     RetrievedFile,
 )
+from scopeproof_core.source_lines import split_git_source_lines
 
 _PR_PATH = re.compile(r"^/([^/]+)/([^/]+)/pull/(\d+)/?$")
 _HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
@@ -150,7 +151,15 @@ def _parse_patch(patch: str) -> list[ChangedLine]:
     lines: list[ChangedLine] = []
     old_line = 0
     new_line = 0
-    for raw in patch.splitlines():
+    records = split_git_source_lines(patch, strip_crlf=False)
+    terminated_records = patch.count("\n")
+    for index, raw in enumerate(records):
+        no_final_newline = (
+            index + 1 < len(records)
+            and records[index + 1].startswith("\\ No newline")
+        )
+        if index < terminated_records and not no_final_newline:
+            raw = raw.removesuffix("\r")
         header = _HUNK_HEADER.match(raw)
         if header:
             old_line, new_line = (int(value) for value in header.groups())

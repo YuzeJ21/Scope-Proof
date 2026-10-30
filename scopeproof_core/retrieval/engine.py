@@ -21,6 +21,7 @@ from scopeproof_core.schemas.models import (
     RetrievalOutcome,
     RetrievedFile,
 )
+from scopeproof_core.source_lines import split_git_source_lines
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 _CANDIDATE_LIMIT = 8
@@ -123,7 +124,7 @@ def _candidate_file(retrieved: RetrievedFile) -> ChangedFile:
         status="unchanged_candidate",
         lines=[
             ChangedLine(change_type=LineChangeType.CONTEXT, line_number=index, content=content)
-            for index, content in enumerate(retrieved.content.splitlines(), start=1)
+            for index, content in enumerate(split_git_source_lines(retrieved.content), start=1)
         ],
     )
 

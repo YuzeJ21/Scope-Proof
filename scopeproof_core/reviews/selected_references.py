@@ -33,8 +33,8 @@ REVIEWER_SELECTED_REFERENCE_BOUNDARY = (
     "internal consistency, not independent source authenticity."
 )
 
-# Git numbers source lines by LF. The existing automatic patch parser accepts
-# additional Python splitlines boundaries; M3 must not cite that ambiguous output.
+# M3 deliberately retains its conservative raw-patch guard even though automatic
+# ingestion now preserves LF boundaries. This repair does not relax selection policy.
 _UNSUPPORTED_LINE_SEPARATORS = frozenset("\v\f\x1c\x1d\x1e\x85\u2028\u2029")
 
 

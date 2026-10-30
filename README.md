@@ -554,6 +554,12 @@ journeys, eight constructed Streamlit selection checks, and six helper/capture c
 is not a count of full end-to-end journeys.
 These constructed engineering checks do not establish independent use or accessibility conformance.
 
+Unreleased source corrects automatic candidate coordinates using Git LF boundaries, explicit
+CRLF handling and Git's no-final-newline marker. Embedded Unicode/control separators remain
+source content rather than extra diff records. Historical saved coordinates and frozen R-002
+results are retained; fresh analysis supplies corrected references. See the
+[version-bound source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md).
+
 Run lint and all offline tests:
 
 ```bash
