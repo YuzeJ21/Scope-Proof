@@ -203,6 +203,8 @@ Streamlit 1.53.0 required Pillow below 13 and could not use the documented patch
 Pydantic 2.8.0 passed the smaller package journeys but failed existing R-002 strict JSON validation
 tests; the guidance uses the locked Pydantic baseline instead of promising full floor compatibility.
 The published wheel and its checksum remain unchanged; the constraints select its dependencies.
+Unreleased `0.2.5.dev0` source now declares these maintained floors directly, including Pillow;
+see the [source declaration alignment](docs/audits/2026-10-29-dependency-baseline-alignment.md).
 
 ### Upgrade existing reviews
 

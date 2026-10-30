@@ -430,12 +430,6 @@ def test_ci_runs_lint_tests_and_benchmark() -> None:
     assert "scopeproof_core.evals.runner" in workflow
 
 
-def test_streamlit_floor_supports_per_widget_junit_upload_limits() -> None:
-    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-
-    assert "streamlit>=1.53,<2" in project["project"]["dependencies"]
-
-
 def test_locked_development_environment_is_documented_and_verified() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     guide = Path("docs/development-environment.md").read_text(encoding="utf-8")

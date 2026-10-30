@@ -110,7 +110,14 @@ rename; that hostile local-account scenario remains unsupported and must not be 
 
 ## Known-good UI baseline
 
-The checked-in lock now resolves Streamlit 1.66.1 and Pillow 13.0.0. Pillow 13.0.0 is the first
+Current unreleased source declares Pydantic `>=2.13.4,<3`, Streamlit `>=1.66.1,<2`, and an explicit
+Pillow `>=13,<14` requirement; HTTPX remains `>=0.27,<1`. These are verified maintained floors,
+not a claim to have identified the earliest compatible versions or tested every later resolution.
+Streamlit itself permits older Pillow versions, so its lower bound alone cannot enforce this
+baseline. The [declaration alignment record](audits/2026-10-29-dependency-baseline-alignment.md)
+separates the corrected source metadata from the unchanged published package.
+
+The checked-in lock resolves Streamlit 1.66.1 and Pillow 13.0.0. Pillow 13.0.0 is the first
 patched version reported for the current Pillow advisories. Streamlit 1.66.1 permits Pillow 13 but
 excludes PyArrow 25.0.0, so the optional research extra moves to PyArrow 26.0.0. This changes the
 development environment, not the frozen R-002 source artifacts, labels, or recorded result; any
@@ -120,8 +127,9 @@ with a per-widget upload allowance. That lower bound alone is not a current patc
 promise: a fresh exact-1.53.0 install selected Pillow 12.3.0, and its `pillow<13` requirement conflicts
 with the maintained Pillow baseline. The broader Python 3.11 source suite also found 55 existing
 R-002 validation failures with Pydantic 2.8.0; canonical JSON containing criterion enums was rejected
-by strict revalidation. This predates the upload repair and remains a declared-minimum compatibility
-limit, not a change to frozen research. For public v0.2.4, follow the README's explicit
+by strict revalidation. This predates the upload repair and remains a compatibility limit in the
+unchanged public v0.2.4 metadata; current source excludes those old versions. Frozen research
+inputs, labels and results are unchanged. For public v0.2.4, follow the README's explicit
 `pydantic>=2.13.4,<3`, `streamlit>=1.66.1,<2` and `Pillow>=13,<14` install constraints. The locked
 contributor environment
 is reproducible; those ranges do not establish that every later combination has been verified.
