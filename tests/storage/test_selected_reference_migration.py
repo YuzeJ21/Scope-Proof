@@ -33,7 +33,7 @@ def test_selected_reference_round_trips_without_source_snapshot_or_truth_upgrade
     store = JsonReviewStore(tmp_path)
     path = store.save(state)
     payload = json.loads(path.read_text())
-    assert payload["record_version"] == 6
+    assert payload["record_version"] == 7
     assert store.load(state.review.review_id) == state
     assert "snapshot" not in payload["state"]
     reference = payload["state"]["bundle"]["reviewer_selected_references"][0]
@@ -92,7 +92,7 @@ def test_selected_reference_history_survives_saved_revision_without_rebinding(tm
     assert loaded.bundle is None
     assert loaded.analysis_history[0].reviewer_selected_references == [reference]
     assert loaded.analysis_history[0].reviewer_selected_references[0].criteria_revision_number == 1
-    assert json.loads(path.read_text())["record_version"] == 6
+    assert json.loads(path.read_text())["record_version"] == 7
 
 
 def test_downgraded_selected_reference_records_fail_closed_instead_of_losing_attribution(tmp_path):

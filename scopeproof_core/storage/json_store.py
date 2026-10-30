@@ -33,8 +33,8 @@ try:
 except ImportError:  # pragma: no cover - exercised through the Windows-lock seam
     msvcrt = None  # type: ignore[assignment]
 
-RECORD_VERSION = 6
-_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5, 6)
+RECORD_VERSION = 7
+_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _LEGACY_CI_CATEGORIES = {
     "successful_legacy_statuses",
@@ -510,6 +510,17 @@ class JsonReviewStore:
         except ValidationError as error:
             raise ValueError("invalid review record envelope") from error
         state_payload = deepcopy(envelope.state)
+        if isinstance(state_payload, dict):
+            audit_bundles = [state_payload.get("bundle")]
+            if isinstance(state_payload.get("analysis_history"), list):
+                audit_bundles.extend(state_payload["analysis_history"])
+            for bundle in audit_bundles:
+                if not isinstance(bundle, dict):
+                    continue
+                if record_version < 7 and bundle.get("selected_reference_events", []) != []:
+                    raise ValueError("reference audit events require saved record version 7")
+                if record_version == 7 and "selected_reference_events" not in bundle:
+                    raise ValueError("version 7 requires explicit reference audit history")
         if record_version < 6 and isinstance(state_payload, dict):
             bundles = [state_payload.get("bundle")]
             history = state_payload.get("analysis_history")

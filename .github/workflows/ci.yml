@@ -143,6 +143,8 @@ jobs:
         run: python -m pytest -q tests/reviews/test_saved_comparison.py tests/reviews/test_foreign_history_comparison.py tests/apps/test_saved_comparison_exports.py
       - name: Reviewer-selected reference compatibility
         run: python -m pytest -q tests/reviews/test_selected_references.py tests/storage/test_selected_reference_migration.py
+      - name: Selected-reference audit compatibility
+        run: python -m pytest -q tests/reviews/test_reference_audit.py tests/reviews/test_reference_audit_safety.py tests/storage/test_reference_audit_migration.py tests/reporting/test_reference_audit_exports.py
       - name: Selected-reference comparison compatibility
         run: python -m pytest -q tests/reviews/test_selected_reference_comparison.py tests/reporting/test_selected_references.py
       - name: Git source coordinate compatibility

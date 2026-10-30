@@ -29,6 +29,7 @@ from scopeproof_core.reviews.comparison import (
     EvidenceReference,
     ReviewComparison,
 )
+from scopeproof_core.reviews.reference_audit import reference_status
 from scopeproof_core.reviews.selected_reference_comparison import (
     SELECTED_REFERENCE_COMPARISON_BOUNDARY,
     SelectedReferenceComparison,
@@ -352,10 +353,15 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
     return lines
 
 
-def _selected_reference_record_markdown(items: list[ReviewerSelectedReference]) -> list[str]:
+def _selected_reference_record_markdown(
+    items: list[ReviewerSelectedReference], *, references=None, events=None
+) -> list[str]:
     lines: list[str] = []
     for item in items:
         fields = {
+            "Status": reference_status(references or items, events, item.reference_id).title()
+            if events is not None
+            else "Lifecycle context unavailable",
             "Reference ID": item.reference_id,
             "Review ID": item.review_id,
             "Repository / PR": f"{item.repository} / #{item.pr_number}",
@@ -375,10 +381,35 @@ def _selected_reference_record_markdown(items: list[ReviewerSelectedReference]) 
         lines.extend(
             f"- **{name}:** {_render_markdown_code(value)}" for name, value in fields.items()
         )
-        lines.extend([
-            f"- **Source:** {render_artifact_reference_markdown(item.permalink)}",
-            f"- **Exact source line:** {_render_markdown_code(item.excerpt)}", "",
-        ])
+        lines.extend(
+            [
+                f"- **Source:** {render_artifact_reference_markdown(item.permalink)}",
+                f"- **Exact source line:** {_render_markdown_code(item.excerpt)}",
+                "",
+            ]
+        )
+    return lines
+
+
+def _reference_events_markdown(events) -> list[str]:
+    if events is None:
+        return ["Lifecycle context unavailable in this older comparison.", ""]
+    lines = []
+    for event in events:
+        lines.extend(
+            [
+                f"### Audit event · {event.action.title()}",
+                "",
+                f"- **Event ID:** {_render_markdown_code(event.event_id)}",
+                f"- **Reference ID:** {_render_markdown_code(event.reference_id)}",
+                "- **Replacement ID:** "
+                f"{_render_markdown_code(event.replacement_reference_id or '(none)')}",
+                f"- **Asserted actor:** {_render_markdown_code(event.reviewer)}",
+                f"- **Reason:** {_render_markdown_code(event.reason)}",
+                f"- **Recorded at:** {_render_markdown_code(event.occurred_at.isoformat())}",
+                "",
+            ]
+        )
     return lines
 
 
@@ -386,61 +417,133 @@ def _selected_reference_markdown(bundle: ReviewBundle) -> list[str]:
     if not bundle.reviewer_selected_references:
         return []
     return [
-        "## Reviewer-selected references", "", REVIEWER_SELECTED_REFERENCE_BOUNDARY, "",
-        *_selected_reference_record_markdown(bundle.reviewer_selected_references),
+        "## Reviewer-selected references",
+        "",
+        REVIEWER_SELECTED_REFERENCE_BOUNDARY,
+        "",
+        f"Active references: {len(bundle.active_reviewer_selected_reference_ids)}",
+        "",
+        *_selected_reference_record_markdown(
+            bundle.reviewer_selected_references, events=bundle.selected_reference_events
+        ),
+        *_reference_events_markdown(bundle.selected_reference_events),
     ]
 
 
 def _selected_reference_comparison_markdown(
     context: SelectedReferenceComparison | None,
 ) -> list[str]:
-    lines = ["## Reviewer-selected Reference Comparison", "",
-             SELECTED_REFERENCE_COMPARISON_BOUNDARY, ""]
+    lines = [
+        "## Reviewer-selected Reference Comparison",
+        "",
+        SELECTED_REFERENCE_COMPARISON_BOUNDARY,
+        "",
+    ]
     if context is None:
         return [*lines, "Selected-reference context was not included in this older comparison.", ""]
     counts = context.change_counts
-    lines.extend([
-        f"- Identical record: {counts.identical_record}",
-        f"- Only previous: {counts.only_previous}",
-        f"- Only current: {counts.only_current}", "",
-    ])
+    lines.extend(
+        [
+            f"- Identical record: {counts.identical_record}",
+            f"- Only previous: {counts.only_previous}",
+            f"- Only current: {counts.only_current}",
+            "",
+        ]
+    )
+    lines.extend(["Original-record presence counts do not imply the same active status.", ""])
+    changed = context.lifecycle_changed_reference_ids
+    if changed is not None:
+        lines.extend([f"Lifecycle changes on shared original records: {len(changed)}", ""])
     if not context.previous and not context.current:
         lines.extend(["No selected references recorded in either analysis.", ""])
     for change in context.record_changes:
         lines.extend([f"### {change.kind.replace('_', ' ').title()}", ""])
-        for label, reference in (
-            ("Previous selected reference", change.previous),
-            ("Current selected reference", change.current),
+        for side, label, reference in (
+            ("previous", "Previous selected reference", change.previous),
+            ("current", "Current selected reference", change.current),
         ):
             if reference is not None:
-                lines.extend([f"**{label}**", "",
-                              *_selected_reference_record_markdown([reference])])
+                lines.extend(
+                    [
+                        f"**{label}**",
+                        "",
+                        *_selected_reference_record_markdown(
+                            [reference],
+                            references=getattr(context, side),
+                            events=getattr(context, f"{side}_reference_events"),
+                        ),
+                    ]
+                )
+    for side in ("previous", "current"):
+        active = getattr(context, f"{side}_active_reference_ids")
+        lines.extend(
+            [
+                f"### {side.title()} reference audit",
+                "",
+                f"Active references: {len(active)}"
+                if active is not None
+                else "Active references: unknown",
+                "",
+                *_reference_events_markdown(getattr(context, f"{side}_reference_events")),
+            ]
+        )
     return lines
 
 
 def _selected_reference_html(bundle: ReviewBundle) -> list[str]:
     if not bundle.reviewer_selected_references:
         return []
-    lines = ["<h2>Reviewer-selected references</h2>",
-             f"<p>{html.escape(REVIEWER_SELECTED_REFERENCE_BOUNDARY)}</p>"]
+    lines = [
+        "<h2>Reviewer-selected references</h2>",
+        f"<p>{html.escape(REVIEWER_SELECTED_REFERENCE_BOUNDARY)}</p>",
+        f"<p>Active references: {len(bundle.active_reviewer_selected_reference_ids)}</p>",
+    ]
     for item in bundle.reviewer_selected_references:
         fields = {
-            "Reference ID": item.reference_id, "Review ID": item.review_id,
+            "Status": reference_status(
+                bundle.reviewer_selected_references,
+                bundle.selected_reference_events,
+                item.reference_id,
+            ).title(),
+            "Reference ID": item.reference_id,
+            "Review ID": item.review_id,
             "Repository / PR": f"{item.repository} / #{item.pr_number}",
             "Criterion / revision": f"{item.criterion_id} / {item.criteria_revision_number}",
             "Confirmed criteria digest": item.confirmed_criteria_sha256,
             "Criteria source": item.criteria_source_provenance.source_uri,
-            "Head": item.head_sha, "Location": f"{item.file_path}:{item.line_number}",
+            "Head": item.head_sha,
+            "Location": f"{item.file_path}:{item.line_number}",
             "Source scope": item.source_scope.value,
             "Static type / level": f"{item.evidence_type.value} / {item.evidence_level.value}",
-            "Selected by": item.reviewer, "Selected at": item.selected_at.isoformat(),
-            "Rationale": item.rationale, "Excerpt SHA256": item.excerpt_sha256,
+            "Selected by": item.reviewer,
+            "Selected at": item.selected_at.isoformat(),
+            "Rationale": item.rationale,
+            "Excerpt SHA256": item.excerpt_sha256,
         }
         lines.append("<dl>")
-        lines.extend(f"<dt>{html.escape(name)}</dt><dd><code>{html.escape(value)}</code></dd>"
-                     for name, value in fields.items())
-        lines.extend(["</dl>", _render_artifact_reference_html(item.permalink),
-                      f"<pre><code>{html.escape(item.excerpt)}</code></pre>"])
+        lines.extend(
+            f"<dt>{html.escape(name)}</dt><dd><code>{html.escape(value)}</code></dd>"
+            for name, value in fields.items()
+        )
+        lines.extend(
+            [
+                "</dl>",
+                _render_artifact_reference_html(item.permalink),
+                f"<pre><code>{html.escape(item.excerpt)}</code></pre>",
+            ]
+        )
+    for event in bundle.selected_reference_events:
+        lines.append(f"<h3>Audit event · {event.action.title()}</h3><dl>")
+        for name, value in {
+            "Event ID": event.event_id,
+            "Reference ID": event.reference_id,
+            "Replacement ID": event.replacement_reference_id or "(none)",
+            "Asserted actor": event.reviewer,
+            "Reason": event.reason,
+            "Recorded at": event.occurred_at.isoformat(),
+        }.items():
+            lines.append(f"<dt>{html.escape(name)}</dt><dd><code>{html.escape(value)}</code></dd>")
+        lines.append("</dl>")
     return lines
 
 
@@ -1167,6 +1270,9 @@ def export_csv(bundle: ExportableReview) -> str:
         "runtime_head_shas",
         "manual_runtime_evidence_id",
         "reviewer_selected_references",
+        "selected_reference_events",
+        "active_reviewer_selected_reference_ids",
+        "selected_reference_statuses",
         "reviewer_selected_reference_boundary",
         "junit_artifact_digests",
         "junit_mapped_cases",
@@ -1377,6 +1483,21 @@ def export_csv(bundle: ExportableReview) -> str:
                     [item.model_dump(mode="json") for item in selected_references],
                     ensure_ascii=False, sort_keys=True,
                 ),
+                "selected_reference_events": json.dumps([
+                    event.model_dump(mode="json") for event in bundle.selected_reference_events
+                    if event.reference_id in {item.reference_id for item in selected_references}
+                ], ensure_ascii=False, sort_keys=True),
+                "active_reviewer_selected_reference_ids": json.dumps([
+                    item.reference_id for item in selected_references
+                    if item.reference_id in bundle.active_reviewer_selected_reference_ids
+                ]),
+                "selected_reference_statuses": json.dumps({
+                    item.reference_id: reference_status(
+                        bundle.reviewer_selected_references, bundle.selected_reference_events,
+                        item.reference_id,
+                    )
+                    for item in selected_references
+                }, ensure_ascii=False, sort_keys=True),
                 "reviewer_selected_reference_boundary": REVIEWER_SELECTED_REFERENCE_BOUNDARY
                 if selected_references else "",
                 "junit_evidence_boundary": _csv_text(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION)

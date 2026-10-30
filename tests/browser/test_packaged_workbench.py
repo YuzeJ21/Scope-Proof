@@ -1532,13 +1532,20 @@ def _download_review_state(page: Page) -> dict:
 
 
 def _assert_selected_reference_is_nongating(
-    before: dict, after: dict, *, expected_count: int = 1,
+    before: dict,
+    after: dict,
+    *,
+    expected_count: int = 1,
 ) -> dict:
     before_bundle = dict(before["bundle"])
     after_bundle = dict(after["bundle"])
     assert before_bundle.pop("reviewer_selected_references", []) == []
     references = after_bundle.pop("reviewer_selected_references")
     assert len(references) == expected_count
+    assert after_bundle.pop("active_reviewer_selected_reference_ids") == [
+        r["reference_id"] for r in references
+    ]
+    assert before_bundle.pop("active_reviewer_selected_reference_ids") == []
     assert after_bundle == before_bundle
     assert {key: value for key, value in after.items() if key != "bundle"} == {
         key: value for key, value in before.items() if key != "bundle"
@@ -1700,7 +1707,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             page.screenshot(path=str(captures / "01-explicit-source-selection.png"))
                             _run_and_wait_for_streamlit_rerun(page, save.click)
                             expect(page.get_by_text(
-                                f"Selected reference · {target_path}:1002", exact=True,
+                                f"Selected reference · {target_path}:1002 · Active", exact=True,
                             )).to_be_visible()
                             page.wait_for_function(STREAMLIT_RERUN_FINISHED_SCRIPT, timeout=10_000)
                             authoritative_json = page.get_by_role(
@@ -1767,7 +1774,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                                 "Reviewer-selected references", exact=True,
                             )).to_be_visible()
                             page.get_by_text(
-                                f"Selected reference · {target_path}:1002", exact=True,
+                                f"Selected reference · {target_path}:1002 · Active", exact=True,
                             ).click()
                             expect(page.get_by_text(reviewer, exact=True)).to_be_visible()
                             expect(page.get_by_text(rationale, exact=True)).to_be_visible()
@@ -1775,8 +1782,8 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             page.screenshot(path=str(captures / "02-reference-after-restart.png"))
                             page.get_by_text("Select a source reference", exact=True).click()
                             expect(page.get_by_text(
-                                "Load matching source before adding a reference. "
-                                "Saved references remain available.", exact=True,
+                                "Load matching source before adding or correcting a reference. "
+                                "Saved references remain available for withdrawal.", exact=True,
                             )).to_be_visible()
                             expect(page.get_by_role(
                                 "button", name="Save selected reference", exact=True,
@@ -1827,7 +1834,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             expect(save).to_be_enabled()
                             _run_and_wait_for_streamlit_rerun(page, save.click)
                             expect(page.get_by_text(
-                                f"Selected reference · {target_path}:1001", exact=True,
+                                f"Selected reference · {target_path}:1001 · Active", exact=True,
                             )).to_be_visible()
                             reopened = _download_review_state(page)
                             original_reference = _assert_selected_reference_is_nongating(
@@ -1888,6 +1895,31 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                                     if row["criterion_id"] == "AC-03" else []
                                 )
                                 assert references == expected
+                            audited = _exercise_reference_audit_actions(page, base_url, reopened)
+                            for viewport in VIEWPORTS:
+                                page.set_viewport_size(viewport)
+                                assert page.evaluate(
+                                    "document.documentElement.scrollWidth <= window.innerWidth"
+                                )
+                            audit_probe = subprocess.run(
+                                [
+                                    str(installed_wheel / "bin" / "python"),
+                                    "-I",
+                                    "-c",
+                                    "import sys; from pathlib import Path; "
+                                    "from scopeproof_core.storage.json_store "
+                                    "import JsonReviewStore; "
+                                    "print(JsonReviewStore(Path(sys.argv[1]))"
+                                    ".load(sys.argv[2]).model_dump_json())",
+                                    str(home_dir / ".scopeproof" / "reviews"),
+                                    audited["review"]["review_id"],
+                                ],
+                                cwd=runtime_dir,
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                            )
+                            assert json.loads(audit_probe.stdout) == audited
                         assert page.evaluate(
                             "document.documentElement.scrollWidth <= window.innerWidth"
                         )
@@ -1898,38 +1930,188 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
     assert browser_errors == []
 
 
+def _exercise_reference_audit_actions(page: Page, base_url: str, saved: dict) -> dict:
+    """Constructed actor corrects an original, restarts UI and withdraws without source."""
+    original = saved["bundle"]["reviewer_selected_references"][0]
+    action = page.get_by_role("combobox", name="Selected-reference action", exact=True)
+    if not action.is_visible():
+        page.get_by_text("Select a source reference", exact=True).click()
+    _choose_combobox_option(page, action, option_name="Correct")
+    _choose_combobox_option(
+        page,
+        page.get_by_role("combobox", name="Active reference to change", exact=True),
+        option_name=f"{original['file_path']}:{original['line_number']} · "
+        f"{original['reference_id']}",
+    )
+    _choose_combobox_option(
+        page,
+        page.get_by_role("combobox", name="Reference source", exact=True),
+        option_name=f"Changed file · {original['file_path']}",
+    )
+    _choose_combobox_option(
+        page,
+        page.get_by_role("combobox", name="Reference page", exact=True),
+        option_name="Page 11 of 11",
+    )
+    _choose_combobox_option(
+        page,
+        page.get_by_role("combobox", name="Reference line", exact=True),
+        option_name=str(original["line_number"]),
+    )
+    actor = "Constructed browser audit actor"
+    correction_reason = "Constructed correction preserves the original rationale."
+    correction_rationale = "Corrected constructed static context for this line."
+    for label, value in (
+        ("Reference reviewer (required)", actor),
+        ("Why this reference matters", correction_rationale),
+        ("Reason for reference action (required)", correction_reason),
+    ):
+        control = page.get_by_label(label, exact=True)
+        control.fill(value)
+        _run_and_wait_for_streamlit_rerun(page, lambda field=control: field.press("Tab"))
+    save = page.get_by_role("button", name="Save selected reference", exact=True)
+    expect(save).to_be_enabled()
+    _run_and_wait_for_streamlit_rerun(page, save.click)
+    corrected = _download_review_state(page)
+    refs = corrected["bundle"]["reviewer_selected_references"]
+    assert refs[:2] == saved["bundle"]["reviewer_selected_references"]
+    replacement = refs[-1]
+    assert replacement["rationale"] == correction_rationale
+    assert (
+        corrected["bundle"]["selected_reference_events"][0]["reference_id"]
+        == original["reference_id"]
+    )
+    assert corrected["bundle"]["active_reviewer_selected_reference_ids"] == [
+        refs[1]["reference_id"],
+        replacement["reference_id"],
+    ]
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.get_by_text("Resume a saved review", exact=True).click()
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    _choose_combobox_option(
+        page,
+        page.get_by_role("combobox", name="Saved review ID", exact=True),
+        option_name=saved["review"]["review_id"],
+        settled_control=reopen,
+    )
+    reopen.click()
+    _choose_combobox_option(
+        page,
+        page.get_by_role("combobox", name="Inspect criterion", exact=True),
+        option_name="AC-03",
+    )
+    page.get_by_text("Select a source reference", exact=True).click()
+    _choose_combobox_option(
+        page,
+        page.get_by_role("combobox", name="Selected-reference action", exact=True),
+        option_name="Withdraw",
+    )
+    _choose_combobox_option(
+        page,
+        page.get_by_role("combobox", name="Active reference to change", exact=True),
+        option_name=f"{replacement['file_path']}:{replacement['line_number']} · "
+        f"{replacement['reference_id']}",
+    )
+    expect(page.get_by_role("combobox", name="Reference source", exact=True)).to_have_count(0)
+    withdrawal_reason = "Constructed withdrawal after reopen without source."
+    for label, value in (
+        ("Reference reviewer (required)", actor),
+        ("Reason for reference action (required)", withdrawal_reason),
+    ):
+        control = page.get_by_label(label, exact=True)
+        control.fill(value)
+        _run_and_wait_for_streamlit_rerun(page, lambda field=control: field.press("Tab"))
+    expect(save).to_be_enabled()
+    _run_and_wait_for_streamlit_rerun(page, save.click)
+    audited = _download_review_state(page)
+    assert audited["bundle"]["reviewer_selected_references"] == refs
+    assert audited["bundle"]["active_reviewer_selected_reference_ids"] == [refs[1]["reference_id"]]
+    assert len(audited["bundle"]["selected_reference_events"]) == 2
+    before, after = dict(saved["bundle"]), dict(audited["bundle"])
+    for payload in (before, after):
+        for key in (
+            "reviewer_selected_references",
+            "selected_reference_events",
+            "active_reviewer_selected_reference_ids",
+        ):
+            payload.pop(key)
+    assert before == after
+    for key in saved.keys() - {"bundle"}:
+        assert saved[key] == audited[key]
+    markdown = _download_with_retry(page, button_name="Download Markdown")
+    text = markdown.path().read_text(encoding="utf-8")
+    assert "Corrected" in text and "Withdrawn" in text
+    for value in (actor, correction_reason, withdrawal_reason, original["rationale"]):
+        assert value in text
+    csv_download = _download_with_retry(page, button_name="Download CSV")
+    row = next(
+        row
+        for row in csv.DictReader(io.StringIO(csv_download.path().read_text(encoding="utf-8")))
+        if row["criterion_id"] == "AC-03"
+    )
+    assert len(json.loads(row["selected_reference_events"])) == 2
+    assert json.loads(row["active_reviewer_selected_reference_ids"]) == [refs[1]["reference_id"]]
+    return audited
+
+
 def _reopen_saved_comparison_current(page: Page, base_url: str) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     page.get_by_text("Resume a saved review", exact=True).click()
     reopen = page.get_by_role("button", name="Reopen local review", exact=True)
     _choose_combobox_option(
-        page, page.get_by_role("combobox", name="Saved review ID", exact=True),
-        option_name=CURRENT_REVIEW_ID, settled_control=reopen,
+        page,
+        page.get_by_role("combobox", name="Saved review ID", exact=True),
+        option_name=CURRENT_REVIEW_ID,
+        settled_control=reopen,
     )
     reopen.click()
-    expect(page.get_by_text(
-        "Review reopened from local storage after validation.", exact=True,
-    )).to_be_visible()
+    expect(
+        page.get_by_text(
+            "Review reopened from local storage after validation.",
+            exact=True,
+        )
+    ).to_be_visible()
     page.get_by_text("Compare saved analyses", exact=True).click()
-    expect(page.get_by_role(
-        "combobox", name="Comparison baseline", exact=True,
-    )).to_have_value("")
-    expect(page.get_by_role(
-        "button", name="Compare selected saved analysis", exact=True,
-    )).to_be_disabled()
-    expect(page.get_by_role(
-        "heading", name="Re-review comparison", exact=True,
-    )).to_have_count(0)
-    expect(page.get_by_role(
-        "button", name="Download comparison JSON", exact=True,
-    )).to_have_count(0)
+    expect(
+        page.get_by_role(
+            "combobox",
+            name="Comparison baseline",
+            exact=True,
+        )
+    ).to_have_value("")
+    expect(
+        page.get_by_role(
+            "button",
+            name="Compare selected saved analysis",
+            exact=True,
+        )
+    ).to_be_disabled()
+    expect(
+        page.get_by_role(
+            "heading",
+            name="Re-review comparison",
+            exact=True,
+        )
+    ).to_have_count(0)
+    expect(
+        page.get_by_role(
+            "button",
+            name="Download comparison JSON",
+            exact=True,
+        )
+    ).to_have_count(0)
 
 
 def _assert_saved_comparison_downloads(
-    page: Page, *, previous_head: str, previous_review_id: str, previous_revision: int = 1,
+    page: Page,
+    *,
+    previous_head: str,
+    previous_review_id: str,
+    previous_revision: int = 1,
 ) -> None:
     markdown = _download_with_retry(
-        page, button_name="Download comparison Markdown",
+        page,
+        button_name="Download comparison Markdown",
     )
     assert markdown.suggested_filename.endswith("-comparison.md")
     text = markdown.path().read_text(encoding="utf-8")

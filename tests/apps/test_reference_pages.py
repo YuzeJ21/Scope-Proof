@@ -69,6 +69,10 @@ def test_later_file_and_last_page_are_selectable_without_automatic_choice():
     assert refs[0]["line_number"] == 1002
     assert refs[0]["excerpt"] == "value_1002 = 1002"
     before["bundle"].pop("reviewer_selected_references")
+    assert after["bundle"].pop("active_reviewer_selected_reference_ids") == [
+        r["reference_id"] for r in refs
+    ]
+    before["bundle"].pop("active_reviewer_selected_reference_ids")
     assert after == before
     assert app.selectbox(key="selected_reference_source").value is None
 

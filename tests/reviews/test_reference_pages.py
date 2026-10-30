@@ -69,6 +69,7 @@ def test_late_file_and_last_page_remain_available_beyond_legacy_prefix():
     after = updated.model_dump(mode="json")
     assert len(after["bundle"]["reviewer_selected_references"]) == 2
     after["bundle"]["reviewer_selected_references"] = []
+    after["bundle"]["active_reviewer_selected_reference_ids"] = []
     assert after == before
 
 
@@ -202,6 +203,7 @@ def test_later_pages_remain_static_non_gating_context(path, kind, level):
     updated = append(state, snapshot, selected)
     after = updated.model_dump(mode="json")
     after["bundle"]["reviewer_selected_references"] = []
+    after["bundle"]["active_reviewer_selected_reference_ids"] = []
     assert before == after
 
 

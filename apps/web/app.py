@@ -113,6 +113,7 @@ from scopeproof_core.reviews.lifecycle import (
     resolution_event_statuses,
     revise_criteria,
 )
+from scopeproof_core.reviews.reference_audit import active_references
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
@@ -679,7 +680,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
         sorted(
             {
                 item.file_path
-                for item in [*state.bundle.evidence, *state.bundle.reviewer_selected_references]
+                for item in [*state.bundle.evidence, *active_references(state.bundle)]
                 if item.source_scope is EvidenceSourceScope.UNCHANGED_CANDIDATE
             }
         )
@@ -2501,6 +2502,7 @@ else:
                 or has_pending_requirements_draft or has_pending_criteria_source
                 or _criterion_detail_draft_pending(include_selected_reference=False)
                 or st.session_state["review_save_conflict"]
+                or source_observation_conflict
             ),
         )
         if reference_state is not None:
@@ -2508,7 +2510,7 @@ else:
             st.session_state["bundle"] = reference_state.bundle
             st.session_state["selected_reference_form_reset_pending"] = True
             st.session_state["selected_reference_save_notice"] = (
-                "Source reference recorded as non-gating static context. "
+                "Selected-reference action recorded as non-gating static context. "
                 "Local save status is shown separately."
             )
             st.rerun()

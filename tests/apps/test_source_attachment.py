@@ -95,6 +95,10 @@ def test_reopen_load_and_repeated_reference_saves_preserve_analysis_and_saved_co
     assert [r["line_number"] for r in refs] == [7, 8, 9]
     original = before.model_dump(mode="json")
     assert refs[0] == original["bundle"].pop("reviewer_selected_references")[0]
+    assert after["bundle"].pop("active_reviewer_selected_reference_ids") == [
+        r["reference_id"] for r in refs
+    ]
+    original["bundle"].pop("active_reviewer_selected_reference_ids")
     assert after == original
     assert store.load(before.review.review_id) == app.session_state["review_state"]
 

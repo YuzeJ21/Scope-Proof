@@ -333,21 +333,56 @@ def append_reviewer_selected_reference(
     source = next((line for line in available if line == selected), None)
     if source is None:
         raise ValueError("selected reference must equal an available exact-head source line")
+    from scopeproof_core.reviews.reference_audit import active_references
+
     assert state.bundle is not None
-    if criterion_id not in {item.criterion_id for item in state.bundle.criteria}:
-        raise ValueError("selected reference must map to an active confirmed criterion")
-    if len(state.bundle.reviewer_selected_references) >= MAX_REVIEWER_SELECTED_REFERENCES:
+    if len(active_references(state.bundle)) >= MAX_REVIEWER_SELECTED_REFERENCES:
         raise ValueError(
-            f"analysis may contain at most {MAX_REVIEWER_SELECTED_REFERENCES} references"
+            f"analysis may contain at most {MAX_REVIEWER_SELECTED_REFERENCES} active references"
         )
     if any(
         (item.criterion_id, item.source_scope, item.file_path, item.line_number)
         == (criterion_id, source.source_scope, source.file_path, source.line_number)
-        for item in state.bundle.reviewer_selected_references
+        for item in active_references(state.bundle)
     ):
         raise ValueError("selected reference already exists for this criterion and source location")
+    reference = _validated_selected_reference(
+        state,
+        snapshot=snapshot,
+        selected=source,
+        criterion_id=criterion_id,
+        reviewer=reviewer,
+        rationale=rationale,
+        unchanged_files=unchanged_files,
+    )
+    bundle = state.bundle.model_copy(deep=True)
+    bundle.reviewer_selected_references.append(reference)
+    return validated_review_state(state.model_copy(update={"bundle": bundle}))
+
+
+def _validated_selected_reference(
+    state: ReviewState,
+    *,
+    snapshot: PullRequestSnapshot,
+    selected: SelectableReferenceLine,
+    criterion_id: str,
+    reviewer: str,
+    rationale: str,
+    unchanged_files: list[RetrievedFile] | None = None,
+) -> ReviewerSelectedReference:
+    """Construct only from fresh exact eligible source, including corrections."""
+    selected = SelectableReferenceLine.model_validate(selected.model_dump(mode="python"))
+    available = _eligible_reference_lines(
+        state, snapshot, unchanged_files, source=(selected.source_scope, selected.file_path)
+    )
+    source = next((line for line in available if line == selected), None)
+    if source is None:
+        raise ValueError("selected reference must equal an available exact-head source line")
+    assert state.bundle is not None
+    if criterion_id not in {item.criterion_id for item in state.bundle.criteria}:
+        raise ValueError("selected reference must map to an active confirmed criterion")
     assert state.review.criteria_source_provenance is not None
-    reference = ReviewerSelectedReference(
+    return ReviewerSelectedReference(
         **source.model_dump(mode="python"),
         review_id=state.review.review_id,
         repository=state.review.repository,
@@ -368,9 +403,6 @@ def append_reviewer_selected_reference(
         reviewer=reviewer,
         rationale=rationale,
     )
-    bundle = state.bundle.model_copy(deep=True)
-    bundle.reviewer_selected_references.append(reference)
-    return validated_review_state(state.model_copy(update={"bundle": bundle}))
 
 
 __all__ = [

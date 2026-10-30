@@ -3,6 +3,7 @@
 import streamlit as st
 
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
+from scopeproof_core.reviews.reference_audit import reference_status
 from scopeproof_core.reviews.selected_reference_comparison import (
     SELECTED_REFERENCE_COMPARISON_BOUNDARY,
     SelectedReferenceComparison,
@@ -20,6 +21,10 @@ def render_selected_reference_comparison(context: SelectedReferenceComparison | 
         f"**Recorded reference context:** Identical record: {counts.identical_record} · "
         f"Only previous: {counts.only_previous} · Only current: {counts.only_current}"
     )
+    st.caption("Original-record presence counts do not imply the same active status.")
+    changed = context.lifecycle_changed_reference_ids
+    if changed is not None:
+        st.text(f"Lifecycle changes on shared original records: {len(changed)}")
     if not context.previous and not context.current:
         st.caption("No selected references recorded in either analysis.")
     for index, change in enumerate(context.record_changes, start=1):
@@ -27,13 +32,20 @@ def render_selected_reference_comparison(context: SelectedReferenceComparison | 
         with st.expander(f"{change.kind.replace('_', ' ').title()} · Reference {index}"):
             st.caption("Exact criterion and source location")
             st.text(f"{reference.criterion_id} · {reference.file_path}:{reference.line_number}")
-            for label, item in (
-                ("Previous selected reference", change.previous),
-                ("Current selected reference", change.current),
+            for side, label, item in (
+                ("previous", "Previous selected reference", change.previous),
+                ("current", "Current selected reference", change.current),
             ):
                 if item is None:
                     continue
                 st.markdown(f"**{label}**")
+                events = getattr(context, f"{side}_reference_events")
+                st.caption("Reference status")
+                st.text(
+                    reference_status(getattr(context, side), events, item.reference_id).title()
+                    if events is not None
+                    else "Lifecycle context unavailable"
+                )
                 st.caption("Reference and owning review IDs")
                 st.text(f"{item.reference_id} · {item.review_id}")
                 st.caption("Criterion, confirmed revision and static source type")
@@ -69,3 +81,21 @@ def render_selected_reference_comparison(context: SelectedReferenceComparison | 
                 st.code(provenance.normalized_criteria_sha256, language=None, wrap_lines=True)
                 st.caption("Excerpt digest")
                 st.code(item.excerpt_sha256, language=None, wrap_lines=True)
+    for side in ("previous", "current"):
+        with st.expander(f"{side.title()} reference audit"):
+            active = getattr(context, f"{side}_active_reference_ids")
+            st.text(
+                f"Active references: {len(active)}"
+                if active is not None
+                else "Active references: unknown"
+            )
+            events = getattr(context, f"{side}_reference_events")
+            if events is None:
+                st.caption("Lifecycle context unavailable in this older comparison.")
+            for event in events or []:
+                st.markdown(f"**Audit event · {event.action.title()}**")
+                st.text(f"{event.reference_id} → {event.replacement_reference_id or '(none)'}")
+                st.caption("Asserted actor and reason")
+                st.text(event.reviewer)
+                st.text(event.reason)
+                st.text(event.occurred_at.isoformat())
