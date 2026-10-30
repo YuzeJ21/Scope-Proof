@@ -487,12 +487,17 @@ class JsonReviewStore:
             ):
                 event.pop("runtime_evidence_id", None)
 
-    def load(self, review_id: str) -> ReviewState:
+    def load(self, review_id: str, *, max_bytes: int | None = None) -> ReviewState:
         """Load a known record format and validate all nested models."""
+        limit = MAX_SAVED_RECORD_BYTES if max_bytes is None else max_bytes
+        if type(limit) is not int or not 1 <= limit <= MAX_SAVED_RECORD_BYTES:
+            raise ValueError(
+                "record byte limit must be a positive integer within the store maximum"
+            )
         payload = json.loads(
             read_text_no_follow(
                 self._existing_record_path(review_id),
-                max_bytes=MAX_SAVED_RECORD_BYTES,
+                max_bytes=limit,
             )
         )
         if not isinstance(payload, dict):

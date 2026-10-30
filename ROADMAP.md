@@ -466,6 +466,15 @@ records and 128 events per analysis. See the [bounded audit design](docs/superpo
 and [engineering assessment](docs/audits/2026-10-30-selected-reference-audit.md).
 This completes a correction/review outcome; it creates no standing feature queue or Stage 3 credit.
 
+The next owner-delegated gap review selected **find saved reviews by validated recorded details**.
+Unreleased source now offers explicitly loaded ten-record pages and page-scoped search by
+repository, PR, head, revision or ID, shared by reopen and foreign-comparison selection.
+Preview work is capped at 1 MiB per record and 10 MiB per request. Unavailable previews retain
+ID-only access; direct reopen keeps full validation. Filename/owner identity and preview-state
+checks prevent retargeted or stale choices. History selection, evidence, gates and record v7
+remain unchanged. See the [bounded discovery assessment](docs/audits/2026-10-30-saved-review-discovery.md).
+This completes another selected reviewer outcome without a persistent index, release or Stage 3 claim.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

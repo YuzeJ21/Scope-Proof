@@ -529,6 +529,29 @@ with nonempty or malformed events are rejected. Older application readers may re
 records. Keep original saved records before
 opening copies in unreleased source; loading alone does not rewrite them.
 
+### Find saved reviews by their recorded details (unreleased source)
+
+Open **Resume a saved review**, choose **Saved details page**, and click **Load saved review
+details**. This explicitly loads at most ten candidates, with a 1 MiB preview cap per record
+(10 MiB per request). Search the loaded page by repository, PR number, full head, criteria
+revision or record ID. Labels retain the ID to distinguish otherwise identical records; the
+selected summary shows full bounded identity and active/historical analysis presence.
+The same descriptive labels are used for foreign **Comparison baseline** choices.
+
+Search covers only the displayed loaded page. An empty result does not mean the store contains
+no matching record. Choose another page or **Enter a review ID directly** to reopen a record
+outside the page or preview limit. Missing, malformed, unsupported, oversized or mismatched
+records supply no partial metadata; they remain ID-only with details unavailable. Opening a
+record still performs the existing full validation under the 64 MiB store cap. Details are
+asserted saved facts, not a current-source, Ready, authenticity or compatibility badge.
+
+Page/query changes and inventory changes to a loaded catalog clear affected selections and
+comparison downloads. Changed previewed records require explicit refresh/reselection before
+reopen or foreign-analysis selection. Without a loaded catalog, an unrelated new ID preserves
+existing ID-based choices and their fingerprint guards. New targets never inherit deletion
+confirmation; direct-ID entry does not add a deletion path. Discovery does not rewrite saved
+records, load GitHub, rerun analysis or carry forward a decision. Record version 7 is unchanged.
+
 ### Durable local review workflow
 
 The workbench keeps criteria revisions and append-only resolution history. Adding, removing,
