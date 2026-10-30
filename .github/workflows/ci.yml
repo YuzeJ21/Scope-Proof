@@ -141,6 +141,8 @@ jobs:
         run: python -m pytest -q tests/storage/test_released_v023_upgrade.py
       - name: Saved comparison compatibility
         run: python -m pytest -q tests/reviews/test_saved_comparison.py tests/apps/test_saved_comparison_exports.py
+      - name: Reviewer-selected reference compatibility
+        run: python -m pytest -q tests/reviews/test_selected_references.py tests/storage/test_selected_reference_migration.py
       - name: Coverage accounting compatibility
         run: python -m pytest -q tests/test_coverage_accounting.py
       - name: Build and install wheel

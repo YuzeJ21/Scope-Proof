@@ -17,6 +17,12 @@ from apps.web.saved_comparison import (
     render_saved_comparison_selector,
 )
 from apps.web.scope_comparison import render_file_scope_comparison
+from apps.web.selected_references import (
+    clear_selected_reference_draft,
+    render_selected_reference_records,
+    render_selected_references,
+    selected_reference_draft_pending,
+)
 from apps.web.view_models import (
     default_criterion_detail_id,
     group_candidate_evidence,
@@ -862,7 +868,7 @@ def _junit_artifact_upload_key() -> str:
     )
 
 
-def _criterion_detail_draft_pending() -> bool:
+def _criterion_detail_draft_pending(*, include_selected_reference: bool = True) -> bool:
     runtime_text_keys = (
         "runtime_artifact_reference",
         "runtime_scenario",
@@ -877,7 +883,8 @@ def _criterion_detail_draft_pending() -> bool:
         or str(st.session_state.get("junit_limitations", "")).strip()
         or st.session_state.get("junit_mapping_scopes", [])
     )
-    return junit_pending or any(
+    selected_pending = include_selected_reference and selected_reference_draft_pending()
+    return selected_pending or junit_pending or any(
         bool(str(st.session_state.get(key, ""))) for key in runtime_text_keys
     ) or (
         st.session_state.get("runtime_evidence_level", EvidenceLevel.E3)
@@ -924,6 +931,7 @@ def _clear_criterion_detail_drafts() -> bool:
     _clear_runtime_evidence_draft()
     _clear_resolution_draft()
     _clear_junit_import_draft()
+    clear_selected_reference_draft()
     return had_pending_input
 
 
@@ -1037,6 +1045,8 @@ if st.session_state["delete_saved_review_reset_pending"]:
     st.session_state["delete_saved_review_confirmed"] = False
 if st.session_state.pop("runtime_evidence_form_reset_pending", False):
     _clear_runtime_evidence_draft()
+if st.session_state.pop("selected_reference_form_reset_pending", False):
+    clear_selected_reference_draft()
 if st.session_state.pop("junit_import_form_reset_pending", False):
     _clear_junit_import_draft()
 if st.session_state.pop("resolution_form_reset_pending", False):
@@ -2030,6 +2040,7 @@ else:
             )
     if comparison is not None:
         st.markdown("### Re-review comparison")
+        st.caption("Reviewer-selected references are excluded from this comparison.")
         st.caption(f"Previous head: {comparison.previous_head_sha}")
         st.caption(f"Current head: {comparison.current_head_sha}")
         st.markdown(
@@ -2284,7 +2295,7 @@ else:
     st.session_state["criterion_detail_form_target"] = criterion_detail_target
     if criterion_detail_target_changed_with_draft:
         st.session_state["criterion_detail_form_reset_notice"] = (
-            "Unsaved runtime evidence or resolution inputs were cleared because the review "
+            "Unsaved criterion inputs were cleared because the review "
             f"target changed. Re-enter them for {selected_id} before saving."
         )
         st.rerun()
@@ -2431,6 +2442,8 @@ else:
                             st.caption("Limitation")
                             st.text(limitation)
 
+        render_selected_reference_records(bundle, selected_id)
+
     with decision_column:
         resolution_save_notice = st.session_state.pop("resolution_save_notice", None)
 
@@ -2445,6 +2458,25 @@ else:
         decision_reviewer_ready = bool(decision_reviewer.strip())
         if not decision_reviewer_ready:
             st.caption("Decision reviewer is required for an attributable audit event.")
+        reference_state = render_selected_references(
+            review_state, st.session_state["snapshot"], selected_id,
+            unchanged_files=st.session_state["candidate_files"],
+            blocked=(
+                has_pending_criteria_draft or has_pending_criteria_authoring_draft
+                or has_pending_requirements_draft or has_pending_criteria_source
+                or _criterion_detail_draft_pending(include_selected_reference=False)
+                or st.session_state["review_save_conflict"]
+            ),
+        )
+        if reference_state is not None:
+            st.session_state["review_state"] = reference_state
+            st.session_state["bundle"] = reference_state.bundle
+            st.session_state["selected_reference_form_reset_pending"] = True
+            st.session_state["selected_reference_save_notice"] = (
+                "Source reference recorded as non-gating static context. "
+                "Local save status is shown separately."
+            )
+            st.rerun()
         decision_options = [
             HumanDecision.ACCEPTED,
             HumanDecision.CHANGE_REQUIRED,

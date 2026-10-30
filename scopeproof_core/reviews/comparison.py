@@ -6,6 +6,7 @@ import json
 import re
 from enum import StrEnum
 from hashlib import sha256
+from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
@@ -266,6 +267,12 @@ class ReviewComparison(BaseModel):
     current_gate: GateVerdict
     ruleset_version_changed: bool
     criteria_requiring_decision_review: list[str] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def reviewer_selected_references_compared(self) -> Literal[False]:
+        """Non-gating selected references are outside this comparison projection."""
+        return False
 
     @model_validator(mode="after")
     def _scope_heads_match_comparison(self) -> ReviewComparison:

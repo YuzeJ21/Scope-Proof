@@ -5,7 +5,8 @@ snapshots: they preserve what was observed at a named commit or release and must
 current product state.
 
 Current direction: bounded Stage 2 development. Source implements scope-aware re-review and
-durable saved-baseline comparison. See the ranked outcomes in the [roadmap](../ROADMAP.md).
+durable saved-baseline comparison, plus separately attributed non-gating source references.
+See the ranked outcomes in the [roadmap](../ROADMAP.md).
 Public install is v0.2.4; current source is unreleased `0.2.5`.
 The dated verification record binds released bytes to their own source commit. Stage 1 is closed
 at zero; Stage 3 is dormant and gated. No personal testing or qualifying reviews are required

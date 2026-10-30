@@ -4831,7 +4831,7 @@ def test_criterion_change_clears_pending_target_specific_drafts() -> None:
     assert app.session_state["review_state"].bundle.runtime_evidence == []
     assert app.session_state["review_state"].resolution_events == []
     assert (
-        "Unsaved runtime evidence or resolution inputs were cleared because the review "
+        "Unsaved criterion inputs were cleared because the review "
         "target changed. Re-enter them for AC-03 before saving."
     ) in [item.value for item in app.info]
 
@@ -4842,7 +4842,7 @@ def test_clean_criterion_change_does_not_claim_a_draft_was_cleared() -> None:
     app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
 
     assert (
-        "Unsaved runtime evidence or resolution inputs were cleared because the review "
+        "Unsaved criterion inputs were cleared because the review "
         "target changed."
     ) not in "\n".join(item.value for item in app.info)
 

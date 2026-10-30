@@ -48,10 +48,13 @@ target-repository runtime proof, accessibility conformance, customer use, demand
    Both saved-state fingerprints bind the comparison; changed records or selection invalidate
    downloads. Preserve saved JSON bytes, history and decisions, with core, AppTest and
    installed-browser restart/reopen/download evidence.
-3. **Design only: reviewer-selected exact-head evidence.** Specify a bounded explicit citation
-   path for locations omitted by conservative retrieval, including source identity, criterion
-   mapping, attribution, evidence type and rejection cases. This is not an implementation task
-   or authorization to alter retrieval benchmarks.
+3. **Implemented in source: reviewer-selected exact-head static references.** Explicitly choose
+   a line from matching loaded source, with criterion mapping, reviewer, rationale and derived
+   E1/E2 type. Keep these references separate from automatic candidates: no gate, confidence,
+   scope-closure, decision or runtime upgrade. Version-6 saved records preserve references for
+   reopen/export; historical versions never acquire invented attribution. Adding after reopen
+   needs matching source. Constructed automated regressions cover the bounded path; no new
+   retrieval score, genuine usefulness or qualifying review follows.
 
 These outcomes improve engineering capability; their benefit in genuine independent work remains
 unvalidated. No personal testing or qualifying reviews are prerequisites. Stage 1 stays closed

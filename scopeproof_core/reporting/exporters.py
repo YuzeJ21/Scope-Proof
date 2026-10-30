@@ -29,6 +29,7 @@ from scopeproof_core.reviews.comparison import (
     EvidenceReference,
     ReviewComparison,
 )
+from scopeproof_core.reviews.selected_references import REVIEWER_SELECTED_REFERENCE_BOUNDARY
 from scopeproof_core.schemas.models import (
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     CriteriaSourceProvenance,
@@ -346,6 +347,63 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
     return lines
 
 
+def _selected_reference_markdown(bundle: ReviewBundle) -> list[str]:
+    if not bundle.reviewer_selected_references:
+        return []
+    lines = ["## Reviewer-selected references", "", REVIEWER_SELECTED_REFERENCE_BOUNDARY, ""]
+    for item in bundle.reviewer_selected_references:
+        fields = {
+            "Reference ID": item.reference_id,
+            "Review ID": item.review_id,
+            "Repository / PR": f"{item.repository} / #{item.pr_number}",
+            "Criterion / revision": f"{item.criterion_id} / {item.criteria_revision_number}",
+            "Confirmed criteria digest": item.confirmed_criteria_sha256,
+            "Criteria source": item.criteria_source_provenance.source_uri,
+            "Head": item.head_sha,
+            "Location": f"{item.file_path}:{item.line_number}",
+            "Source scope": item.source_scope.value,
+            "Static type / level": f"{item.evidence_type.value} / {item.evidence_level.value}",
+            "Selected by": item.reviewer,
+            "Selected at": item.selected_at.isoformat(),
+            "Rationale": item.rationale,
+            "Excerpt SHA256": item.excerpt_sha256,
+        }
+        lines.extend(
+            f"- **{name}:** {_render_markdown_code(value)}" for name, value in fields.items()
+        )
+        lines.extend([
+            f"- **Source:** {render_artifact_reference_markdown(item.permalink)}",
+            f"- **Exact source line:** {_render_markdown_code(item.excerpt)}", "",
+        ])
+    return lines
+
+
+def _selected_reference_html(bundle: ReviewBundle) -> list[str]:
+    if not bundle.reviewer_selected_references:
+        return []
+    lines = ["<h2>Reviewer-selected references</h2>",
+             f"<p>{html.escape(REVIEWER_SELECTED_REFERENCE_BOUNDARY)}</p>"]
+    for item in bundle.reviewer_selected_references:
+        fields = {
+            "Reference ID": item.reference_id, "Review ID": item.review_id,
+            "Repository / PR": f"{item.repository} / #{item.pr_number}",
+            "Criterion / revision": f"{item.criterion_id} / {item.criteria_revision_number}",
+            "Confirmed criteria digest": item.confirmed_criteria_sha256,
+            "Criteria source": item.criteria_source_provenance.source_uri,
+            "Head": item.head_sha, "Location": f"{item.file_path}:{item.line_number}",
+            "Source scope": item.source_scope.value,
+            "Static type / level": f"{item.evidence_type.value} / {item.evidence_level.value}",
+            "Selected by": item.reviewer, "Selected at": item.selected_at.isoformat(),
+            "Rationale": item.rationale, "Excerpt SHA256": item.excerpt_sha256,
+        }
+        lines.append("<dl>")
+        lines.extend(f"<dt>{html.escape(name)}</dt><dd><code>{html.escape(value)}</code></dd>"
+                     for name, value in fields.items())
+        lines.extend(["</dl>", _render_artifact_reference_html(item.permalink),
+                      f"<pre><code>{html.escape(item.excerpt)}</code></pre>"])
+    return lines
+
+
 def export_json(bundle: ExportableReview) -> str:
     """Return canonical, diff-friendly JSON without adapter state or credentials."""
     payload = _validated_exportable(bundle).model_dump(mode="json")
@@ -480,7 +538,8 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
         "",
         (
             "> ScopeProof compares auditable candidate references. Candidate comparison does not "
-            "prove criterion satisfaction."
+            "prove criterion satisfaction. "
+            "Reviewer-selected references are excluded from this comparison."
         ),
         "",
         "## Evidence Change Counts",
@@ -834,6 +893,7 @@ def export_markdown(bundle: ExportableReview) -> str:
             ]
         )
 
+    lines.extend(_selected_reference_markdown(bundle))
     lines.extend(_junit_import_markdown(bundle))
     lines.extend(
         [
@@ -1064,6 +1124,8 @@ def export_csv(bundle: ExportableReview) -> str:
         "runtime_pr_numbers",
         "runtime_head_shas",
         "manual_runtime_evidence_id",
+        "reviewer_selected_references",
+        "reviewer_selected_reference_boundary",
         "junit_artifact_digests",
         "junit_mapped_cases",
         "junit_evidence_boundary",
@@ -1094,6 +1156,10 @@ def export_csv(bundle: ExportableReview) -> str:
         coverage = coverage_by_id[criterion.criterion_id]
         runtime_items = [
             item for item in bundle.runtime_evidence if item.criterion_id == criterion.criterion_id
+        ]
+        selected_references = [
+            item for item in bundle.reviewer_selected_references
+            if item.criterion_id == criterion.criterion_id
         ]
         junit_imports = [
             item
@@ -1265,6 +1331,12 @@ def export_csv(bundle: ExportableReview) -> str:
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
+                "reviewer_selected_references": json.dumps(
+                    [item.model_dump(mode="json") for item in selected_references],
+                    ensure_ascii=False, sort_keys=True,
+                ),
+                "reviewer_selected_reference_boundary": REVIEWER_SELECTED_REFERENCE_BOUNDARY
+                if selected_references else "",
                 "junit_evidence_boundary": _csv_text(JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION)
                 if junit_imports
                 else "",
@@ -1559,6 +1631,7 @@ def export_html(value: ExportableReview) -> str:
                 if bundle.runtime_evidence
                 else []
             ),
+            *_selected_reference_html(bundle),
             *_junit_import_html(bundle),
             "<h2>Changed-file Scope</h2>",
             "<p>Inventory: <code>"
