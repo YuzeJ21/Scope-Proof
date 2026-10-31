@@ -57,6 +57,17 @@ class HistoricalAnalysisReport(BaseModel):
     validation_ruleset_version: str
     validation_source_identity: CoreSourceIdentity
 
+    @model_validator(mode="before")
+    @classmethod
+    def _require_recorded_producer(cls, value: object) -> object:
+        if isinstance(value, dict) and isinstance(value.get("analysis"), dict):
+            review = value["analysis"].get("review")
+            if isinstance(review, dict) and any(
+                field not in review for field in ("tool_version", "ruleset_version")
+            ):
+                raise ValueError("historical report requires explicit recorded producer fields")
+        return value
+
     @model_validator(mode="after")
     def _historical_identity(self) -> HistoricalAnalysisReport:
         if self.analysis.review.review_id != self.selection.review_id:

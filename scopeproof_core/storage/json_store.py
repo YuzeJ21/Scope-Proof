@@ -533,15 +533,22 @@ class JsonReviewStore:
         state_payload = deepcopy(envelope.state)
         if isinstance(state_payload, dict):
             audit_bundles = [state_payload.get("bundle")]
+            recorded_reviews = [state_payload.get("review")]
             if isinstance(state_payload.get("analysis_history"), list):
                 audit_bundles.extend(state_payload["analysis_history"])
             for bundle in audit_bundles:
                 if not isinstance(bundle, dict):
                     continue
+                recorded_reviews.append(bundle.get("review"))
                 if record_version < 7 and bundle.get("selected_reference_events", []) != []:
                     raise ValueError("reference audit events require saved record version 7")
                 if record_version == 7 and "selected_reference_events" not in bundle:
                     raise ValueError("version 7 requires explicit reference audit history")
+            for review in recorded_reviews:
+                if isinstance(review, dict):
+                    # Constructor defaults describe new reviews, never absent saved facts.
+                    review.setdefault("tool_version", "unknown")
+                    review.setdefault("ruleset_version", "unknown")
         if record_version < 6 and isinstance(state_payload, dict):
             bundles = [state_payload.get("bundle")]
             history = state_payload.get("analysis_history")

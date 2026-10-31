@@ -78,3 +78,15 @@ inputs/results remain unchanged. Stage 1 stays closed at zero, Stage 2 owner-led
 No personal testing, qualifying reviews, participant contact, release, deployment, new adapter,
 accounts/billing or public post follows. Actual usefulness, independent use and accessibility
 conformance remain unknown. This selected outcome creates no standing follow-on queue.
+
+## Independent review correction
+
+The whole-branch review reproduced missing saved producer versions becoming today's constructor
+defaults in the historical report. The loader now marks omitted tool/ruleset versions `unknown`
+for saved current and retained reviews in all seven supported formats; explicit recorded values
+and new-review constructor defaults remain unchanged. Historical report envelopes also require
+explicit producer fields, even when a missing field's default could match the fingerprint.
+Saved bytes and record version remain unchanged. Regression RED/GREEN covers omitted individual
+and paired fields, preserved counterparts, current validation identity and report reparse rejection.
+The earlier-head installed-browser run was cancelled as incomplete after this finding; final
+verification uses a fresh package built after the correction.
