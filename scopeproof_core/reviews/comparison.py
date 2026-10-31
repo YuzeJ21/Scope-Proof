@@ -10,6 +10,7 @@ from hashlib import sha256
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from scopeproof_core.gates.validation import validated_review_bundle
+from scopeproof_core.reviews.decision_context_comparison import DecisionContextComparison
 from scopeproof_core.reviews.scope_comparison import FileScopeComparison, FileScopeSnapshot
 from scopeproof_core.reviews.selected_reference_comparison import SelectedReferenceComparison
 from scopeproof_core.schemas.models import (
@@ -264,6 +265,7 @@ class ReviewComparison(BaseModel):
     junit_import_changes: list[JUnitImportChange] = Field(default_factory=list)
     file_scope: FileScopeComparison | None = None
     selected_reference_comparison: SelectedReferenceComparison | None = None
+    decision_context_comparison: DecisionContextComparison | None = None
     previous_gate: GateVerdict
     current_gate: GateVerdict
     ruleset_version_changed: bool
@@ -274,6 +276,59 @@ class ReviewComparison(BaseModel):
     def reviewer_selected_references_compared(self) -> bool:
         """Missing historical projections remain unavailable rather than empty."""
         return self.selected_reference_comparison is not None
+
+    @computed_field
+    @property
+    def decision_context_compared(self) -> bool:
+        return self.decision_context_comparison is not None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _discard_context_availability(cls, value: object) -> object:
+        if isinstance(value, dict):
+            return {key: item for key, item in value.items() if key != "decision_context_compared"}
+        return value
+
+    @model_validator(mode="after")
+    def _decision_context_matches_comparison(self) -> ReviewComparison:
+        context = self.decision_context_comparison
+        if context is None:
+            return self
+        if self.file_scope is None:
+            raise ValueError("decision context requires owning scope snapshots")
+        for side in ("previous", "current"):
+            snapshot = getattr(context, side)
+            owner = getattr(self.file_scope, side)
+            if (
+                snapshot.head_sha != getattr(self, f"{side}_head_sha")
+                or snapshot.review_id != owner.review_id
+                or snapshot.head_sha != owner.head_sha
+                or snapshot.criteria_revision_number != owner.criteria_revision_number
+                or snapshot.criterion_ids != owner.criterion_ids
+                or snapshot.criteria_source_provenance.normalized_criteria_sha256
+                != owner.normalized_criteria_sha256
+            ):
+                raise ValueError("decision context must match its owning scope identity")
+            selected = self.selected_reference_comparison
+            if selected is not None and (
+                (context.repository, context.pr_number) != (selected.repository, selected.pr_number)
+                or snapshot.criteria_source_provenance
+                != getattr(selected, f"{side}_criteria_source_provenance")
+            ):
+                raise ValueError("decision context must match owning repository and provenance")
+        old = {item.criterion_id: item.decision for item in context.previous.resolutions}
+        new = {item.criterion_id: item.decision for item in context.current.resolutions}
+        expected = [
+            ResolutionChange(
+                criterion_id=criterion_id, previous_decision=old.get(criterion_id),
+                current_decision=new.get(criterion_id),
+            )
+            for criterion_id in sorted(old.keys() | new.keys())
+            if old.get(criterion_id) != new.get(criterion_id)
+        ]
+        if self.changed_human_resolutions != expected:
+            raise ValueError("decision context must match the existing decision enum deltas")
+        return self
 
     @model_validator(mode="after")
     def _scope_heads_match_comparison(self) -> ReviewComparison:
@@ -760,6 +815,7 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
         previous_head_sha=previous.review.head_sha,
         current_head_sha=current.review.head_sha,
         selected_reference_comparison=SelectedReferenceComparison.from_bundles(previous, current),
+        decision_context_comparison=DecisionContextComparison.from_bundles(previous, current),
         file_scope=FileScopeComparison(
             previous=FileScopeSnapshot.from_bundle(previous),
             current=FileScopeSnapshot.from_bundle(current),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
 import os
@@ -8,6 +9,7 @@ import re
 import shutil
 import signal
 import socket
+import string
 import subprocess
 import sys
 import time
@@ -2133,6 +2135,8 @@ def _assert_saved_comparison_downloads(
     previous_head: str,
     previous_review_id: str,
     previous_revision: int = 1,
+    previous_analysis: dict,
+    current_analysis: dict,
 ) -> None:
     markdown = _download_with_retry(
         page,
@@ -2140,6 +2144,11 @@ def _assert_saved_comparison_downloads(
     )
     assert markdown.suggested_filename.endswith("-comparison.md")
     text = markdown.path().read_text(encoding="utf-8")
+    display_text = re.sub(
+        r"\\([" + re.escape(string.punctuation) + r"])",
+        r"\1",
+        html.unescape(text),
+    )
     assert "Changed-file Scope Comparison" in text
     assert previous_head in text and CURRENT_HEAD in text
     assert "src/unrelated.py" in text and "notes.md" in text
@@ -2150,6 +2159,7 @@ def _assert_saved_comparison_downloads(
     assert "Only previous: 1" in text and "Only current: 1" in text
     assert "non-gating static context" in text
     assert "cross-head equivalence" in text and "intent, not execution" in text
+    assert "Recorded decision and runtime context" in text
 
     download = _download_with_retry(page, button_name="Download comparison JSON")
     assert download.suggested_filename.endswith("-comparison.json")
@@ -2176,7 +2186,49 @@ def _assert_saved_comparison_downloads(
         assert reference["permalink"] == (
             f"https://github.com/acme/widget/blob/{head}/notes.md#L1-L1"
         )
-    assert payload["previous_gate"] == payload["current_gate"] == "blocked"
+    assert payload["previous_gate"] == previous_analysis["gate"]["verdict"] == "needs_review"
+    assert payload["current_gate"] == current_analysis["gate"]["verdict"] == "needs_review"
+    # Same enum on all three saved baselines must retain the old enum-delta meaning.
+    assert payload["changed_human_resolutions"] == []
+    decision_context = payload["decision_context_comparison"]
+    assert decision_context["repository"] == "acme/widget"
+    assert decision_context["pr_number"] == 7
+    assert len(decision_context["record_changes"]) == 1
+    change = decision_context["record_changes"][0]
+    assert change["criterion_id"] == "AC-01"
+    assert change["kind"] == "recorded_context_changed"
+    for side, analysis in (("previous", previous_analysis), ("current", current_analysis)):
+        snapshot = decision_context[side]
+        assert snapshot["review_id"] == analysis["review"]["review_id"]
+        assert snapshot["head_sha"] == analysis["review"]["head_sha"]
+        assert snapshot["criteria_revision_number"] == analysis["criteria_revision_number"]
+        assert snapshot["criteria_source_provenance"] == (
+            analysis["review"]["criteria_source_provenance"]
+        )
+        assert snapshot["criterion_ids"] == ["AC-01"]
+        assert snapshot["resolutions"] == analysis["resolutions"]
+        assert snapshot["runtime_evidence"] == analysis["runtime_evidence"]
+        assert len(snapshot["resolutions"]) == len(snapshot["runtime_evidence"]) == 1
+        resolution, runtime = snapshot["resolutions"][0], snapshot["runtime_evidence"][0]
+        assert resolution["decision"] == "manually_verified"
+        assert resolution["claimed_evidence_level"] == runtime["evidence_level"] == "E3"
+        assert resolution["runtime_evidence_id"] == runtime["runtime_evidence_id"]
+        assert len(runtime["runtime_evidence_id"]) > 1_000
+        assert change[side]["resolution"] == resolution
+        assert change[side]["runtime_evidence"] == [runtime]
+        assert change[side]["runtime_link_status"] == "linked"
+        # Inspect every retained field against the original persisted analysis,
+        # including complete recorded timestamps, artifacts and limitations.
+        for record in (resolution, runtime):
+            for field, value in record.items():
+                if field in {"repository", "pr_number", "head_sha", "criterion_id"}:
+                    continue
+                for item in value if isinstance(value, list) else [value]:
+                    if item is not None:
+                        rendered = str(item)
+                        assert rendered in display_text or (
+                            rendered.replace("Z", "+00:00") in display_text
+                        )
     assert payload["evidence_change_counts"] == {
         "unchanged": 0, "relocated": 1, "modified": 0, "added": 0, "removed": 0,
     }
@@ -2202,6 +2254,36 @@ def _assert_saved_comparison_downloads(
     }]
 
 
+def _assert_decision_context_details(page: Page, *, previous_actor: str) -> None:
+    """Inspect the rendered recorded facts, not just a comparison availability badge."""
+    expect(page.get_by_role(
+        "heading", name="Recorded decision and runtime context", exact=True,
+    )).to_be_visible()
+    for side, context in (("Previous", previous_actor), ("Current", "current")):
+        label = context.replace("-", " ")
+        disclosure = page.get_by_text(f"{side} decision context", exact=True)
+        details = disclosure.locator("xpath=ancestor::details[1]")
+        if not details.evaluate("node => node.open"):
+            disclosure.click()
+        for value in (
+            f"CONSTRUCTED {label} automatic decision actor",
+            f"CONSTRUCTED {label} decision rationale; not customer evidence.",
+            f"constructed-{context}-runtime",
+            f"CONSTRUCTED {label} CSV export observation",
+            f"CONSTRUCTED {label} automatic test environment",
+            f"CONSTRUCTED {label} recorded result; no target code was executed.",
+            f"CONSTRUCTED {label} observation; no genuine external verification.",
+            "Automatic fixture actors are not independent practitioners.",
+            "<img src=x onerror=bad> **Untrusted recorded text**",
+        ):
+            expect(details.get_by_text(value, exact=False).first).to_be_visible()
+        expect(details.locator("img[src=x]")).to_have_count(0)
+        expect(details.locator("strong", has_text="Untrusted recorded text")).to_have_count(0)
+        expect(details.locator(
+            f'a[href="https://example.test/constructed/{context}/runtime-report"]',
+        ).first).to_be_visible()
+
+
 def test_installed_wheel_saved_comparison_survives_restart_without_record_writes(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
@@ -2222,12 +2304,18 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
             "recipe=runpy.run_path(sys.argv[1]); "
             "store=JsonReviewStore(Path(sys.argv[2])); "
             "[store.save(state) for state in recipe['saved_comparison_states']("
-            "selected_references=True, foreign_history=True)]"
+            "selected_references=True, foreign_history=True, decision_context=True)]"
         ),
         str(recipe), str(review_store_dir), cwd=runtime_dir,
     )
     saved_bytes = {path.name: path.read_bytes() for path in review_store_dir.glob("*.json")}
     assert set(saved_bytes) == {f"{CURRENT_REVIEW_ID}.json", f"{PREVIOUS_REVIEW_ID}.json"}
+    saved_analyses = {}
+    for raw_record in saved_bytes.values():
+        saved_state = json.loads(raw_record)["state"]
+        for analysis in [saved_state["bundle"], *saved_state["analysis_history"]]:
+            saved_analyses[analysis["review"]["head_sha"]] = analysis
+            assert analysis["gate"]["verdict"] == "needs_review"
 
     def assert_records_unchanged() -> None:
         assert {
@@ -2380,10 +2468,15 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                 expect(page.get_by_text(
                                     "Previously decided paths now unresolved:", exact=True,
                                 )).to_be_visible()
+                                _assert_decision_context_details(
+                                    page, previous_actor=previous_actor,
+                                )
                                 _assert_saved_comparison_downloads(
                                     page, previous_head=previous_head,
                                     previous_review_id=previous_id,
                                     previous_revision=previous_revision,
+                                    previous_analysis=saved_analyses[previous_head],
+                                    current_analysis=saved_analyses[CURRENT_HEAD],
                                 )
                                 assert_records_unchanged()
                             page.get_by_role(
@@ -2401,6 +2494,23 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                 "document.documentElement.scrollWidth <= window.innerWidth"
                             )
                             page.screenshot(path=str(captures / "03-phone-comparison-controls.png"))
+                            _assert_decision_context_details(
+                                page, previous_actor="foreign-history",
+                            )
+                            assert page.evaluate(
+                                "document.documentElement.scrollWidth <= window.innerWidth"
+                            )
+                            page.evaluate("document.documentElement.style.zoom = '2'")
+                            _assert_decision_context_details(
+                                page, previous_actor="foreign-history",
+                            )
+                            assert page.evaluate(
+                                "document.documentElement.scrollWidth <= window.innerWidth"
+                            )
+                            page.screenshot(path=str(
+                                captures / "04-phone-decision-context-css-zoom-200.png",
+                            ))
+                            page.evaluate("document.documentElement.style.zoom = ''")
                     finally:
                         context.close()
                 assert_records_unchanged()
@@ -2412,3 +2522,4 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
     assert (captures / "01-before-restart.png").is_file()
     assert (captures / "02-history-comparison.png").is_file()
     assert (captures / "03-phone-comparison-controls.png").is_file()
+    assert (captures / "04-phone-decision-context-css-zoom-200.png").is_file()
