@@ -16,6 +16,11 @@ from apps.web.saved_comparison import (
     clear_saved_comparison_selection,
     render_saved_comparison_selector,
 )
+from apps.web.saved_discovery import (
+    clear_saved_delete_confirmation,
+    render_saved_discovery,
+    render_saved_review_summary,
+)
 from apps.web.scope_comparison import render_file_scope_comparison
 from apps.web.selected_reference_comparison import render_selected_reference_comparison
 from apps.web.selected_references import (
@@ -135,6 +140,7 @@ from scopeproof_core.schemas.models import (
     RuntimeEvidence,
     require_verified_public_origin,
 )
+from scopeproof_core.storage.discovery import format_saved_review_label, load_discovered_review
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
     StaleReviewState,
@@ -1433,20 +1439,32 @@ render_source_attachment(
     research_mode=alpha_feedback_mode,
 )
 
+visible_saved_review_ids = saved_review_ids
+saved_discovery_entries = {}
 with st.expander("Resume a saved review", expanded=False):
+    if review_store_available:
+        visible_saved_review_ids, saved_discovery_entries = render_saved_discovery(
+            review_store, saved_review_ids,
+        )
+    direct_reopen = st.session_state.get("saved_discovery_direct_id", False)
     if not review_store_available:
         reopen_id = ""
         st.error(
             "Local review storage is unavailable. Verify that the ScopeProof review directory "
             "is a regular local directory."
         )
-    elif saved_review_ids:
+    elif saved_review_ids and not direct_reopen:
         reopen_id = st.selectbox(
             "Saved review ID",
-            options=saved_review_ids,
+            options=visible_saved_review_ids,
+            format_func=lambda review_id: (
+                format_saved_review_label(saved_discovery_entries[review_id])
+                if review_id in saved_discovery_entries else review_id
+            ),
             index=None,
             placeholder="Select a saved review",
             key="saved_reopen_review_id",
+            on_change=clear_saved_delete_confirmation,
         )
         record_label = "review" if len(saved_review_ids) == 1 else "reviews"
         st.caption(
@@ -1455,27 +1473,39 @@ with st.expander("Resume a saved review", expanded=False):
         )
     else:
         reopen_id = st.text_input("Review ID", key="reopen_review_id")
-        st.caption("No saved local reviews found.")
+        if not saved_review_ids:
+            st.caption("No saved local reviews found.")
+    render_saved_review_summary(saved_discovery_entries.get(reopen_id))
     if st.button(
         "Reopen local review",
         key="reopen_review",
         disabled=not reopen_id or replacement_blocked or not review_store_available,
     ):
         try:
-            reopened_state = review_store.load(reopen_id.strip())
+            preview = saved_discovery_entries.get(reopen_id.strip())
+            reopened_state = load_discovered_review(
+                review_store, reopen_id.strip(),
+                expected_fingerprint=(
+                    preview.metadata.state_fingerprint
+                    if preview is not None and preview.metadata is not None else None
+                ),
+            )
         except FileNotFoundError:
             st.error("No saved review was found for that review ID.")
         except UnsupportedRecordVersion:
             st.error("This saved review requires a different ScopeProof record version.")
         except (OSError, ValueError):
-            st.error("The saved review could not be opened. Verify its ID and record integrity.")
+            st.error(
+                "The saved review could not be opened. Refresh saved details and select it again, "
+                "or verify its ID and record integrity."
+            )
         else:
             _hydrate_reopened_review(reopened_state)
             st.session_state["review_reopen_notice"] = (
                 "Review reopened from local storage after validation."
             )
             st.rerun()
-    if saved_review_ids and reopen_id and review_store_available:
+    if saved_review_ids and reopen_id and review_store_available and not direct_reopen:
         delete_confirmed = st.checkbox(
             "Permanently delete the selected local review",
             key="delete_saved_review_confirmed",
@@ -1486,7 +1516,13 @@ with st.expander("Resume a saved review", expanded=False):
             disabled=not delete_confirmed,
         ):
             try:
-                review_store.delete(reopen_id)
+                preview = saved_discovery_entries.get(reopen_id)
+                if preview is None or preview.metadata is None:
+                    review_store.delete(reopen_id)
+                else:
+                    review_store.delete(
+                        reopen_id, expected_fingerprint=preview.metadata.state_fingerprint,
+                    )
             except FileNotFoundError:
                 _mark_open_review_deleted(reopen_id)
                 st.session_state["saved_review_delete_notice"] = (
@@ -2024,7 +2060,8 @@ st.header("3 · Decision Progress")
 saved_comparison, saved_comparison_selection = render_saved_comparison_selector(
     review_state,
     store=review_store,
-    saved_review_ids=saved_review_ids,
+    saved_review_ids=visible_saved_review_ids,
+    discovery_entries=saved_discovery_entries,
     current_is_saved=(
         review_matches_local_save and review_store_available and not source_observation_conflict
     ),

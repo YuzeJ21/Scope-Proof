@@ -12,6 +12,11 @@ from scopeproof_core.reviews.saved_comparison import (
     prepare_saved_comparison,
 )
 from scopeproof_core.schemas.models import ReviewState
+from scopeproof_core.storage.discovery import (
+    SavedReviewDiscoveryEntry,
+    format_saved_review_label,
+    load_discovered_review,
+)
 from scopeproof_core.storage.json_store import JsonReviewStore
 
 
@@ -40,16 +45,22 @@ def _analysis_changed() -> None:
 
 def _render_foreign_analysis_selector(
     store: JsonReviewStore, baseline_id: str, *, eligible: bool,
+    expected_preview_fingerprint: str | None = None,
 ) -> tuple[int | None, str | None, bool]:
     """Load only the chosen record and bind displayed positions to its complete snapshot."""
     try:
-        baseline = store.load(baseline_id)
+        baseline = load_discovered_review(
+            store, baseline_id, expected_fingerprint=expected_preview_fingerprint,
+        )
         fingerprint = store.state_fingerprint(baseline)
     except (OSError, ValueError):
         _analysis_changed()
         st.session_state["saved_comparison_analysis"] = None
         st.session_state["saved_comparison_analysis_context"] = (baseline_id, "unavailable")
-        st.warning("Selected saved record is unavailable. Reopen or select another saved baseline.")
+        st.warning(
+            "Selected saved record is unavailable or changed since its preview. "
+            "Refresh saved details and select its baseline again."
+        )
         st.selectbox(
             "Baseline analysis", options=[], index=None, disabled=True,
             key="saved_comparison_analysis",
@@ -129,6 +140,7 @@ def render_saved_comparison_selector(
     store: JsonReviewStore,
     saved_review_ids: list[str],
     current_is_saved: bool,
+    discovery_entries: dict[str, SavedReviewDiscoveryEntry] | None = None,
 ) -> tuple[ReviewComparison | None, SavedComparisonSelection | None]:
     """Read selected saved truth on each rerun; return no stale or unapplied comparison."""
     if "saved_comparison_export_lease" not in st.session_state:
@@ -148,8 +160,12 @@ def render_saved_comparison_selector(
     if current is None:
         return None, None
 
+    entries = discovery_entries or {}
     sources: dict[str, tuple[str, int | None, str]] = {
-        f"saved:{review_id}": (review_id, None, f"Saved review · {review_id}")
+        f"saved:{review_id}": (review_id, None, (
+            format_saved_review_label(entries[review_id])
+            if review_id in entries else f"Saved review · {review_id}"
+        ))
         for review_id in sorted(saved_review_ids) if review_id != current.review.review_id
     }
     for index, historical in enumerate(current.analysis_history):
@@ -202,7 +218,14 @@ def render_saved_comparison_selector(
         expected_baseline_fingerprint = None
         if baseline_id is not None and baseline_id != current.review.review_id:
             history_index, expected_baseline_fingerprint, has_analysis = (
-                _render_foreign_analysis_selector(store, baseline_id, eligible=eligible)
+                _render_foreign_analysis_selector(
+                    store, baseline_id, eligible=eligible,
+                    expected_preview_fingerprint=(
+                        entries[baseline_id].metadata.state_fingerprint
+                        if baseline_id in entries and entries[baseline_id].metadata is not None
+                        else None
+                    ),
+                )
             )
         elif baseline_id is not None:
             expected_baseline_fingerprint = store.state_fingerprint(current)

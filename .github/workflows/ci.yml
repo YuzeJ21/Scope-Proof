@@ -145,6 +145,8 @@ jobs:
         run: python -m pytest -q tests/reviews/test_selected_references.py tests/storage/test_selected_reference_migration.py
       - name: Selected-reference audit compatibility
         run: python -m pytest -q tests/reviews/test_reference_audit.py tests/reviews/test_reference_audit_safety.py tests/storage/test_reference_audit_migration.py tests/reporting/test_reference_audit_exports.py
+      - name: Saved-review discovery compatibility
+        run: python -m pytest -q tests/storage/test_review_discovery.py tests/storage/test_review_discovery_safety.py tests/reviews/test_discovery_selection.py tests/storage/test_discovery_review_fixes.py
       - name: Selected-reference comparison compatibility
         run: python -m pytest -q tests/reviews/test_selected_reference_comparison.py tests/reporting/test_selected_references.py
       - name: Git source coordinate compatibility

@@ -2054,16 +2054,41 @@ def _exercise_reference_audit_actions(page: Page, base_url: str, saved: dict) ->
     return audited
 
 
-def _reopen_saved_comparison_current(page: Page, base_url: str) -> None:
+def _reopen_saved_comparison_current(
+    page: Page,
+    base_url: str,
+    *,
+    discover: bool = False,
+) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     page.get_by_text("Resume a saved review", exact=True).click()
+    if discover:
+        load = page.get_by_role("button", name="Load saved review details", exact=True)
+        _run_and_wait_for_streamlit_rerun(page, load.click)
+        query = page.get_by_role(
+            "textbox",
+            name="Search loaded page by repository, PR, head, revision or ID",
+            exact=True,
+        )
+        query.fill("ACME/WIDGET #7")
+        _run_and_wait_for_streamlit_rerun(page, lambda: query.press("Tab"))
+        expect(page.get_by_text("Search covers this page only.", exact=False)).to_be_visible()
+        expect(page.get_by_role("button", name="Reopen local review", exact=True)).to_be_disabled()
     reopen = page.get_by_role("button", name="Reopen local review", exact=True)
     _choose_combobox_option(
         page,
         page.get_by_role("combobox", name="Saved review ID", exact=True),
-        option_name=CURRENT_REVIEW_ID,
+        option_name=(
+            f"acme/widget · PR #7 · head {CURRENT_HEAD[:12]} · criteria revision 2 · "
+            f"{CURRENT_REVIEW_ID}"
+            if discover
+            else CURRENT_REVIEW_ID
+        ),
         settled_control=reopen,
     )
+    if discover:
+        expect(page.get_by_text(f"Head: {CURRENT_HEAD}", exact=False)).to_be_visible()
+        expect(page.get_by_text("Retained historical analyses: 1", exact=False)).to_be_visible()
     reopen.click()
     expect(
         page.get_by_text(
@@ -2242,32 +2267,65 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                         with _capture_browser_failure(
                             page, diagnostics / f"generation-{generation}", log_path,
                         ):
-                            _reopen_saved_comparison_current(page, base_url)
+                            _reopen_saved_comparison_current(
+                                page, base_url, discover=generation == 1,
+                            )
                             assert_records_unchanged()
                             if generation == 0:
                                 page.screenshot(path=str(captures / "01-before-restart.png"))
                                 continue
 
                             baseline = page.get_by_role(
-                                "combobox", name="Comparison baseline", exact=True,
+                                "combobox",
+                                name="Comparison baseline",
+                                exact=True,
                             )
                             compare = page.get_by_role(
-                                "button", name="Compare selected saved analysis", exact=True,
+                                "button",
+                                name="Compare selected saved analysis",
+                                exact=True,
                             )
                             for (
-                                option, analysis_option, previous_head, previous_id,
-                                previous_revision, previous_actor,
+                                option,
+                                analysis_option,
+                                previous_head,
+                                previous_id,
+                                previous_revision,
+                                previous_actor,
                             ) in (
-                                (f"Saved review · {PREVIOUS_REVIEW_ID}",
-                                 None, PREVIOUS_HEAD, PREVIOUS_REVIEW_ID, 2, "previous"),
-                                (f"History 1 · criteria revision 1 · head {HISTORY_HEAD}",
-                                 None, HISTORY_HEAD, CURRENT_REVIEW_ID, 1, "historical"),
-                                (f"Saved review · {PREVIOUS_REVIEW_ID}",
-                                 f"History 1 · criteria revision 1 · head {FOREIGN_HISTORY_HEAD}",
-                                 FOREIGN_HISTORY_HEAD, PREVIOUS_REVIEW_ID, 1, "foreign-history"),
+                                (
+                                    f"acme/widget · PR #7 · head {PREVIOUS_HEAD[:12]} · "
+                                    f"criteria revision 2 · {PREVIOUS_REVIEW_ID}",
+                                    None,
+                                    PREVIOUS_HEAD,
+                                    PREVIOUS_REVIEW_ID,
+                                    2,
+                                    "previous",
+                                ),
+                                (
+                                    f"History 1 · criteria revision 1 · head {HISTORY_HEAD}",
+                                    None,
+                                    HISTORY_HEAD,
+                                    CURRENT_REVIEW_ID,
+                                    1,
+                                    "historical",
+                                ),
+                                (
+                                    f"acme/widget · PR #7 · head {PREVIOUS_HEAD[:12]} · "
+                                    f"criteria revision 2 · {PREVIOUS_REVIEW_ID}",
+                                    "History 1 · criteria revision 1 · head "
+                                    f"{FOREIGN_HISTORY_HEAD}",
+                                    FOREIGN_HISTORY_HEAD,
+                                    PREVIOUS_REVIEW_ID,
+                                    1,
+                                    "foreign-history",
+                                ),
                             ):
                                 _choose_combobox_option(
-                                    page, baseline, option_name=option, settled_control=compare,
+                                    page,
+                                    baseline,
+                                    option_name=option,
+                                    settled_control=compare,
                                 )
                                 if analysis_option is not None:
                                     analysis = page.get_by_role(

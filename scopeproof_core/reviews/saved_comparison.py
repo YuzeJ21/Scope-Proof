@@ -41,6 +41,11 @@ def _baseline_bundle(state: ReviewState, history_index: int | None) -> ReviewBun
     return state.bundle
 
 
+def _require_selected_identity(state: ReviewState, review_id: str) -> None:
+    if state.review.review_id != review_id:
+        raise SavedComparisonUnavailable("saved filename and owning review identity differ")
+
+
 def _compare(
     current: ReviewState,
     baseline: ReviewState,
@@ -65,6 +70,8 @@ def prepare_saved_comparison(
         saved_current,
         baseline,
     ):
+        _require_selected_identity(saved_current, current.review.review_id)
+        _require_selected_identity(baseline, baseline_review_id)
         current_fingerprint = store.state_fingerprint(saved_current)
         if current_fingerprint != expected_current:
             raise SavedComparisonUnavailable(
@@ -98,6 +105,8 @@ def locked_saved_comparison(
         current,
         baseline,
     ):
+        _require_selected_identity(current, selection.current_review_id)
+        _require_selected_identity(baseline, selection.baseline_review_id)
         if (
             store.state_fingerprint(current) != selection.current_fingerprint
             or store.state_fingerprint(baseline) != selection.baseline_fingerprint

@@ -198,8 +198,8 @@ class JsonReviewStore:
             and _REVIEW_ID.fullmatch(candidate.stem)
         )
 
-    def delete(self, review_id: str) -> None:
-        """Delete one exact safe local record without parsing its contents."""
+    def delete(self, review_id: str, *, expected_fingerprint: str | None = None) -> None:
+        """Delete one safe ID, optionally bound to an explicitly previewed snapshot."""
         validated_id = self._validate_review_id(review_id)
         self._require_safe_directory()
         if not self.directory.is_dir():
@@ -207,6 +207,15 @@ class JsonReviewStore:
         if not _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED:
             raise OSError("safe local review deletion is unsupported on this platform")
         with self._mutation_lock(validated_id):
+            if expected_fingerprint is not None:
+                current = self.load(validated_id)
+                if (
+                    current.review.review_id != validated_id
+                    or self.state_fingerprint(current) != expected_fingerprint
+                ):
+                    raise StaleReviewState(
+                        "saved review changed since preview; refresh details before deleting"
+                    )
             try:
                 directory_fd = os.open(
                     self.directory,
@@ -487,12 +496,24 @@ class JsonReviewStore:
             ):
                 event.pop("runtime_evidence_id", None)
 
-    def load(self, review_id: str) -> ReviewState:
+    def load(self, review_id: str, *, max_bytes: int | None = None) -> ReviewState:
         """Load a known record format and validate all nested models."""
+        try:
+            return self._load_record(review_id, max_bytes=max_bytes)
+        except RecursionError as error:
+            raise ValueError("saved review nesting exceeds validation limits") from error
+
+    def _load_record(self, review_id: str, *, max_bytes: int | None) -> ReviewState:
+        """Keep parser, migration and nested-validation failures within the load boundary."""
+        limit = MAX_SAVED_RECORD_BYTES if max_bytes is None else max_bytes
+        if type(limit) is not int or not 1 <= limit <= MAX_SAVED_RECORD_BYTES:
+            raise ValueError(
+                "record byte limit must be a positive integer within the store maximum"
+            )
         payload = json.loads(
             read_text_no_follow(
                 self._existing_record_path(review_id),
-                max_bytes=MAX_SAVED_RECORD_BYTES,
+                max_bytes=limit,
             )
         )
         if not isinstance(payload, dict):
