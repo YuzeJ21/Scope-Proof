@@ -6,6 +6,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from scopeproof_core.reviews.comparison import ReviewComparison
+from scopeproof_core.reviews.historical_analysis import (
+    HistoricalAnalysisReport,
+    HistoricalAnalysisSelection,
+    locked_historical_analysis,
+)
 from scopeproof_core.reviews.saved_comparison import (
     SavedComparisonSelection,
     locked_saved_comparison,
@@ -35,6 +40,47 @@ class SavedComparisonExportLease:
     def invalidate(self) -> None:
         self.generation += 1
         self.selection = None
+
+
+@dataclass
+class HistoricalAnalysisExportLease:
+    """Session generation shared by historical selection and existing callbacks."""
+
+    selection: HistoricalAnalysisSelection | None = None
+    generation: int = 0
+
+    def invalidate(self) -> None:
+        self.generation += 1
+        self.selection = None
+
+
+def deferred_historical_export(
+    selection: HistoricalAnalysisSelection,
+    renderer: Callable[[HistoricalAnalysisReport], str],
+    *,
+    store: JsonReviewStore,
+    lease: HistoricalAnalysisExportLease,
+) -> Callable[[], str]:
+    captured = selection.model_copy(deep=True)
+    generation = lease.generation
+    message = (
+        "Historical export was blocked because the saved record or selection changed. "
+        "Reopen the review and select its retained analysis again."
+    )
+
+    def render() -> str:
+        if lease.generation != generation or lease.selection != captured:
+            raise DeferredExportUnavailable(message)
+        try:
+            with locked_historical_analysis(store, captured) as report:
+                rendered = renderer(report)
+                if lease.generation != generation or lease.selection != captured:
+                    raise DeferredExportUnavailable(message)
+                return rendered
+        except (OSError, ValueError):
+            raise DeferredExportUnavailable(message) from None
+
+    return render
 
 
 def deferred_saved_comparison_export(
