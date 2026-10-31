@@ -2444,6 +2444,12 @@ def _exercise_historical_inspection(
     resume = page.get_by_text("Resume a saved review", exact=True)
     if not resume.locator("xpath=ancestor::details[1]").evaluate("node => node.open"):
         resume.click()
+    replace = page.get_by_role(
+        "checkbox", name="Allow replacing the unsaved current review", exact=True,
+    )
+    expect(reopen).to_be_disabled()
+    _run_and_wait_for_streamlit_rerun(page, replace.check)
+    expect(reopen).to_be_enabled()
     _run_and_wait_for_streamlit_rerun(page, reopen.click)
     disclosure = page.get_by_text("Inspect retained analysis", exact=True)
     if not disclosure.locator("xpath=ancestor::details[1]").evaluate("node => node.open"):
