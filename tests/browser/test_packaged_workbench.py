@@ -2448,17 +2448,29 @@ def _exercise_historical_inspection(
         "checkbox", name="Allow replacing the unsaved current review", exact=True,
     )
     expect(reopen).to_be_disabled()
-    _run_and_wait_for_streamlit_rerun(page, replace.check)
+    _run_and_wait_for_streamlit_rerun(
+        page,
+        page.get_by_text("Allow replacing the unsaved current review", exact=True).click,
+    )
+    expect(replace).to_be_checked()
     expect(reopen).to_be_enabled()
     _run_and_wait_for_streamlit_rerun(page, reopen.click)
-    disclosure = page.get_by_text("Inspect retained analysis", exact=True)
-    if not disclosure.locator("xpath=ancestor::details[1]").evaluate("node => node.open"):
-        disclosure.click()
-    expect(choice).to_have_value("")
-    expect(inspect).to_be_disabled()
-    expect(heading).to_have_count(0)
+    # Reopen intentionally collapses this panel. Inspect its retained DOM too:
+    # hidden stale report/download nodes must not masquerade as cleared state.
     expect(page.get_by_role(
-        "button", name="Download historical JSON", exact=True,
+        "combobox", name="Retained historical analysis", exact=True, include_hidden=True,
+    )).to_have_value("")
+    expect(page.get_by_role(
+        "button", name="Inspect selected historical analysis", exact=True, include_hidden=True,
+    )).to_be_disabled()
+    expect(page.get_by_role(
+        "heading", name="Historical recorded analysis", exact=True, include_hidden=True,
+    )).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Download historical JSON", exact=True, include_hidden=True,
+    )).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Download historical Markdown", exact=True, include_hidden=True,
     )).to_have_count(0)
 
 
