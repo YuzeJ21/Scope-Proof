@@ -2415,13 +2415,13 @@ def _exercise_historical_inspection(
                 const result = {
                     lastColumnReachable: last.right <= bounds.right + 1 && last.right > bounds.left,
                     overflow: getComputedStyle(element).overflowX,
-                    width: bounds.width,
+                    layoutWidth: element.clientWidth,
                 };
                 element.scrollLeft = 0;
                 return result;
             }""")
             assert reachability["overflow"] == "auto"
-            assert reachability["width"] <= geometry["clientWidth"] + 1
+            assert reachability["layoutWidth"] <= geometry["clientWidth"] + 1
             assert reachability["lastColumnReachable"]
         page.screenshot(path=str(captures / f"{name}.png"))
         # At CSS 200% the introductory boundary can fill a phone viewport.
