@@ -3,7 +3,11 @@
 from datetime import UTC, datetime
 
 from scopeproof_core.demo import build_review
-from scopeproof_core.reviews.lifecycle import append_file_scope_decision, new_review_state
+from scopeproof_core.reviews.lifecycle import (
+    append_external_verification,
+    append_file_scope_decision,
+    new_review_state,
+)
 from scopeproof_core.reviews.selected_references import (
     append_reviewer_selected_reference,
     selectable_reference_lines,
@@ -17,10 +21,13 @@ from scopeproof_core.schemas.models import (
     Criterion,
     EvidenceLevel,
     FileScopeDecision,
+    HumanDecision,
     LineChangeType,
     PullRequestSnapshot,
     RepositoryVisibility,
+    ResolutionEvent,
     ReviewState,
+    RuntimeEvidence,
 )
 
 CURRENT_REVIEW_ID = "saved-comparison-current"
@@ -125,8 +132,50 @@ def _with_prior_scope_decision(state: ReviewState) -> ReviewState:
     ))
 
 
+def _with_decision_context(state: ReviewState, context: str) -> ReviewState:
+    """Record explicitly constructed observations, never actual target execution."""
+    label = context.replace("-", " ")
+    actor = f"CONSTRUCTED {label} automatic decision actor"
+    artifact = f"https://example.test/constructed/{context}/runtime-report"
+    runtime_id = f"constructed-{context}-runtime"
+    timestamp = datetime(2026, 10, 30, 12, tzinfo=UTC)
+    return append_external_verification(
+        state,
+        RuntimeEvidence(
+            runtime_evidence_id=runtime_id,
+            repository=state.review.repository,
+            pr_number=state.review.pr_number,
+            head_sha=state.review.head_sha,
+            criterion_id="AC-01",
+            artifact_reference=artifact,
+            scenario=f"CONSTRUCTED {label} CSV export observation",
+            timestamp=timestamp,
+            environment=f"CONSTRUCTED {label} automatic test environment",
+            result=f"CONSTRUCTED {label} recorded result; no target code was executed.",
+            reviewer=actor,
+            evidence_level=EvidenceLevel.E3,
+            limitations=[
+                f"CONSTRUCTED {label} observation; no genuine external verification.",
+                "Automatic fixture actors are not independent practitioners.",
+            ],
+        ),
+        ResolutionEvent(
+            event_id=f"constructed-{context}-manual-decision",
+            criterion_id="AC-01",
+            decision=HumanDecision.MANUALLY_VERIFIED,
+            comment=f"CONSTRUCTED {label} decision rationale; not customer evidence.",
+            evidence_url=artifact,
+            claimed_evidence_level=EvidenceLevel.E3,
+            runtime_evidence_id=runtime_id,
+            reviewer=actor,
+            timestamp=timestamp,
+        ),
+    )
+
+
 def saved_comparison_states(
     *, selected_references: bool = False, foreign_history: bool = False,
+    decision_context: bool = False,
 ) -> tuple[ReviewState, ReviewState]:
     """Return compatible constructed active/history and separate-record analyses."""
     current = _constructed_state(
@@ -146,16 +195,30 @@ def saved_comparison_states(
             selected_context="previous" if selected_references else None,
         )
     )
+    if decision_context:
+        current = _with_decision_context(current, "current")
+        historical = _with_decision_context(historical, "historical")
+        previous = _with_decision_context(previous, "previous")
     assert current.bundle is not None and historical.bundle is not None
     current.criteria_revision.number = 2
     current.bundle.criteria_revision_number = 2
     current.analysis_history = [historical.bundle]
+    if decision_context:
+        current.resolution_events = [
+            *historical.resolution_events, *current.resolution_events,
+        ]
     if foreign_history:
         foreign_historical = _with_prior_scope_decision(_constructed_state(
             PREVIOUS_REVIEW_ID, FOREIGN_HISTORY_HEAD, added_path=False,
             selected_context="foreign-history" if selected_references else None,
         ))
+        if decision_context:
+            foreign_historical = _with_decision_context(foreign_historical, "foreign-history")
         previous.analysis_history = [foreign_historical.bundle]
+        if decision_context:
+            previous.resolution_events = [
+                *foreign_historical.resolution_events, *previous.resolution_events,
+            ]
     return (
         ReviewState.model_validate(current.model_dump(mode="python")),
         ReviewState.model_validate(previous.model_dump(mode="python")),

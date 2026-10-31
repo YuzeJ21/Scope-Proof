@@ -475,6 +475,16 @@ checks prevent retargeted or stale choices. History selection, evidence, gates a
 remain unchanged. See the [bounded discovery assessment](docs/audits/2026-10-30-saved-review-discovery.md).
 This completes another selected reviewer outcome without a persistent index, release or Stage 3 claim.
 
+The next owner-delegated gap review selected **inspect recorded reviewer decision and runtime
+context in compatible comparisons**. Previously, comparison reduced criterion resolutions to
+decision labels, hiding same-label changes in notes, attribution or linked observations. Unreleased
+source now provides separately validated previous/current snapshots in the workbench and comparison
+JSON/Markdown, with complete latest criterion resolutions and retained runtime records. Complete
+record distinctions remain separate from existing enum deltas, candidate changes, decision-review
+logic and gates. Explicit runtime links are preserved; legacy links remain unknown. Review-level
+final acceptance and full event history are outside this slice. See the [bounded assessment](docs/audits/2026-10-30-decision-context-comparison.md).
+This completes the selected reporting outcome without changing record v7, release status or Stage 3.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

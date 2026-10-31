@@ -580,6 +580,24 @@ expires the applied comparison; select again to continue. This path does not fet
 reanalyze code, modify saved review bytes, or carry forward a decision. The published v0.2.4
 download does not contain this new entry point.
 
+### Inspect recorded decision changes (unreleased source)
+
+Compatible comparisons include a separate **Recorded decision and runtime context** section.
+Expand **Previous decision context** and **Current decision context** to inspect owning record,
+head, criteria revision, latest criterion decisions and retained runtime observations. The
+comparison JSON and Markdown include complete notes, asserted reviewers, recorded timestamps,
+claimed levels, explicit runtime IDs, artifact references, scenarios, environments, results and
+limitations. A changed note or observation is visible even when the decision label stays the same.
+
+These are differences in recorded facts, separate from automatic candidate changes and the
+existing decision-label deltas. They do not change gates, carry a decision forward, authenticate
+the actor, fetch an artifact or re-verify execution. Only an explicit validated runtime ID links
+a decision to an observation; legacy unlinked records remain unlinked. Missing context in an
+older comparison is unavailable, while new explicit empty snapshots mean no records were present.
+Review-level final acceptance and full decision-event history are outside this section. Saved
+record changes expire old comparison downloads, including changes limited to runtime context.
+See the [bounded assessment](docs/audits/2026-10-30-decision-context-comparison.md).
+
 ### Local review storage
 
 The workbench stores versioned JSON records under `~/.scopeproof/reviews`. The reopen panel lists
