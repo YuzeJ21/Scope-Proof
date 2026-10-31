@@ -40,18 +40,20 @@ def _complete_record(value: object, model: type[BaseModel]) -> dict:
 
 
 def _complete_records(value: object) -> object:
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="python")
     if isinstance(value, dict):
         value = dict(value)
-        if isinstance(value.get("resolutions"), list):
-            value["resolutions"] = [
-                _complete_record(item, HumanResolution) for item in value["resolutions"]
-            ]
+        for field, model in (
+            ("resolutions", HumanResolution), ("runtime_evidence", RuntimeEvidence),
+        ):
+            if field not in value:
+                continue
+            if not isinstance(value[field], list):
+                raise ValueError("comparison context collections must be explicit lists")
+            value[field] = [_complete_record(item, model) for item in value[field]]
         if value.get("resolution") is not None:
             value["resolution"] = _complete_record(value["resolution"], HumanResolution)
-        if isinstance(value.get("runtime_evidence"), list):
-            value["runtime_evidence"] = [
-                _complete_record(item, RuntimeEvidence) for item in value["runtime_evidence"]
-            ]
     return value
 
 
@@ -160,6 +162,8 @@ class CriterionDecisionContext(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _explicit_records(cls, value: object) -> object:
+        if isinstance(value, BaseModel):
+            value = value.model_dump(mode="python")
         if isinstance(value, dict):
             value = {key: item for key, item in value.items() if key != "runtime_link_status"}
         return _complete_records(value)

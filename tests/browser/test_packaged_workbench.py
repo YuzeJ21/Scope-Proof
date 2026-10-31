@@ -2213,6 +2213,7 @@ def _assert_saved_comparison_downloads(
         assert resolution["decision"] == "manually_verified"
         assert resolution["claimed_evidence_level"] == runtime["evidence_level"] == "E3"
         assert resolution["runtime_evidence_id"] == runtime["runtime_evidence_id"]
+        assert len(runtime["runtime_evidence_id"]) > 1_000
         assert change[side]["resolution"] == resolution
         assert change[side]["runtime_evidence"] == [runtime]
         assert change[side]["runtime_link_status"] == "linked"
@@ -2273,8 +2274,11 @@ def _assert_decision_context_details(page: Page, *, previous_actor: str) -> None
             f"CONSTRUCTED {label} recorded result; no target code was executed.",
             f"CONSTRUCTED {label} observation; no genuine external verification.",
             "Automatic fixture actors are not independent practitioners.",
+            "<img src=x onerror=bad> **Untrusted recorded text**",
         ):
             expect(details.get_by_text(value, exact=False).first).to_be_visible()
+        expect(details.locator("img[src=x]")).to_have_count(0)
+        expect(details.locator("strong", has_text="Untrusted recorded text")).to_have_count(0)
         expect(details.locator(
             f'a[href="https://example.test/constructed/{context}/runtime-report"]',
         ).first).to_be_visible()

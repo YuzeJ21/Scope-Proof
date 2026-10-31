@@ -137,7 +137,8 @@ def _with_decision_context(state: ReviewState, context: str) -> ReviewState:
     label = context.replace("-", " ")
     actor = f"CONSTRUCTED {label} automatic decision actor"
     artifact = f"https://example.test/constructed/{context}/runtime-report"
-    runtime_id = f"constructed-{context}-runtime"
+    # Exercise wrapping of valid long recorded identities in real installed UI.
+    runtime_id = f"constructed-{context}-runtime-" + "traceability" * 90
     timestamp = datetime(2026, 10, 30, 12, tzinfo=UTC)
     return append_external_verification(
         state,
@@ -151,7 +152,10 @@ def _with_decision_context(state: ReviewState, context: str) -> ReviewState:
             scenario=f"CONSTRUCTED {label} CSV export observation",
             timestamp=timestamp,
             environment=f"CONSTRUCTED {label} automatic test environment",
-            result=f"CONSTRUCTED {label} recorded result; no target code was executed.",
+            result=(
+                f"CONSTRUCTED {label} recorded result; no target code was executed. "
+                "<img src=x onerror=bad> **Untrusted recorded text**"
+            ),
             reviewer=actor,
             evidence_level=EvidenceLevel.E3,
             limitations=[

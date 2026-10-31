@@ -59,6 +59,13 @@ against JSON/Markdown and workbench details through restart/reopen and active/ow
 comparison, retaining saved-byte/gate invariants and desktop/phone/200% CSS zoom layout checks.
 CSS zoom is labeled as automation, not native browser zoom or accessibility conformance.
 
+Independent whole-branch review reproduced a Python-input bypass before integration: tuples or
+iterators could skip the complete nested-record check and allow default timestamps. Regression
+tests reproduced this before the fix. Projection collections now require explicit lists before
+Pydantic's nested defaults can run, including standalone rows; mutable model inputs are serialized
+and revalidated. Additional installed-browser checks use runtime IDs longer than 1,000 characters
+and inert HTML/Markdown-like recorded result text at desktop, phone and 200% CSS zoom.
+
 Full coverage, lint/lock, deterministic benchmark, clean installation, package/browser, available
 Python/Windows compatibility, independent review, exact-head CI and resulting-main outcomes are
 source-bound in the integration PR and private verification report. Earlier or interrupted runs

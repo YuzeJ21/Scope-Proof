@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import io
+import json
 import os
 import socket
 import subprocess
@@ -410,11 +411,18 @@ def test_same_decision_changed_context_preserves_all_original_deltas_gates_and_s
     assert before == (previous.model_dump_json(), current.model_dump_json())
 
 
-def test_comparison_never_opens_fetches_or_executes_recorded_artifact(monkeypatch, tmp_path):
+@pytest.mark.parametrize("reference_kind", ["local_path", "windows_path"])
+def test_comparison_never_opens_fetches_or_executes_recorded_artifact(
+    monkeypatch, tmp_path, reference_kind,
+):
     bundle = constructed_bundle()
     artifact = tmp_path / "constructed-observation.py"
     artifact.write_text("raise AssertionError('Constructed target must never execute')\n")
-    bundle.runtime_evidence[0].artifact_reference = str(artifact)
+    reference = (
+        str(artifact) if reference_kind == "local_path"
+        else r"C:\constructed\untrusted-observation.py"
+    )
+    bundle.runtime_evidence[0].artifact_reference = reference
     bundle = regated(bundle)
     api = context_type()
 
@@ -431,5 +439,9 @@ def test_comparison_never_opens_fetches_or_executes_recorded_artifact(monkeypatc
         context = api.from_bundles(bundle, bundle)
         result = compare_reviews(bundle, bundle)
         exported = export_comparison_json(result)
-    assert context.current.runtime_evidence[0].artifact_reference == str(artifact)
-    assert str(artifact) in exported
+    assert context.current.runtime_evidence[0].artifact_reference == reference
+    payload = json.loads(exported)
+    for side in ("previous", "current"):
+        assert payload["decision_context_comparison"][side]["runtime_evidence"][0][
+            "artifact_reference"
+        ] == reference
