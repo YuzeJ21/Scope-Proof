@@ -13,6 +13,10 @@ import streamlit as st
 
 from apps.web.decision_context_comparison import render_decision_context_comparison
 from apps.web.deferred_exports import deferred_review_export, deferred_saved_comparison_export
+from apps.web.historical_analysis import (
+    clear_historical_analysis_selection,
+    render_historical_analysis_selector,
+)
 from apps.web.saved_comparison import (
     clear_saved_comparison_selection,
     render_saved_comparison_selector,
@@ -312,6 +316,7 @@ elif _active_source_provenance is not None:
 def _reset_analysis() -> None:
     clear_source_attachment()
     clear_saved_comparison_selection()
+    clear_historical_analysis_selection()
     st.session_state["criteria_confirmed"] = False
     st.session_state["bundle"] = None
     st.session_state["resolutions"] = []
@@ -667,6 +672,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     """Restore persisted review state without claiming its source snapshot is loaded."""
     clear_source_attachment()
     clear_saved_comparison_selection()
+    clear_historical_analysis_selection()
     st.session_state["snapshot"] = None
     st.session_state["criteria"] = state.criteria_revision.criteria
     st.session_state["criteria_confirmed"] = state.review.criteria_confirmed
@@ -2058,6 +2064,13 @@ review_matches_local_save = bool(
 )
 review_save_notice = st.session_state.pop("review_save_notice", None)
 st.header("3 · Decision Progress")
+render_historical_analysis_selector(
+    review_state, store=review_store,
+    current_is_saved=(
+        review_store_available and review_state is not None
+        and _review_matches_local_save(review_state)
+    ),
+)
 saved_comparison, saved_comparison_selection = render_saved_comparison_selector(
     review_state,
     store=review_store,

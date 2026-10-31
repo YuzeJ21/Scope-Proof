@@ -46,6 +46,13 @@ from scopeproof_core.schemas.models import (
     LineChangeType,
 )
 from tests.candidate_selection_fixture import selection_criteria, selection_snapshot
+from tests.historical_analysis_fixture import (
+    HISTORICAL_HEAD,
+    HISTORICAL_PRODUCER_VERSION,
+    HISTORICAL_REVIEW_ID,
+    HISTORICAL_UNTRUSTED_TEXT,
+    PENDING_CRITERIA_TEXT,
+)
 from tests.saved_comparison_fixture import (
     CURRENT_HEAD,
     CURRENT_REVIEW_ID,
@@ -2284,6 +2291,189 @@ def _assert_decision_context_details(page: Page, *, previous_actor: str) -> None
         ).first).to_be_visible()
 
 
+def _exercise_historical_inspection(
+    page: Page, base_url: str, saved_state: dict, captures: Path,
+) -> None:
+    """Inspect stored history while the changed current criteria remain unconfirmed."""
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.get_by_text("Resume a saved review", exact=True).click()
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    _choose_combobox_option(
+        page, page.get_by_role("combobox", name="Saved review ID", exact=True),
+        option_name=HISTORICAL_REVIEW_ID, settled_control=reopen,
+    )
+    _run_and_wait_for_streamlit_rerun(page, reopen.click)
+    expect(page.get_by_text(
+        "Review reopened from local storage after validation.", exact=True,
+    )).to_be_visible()
+    expect(page.get_by_text(
+        "Confirm criteria and run analysis to generate the evidence matrix.", exact=True,
+    )).to_be_visible()
+    expect(page.get_by_role("button", name="Download JSON", exact=True)).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Record final acceptance", exact=True,
+    )).to_have_count(0)
+    page.get_by_text("Inspect retained analysis", exact=True).click()
+    choice = page.get_by_role("combobox", name="Retained historical analysis", exact=True)
+    inspect = page.get_by_role(
+        "button", name="Inspect selected historical analysis", exact=True,
+    )
+    heading = page.get_by_role("heading", name="Historical recorded analysis", exact=True)
+    expect(choice).to_have_value("")
+    expect(inspect).to_be_disabled()
+    expect(heading).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Download historical JSON", exact=True,
+    )).to_have_count(0)
+    _choose_combobox_option(
+        page, choice,
+        option_name=f"History 1 · criteria revision 1 · head {HISTORICAL_HEAD}",
+        settled_control=inspect,
+    )
+    expect(heading).to_have_count(0)
+    _run_and_wait_for_streamlit_rerun(page, inspect.click)
+    expect(heading).to_be_visible()
+    historical = saved_state["analysis_history"][0]
+    assert historical["criteria_revision_number"] == 1
+    assert saved_state["criteria_revision"]["number"] == 3
+    assert saved_state["criteria_revision"]["confirmed"] is False
+    assert saved_state["bundle"] is None
+    assert historical["criteria"] != saved_state["criteria_revision"]["criteria"]
+    panel = heading.locator("xpath=ancestor::details[1]")
+    for value in (
+        HISTORICAL_REVIEW_ID, HISTORICAL_HEAD, HISTORICAL_PRODUCER_VERSION,
+        "CONSTRUCTED historical automatic decision actor",
+        "CONSTRUCTED historical automatic reference actor",
+        HISTORICAL_UNTRUSTED_TEXT,
+    ):
+        expect(panel.get_by_text(value, exact=False).first).to_be_visible()
+    expect(panel.locator("img[src=x]")).to_have_count(0)
+    expect(panel.locator(
+        "strong", has_text="CONSTRUCTED inert historical result",
+    )).to_have_count(0)
+    json_download = _download_with_retry(page, button_name="Download historical JSON")
+    report = json.loads(json_download.path().read_text(encoding="utf-8"))
+    assert set(report) == {
+        "report_kind", "schema_version", "boundary", "selection", "analysis",
+        "validation_tool_version", "validation_ruleset_version", "validation_source_identity",
+    }
+    assert report["report_kind"] == "scopeproof_historical_analysis"
+    assert report["schema_version"] == 1
+    assert report["boundary"]
+    assert report["selection"]["review_id"] == HISTORICAL_REVIEW_ID
+    assert report["selection"]["history_index"] == 0
+    assert report["analysis"] == historical
+    assert report["analysis"]["review"]["tool_version"] == HISTORICAL_PRODUCER_VERSION
+    assert report["validation_tool_version"] == version("scopeproof")
+    assert report["validation_source_identity"] is not None
+    markdown_download = _download_with_retry(page, button_name="Download historical Markdown")
+    markdown = html.unescape(re.sub(
+        r"\\([^\w\s])", r"\1", markdown_download.path().read_text(encoding="utf-8"),
+    ))
+    for value in (
+        HISTORICAL_REVIEW_ID, HISTORICAL_HEAD, HISTORICAL_PRODUCER_VERSION,
+        "CONSTRUCTED historical automatic decision actor",
+        "CONSTRUCTED historical automatic reference actor",
+        HISTORICAL_UNTRUSTED_TEXT,
+    ):
+        assert value in markdown
+    assert "historical" in markdown.lower()
+    assert PENDING_CRITERIA_TEXT not in markdown
+    expect(page.get_by_role("button", name="Download JSON", exact=True)).to_have_count(0)
+    expect(page.get_by_text(
+        "Confirm criteria and run analysis to generate the evidence matrix.", exact=True,
+    )).to_be_visible()
+
+    for viewport, zoom, name in (
+        (VIEWPORTS[0], "", "05-historical-desktop"),
+        (VIEWPORTS[1], "", "06-historical-phone"),
+        (VIEWPORTS[1], "2", "07-historical-phone-css-zoom-200"),
+    ):
+        page.set_viewport_size(viewport)
+        page.evaluate("value => { document.documentElement.style.zoom = value; }", zoom)
+        # Capture the historical section itself, after explicitly bringing its
+        # heading into view; selector/sidebar screenshots do not prove this UI.
+        heading.scroll_into_view_if_needed()
+        expect(heading).to_be_visible()
+        expect(heading).to_be_in_viewport()
+        expect(panel.get_by_text(HISTORICAL_HEAD, exact=False).first).to_be_visible()
+        expect(panel.get_by_text(HISTORICAL_REVIEW_ID, exact=False).first).to_be_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        geometry = panel.evaluate("element => ({width: element.getBoundingClientRect().width, "
+                                  "scrollWidth: element.scrollWidth, "
+                                  "clientWidth: element.clientWidth})")
+        assert geometry["width"] > 0
+        assert geometry["scrollWidth"] <= geometry["clientWidth"] + 1
+        preview = panel.locator(".st-key-historical_analysis_preview")
+        tables = preview.locator("table")
+        assert tables.count() > 0
+        for table in tables.all():
+            reachability = table.evaluate("""element => {
+                element.scrollLeft = element.scrollWidth;
+                const bounds = element.getBoundingClientRect();
+                const last = element.querySelector('tr').lastElementChild.getBoundingClientRect();
+                const result = {
+                    lastColumnReachable: last.right <= bounds.right + 1 && last.right > bounds.left,
+                    overflow: getComputedStyle(element).overflowX,
+                    layoutWidth: element.clientWidth,
+                };
+                element.scrollLeft = 0;
+                return result;
+            }""")
+            assert reachability["overflow"] == "auto"
+            assert reachability["layoutWidth"] <= geometry["clientWidth"] + 1
+            assert reachability["lastColumnReachable"]
+        page.screenshot(path=str(captures / f"{name}.png"))
+        # At CSS 200% the introductory boundary can fill a phone viewport.
+        # Preserve separate visible identity captures rather than treating
+        # off-screen text or metadata as screenshot evidence.
+        for identity, suffix in ((HISTORICAL_REVIEW_ID, "owner"), (HISTORICAL_HEAD, "head")):
+            target = panel.get_by_text(identity, exact=False).first
+            target.scroll_into_view_if_needed()
+            expect(target).to_be_in_viewport()
+            page.screenshot(path=str(captures / f"{name}-{suffix}.png"))
+        (captures / f"{name}.json").write_text(json.dumps({
+            "viewport": viewport, "css_zoom": zoom or "1", "panel": geometry,
+            "historical_head": HISTORICAL_HEAD, "owner": HISTORICAL_REVIEW_ID,
+        }, indent=2), encoding="utf-8")
+    page.evaluate("document.documentElement.style.zoom = ''")
+    page.set_viewport_size(VIEWPORTS[0])
+
+    # Reopening the same owner must expire applied history/download state,
+    # requiring an explicit choice and inspection again.
+    resume = page.get_by_text("Resume a saved review", exact=True)
+    if not resume.locator("xpath=ancestor::details[1]").evaluate("node => node.open"):
+        resume.click()
+    replace = page.get_by_role(
+        "checkbox", name="Allow replacing the unsaved current review", exact=True,
+    )
+    expect(reopen).to_be_disabled()
+    _run_and_wait_for_streamlit_rerun(
+        page,
+        page.get_by_text("Allow replacing the unsaved current review", exact=True).click,
+    )
+    expect(replace).to_be_checked()
+    expect(reopen).to_be_enabled()
+    _run_and_wait_for_streamlit_rerun(page, reopen.click)
+    # Reopen intentionally collapses this panel. Inspect its retained DOM too:
+    # hidden stale report/download nodes must not masquerade as cleared state.
+    expect(page.get_by_role(
+        "combobox", name="Retained historical analysis", exact=True, include_hidden=True,
+    )).to_have_value("")
+    expect(page.get_by_role(
+        "button", name="Inspect selected historical analysis", exact=True, include_hidden=True,
+    )).to_be_disabled()
+    expect(page.get_by_role(
+        "heading", name="Historical recorded analysis", exact=True, include_hidden=True,
+    )).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Download historical JSON", exact=True, include_hidden=True,
+    )).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Download historical Markdown", exact=True, include_hidden=True,
+    )).to_have_count(0)
+
+
 def test_installed_wheel_saved_comparison_survives_restart_without_record_writes(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
@@ -2317,6 +2507,22 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
             saved_analyses[analysis["review"]["head_sha"]] = analysis
             assert analysis["gate"]["verdict"] == "needs_review"
 
+    historical_recipe = runtime_dir / "constructed-historical-analysis.py"
+    shutil.copy2(REPOSITORY_ROOT / "tests" / "historical_analysis_fixture.py", historical_recipe)
+    _run(
+        str(installed_wheel / "bin" / "python"), "-I", "-c",
+        "from pathlib import Path; import runpy, sys; import apps, scopeproof_core; "
+        "from scopeproof_core.storage.json_store import JsonReviewStore; "
+        "assert all(Path(module.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()) "
+        "for module in (apps, scopeproof_core)); "
+        "recipe=runpy.run_path(sys.argv[1]); "
+        "JsonReviewStore(Path(sys.argv[2])).save(recipe['historical_analysis_state']())",
+        str(historical_recipe), str(review_store_dir), cwd=runtime_dir,
+    )
+    historical_path = review_store_dir / f"{HISTORICAL_REVIEW_ID}.json"
+    saved_bytes[historical_path.name] = historical_path.read_bytes()
+    historical_state = json.loads(saved_bytes[historical_path.name])["state"]
+
     def assert_records_unchanged() -> None:
         assert {
             path.name: path.read_bytes() for path in review_store_dir.glob("*.json")
@@ -2332,7 +2538,7 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            for generation in range(2):
+            for generation in range(3):
                 with _installed_workbench_server(
                     installed_wheel, runtime_dir, home_dir,
                     log_name=f"saved-comparison-{generation}.log",
@@ -2355,6 +2561,12 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                         with _capture_browser_failure(
                             page, diagnostics / f"generation-{generation}", log_path,
                         ):
+                            if generation == 2:
+                                _exercise_historical_inspection(
+                                    page, base_url, historical_state, captures,
+                                )
+                                assert_records_unchanged()
+                                continue
                             _reopen_saved_comparison_current(
                                 page, base_url, discover=generation == 1,
                             )
@@ -2523,3 +2735,10 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
     assert (captures / "02-history-comparison.png").is_file()
     assert (captures / "03-phone-comparison-controls.png").is_file()
     assert (captures / "04-phone-decision-context-css-zoom-200.png").is_file()
+    for name in (
+        "05-historical-desktop", "06-historical-phone", "07-historical-phone-css-zoom-200",
+    ):
+        assert (captures / f"{name}.png").is_file()
+        assert (captures / f"{name}.json").is_file()
+        assert (captures / f"{name}-owner.png").is_file()
+        assert (captures / f"{name}-head.png").is_file()
