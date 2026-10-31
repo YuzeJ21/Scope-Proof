@@ -598,6 +598,26 @@ Review-level final acceptance and full decision-event history are outside this s
 record changes expire old comparison downloads, including changes limited to runtime context.
 See the [bounded assessment](docs/audits/2026-10-30-decision-context-comparison.md).
 
+### Inspect retained historical analyses (unreleased source)
+
+Reopen a saved record and expand **Inspect retained analysis** in Decision Progress. Explicitly
+choose a **Retained historical analysis**, then click **Inspect selected historical analysis**.
+This works with different current criteria or a saved pending revision that has no active analysis.
+The historical view never replaces the active review or carries its decisions forward.
+
+The read-only view and **Download historical JSON/Markdown** identify the owning saved record,
+history position, exact historical head, known or unknown criteria revision, original producer and
+current validation context. They retain the selected analysis's criteria, evidence, decisions,
+observations, scope and reference audit. Its historical status is validated under installed policy;
+it is not current-head verification or acceptance. Full owning decision-event history is not replayed.
+
+Current draft inputs do not enter this report. Unsaved model changes require saving or reopening
+first; a changed/deleted record or changed selection expires the old view and download callbacks.
+Reopening even the same record clears its choice. Legacy histories missing criteria-source
+provenance show identity and an unavailable-report explanation under the existing export policy.
+This path reads saved facts without fetching artifacts, loading source or rerunning analysis.
+See the [bounded assessment](docs/audits/2026-10-31-historical-analysis-inspection.md).
+
 ### Local review storage
 
 The workbench stores versioned JSON records under `~/.scopeproof/reviews`. The reopen panel lists

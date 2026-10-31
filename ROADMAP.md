@@ -485,6 +485,16 @@ logic and gates. Explicit runtime links are preserved; legacy links remain unkno
 final acceptance and full event history are outside this slice. See the [bounded assessment](docs/audits/2026-10-30-decision-context-comparison.md).
 This completes the selected reporting outcome without changing record v7, release status or Stage 3.
 
+The next owner-delegated gap review selected **inspect and hand off one retained historical
+analysis without a compatible active analysis**. Saved data was intact, but comparison-only access
+excluded pending records with no active bundle and changed criteria. Unreleased source now provides
+an explicit read-only history selector, historical-only JSON/Markdown and separate producer/current
+validation identities. Full-record/history-position/analysis fingerprints and callback leases reject
+stale or retargeted choices. Unknown revisions remain unknown; missing historical provenance keeps
+reports unavailable under existing policy. Current drafts, active analysis, decisions, gates,
+comparison compatibility and record v7 stay unchanged. See the [bounded assessment](docs/audits/2026-10-31-historical-analysis-inspection.md).
+This completes one inspection/handoff outcome without a new release, standing queue or Stage 3 claim.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic
