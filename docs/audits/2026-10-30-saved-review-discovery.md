@@ -37,6 +37,13 @@ search index adds synchronization and migration work. Neither is included.
   missing IDs and changed selected-state fingerprints retain existing guards. Deletion consent
   resets on target change; direct-ID reopen adds no deletion route.
 
+Independent review reproduced three interactions before merge: deep JSON nesting aborted a page;
+catalog invalidation left the direct-ID target populated; and deletion of a preview did not check
+whether that record had changed. Regressions observed all three failures. The loader now converts
+recursion failures to a per-record validation error, invalidation clears both reopen targets, and
+deletion checks the available preview's fingerprint/owner under the existing mutation lock.
+ID-only corrupt-record recovery and existing platform deletion restrictions remain unchanged.
+
 Discovery does not write records, fabricate legacy metadata, call GitHub, execute target code or
 rerun analysis. Existing pending-input, source authority, storage conflict, acceptance and deferred
 export controls remain. Evidence, selected-reference audit events, reviewer decisions, historical

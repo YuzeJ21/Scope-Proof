@@ -1516,7 +1516,13 @@ with st.expander("Resume a saved review", expanded=False):
             disabled=not delete_confirmed,
         ):
             try:
-                review_store.delete(reopen_id)
+                preview = saved_discovery_entries.get(reopen_id)
+                if preview is None or preview.metadata is None:
+                    review_store.delete(reopen_id)
+                else:
+                    review_store.delete(
+                        reopen_id, expected_fingerprint=preview.metadata.state_fingerprint,
+                    )
             except FileNotFoundError:
                 _mark_open_review_deleted(reopen_id)
                 st.session_state["saved_review_delete_notice"] = (

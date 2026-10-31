@@ -69,6 +69,11 @@ its analysis can be selected. ID-only unavailable previews may still use the exi
 selection path. Validate filename/state ID matching in both selected-record loading and core
 comparison preparation, so a catalog label cannot retarget another record. Never infer baseline
 compatibility or acceptance from its descriptive metadata.
+Clearing targets includes the direct-ID input. Deleting a loaded available preview supplies its
+fingerprint to `JsonReviewStore.delete(..., expected_fingerprint=...)`, checked with owning ID
+under the existing mutation lock before unlink. ID-only deletion retains the existing unparsed
+recovery path; no new platform deletion support is added. Loader recursion failures from JSON,
+migration or validation become `ValueError`, so malformed nesting remains per-record unavailable.
 
 Selected-record summary shows full bounded repository/head/revision and active/history presence,
 not a fresh-source or readiness badge. Preview names are local asserted saved metadata. Source,

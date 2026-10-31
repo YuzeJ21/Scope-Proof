@@ -16,6 +16,7 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 
 def _clear_targets() -> None:
     st.session_state["saved_reopen_review_id"] = None
+    st.session_state["reopen_review_id"] = ""
     st.session_state["delete_saved_review_confirmed"] = False
     clear_saved_comparison_selection()
     st.session_state["saved_discovery_notice"] = (

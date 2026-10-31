@@ -551,6 +551,10 @@ reopen or foreign-analysis selection. Without a loaded catalog, an unrelated new
 existing ID-based choices and their fingerprint guards. New targets never inherit deletion
 confirmation; direct-ID entry does not add a deletion path. Discovery does not rewrite saved
 records, load GitHub, rerun analysis or carry forward a decision. Record version 7 is unchanged.
+Loaded-preview deletion also rechecks its exact saved-state fingerprint under the existing
+mutation lock. A changed record cannot be deleted using consent for its old preview. Clearing
+discovery targets clears both selector and direct-ID input; malformed nesting is isolated to
+the unavailable record rather than aborting neighboring previews.
 
 ### Durable local review workflow
 
