@@ -2404,6 +2404,25 @@ def _exercise_historical_inspection(
                                   "clientWidth: element.clientWidth})")
         assert geometry["width"] > 0
         assert geometry["scrollWidth"] <= geometry["clientWidth"] + 1
+        preview = panel.locator(".st-key-historical_analysis_preview")
+        tables = preview.locator("table")
+        assert tables.count() > 0
+        for table in tables.all():
+            reachability = table.evaluate("""element => {
+                element.scrollLeft = element.scrollWidth;
+                const bounds = element.getBoundingClientRect();
+                const last = element.querySelector('tr').lastElementChild.getBoundingClientRect();
+                const result = {
+                    lastColumnReachable: last.right <= bounds.right + 1 && last.right > bounds.left,
+                    overflow: getComputedStyle(element).overflowX,
+                    width: bounds.width,
+                };
+                element.scrollLeft = 0;
+                return result;
+            }""")
+            assert reachability["overflow"] == "auto"
+            assert reachability["width"] <= geometry["clientWidth"] + 1
+            assert reachability["lastColumnReachable"]
         page.screenshot(path=str(captures / f"{name}.png"))
         # At CSS 200% the introductory boundary can fill a phone viewport.
         # Preserve separate visible identity captures rather than treating

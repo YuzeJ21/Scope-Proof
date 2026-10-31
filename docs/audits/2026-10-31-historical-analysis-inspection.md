@@ -90,3 +90,11 @@ Saved bytes and record version remain unchanged. Regression RED/GREEN covers omi
 and paired fields, preserved counterparts, current validation identity and report reparse rejection.
 The earlier-head installed-browser run was cancelled as incomplete after this finding; final
 verification uses a fresh package built after the correction.
+
+The installed browser then reproduced report-preview overflow on both macOS and Linux. Real DOM
+measurements identified Markdown descendant overflow; scoped wrapping and horizontally scrollable
+tables reduced the panel's scroll width to its client width at desktop, phone and 200% CSS zoom.
+The product applies only constant trusted CSS under the historical preview key, while report HTML
+remains disabled. No evidence is hidden, truncated or placed in a fixed-height scrolling report.
+The strict original panel/page geometry assertions remain; additional checks require every table's
+last column to be reachable after scrolling. Earlier failing runs remain separate from final proof.

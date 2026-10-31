@@ -21,6 +21,27 @@ from scopeproof_core.reviews.historical_analysis import (
 from scopeproof_core.schemas.models import ReviewState
 from scopeproof_core.storage.json_store import JsonReviewStore
 
+_PREVIEW_STYLE = """
+<style>
+.st-key-historical_analysis_preview {
+    min-width: 0;
+    max-width: 100%;
+}
+.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"] {
+    overflow-wrap: anywhere;
+}
+.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"] table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+}
+.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"] code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+</style>
+"""
+
 
 def clear_historical_analysis_selection(*, clear_choice: bool = True) -> None:
     lease = st.session_state.get("historical_analysis_export_lease")
@@ -139,7 +160,9 @@ def render_historical_analysis_selector(
                         "preview and downloads remain unavailable under the existing export policy."
                     )
                     return
-                st.markdown(_readable_markdown(export_historical_markdown(report)))
+                st.html(_PREVIEW_STYLE)
+                with st.container(key="historical_analysis_preview"):
+                    st.markdown(_readable_markdown(export_historical_markdown(report)))
                 lease = st.session_state["historical_analysis_export_lease"]
                 for label, renderer, suffix, mime in (
                     ("JSON", export_historical_json, "json", "application/json"),
