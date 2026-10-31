@@ -29,6 +29,10 @@ from scopeproof_core.reviews.comparison import (
     EvidenceReference,
     ReviewComparison,
 )
+from scopeproof_core.reviews.decision_context_comparison import (
+    DECISION_CONTEXT_COMPARISON_BOUNDARY,
+    DecisionContextComparison,
+)
 from scopeproof_core.reviews.reference_audit import reference_status
 from scopeproof_core.reviews.selected_reference_comparison import (
     SELECTED_REFERENCE_COMPARISON_BOUNDARY,
@@ -666,6 +670,118 @@ def _comparison_file_scope_markdown(comparison: ReviewComparison) -> list[str]:
     return lines
 
 
+def _decision_context_comparison_markdown(
+    context: DecisionContextComparison | None,
+) -> list[str]:
+    lines = [
+        "## Recorded decision and runtime context", "",
+        DECISION_CONTEXT_COMPARISON_BOUNDARY, "",
+        "Latest criterion decisions and retained runtime records only; review-level final "
+        "acceptance and full decision-event history are outside this section.", "",
+    ]
+    if context is None:
+        return [*lines, "Decision context was not included in this older comparison.", ""]
+    changes = context.record_changes
+    if not changes:
+        lines.extend([
+            "No criterion decisions or runtime observations recorded on either side.", "",
+        ])
+    else:
+        lines.extend([
+            "Changed recorded context: "
+            f"{sum(row.kind == 'recorded_context_changed' for row in changes)}. "
+            "These distinctions compare complete recorded facts, not behavior.", "",
+        ])
+    for side in ("previous", "current"):
+        snapshot = getattr(context, side)
+        provenance = snapshot.criteria_source_provenance
+        lines.extend([
+            f"### {side.title()} decision context", "",
+            f"- Repository: {_render_markdown_code(snapshot.repository)}; PR #{snapshot.pr_number}",
+            f"- Review ID: {_render_markdown_code(snapshot.review_id)}",
+            f"- Head: {_render_markdown_code(snapshot.head_sha)}",
+            f"- Criteria revision: {snapshot.criteria_revision_number}",
+            f"- Recorded input origin: {_render_markdown_code(snapshot.input_origin.value)}",
+            f"- Criteria source: {_render_markdown_code(provenance.source_uri)}",
+            "- Criteria source revision: "
+            f"{_render_markdown_code(provenance.source_revision or 'Not recorded')}",
+            f"- Source-text digest: {_render_markdown_code(provenance.source_text_sha256)}",
+            "- Normalized criteria digest: "
+            f"{_render_markdown_code(provenance.normalized_criteria_sha256)}",
+            f"- Criteria confirmed by: {_escape_markdown_text(provenance.confirmed_by)}",
+            "- Criteria confirmed at: "
+            f"{_render_markdown_code(provenance.confirmed_at.isoformat())}",
+            "",
+        ])
+        for change in changes:
+            row = getattr(change, side)
+            if row is None:
+                continue
+            lines.extend([
+                f"#### {_escape_markdown_text(row.criterion_id)}", "",
+                f"- Record distinction: {change.kind.replace('_', ' ')}",
+            ])
+            resolution = row.resolution
+            if resolution is None:
+                lines.append("- No criterion decision recorded in this snapshot.")
+            else:
+                level = (
+                    resolution.claimed_evidence_level.value
+                    if resolution.claimed_evidence_level else "Not claimed"
+                )
+                reference = (
+                    render_artifact_reference_markdown(resolution.evidence_url)
+                    if resolution.evidence_url else "Not recorded"
+                )
+                lines.extend([
+                    f"- Recorded decision: {_render_markdown_code(resolution.decision.value)}",
+                    f"- Decision note: {_escape_markdown_text(resolution.comment)}",
+                    f"- Asserted decision reviewer: {_escape_markdown_text(resolution.reviewer)}",
+                    "- Decision recorded at: "
+                    f"{_render_markdown_code(resolution.timestamp.isoformat())}",
+                    f"- Claimed decision evidence level: {_render_markdown_code(level)}",
+                    f"- Decision evidence reference: {reference}",
+                    "- Decision runtime ID: "
+                    f"{_render_markdown_code(resolution.runtime_evidence_id or 'Not recorded')}",
+                ])
+            link = {
+                "linked": "Explicit runtime ID link",
+                "legacy_unlinked": "Legacy unlinked; relationship to an observation unknown",
+                "no_link": "No explicit runtime ID link",
+            }[row.runtime_link_status]
+            lines.extend([f"- Runtime relationship: {link}", ""])
+            if not row.runtime_evidence:
+                lines.extend(["No runtime observations recorded for this criterion.", ""])
+            for item in row.runtime_evidence:
+                pr_number = str(item.pr_number) if item.pr_number else "Not recorded"
+                lines.extend([
+                    "**Retained recorded runtime observation**", "",
+                    "- Runtime ID: "
+                    f"{_render_markdown_code(item.runtime_evidence_id or 'Legacy unlinked')}",
+                    "- Bound repository: "
+                    f"{_render_markdown_code(item.repository or 'Not recorded')}",
+                    f"- Bound PR: {_render_markdown_code(pr_number)}",
+                    f"- Bound head: {_render_markdown_code(item.head_sha or 'Not recorded')}",
+                    "- Artifact reference: "
+                    f"{render_artifact_reference_markdown(item.artifact_reference)}",
+                    f"- Recorded scenario: {_escape_markdown_text(item.scenario)}",
+                    f"- Recorded environment: {_escape_markdown_text(item.environment)}",
+                    f"- Recorded result: {_escape_markdown_text(item.result)}",
+                    f"- Asserted observation reviewer: {_escape_markdown_text(item.reviewer)}",
+                    "- Recorded evidence level: "
+                    f"{_render_markdown_code(item.evidence_level.value)}",
+                    "- Observation recorded at: "
+                    f"{_render_markdown_code(item.timestamp.isoformat())}",
+                    "- Recorded limitations:",
+                ])
+                lines.extend(
+                    [f"  - {_escape_markdown_text(value)}" for value in item.limitations]
+                    or ["  - None recorded (not a completeness claim)."]
+                )
+                lines.append("")
+    return lines
+
+
 def export_comparison_markdown(comparison: ReviewComparison) -> str:
     """Render an inspectable, evidence-bound re-review comparison."""
 
@@ -696,6 +812,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
     ]
     lines.extend(_comparison_file_scope_markdown(comparison))
     lines.extend(_selected_reference_comparison_markdown(comparison.selected_reference_comparison))
+    lines.extend(_decision_context_comparison_markdown(comparison.decision_context_comparison))
     lines.extend(["## Evidence Changes", ""])
     for change in comparison.evidence_changes:
         kind = change.kind.value.replace("_", " ").title()

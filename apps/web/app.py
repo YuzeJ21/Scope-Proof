@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import streamlit as st
 
+from apps.web.decision_context_comparison import render_decision_context_comparison
 from apps.web.deferred_exports import deferred_review_export, deferred_saved_comparison_export
 from apps.web.saved_comparison import (
     clear_saved_comparison_selection,
@@ -2133,6 +2134,7 @@ else:
         )
         render_file_scope_comparison(comparison.file_scope)
         render_selected_reference_comparison(comparison.selected_reference_comparison)
+        render_decision_context_comparison(comparison.decision_context_comparison)
         comparison_markdown_column, comparison_json_column = st.columns(2)
         with comparison_markdown_column:
             st.download_button(
