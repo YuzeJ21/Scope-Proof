@@ -79,7 +79,7 @@ def test_new_review_construction_keeps_current_producer_defaults():
     assert review.ruleset_version == RULESET_VERSION
 
 
-def test_missing_active_producer_preserves_other_recorded_producers(tmp_path):
+def test_partially_missing_active_producer_cannot_overwrite_explicit_owner_identity(tmp_path):
     state, _ = saved_comparison_states()
     store = JsonReviewStore(tmp_path / "records")
     path = store.save(state)
@@ -88,9 +88,23 @@ def test_missing_active_producer_preserves_other_recorded_producers(tmp_path):
         payload["state"]["bundle"]["review"].pop(name)
     path.write_text(json.dumps(payload))
     before = path.read_bytes()
+    with pytest.raises(ValueError, match="active bundle review must match lifecycle review"):
+        store.load(state.review.review_id)
+    assert path.read_bytes() == before
+
+
+def test_matching_missing_active_and_owner_producers_preserve_retained_identity(tmp_path):
+    state, _ = saved_comparison_states()
+    store = JsonReviewStore(tmp_path / "records")
+    path = store.save(state)
+    payload = json.loads(path.read_text())
+    for review in (payload["state"]["review"], payload["state"]["bundle"]["review"]):
+        for name in ("tool_version", "ruleset_version"):
+            review.pop(name)
+    path.write_text(json.dumps(payload))
+    before = path.read_bytes()
     loaded = store.load(state.review.review_id)
-    assert loaded.bundle.review.tool_version == "unknown"
-    assert loaded.bundle.review.ruleset_version == "unknown"
-    assert loaded.review == state.review
+    assert loaded.review.tool_version == loaded.bundle.review.tool_version == "unknown"
+    assert loaded.review.ruleset_version == loaded.bundle.review.ruleset_version == "unknown"
     assert loaded.analysis_history == state.analysis_history
     assert path.read_bytes() == before
