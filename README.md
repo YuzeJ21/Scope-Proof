@@ -638,6 +638,21 @@ Review-level final acceptance and full decision-event history are outside this s
 record changes expire old comparison downloads, including changes limited to runtime context.
 See the [bounded assessment](docs/audits/2026-10-30-decision-context-comparison.md).
 
+### Inspect recorded final acceptance (unreleased source)
+
+Comparisons also show a separate **Recorded final acceptance** section with previous/current
+explicit Yes/No values, owning record/head/revision/criteria identities and whether the recorded
+value changed. Identical Conditional gate labels can accompany different acceptance values.
+Comparison JSON/Markdown retain the same typed projection; older comparisons without it show
+context unavailable, rather than two invented No values.
+
+These are asserted local flags, not authenticated approval, runtime verification or correctness.
+Actor, time, rationale and event association are unavailable in analysis snapshots. No does not
+establish revocation or that acceptance never happened. Unknown revisions remain unknown.
+The section changes no gate, evidence, decision, confirmation or saved record, and carries no
+acceptance forward. Whole-record saved-comparison guards also reject acceptance-only changes.
+See the [bounded assessment](docs/audits/2026-11-01-recorded-final-acceptance.md).
+
 ### Find source references by content (unreleased source)
 
 In **Select a source reference**, explicitly choose a loaded **Reference source**, then use
