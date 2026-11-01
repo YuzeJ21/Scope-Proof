@@ -23,6 +23,7 @@ from scopeproof_core.alpha.service import (
 )
 from scopeproof_core.alpha.storage import JsonAlphaCaseStore
 from scopeproof_core.build_identity import current_core_source_identity
+from scopeproof_core.cli_history import register_history_commands
 from scopeproof_core.criteria.confirmation import (
     build_criteria_source_provenance,
     read_exact_utf8_text,
@@ -736,6 +737,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scopeproof", description=__doc__)
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
+    register_history_commands(commands)
     review = commands.add_parser("review", help="Review a public PR or local fixture")
     source = review.add_mutually_exclusive_group(required=True)
     source.add_argument("--fixture", help="Path to a PR-shaped local fixture JSON")
