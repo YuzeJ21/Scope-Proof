@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, computed_field, field_validator, model_va
 
 from scopeproof_core.gates.validation import validated_review_bundle
 from scopeproof_core.reviews.decision_context_comparison import DecisionContextComparison
+from scopeproof_core.reviews.final_acceptance_comparison import FinalAcceptanceComparison
 from scopeproof_core.reviews.scope_comparison import FileScopeComparison, FileScopeSnapshot
 from scopeproof_core.reviews.selected_reference_comparison import SelectedReferenceComparison
 from scopeproof_core.schemas.models import (
@@ -266,6 +267,7 @@ class ReviewComparison(BaseModel):
     file_scope: FileScopeComparison | None = None
     selected_reference_comparison: SelectedReferenceComparison | None = None
     decision_context_comparison: DecisionContextComparison | None = None
+    final_acceptance_comparison: FinalAcceptanceComparison | None = None
     previous_gate: GateVerdict
     current_gate: GateVerdict
     ruleset_version_changed: bool
@@ -282,12 +284,44 @@ class ReviewComparison(BaseModel):
     def decision_context_compared(self) -> bool:
         return self.decision_context_comparison is not None
 
+    @computed_field
+    @property
+    def final_acceptance_compared(self) -> bool:
+        return self.final_acceptance_comparison is not None
+
     @model_validator(mode="before")
     @classmethod
     def _discard_context_availability(cls, value: object) -> object:
         if isinstance(value, dict):
-            return {key: item for key, item in value.items() if key != "decision_context_compared"}
+            return {key: item for key, item in value.items()
+                    if key not in {"decision_context_compared", "final_acceptance_compared"}}
         return value
+
+    @model_validator(mode="after")
+    def _final_acceptance_matches_owner(self) -> ReviewComparison:
+        context = self.final_acceptance_comparison
+        if context is None:
+            return self
+        if self.decision_context_comparison is None:
+            raise ValueError("final-acceptance context requires owning decision-context identities")
+        for side in ("previous", "current"):
+            snapshot = getattr(context, side)
+            owner = getattr(self.decision_context_comparison, side)
+            for field in ("repository", "pr_number", "review_id", "head_sha",
+                          "criteria_revision_number", "input_origin"):
+                if getattr(snapshot, field) != getattr(owner, field):
+                    raise ValueError("final-acceptance context must match its owning analysis")
+            if (
+                snapshot.criterion_ids != tuple(owner.criterion_ids)
+                or snapshot.normalized_criteria_sha256
+                != owner.criteria_source_provenance.normalized_criteria_sha256
+            ):
+                raise ValueError("final-acceptance context must match owning confirmed criteria")
+            if getattr(self, f"{side}_gate") is GateVerdict.READY and not (
+                snapshot.recorded_final_acceptance
+            ):
+                raise ValueError("Ready comparison requires recorded final acceptance")
+        return self
 
     @model_validator(mode="after")
     def _decision_context_matches_comparison(self) -> ReviewComparison:
@@ -816,6 +850,7 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
         current_head_sha=current.review.head_sha,
         selected_reference_comparison=SelectedReferenceComparison.from_bundles(previous, current),
         decision_context_comparison=DecisionContextComparison.from_bundles(previous, current),
+        final_acceptance_comparison=FinalAcceptanceComparison.from_bundles(previous, current),
         file_scope=FileScopeComparison(
             previous=FileScopeSnapshot.from_bundle(previous),
             current=FileScopeSnapshot.from_bundle(current),

@@ -249,6 +249,7 @@ def test_legacy_unavailable_is_distinct_from_known_empty_despite_forged_availabi
     assert result.decision_context_comparison.record_changes == []
     data = result.model_dump(mode="json")
     del data["decision_context_comparison"]
+    del data["final_acceptance_comparison"]
     data["decision_context_compared"] = True
     old = ReviewComparison.model_validate(data)
     assert old.decision_context_comparison is None

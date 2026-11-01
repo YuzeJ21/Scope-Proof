@@ -155,6 +155,7 @@ def test_known_empty_and_legacy_unavailable_remain_distinct():
     assert result.decision_context_comparison.record_changes == []
     payload = result.model_dump(mode="json")
     payload.pop("decision_context_comparison")
+    payload.pop("final_acceptance_comparison")
     payload["decision_context_compared"] = True
     legacy = ReviewComparison.model_validate(payload)
     assert legacy.decision_context_compared is False
