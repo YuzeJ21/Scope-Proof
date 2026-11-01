@@ -2736,11 +2736,14 @@ else:
                             for warning in parsed_junit.parser_warnings:
                                 st.text(warning)
             junit_review_state = review_state
-            if st.session_state["review_save_conflict"]:
+            if (
+                st.session_state["review_save_conflict"]
+                or st.session_state["deleted_review_save_fingerprint"] is not None
+            ):
                 junit_review_state = None
                 st.info(
-                    "The saved review changed or is unavailable. Reopen the current record "
-                    "and explicitly stage JUnit mappings again. "
+                    "The saved review changed, is unavailable or was deleted. "
+                    "Reopen or explicitly restore the review, then stage JUnit mappings again. "
                     "Previous draft choices were cleared."
                 )
             junit_import_candidate = render_junit_mapping_draft(

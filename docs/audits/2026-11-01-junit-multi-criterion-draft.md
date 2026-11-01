@@ -30,7 +30,7 @@ lifecycle/migration/reporting decision. This slice neither runs target code nor 
 
 Root core RED6 and independent safety RED19 missing-feature cases preceded implementation.
 New core/safety plus existing importer regressions:73passed. Component RED5 preceded the renderer;
-the expanded eight-case AppTest file also exercises the actual workbench saving both mappings once,
+the expanded nine-case AppTest file also exercises the actual workbench saving both mappings once,
 validated export and unchanged gate/decision/runtime truth. Three original single-target save
 flows add explicit target/stage actions while keeping their assertions. An initial fixture used a
 nonexistent decision enum, and provenance mutation attempted a frozen field; fixtures were
@@ -40,7 +40,7 @@ The existing installed-wheel primary journey is extended for two suites/two crit
 staging/reset/save guards, restart/reopen/export, sanitized output and unchanged remaining bundle
 truth. No journey/server generation is added; collection remains17 checks (3 installed journeys,
 8 selection and6 helper/capture checks). The1MiB boundary and discarded-output assertions remain.
-Windows verification includes the33 new core/safety/AppTest cases.
+Windows verification includes the34 new core/safety/AppTest cases.
 
 Independent review found that a detected external saved-review change retained an importable
 draft against the older in-memory snapshot. Optimistic storage already prevented overwriting the
@@ -48,6 +48,10 @@ external record. Two failing actual-workbench cases (note-only and provenance-on
 including an already queued Save event) reproduce the stale in-memory append. The bounded fix
 expires draft authority/controls on the existing saved-conflict signal and requires reopen and
 explicit re-staging. Both regressions pass without local imports or persisted-byte changes.
+The same known-stale boundary also applies to the existing deleted-record suppression signal.
+A third queued-Save regression reproduced retained authority after external deletion; it now
+requires explicit restore/reopen and re-staging, appends no import and does not recreate the
+disposable deleted record. No existing storage/deletion policy is changed.
 Negative empty-suite, oversized-importer and duplicate-artifact UI tests now explicitly attempt
 staging and retain their original rejection assertions; no parser/builder policy was relaxed.
 

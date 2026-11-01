@@ -135,7 +135,7 @@ def test_actual_workbench_saves_both_mappings_once_and_exports_without_gate_chan
         assert "AC-01" in rendered and "AC-02" in rendered
 
 
-@pytest.mark.parametrize("external_change", ["note", "provenance"])
+@pytest.mark.parametrize("external_change", ["note", "provenance", "deleted"])
 def test_detected_saved_review_change_expires_mapping_even_with_queued_save(
     tmp_path, external_change,
 ):
@@ -159,7 +159,12 @@ def test_detected_saved_review_change_expires_mapping_even_with_queued_save(
         app.button(key="save_junit_import").click()  # An event from the still-valid old screen.
         store = JsonReviewStore(directory)
         changed = store.load(app.session_state["review_state"].review.review_id)
-        if external_change == "note":
+        if external_change == "deleted":
+            path = directory / f"{changed.review.review_id}.json"
+            assert path.exists()
+            path.unlink()  # Simulated external writer, limited to this disposable record.
+            external_bytes = None
+        elif external_change == "note":
             changed.bundle.evidence[0].limitations.append("CONSTRUCTED external note change")
         else:
             provenance = changed.review.criteria_source_provenance.model_copy(
@@ -168,16 +173,22 @@ def test_detected_saved_review_change_expires_mapping_even_with_queued_save(
             changed.review.criteria_source_provenance = provenance
             changed.bundle.review.criteria_source_provenance = provenance
             changed.criteria_revision.source_provenance = provenance
-        changed = ReviewState.model_validate(changed.model_dump(mode="python"))
-        path = store.save(changed)
-        external_bytes = path.read_bytes()
+        if external_change != "deleted":
+            changed = ReviewState.model_validate(changed.model_dump(mode="python"))
+            path = store.save(changed)
+            external_bytes = path.read_bytes()
         app.run()
         assert not app.exception
-        assert app.session_state["review_save_conflict"] is True
+        assert app.session_state["review_save_conflict"] or (
+            app.session_state["deleted_review_save_fingerprint"] is not None
+        )
         assert app.session_state["junit_mapping_draft"] is None
         assert app.button(key="save_junit_import").disabled
         assert app.button(key="stage_junit_mapping").disabled
         assert app.selectbox(key="junit_mapping_target").value is None
         assert app.session_state["review_state"].bundle.junit_evidence_imports == []
-        assert store.load(changed.review.review_id).bundle.junit_evidence_imports == []
-        assert path.read_bytes() == external_bytes
+        if external_change == "deleted":
+            assert not path.exists()
+        else:
+            assert store.load(changed.review.review_id).bundle.junit_evidence_imports == []
+            assert path.read_bytes() == external_bytes
