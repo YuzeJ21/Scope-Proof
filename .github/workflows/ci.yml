@@ -130,6 +130,8 @@ jobs:
         run: python -m pytest -q tests/importers/test_junit_draft.py tests/importers/test_junit_draft_safety.py tests/apps/test_junit_mapping.py
       - name: Readable resolution audit compatibility
         run: python -m pytest -q tests/reporting/test_resolution_audit_exports.py tests/reporting/test_resolution_audit_safety.py tests/reporting/test_resolution_audit_review_fixes.py
+      - name: Workbench resolution audit compatibility
+        run: python -m pytest -q tests/apps/test_resolution_history.py
       - name: Recorded decision comparison compatibility
         run: python -m pytest -q tests/reviews/test_decision_context_comparison.py tests/reviews/test_decision_context_safety.py tests/reviews/test_decision_context_review_fixes.py tests/reporting/test_decision_context_comparison.py
       - name: Recorded final acceptance comparison compatibility
