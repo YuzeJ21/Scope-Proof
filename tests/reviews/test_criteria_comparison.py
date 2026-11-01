@@ -147,3 +147,39 @@ def test_report_version_is_a_strict_integer(tmp_path):
     payload["schema_version"] = True
     with pytest.raises(ValueError):
         api().CriteriaRevisionComparison.model_validate(payload)
+
+
+@pytest.mark.parametrize("change", ["source", "provenance"])
+def test_source_only_or_provenance_only_edits_do_not_become_criterion_changes(tmp_path, change):
+    from datetime import UTC, datetime, timedelta
+
+    from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
+    from scopeproof_core.reviews.lifecycle import confirm_criteria
+
+    state = historical_analysis_state()
+    old = state.analysis_history[0]
+    if change == "source":
+        from scopeproof_core.gates.evaluator import evaluate_gate
+        old.reviewer_selected_references = []
+        old.selected_reference_events = []
+        old.review.criteria_source_provenance = None
+        old.gate = evaluate_gate(old.review, old.criteria, old.findings,
+                                 old.resolutions, old.evidence)
+    state = revise_criteria(state, old.criteria, old.source_text)
+    if change == "source":
+        state.criteria_revision.source_text += "\nCONSTRUCTED source-only annotation"
+    else:
+        provenance = build_criteria_source_provenance(
+            source_uri="https://example.test/constructed/changed-source-reference",
+            source_text=state.criteria_revision.source_text,
+            criteria=state.criteria_revision.criteria,
+            confirmed_by="CONSTRUCTED automatic criteria actor",
+            confirmed_at=datetime.now(UTC) + timedelta(seconds=1),
+        )
+        state = confirm_criteria(state, provenance)
+    _, _, _, _, report = report_for(tmp_path, state)
+    assert [r.kind for r in report.criterion_changes] == ["identical"]
+    assert not report.criterion_changes[0].changed_fields
+    assert not report.criterion_order_changed
+    assert report.source_text_changed is (change == "source")
+    assert report.source_provenance_changed is (change == "provenance")

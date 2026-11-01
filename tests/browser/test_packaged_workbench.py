@@ -53,6 +53,8 @@ from tests.historical_analysis_fixture import (
     HISTORICAL_REVIEW_ID,
     HISTORICAL_UNTRUSTED_TEXT,
     PENDING_CRITERIA_TEXT,
+    SAVED_CRITERIA_LONG_SPAN,
+    SAVED_CRITERIA_UNTRUSTED_TEXT,
 )
 from tests.saved_comparison_fixture import (
     CURRENT_HEAD,
@@ -2407,9 +2409,16 @@ def _exercise_historical_inspection(
     expect(criteria_preview).to_be_visible()
     expect(criteria_preview.get_by_text(PENDING_CRITERIA_TEXT, exact=False).first).to_be_visible()
     expect(criteria_preview.get_by_text(unsaved_draft, exact=False)).to_have_count(0)
+    expect(criteria_preview.get_by_text(
+        SAVED_CRITERIA_UNTRUSTED_TEXT, exact=False,
+    ).first).to_be_visible()
+    expect(criteria_preview.get_by_text(SAVED_CRITERIA_LONG_SPAN, exact=False)).to_be_visible()
     expect(criteria_preview.locator("img[src=x]")).to_have_count(0)
     expect(criteria_preview.locator(
         "strong", has_text="CONSTRUCTED unsaved criteria draft",
+    )).to_have_count(0)
+    expect(criteria_preview.locator(
+        "strong", has_text="CONSTRUCTED saved criteria source",
     )).to_have_count(0)
     criteria_json = _download_with_retry(page, button_name="Download criteria changes JSON")
     criteria_report = json.loads(criteria_json.path().read_text(encoding="utf-8"))
@@ -2483,7 +2492,8 @@ def _exercise_historical_inspection(
     ))
     for snapshot in expected_snapshots.values():
         assert snapshot["head_sha"] in criteria_markdown
-        assert snapshot["source_text"] in criteria_markdown
+        for line in snapshot["source_text"].splitlines():
+            assert line in criteria_markdown
         for criterion in snapshot["criteria"]:
             for field, value in criterion.items():
                 assert field in criteria_markdown
@@ -2674,7 +2684,7 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
         "assert all(Path(module.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()) "
         "for module in (apps, scopeproof_core)); "
         "recipe=runpy.run_path(sys.argv[1]); "
-        "JsonReviewStore(Path(sys.argv[2])).save(recipe['historical_analysis_state']())",
+        "JsonReviewStore(Path(sys.argv[2])).save(recipe['criteria_change_browser_state']())",
         str(historical_recipe), str(review_store_dir), cwd=runtime_dir,
     )
     historical_path = review_store_dir / f"{HISTORICAL_REVIEW_ID}.json"
