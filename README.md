@@ -618,6 +618,27 @@ provenance show identity and an unavailable-report explanation under the existin
 This path reads saved facts without fetching artifacts, loading source or rerunning analysis.
 See the [bounded assessment](docs/audits/2026-10-31-historical-analysis-inspection.md).
 
+### Inspect saved requirements changes (unreleased source)
+
+After inspecting a retained analysis, click **Compare with saved current criteria** to see its
+recorded requirements beside the current saved revision, including a pending unconfirmed revision
+without an active analysis. **Download criteria changes JSON/Markdown** provides a separate
+requirements-only handoff with repository/PR, saved heads, revisions, confirmation, full ordered
+criterion records, source text and recorded provenance. JSON preserves exact source whitespace;
+Markdown presents escaped source lines. Missing provenance and historical revision remain unknown.
+
+The view distinguishes added/removed IDs, complete same-ID field changes, positions, shared-ID
+ordering, exact source-text changes and recorded-provenance changes. IDs are recorded keys;
+matching IDs or text never establish semantic continuity. Unsaved drafts are excluded. Selection
+and click-time downloads bind the saved owner, full record, history position and both criteria
+snapshots; changed records require reopening and explicit selection. Reopen/reset revokes callbacks.
+Saved head strings are preserved as recorded context, not freshly verified commit identities.
+
+This neither compares evidence under changed requirements nor carries decisions forward. Criteria
+confirmation, current analysis, gates, compatible evidence comparison and the full acceptance-report
+provenance policy remain unchanged. No source is fetched or executed. See the
+[bounded assessment](docs/audits/2026-10-31-criteria-revision-changes.md).
+
 ### Local review storage
 
 The workbench stores versioned JSON records under `~/.scopeproof/reviews`. The reopen panel lists

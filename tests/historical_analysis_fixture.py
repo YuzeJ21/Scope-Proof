@@ -42,6 +42,10 @@ HISTORICAL_UNTRUSTED_TEXT = (
     "<img src=x onerror=bad> **CONSTRUCTED inert historical result**"
 )
 PENDING_CRITERIA_TEXT = "CONSTRUCTED changed requirement: export JSON instead of CSV"
+SAVED_CRITERIA_UNTRUSTED_TEXT = (
+    "<img src=x onerror=bad> **CONSTRUCTED saved criteria source**"
+)
+SAVED_CRITERIA_LONG_SPAN = "CONSTRUCTED-saved-source-span-" + "unbroken" * 180
 
 
 def historical_analysis_state() -> ReviewState:
@@ -127,4 +131,12 @@ def historical_analysis_state() -> ReviewState:
         criterion_id="AC-02", text=PENDING_CRITERIA_TEXT,
         required_evidence_level=EvidenceLevel.E2,
     )], PENDING_CRITERIA_TEXT)
+    return ReviewState.model_validate(state.model_dump(mode="python"))
+
+
+def criteria_change_browser_state() -> ReviewState:
+    """Real saved adversarial criteria context, distinct from unsaved draft text."""
+    state = historical_analysis_state()
+    state.criteria_revision.source_text += "\n" + SAVED_CRITERIA_UNTRUSTED_TEXT
+    state.criteria_revision.criteria[0].source_span = SAVED_CRITERIA_LONG_SPAN
     return ReviewState.model_validate(state.model_dump(mode="python"))
