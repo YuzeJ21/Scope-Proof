@@ -33,7 +33,7 @@
 
 **Interfaces:** Consumes ReviewState and PullRequestSnapshot. Produces `build_scope_file_preview(state: ReviewState, snapshot: PullRequestSnapshot, path: str, *, page_index: int = 0) -> ScopeFilePreview`; fields/availability as specified in design, page_count computed.
 
-- [ ] Write failing behavior tests for literal base/head coordinates, renamed/removed paths, pages beyond 100, oversized omission, source mismatch/unavailability, matching partial source and unchanged state.
+- [ ] Write failing behavior tests for literal old diff-side/head coordinates, renamed/removed paths, pages beyond 100, oversized omission, source mismatch/unavailability, matching partial source and unchanged state.
 - [ ] Run `.venv/bin/python -m pytest -q tests/reviews/test_scope_file_preview.py`; expect missing-feature failures, after validating constructed fixture.
 - [ ] Implement smallest typed projection and context checks; no changes to existing source policy or gate.
 - [ ] Run core and safety files plus tests/reviews/test_selected_references.py; expect all pass.
