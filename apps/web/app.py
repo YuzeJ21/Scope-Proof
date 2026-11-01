@@ -2735,8 +2735,16 @@ else:
                             st.caption("Parser warnings")
                             for warning in parsed_junit.parser_warnings:
                                 st.text(warning)
+            junit_review_state = review_state
+            if st.session_state["review_save_conflict"]:
+                junit_review_state = None
+                st.info(
+                    "The saved review changed or is unavailable. Reopen the current record "
+                    "and explicitly stage JUnit mappings again. "
+                    "Previous draft choices were cleared."
+                )
             junit_import_candidate = render_junit_mapping_draft(
-                review_state,
+                junit_review_state,
                 uploaded_junit.getvalue() if parsed_junit is not None else None,
                 parsed_junit, scope_ids=available_scope_ids, scope_labels=scope_labels,
                 importer=junit_importer,

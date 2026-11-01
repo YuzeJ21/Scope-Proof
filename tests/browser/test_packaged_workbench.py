@@ -1199,7 +1199,10 @@ def _exercise_junit_import_round_trip(
         expect(mapping.locator("xpath=../..")).to_contain_text(scope_label)
         expect(save).to_be_disabled()
         expect(add_mapping).to_be_enabled()
-        _run_and_wait_for_streamlit_rerun(page, add_mapping.click)
+        _click_until_text_visible(
+            page, button_name="Add selected scopes to mapping draft",
+            outcome_text=f"Criterion: {criterion_id} · 1 mapped test case(s)",
+        )
         if not preview.is_visible():
             junit_expander.click()
         expect(target).to_have_value("")

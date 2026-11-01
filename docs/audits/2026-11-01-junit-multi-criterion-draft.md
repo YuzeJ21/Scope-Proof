@@ -30,7 +30,7 @@ lifecycle/migration/reporting decision. This slice neither runs target code nor 
 
 Root core RED6 and independent safety RED19 missing-feature cases preceded implementation.
 New core/safety plus existing importer regressions:73passed. Component RED5 preceded the renderer;
-the expanded six-case AppTest file also exercises the actual workbench saving both mappings once,
+the expanded eight-case AppTest file also exercises the actual workbench saving both mappings once,
 validated export and unchanged gate/decision/runtime truth. Three original single-target save
 flows add explicit target/stage actions while keeping their assertions. An initial fixture used a
 nonexistent decision enum, and provenance mutation attempted a frozen field; fixtures were
@@ -40,7 +40,23 @@ The existing installed-wheel primary journey is extended for two suites/two crit
 staging/reset/save guards, restart/reopen/export, sanitized output and unchanged remaining bundle
 truth. No journey/server generation is added; collection remains17 checks (3 installed journeys,
 8 selection and6 helper/capture checks). The1MiB boundary and discarded-output assertions remain.
-Windows verification includes the31 new core/safety/AppTest cases.
+Windows verification includes the33 new core/safety/AppTest cases.
+
+Independent review found that a detected external saved-review change retained an importable
+draft against the older in-memory snapshot. Optimistic storage already prevented overwriting the
+external record. Two failing actual-workbench cases (note-only and provenance-only changes,
+including an already queued Save event) reproduce the stale in-memory append. The bounded fix
+expires draft authority/controls on the existing saved-conflict signal and requires reopen and
+explicit re-staging. Both regressions pass without local imports or persisted-byte changes.
+Negative empty-suite, oversized-importer and duplicate-artifact UI tests now explicitly attempt
+staging and retain their original rejection assertions; no parser/builder policy was relaxed.
+
+The initial installed primary journey captured an enabled Add click with no observed rerun or
+staged result; two other installed journeys passed. Its new interaction now uses the existing
+bounded result-based click helper, targeting each unique criterion mapping in the preview.
+A rejected mapping cannot satisfy that outcome. The original failure is preserved, and final
+installed journeys are rebuilt/rerun. The initial broad covered run was intentionally interrupted
+before the source fix; it is not completion evidence.
 
 Full-suite95% unrounded coverage, lint/lock, deterministic benchmarks, installed package/browser,
 independent whole-branch review and exact-head/resulting-main integration outcomes are recorded

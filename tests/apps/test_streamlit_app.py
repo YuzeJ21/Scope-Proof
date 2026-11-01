@@ -5468,8 +5468,16 @@ def test_junit_import_save_stays_disabled_until_full_draft_is_valid(
     ).run()
     app = app.text_input(key="junit_importer").set_value(importer).run()
     app = app.multiselect(key="junit_mapping_scopes").set_value(mapping).run()
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    assert app.button(key="stage_junit_mapping").disabled is False
+    app = app.button(key="stage_junit_mapping").click().run()
 
     assert app.button(key="save_junit_import").disabled is True
+    assert app.error
+    assert app.session_state["junit_mapping_draft"].selections == ()
+    assert app.session_state["review_state"].bundle.junit_evidence_imports == []
 
 
 def test_junit_import_save_stays_disabled_for_already_imported_artifact() -> None:
@@ -5496,4 +5504,12 @@ def test_junit_import_save_stays_disabled_for_already_imported_artifact() -> Non
         ["suite-0001"]
     ).run()
 
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    before = app.session_state["review_state"].model_dump_json()
+    app = app.button(key="stage_junit_mapping").click().run()
     assert app.button(key="save_junit_import").disabled is True
+    assert app.error
+    assert app.session_state["junit_mapping_draft"].selections == ()
+    assert app.session_state["review_state"].model_dump_json() == before
