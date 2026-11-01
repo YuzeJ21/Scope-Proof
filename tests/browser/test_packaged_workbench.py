@@ -1784,9 +1784,26 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             )
                             expect(query).to_be_enabled()
                             expect(query).to_have_value("")
-                            expect(query).to_have_attribute("maxlength", "200")
                             reference_page = page.get_by_role(
                                 "combobox", name="Reference page", exact=True,
+                            )
+                            expect(reference_page).to_have_value("Page 1 of 11")
+                            # Streamlit enforces max_chars in its input change handler,
+                            # rather than publishing a native maxlength attribute.
+                            bounded_query = "q" * 200
+                            query.fill(bounded_query)
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=query: control.press("Tab"),
+                            )
+                            expect(query).to_have_value(bounded_query)
+                            expect(reference_page).to_be_disabled()
+                            query.fill("z" * 201)
+                            query.press("Tab")
+                            expect(query).to_have_value(bounded_query)
+                            expect(reference_page).to_be_disabled()
+                            query.fill("")
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=query: control.press("Tab"),
                             )
                             expect(reference_page).to_have_value("Page 1 of 11")
                             _choose_combobox_option(
