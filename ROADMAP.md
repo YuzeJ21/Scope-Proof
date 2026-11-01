@@ -506,6 +506,16 @@ confirmation, analysis, storage mutation or gate change occurs. See the
 [bounded assessment](docs/audits/2026-10-31-criteria-revision-changes.md).
 This completes one requirements-inspection outcome; publication and Stage 3 retain separate gates.
 
+The next owner-delegated gap review selected **find static references by source content before
+choosing a line**. The existing chooser exposed line numbers before excerpts. Unreleased source
+now supports literal, case-insensitive search across eligible lines of one explicitly selected,
+already-ingested file. Counts and bounded 100-line physical-coordinate previews precede explicit
+selection; no match selects nothing, and query/file/page/context changes clear dependent choices.
+Existing eligibility, exact-head append checks, attribution, static/non-gating boundaries, record
+v7 and frozen research remain unchanged. This is source navigation, not a retrieval algorithm or
+repository-search claim. See the [bounded assessment](docs/audits/2026-10-31-source-reference-search.md).
+This completes one source-selection outcome without a release, standing queue or Stage 3 advance.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

@@ -15,9 +15,10 @@ from scopeproof_core.reviews.reference_audit import (
 from scopeproof_core.reviews.selected_references import (
     MAX_REFERENCE_LINE_BYTES,
     MAX_REFERENCE_PAGE_LINES,
+    MAX_REFERENCE_QUERY_CHARS,
     REVIEWER_SELECTED_REFERENCE_BOUNDARY,
     append_reviewer_selected_reference,
-    selectable_reference_page,
+    search_reference_page,
     selectable_reference_sources,
 )
 from scopeproof_core.schemas.models import (
@@ -38,6 +39,7 @@ _DRAFT_KEYS = (
     "selected_reference_reason",
     "selected_reference_source",
     "selected_reference_line",
+    "selected_reference_query",
     "selected_reference_reviewer",
     "selected_reference_rationale",
 )
@@ -56,6 +58,7 @@ def clear_selected_reference_draft() -> None:
     st.session_state["selected_reference_source"] = None
     st.session_state["selected_reference_line"] = None
     st.session_state["selected_reference_page"] = None
+    st.session_state["selected_reference_query"] = ""
     st.session_state["selected_reference_reviewer"] = ""
     st.session_state["selected_reference_rationale"] = ""
 
@@ -77,6 +80,7 @@ def _target_changed() -> None:
     st.session_state["selected_reference_source"] = None
     st.session_state["selected_reference_line"] = None
     st.session_state["selected_reference_page"] = None
+    st.session_state["selected_reference_query"] = ""
     st.session_state["selected_reference_reviewer"] = ""
     st.session_state["selected_reference_rationale"] = ""
     st.session_state["selected_reference_reason"] = ""
@@ -86,6 +90,12 @@ def _source_changed() -> None:
     st.session_state["selected_reference_page"] = (
         0 if st.session_state.get("selected_reference_source") else None
     )
+    st.session_state["selected_reference_line"] = None
+    st.session_state["selected_reference_query"] = ""
+
+
+def _query_changed() -> None:
+    st.session_state["selected_reference_page"] = 0
     st.session_state["selected_reference_line"] = None
 
 
@@ -189,30 +199,55 @@ def _render_source_selection(
         on_change=_source_changed,
     )
     selected_source = sources.get(source)
-    page_count = (
-        (selected_source.eligible_line_count + MAX_REFERENCE_PAGE_LINES - 1)
-        // MAX_REFERENCE_PAGE_LINES
-        if selected_source is not None
-        else 0
+    query = st.text_input(
+        "Find text in this file (literal, case-insensitive)",
+        key="selected_reference_query", max_chars=MAX_REFERENCE_QUERY_CHARS,
+        disabled=selected_source is None, on_change=_query_changed,
     )
+    st.caption(
+        "Search covers eligible, already-loaded lines in the selected file only. "
+        "It does not search the repository or omitted source. "
+        "Empty text browses all eligible lines; "
+        "spaces and punctuation are literal."
+    )
+    first_page = None
+    if selected_source is not None:
+        try:
+            first_page = search_reference_page(
+                state, snapshot, source_scope=selected_source.source_scope,
+                file_path=selected_source.file_path, query=query,
+                unchanged_files=unchanged_files,
+            )
+        except ValueError:
+            st.warning("This source search is unavailable. Refresh the source selection.")
+            return None
+        st.caption(
+            f"{first_page.matching_line_count:,} matching of "
+            f"{first_page.source.eligible_line_count:,} eligible lines in this file. "
+            "Search results are non-gating static locations, not automatic evidence."
+        )
+    page_count = first_page.page_count if first_page is not None else 0
+    if not page_count:
+        st.session_state["selected_reference_page"] = None
     page_index = st.selectbox(
         "Reference page",
         list(range(page_count)),
         index=0 if page_count else None,
         key="selected_reference_page",
         format_func=lambda index: f"Page {index + 1} of {page_count}",
-        disabled=selected_source is None,
+        disabled=not page_count,
         on_change=_page_changed,
     )
     source_lines = []
-    if selected_source is not None and page_index is not None:
+    if first_page is not None and page_index is not None:
         try:
-            page = selectable_reference_page(
+            page = first_page if page_index == 0 else search_reference_page(
                 state,
                 snapshot,
                 source_scope=selected_source.source_scope,
                 file_path=selected_source.file_path,
                 page_index=page_index,
+                query=query,
                 unchanged_files=unchanged_files,
             )
         except ValueError:
@@ -222,15 +257,23 @@ def _render_source_selection(
         first = page_index * MAX_REFERENCE_PAGE_LINES + 1
         st.caption(
             f"{first:,} to {first + len(source_lines) - 1:,} of "
-            f"{page.source.eligible_line_count:,} eligible lines in this file. "
+            f"{page.matching_line_count:,} matching eligible lines in this file. "
             "Reference line values are physical Git line numbers."
         )
+        with st.container(key="selected_reference_source_preview"):
+            st.caption("Source lines on this page (physical Git line numbers)")
+            st.code(
+                "\n".join(f"{line.line_number}: {line.excerpt}" for line in source_lines),
+                language=None, wrap_lines=True, height=320,
+            )
+    elif first_page is not None:
+        st.info("No eligible source lines match this literal text in the selected file.")
     number = st.selectbox(
         "Reference line",
         [line.line_number for line in source_lines],
         index=None,
         key="selected_reference_line",
-        disabled=source is None,
+        disabled=not source_lines,
     )
     selected = next((line for line in source_lines if line.line_number == number), None)
     if selected is not None:

@@ -598,6 +598,26 @@ Review-level final acceptance and full decision-event history are outside this s
 record changes expire old comparison downloads, including changes limited to runtime context.
 See the [bounded assessment](docs/audits/2026-10-30-decision-context-comparison.md).
 
+### Find source references by content (unreleased source)
+
+In **Select a source reference**, explicitly choose a loaded **Reference source**, then use
+**Find text in this file (literal, case-insensitive)**. Search covers all eligible already-ingested
+lines in that file, including later pages beyond the legacy global first 1,000. Empty text browses
+the eligible file; spaces and punctuation are literal, and regex syntax has no special meaning.
+Queries are limited to 200 characters and each result page to 100 complete eligible lines.
+
+Matching/eligible counts and a safe numbered source preview appear before **Reference line**.
+Preview numbers are physical Git coordinates, including gaps. Choose a line explicitly, then
+provide the reviewer and rationale before saving. No match leaves no selectable line. Query
+changes reset the page and clear the line; changing files also clears the query. Context changes,
+draft clearing and saves clear search inputs. Queries are transient drafts, not saved evidence.
+
+Search does not fetch more source or cover the entire repository. Existing removed/skipped,
+truncated, ambiguous, unsupported or oversized-source exclusions remain in force. Source and
+exact-head validation still run when saving. References stay non-gating static context; they
+do not alter automatic candidates, findings, scope, decisions, runtime evidence or acceptance.
+See the [bounded assessment](docs/audits/2026-10-31-source-reference-search.md).
+
 ### Inspect retained historical analyses (unreleased source)
 
 Reopen a saved record and expand **Inspect retained analysis** in Decision Progress. Explicitly

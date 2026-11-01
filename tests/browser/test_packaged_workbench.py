@@ -1569,6 +1569,93 @@ def _assert_selected_reference_is_nongating(
     return references[0]
 
 
+def _assert_selected_reference_source_preview(
+    page: Page, captures: Path, *, expected_lines: dict[int, str],
+) -> None:
+    """Inspect the actual bounded source preview, including narrow/zoomed layouts."""
+    preview = page.locator(".st-key-selected_reference_source_preview")
+    expect(preview.get_by_text(
+        "Source lines on this page (physical Git line numbers)", exact=True,
+    )).to_be_visible()
+    code = preview.locator('[data-testid="stCode"]')
+    expect(code).to_have_count(1)
+    rendered = code.locator("code")
+    for number, excerpt in expected_lines.items():
+        assert f"{number}: {excerpt}" in rendered.inner_text()
+    assert rendered.locator("script, img, a, button").count() == 0
+    assert page.evaluate("window.__scopeproofSourceTextExecuted === undefined")
+
+    for viewport, zoom, name in (
+        (VIEWPORTS[0], "", "source-preview-desktop"),
+        (VIEWPORTS[1], "", "source-preview-phone"),
+        (VIEWPORTS[1], "2", "source-preview-phone-css-zoom-200"),
+    ):
+        page.set_viewport_size(viewport)
+        page.evaluate("value => { document.documentElement.style.zoom = value; }", zoom)
+        code.scroll_into_view_if_needed()
+        expect(code).to_be_in_viewport()
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        geometry = preview.evaluate("element => ({"
+                                    "width: element.getBoundingClientRect().width, "
+                                    "scrollWidth: element.scrollWidth, "
+                                    "clientWidth: element.clientWidth})")
+        assert geometry["width"] > 0
+        assert geometry["scrollWidth"] <= geometry["clientWidth"] + 1
+        code_geometry = code.evaluate("""element => {
+            const rect = element.getBoundingClientRect();
+            const scrollable = [element, ...element.querySelectorAll('*')].filter(node => {
+                const style = getComputedStyle(node);
+                return /auto|scroll/.test(style.overflowY) &&
+                    node.scrollHeight > node.clientHeight;
+            });
+            return {
+                width: rect.width, left: rect.left, right: rect.right,
+                clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+                scrollRegions: scrollable.map(node => {
+                    node.scrollTop = node.scrollHeight;
+                    const result = {
+                        height: node.clientHeight,
+                        endReachable: node.scrollTop + node.clientHeight >= node.scrollHeight - 1,
+                    };
+                    node.scrollTop = 0;
+                    return result;
+                }),
+            };
+        }""")
+        assert code_geometry["width"] > 0
+        assert code_geometry["left"] >= -1
+        assert code_geometry["right"] <= viewport["width"] + 1
+        assert code_geometry["clientWidth"] <= geometry["clientWidth"] + 1
+        assert code_geometry["scrollWidth"] <= code_geometry["clientWidth"] + 1
+        assert code_geometry["scrollRegions"]
+        assert all(
+            0 < region["height"] <= 320 and region["endReachable"]
+            for region in code_geometry["scrollRegions"]
+        )
+        for number, excerpt in expected_lines.items():
+            assert f"{number}: {excerpt}" in rendered.inner_text()
+        page.screenshot(path=str(captures / f"{name}.png"))
+        code.evaluate("""element => {
+            for (const node of [element, ...element.querySelectorAll('*')]) {
+                if (/auto|scroll/.test(getComputedStyle(node).overflowY)) {
+                    node.scrollTop = node.scrollHeight;
+                }
+            }
+        }""")
+        page.screenshot(path=str(captures / f"{name}-end.png"))
+        code.evaluate("""element => {
+            for (const node of [element, ...element.querySelectorAll('*')]) {
+                node.scrollTop = 0;
+            }
+        }""")
+        (captures / f"{name}.json").write_text(json.dumps({
+            "viewport": viewport, "css_zoom": zoom or "1", "preview": geometry,
+            "code": code_geometry, "physical_lines": list(expected_lines),
+        }, indent=2), encoding="utf-8")
+    page.evaluate("document.documentElement.style.zoom = ''")
+    page.set_viewport_size(VIEWPORTS[0])
+
+
 def test_installed_wheel_selected_reference_survives_restart_without_gate_change(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
@@ -1581,6 +1668,13 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
     snapshot = load_demo_snapshot().model_copy(deep=True)
     target_path = "tests/test_late_reference.py"
     target_excerpt = "def test_constructed_late_reference():"
+    inert_long_excerpt = (
+        '<script>window.__scopeproofSourceTextExecuted = true</script>'
+        '<img src="https://example.invalid/constructed-source-preview" '
+        'onerror="window.__scopeproofSourceTextExecuted = true">'
+        '<a href="javascript:window.__scopeproofSourceTextExecuted=true">inert</a> '
+        + "constructed_long_source_" * 140 + " SOURCE_END_SENTINEL"
+    )
     for path in ("aaa/prefix.py", target_path):
         snapshot.files.append(ChangedFile(
             path=path, status="added",
@@ -1589,6 +1683,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                     change_type=LineChangeType.ADDED, line_number=number,
                     content=(
                         target_excerpt if path == target_path and number == 1002
+                        else inert_long_excerpt if path == target_path and number == 1001
                         else f"constructed_value_{number} = {number}"
                     ),
                 )
@@ -1680,9 +1775,16 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             source = page.get_by_role(
                                 "combobox", name="Reference source", exact=True,
                             )
+                            query = page.get_by_label(
+                                "Find text in this file (literal, case-insensitive)", exact=True,
+                            )
+                            expect(query).to_be_disabled()
                             _choose_combobox_option(
                                 page, source, option_name=f"Changed file · {target_path}",
                             )
+                            expect(query).to_be_enabled()
+                            expect(query).to_have_value("")
+                            expect(query).to_have_attribute("maxlength", "200")
                             reference_page = page.get_by_role(
                                 "combobox", name="Reference page", exact=True,
                             )
@@ -1694,11 +1796,43 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                                 "combobox", name="Reference line", exact=True,
                             )
                             expect(line).to_have_value("")
+                            _assert_selected_reference_source_preview(
+                                page, captures,
+                                expected_lines={1001: inert_long_excerpt, 1002: target_excerpt},
+                            )
+                            # The complete late-page text is readable before any selection.
                             _choose_combobox_option(page, line, option_name="1002")
                             save = page.get_by_role(
                                 "button", name="Save selected reference", exact=True,
                             )
                             expect(save).to_be_disabled()
+                            query.fill("constructed missing literal [.*]")
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=query: control.press("Tab"),
+                            )
+                            expect(reference_page).to_be_disabled()
+                            expect(line).to_be_disabled()
+                            expect(line).to_have_value("")
+                            expect(save).to_be_disabled()
+                            expect(page.locator(
+                                ".st-key-selected_reference_source_preview",
+                            )).to_have_count(0)
+                            query.fill("TEST_CONSTRUCTED_LATE_REFERENCE")
+                            _run_and_wait_for_streamlit_rerun(
+                                page, lambda control=query: control.press("Tab"),
+                            )
+                            expect(reference_page).to_have_value("Page 1 of 1")
+                            expect(line).to_be_enabled()
+                            expect(line).to_have_value("")
+                            preview = page.locator(".st-key-selected_reference_source_preview")
+                            expect(preview.get_by_text(
+                                "Source lines on this page (physical Git line numbers)", exact=True,
+                            )).to_be_visible()
+                            assert preview.locator("code").inner_text() == (
+                                f"1002: {target_excerpt}"
+                            )
+                            expect(save).to_be_disabled()
+                            _choose_combobox_option(page, line, option_name="1002")
                             note = page.get_by_label("Why this reference matters", exact=True)
                             note.fill(rationale)
                             _run_and_wait_for_streamlit_rerun(
@@ -1759,6 +1893,10 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             assert reference["permalink"] == (
                                 "https://github.com/scopeproof/demo-stock-research/blob/"
                                 "head-demo-002/tests/test_late_reference.py#L1002-L1002"
+                            )
+                            # Search remains an unsaved chooser draft, outside authoritative data.
+                            assert "TEST_CONSTRUCTED_LATE_REFERENCE" not in json.dumps(
+                                selected_state,
                             )
                         else:
                             assert before is not None and selected_state is not None
@@ -1861,7 +1999,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                             assert resumed_reference["criterion_id"] == "AC-03"
                             assert resumed_reference["line_number"] == 1001
                             assert resumed_reference["file_path"] == target_path
-                            assert resumed_reference["excerpt"] == "constructed_value_1001 = 1001"
+                            assert resumed_reference["excerpt"] == inert_long_excerpt
                             assert resumed_reference["reviewer"] == resumed_reviewer
                             assert resumed_reference["rationale"] == resumed_rationale
                             assert resumed_reference["evidence_type"] == "test"
@@ -1887,7 +2025,7 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                                 "AC-03", "head-demo-002", reviewer, rationale,
                                 "test_late_reference.py", "1002", target_excerpt, "E2",
                                 resumed_reviewer, resumed_rationale, "1001",
-                                "constructed_value_1001 = 1001",
+                                "SOURCE_END_SENTINEL",
                             ):
                                 assert expected in report
                             assert "non-gating static context" in report
@@ -1908,6 +2046,19 @@ def test_installed_wheel_selected_reference_survives_restart_without_gate_change
                                 )
                                 assert references == expected
                             audited = _exercise_reference_audit_actions(page, base_url, reopened)
+                            saved_source = page.get_by_text(
+                                f"Selected reference · {target_path}:1001 · Active", exact=True,
+                            )
+                            saved_source.click()
+                            saved_source_panel = saved_source.locator("xpath=ancestor::details[1]")
+                            saved_code = saved_source_panel.locator("code").filter(
+                                has_text="SOURCE_END_SENTINEL",
+                            )
+                            expect(saved_code).to_have_text(inert_long_excerpt)
+                            assert saved_code.locator("script, img, a, button").count() == 0
+                            assert page.evaluate(
+                                "window.__scopeproofSourceTextExecuted === undefined",
+                            )
                             for viewport in VIEWPORTS:
                                 page.set_viewport_size(viewport)
                                 assert page.evaluate(
