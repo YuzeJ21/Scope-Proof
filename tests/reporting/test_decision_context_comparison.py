@@ -59,6 +59,7 @@ def test_legacy_missing_context_known_empty_and_legacy_unlinked_are_distinct_in_
     assert "Legacy unlinked" in export_comparison_markdown(result)
     data = result.model_dump(mode="json")
     data.pop("decision_context_comparison")
+    data.pop("final_acceptance_comparison")
     old = ReviewComparison.model_validate(data)
     assert "Decision context was not included in this older comparison" in (
         export_comparison_markdown(old)

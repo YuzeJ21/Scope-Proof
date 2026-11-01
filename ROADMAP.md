@@ -536,6 +536,16 @@ publication and atomic no-overwrite output preserve saved bytes, decisions and g
 [bounded requirements handoff assessment](docs/audits/2026-10-31-cli-criteria-changes.md).
 This finishes one selected script-recipient outcome, not an ongoing parity queue or Stage 3 claim.
 
+The next owner-delegated review selected **recorded final acceptance in comparisons**. Existing
+gate labels and criterion-decision context did not expose the recorded review-level flag; two
+Conditional analyses can differ in acceptance. Unreleased source now adds separate typed
+previous/current values with owning identities and derived change status to the workbench and
+comparison JSON/Markdown. Older missing context remains unavailable. Analysis snapshots do not
+retain acceptance actors, times, rationale or event association, so those stay explicitly unknown;
+No is never translated into revoked or never accepted. Gates, decisions, v7 records and frozen
+research remain unchanged. See the [bounded inspection assessment](docs/audits/2026-11-01-recorded-final-acceptance.md).
+This completes one informational outcome without a release, standing queue or Stage 3 advance.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

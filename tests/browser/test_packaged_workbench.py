@@ -2239,6 +2239,7 @@ def _reopen_saved_comparison_current(
     base_url: str,
     *,
     discover: bool = False,
+    review_id: str = CURRENT_REVIEW_ID,
 ) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     page.get_by_text("Resume a saved review", exact=True).click()
@@ -2260,9 +2261,9 @@ def _reopen_saved_comparison_current(
         page.get_by_role("combobox", name="Saved review ID", exact=True),
         option_name=(
             f"acme/widget · PR #7 · head {CURRENT_HEAD[:12]} · criteria revision 2 · "
-            f"{CURRENT_REVIEW_ID}"
+            f"{review_id}"
             if discover
-            else CURRENT_REVIEW_ID
+            else review_id
         ),
         settled_control=reopen,
     )
@@ -2460,6 +2461,86 @@ def _assert_decision_context_details(page: Page, *, previous_actor: str) -> None
         expect(details.locator(
             f'a[href="https://example.test/constructed/{context}/runtime-report"]',
         ).first).to_be_visible()
+
+
+def _assert_final_acceptance_details(page: Page) -> None:
+    expect(page.get_by_role(
+        "heading", name="Recorded final acceptance", exact=True,
+    )).to_be_visible()
+    expect(page.get_by_text("Recorded value changed: Yes", exact=True)).to_be_visible()
+    for side, value in (("Previous", "No"), ("Current", "Yes")):
+        disclosure = page.get_by_text(f"{side} recorded final acceptance", exact=True)
+        details = disclosure.locator("xpath=ancestor::details[1]")
+        if not details.evaluate("node => node.open"):
+            disclosure.click()
+        expect(details.get_by_text(
+            f"Recorded final acceptance: {value}", exact=True,
+        )).to_be_visible()
+        expect(details.get_by_text("acme/widget · PR #7", exact=True)).to_be_visible()
+        expect(details.get_by_text(re.compile(r"^Criteria revision: [12]$"))).to_be_visible()
+    expect(page.get_by_text(
+        "Event attribution, actor, timestamp, rationale and event association are unavailable "
+        "in analysis snapshots. No does not establish revocation or that acceptance never "
+        "happened.",
+        exact=True,
+    )).to_be_visible()
+
+
+def _exercise_final_acceptance_comparison(page: Page, base_url: str, captures: Path) -> None:
+    """Compare explicitly constructed flags through own and foreign retained history."""
+    _reopen_saved_comparison_current(
+        page, base_url, discover=True, review_id=CURRENT_REVIEW_ID + "-acceptance",
+    )
+    baseline = page.get_by_role("combobox", name="Comparison baseline", exact=True)
+    compare = page.get_by_role("button", name="Compare selected saved analysis", exact=True)
+    foreign = (f"acme/widget · PR #7 · head {PREVIOUS_HEAD[:12]} · criteria revision 2 · "
+               f"{PREVIOUS_REVIEW_ID}-acceptance")
+    for option, history, previous_head in (
+        (foreign, None, PREVIOUS_HEAD),
+        (f"History 1 · criteria revision 1 · head {HISTORY_HEAD}", None, HISTORY_HEAD),
+        (foreign, f"History 1 · criteria revision 1 · head {FOREIGN_HISTORY_HEAD}",
+         FOREIGN_HISTORY_HEAD),
+    ):
+        _choose_combobox_option(page, baseline, option_name=option, settled_control=compare)
+        if history:
+            _choose_combobox_option(
+                page, page.get_by_role("combobox", name="Baseline analysis", exact=True),
+                option_name=history, settled_control=compare,
+            )
+        compare.click()
+        _assert_final_acceptance_details(page)
+        download = _download_with_retry(page, button_name="Download comparison JSON")
+        payload = json.loads(download.path().read_text(encoding="utf-8"))
+        assert payload["previous_gate"] == payload["current_gate"] == "conditional"
+        context = payload["final_acceptance_comparison"]
+        assert payload["final_acceptance_compared"] is True
+        assert context["recorded_value_changed"] is True
+        assert context["previous"]["head_sha"] == previous_head
+        assert context["current"]["head_sha"] == CURRENT_HEAD
+        assert context["previous"]["recorded_final_acceptance"] is False
+        assert context["current"]["recorded_final_acceptance"] is True
+        for snapshot in (context["previous"], context["current"]):
+            assert snapshot["event_context_status"] == "unavailable_in_analysis_snapshot"
+        markdown = _download_with_retry(page, button_name="Download comparison Markdown")
+        text = markdown.path().read_text(encoding="utf-8")
+        assert "## Recorded final acceptance" in text
+        assert "Recorded final acceptance: Yes" in text
+        assert "Recorded final acceptance: No" in text
+        assert previous_head in text and CURRENT_HEAD in text
+    for name, viewport, zoom in (
+        ("11-final-acceptance-desktop", VIEWPORTS[0], ""),
+        ("12-final-acceptance-phone", VIEWPORTS[1], ""),
+        ("13-final-acceptance-phone-css-zoom-200", VIEWPORTS[1], "2"),
+    ):
+        page.set_viewport_size(viewport)
+        page.evaluate("zoom => document.documentElement.style.zoom = zoom", zoom)
+        _assert_final_acceptance_details(page)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        page.get_by_role(
+            "heading", name="Recorded final acceptance", exact=True,
+        ).scroll_into_view_if_needed()
+        page.screenshot(path=str(captures / f"{name}.png"))
+    page.evaluate("document.documentElement.style.zoom = ''")
 
 
 def _exercise_historical_inspection(
@@ -2834,10 +2915,24 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
         ),
         str(recipe), str(review_store_dir), cwd=runtime_dir,
     )
+    _run(
+        str(installed_wheel / "bin" / "python"), "-I", "-c",
+        "from pathlib import Path; import runpy, sys; "
+        "from scopeproof_core.storage.json_store import JsonReviewStore; "
+        "recipe=runpy.run_path(sys.argv[1]); store=JsonReviewStore(Path(sys.argv[2])); "
+        "[store.save(state) for state in recipe['saved_comparison_states']("
+        "foreign_history=True, final_acceptance_context=True)]",
+        str(recipe), str(review_store_dir), cwd=runtime_dir,
+    )
     saved_bytes = {path.name: path.read_bytes() for path in review_store_dir.glob("*.json")}
-    assert set(saved_bytes) == {f"{CURRENT_REVIEW_ID}.json", f"{PREVIOUS_REVIEW_ID}.json"}
+    assert set(saved_bytes) == {
+        f"{CURRENT_REVIEW_ID}.json", f"{PREVIOUS_REVIEW_ID}.json",
+        f"{CURRENT_REVIEW_ID}-acceptance.json", f"{PREVIOUS_REVIEW_ID}-acceptance.json",
+    }
     saved_analyses = {}
-    for raw_record in saved_bytes.values():
+    for name, raw_record in saved_bytes.items():
+        if "-acceptance.json" in name:
+            continue
         saved_state = json.loads(raw_record)["state"]
         for analysis in [saved_state["bundle"], *saved_state["analysis_history"]]:
             saved_analyses[analysis["review"]["head_sha"]] = analysis
@@ -2874,7 +2969,7 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            for generation in range(3):
+            for generation in range(4):
                 with _installed_workbench_server(
                     installed_wheel, runtime_dir, home_dir,
                     log_name=f"saved-comparison-{generation}.log",
@@ -2897,6 +2992,10 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                         with _capture_browser_failure(
                             page, diagnostics / f"generation-{generation}", log_path,
                         ):
+                            if generation == 3:
+                                _exercise_final_acceptance_comparison(page, base_url, captures)
+                                assert_records_unchanged()
+                                continue
                             if generation == 2:
                                 _exercise_historical_inspection(
                                     page, base_url, historical_state, captures,
@@ -3071,6 +3170,9 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
     assert (captures / "02-history-comparison.png").is_file()
     assert (captures / "03-phone-comparison-controls.png").is_file()
     assert (captures / "04-phone-decision-context-css-zoom-200.png").is_file()
+    for name in ("11-final-acceptance-desktop", "12-final-acceptance-phone",
+                 "13-final-acceptance-phone-css-zoom-200"):
+        assert (captures / f"{name}.png").is_file()
     for name in (
         "05-historical-desktop", "06-historical-phone", "07-historical-phone-css-zoom-200",
         "08-criteria-changes-desktop", "09-criteria-changes-phone",
