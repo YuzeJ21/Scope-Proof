@@ -13,6 +13,7 @@ from pydantic import (
     ConfigDict,
     Field,
     StrictInt,
+    StrictStr,
     ValidationError,
     field_validator,
     model_validator,
@@ -105,6 +106,7 @@ def _line(
 
 
 MAX_REFERENCE_PAGE_LINES = 100
+MAX_REFERENCE_QUERY_CHARS = 200
 
 
 class _ReferenceSourceIdentity(BaseModel):
@@ -166,6 +168,51 @@ class SelectableReferencePage(BaseModel):
             numbers.append(line.line_number)
         if numbers != sorted(set(numbers)):
             raise ValueError("reference page lines must be unique and ordered")
+        return self
+
+
+class _ReferenceSearchRequest(_ReferencePageRequest):
+    query: StrictStr = Field(max_length=MAX_REFERENCE_QUERY_CHARS)
+
+
+class SelectableReferenceSearchPage(BaseModel):
+    """A complete match window over one eligible loaded file; never ranked evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
+
+    source: SelectableReferenceSource
+    query: StrictStr = Field(max_length=MAX_REFERENCE_QUERY_CHARS)
+    page_index: StrictInt = Field(ge=0)
+    matching_line_count: StrictInt = Field(ge=0)
+    lines: tuple[SelectableReferenceLine, ...] = Field(max_length=MAX_REFERENCE_PAGE_LINES)
+
+    @property
+    def page_count(self) -> int:
+        return (self.matching_line_count + MAX_REFERENCE_PAGE_LINES - 1) // MAX_REFERENCE_PAGE_LINES
+
+    @model_validator(mode="after")
+    def validate_search_page(self) -> SelectableReferenceSearchPage:
+        if self.matching_line_count > self.source.eligible_line_count or (
+            self.query == "" and self.matching_line_count != self.source.eligible_line_count
+        ):
+            raise ValueError("search counts must match the eligible file and literal query")
+        start = self.page_index * MAX_REFERENCE_PAGE_LINES
+        if (self.matching_line_count == 0 and self.page_index != 0) or (
+            self.matching_line_count > 0 and start >= self.matching_line_count
+        ):
+            raise ValueError("search page is outside the matching source lines")
+        if len(self.lines) != min(MAX_REFERENCE_PAGE_LINES, self.matching_line_count - start):
+            raise ValueError("search page must contain its complete bounded match window")
+        numbers = []
+        for item in self.lines:
+            line = SelectableReferenceLine.model_validate(item.model_dump(mode="python"))
+            if (line.source_scope, line.file_path) != (
+                self.source.source_scope, self.source.file_path,
+            ) or self.query.casefold() not in line.excerpt.casefold():
+                raise ValueError("search lines must match their selected source and literal query")
+            numbers.append(line.line_number)
+        if numbers != sorted(set(numbers)):
+            raise ValueError("search lines must retain unique ordered physical Git coordinates")
         return self
 
 
@@ -305,6 +352,43 @@ def selectable_reference_lines(
             _eligible_reference_lines(state, snapshot, unchanged_files),
             MAX_SELECTABLE_REFERENCE_LINES,
         )
+    )
+
+
+def search_reference_page(
+    state: ReviewState,
+    snapshot: PullRequestSnapshot,
+    *,
+    source_scope: EvidenceSourceScope,
+    file_path: str,
+    query: str = "",
+    page_index: int = 0,
+    unchanged_files: list[RetrievedFile] | None = None,
+) -> SelectableReferenceSearchPage:
+    """Search eligible loaded lines of one explicit file, retaining at most one result page."""
+    request = _ReferenceSearchRequest(
+        source_scope=source_scope, file_path=file_path, page_index=page_index, query=query,
+    )
+    start = request.page_index * MAX_REFERENCE_PAGE_LINES
+    eligible_count = matching_count = 0
+    lines = []
+    folded_query = request.query.casefold()
+    for line in _eligible_reference_lines(
+        state, snapshot, unchanged_files, source=(request.source_scope, request.file_path),
+    ):
+        eligible_count += 1
+        if folded_query in line.excerpt.casefold():
+            if start <= matching_count < start + MAX_REFERENCE_PAGE_LINES:
+                lines.append(line)
+            matching_count += 1
+    if eligible_count == 0:
+        raise ValueError("selected reference search source is unavailable")
+    return SelectableReferenceSearchPage(
+        source=SelectableReferenceSource(
+            source_scope=request.source_scope, file_path=request.file_path,
+            eligible_line_count=eligible_count,
+        ), query=request.query, page_index=request.page_index,
+        matching_line_count=matching_count, lines=tuple(lines),
     )
 
 
