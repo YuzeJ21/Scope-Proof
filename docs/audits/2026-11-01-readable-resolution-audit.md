@@ -69,6 +69,13 @@ results are recorded in the external version-bound packet:
 This source document is not a moving main ledger. All seven frozen R-002 hashes remain bound to
 the baseline; no historical expectation or score is rewritten.
 
+The initial Windows installed audit test exposed a transport mismatch: the isolated child used
+the platform's default piped output encoding while the test decoded UTF-8. The test now explicitly
+requests Python UTF-8 mode and verifies a constructed Unicode actor without replacing or ignoring
+undecodable data. This scopes installed compatibility to the explicit test environment; it does
+not assert a new encoding policy for every Windows shell or redirection. Product code is unchanged
+by this test-harness repair; native Windows CI is required again on its final commit.
+
 All actors are constructed automation, not personal testing, qualifying reviews, customer
 validation, genuine independent use or accessibility conformance. Source remains unreleased
 0.2.5; public v0.2.4 and historical candidate archives are unchanged. Stage 1 remains closed at

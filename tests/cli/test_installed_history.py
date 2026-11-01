@@ -83,7 +83,8 @@ def test_installed_readable_resolution_audit_handoff(tmp_path):
 
     def run(*args):
         process = subprocess.run(
-            [interpreter, "-I", *args], cwd=tmp_path, capture_output=True, text=True,
+            [interpreter, "-X", "utf8", "-I", *args],
+            cwd=tmp_path, capture_output=True, text=True,
             encoding="utf-8", timeout=60, check=False,
         )
         assert process.returncode == 0, process.stdout + process.stderr
@@ -153,6 +154,7 @@ def test_installed_readable_resolution_audit_handoff(tmp_path):
         assert re.search(r"Recorded outcome:?\s+final_acceptance=false\b", text)
         label = re.escape("Additional decision field (not applied to this target)")
         assert re.search(rf"{label}:?\s+accepted\b", text)
+        assert "Constructed legacy recorder 测试" in text
         assert mixed_path.read_bytes() == mixed_before
 
     catalog = json.loads(run("-m", "scopeproof_core.cli", "history", review_id,

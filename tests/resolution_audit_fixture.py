@@ -77,6 +77,6 @@ def mixed_legacy_resolution_audit_state() -> ReviewState:
     bundle.review.review_id = "constructed-mixed-resolution-audit-review"
     return append_resolution(new_review_state(bundle), ResolutionEvent(
         event_id="constructed-mixed-final-false", final_acceptance=False,
-        decision=HumanDecision.ACCEPTED, reviewer="Constructed legacy recorder",
+        decision=HumanDecision.ACCEPTED, reviewer="Constructed legacy recorder 测试",
         timestamp=datetime(2026, 10, 31, 12, tzinfo=UTC),
     ))
