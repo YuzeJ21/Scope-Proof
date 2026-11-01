@@ -1,9 +1,12 @@
 """Run explicitly against an installed wheel, outside the checkout, on POSIX or Windows."""
 
+import html
 import json
 import os
+import re
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -55,6 +58,9 @@ def test_installed_history_handoff(tmp_path):
     markdown = target.read_text(encoding="utf-8")
     assert markdown.startswith("# ScopeProof Historical Analysis\n")
     assert "not current-head verification or acceptance" in markdown
+    assert "Full resolution history is unavailable" in markdown
+    history = markdown.split("## Resolution History\n", 1)[1].split("\n## ", 1)[0]
+    assert "constructed-historical-manual-decision" not in history
     run(*args, "--format", "markdown", "--output", str(target), expected=2)
     assert target.read_text(encoding="utf-8") == markdown
     assert record.read_bytes() == before
@@ -65,3 +71,99 @@ def test_installed_history_handoff(tmp_path):
         "state.criteria_revision.source_text += ' CONSTRUCTED saved change'; store.save(state)")
     stale = run(*args, expected=2)
     assert stale.stdout == "" and "changed" in stale.stderr
+
+
+def test_installed_readable_resolution_audit_handoff(tmp_path):
+    interpreter = os.environ.get("SCOPEPROOF_INSTALLED_PYTHON")
+    if not interpreter:
+        pytest.skip("set SCOPEPROOF_INSTALLED_PYTHON to an isolated installed-wheel interpreter")
+    recipe = tmp_path / "constructed_resolution_audit.py"
+    shutil.copyfile(Path(__file__).parents[1] / "resolution_audit_fixture.py", recipe)
+    records = tmp_path / "explicit-constructed-records"
+
+    def run(*args):
+        process = subprocess.run(
+            [interpreter, "-X", "utf8", "-I", *args],
+            cwd=tmp_path, capture_output=True, text=True,
+            encoding="utf-8", timeout=60, check=False,
+        )
+        assert process.returncode == 0, process.stdout + process.stderr
+        return process.stdout
+
+    run("-c", "from pathlib import Path; import sys, scopeproof_core, runpy; "
+        "assert Path(scopeproof_core.__file__).resolve().is_relative_to(Path(sys.prefix)); "
+        "from scopeproof_core.storage.json_store import JsonReviewStore; "
+        f"fixture=runpy.run_path({str(recipe)!r}); "
+        f"store=JsonReviewStore(Path({str(records)!r})); "
+        "store.save(fixture['resolution_audit_state']()); "
+        "store.save(fixture['mixed_legacy_resolution_audit_state']())")
+    review_id = "constructed-resolution-audit-review"
+    path = records / f"{review_id}.json"
+    before = path.read_bytes()
+    original = json.loads(before)["state"]
+    expected = [
+        ("r1-old-accept", "Prior revision", 1, "accepted"),
+        ("r2-old-change", "Superseded", 2, "change_required"),
+        ("r2-current-accept", "Current", 2, "accepted"),
+        ("r2-ac02-accept", "Current", 2, "accepted"),
+        ("r2-ac03-accept", "Current", 2, "accepted"),
+        ("r2-ac04-accept", "Current", 2, "accepted"),
+        ("r2-final-true", "Superseded", 2, "final_acceptance=true"),
+        ("r2-final-false", "Current", 2, "final_acceptance=false"),
+    ]
+    events = original["resolution_events"]
+    assert [event["event_id"] for event in events] == [row[0] for row in expected]
+    for kind in ("markdown", "html"):
+        report = run("-m", "scopeproof_core.cli", "export", review_id,
+                     "--storage-dir", str(records), "--format", kind)
+        marker = "## Resolution History\n" if kind == "markdown" else "<h2>Resolution History</h2>"
+        history = report.split(marker, 1)[1]
+        history = history.split("\n## " if kind == "markdown" else "<h2>", 1)[0]
+        assert "<a " not in history and "<script" not in history
+        decoded = html.unescape(re.sub(r"<[^>]*>", " ", history))
+        text = " ".join(re.sub(r"\\(.)", r"\1", decoded).replace("**", "").split())
+        blocks = re.split(r"Event ID:?\s+", text)[1:]
+        assert len(blocks) == 8
+        for event, block, (event_id, status, revision, outcome) in zip(
+            events, blocks, expected, strict=True,
+        ):
+            assert block.startswith(event_id + " ")
+            assert re.search(rf"Event status:?\s+{status}\b", block)
+            assert re.search(rf"Criteria revision:?\s+{revision}\b", block)
+            assert re.search(rf"Recorded outcome:?\s+{outcome}\b", block)
+            for recorded in (
+                event["criterion_id"] or "Final acceptance", outcome, event["reviewer"],
+                event["comment"], datetime.fromisoformat(event["timestamp"]).isoformat(),
+            ):
+                assert recorded in block
+            if event["evidence_url"] is not None:
+                assert event["evidence_url"] in block
+        assert path.read_bytes() == before
+
+    mixed_id = "constructed-mixed-resolution-audit-review"
+    mixed_path = records / f"{mixed_id}.json"
+    mixed_before = mixed_path.read_bytes()
+    for kind in ("markdown", "html"):
+        report = run("-m", "scopeproof_core.cli", "export", mixed_id,
+                     "--storage-dir", str(records), "--format", kind)
+        marker = "## Resolution History\n" if kind == "markdown" else "<h2>Resolution History</h2>"
+        history = report.split(marker, 1)[1]
+        history = history.split("\n## " if kind == "markdown" else "<h2>", 1)[0]
+        decoded = html.unescape(re.sub(r"<[^>]*>", " ", history))
+        text = " ".join(re.sub(r"\\(.)", r"\1", decoded).replace("**", "").split())
+        assert re.search(r"Recorded outcome:?\s+final_acceptance=false\b", text)
+        label = re.escape("Additional decision field (not applied to this target)")
+        assert re.search(rf"{label}:?\s+accepted\b", text)
+        assert "Constructed legacy recorder 测试" in text
+        assert mixed_path.read_bytes() == mixed_before
+
+    catalog = json.loads(run("-m", "scopeproof_core.cli", "history", review_id,
+                             "--storage-dir", str(records)))
+    historical = run("-m", "scopeproof_core.cli", "export-history", review_id,
+                     "--storage-dir", str(records), "--history-position", "1",
+                     "--expected-state-fingerprint", catalog["state_fingerprint"],
+                     "--format", "markdown")
+    history = historical.split("## Resolution History\n", 1)[1].split("\n## ", 1)[0]
+    assert "Full resolution history is unavailable" in history
+    assert "r1-old-accept" not in history and "r2-current-accept" not in history
+    assert path.read_bytes() == before

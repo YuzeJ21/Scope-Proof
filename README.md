@@ -13,6 +13,12 @@ target closed unmet when the owner chose not to pursue Stage 1.
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
+Readable Markdown and HTML reports retain the saved review's decision audit: recorded actors,
+times, event IDs, criteria revisions and Current/Superseded/Prior revision status, with explicit
+evidence claims and runtime references. Analysis-only exports disclose unavailable full history.
+These are recorded assertions, not authenticated approval or runtime proof. See the
+[bounded handoff assessment](docs/audits/2026-11-01-readable-resolution-audit.md).
+
 Current direction: develop the reviewer workflow through a short, outcome-driven Stage 2 roadmap.
 The published evaluation
 download is **v0.2.4**, with its wheel, source archive, and checksums verified in the

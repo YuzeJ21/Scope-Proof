@@ -46,6 +46,7 @@ from scopeproof_core.schemas.models import (
     ChangedLine,
     LineChangeType,
     PullRequestSnapshot,
+    ReviewState,
 )
 from tests.candidate_selection_fixture import selection_criteria, selection_snapshot
 from tests.historical_analysis_fixture import (
@@ -1605,6 +1606,53 @@ def test_installed_wheel_primary_path_in_chromium(
 def _download_review_state(page: Page) -> dict:
     download = _download_with_retry(page, button_name="Download JSON")
     return json.loads(download.path().read_text(encoding="utf-8"))
+
+
+def _assert_recorded_resolution_history_download(page: Page, state: ReviewState) -> None:
+    """The readable handoff retains each saved event's own attributed fields."""
+    expected_events = (
+        ("constructed-historical-manual-decision", "Prior revision", 1),
+        ("constructed-current-manual-decision", "Current", 2),
+    )
+    assert state.criteria_revision.number == 2
+    assert [event.event_id for event in state.resolution_events] == [
+        event_id for event_id, _status, _revision in expected_events
+    ]
+    download = _download_with_retry(page, button_name="Download Markdown")
+    assert download.suggested_filename.endswith(".md")
+    report = download.path().read_text(encoding="utf-8")
+    history = report.split("## Resolution History\n", 1)[1].split("\n## ", 1)[0]
+    # Decode presentation escaping independently, without calling export or status helpers.
+    decoded = html.unescape(re.sub(
+        r"\\(.)", r"\1", history.replace("**", ""),
+    ))
+    blocks = re.split(r"Event ID:\s*", decoded)[1:]
+    assert len(blocks) == len(expected_events)
+    for event, block, (event_id, status, revision) in zip(
+        state.resolution_events, blocks, expected_events, strict=True,
+    ):
+        assert block.startswith(event_id + "\n")
+        assert event.criteria_revision_number == revision
+        assert event.criterion_id == "AC-01"
+        assert event.decision is not None
+        assert event.claimed_evidence_level is not None
+        assert event.evidence_url is not None
+        assert event.runtime_evidence_id is not None
+        for label, value in {
+            "Event status": status,
+            "Criteria revision": str(revision),
+            "Target": event.criterion_id,
+            "Recorded outcome": event.decision.value,
+            "Asserted reviewer": event.reviewer,
+            "Recorded at (as recorded)": event.timestamp.isoformat(),
+            "Reviewer note": event.comment,
+            "Evidence URL (as recorded)": event.evidence_url,
+            "Claimed evidence level": event.claimed_evidence_level.value,
+            "Runtime evidence link": event.runtime_evidence_id,
+        }.items():
+            assert f"{label}: {value}\n" in block
+    assert "<a " not in history
+    assert "](" not in history
 
 
 def _assert_selected_reference_is_nongating(
@@ -3251,9 +3299,14 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                                 continue
 
                             _assert_scope_source_unavailable(page)
-                            assert _download_review_state(page) == json.loads(
+                            downloaded_state = _download_review_state(page)
+                            assert downloaded_state == json.loads(
                                 saved_bytes[f"{CURRENT_REVIEW_ID}.json"],
                             )["state"]
+                            _assert_recorded_resolution_history_download(
+                                page, ReviewState.model_validate(downloaded_state),
+                            )
+                            assert_records_unchanged()
                             # Inspecting a scope target leaves an unsubmitted draft. The
                             # existing comparison guard requires explicitly clearing it.
                             comparison_panel = page.get_by_text(

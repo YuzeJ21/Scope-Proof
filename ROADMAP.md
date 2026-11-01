@@ -569,6 +569,17 @@ record v7, gates, decisions, runtime truth and frozen research remain unchanged.
 is a separate future lifecycle decision; this is one completed import outcome, not a standing
 adapter/parity queue or genuine-use evidence.
 
+The next owner-delegated gap review selected **readable decision-audit handoff**. Markdown
+previously reduced resolution history to target/outcome/note, and HTML omitted that history.
+Unreleased source now preserves recorded event IDs, asserted actors/times, revision and
+Current/Superseded/Prior revision status, evidence declarations and runtime links in both readable
+formats. Append order determines applicability; timestamp order does not. Bundle-only and retained
+analysis exports explicitly lack complete event history, and no historical head/provenance or
+acceptance-event association is inferred. Existing validation, JSON/CSV, record v7, gates,
+decisions, runtime truth and frozen R-002 stay unchanged. See the
+[bounded assessment](docs/audits/2026-11-01-readable-resolution-audit.md). This completes one report
+recipient outcome, without a release, ongoing format-parity queue or Stage 3 credit.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic
