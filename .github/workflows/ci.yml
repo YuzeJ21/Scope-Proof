@@ -124,6 +124,8 @@ jobs:
         run: python -c "import scopeproof_core; import scopeproof_core.cli; import scopeproof_core.alpha.storage; import scopeproof_core.alpha.rehearsal_storage; import apps.web.app"
       - name: Changed-file scope compatibility
         run: python -m pytest -q tests/gates/test_file_scope.py tests/reviews/test_file_scope_lifecycle.py tests/storage/test_file_scope_migration.py tests/cli/test_scope_file.py tests/reporting/test_file_scope_exports.py tests/test_build_identity.py tests/reporting/test_build_identity_exports.py
+      - name: Loaded changed-file diff inspection compatibility
+        run: python -m pytest -q tests/reviews/test_scope_file_preview.py tests/reviews/test_scope_file_preview_safety.py tests/apps/test_scope_file_preview.py
       - name: Recorded decision comparison compatibility
         run: python -m pytest -q tests/reviews/test_decision_context_comparison.py tests/reviews/test_decision_context_safety.py tests/reviews/test_decision_context_review_fixes.py tests/reporting/test_decision_context_comparison.py
       - name: Recorded final acceptance comparison compatibility

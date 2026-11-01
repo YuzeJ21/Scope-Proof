@@ -546,6 +546,17 @@ No is never translated into revoked or never accepted. Gates, decisions, v7 reco
 research remain unchanged. See the [bounded inspection assessment](docs/audits/2026-11-01-recorded-final-acceptance.md).
 This completes one informational outcome without a release, standing queue or Stage 3 advance.
 
+The next owner-delegated gap review selected **inspect loaded changes before a file-scope
+decision**. The existing form showed names and prior decisions but no source beside its explicit
+within/outside choice. Unreleased source now provides a source-bound, read-only diff preview with
+base/head coordinates, rename metadata and bounded 100-record pages. Skipped/truncated or
+ambiguous content remains unavailable; overlong records have explicit omissions. Switching files
+clears dependent decision drafts, and review/source changes clear the target. Reopened records
+without source retain explicit unavailability and the existing matching-source attachment path.
+This changes no saved decision, citation, gate, record version or frozen research. See the
+[bounded assessment](docs/audits/2026-11-01-scope-file-inspection.md). This completes a direct scope
+inspection outcome, not a standing parity queue or evidence of genuine independent usefulness.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

@@ -45,6 +45,7 @@ from scopeproof_core.schemas.models import (
     ChangedFile,
     ChangedLine,
     LineChangeType,
+    PullRequestSnapshot,
 )
 from tests.candidate_selection_fixture import selection_criteria, selection_snapshot
 from tests.historical_analysis_fixture import (
@@ -2308,6 +2309,135 @@ def _reopen_saved_comparison_current(
     ).to_have_count(0)
 
 
+def _assert_scope_source_unavailable(page: Page) -> None:
+    path = page.get_by_role("combobox", name="Uncited changed file", exact=True)
+    _choose_combobox_option(page, path, option_name="notes.md")
+    preview = page.locator(".st-key-scope_file_preview")
+    expect(preview.get_by_text(
+        "Loaded source is unavailable. Use Load matching reviewed source to inspect "
+        "this saved analysis.", exact=True,
+    )).to_be_visible()
+    # Recorded identity/path metadata remains visible; no source excerpt is invented.
+    expect(preview.locator('[data-testid="stCode"] code').filter(
+        has_text="+ head line",
+    )).to_have_count(0)
+    expect(page.get_by_role(
+        "combobox", name="File scope decision", exact=True,
+    )).to_have_value("")
+    expect(page.get_by_label(
+        "File scope explanation (required)", exact=True,
+    )).to_have_value("")
+    expect(page.get_by_role(
+        "button", name="Save file scope decision", exact=True,
+    )).to_be_disabled()
+
+
+def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
+    """Inspect constructed inert records and discard a draft without saving it."""
+    _assert_scope_source_unavailable(page)
+    before = _download_review_state(page)
+    page.get_by_role("button", name="Load matching reviewed source", exact=True).click()
+    expect(page.get_by_text(
+        "Matching reviewed source loaded. Saved analysis and decisions were preserved.",
+        exact=True,
+    )).to_be_visible()
+    path = page.get_by_role("combobox", name="Uncited changed file", exact=True)
+    _choose_combobox_option(page, path, option_name="notes.md")
+    preview = page.locator(".st-key-scope_file_preview")
+    expect(preview.get_by_text("Loaded changed-file diff", exact=True)).to_be_visible()
+    expect(preview.get_by_text(
+        "Static diff context, not a full file, runtime verification or a scope decision.",
+        exact=False,
+    )).to_be_visible()
+    assert page.evaluate("""() => {
+        const path = document.querySelector('.st-key-scope_file_path');
+        const preview = document.querySelector('.st-key-scope_file_preview');
+        const decision = document.querySelector('.st-key-scope_disposition');
+        return Boolean(path && preview && decision &&
+            (path.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+            (preview.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING));
+    }""")
+    code = preview.locator('[data-testid="stCode"] code').filter(
+        has_text="+ head line 1 | Constructed unrelated project note.",
+    )
+    expect(code).to_have_count(1)
+    assert len(code.inner_text().splitlines()) == 100
+    page_picker = page.get_by_role("combobox", name="Changed-file diff page", exact=True)
+    _choose_combobox_option(page, page_picker, option_name="Page 2 of 2")
+    expect(preview.locator('[data-testid="stCode"] code').filter(
+        has_text="+ head line 101 | Constructed scope preview note line 101.",
+    )).to_have_count(1)
+    disposition = page.get_by_role("combobox", name="File scope decision", exact=True)
+    _choose_combobox_option(page, disposition, option_name="Within Confirmed Criteria")
+    criterion = page.get_by_role(
+        "combobox", name="Confirmed criterion for this file", exact=True,
+    )
+    _choose_combobox_option(page, criterion, option_name="AC-01")
+    note = page.get_by_label("File scope explanation (required)", exact=True)
+    note.fill("CONSTRUCTED unsaved notes.md decision; must not retarget another file.")
+    _run_and_wait_for_streamlit_rerun(page, lambda: note.press("Tab"))
+    _choose_combobox_option(page, path, option_name="src/unrelated.py")
+    expect(disposition).to_have_value("")
+    expect(criterion).to_have_count(0)
+    expect(note).to_have_value("")
+    expect(page_picker).to_have_value("Page 1 of 1")
+    expect(page.get_by_role(
+        "button", name="Save file scope decision", exact=True,
+    )).to_be_disabled()
+    code = preview.locator('[data-testid="stCode"] code').filter(
+        has_text="CONSTRUCTED-TARGET-CODE-MUST-NOT-RUN",
+    )
+    expect(code).to_have_count(1)
+    rendered = code.inner_text()
+    assert "+ head line 1 | raise AssertionError(" in rendered
+    assert '+ head line 2 | <script>window.__scopeproofScopeTextExecuted = true</script>' in (
+        rendered
+    )
+    assert code.locator("script, img, a, button").count() == 0
+    assert page.evaluate("window.__scopeproofScopeTextExecuted === undefined")
+    assert CURRENT_HEAD in preview.inner_text()
+    assert "d" * 40 in preview.inner_text()
+
+    for viewport, zoom, name in (
+        (VIEWPORTS[0], "", "14-scope-file-preview-desktop"),
+        (VIEWPORTS[1], "", "15-scope-file-preview-phone"),
+        (VIEWPORTS[1], "2", "16-scope-file-preview-phone-css-zoom-200"),
+    ):
+        page.set_viewport_size(viewport)
+        page.evaluate("zoom => document.documentElement.style.zoom = zoom", zoom)
+        code.scroll_into_view_if_needed()
+        expect(code).to_be_in_viewport()
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        geometry = preview.evaluate("""element => {
+            const rect = element.getBoundingClientRect();
+            return {
+                width: rect.width, left: rect.left, right: rect.right,
+                clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+            };
+        }""")
+        assert geometry["width"] > 0
+        assert geometry["left"] >= -1
+        assert geometry["right"] <= viewport["width"] + 1
+        assert geometry["scrollWidth"] <= geometry["clientWidth"] + 1
+        assert "CONSTRUCTED-TARGET-CODE-MUST-NOT-RUN" in code.inner_text()
+        assert code.locator("script, img, a, button").count() == 0
+        assert page.evaluate("window.__scopeproofScopeTextExecuted === undefined")
+        page.screenshot(path=str(captures / f"{name}.png"))
+        (captures / f"{name}.json").write_text(json.dumps({
+            "viewport": viewport, "css_zoom": zoom or "1", "preview": geometry,
+        }, indent=2), encoding="utf-8")
+    page.evaluate("document.documentElement.style.zoom = ''")
+    page.set_viewport_size(VIEWPORTS[0])
+    _choose_combobox_option(page, path, option_name="notes.md")
+    expect(page_picker).to_have_value("Page 1 of 2")
+    expect(disposition).to_have_value("")
+    expect(note).to_have_value("")
+    # The discarded within-criteria draft does not survive visiting a different file.
+    _choose_combobox_option(page, disposition, option_name="Within Confirmed Criteria")
+    expect(criterion).to_have_value("")
+    assert _download_review_state(page) == before
+
+
 def _assert_saved_comparison_downloads(
     page: Page,
     *,
@@ -2938,6 +3068,50 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
             saved_analyses[analysis["review"]["head_sha"]] = analysis
             assert analysis["gate"]["verdict"] == "needs_review"
 
+    # Keep source inspection entirely constructed and local. Identity, inventory
+    # and CI observations come from the saved analysis, while its recorded
+    # reference and implementation excerpts retain their original source lines.
+    current_review = saved_analyses[CURRENT_HEAD]["review"]
+    scope_snapshot = PullRequestSnapshot.model_validate({
+        **{key: current_review[key] for key in (
+            "repository", "repository_visibility", "pr_number", "base_sha", "head_sha",
+            "check_state", "ci_observation", "ingestion_state", "skipped_files",
+        )},
+        "title": "Constructed local scope-file inspection",
+        "html_url": "https://github.com/acme/widget/pull/7",
+        "files": [
+            ChangedFile(path="src/export.py", status="modified", lines=[ChangedLine(
+                change_type=LineChangeType.ADDED, line_number=1,
+                content="def export_csv(rows): return rows",
+            )]),
+            ChangedFile(path="notes.md", status="added", lines=[
+                ChangedLine(
+                    change_type=LineChangeType.ADDED, line_number=number,
+                    content=(
+                        "Constructed unrelated project note." if number == 1
+                        else f"Constructed scope preview note line {number}."
+                    ),
+                ) for number in range(1, 102)
+            ]),
+            ChangedFile(path="src/unrelated.py", status="added", lines=[
+                ChangedLine(
+                    change_type=LineChangeType.ADDED, line_number=1,
+                    content="raise AssertionError('CONSTRUCTED-TARGET-CODE-MUST-NOT-RUN')",
+                ),
+                ChangedLine(
+                    change_type=LineChangeType.ADDED, line_number=2,
+                    content=(
+                        "<script>window.__scopeproofScopeTextExecuted = true</script>"
+                        '<img src="https://example.invalid/constructed-scope-preview" '
+                        'onerror="window.__scopeproofScopeTextExecuted = true">'
+                    ),
+                ),
+            ]),
+        ],
+    })
+    scope_snapshot_path = runtime_dir / "constructed-scope-file-snapshot.json"
+    scope_snapshot_path.write_text(scope_snapshot.model_dump_json(), encoding="utf-8")
+
     historical_recipe = runtime_dir / "constructed-historical-analysis.py"
     shutil.copy2(REPOSITORY_ROOT / "tests" / "historical_analysis_fixture.py", historical_recipe)
     _run(
@@ -2973,6 +3147,7 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                 with _installed_workbench_server(
                     installed_wheel, runtime_dir, home_dir,
                     log_name=f"saved-comparison-{generation}.log",
+                    constructed_snapshot=scope_snapshot_path,
                 ) as (base_url, log_path):
                     context = browser.new_context(viewport=VIEWPORTS[0])
                     try:
@@ -3007,14 +3182,37 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                             )
                             assert_records_unchanged()
                             if generation == 0:
+                                _exercise_scope_file_inspection(page, captures)
+                                assert_records_unchanged()
                                 page.screenshot(path=str(captures / "01-before-restart.png"))
                                 continue
 
+                            _assert_scope_source_unavailable(page)
+                            assert _download_review_state(page) == json.loads(
+                                saved_bytes[f"{CURRENT_REVIEW_ID}.json"],
+                            )["state"]
+                            # Inspecting a scope target leaves an unsubmitted draft. The
+                            # existing comparison guard requires explicitly clearing it.
+                            comparison_panel = page.get_by_text(
+                                "Compare saved analyses", exact=True,
+                            ).locator("xpath=ancestor::details[1]")
+                            if comparison_panel.get_attribute("open") is None:
+                                page.get_by_text("Compare saved analyses", exact=True).click()
+                            expect(page.get_by_role(
+                                "combobox", name="Comparison baseline", exact=True,
+                            )).to_be_disabled()
+                            clear_scope = page.get_by_role(
+                                "button", name="Clear pending file-scope inputs", exact=True,
+                            )
+                            _run_and_wait_for_streamlit_rerun(page, clear_scope.click)
+                            if comparison_panel.get_attribute("open") is None:
+                                page.get_by_text("Compare saved analyses", exact=True).click()
                             baseline = page.get_by_role(
                                 "combobox",
                                 name="Comparison baseline",
                                 exact=True,
                             )
+                            expect(baseline).to_be_enabled()
                             compare = page.get_by_role(
                                 "button",
                                 name="Compare selected saved analysis",
@@ -3173,6 +3371,12 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
     for name in ("11-final-acceptance-desktop", "12-final-acceptance-phone",
                  "13-final-acceptance-phone-css-zoom-200"):
         assert (captures / f"{name}.png").is_file()
+    for name in (
+        "14-scope-file-preview-desktop", "15-scope-file-preview-phone",
+        "16-scope-file-preview-phone-css-zoom-200",
+    ):
+        assert (captures / f"{name}.png").is_file()
+        assert (captures / f"{name}.json").is_file()
     for name in (
         "05-historical-desktop", "06-historical-phone", "07-historical-phone-css-zoom-200",
         "08-criteria-changes-desktop", "09-criteria-changes-phone",
