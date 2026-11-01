@@ -18,6 +18,10 @@ times, event IDs, criteria revisions and Current/Superseded/Prior revision statu
 evidence claims and runtime references. Analysis-only exports disclose unavailable full history.
 These are recorded assertions, not authenticated approval or runtime proof. See the
 [bounded handoff assessment](docs/audits/2026-11-01-readable-resolution-audit.md).
+The workbench now uses the same target-based field projection. Mixed legacy decision/final-flag
+fields remain visible with extra fields explicitly marked as not applied to that target, and
+recorded offsets or missing timezones remain explicit. See the
+[workbench consistency assessment](docs/audits/2026-11-01-workbench-resolution-audit.md).
 
 Current direction: develop the reviewer workflow through a short, outcome-driven Stage 2 roadmap.
 The published evaluation

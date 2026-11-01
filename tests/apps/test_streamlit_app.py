@@ -3924,7 +3924,7 @@ def test_final_acceptance_requires_resolutions_and_then_completes_gate() -> None
     ]
     assert "Current · revision 1" in [item.value for item in app.text]
     assert "Final acceptance" in [item.value for item in app.code]
-    assert "Recorded" in [item.value for item in app.text]
+    assert "final_acceptance=true" in [item.value for item in app.text]
     assert "Reviewer recorded final acceptance" in [item.value for item in app.text]
 
 
@@ -4509,11 +4509,11 @@ def test_resolution_history_distinguishes_current_and_superseded_decisions() -> 
     caption_text = "\n".join(item.value for item in app.caption)
     assert "Superseded · revision 1" in text_values
     assert "Current · revision 1" in text_values
-    assert "Rejected Finding" in text_values
-    assert "Accepted" in text_values
+    assert "rejected_finding" in text_values
+    assert "accepted" in text_values
     assert (
-        "Current events are the latest recorded inputs for the active revision. Superseded and "
-        "prior-revision events remain audit history and do not independently control the gate."
+        "Current events are the latest recorded inputs for their target in the active criteria "
+        "revision. Superseded and prior-revision events remain audit history"
     ) in caption_text
 
 
@@ -4556,12 +4556,12 @@ def test_resolution_history_shows_reviewer_timestamp_and_claimed_level() -> None
 
     text_values = [item.value for item in app.text]
     assert "Controlled reviewer" in text_values
-    assert "2026-07-14T19:45:00Z" in text_values
+    assert "2026-07-14T19:45:00+00:00" in text_values
     assert "E3" in text_values
     assert [item.value for item in app.code].count("runtime-audit-event") == 2
 
 
-def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> None:
+def test_resolution_history_discloses_unrecorded_claimed_level_for_non_manual_decision() -> None:
     app = analyzed_demo(new_app())
     review_state = app.session_state["review_state"].model_copy(deep=True)
     review_state = append_resolution(
@@ -4583,8 +4583,9 @@ def test_resolution_history_omits_claimed_level_for_non_manual_decision() -> Non
     captions = [item.value for item in app.caption]
     text_values = [item.value for item in app.text]
     assert "Controlled reviewer" in text_values
-    assert "2026-07-14T19:50:00Z" in text_values
-    assert "Claimed evidence level" not in captions
+    assert "2026-07-14T19:50:00+00:00" in text_values
+    assert "Claimed evidence level" in captions
+    assert "Not recorded" in text_values
 
 
 def test_runtime_evidence_guidance_lists_only_missing_required_fields() -> None:

@@ -115,7 +115,6 @@ from scopeproof_core.reviews.comparison import (
     compare_reviews,
 )
 from scopeproof_core.reviews.lifecycle import (
-    ResolutionEventStatus,
     acceptance_requires_comment,
     append_external_verification,
     append_file_scope_decision,
@@ -129,6 +128,12 @@ from scopeproof_core.reviews.lifecycle import (
     revise_criteria,
 )
 from scopeproof_core.reviews.reference_audit import active_references
+from scopeproof_core.reviews.resolution_history import (
+    LEGACY_RUNTIME_LINK,
+    RESOLUTION_HISTORY_BOUNDARY,
+    RESOLUTION_HISTORY_EMPTY,
+    resolution_history_event_fields,
+)
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
@@ -3343,63 +3348,33 @@ else:
     if review_state is not None:
         st.markdown("### Resolution history")
         if review_state.resolution_events:
-            st.caption(
-                "Current events are the latest recorded inputs for the active revision. "
-                "Superseded and prior-revision events remain audit history and do not "
-                "independently control the gate."
-            )
+            st.caption(RESOLUTION_HISTORY_BOUNDARY)
             event_statuses = resolution_event_statuses(
                 review_state.resolution_events,
                 active_revision_number=review_state.criteria_revision.number,
             )
-            status_labels = {
-                ResolutionEventStatus.CURRENT: "Current",
-                ResolutionEventStatus.SUPERSEDED: "Superseded",
-                ResolutionEventStatus.PRIOR_REVISION: "Prior revision",
-            }
-            for event, event_status in zip(
-                review_state.resolution_events, event_statuses, strict=True
-            ):
-                target = event.criterion_id or "Final acceptance"
-                outcome = (
-                    _status_label(event.decision.value)
-                    if event.decision
-                    else "Recorded"
-                    if event.final_acceptance
-                    else "Not recorded"
-                )
-                status = (
-                    f"Current · revision {event.criteria_revision_number}"
-                    if event_status is ResolutionEventStatus.CURRENT
-                    else (
-                        f"{status_labels[event_status]} · revision {event.criteria_revision_number}"
-                    )
-                )
-                recorded_at = event.model_dump(mode="json")["timestamp"]
-                with st.container(border=True):
-                    st.caption("Event status")
-                    st.text(status)
-                    st.caption("Target")
-                    st.code(target, language=None)
-                    st.caption("Outcome")
-                    st.text(outcome)
-                    st.caption("Reviewer comment")
-                    st.text(event.comment or "No note provided")
-                    st.caption("Reviewer")
-                    st.text(event.reviewer)
-                    st.caption("Recorded at (UTC)")
-                    st.text(recorded_at)
-                    if event.claimed_evidence_level is not None:
-                        st.caption("Claimed evidence level")
-                        st.text(event.claimed_evidence_level.value)
-                    if event.decision is HumanDecision.MANUALLY_VERIFIED:
-                        st.caption("Runtime evidence link")
-                        if event.runtime_evidence_id is None:
-                            st.warning("Legacy unlinked; re-record at the active head")
+            for position, (event, event_status) in enumerate(zip(
+                review_state.resolution_events, event_statuses, strict=True,
+            ), start=1):
+                with st.container(border=True, key=f"resolution_history_event_{position}"):
+                    for label, value in resolution_history_event_fields(event, event_status):
+                        st.caption(label)
+                        if label == "Event status":
+                            st.text(f"{value} · revision {event.criteria_revision_number}")
+                        elif (
+                            label == "Runtime evidence link" and value == LEGACY_RUNTIME_LINK
+                            and event.runtime_evidence_id is None
+                        ):
+                            st.warning(value)
+                        elif label in {"Event ID", "Target"} or (
+                            label.startswith("Runtime evidence link")
+                            and event.runtime_evidence_id is not None
+                        ):
+                            st.code(value, language=None, wrap_lines=True)
                         else:
-                            st.code(event.runtime_evidence_id, language=None)
+                            st.text(value)
         else:
-            st.caption("No human decisions have been recorded yet.")
+            st.caption(RESOLUTION_HISTORY_EMPTY)
 
     with _locked_review_status_snapshot(
         review_state,

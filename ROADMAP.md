@@ -70,7 +70,7 @@ ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
-moving-head ledger. Current browser coverage comprises seventeen checks: three installed-wheel
+moving-head ledger. Current browser coverage comprises eighteen checks: four installed-wheel
 Chromium journeys, eight constructed Streamlit selection checks, and six helper/capture checks.
 Dated five-check CI results below remain
 historical results, not current suite counts.
@@ -579,6 +579,17 @@ acceptance-event association is inferred. Existing validation, JSON/CSV, record 
 decisions, runtime truth and frozen R-002 stay unchanged. See the
 [bounded assessment](docs/audits/2026-11-01-readable-resolution-audit.md). This completes one report
 recipient outcome, without a release, ongoing format-parity queue or Stage 3 credit.
+
+The owner next selected **consistent workbench decision-audit display** for schema-valid mixed
+legacy events. The workbench and readable reports now share the same target-based field projection:
+review flags stay explicit `final_acceptance=true/false`, criterion decisions retain their own
+meaning, and extra recorded fields are visible as not applied to that target. Event identity,
+asserted metadata, missing/empty values and timezone uncertainty remain inspectable without
+reinterpreting stored history. Append order and existing deterministic status classification stay
+unchanged. The [bounded assessment](docs/audits/2026-11-01-workbench-resolution-audit.md) records
+isolated AppTest and installed-browser verification, including reopening/download without record
+writes. This closes the concrete display discrepancy found during PR #242; it does not create a
+parity queue, new release, genuine-use evidence or Stage 3 advancement.
 
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
