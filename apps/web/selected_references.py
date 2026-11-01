@@ -255,9 +255,10 @@ def _render_source_selection(
             return None
         source_lines = page.lines
         first = page_index * MAX_REFERENCE_PAGE_LINES + 1
+        line_kind = "matching eligible lines" if query else "eligible lines"
         st.caption(
             f"{first:,} to {first + len(source_lines) - 1:,} of "
-            f"{page.matching_line_count:,} matching eligible lines in this file. "
+            f"{page.matching_line_count:,} {line_kind} in this file. "
             "Reference line values are physical Git line numbers."
         )
         with st.container(key="selected_reference_source_preview"):
