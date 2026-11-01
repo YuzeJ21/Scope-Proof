@@ -6,6 +6,7 @@ from scopeproof_core.demo import build_review
 from scopeproof_core.reviews.lifecycle import (
     append_external_verification,
     append_file_scope_decision,
+    append_resolution,
     new_review_state,
 )
 from scopeproof_core.reviews.selected_references import (
@@ -177,24 +178,56 @@ def _with_decision_context(state: ReviewState, context: str) -> ReviewState:
     )
 
 
+def _with_recorded_acceptance(state: ReviewState, *, accepted: bool) -> ReviewState:
+    """Construct explicit scope/exception decisions; never claim practitioner acceptance."""
+    from scopeproof_core.gates.evaluator import unresolved_changed_file_paths
+
+    actor = "CONSTRUCTED automatic acceptance-fixture actor"
+    for path in sorted(unresolved_changed_file_paths(
+        state.review, state.bundle.findings, state.bundle.evidence,
+        state.bundle.file_scope_decisions,
+    )):
+        state = append_file_scope_decision(state, FileScopeDecision(
+            review_id=state.review.review_id, head_sha=state.review.head_sha,
+            criteria_revision_number=state.criteria_revision.number,
+            normalized_criteria_sha256=(
+                state.review.criteria_source_provenance.normalized_criteria_sha256
+            ), path=path, disposition="outside_confirmed_criteria",
+            note="CONSTRUCTED scope choice; not inferred acceptance.", reviewer=actor,
+        ))
+    state = append_resolution(state, ResolutionEvent(
+        criterion_id="AC-01", decision=HumanDecision.ACCEPTED_EXCEPTION,
+        comment="CONSTRUCTED exception; not runtime verification or practitioner use.",
+        reviewer=actor,
+    ))
+    if accepted:
+        state = append_resolution(state, ResolutionEvent(
+            final_acceptance=True, reviewer=actor,
+            comment="CONSTRUCTED recorded flag; not authenticated or qualifying acceptance.",
+        ))
+    return state
+
+
 def saved_comparison_states(
     *, selected_references: bool = False, foreign_history: bool = False,
-    decision_context: bool = False,
+    decision_context: bool = False, final_acceptance_context: bool = False,
 ) -> tuple[ReviewState, ReviewState]:
     """Return compatible constructed active/history and separate-record analyses."""
+    current_id = CURRENT_REVIEW_ID + ("-acceptance" if final_acceptance_context else "")
+    previous_id = PREVIOUS_REVIEW_ID + ("-acceptance" if final_acceptance_context else "")
     current = _constructed_state(
-        CURRENT_REVIEW_ID, CURRENT_HEAD, added_path=True, revision_number=2,
+        current_id, CURRENT_HEAD, added_path=True, revision_number=2,
         selected_context="current" if selected_references else None,
     )
     historical = _with_prior_scope_decision(
         _constructed_state(
-            CURRENT_REVIEW_ID, HISTORY_HEAD, added_path=False,
+            current_id, HISTORY_HEAD, added_path=False,
             selected_context="historical" if selected_references else None,
         )
     )
     previous = _with_prior_scope_decision(
         _constructed_state(
-            PREVIOUS_REVIEW_ID, PREVIOUS_HEAD, added_path=False,
+            previous_id, PREVIOUS_HEAD, added_path=False,
             revision_number=2 if foreign_history else 1,
             selected_context="previous" if selected_references else None,
         )
@@ -203,23 +236,29 @@ def saved_comparison_states(
         current = _with_decision_context(current, "current")
         historical = _with_decision_context(historical, "historical")
         previous = _with_decision_context(previous, "previous")
+    if final_acceptance_context:
+        current = _with_recorded_acceptance(current, accepted=True)
+        historical = _with_recorded_acceptance(historical, accepted=False)
+        previous = _with_recorded_acceptance(previous, accepted=False)
     assert current.bundle is not None and historical.bundle is not None
     current.criteria_revision.number = 2
     current.bundle.criteria_revision_number = 2
     current.analysis_history = [historical.bundle]
-    if decision_context:
+    if decision_context or final_acceptance_context:
         current.resolution_events = [
             *historical.resolution_events, *current.resolution_events,
         ]
     if foreign_history:
         foreign_historical = _with_prior_scope_decision(_constructed_state(
-            PREVIOUS_REVIEW_ID, FOREIGN_HISTORY_HEAD, added_path=False,
+            previous_id, FOREIGN_HISTORY_HEAD, added_path=False,
             selected_context="foreign-history" if selected_references else None,
         ))
         if decision_context:
             foreign_historical = _with_decision_context(foreign_historical, "foreign-history")
+        if final_acceptance_context:
+            foreign_historical = _with_recorded_acceptance(foreign_historical, accepted=False)
         previous.analysis_history = [foreign_historical.bundle]
-        if decision_context:
+        if decision_context or final_acceptance_context:
             previous.resolution_events = [
                 *foreign_historical.resolution_events, *previous.resolution_events,
             ]

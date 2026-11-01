@@ -33,6 +33,10 @@ from scopeproof_core.reviews.decision_context_comparison import (
     DECISION_CONTEXT_COMPARISON_BOUNDARY,
     DecisionContextComparison,
 )
+from scopeproof_core.reviews.final_acceptance_comparison import (
+    FINAL_ACCEPTANCE_COMPARISON_BOUNDARY,
+    FinalAcceptanceComparison,
+)
 from scopeproof_core.reviews.reference_audit import reference_status
 from scopeproof_core.reviews.selected_reference_comparison import (
     SELECTED_REFERENCE_COMPARISON_BOUNDARY,
@@ -782,6 +786,40 @@ def _decision_context_comparison_markdown(
     return lines
 
 
+def _final_acceptance_comparison_markdown(
+    context: FinalAcceptanceComparison | None,
+) -> list[str]:
+    lines = ["## Recorded final acceptance", "", FINAL_ACCEPTANCE_COMPARISON_BOUNDARY, ""]
+    if context is None:
+        return [*lines, "Recorded final acceptance was not included in this older comparison.", ""]
+    lines.extend([
+        f"Recorded value changed: {'Yes' if context.recorded_value_changed else 'No'}", "",
+        "Event attribution, actor, timestamp, rationale and event association are unavailable "
+        "in analysis snapshots. No does not establish revocation or that acceptance never "
+        "happened.",
+        "",
+    ])
+    for side in ("previous", "current"):
+        snapshot = getattr(context, side)
+        value = "Yes" if snapshot.recorded_final_acceptance else "No"
+        lines.extend([
+            f"### {side.title()} recorded final acceptance", "",
+            f"Recorded final acceptance: {value}", "",
+            f"- Repository: {_render_markdown_code(snapshot.repository)}; PR #{snapshot.pr_number}",
+            f"- Review ID: {_render_markdown_code(snapshot.review_id)}",
+            f"- Head: {_render_markdown_code(snapshot.head_sha)}",
+            f"- Criteria revision: {snapshot.criteria_revision_number}",
+            f"- Recorded input origin: {_render_markdown_code(snapshot.input_origin.value)}",
+            "- Normalized criteria digest: "
+            f"{_render_markdown_code(snapshot.normalized_criteria_sha256)}",
+            "- Criterion IDs: " + ", ".join(
+                _render_markdown_code(item) for item in snapshot.criterion_ids
+            ),
+            "",
+        ])
+    return lines
+
+
 def export_comparison_markdown(comparison: ReviewComparison) -> str:
     """Render an inspectable, evidence-bound re-review comparison."""
 
@@ -813,6 +851,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
     lines.extend(_comparison_file_scope_markdown(comparison))
     lines.extend(_selected_reference_comparison_markdown(comparison.selected_reference_comparison))
     lines.extend(_decision_context_comparison_markdown(comparison.decision_context_comparison))
+    lines.extend(_final_acceptance_comparison_markdown(comparison.final_acceptance_comparison))
     lines.extend(["## Evidence Changes", ""])
     for change in comparison.evidence_changes:
         kind = change.kind.value.replace("_", " ").title()
