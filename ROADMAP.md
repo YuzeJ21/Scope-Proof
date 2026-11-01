@@ -526,6 +526,16 @@ historical provenance still blocks full reports, output creation is atomic/no-ov
 bytes, decisions and gates stay unchanged. See the [bounded handoff assessment](docs/audits/2026-10-31-cli-historical-analysis.md).
 This completes one automatic-workflow outcome without publication, a standing queue or Stage 3 credit.
 
+The following owner-delegated review selected **headless saved requirements-change handoff**.
+After historical CLI export, scripts still could not explain the old-versus-current saved criteria
+when evidence comparison correctly refused changed or pending requirements. Unreleased source now
+adds `export-criteria-changes`, reusing the existing history catalog, explicit position/full-state
+fingerprint, requirements-only services and JSON/Markdown policy. Missing provenance remains
+unknown without relaxing full acceptance reports; pending criteria stay unconfirmed. Lock-bound
+publication and atomic no-overwrite output preserve saved bytes, decisions and gates. See the
+[bounded requirements handoff assessment](docs/audits/2026-10-31-cli-criteria-changes.md).
+This finishes one selected script-recipient outcome, not an ongoing parity queue or Stage 3 claim.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

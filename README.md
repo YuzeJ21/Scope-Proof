@@ -298,6 +298,25 @@ identity remain separate; missing historical source provenance still blocks full
 commands do not confirm revised criteria, rerun analysis, fetch source or carry decisions forward.
 They are not available in the published v0.2.4 package.
 
+Unreleased source also exposes the saved requirements-change report to scripts. Use the chosen
+position and fingerprint from `history` to compare that retained analysis's criteria with the
+current **saved** revision, including an unconfirmed revision with no active analysis:
+
+```bash
+scopeproof export-criteria-changes REVIEW_ID \
+  --history-position 1 \
+  --expected-state-fingerprint HASH_FROM_HISTORY \
+  --format markdown --output criteria-changes.md \
+  --storage-dir .scopeproof/reviews
+```
+
+Default output is JSON to stdout; optional files are created without overwrite. The report includes
+complete ordered criteria, exact source text in JSON, saved heads/revisions, asserted confirmation
+and recorded provenance. Same IDs are keys, not semantic continuity. Missing provenance stays
+unknown in this requirements-only report; it still blocks full historical acceptance reports.
+A saved change requires a fresh catalog and explicit selection. The command does not confirm
+criteria, include unsaved drafts, compare evidence, carry decisions forward or change a gate.
+
 Continue the same validated local review through the CLI with explicit human decisions. Store
 reviewer notes in UTF-8 files when they are needed:
 

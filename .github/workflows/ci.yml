@@ -129,7 +129,7 @@ jobs:
       - name: Retained historical analysis compatibility
         run: python -m pytest -q tests/reviews/test_historical_analysis.py tests/reviews/test_historical_analysis_safety.py tests/reviews/test_historical_analysis_producer.py tests/reporting/test_historical_analysis.py
       - name: Historical CLI handoff compatibility
-        run: python -m pytest -q tests/cli/test_history.py tests/cli/test_history_safety.py
+        run: python -m pytest -q tests/cli/test_history.py tests/cli/test_history_safety.py tests/cli/test_criteria_changes.py tests/cli/test_criteria_changes_safety.py
       - name: Saved criteria revision comparison compatibility
         run: python -m pytest -q tests/reviews/test_criteria_comparison.py tests/reviews/test_criteria_comparison_safety.py tests/reporting/test_criteria_comparison.py
       - name: Platform-safe storage and CLI regressions
@@ -180,7 +180,7 @@ jobs:
           scopeproof comparison-benchmark
           Pop-Location
           $env:SCOPEPROOF_INSTALLED_PYTHON = (Get-Command python).Source
-          python -m pytest -q tests/cli/test_installed_history.py
+          python -m pytest -q tests/cli/test_installed_history.py tests/cli/test_installed_criteria_changes.py
 
   locked-environment:
     runs-on: ubuntu-latest
@@ -273,7 +273,7 @@ jobs:
           (cd "$RUNNER_TEMP" && scopeproof comparison-benchmark)
           (cd "$RUNNER_TEMP" && python -m scopeproof_core.evals.r002_swebench --help)
 
-          SCOPEPROOF_INSTALLED_PYTHON="$(command -v python)" python -m pytest -q tests/cli/test_installed_history.py
+          SCOPEPROOF_INSTALLED_PYTHON="$(command -v python)" python -m pytest -q tests/cli/test_installed_history.py tests/cli/test_installed_criteria_changes.py
 
           web_log="$RUNNER_TEMP/scopeproof-web.log"
           web_pid=""
