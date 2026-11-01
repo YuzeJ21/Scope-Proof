@@ -2317,7 +2317,10 @@ def _assert_scope_source_unavailable(page: Page) -> None:
         "Loaded source is unavailable. Use Load matching reviewed source to inspect "
         "this saved analysis.", exact=True,
     )).to_be_visible()
-    expect(preview.locator('[data-testid="stCode"]')).to_have_count(0)
+    # Recorded identity/path metadata remains visible; no source excerpt is invented.
+    expect(preview.locator('[data-testid="stCode"] code').filter(
+        has_text="+ head line",
+    )).to_have_count(0)
     expect(page.get_by_role(
         "combobox", name="File scope decision", exact=True,
     )).to_have_value("")

@@ -657,8 +657,8 @@ See the [bounded assessment](docs/audits/2026-11-01-recorded-final-acceptance.md
 
 Under **Changed-file scope**, choose an **Uncited changed file** to inspect its already-loaded
 diff before making an explicit decision. The preview shows base/head identity, recorded status
-and rename origin, with pages of 100 diff records. Removed-line coordinates refer to the base;
-added/context coordinates refer to the head. Gaps may exist: this is static diff context, not a
+and rename origin, with pages of 100 diff records. Removed-line numbers refer only to the old diff side; its commit identity was not retained and
+must not be inferred from the recorded PR base SHA. Added/context coordinates refer to the head. Gaps may exist: this is static diff context, not a
 full file or runtime verification. Overlong records are explicitly omitted, and skipped,
 truncated or ambiguous content is unavailable.
 

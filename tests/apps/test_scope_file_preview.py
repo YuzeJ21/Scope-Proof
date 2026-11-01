@@ -29,13 +29,17 @@ def _render(mode="available"):
                 ChangedLine(change_type=LineChangeType.ADDED, line_number=index + 1,
                             content=f"CONSTRUCTED record {index}") for index in range(101)
             ])
+        elif mode == "renamed-missing":
+            st.session_state.fixture = scope_preview_context(
+                status="renamed", previous_path="old/notes.md",
+            )
         else:
             st.session_state.fixture = scope_preview_context()
     state, snapshot = st.session_state.fixture
     prepare_scope_draft_context(state, snapshot)
     st.selectbox("Uncited changed file", ["notes.md", "src/export.py"], index=None,
                  key="scope_file_path", on_change=scope_file_changed)
-    render_scope_file_preview(state, None if mode == "missing" else snapshot,
+    render_scope_file_preview(state, None if mode.endswith("missing") else snapshot,
                              st.session_state.scope_file_path, source_allowed=mode != "blocked")
     st.selectbox("File scope decision", ["outside_confirmed_criteria", "within_confirmed_criteria"],
                  index=None, key="scope_disposition")
@@ -53,7 +57,7 @@ def test_selected_file_renders_inert_base_head_records_before_decision_without_m
     app.selectbox(key="scope_file_path").select("notes.md").run()
     assert not app.exception
     assert "Loaded changed-file diff" in _values(app.caption)
-    assert "- base line 20 | CONSTRUCTED old note" in _values(app.code)
+    assert "- old diff line 20 | CONSTRUCTED old note" in _values(app.code)
     assert "+ head line 21 | CONSTRUCTED new note <img src=x> **Ready**" in _values(app.code)
     assert "  head line 50 | CONSTRUCTED retained context" in _values(app.code)
     assert "<img" not in _values(app.markdown)
@@ -103,7 +107,7 @@ def test_unknown_coordinates_control_escapes_and_oversized_omission_are_explicit
     app = AppTest.from_function(_render, args=("escaped",)).run()
     app.selectbox(key="scope_file_path").select("notes.md").run()
     assert not app.exception
-    assert "- base line unknown | CONSTRUCTED\\u000d\\u2028record" in _values(app.code)
+    assert "- old diff line unknown | CONSTRUCTED\\u000d\\u2028record" in _values(app.code)
     assert "+ head line 2 | [Content omitted: exceeds 4,096 UTF-8 bytes]" in _values(app.code)
     assert "x" * 4097 not in _values(app.code)
 
@@ -128,3 +132,30 @@ def test_truncated_loaded_content_remains_hidden_with_explicit_reason():
     assert not app.exception
     assert "truncated; no content is shown" in _values(app.info)
     assert "CONSTRUCTED old note" not in _values(app.code)
+
+
+def test_removed_lines_do_not_claim_coordinates_at_the_recorded_pr_base_commit():
+    app = AppTest.from_function(_render).run()
+    app.selectbox(key="scope_file_path").select("notes.md").run()
+    assert not app.exception
+    assert "- old diff line 20 | CONSTRUCTED old note" in _values(app.code)
+    assert "old-side commit was not retained" in _values(app.caption)
+    assert "Base (removed-line coordinates)" not in _values(app.caption)
+
+
+def test_saved_rename_metadata_remains_visible_when_loaded_source_is_missing():
+    app = AppTest.from_function(_render, args=("renamed-missing",)).run()
+    app.selectbox(key="scope_file_path").select("notes.md").run()
+    assert not app.exception
+    assert "Recorded change status: renamed" in _values(app.text)
+    assert "old/notes.md" in _values(app.code)
+    assert "unavailable" in _values(app.info)
+    assert "CONSTRUCTED old note" not in _values(app.code)
+
+
+def test_unicode_display_controls_are_escaped_without_normalizing_unicode_source():
+    from apps.web.scope_file_preview import _visible_content
+
+    assert _visible_content("é漢字\t\x80\u202e\u2066\U000e0001") == (
+        "é漢字\t\\u0080\\u202e\\u2066\\U000e0001"
+    )

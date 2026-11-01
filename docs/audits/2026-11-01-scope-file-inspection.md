@@ -15,7 +15,7 @@ The core builds a Pydantic-validated, read-only loaded-diff projection, independ
 It revalidates confirmed active state, source repo/PR/base/head/visibility, complete recorded
 observations and exact unique inventory. Matching partial source does not weaken its gate.
 Skipped/truncated/unsupported/ambiguous/no-line states expose no excerpts. Available records use
-100-record pages, preserved diff order and old/base versus new/head coordinates. Records over
+100-record pages, preserved diff order and old diff-side versus new/head coordinates. Records over
 4,096 UTF-8 bytes are omitted explicitly. Stored source is not normalized or rewritten.
 
 The workbench shows the selected file's static diff before disposition controls, with inert
@@ -29,8 +29,8 @@ No network fetch, source execution, new adapter, account or storage format was a
 
 Root core RED (13 missing-feature failures) and independent safety RED (44 missing-feature
 failures) preceded implementation. Core GREEN: 13 cases; independent safety GREEN: 44 cases;
-combined with existing selected-reference regressions: 110 passed. Seven AppTest cases cover
-inert source, old/new/unknown coordinates, explicit omissions, missing/conflicted source and
+combined with existing selected-reference regressions: 110 passed. Ten AppTest cases cover
+inert source, old/new/unknown coordinates, saved metadata without source and Unicode display controls, explicit omissions, missing/conflicted source and
 file/context draft reset. The existing installed-wheel saved-comparison journey is extended
 without adding a server generation or claiming another journey. It covers restart unavailability,
 matching-source attachment, page 2, draft reset, unchanged records and desktop/phone/CSS-200 views.
@@ -46,3 +46,14 @@ genuine independent use, authenticated decisions, runtime proof or accessibility
 Browser totals distinguish checks from journeys. Existing 95% unrounded coverage policy and seven
 frozen R-002 files remain unchanged. Source is unreleased 0.2.5; public v0.2.4 remains unchanged.
 Stage 1 remains closed at zero, Stage 2 owner-led, Stage 3 dormant. No release, deployment or outreach.
+
+Independent whole-branch review found the original plan/UI incorrectly associated old diff-side
+numbers with the recorded PR base tip. GitHub three-dot diffs can use a different merge base;
+[GitHub's comparison documentation](https://docs.github.com/en/pull-requests/reference/branches#three-dot-and-two-dot-git-diff-comparisons)
+confirms that distinction. A two-case failing regression reproduced coordinate wording and missing
+saved rename metadata; a separate failing display test covered C1/bidi controls. The bounded fix
+labels old diff-side coordinates without inventing a commit, preserves validated saved metadata
+before source availability checks, and escapes Unicode control/format/separator characters while
+preserving ordinary Unicode/tab text. The combined new focused suite passed 67 cases after fixes.
+Initial broad runs were deliberately interrupted before source changes and retained separately;
+they are not completion evidence. Final verification uses a freshly rebuilt installed package.

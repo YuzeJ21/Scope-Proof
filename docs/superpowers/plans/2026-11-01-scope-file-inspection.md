@@ -21,7 +21,7 @@
 
 ## Review Focus
 
-- Renamed/deleted old lines must retain base coordinates, never head evidence claims.
+- Renamed/deleted old lines must retain old diff-side coordinates, never head evidence claims.
 - A same-head source with different inventory or observations must be unavailable.
 - Skipped/truncated/oversized content must not leak through a convenience preview.
 - Changing file or source context must not retarget an old disposition or explanation.

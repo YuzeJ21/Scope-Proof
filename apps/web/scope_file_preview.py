@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from unicodedata import category
 
 import streamlit as st
 
+from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.reviews.scope_file_preview import build_scope_file_preview
 from scopeproof_core.schemas.models import LineChangeType, PullRequestSnapshot, ReviewState
 
@@ -35,10 +37,10 @@ def prepare_scope_draft_context(
 def _visible_content(content: str) -> str:
     # Preserve physical record boundaries without presenting separators as extra source lines.
     return "".join(
-        f"\\u{ord(character):04x}" if (
-            (ord(character) < 32 and character != "\t")
-            or character in "\x7f\x85\u2028\u2029"
-        ) else character
+        (f"\\u{ord(character):04x}" if ord(character) <= 0xffff
+         else f"\\U{ord(character):08x}")
+        if character != "\t" and category(character) in {"Cc", "Cf", "Zl", "Zp"}
+        else character
         for character in content
     )
 
@@ -59,7 +61,30 @@ def render_scope_file_preview(
             "Only ingested diff records are shown; gaps may exist. "
             "Control/separator characters are shown as escapes."
         )
-        if state is None or snapshot is None or not source_allowed:
+        try:
+            if state is None:
+                raise ValueError("no active saved review")
+            state = validated_review_state(state)
+            inventory = state.review.changed_file_inventory
+            recorded_file = next(
+                (item for item in inventory.files if item.path == path), None,
+            ) if inventory is not None else None
+            if recorded_file is None:
+                raise ValueError("no recorded selected-file metadata")
+        except ValueError:
+            st.info("Recorded file metadata and loaded source are unavailable for this analysis.")
+            return
+        st.text(f"{state.review.repository} · PR #{state.review.pr_number}")
+        st.code(recorded_file.path, language=None, wrap_lines=True)
+        st.text(f"Recorded change status: {recorded_file.status}")
+        if recorded_file.previous_path is not None:
+            st.text("Recorded previous path")
+            st.code(recorded_file.previous_path, language=None, wrap_lines=True)
+        st.caption("Recorded PR base identity; the diff's old-side commit was not retained.")
+        st.code(state.review.base_sha, language=None, wrap_lines=True)
+        st.caption("Recorded head (added/context-line coordinates)")
+        st.code(state.review.head_sha, language=None, wrap_lines=True)
+        if snapshot is None or not source_allowed:
             st.info(
                 "Loaded source is unavailable. Use Load matching reviewed source "
                 "to inspect this saved analysis."
@@ -75,16 +100,6 @@ def render_scope_file_preview(
                 "Load matching reviewed source or explicitly re-review; no diff was inferred."
             )
             return
-        st.text(f"{preview.repository} · PR #{preview.pr_number}")
-        st.code(preview.path, language=None, wrap_lines=True)
-        st.text(f"Recorded change status: {preview.status}")
-        if preview.previous_path is not None:
-            st.text("Recorded previous path")
-            st.code(preview.previous_path, language=None, wrap_lines=True)
-        st.caption("Base (removed-line coordinates)")
-        st.code(preview.base_sha, language=None, wrap_lines=True)
-        st.caption("Head (added/context-line coordinates)")
-        st.code(preview.head_sha, language=None, wrap_lines=True)
         if preview.availability != "available":
             reasons = {
                 "skipped": "The file was skipped during ingestion; no content is shown.",
@@ -115,6 +130,6 @@ def render_scope_file_preview(
                 else _visible_content(line.content)
             )
             rendered.append(
-                f"{prefix} {'base' if removed else 'head'} line {coordinate} | {content}"
+                f"{prefix} {'old diff' if removed else 'head'} line {coordinate} | {content}"
             )
         st.code("\n".join(rendered), language=None, wrap_lines=True)
