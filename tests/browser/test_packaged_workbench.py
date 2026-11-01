@@ -3191,11 +3191,28 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                             assert _download_review_state(page) == json.loads(
                                 saved_bytes[f"{CURRENT_REVIEW_ID}.json"],
                             )["state"]
+                            # Inspecting a scope target leaves an unsubmitted draft. The
+                            # existing comparison guard requires explicitly clearing it.
+                            comparison_panel = page.get_by_text(
+                                "Compare saved analyses", exact=True,
+                            ).locator("xpath=ancestor::details[1]")
+                            if comparison_panel.get_attribute("open") is None:
+                                page.get_by_text("Compare saved analyses", exact=True).click()
+                            expect(page.get_by_role(
+                                "combobox", name="Comparison baseline", exact=True,
+                            )).to_be_disabled()
+                            clear_scope = page.get_by_role(
+                                "button", name="Clear pending file-scope inputs", exact=True,
+                            )
+                            _run_and_wait_for_streamlit_rerun(page, clear_scope.click)
+                            if comparison_panel.get_attribute("open") is None:
+                                page.get_by_text("Compare saved analyses", exact=True).click()
                             baseline = page.get_by_role(
                                 "combobox",
                                 name="Comparison baseline",
                                 exact=True,
                             )
+                            expect(baseline).to_be_enabled()
                             compare = page.get_by_role(
                                 "button",
                                 name="Compare selected saved analysis",
