@@ -37,6 +37,7 @@ from scopeproof_core.reviews.final_acceptance_comparison import (
     FINAL_ACCEPTANCE_COMPARISON_BOUNDARY,
     FinalAcceptanceComparison,
 )
+from scopeproof_core.reviews.lifecycle import ResolutionEventStatus, resolution_event_statuses
 from scopeproof_core.reviews.reference_audit import reference_status
 from scopeproof_core.reviews.selected_reference_comparison import (
     SELECTED_REFERENCE_COMPARISON_BOUNDARY,
@@ -51,6 +52,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     JUnitCaseResult,
     JUnitEvidenceImport,
+    ResolutionEvent,
     ReviewBundle,
     ReviewerSelectedReference,
     ReviewState,
@@ -78,6 +80,18 @@ _RETRIEVAL_BOUNDARY = (
 _RETRIEVAL_FALLBACK = "Retrieval diagnostics were not recorded for this review."
 _LEGACY_RUNTIME_LINK = "Legacy unlinked; re-record at the active head"
 _EXPORT_PROVENANCE_REQUIRED = "criteria source provenance is required for export"
+_RESOLUTION_HISTORY_BOUNDARY = (
+    "Current events are the latest recorded inputs for their target in the active criteria "
+    "revision. Superseded and prior-revision events remain audit history and do not "
+    "independently control the gate. Reviewer names and timestamps are recorded assertions, "
+    "not authenticated identity or runtime verification. Events do not record historical "
+    "heads or criteria-source provenance; none is inferred here. Review-level flags are "
+    "shown only as recorded values."
+)
+_RESOLUTION_HISTORY_UNAVAILABLE = (
+    "Full resolution history is unavailable for this analysis-only report."
+)
+_RESOLUTION_HISTORY_EMPTY = "No resolution events were recorded for this saved review."
 
 
 def _escape_markdown_text(value: str) -> str:
@@ -94,6 +108,94 @@ def _render_markdown_code(value: str) -> str:
     """Render untrusted repository text as inert HTML code within Markdown."""
     normalized = value.replace("\r", " ").replace("\n", " ")
     return f"<code>{html.escape(normalized, quote=True)}</code>"
+
+
+def _recorded_resolution_value(value: str | None) -> str:
+    if value is None:
+        return "Not recorded"
+    return value if value else "Empty value recorded"
+
+
+def _resolution_history_event_fields(
+    event: ResolutionEvent, status: ResolutionEventStatus,
+) -> list[tuple[str, str]]:
+    """Project only recorded fields from events in an already validated export state."""
+    recorded_at = event.timestamp.isoformat()
+    if event.timestamp.utcoffset() is None:
+        recorded_at += " (timezone not recorded)"
+    outcome = (
+        event.decision.value if event.decision is not None
+        else f"final_acceptance={str(event.final_acceptance).lower()}"
+    )
+    runtime_link = (
+        _LEGACY_RUNTIME_LINK
+        if event.decision is HumanDecision.MANUALLY_VERIFIED and event.runtime_evidence_id is None
+        else _recorded_resolution_value(event.runtime_evidence_id)
+    )
+    status_label = {
+        ResolutionEventStatus.CURRENT: "Current",
+        ResolutionEventStatus.SUPERSEDED: "Superseded",
+        ResolutionEventStatus.PRIOR_REVISION: "Prior revision",
+    }[status]
+    return [
+        ("Event ID", event.event_id),
+        ("Event status", status_label),
+        ("Criteria revision", str(event.criteria_revision_number)),
+        ("Target", event.criterion_id if event.criterion_id is not None else "Final acceptance"),
+        ("Recorded outcome", outcome),
+        ("Asserted reviewer", event.reviewer),
+        ("Recorded at (as recorded)", recorded_at),
+        ("Reviewer note", _recorded_resolution_value(event.comment)),
+        ("Evidence URL (as recorded)", _recorded_resolution_value(event.evidence_url)),
+        ("Claimed evidence level", _recorded_resolution_value(
+            event.claimed_evidence_level.value
+            if event.claimed_evidence_level is not None else None,
+        )),
+        ("Runtime evidence link", runtime_link),
+    ]
+
+
+def _resolution_history_markdown(state: ReviewState | None) -> list[str]:
+    lines = ["## Resolution History", ""]
+    if state is None:
+        return [*lines, _RESOLUTION_HISTORY_UNAVAILABLE, ""]
+    if not state.resolution_events:
+        return [*lines, _RESOLUTION_HISTORY_EMPTY, ""]
+    lines.extend([
+        _RESOLUTION_HISTORY_BOUNDARY, "",
+        f"Active criteria revision: {state.criteria_revision.number}", "",
+    ])
+    statuses = resolution_event_statuses(state.resolution_events, state.criteria_revision.number)
+    for position, (event, status) in enumerate(
+        zip(state.resolution_events, statuses, strict=True), 1,
+    ):
+        lines.append(f"### Event {position}")
+        lines.append("")
+        for label, value in _resolution_history_event_fields(event, status):
+            lines.append(f"- **{label}:** {_escape_markdown_text(value)}")
+        lines.append("")
+    return lines
+
+
+def _resolution_history_html(state: ReviewState | None) -> list[str]:
+    lines = ["<h2>Resolution History</h2>"]
+    if state is None:
+        return [*lines, f"<p>{_RESOLUTION_HISTORY_UNAVAILABLE}</p>"]
+    if not state.resolution_events:
+        return [*lines, f"<p>{_RESOLUTION_HISTORY_EMPTY}</p>"]
+    lines.extend([
+        f"<p>{_RESOLUTION_HISTORY_BOUNDARY}</p>",
+        f"<p>Active criteria revision: {state.criteria_revision.number}</p>",
+    ])
+    statuses = resolution_event_statuses(state.resolution_events, state.criteria_revision.number)
+    for position, (event, status) in enumerate(
+        zip(state.resolution_events, statuses, strict=True), 1,
+    ):
+        lines.append(f"<h3>Event {position}</h3><dl>")
+        for label, value in _resolution_history_event_fields(event, status):
+            lines.append(f"<dt>{label}</dt><dd><code>{html.escape(value)}</code></dd>")
+        lines.append("</dl>")
+    return lines
 
 
 def _csv_text(value: str) -> str:
@@ -1266,16 +1368,7 @@ def export_markdown(bundle: ExportableReview) -> str:
                 "",
             ]
         )
-    if state is not None:
-        lines.extend(["## Resolution History", ""])
-        for event in state.resolution_events:
-            target = event.criterion_id or "Final acceptance"
-            outcome = (
-                event.decision.value if event.decision else str(event.final_acceptance).lower()
-            )
-            history = f"{target}: {outcome} — {event.comment or 'No note provided'}"
-            lines.append(f"- {_escape_markdown_text(history)}")
-        lines.append("")
+    lines.extend(_resolution_history_markdown(state))
     scope_status, changed_paths, unresolved_paths = _scope_summary(bundle)
     lines.extend([
         "## Changed-file Scope",
@@ -1950,6 +2043,7 @@ def export_html(value: ExportableReview) -> str:
                 if bundle.runtime_evidence
                 else []
             ),
+            *_resolution_history_html(state),
             *_selected_reference_html(bundle),
             *_junit_import_html(bundle),
             "<h2>Changed-file Scope</h2>",
