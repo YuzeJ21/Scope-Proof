@@ -76,5 +76,3 @@ def resolution_history_event_fields(
         )),
         ("Runtime evidence link" + context_suffix, runtime_link),
     ]
-
-
