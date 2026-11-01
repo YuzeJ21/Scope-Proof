@@ -557,6 +557,18 @@ This changes no saved decision, citation, gate, record version or frozen researc
 [bounded assessment](docs/audits/2026-11-01-scope-file-inspection.md). This completes a direct scope
 inspection outcome, not a standing parity queue or evidence of genuine independent usefulness.
 
+The next owner-delegated gap review selected **map one JUnit artifact to multiple criteria before
+one import**. The prior workbench mapped every selected scope only to the inspected criterion,
+while duplicate-artifact protection correctly prevented importing that report again. Unreleased
+source now stages explicit target/scope choices, previews the canonical assignments and supports
+criterion-group removal/clear before one unchanged lifecycle append. Complete review/artifact
+binding expires stale choices, overlapping ownership is rejected without changing the prior
+draft, and unsubmitted choices block Save. Existing parser, duplicate protection, saved imports,
+record v7, gates, decisions, runtime truth and frozen research remain unchanged. See the
+[bounded assessment](docs/audits/2026-11-01-junit-multi-criterion-draft.md). Saved-import correction
+is a separate future lifecycle decision; this is one completed import outcome, not a standing
+adapter/parity queue or genuine-use evidence.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

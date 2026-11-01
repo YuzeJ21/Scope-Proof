@@ -18,6 +18,7 @@ from apps.web.historical_analysis import (
     clear_historical_analysis_selection,
     render_historical_analysis_selector,
 )
+from apps.web.junit_mapping import clear_junit_mapping_draft, render_junit_mapping_draft
 from apps.web.saved_comparison import (
     clear_saved_comparison_selection,
     render_saved_comparison_selector,
@@ -90,8 +91,6 @@ from scopeproof_core.github.client import (
 from scopeproof_core.importers.junit import (
     MAX_JUNIT_BYTES,
     JUnitImportError,
-    JUnitMappingSelection,
-    build_junit_evidence_import,
     parse_junit_artifact,
 )
 from scopeproof_core.presentation import (
@@ -280,7 +279,6 @@ _STATE_DEFAULTS = {
     "criteria_source_widget_sync_pending": None,
     "source_widget_sync_pending": None,
     "junit_artifact_upload_version": 0,
-    "junit_mapping_artifact_sha256": None,
 }
 for state_key, default in _STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -912,6 +910,7 @@ def _criterion_detail_draft_pending(*, include_selected_reference: bool = True) 
         or str(st.session_state.get("junit_importer", "")).strip()
         or str(st.session_state.get("junit_limitations", "")).strip()
         or st.session_state.get("junit_mapping_scopes", [])
+        or st.session_state.get("junit_mapping_draft") is not None
     )
     selected_pending = include_selected_reference and selected_reference_draft_pending()
     return selected_pending or junit_pending or any(
@@ -952,7 +951,7 @@ def _clear_junit_import_draft() -> None:
     st.session_state["junit_importer"] = ""
     st.session_state["junit_limitations"] = ""
     st.session_state["junit_mapping_scopes"] = []
-    st.session_state["junit_mapping_artifact_sha256"] = None
+    clear_junit_mapping_draft()
 
 
 def _clear_criterion_detail_drafts() -> bool:
@@ -2710,18 +2709,6 @@ else:
                             "review remains unchanged."
                         )
                     else:
-                        previous_mapping_digest = st.session_state.get(
-                            "junit_mapping_artifact_sha256"
-                        )
-                        if (
-                            previous_mapping_digest is not None
-                            and previous_mapping_digest
-                            != parsed_junit.artifact_sha256
-                        ):
-                            st.session_state["junit_mapping_scopes"] = []
-                        st.session_state["junit_mapping_artifact_sha256"] = (
-                            parsed_junit.artifact_sha256
-                        )
                         st.caption("Sanitized JUnit preview")
                         st.text(
                             "Computed results: "
@@ -2748,49 +2735,30 @@ else:
                             st.caption("Parser warnings")
                             for warning in parsed_junit.parser_warnings:
                                 st.text(warning)
-            junit_mapping_scopes = st.multiselect(
-                "Map JUnit scopes to the selected criterion",
-                options=available_scope_ids,
-                format_func=lambda scope_id: scope_labels.get(scope_id, scope_id),
-                key="junit_mapping_scopes",
-                disabled=parsed_junit is None,
+            junit_review_state = review_state
+            if (
+                st.session_state["review_save_conflict"]
+                or st.session_state["deleted_review_save_fingerprint"] is not None
+            ):
+                junit_review_state = None
+                st.info(
+                    "The saved review changed, is unavailable or was deleted. "
+                    "Reopen or explicitly restore the review, then stage JUnit mappings again. "
+                    "Previous draft choices were cleared."
+                )
+            junit_import_candidate = render_junit_mapping_draft(
+                junit_review_state,
+                uploaded_junit.getvalue() if parsed_junit is not None else None,
+                parsed_junit, scope_ids=available_scope_ids, scope_labels=scope_labels,
+                importer=junit_importer,
+                limitations=[
+                    line.strip() for line in junit_limitations.splitlines() if line.strip()
+                ],
             )
-            st.caption(
-                f"Selected mapping target: {selected_id}. ScopeProof never infers this "
-                "relationship from test names."
-            )
-            junit_import_candidate = None
-            junit_import_draft_present = bool(
-                exact_head_ready
-                and review_state is not None
-                and parsed_junit is not None
-                and junit_importer.strip()
-                and junit_mapping_scopes
-            )
-            if junit_import_draft_present:
-                assert review_state is not None
-                assert uploaded_junit is not None
+            if junit_import_candidate is not None:
                 try:
-                    junit_import_candidate = build_junit_evidence_import(
-                        review_state,
-                        uploaded_junit.getvalue(),
-                        [
-                            JUnitMappingSelection(
-                                scope_id=scope_id,
-                                criterion_id=selected_id,
-                            )
-                            for scope_id in junit_mapping_scopes
-                        ],
-                        importer=junit_importer,
-                        limitations=[
-                            line.strip()
-                            for line in junit_limitations.splitlines()
-                            if line.strip()
-                        ],
-                    )
-                    append_junit_evidence_import(
-                        review_state, junit_import_candidate
-                    )
+                    assert review_state is not None
+                    append_junit_evidence_import(review_state, junit_import_candidate)
                 except (JUnitImportError, TypeError, ValueError):
                     junit_import_candidate = None
             if st.button(

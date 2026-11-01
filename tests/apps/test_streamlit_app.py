@@ -3396,6 +3396,10 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
     app = app.text_area(key="split_criterion_text").set_value(
         "First behavior\nSecond behavior"
     ).run()
+    criteria = app.session_state["criteria"]
+    assert criteria
+    criterion_action_keys = [f"remove_{item.criterion_id}" for item in criteria]
+    criterion_action_keys += [f"move_up_{item.criterion_id}" for item in criteria[1:]]
 
     warning_text = "\n".join(item.value for item in app.warning)
     assert "Replacing it will discard unsaved changes." in warning_text
@@ -3406,11 +3410,8 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
     assert app.button(key="prepare_criteria").disabled is True
     assert app.button(key="add_criterion_ui").disabled is False
     assert app.button(key="split_criterion_ui").disabled is False
-    assert all(
-        button.disabled
-        for button in app.button
-        if button.key.startswith(("remove_", "move_up_"))
-    )
+    assert all(app.button(key=key).disabled for key in criterion_action_keys)
+    assert app.button(key="remove_junit_mapping").disabled is True
 
     app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
 
@@ -3420,11 +3421,8 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
     assert app.button(key="prepare_criteria").disabled is False
     assert app.button(key="add_criterion_ui").disabled is False
     assert app.button(key="split_criterion_ui").disabled is False
-    assert all(
-        not button.disabled
-        for button in app.button
-        if button.key.startswith(("remove_", "move_up_"))
-    )
+    assert all(not app.button(key=key).disabled for key in criterion_action_keys)
+    assert app.button(key="remove_junit_mapping").disabled is True
 
 
 def test_replacing_unsaved_review_consumes_replacement_approval() -> None:
@@ -5277,6 +5275,10 @@ def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -
     app = app.multiselect(key="junit_mapping_scopes").set_value(
         ["suite-0001"]
     ).run()
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    app = app.button(key="stage_junit_mapping").click().run()
     app = app.button(key="save_junit_import").click().run()
 
     updated = app.session_state["review_state"]
@@ -5319,6 +5321,10 @@ def test_junit_exact_one_mib_payload_fits_upload_envelope_and_remains_non_gating
         "Constructed automated byte-boundary probe"
     ).run()
     app = app.multiselect(key="junit_mapping_scopes").set_value(["suite-0001"]).run()
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    app = app.button(key="stage_junit_mapping").click().run()
     app = app.button(key="save_junit_import").click().run()
 
     updated = app.session_state["review_state"]
@@ -5460,8 +5466,16 @@ def test_junit_import_save_stays_disabled_until_full_draft_is_valid(
     ).run()
     app = app.text_input(key="junit_importer").set_value(importer).run()
     app = app.multiselect(key="junit_mapping_scopes").set_value(mapping).run()
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    assert app.button(key="stage_junit_mapping").disabled is False
+    app = app.button(key="stage_junit_mapping").click().run()
 
     assert app.button(key="save_junit_import").disabled is True
+    assert app.error
+    assert app.session_state["junit_mapping_draft"].selections == ()
+    assert app.session_state["review_state"].bundle.junit_evidence_imports == []
 
 
 def test_junit_import_save_stays_disabled_for_already_imported_artifact() -> None:
@@ -5474,6 +5488,10 @@ def test_junit_import_save_stays_disabled_for_already_imported_artifact() -> Non
     app = app.multiselect(key="junit_mapping_scopes").set_value(
         ["suite-0001"]
     ).run()
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    app = app.button(key="stage_junit_mapping").click().run()
     app = app.button(key="save_junit_import").click().run()
 
     app = app.file_uploader(key="junit_artifact_upload_1").upload(
@@ -5484,4 +5502,12 @@ def test_junit_import_save_stays_disabled_for_already_imported_artifact() -> Non
         ["suite-0001"]
     ).run()
 
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    before = app.session_state["review_state"].model_dump_json()
+    app = app.button(key="stage_junit_mapping").click().run()
     assert app.button(key="save_junit_import").disabled is True
+    assert app.error
+    assert app.session_state["junit_mapping_draft"].selections == ()
+    assert app.session_state["review_state"].model_dump_json() == before

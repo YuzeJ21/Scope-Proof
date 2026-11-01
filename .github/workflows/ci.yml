@@ -126,6 +126,8 @@ jobs:
         run: python -m pytest -q tests/gates/test_file_scope.py tests/reviews/test_file_scope_lifecycle.py tests/storage/test_file_scope_migration.py tests/cli/test_scope_file.py tests/reporting/test_file_scope_exports.py tests/test_build_identity.py tests/reporting/test_build_identity_exports.py
       - name: Loaded changed-file diff inspection compatibility
         run: python -m pytest -q tests/reviews/test_scope_file_preview.py tests/reviews/test_scope_file_preview_safety.py tests/apps/test_scope_file_preview.py
+      - name: Multi-criterion JUnit draft compatibility
+        run: python -m pytest -q tests/importers/test_junit_draft.py tests/importers/test_junit_draft_safety.py tests/apps/test_junit_mapping.py
       - name: Recorded decision comparison compatibility
         run: python -m pytest -q tests/reviews/test_decision_context_comparison.py tests/reviews/test_decision_context_safety.py tests/reviews/test_decision_context_review_fixes.py tests/reporting/test_decision_context_comparison.py
       - name: Recorded final acceptance comparison compatibility

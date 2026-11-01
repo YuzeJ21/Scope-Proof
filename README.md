@@ -370,6 +370,19 @@ that the implementation is correct.
 The v0.2.4 release can also inspect and append one bounded local JUnit XML artifact
 without executing target-repository code. First inspect the sanitized scope IDs:
 
+In unreleased **0.2.5 source**, the workbench can stage different scopes from one artifact for
+multiple confirmed criteria before a single import. Choose a **JUnit mapping target criterion**,
+choose its scopes, then **Add selected scopes to mapping draft**. Repeat for another criterion,
+inspect the staged preview, and use **Save imported JUnit results** once. Remove a criterion group
+or clear the draft to revise unsaved choices. Unsubmitted target/scope choices keep Save disabled.
+
+Artifact or full-review changes clear staged mappings; the existing main inspected-criterion
+change also clears unsaved criterion-detail inputs. Use the independent mapping target inside
+the JUnit form to choose multiple criteria. One case cannot belong to two criteria. This does
+not edit a saved import or permit importing the same artifact again. The draft is unsaved
+organizational context; it changes no evidence level, gate, decision or runtime truth. See the
+[bounded assessment](docs/audits/2026-11-01-junit-multi-criterion-draft.md).
+
 ```bash
 scopeproof inspect-junit results.xml
 ```
