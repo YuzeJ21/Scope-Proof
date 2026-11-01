@@ -39,6 +39,7 @@ from playwright.sync_api import (
 from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.importers.junit import MAX_JUNIT_BYTES
 from scopeproof_core.reviews.comparison import ReviewComparison
+from scopeproof_core.reviews.criteria_comparison import CriteriaSnapshot
 from scopeproof_core.schemas.models import (
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     ChangedFile,
@@ -2319,9 +2320,19 @@ def _exercise_historical_inspection(
         "button", name="Inspect selected historical analysis", exact=True,
     )
     heading = page.get_by_role("heading", name="Historical recorded analysis", exact=True)
+    criteria_heading = page.get_by_role(
+        "heading", name="Saved criteria revision changes", exact=True,
+    )
+    compare_criteria = page.get_by_role(
+        "button", name="Compare with saved current criteria", exact=True,
+    )
     expect(choice).to_have_value("")
     expect(inspect).to_be_disabled()
     expect(heading).to_have_count(0)
+    expect(criteria_heading).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Download criteria changes JSON", exact=True,
+    )).to_have_count(0)
     expect(page.get_by_role(
         "button", name="Download historical JSON", exact=True,
     )).to_have_count(0)
@@ -2379,23 +2390,154 @@ def _exercise_historical_inspection(
         assert value in markdown
     assert "historical" in markdown.lower()
     assert PENDING_CRITERIA_TEXT not in markdown
+
+    # A text-widget draft is not a saved criteria revision. Compare the selected
+    # retained position with the persisted pending revision, without confirming it.
+    unsaved_draft = "<img src=x onerror=bad> **CONSTRUCTED unsaved criteria draft**"
+    requirements = page.get_by_role(
+        "textbox", name="Product requirements or acceptance criteria", exact=True,
+    )
+    requirements.fill(unsaved_draft)
+    _run_and_wait_for_streamlit_rerun(page, lambda: requirements.press("Tab"))
+    expect(compare_criteria).to_be_enabled()
+    expect(criteria_heading).to_have_count(0)
+    _run_and_wait_for_streamlit_rerun(page, compare_criteria.click)
+    expect(criteria_heading).to_be_visible()
+    criteria_preview = panel.locator(".st-key-criteria_comparison_preview")
+    expect(criteria_preview).to_be_visible()
+    expect(criteria_preview.get_by_text(PENDING_CRITERIA_TEXT, exact=False).first).to_be_visible()
+    expect(criteria_preview.get_by_text(unsaved_draft, exact=False)).to_have_count(0)
+    expect(criteria_preview.locator("img[src=x]")).to_have_count(0)
+    expect(criteria_preview.locator(
+        "strong", has_text="CONSTRUCTED unsaved criteria draft",
+    )).to_have_count(0)
+    criteria_json = _download_with_retry(page, button_name="Download criteria changes JSON")
+    criteria_report = json.loads(criteria_json.path().read_text(encoding="utf-8"))
+    assert set(criteria_report) == {
+        "report_kind", "schema_version", "boundary", "selection", "previous", "current",
+        "validation_tool_version", "validation_ruleset_version", "validation_source_identity",
+        "criterion_changes", "source_text_changed", "source_provenance_changed",
+        "criterion_order_changed",
+    }
+    assert criteria_report["report_kind"] == "scopeproof_criteria_revision_comparison"
+    assert criteria_report["schema_version"] == 1
+    assert "Recorded requirements only" in criteria_report["boundary"]
+    assert criteria_report["selection"]["historical"] == report["selection"]
+    assert criteria_report["selection"]["repository"] == historical["review"]["repository"]
+    assert criteria_report["selection"]["pr_number"] == historical["review"]["pr_number"]
+    revision = saved_state["criteria_revision"]
+    expected_snapshots = {
+        "previous": {
+            "review_id": historical["review"]["review_id"],
+            "repository": historical["review"]["repository"],
+            "pr_number": historical["review"]["pr_number"],
+            "head_sha": historical["review"]["head_sha"],
+            "revision_number": historical["criteria_revision_number"],
+            "confirmed": historical["review"]["criteria_confirmed"],
+            "source_text": historical["source_text"], "criteria": historical["criteria"],
+            "source_provenance": historical["review"]["criteria_source_provenance"],
+        },
+        "current": {
+            "review_id": saved_state["review"]["review_id"],
+            "repository": saved_state["review"]["repository"],
+            "pr_number": saved_state["review"]["pr_number"],
+            "head_sha": saved_state["review"]["head_sha"],
+            "revision_number": revision["number"], "confirmed": revision["confirmed"],
+            "source_text": revision["source_text"], "criteria": revision["criteria"],
+            "source_provenance": revision["source_provenance"],
+        },
+    }
+    for side, expected_snapshot in expected_snapshots.items():
+        assert criteria_report[side] == expected_snapshot
+        snapshot_json = CriteriaSnapshot.model_validate(expected_snapshot).model_dump_json()
+        assert criteria_report["selection"][f"{side}_criteria_fingerprint"] == sha256(
+            snapshot_json.encode("utf-8"),
+        ).hexdigest()
+    assert criteria_report["previous"]["confirmed"] is True
+    assert criteria_report["current"]["confirmed"] is False
+    assert criteria_report["criterion_changes"] == [
+        {
+            "criterion_id": "AC-01", "kind": "only_previous",
+            "previous": historical["criteria"][0], "current": None,
+            "previous_position": 1, "current_position": None, "changed_fields": [],
+        },
+        {
+            "criterion_id": "AC-02", "kind": "only_current",
+            "previous": None, "current": revision["criteria"][0],
+            "previous_position": None, "current_position": 1, "changed_fields": [],
+        },
+    ]
+    assert criteria_report["source_text_changed"] is True
+    assert criteria_report["source_provenance_changed"] is True
+    assert criteria_report["criterion_order_changed"] is False
+    for field in (
+        "validation_tool_version", "validation_ruleset_version", "validation_source_identity",
+    ):
+        assert criteria_report[field] == report[field]
+    criteria_markdown_download = _download_with_retry(
+        page, button_name="Download criteria changes Markdown",
+    )
+    criteria_markdown = html.unescape(re.sub(
+        r"\\([^\w\s])", r"\1",
+        criteria_markdown_download.path().read_text(encoding="utf-8"),
+    ))
+    for snapshot in expected_snapshots.values():
+        assert snapshot["head_sha"] in criteria_markdown
+        assert snapshot["source_text"] in criteria_markdown
+        for criterion in snapshot["criteria"]:
+            for field, value in criterion.items():
+                assert field in criteria_markdown
+                assert str(value) in criteria_markdown
+        if snapshot["source_provenance"] is not None:
+            for field, value in snapshot["source_provenance"].items():
+                assert field in criteria_markdown
+                assert str(value) in criteria_markdown
+    for value in (
+        HISTORICAL_REVIEW_ID, historical["review"]["repository"],
+        "Confirmed (asserted)", "Unconfirmed",
+        "Not recorded; provenance remains unknown.", "only_previous", "only_current",
+        *criteria_report["selection"]["historical"].values(),
+        criteria_report["selection"]["previous_criteria_fingerprint"],
+        criteria_report["selection"]["current_criteria_fingerprint"],
+    ):
+        if isinstance(value, str):
+            assert value in criteria_markdown
+    for excluded in (
+        unsaved_draft, HISTORICAL_UNTRUSTED_TEXT, HISTORICAL_PRODUCER_VERSION,
+        "CONSTRUCTED historical automatic decision actor",
+        "CONSTRUCTED historical automatic reference actor", "constructed-historical-runtime-",
+    ):
+        assert excluded not in criteria_json.path().read_text(encoding="utf-8")
+        assert excluded not in criteria_markdown
     expect(page.get_by_role("button", name="Download JSON", exact=True)).to_have_count(0)
+    expect(page.get_by_role(
+        "button", name="Record final acceptance", exact=True,
+    )).to_have_count(0)
     expect(page.get_by_text(
         "Confirm criteria and run analysis to generate the evidence matrix.", exact=True,
     )).to_be_visible()
 
-    for viewport, zoom, name in (
-        (VIEWPORTS[0], "", "05-historical-desktop"),
-        (VIEWPORTS[1], "", "06-historical-phone"),
-        (VIEWPORTS[1], "2", "07-historical-phone-css-zoom-200"),
+    for viewport, zoom, name, selected_heading, preview_key, require_tables in (
+        (VIEWPORTS[0], "", "05-historical-desktop", heading,
+         "historical_analysis_preview", True),
+        (VIEWPORTS[1], "", "06-historical-phone", heading,
+         "historical_analysis_preview", True),
+        (VIEWPORTS[1], "2", "07-historical-phone-css-zoom-200", heading,
+         "historical_analysis_preview", True),
+        (VIEWPORTS[0], "", "08-criteria-changes-desktop", criteria_heading,
+         "criteria_comparison_preview", False),
+        (VIEWPORTS[1], "", "09-criteria-changes-phone", criteria_heading,
+         "criteria_comparison_preview", False),
+        (VIEWPORTS[1], "2", "10-criteria-changes-phone-css-zoom-200", criteria_heading,
+         "criteria_comparison_preview", False),
     ):
         page.set_viewport_size(viewport)
         page.evaluate("value => { document.documentElement.style.zoom = value; }", zoom)
-        # Capture the historical section itself, after explicitly bringing its
-        # heading into view; selector/sidebar screenshots do not prove this UI.
-        heading.scroll_into_view_if_needed()
-        expect(heading).to_be_visible()
-        expect(heading).to_be_in_viewport()
+        # Capture each report itself, after explicitly bringing its heading into
+        # view; selector/sidebar screenshots do not prove these separate views.
+        selected_heading.scroll_into_view_if_needed()
+        expect(selected_heading).to_be_visible()
+        expect(selected_heading).to_be_in_viewport()
         expect(panel.get_by_text(HISTORICAL_HEAD, exact=False).first).to_be_visible()
         expect(panel.get_by_text(HISTORICAL_REVIEW_ID, exact=False).first).to_be_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
@@ -2404,9 +2546,17 @@ def _exercise_historical_inspection(
                                   "clientWidth: element.clientWidth})")
         assert geometry["width"] > 0
         assert geometry["scrollWidth"] <= geometry["clientWidth"] + 1
-        preview = panel.locator(".st-key-historical_analysis_preview")
+        preview = panel.locator(f".st-key-{preview_key}")
+        preview_geometry = preview.evaluate(
+            "element => ({width: element.getBoundingClientRect().width, "
+            "scrollWidth: element.scrollWidth, clientWidth: element.clientWidth})",
+        )
+        assert preview_geometry["width"] > 0
+        assert preview_geometry["scrollWidth"] <= preview_geometry["clientWidth"] + 1
+        assert preview_geometry["clientWidth"] <= geometry["clientWidth"] + 1
         tables = preview.locator("table")
-        assert tables.count() > 0
+        if require_tables:
+            assert tables.count() > 0
         for table in tables.all():
             reachability = table.evaluate("""element => {
                 element.scrollLeft = element.scrollWidth;
@@ -2428,12 +2578,13 @@ def _exercise_historical_inspection(
         # Preserve separate visible identity captures rather than treating
         # off-screen text or metadata as screenshot evidence.
         for identity, suffix in ((HISTORICAL_REVIEW_ID, "owner"), (HISTORICAL_HEAD, "head")):
-            target = panel.get_by_text(identity, exact=False).first
+            target = preview.get_by_text(identity, exact=False).first
             target.scroll_into_view_if_needed()
             expect(target).to_be_in_viewport()
             page.screenshot(path=str(captures / f"{name}-{suffix}.png"))
         (captures / f"{name}.json").write_text(json.dumps({
             "viewport": viewport, "css_zoom": zoom or "1", "panel": geometry,
+            "preview": preview_geometry, "preview_key": preview_key,
             "historical_head": HISTORICAL_HEAD, "owner": HISTORICAL_REVIEW_ID,
         }, indent=2), encoding="utf-8")
     page.evaluate("document.documentElement.style.zoom = ''")
@@ -2472,6 +2623,13 @@ def _exercise_historical_inspection(
     expect(page.get_by_role(
         "button", name="Download historical Markdown", exact=True, include_hidden=True,
     )).to_have_count(0)
+    expect(page.get_by_role(
+        "heading", name="Saved criteria revision changes", exact=True, include_hidden=True,
+    )).to_have_count(0)
+    for label in ("JSON", "Markdown"):
+        expect(page.get_by_role(
+            "button", name=f"Download criteria changes {label}", exact=True, include_hidden=True,
+        )).to_have_count(0)
 
 
 def test_installed_wheel_saved_comparison_survives_restart_without_record_writes(
@@ -2737,6 +2895,8 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
     assert (captures / "04-phone-decision-context-css-zoom-200.png").is_file()
     for name in (
         "05-historical-desktop", "06-historical-phone", "07-historical-phone-css-zoom-200",
+        "08-criteria-changes-desktop", "09-criteria-changes-phone",
+        "10-criteria-changes-phone-css-zoom-200",
     ):
         assert (captures / f"{name}.png").is_file()
         assert (captures / f"{name}.json").is_file()

@@ -26,6 +26,8 @@ def report_for(tmp_path, state=None):
 def test_pending_saved_revision_compares_without_creating_analysis_or_confirmation(tmp_path):
     store, state, path, selection, report = report_for(tmp_path)
     before = path.read_bytes(), state.model_dump_json()
+    assert selection.repository == "acme/constructed-history"
+    assert selection.pr_number == 17
     assert report.previous.revision_number == 1
     assert report.current.revision_number == 3
     assert report.previous.confirmed is True and report.current.confirmed is False
@@ -126,5 +128,22 @@ def test_report_rejects_mutated_snapshot_and_non_recorded_defaults(tmp_path):
     _, _, _, _, report = report_for(tmp_path / "fresh")
     payload = report.model_dump(mode="python")
     del payload["previous"]["criteria"][0]["priority"]
+    with pytest.raises(ValueError):
+        api().CriteriaRevisionComparison.model_validate(payload)
+
+
+@pytest.mark.parametrize("field,value", [("repository", "forged/repository"), ("pr_number", 999)])
+def test_exported_report_owning_identity_cannot_be_retargeted(tmp_path, field, value):
+    _, _, _, _, report = report_for(tmp_path)
+    payload = report.model_dump(mode="python")
+    payload["selection"][field] = value
+    with pytest.raises(ValueError):
+        api().CriteriaRevisionComparison.model_validate(payload)
+
+
+def test_report_version_is_a_strict_integer(tmp_path):
+    _, _, _, _, report = report_for(tmp_path)
+    payload = report.model_dump(mode="python")
+    payload["schema_version"] = True
     with pytest.raises(ValueError):
         api().CriteriaRevisionComparison.model_validate(payload)

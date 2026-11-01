@@ -25,11 +25,11 @@ when their text matches. Positions are one-based recorded positions, not ranking
 
 `scopeproof_core/reviews/criteria_comparison.py` provides:
 
-- `CriteriaSnapshot`: frozen, extra-forbid Pydantic view with exact saved head, positive or unknown
+- `CriteriaSnapshot`: frozen, extra-forbid Pydantic view with owner/repository/PR, exact saved head, positive or unknown
   revision, explicit confirmation, full source text, complete ordered `Criterion` records and
   optional recorded provenance. Require explicit fields, unique criterion IDs, and matching
   provenance digests when present. No generated historical timestamps or inferred provenance.
-- `CriteriaComparisonSelection`: nested `HistoricalAnalysisSelection` plus previous/current
+- `CriteriaComparisonSelection`: nested `HistoricalAnalysisSelection`, repository/PR plus previous/current
   criteria-snapshot SHA-256 fingerprints. Full owner/state/history/analysis fingerprints remain
   binding. Fingerprints are consistency checks, not authenticated provenance.
 - `CriteriaRevisionComparison`: fixed report kind/version/boundary, selection, previous/current

@@ -22,6 +22,8 @@ def export_criteria_comparison_markdown(report: CriteriaRevisionComparison) -> s
     lines = [
         "# ScopeProof Criteria Revision Changes", "", f"> {report.boundary}", "",
         f"- Owning saved record: {code(historical.review_id)}",
+        f"- Repository: {code(report.selection.repository)}",
+        f"- Pull request: {report.selection.pr_number}",
         f"- Retained history position: {historical.history_index + 1}",
         f"- Saved-state fingerprint: {code(historical.state_fingerprint)}",
         f"- Historical analysis fingerprint: {code(historical.analysis_fingerprint)}",

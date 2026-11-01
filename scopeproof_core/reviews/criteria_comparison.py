@@ -25,9 +25,11 @@ from scopeproof_core.reviews.historical_analysis import (
     historical_analysis_fingerprint,
 )
 from scopeproof_core.schemas.models import (
+    GITHUB_REPOSITORY_PATTERN,
     RULESET_VERSION,
     CriteriaSourceProvenance,
     Criterion,
+    LocalReviewId,
     ReviewState,
     normalized_criteria_sha256,
     source_text_sha256,
@@ -55,6 +57,9 @@ def _complete(value: object, model: type[BaseModel]) -> dict:
 class CriteriaSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
 
+    review_id: LocalReviewId
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    pr_number: StrictInt = Field(gt=0)
     head_sha: str = Field(min_length=1)
     revision_number: StrictInt | Literal["unknown"]
     confirmed: StrictBool
@@ -103,6 +108,8 @@ class CriteriaComparisonSelection(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
 
     historical: HistoricalAnalysisSelection
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    pr_number: StrictInt = Field(gt=0)
     previous_criteria_fingerprint: Fingerprint
     current_criteria_fingerprint: Fingerprint
 
@@ -127,7 +134,7 @@ class CriteriaRevisionComparison(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
 
     report_kind: Literal["scopeproof_criteria_revision_comparison"]
-    schema_version: Literal[1]
+    schema_version: StrictInt = Field(ge=1, le=1)
     boundary: Literal[CRITERIA_COMPARISON_BOUNDARY]
     selection: CriteriaComparisonSelection
     previous: CriteriaSnapshot
@@ -145,6 +152,11 @@ class CriteriaRevisionComparison(BaseModel):
 
     @model_validator(mode="after")
     def _bound_snapshots(self) -> CriteriaRevisionComparison:
+        identity = (self.selection.historical.review_id,
+                    self.selection.repository, self.selection.pr_number)
+        if any((snapshot.review_id, snapshot.repository, snapshot.pr_number) != identity
+               for snapshot in (self.previous, self.current)):
+            raise ValueError("criteria snapshots must match their selected owning identity")
         if (
             _fingerprint(self.previous) != self.selection.previous_criteria_fingerprint
             or _fingerprint(self.current) != self.selection.current_criteria_fingerprint
@@ -217,11 +229,15 @@ def _snapshots(state: ReviewState, index: int) -> tuple[CriteriaSnapshot, Criter
     old = state.analysis_history[index]
     revision = state.criteria_revision
     return CriteriaSnapshot(
+        review_id=old.review.review_id, repository=old.review.repository,
+        pr_number=old.review.pr_number,
         head_sha=old.review.head_sha, revision_number=old.criteria_revision_number,
         confirmed=old.review.criteria_confirmed, source_text=old.source_text,
         criteria=[item.model_copy(deep=True) for item in old.criteria],
         source_provenance=old.review.criteria_source_provenance,
     ), CriteriaSnapshot(
+        review_id=state.review.review_id, repository=state.review.repository,
+        pr_number=state.review.pr_number,
         head_sha=state.review.head_sha, revision_number=revision.number,
         confirmed=revision.confirmed, source_text=revision.source_text,
         criteria=[item.model_copy(deep=True) for item in revision.criteria],
@@ -232,6 +248,7 @@ def _snapshots(state: ReviewState, index: int) -> tuple[CriteriaSnapshot, Criter
 def _selection(state: ReviewState, index: int) -> CriteriaComparisonSelection:
     previous, current = _snapshots(state, index)
     return CriteriaComparisonSelection(
+        repository=state.review.repository, pr_number=state.review.pr_number,
         historical=HistoricalAnalysisSelection(
             review_id=state.review.review_id,
             state_fingerprint=JsonReviewStore.state_fingerprint(state), history_index=index,

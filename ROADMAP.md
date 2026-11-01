@@ -495,6 +495,17 @@ reports unavailable under existing policy. Current drafts, active analysis, deci
 comparison compatibility and record v7 stay unchanged. See the [bounded assessment](docs/audits/2026-10-31-historical-analysis-inspection.md).
 This completes one inspection/handoff outcome without a new release, standing queue or Stage 3 claim.
 
+The next owner-delegated gap review selected **inspect saved requirements changes**. Revising
+requirements archives the analysis, while evidence comparison correctly refuses changed criteria.
+Unreleased source now compares one explicitly selected retained analysis's criteria with the current
+saved revision, even while unconfirmed. Complete field/position/source/provenance distinctions and
+requirements-only JSON/Markdown remain separate from evidence comparison. Same IDs are recorded
+keys, not semantic continuity; unknown provenance stays unknown. Exact saved-state and both snapshot
+fingerprints plus deferred leases reject stale selections. No decision carry-forward, criteria
+confirmation, analysis, storage mutation or gate change occurs. See the
+[bounded assessment](docs/audits/2026-10-31-criteria-revision-changes.md).
+This completes one requirements-inspection outcome; publication and Stage 3 retain separate gates.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic

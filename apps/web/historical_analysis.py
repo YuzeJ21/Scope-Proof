@@ -7,6 +7,7 @@ import re
 
 import streamlit as st
 
+from apps.web.criteria_comparison import clear_criteria_comparison, render_criteria_comparison
 from apps.web.deferred_exports import HistoricalAnalysisExportLease, deferred_historical_export
 from scopeproof_core.reporting.historical_analysis import (
     export_historical_json,
@@ -23,19 +24,22 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 
 _PREVIEW_STYLE = """
 <style>
-.st-key-historical_analysis_preview {
+.st-key-historical_analysis_preview, .st-key-criteria_comparison_preview {
     min-width: 0;
     max-width: 100%;
 }
-.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"] {
+.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"],
+.st-key-criteria_comparison_preview [data-testid="stMarkdownContainer"] {
     overflow-wrap: anywhere;
 }
-.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"] table {
+.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"] table,
+.st-key-criteria_comparison_preview [data-testid="stMarkdownContainer"] table {
     display: block;
     max-width: 100%;
     overflow-x: auto;
 }
-.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"] code {
+.st-key-historical_analysis_preview [data-testid="stMarkdownContainer"] code,
+.st-key-criteria_comparison_preview [data-testid="stMarkdownContainer"] code {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
@@ -44,6 +48,7 @@ _PREVIEW_STYLE = """
 
 
 def clear_historical_analysis_selection(*, clear_choice: bool = True) -> None:
+    clear_criteria_comparison()
     lease = st.session_state.get("historical_analysis_export_lease")
     if lease is not None:
         lease.invalidate()
@@ -154,31 +159,34 @@ def render_historical_analysis_selector(
         try:
             with locked_historical_analysis(store, selection) as report:
                 _render_identity(report)
+                st.html(_PREVIEW_STYLE)
                 if report.analysis.review.criteria_source_provenance is None:
                     st.warning(
                         "Historical criteria source provenance was not recorded. Full report "
                         "preview and downloads remain unavailable under the existing export policy."
                     )
-                    return
-                st.html(_PREVIEW_STYLE)
-                with st.container(key="historical_analysis_preview"):
-                    st.markdown(_readable_markdown(export_historical_markdown(report)))
-                lease = st.session_state["historical_analysis_export_lease"]
-                for label, renderer, suffix, mime in (
-                    ("JSON", export_historical_json, "json", "application/json"),
-                    ("Markdown", export_historical_markdown, "md", "text/markdown"),
-                ):
-                    filename = (
-                        f"{selection.review_id}-history-{selection.history_index + 1}.{suffix}"
-                    )
-                    st.download_button(
-                        f"Download historical {label}",
-                        data=deferred_historical_export(
-                            selection, renderer, store=store, lease=lease,
-                        ),
-                        file_name=filename,
-                        mime=mime, key=f"download_historical_{suffix}", on_click="ignore",
-                    )
+                else:
+                    with st.container(key="historical_analysis_preview"):
+                        st.markdown(_readable_markdown(export_historical_markdown(report)))
+                    lease = st.session_state["historical_analysis_export_lease"]
+                    for label, renderer, suffix, mime in (
+                        ("JSON", export_historical_json, "json", "application/json"),
+                        ("Markdown", export_historical_markdown, "md", "text/markdown"),
+                    ):
+                        filename = (
+                            f"{selection.review_id}-history-{selection.history_index + 1}.{suffix}"
+                        )
+                        st.download_button(
+                            f"Download historical {label}",
+                            data=deferred_historical_export(
+                                selection, renderer, store=store, lease=lease,
+                            ),
+                            file_name=filename,
+                            mime=mime, key=f"download_historical_{suffix}", on_click="ignore",
+                        )
+            render_criteria_comparison(
+                current, selection, store=store, readable_markdown=_readable_markdown,
+            )
         except (OSError, ValueError):
             _choice_changed()
             st.session_state["historical_analysis_unavailable"] = True

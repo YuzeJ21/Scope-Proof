@@ -6,6 +6,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from scopeproof_core.reviews.comparison import ReviewComparison
+from scopeproof_core.reviews.criteria_comparison import (
+    CriteriaComparisonSelection,
+    CriteriaRevisionComparison,
+    locked_criteria_comparison,
+)
 from scopeproof_core.reviews.historical_analysis import (
     HistoricalAnalysisReport,
     HistoricalAnalysisSelection,
@@ -52,6 +57,44 @@ class HistoricalAnalysisExportLease:
     def invalidate(self) -> None:
         self.generation += 1
         self.selection = None
+
+
+@dataclass
+class CriteriaComparisonExportLease:
+    """Volatile generation revokes already rendered requirements downloads."""
+
+    selection: CriteriaComparisonSelection | None = None
+    generation: int = 0
+
+    def invalidate(self) -> None:
+        self.generation += 1
+        self.selection = None
+
+
+def deferred_criteria_comparison_export(
+    selection: CriteriaComparisonSelection,
+    renderer: Callable[[CriteriaRevisionComparison], str],
+    *,
+    store: JsonReviewStore,
+    lease: CriteriaComparisonExportLease,
+) -> Callable[[], str]:
+    captured = selection.model_copy(deep=True)
+    generation = lease.generation
+    message = "Saved criteria changed or selection expired. Reopen and explicitly compare again."
+
+    def render() -> str:
+        if lease.generation != generation or lease.selection != captured:
+            raise DeferredExportUnavailable(message)
+        try:
+            with locked_criteria_comparison(store, captured) as report:
+                rendered = renderer(report)
+                if lease.generation != generation or lease.selection != captured:
+                    raise DeferredExportUnavailable(message)
+                return rendered
+        except (OSError, ValueError):
+            raise DeferredExportUnavailable(message) from None
+
+    return render
 
 
 def deferred_historical_export(
