@@ -123,13 +123,30 @@ def _resolution_history_event_fields(
     recorded_at = event.timestamp.isoformat()
     if event.timestamp.utcoffset() is None:
         recorded_at += " (timezone not recorded)"
-    outcome = (
-        event.decision.value if event.decision is not None
-        else f"final_acceptance={str(event.final_acceptance).lower()}"
+    criterion_target = event.criterion_id is not None
+    if criterion_target:
+        assert event.decision is not None  # Guaranteed by the validated event kind.
+        outcome = event.decision.value
+    else:
+        outcome = f"final_acceptance={str(event.final_acceptance).lower()}"
+    additional_fields: list[tuple[str, str]] = []
+    if not criterion_target and event.decision is not None:
+        additional_fields.append((
+            "Additional decision field (not applied to this target)", event.decision.value,
+        ))
+    if criterion_target and event.final_acceptance is not None:
+        additional_fields.append((
+            "Additional final-acceptance field (not applied to this target)",
+            str(event.final_acceptance).lower(),
+        ))
+    context_suffix = (
+        " (not applied to this target)"
+        if not criterion_target and event.decision is HumanDecision.MANUALLY_VERIFIED else ""
     )
     runtime_link = (
         _LEGACY_RUNTIME_LINK
-        if event.decision is HumanDecision.MANUALLY_VERIFIED and event.runtime_evidence_id is None
+        if criterion_target and event.decision is HumanDecision.MANUALLY_VERIFIED
+        and event.runtime_evidence_id is None
         else _recorded_resolution_value(event.runtime_evidence_id)
     )
     status_label = {
@@ -143,15 +160,16 @@ def _resolution_history_event_fields(
         ("Criteria revision", str(event.criteria_revision_number)),
         ("Target", event.criterion_id if event.criterion_id is not None else "Final acceptance"),
         ("Recorded outcome", outcome),
+        *additional_fields,
         ("Asserted reviewer", event.reviewer),
         ("Recorded at (as recorded)", recorded_at),
         ("Reviewer note", _recorded_resolution_value(event.comment)),
         ("Evidence URL (as recorded)", _recorded_resolution_value(event.evidence_url)),
-        ("Claimed evidence level", _recorded_resolution_value(
+        ("Claimed evidence level" + context_suffix, _recorded_resolution_value(
             event.claimed_evidence_level.value
             if event.claimed_evidence_level is not None else None,
         )),
-        ("Runtime evidence link", runtime_link),
+        ("Runtime evidence link" + context_suffix, runtime_link),
     ]
 
 

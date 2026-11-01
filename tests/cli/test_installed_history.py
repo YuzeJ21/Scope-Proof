@@ -93,20 +93,22 @@ def test_installed_readable_resolution_audit_handoff(tmp_path):
         "assert Path(scopeproof_core.__file__).resolve().is_relative_to(Path(sys.prefix)); "
         "from scopeproof_core.storage.json_store import JsonReviewStore; "
         f"fixture=runpy.run_path({str(recipe)!r}); "
-        f"JsonReviewStore(Path({str(records)!r})).save(fixture['resolution_audit_state']())")
+        f"store=JsonReviewStore(Path({str(records)!r})); "
+        "store.save(fixture['resolution_audit_state']()); "
+        "store.save(fixture['mixed_legacy_resolution_audit_state']())")
     review_id = "constructed-resolution-audit-review"
     path = records / f"{review_id}.json"
     before = path.read_bytes()
     original = json.loads(before)["state"]
     expected = [
-        ("r1-old-accept", "Prior revision", 1),
-        ("r2-old-change", "Superseded", 2),
-        ("r2-current-accept", "Current", 2),
-        ("r2-ac02-accept", "Current", 2),
-        ("r2-ac03-accept", "Current", 2),
-        ("r2-ac04-accept", "Current", 2),
-        ("r2-final-true", "Superseded", 2),
-        ("r2-final-false", "Current", 2),
+        ("r1-old-accept", "Prior revision", 1, "accepted"),
+        ("r2-old-change", "Superseded", 2, "change_required"),
+        ("r2-current-accept", "Current", 2, "accepted"),
+        ("r2-ac02-accept", "Current", 2, "accepted"),
+        ("r2-ac03-accept", "Current", 2, "accepted"),
+        ("r2-ac04-accept", "Current", 2, "accepted"),
+        ("r2-final-true", "Superseded", 2, "final_acceptance=true"),
+        ("r2-final-false", "Current", 2, "final_acceptance=false"),
     ]
     events = original["resolution_events"]
     assert [event["event_id"] for event in events] == [row[0] for row in expected]
@@ -121,14 +123,13 @@ def test_installed_readable_resolution_audit_handoff(tmp_path):
         text = " ".join(re.sub(r"\\(.)", r"\1", decoded).replace("**", "").split())
         blocks = re.split(r"Event ID:?\s+", text)[1:]
         assert len(blocks) == 8
-        for event, block, (event_id, status, revision) in zip(
+        for event, block, (event_id, status, revision, outcome) in zip(
             events, blocks, expected, strict=True,
         ):
             assert block.startswith(event_id + " ")
             assert re.search(rf"Event status:?\s+{status}\b", block)
             assert re.search(rf"Criteria revision:?\s+{revision}\b", block)
-            outcome = (event["decision"] if event["decision"] is not None
-                       else f"final_acceptance={str(event['final_acceptance']).lower()}")
+            assert re.search(rf"Recorded outcome:?\s+{outcome}\b", block)
             for recorded in (
                 event["criterion_id"] or "Final acceptance", outcome, event["reviewer"],
                 event["comment"], datetime.fromisoformat(event["timestamp"]).isoformat(),
@@ -137,6 +138,22 @@ def test_installed_readable_resolution_audit_handoff(tmp_path):
             if event["evidence_url"] is not None:
                 assert event["evidence_url"] in block
         assert path.read_bytes() == before
+
+    mixed_id = "constructed-mixed-resolution-audit-review"
+    mixed_path = records / f"{mixed_id}.json"
+    mixed_before = mixed_path.read_bytes()
+    for kind in ("markdown", "html"):
+        report = run("-m", "scopeproof_core.cli", "export", mixed_id,
+                     "--storage-dir", str(records), "--format", kind)
+        marker = "## Resolution History\n" if kind == "markdown" else "<h2>Resolution History</h2>"
+        history = report.split(marker, 1)[1]
+        history = history.split("\n## " if kind == "markdown" else "<h2>", 1)[0]
+        decoded = html.unescape(re.sub(r"<[^>]*>", " ", history))
+        text = " ".join(re.sub(r"\\(.)", r"\1", decoded).replace("**", "").split())
+        assert re.search(r"Recorded outcome:?\s+final_acceptance=false\b", text)
+        label = re.escape("Additional decision field (not applied to this target)")
+        assert re.search(rf"{label}:?\s+accepted\b", text)
+        assert mixed_path.read_bytes() == mixed_before
 
     catalog = json.loads(run("-m", "scopeproof_core.cli", "history", review_id,
                              "--storage-dir", str(records)))

@@ -42,6 +42,16 @@ unchanged saved bytes/machine reports. Thirty-two new cases and adjacent reporti
 Initial presentation-decoder and legacy-fixture expectations were corrected without weakening
 production validation or changing gate outcomes; initial failures remain in the evidence packet.
 
+Independent whole-branch review at `7f3cfcee6a026edc728e0903a86770413892511a` found one supported
+reporting defect: schema-valid mixed legacy events could display an extra decision instead of
+their applicable review-level false flag. Extra manual fields could also trigger a criterion-only
+warning on that review-level target. Ten failing public-export regressions cover both mixed
+directions and manual-ID variants. The fix selects semantics by target, retains extra recorded
+fields as explicitly unapplied context, and limits the legacy manual warning to criterion targets.
+The ten cases pass without changing schema acceptance, stored data, machine reports or gates.
+The installed CLI handoff also checks a saved mixed legacy record. Initial 32-case evidence and
+review head remain distinct from this fix pass; full checks are rerun on the final source.
+
 One additional installed CLI case copies only the constructed product-import fixture to a
 temporary directory, uses the installed interpreter outside the checkout with explicit storage,
 exports both readable formats, checks recorded distinctions and verifies unchanged bytes.
