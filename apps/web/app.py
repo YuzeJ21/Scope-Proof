@@ -28,6 +28,11 @@ from apps.web.saved_discovery import (
     render_saved_review_summary,
 )
 from apps.web.scope_comparison import render_file_scope_comparison
+from apps.web.scope_file_preview import (
+    prepare_scope_draft_context,
+    render_scope_file_preview,
+    scope_file_changed,
+)
 from apps.web.selected_reference_comparison import render_selected_reference_comparison
 from apps.web.selected_references import (
     clear_selected_reference_draft,
@@ -3166,12 +3171,18 @@ else:
                         f"Criteria revision: {prior.criteria_revision_number}\n"
                         f"Explanation: {prior.note}"
                     )
+            prepare_scope_draft_context(review_state, st.session_state["snapshot"])
             selected_scope_path = st.selectbox(
                 "Uncited changed file",
                 options=uncited_paths,
                 index=None,
                 placeholder="Select one changed file",
                 key="scope_file_path",
+                on_change=scope_file_changed,
+            )
+            render_scope_file_preview(
+                review_state, st.session_state["snapshot"], selected_scope_path,
+                source_allowed=source_authority_check(review_state)(),
             )
             scope_disposition = st.selectbox(
                 "File scope decision",

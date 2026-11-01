@@ -653,6 +653,21 @@ The section changes no gate, evidence, decision, confirmation or saved record, a
 acceptance forward. Whole-record saved-comparison guards also reject acceptance-only changes.
 See the [bounded assessment](docs/audits/2026-11-01-recorded-final-acceptance.md).
 
+### Inspect a changed file before deciding its scope (unreleased source)
+
+Under **Changed-file scope**, choose an **Uncited changed file** to inspect its already-loaded
+diff before making an explicit decision. The preview shows base/head identity, recorded status
+and rename origin, with pages of 100 diff records. Removed-line coordinates refer to the base;
+added/context coordinates refer to the head. Gaps may exist: this is static diff context, not a
+full file or runtime verification. Overlong records are explicitly omitted, and skipped,
+truncated or ambiguous content is unavailable.
+
+Reopened records need the existing **Load matching reviewed source** action to restore source
+inspection. Mismatched or conflicted source is withheld. Changing the file clears its unsaved
+disposition, criterion, explanation and preview page; changing review/source context also clears
+the target. Inspection never records a scope decision, cites evidence or changes a gate. See the
+[bounded assessment](docs/audits/2026-11-01-scope-file-inspection.md).
+
 ### Find source references by content (unreleased source)
 
 In **Select a source reference**, explicitly choose a loaded **Reference source**, then use
