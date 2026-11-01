@@ -64,5 +64,15 @@
 - [ ] **Step 2: Strengthen one existing installed browser journey.** Drive/download existing controls and assert actual enriched Markdown against the downloaded validated JSON, including status, actor/time and IDs; preserve all existing assertions and 17-check collection.
 - [ ] **Step 3: Add bounded Windows report tests and update product/roadmap/status/audit docs.** State recipient outcome, automation limits, release and Stage 3 boundaries; do not create an ongoing parity queue.
 - [ ] **Step 4: Run integration.** Full covered suite at 95%, Ruff/lock/diff checks, deterministic benchmarks, fresh wheel/install/installed CLI/browser journeys and source/package/frozen hashes. Expected all pass; record actual counts and failures separately.
-- [ ] **Step 5: Commit; one fresh whole-branch agent review.** Fix supported Important/Critical findings with RED→GREEN evidence, rerun affected checks and the full suite if source changes. Preserve review head and fix heads.
-- [ ] **Step 6: Create reviewable PR and guarded merge.** Require exact-head CI/CodeQL/Windows/Python and resolved findings, fresh review/protection checks, expected-head merge, identical resulting tree, clean synchronized checkouts and green resulting-main CI. Keep all evidence outside the source tree in the version-bound audit packet.
+- [ ] **Step 5: Commit the tested integration, configuration and documentation.** Complete this implementation task after observed local full-suite, installed CLI/browser and other Step 4 results.
+
+## Final verification and integration
+
+After both implementation tasks, dispatch one fresh whole-branch agent review. Fix supported
+Important/Critical findings with RED→GREEN evidence, rerun affected checks and the full suite if
+source changes. Preserve review head and fix heads.
+
+Create a reviewable PR and require exact-head CI/CodeQL/Windows/Python and resolved findings,
+fresh review/protection checks, expected-head merge, identical resulting tree, clean synchronized
+checkouts and green resulting-main CI. Keep evidence outside the source tree in the version-bound
+audit packet. Source-task completion does not mean integration or goal completion.
