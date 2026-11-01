@@ -66,6 +66,12 @@ from tests.saved_comparison_fixture import (
     PREVIOUS_HEAD,
     PREVIOUS_REVIEW_ID,
 )
+from tests.workbench_resolution_history_fixture import (
+    WORKBENCH_HISTORY_HOSTILE_NOTE,
+    WORKBENCH_HISTORY_HOSTILE_REVIEWER,
+    WORKBENCH_HISTORY_HOSTILE_URL,
+    WORKBENCH_HISTORY_REVIEW_ID,
+)
 
 pytestmark = pytest.mark.browser
 
@@ -3502,3 +3508,265 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
         assert (captures / f"{name}.json").is_file()
         assert (captures / f"{name}-owner.png").is_file()
         assert (captures / f"{name}-head.png").is_file()
+
+
+def _workbench_history_expected_fields() -> tuple[dict[str, str], ...]:
+    """Hand-derived recorded fields, independent of projection and export helpers."""
+    return (
+        {
+            "Event ID": "workbench-final-accepted-extra",
+            "Event status": "Superseded", "Criteria revision": "1",
+            "Target": "Final acceptance", "Recorded outcome": "final_acceptance=false",
+            "Additional decision field (not applied to this target)": "accepted",
+            "Asserted reviewer": WORKBENCH_HISTORY_HOSTILE_REVIEWER,
+            "Recorded at (as recorded)": "2035-03-02T01:02:03+05:45",
+            "Reviewer note": WORKBENCH_HISTORY_HOSTILE_NOTE,
+            "Evidence URL (as recorded)": WORKBENCH_HISTORY_HOSTILE_URL,
+            "Claimed evidence level": "Not recorded", "Runtime evidence link": "Not recorded",
+        },
+        {
+            "Event ID": "workbench-final-manual-missing",
+            "Event status": "Superseded", "Criteria revision": "1",
+            "Target": "Final acceptance", "Recorded outcome": "final_acceptance=false",
+            "Additional decision field (not applied to this target)": "manually_verified",
+            "Asserted reviewer": "Constructed extra manual claimant",
+            "Recorded at (as recorded)": "2025-01-02T03:04:05 (timezone not recorded)",
+            "Reviewer note": "Recorded extra manual assertion without a runtime observation",
+            "Evidence URL (as recorded)": "Not recorded",
+            "Claimed evidence level (not applied to this target)": "E4",
+            "Runtime evidence link (not applied to this target)": "Not recorded",
+        },
+        {
+            "Event ID": "workbench-final-manual-linked",
+            "Event status": "Current", "Criteria revision": "1",
+            "Target": "Final acceptance", "Recorded outcome": "final_acceptance=false",
+            "Additional decision field (not applied to this target)": "manually_verified",
+            "Asserted reviewer": "Constructed extra linked claimant",
+            "Recorded at (as recorded)": "2024-02-03T04:05:06+00:00",
+            "Reviewer note": "Recorded unmatched link retained only as unapplied context",
+            "Evidence URL (as recorded)": "Not recorded",
+            "Claimed evidence level (not applied to this target)": "E3",
+            "Runtime evidence link (not applied to this target)": (
+                "unmatched-recorded-workbench-link"
+            ),
+        },
+        {
+            "Event ID": "workbench-criterion-extra-flag",
+            "Event status": "Current", "Criteria revision": "1", "Target": "AC-01",
+            "Recorded outcome": "change_required",
+            "Additional final-acceptance field (not applied to this target)": "false",
+            "Asserted reviewer": "Constructed criterion recorder",
+            "Recorded at (as recorded)": "2020-01-01T10:11:12-04:00",
+            "Reviewer note": "Empty value recorded",
+            "Evidence URL (as recorded)": "Empty value recorded",
+            "Claimed evidence level": "Not recorded", "Runtime evidence link": "Not recorded",
+        },
+    )
+
+
+def _assert_workbench_history_fields(page: Page) -> None:
+    expected = _workbench_history_expected_fields()
+    containers = page.locator('[class*="st-key-resolution_history_event_"]')
+    expect(containers).to_have_count(len(expected))
+    for position, fields in enumerate(expected, 1):
+        block = page.locator(f".st-key-resolution_history_event_{position}")
+        for label, recorded_value in fields.items():
+            value = (
+                f"{recorded_value} · revision 1" if label == "Event status" else recorded_value
+            )
+            caption = block.get_by_text(label, exact=True)
+            expect(caption).to_have_count(1)
+            # Pair the actual adjacent label/value elements within this event.
+            # A matching value in another event or another field cannot pass.
+            value_element = caption.locator(
+                'xpath=ancestor::div[@data-testid="stElementContainer"][1]'
+                '/following-sibling::*[1]',
+            )
+            expect(value_element).to_have_text(value)
+        expect(block.locator("script, img, a")).to_have_count(0)
+        expect(block.get_by_text(
+            "Legacy unlinked; re-record at the active head", exact=True,
+        )).to_have_count(0)
+    assert page.evaluate("window.__scopeproofHistoryExecuted === undefined")
+
+
+def _assert_workbench_history_markdown_download(page: Page) -> None:
+    download = _download_with_retry(page, button_name="Download Markdown")
+    assert download.suggested_filename.endswith(".md")
+    report = download.path().read_text(encoding="utf-8")
+    history = report.split("## Resolution History\n", 1)[1].split("\n## ", 1)[0]
+    assert "<script>" not in history
+    assert "<img " not in history
+    assert "<a " not in history
+    assert "](" not in history
+    assert "Legacy unlinked; re-record at the active head" not in history
+    decoded = html.unescape(re.sub(r"\\(.)", r"\1", history.replace("**", "")))
+    blocks = re.split(r"- Event ID:\s*", decoded)[1:]
+    expected = _workbench_history_expected_fields()
+    assert len(blocks) == len(expected)
+    for block, fields in zip(blocks, expected, strict=True):
+        assert block.startswith(fields["Event ID"] + "\n")
+        for label, value in fields.items():
+            if label != "Event ID":
+                assert f"- {label}: {value}\n" in block
+
+
+def _capture_automated_workbench_history(page: Page, captures: Path) -> None:
+    """Capture actual rendered outcomes and time metadata under constructed automation."""
+    manifest = {
+        "actor": "constructed automated browser",
+        "personal_testing": False,
+        "qualifying_review": False,
+        "captures": [],
+    }
+    for viewport, zoom, layout in (
+        (VIEWPORTS[0], "", "desktop"),
+        (VIEWPORTS[1], "", "phone-390"),
+        (VIEWPORTS[1], "2", "phone-390-css-zoom-200"),
+    ):
+        page.set_viewport_size(viewport)
+        page.evaluate("value => { document.documentElement.style.zoom = value; }", zoom)
+        for position, label, detail in (
+            (1, "Recorded outcome", "mixed-accepted-outcome"),
+            (2, "Recorded outcome", "mixed-manual-outcome"),
+            (2, "Recorded at (as recorded)", "naive-time"),
+            (4, "Recorded outcome", "criterion-extra-flag"),
+        ):
+            event = page.locator(f".st-key-resolution_history_event_{position}")
+            anchor = event.get_by_text(label, exact=True)
+            anchor.evaluate("element => element.scrollIntoView({block: 'center'})")
+            expect(anchor).to_be_in_viewport(ratio=1)
+            anchor_geometry = anchor.evaluate("""element => {
+                const bounds = element.getBoundingClientRect();
+                const header = document.querySelector('[data-testid="stHeader"]');
+                return {
+                    top: bounds.top, bottom: bounds.bottom,
+                    headerBottom: header?.getBoundingClientRect().bottom ?? 0,
+                };
+            }""")
+            assert anchor_geometry["top"] >= anchor_geometry["headerBottom"]
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            geometry = event.evaluate("""element => {
+                const bounds = element.getBoundingClientRect();
+                return {
+                    left: bounds.left, right: bounds.right, width: bounds.width,
+                    clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+                };
+            }""")
+            assert geometry["width"] > 0
+            assert geometry["left"] >= -1
+            assert geometry["right"] <= viewport["width"] + 1
+            assert geometry["scrollWidth"] <= geometry["clientWidth"] + 1
+            name = f"automated-resolution-history-{layout}-{detail}.png"
+            page.screenshot(path=str(captures / name))
+            manifest["captures"].append({
+                "file": name, "viewport": viewport, "css_zoom": zoom or "1",
+                "event_id": _workbench_history_expected_fields()[position - 1]["Event ID"],
+                "visible_anchor": label, "anchor_geometry": anchor_geometry,
+                "event_geometry": geometry,
+            })
+    page.evaluate("document.documentElement.style.zoom = ''")
+    page.set_viewport_size(VIEWPORTS[0])
+    (captures / "automated-resolution-history-manifest.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8",
+    )
+
+
+def test_installed_wheel_mixed_resolution_history_survives_restart_without_record_writes(
+    tmp_path: Path, installed_wheel: Path,
+) -> None:
+    """Installed UI and downloaded Markdown preserve the same inert recorded event fields."""
+    runtime_dir = tmp_path / "runtime"
+    home_dir = runtime_dir / "home"
+    home_dir.mkdir(parents=True)
+    review_store_dir = home_dir / ".scopeproof" / "reviews"
+    recipe = runtime_dir / "constructed-workbench-resolution-history.py"
+    shutil.copy2(REPOSITORY_ROOT / "tests" / "workbench_resolution_history_fixture.py", recipe)
+    _run(
+        str(installed_wheel / "bin" / "python"), "-I", "-c",
+        "from pathlib import Path; import runpy, sys; import apps, scopeproof_core; "
+        "from scopeproof_core.storage.json_store import JsonReviewStore; "
+        "assert all(Path(module.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()) "
+        "for module in (apps, scopeproof_core)); "
+        "recipe=runpy.run_path(sys.argv[1]); "
+        "JsonReviewStore(Path(sys.argv[2])).save(recipe['workbench_resolution_history_state']())",
+        str(recipe), str(review_store_dir), cwd=runtime_dir,
+    )
+    saved_bytes = {path.name: path.read_bytes() for path in review_store_dir.glob("*.json")}
+    assert set(saved_bytes) == {f"{WORKBENCH_HISTORY_REVIEW_ID}.json"}
+    saved_state = json.loads(saved_bytes[f"{WORKBENCH_HISTORY_REVIEW_ID}.json"])["state"]
+    assert saved_state["review"]["final_acceptance"] is False
+    assert saved_state["bundle"]["runtime_evidence"] == []
+
+    def assert_records_unchanged() -> None:
+        assert {
+            path.name: path.read_bytes() for path in review_store_dir.glob("*.json")
+        } == saved_bytes
+
+    diagnostics = Path(os.environ.get(
+        "SCOPEPROOF_BROWSER_DIAGNOSTIC_DIR", str(tmp_path / "diagnostics"),
+    )) / "resolution-history"
+    captures = diagnostics / "captures"
+    captures.mkdir(parents=True)
+    browser_errors: list[str] = []
+    external_requests: list[str] = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            for generation in range(2):
+                with _installed_workbench_server(
+                    installed_wheel, runtime_dir, home_dir,
+                    log_name=f"resolution-history-{generation}.log",
+                ) as (base_url, log_path):
+                    context = browser.new_context(viewport=VIEWPORTS[0])
+                    try:
+                        context.route(
+                            "**/*", lambda route: _route_loopback_only(route, external_requests),
+                        )
+                        page = context.new_page()
+                        page.on("console", lambda message: (
+                            browser_errors.append(f"console: {message.text}")
+                            if message.type == "error" else None
+                        ))
+                        page.on("pageerror", lambda error: browser_errors.append(f"page: {error}"))
+                        page.on("websocket", lambda websocket: (
+                            external_requests.append(websocket.url)
+                            if not _is_loopback_request(websocket.url) else None
+                        ))
+                        with _capture_browser_failure(
+                            page, diagnostics / f"generation-{generation}", log_path,
+                        ):
+                            page.goto(base_url, wait_until="domcontentloaded")
+                            page.get_by_text("Resume a saved review", exact=True).click()
+                            reopen = page.get_by_role(
+                                "button", name="Reopen local review", exact=True,
+                            )
+                            _choose_combobox_option(
+                                page,
+                                page.get_by_role("combobox", name="Saved review ID", exact=True),
+                                option_name=WORKBENCH_HISTORY_REVIEW_ID,
+                                settled_control=reopen,
+                            )
+                            reopen.click()
+                            expect(page.get_by_text(
+                                "Review reopened from local storage after validation.", exact=True,
+                            )).to_be_visible()
+                            _assert_workbench_history_fields(page)
+                            assert_records_unchanged()
+                            _assert_workbench_history_markdown_download(page)
+                            assert _download_review_state(page) == saved_state
+                            assert_records_unchanged()
+                            if generation == 0:
+                                _capture_automated_workbench_history(page, captures)
+                                _assert_workbench_history_fields(page)
+                                assert_records_unchanged()
+                    finally:
+                        context.close()
+                assert_records_unchanged()
+        finally:
+            browser.close()
+    assert_records_unchanged()
+    assert browser_errors == []
+    assert external_requests == []
+    assert len(list(captures.glob("automated-resolution-history-*.png"))) == 12
+    assert (captures / "automated-resolution-history-manifest.json").is_file()

@@ -37,8 +37,14 @@ from scopeproof_core.reviews.final_acceptance_comparison import (
     FINAL_ACCEPTANCE_COMPARISON_BOUNDARY,
     FinalAcceptanceComparison,
 )
-from scopeproof_core.reviews.lifecycle import ResolutionEventStatus, resolution_event_statuses
+from scopeproof_core.reviews.lifecycle import resolution_event_statuses
 from scopeproof_core.reviews.reference_audit import reference_status
+from scopeproof_core.reviews.resolution_history import (
+    LEGACY_RUNTIME_LINK,
+    RESOLUTION_HISTORY_BOUNDARY,
+    RESOLUTION_HISTORY_EMPTY,
+    resolution_history_event_fields,
+)
 from scopeproof_core.reviews.selected_reference_comparison import (
     SELECTED_REFERENCE_COMPARISON_BOUNDARY,
     SelectedReferenceComparison,
@@ -52,7 +58,6 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     JUnitCaseResult,
     JUnitEvidenceImport,
-    ResolutionEvent,
     ReviewBundle,
     ReviewerSelectedReference,
     ReviewState,
@@ -78,20 +83,10 @@ _RETRIEVAL_BOUNDARY = (
     "is satisfied or missing from the repository."
 )
 _RETRIEVAL_FALLBACK = "Retrieval diagnostics were not recorded for this review."
-_LEGACY_RUNTIME_LINK = "Legacy unlinked; re-record at the active head"
 _EXPORT_PROVENANCE_REQUIRED = "criteria source provenance is required for export"
-_RESOLUTION_HISTORY_BOUNDARY = (
-    "Current events are the latest recorded inputs for their target in the active criteria "
-    "revision. Superseded and prior-revision events remain audit history and do not "
-    "independently control the gate. Reviewer names and timestamps are recorded assertions, "
-    "not authenticated identity or runtime verification. Events do not record historical "
-    "heads or criteria-source provenance; none is inferred here. Review-level flags are "
-    "shown only as recorded values."
-)
 _RESOLUTION_HISTORY_UNAVAILABLE = (
     "Full resolution history is unavailable for this analysis-only report."
 )
-_RESOLUTION_HISTORY_EMPTY = "No resolution events were recorded for this saved review."
 
 
 def _escape_markdown_text(value: str) -> str:
@@ -110,77 +105,14 @@ def _render_markdown_code(value: str) -> str:
     return f"<code>{html.escape(normalized, quote=True)}</code>"
 
 
-def _recorded_resolution_value(value: str | None) -> str:
-    if value is None:
-        return "Not recorded"
-    return value if value else "Empty value recorded"
-
-
-def _resolution_history_event_fields(
-    event: ResolutionEvent, status: ResolutionEventStatus,
-) -> list[tuple[str, str]]:
-    """Project only recorded fields from events in an already validated export state."""
-    recorded_at = event.timestamp.isoformat()
-    if event.timestamp.utcoffset() is None:
-        recorded_at += " (timezone not recorded)"
-    criterion_target = event.criterion_id is not None
-    if criterion_target:
-        assert event.decision is not None  # Guaranteed by the validated event kind.
-        outcome = event.decision.value
-    else:
-        outcome = f"final_acceptance={str(event.final_acceptance).lower()}"
-    additional_fields: list[tuple[str, str]] = []
-    if not criterion_target and event.decision is not None:
-        additional_fields.append((
-            "Additional decision field (not applied to this target)", event.decision.value,
-        ))
-    if criterion_target and event.final_acceptance is not None:
-        additional_fields.append((
-            "Additional final-acceptance field (not applied to this target)",
-            str(event.final_acceptance).lower(),
-        ))
-    context_suffix = (
-        " (not applied to this target)"
-        if not criterion_target and event.decision is HumanDecision.MANUALLY_VERIFIED else ""
-    )
-    runtime_link = (
-        _LEGACY_RUNTIME_LINK
-        if criterion_target and event.decision is HumanDecision.MANUALLY_VERIFIED
-        and event.runtime_evidence_id is None
-        else _recorded_resolution_value(event.runtime_evidence_id)
-    )
-    status_label = {
-        ResolutionEventStatus.CURRENT: "Current",
-        ResolutionEventStatus.SUPERSEDED: "Superseded",
-        ResolutionEventStatus.PRIOR_REVISION: "Prior revision",
-    }[status]
-    return [
-        ("Event ID", event.event_id),
-        ("Event status", status_label),
-        ("Criteria revision", str(event.criteria_revision_number)),
-        ("Target", event.criterion_id if event.criterion_id is not None else "Final acceptance"),
-        ("Recorded outcome", outcome),
-        *additional_fields,
-        ("Asserted reviewer", event.reviewer),
-        ("Recorded at (as recorded)", recorded_at),
-        ("Reviewer note", _recorded_resolution_value(event.comment)),
-        ("Evidence URL (as recorded)", _recorded_resolution_value(event.evidence_url)),
-        ("Claimed evidence level" + context_suffix, _recorded_resolution_value(
-            event.claimed_evidence_level.value
-            if event.claimed_evidence_level is not None else None,
-        )),
-        ("Runtime evidence link" + context_suffix, runtime_link),
-    ]
-
-
 def _resolution_history_markdown(state: ReviewState | None) -> list[str]:
     lines = ["## Resolution History", ""]
     if state is None:
         return [*lines, _RESOLUTION_HISTORY_UNAVAILABLE, ""]
     if not state.resolution_events:
-        return [*lines, _RESOLUTION_HISTORY_EMPTY, ""]
+        return [*lines, RESOLUTION_HISTORY_EMPTY, ""]
     lines.extend([
-        _RESOLUTION_HISTORY_BOUNDARY, "",
+        RESOLUTION_HISTORY_BOUNDARY, "",
         f"Active criteria revision: {state.criteria_revision.number}", "",
     ])
     statuses = resolution_event_statuses(state.resolution_events, state.criteria_revision.number)
@@ -189,7 +121,7 @@ def _resolution_history_markdown(state: ReviewState | None) -> list[str]:
     ):
         lines.append(f"### Event {position}")
         lines.append("")
-        for label, value in _resolution_history_event_fields(event, status):
+        for label, value in resolution_history_event_fields(event, status):
             lines.append(f"- **{label}:** {_escape_markdown_text(value)}")
         lines.append("")
     return lines
@@ -200,9 +132,9 @@ def _resolution_history_html(state: ReviewState | None) -> list[str]:
     if state is None:
         return [*lines, f"<p>{_RESOLUTION_HISTORY_UNAVAILABLE}</p>"]
     if not state.resolution_events:
-        return [*lines, f"<p>{_RESOLUTION_HISTORY_EMPTY}</p>"]
+        return [*lines, f"<p>{RESOLUTION_HISTORY_EMPTY}</p>"]
     lines.extend([
-        f"<p>{_RESOLUTION_HISTORY_BOUNDARY}</p>",
+        f"<p>{RESOLUTION_HISTORY_BOUNDARY}</p>",
         f"<p>Active criteria revision: {state.criteria_revision.number}</p>",
     ])
     statuses = resolution_event_statuses(state.resolution_events, state.criteria_revision.number)
@@ -210,7 +142,7 @@ def _resolution_history_html(state: ReviewState | None) -> list[str]:
         zip(state.resolution_events, statuses, strict=True), 1,
     ):
         lines.append(f"<h3>Event {position}</h3><dl>")
-        for label, value in _resolution_history_event_fields(event, status):
+        for label, value in resolution_history_event_fields(event, status):
             lines.append(f"<dt>{label}</dt><dd><code>{html.escape(value)}</code></dd>")
         lines.append("</dl>")
     return lines
@@ -1303,7 +1235,7 @@ def export_markdown(bundle: ExportableReview) -> str:
                     + (
                         _render_markdown_code(resolution.runtime_evidence_id)
                         if resolution.runtime_evidence_id is not None
-                        else _LEGACY_RUNTIME_LINK
+                        else LEGACY_RUNTIME_LINK
                     )
                 )
         lines.extend(
@@ -1335,8 +1267,8 @@ def export_markdown(bundle: ExportableReview) -> str:
         for item in bundle.runtime_evidence:
             if item.runtime_evidence_id is None:
                 identity_lines = [
-                    f"  - Runtime identity: {_LEGACY_RUNTIME_LINK}",
-                    f"  - Manual resolution link: {_LEGACY_RUNTIME_LINK}",
+                    f"  - Runtime identity: {LEGACY_RUNTIME_LINK}",
+                    f"  - Manual resolution link: {LEGACY_RUNTIME_LINK}",
                 ]
             else:
                 identity_lines = [
@@ -1721,7 +1653,7 @@ def export_csv(bundle: ExportableReview) -> str:
                     [item.head_sha for item in runtime_items], ensure_ascii=False
                 ),
                 "manual_runtime_evidence_id": _csv_text(
-                    resolution.runtime_evidence_id or _LEGACY_RUNTIME_LINK
+                    resolution.runtime_evidence_id or LEGACY_RUNTIME_LINK
                 )
                 if resolution is not None and resolution.decision is HumanDecision.MANUALLY_VERIFIED
                 else "",
@@ -1866,7 +1798,7 @@ def export_html(value: ExportableReview) -> str:
         + (
             f"<code>{html.escape(resolution.runtime_evidence_id)}</code>"
             if resolution.runtime_evidence_id is not None
-            else html.escape(_LEGACY_RUNTIME_LINK)
+            else html.escape(LEGACY_RUNTIME_LINK)
         )
         + "</li>"
         for resolution in bundle.resolutions
@@ -1876,9 +1808,9 @@ def export_html(value: ExportableReview) -> str:
     for item in bundle.runtime_evidence:
         if item.runtime_evidence_id is None:
             identity = (
-                f"<br><strong>Runtime identity:</strong> {html.escape(_LEGACY_RUNTIME_LINK)}"
+                f"<br><strong>Runtime identity:</strong> {html.escape(LEGACY_RUNTIME_LINK)}"
                 f"<br><strong>Manual resolution link:</strong> "
-                f"{html.escape(_LEGACY_RUNTIME_LINK)}"
+                f"{html.escape(LEGACY_RUNTIME_LINK)}"
             )
         else:
             resolution_link = (
