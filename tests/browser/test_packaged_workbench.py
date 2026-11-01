@@ -1141,6 +1141,7 @@ def _exercise_junit_import_round_trip(
     )
     reopen.click()
     expect(page.get_by_text("File scope decision history", exact=True)).to_be_visible()
+    before_import = _download_review_state(page)
 
     junit_expander = page.get_by_text("Import external JUnit results", exact=True)
     junit_expander.click()
@@ -1151,7 +1152,7 @@ def _exercise_junit_import_round_trip(
         page, lambda: artifact_input.set_input_files(artifact_path)
     )
     preview = page.get_by_text(
-        "Computed results: 1 total · 1 passed · 0 failed · 0 errors · 0 skipped",
+        "Computed results: 2 total · 2 passed · 0 failed · 0 errors · 0 skipped",
         exact=True,
     )
     expect(preview).to_have_count(1)
@@ -1164,30 +1165,61 @@ def _exercise_junit_import_round_trip(
     if not preview.is_visible():
         junit_expander.click()
     expect(preview).to_be_visible()
+    target = page.get_by_role(
+        "combobox", name="JUnit mapping target criterion", exact=True
+    )
     mapping = page.get_by_role(
         "combobox", name="Map JUnit scopes to the selected criterion", exact=True
     )
-    expect(mapping).to_be_enabled()
-    _choose_multiselect_option(
-        page,
-        mapping,
-        query="suite-0001",
-        option_name="suite-0001 · suite · unit",
-    )
-    page.keyboard.press("Escape")
-    expect(mapping.locator("xpath=../..")).to_contain_text(
-        "suite-0001 · suite · unit"
-    )
-    expect(preview).to_have_count(1)
-    if not preview.is_visible():
-        junit_expander.click()
-    expect(
-        page.get_by_label("Asserted JUnit importer (required)", exact=True)
-    ).to_have_value("Packaged browser reviewer")
     save = page.get_by_role(
         "button", name="Save imported JUnit results", exact=True
     )
-    expect(save).to_be_enabled()
+    add_mapping = page.get_by_role(
+        "button", name="Add selected scopes to mapping draft", exact=True
+    )
+    expect(target).to_have_value("")
+    expect(mapping).to_be_enabled()
+    expect(save).to_be_disabled()
+    staged_preview = page.locator(".st-key-junit_mapping_preview")
+    for criterion_id, suite_id, suite_name in (
+        ("AC-01", "suite-0001", "unit"),
+        ("AC-02", "suite-0002", "filters"),
+    ):
+        _choose_combobox_option(page, target, option_name=criterion_id)
+        if not preview.is_visible():
+            junit_expander.click()
+        expect(save).to_be_disabled()
+        scope_label = f"{suite_id} · suite · {suite_name}"
+        _choose_multiselect_option(
+            page, mapping, query=suite_id, option_name=scope_label,
+        )
+        page.keyboard.press("Escape")
+        if not preview.is_visible():
+            junit_expander.click()
+        expect(mapping.locator("xpath=../..")).to_contain_text(scope_label)
+        expect(save).to_be_disabled()
+        expect(add_mapping).to_be_enabled()
+        _run_and_wait_for_streamlit_rerun(page, add_mapping.click)
+        if not preview.is_visible():
+            junit_expander.click()
+        expect(target).to_have_value("")
+        expect(mapping.locator("xpath=../..").get_by_text(
+            scope_label, exact=True,
+        )).to_have_count(0)
+        expect(staged_preview).to_contain_text("Staged JUnit mappings (not imported)")
+        expect(staged_preview).to_contain_text(
+            f"Criterion: {criterion_id} · 1 mapped test case(s)"
+        )
+        expect(staged_preview.locator('[data-testid="stCode"] code').filter(
+            has_text=f"{suite_id}-case-0001",
+        )).to_have_count(1)
+        expect(save).to_be_enabled()
+    expect(staged_preview.locator('[data-testid="stCode"] code')).to_have_count(2)
+    expect(preview).to_have_count(1)
+    expect(
+        page.get_by_label("Asserted JUnit importer (required)", exact=True)
+    ).to_have_value("Packaged browser reviewer")
+    expect(page.get_by_role("button", name="Download JSON", exact=True)).to_be_disabled()
     expect(save).to_be_visible()
     _click_until_text_visible(
         page,
@@ -1228,6 +1260,32 @@ def _exercise_junit_import_round_trip(
         assert artifact_digest.encode() in downloaded_bytes
         assert b"RAW-JUNIT-OUTPUT-SENTINEL" not in downloaded_bytes
         assert b"FAILURE-BODY-SENTINEL" not in downloaded_bytes
+        assert b"AC-01" in downloaded_bytes
+        assert b"AC-02" in downloaded_bytes
+        assert b"suite-0001-case-0001" in downloaded_bytes
+        assert b"suite-0002-case-0001" in downloaded_bytes
+        if suffix == ".json":
+            after_import = json.loads(downloaded_bytes)
+            before_bundle = dict(before_import["bundle"])
+            after_bundle = dict(after_import["bundle"])
+            assert before_bundle.pop("junit_evidence_imports") == []
+            imports = after_bundle.pop("junit_evidence_imports")
+            assert len(imports) == 1
+            assert imports[0]["artifact_sha256"] == artifact_digest
+            assert imports[0]["criterion_mappings"] == [
+                {"criterion_id": "AC-01", "test_case_ids": ["suite-0001-case-0001"]},
+                {"criterion_id": "AC-02", "test_case_ids": ["suite-0002-case-0001"]},
+            ]
+            assert imports[0]["evidence_boundary"]["gate_effect"] == "non_gating"
+            assert imports[0]["evidence_boundary"]["execution"] == (
+                "not_executed_by_scopeproof"
+            )
+            assert after_bundle == before_bundle
+            assert {key: value for key, value in after_import.items() if key != "bundle"} == {
+                key: value for key, value in before_import.items() if key != "bundle"
+            }
+            assert after_bundle["runtime_evidence"] == []
+            assert after_bundle["review"]["final_acceptance"] is False
 
 
 def _exercise_junit_upload_byte_boundary(page: Page, artifact_directory: Path) -> None:
@@ -1449,8 +1507,10 @@ def test_installed_wheel_primary_path_in_chromium(
     )
     junit_artifact = runtime_dir / "junit-results.xml"
     junit_artifact_bytes = (
-        b'<testsuite name="unit"><testcase name="test_browser_round_trip"/>'
+        b'<testsuites><testsuite name="unit"><testcase name="test_browser_round_trip"/>'
         b"<system-out>RAW-JUNIT-OUTPUT-SENTINEL</system-out></testsuite>"
+        b'<testsuite name="filters"><testcase name="test_browser_active_filters"/>'
+        b"</testsuite></testsuites>"
     )
     junit_artifact.write_bytes(junit_artifact_bytes)
     junit_artifact_digest = sha256(junit_artifact_bytes).hexdigest()

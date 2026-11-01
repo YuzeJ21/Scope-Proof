@@ -5277,6 +5277,10 @@ def test_junit_import_maps_uploaded_suite_without_changing_gate_or_decisions() -
     app = app.multiselect(key="junit_mapping_scopes").set_value(
         ["suite-0001"]
     ).run()
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    app = app.button(key="stage_junit_mapping").click().run()
     app = app.button(key="save_junit_import").click().run()
 
     updated = app.session_state["review_state"]
@@ -5319,6 +5323,10 @@ def test_junit_exact_one_mib_payload_fits_upload_envelope_and_remains_non_gating
         "Constructed automated byte-boundary probe"
     ).run()
     app = app.multiselect(key="junit_mapping_scopes").set_value(["suite-0001"]).run()
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    app = app.button(key="stage_junit_mapping").click().run()
     app = app.button(key="save_junit_import").click().run()
 
     updated = app.session_state["review_state"]
@@ -5474,6 +5482,10 @@ def test_junit_import_save_stays_disabled_for_already_imported_artifact() -> Non
     app = app.multiselect(key="junit_mapping_scopes").set_value(
         ["suite-0001"]
     ).run()
+    app = app.selectbox(key="junit_mapping_target").set_value(
+        app.session_state["selected_criterion"]
+    ).run()
+    app = app.button(key="stage_junit_mapping").click().run()
     app = app.button(key="save_junit_import").click().run()
 
     app = app.file_uploader(key="junit_artifact_upload_1").upload(
