@@ -3396,6 +3396,10 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
     app = app.text_area(key="split_criterion_text").set_value(
         "First behavior\nSecond behavior"
     ).run()
+    criteria = app.session_state["criteria"]
+    assert criteria
+    criterion_action_keys = [f"remove_{item.criterion_id}" for item in criteria]
+    criterion_action_keys += [f"move_up_{item.criterion_id}" for item in criteria[1:]]
 
     warning_text = "\n".join(item.value for item in app.warning)
     assert "Replacing it will discard unsaved changes." in warning_text
@@ -3406,11 +3410,8 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
     assert app.button(key="prepare_criteria").disabled is True
     assert app.button(key="add_criterion_ui").disabled is False
     assert app.button(key="split_criterion_ui").disabled is False
-    assert all(
-        button.disabled
-        for button in app.button
-        if button.key.startswith(("remove_", "move_up_"))
-    )
+    assert all(app.button(key=key).disabled for key in criterion_action_keys)
+    assert app.button(key="remove_junit_mapping").disabled is True
 
     app = app.checkbox(key="replace_unsaved_review_confirmed").check().run()
 
@@ -3420,11 +3421,8 @@ def test_unsaved_review_requires_explicit_approval_before_replacement(
     assert app.button(key="prepare_criteria").disabled is False
     assert app.button(key="add_criterion_ui").disabled is False
     assert app.button(key="split_criterion_ui").disabled is False
-    assert all(
-        not button.disabled
-        for button in app.button
-        if button.key.startswith(("remove_", "move_up_"))
-    )
+    assert all(not app.button(key=key).disabled for key in criterion_action_keys)
+    assert app.button(key="remove_junit_mapping").disabled is True
 
 
 def test_replacing_unsaved_review_consumes_replacement_approval() -> None:
