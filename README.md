@@ -277,6 +277,27 @@ scopeproof export REVIEW_ID \
 
 Available repeat-export formats are `json`, `markdown`, `csv`, and `html`.
 
+Current **unreleased 0.2.5 source** also supports historical-only CLI handoff after criteria change,
+including a saved record with no active analysis. First discover retained positions and the saved
+fingerprint, then explicitly export the chosen position:
+
+```bash
+scopeproof history REVIEW_ID --storage-dir .scopeproof/reviews
+scopeproof export-history REVIEW_ID \
+  --history-position 1 \
+  --expected-state-fingerprint HASH_FROM_HISTORY \
+  --format markdown --output historical-review.md \
+  --storage-dir .scopeproof/reviews
+```
+
+The catalog is descriptive metadata, with one-based positions in saved order; it supplies no new
+verdict or current authority. JSON is the export default; omit `--output` to use stdout. A changed
+record requires a fresh catalog and explicit choice, including changes outside the chosen analysis.
+Existing output files are never overwritten. Historical producer context and current validation
+identity remain separate; missing historical source provenance still blocks full reports. These
+commands do not confirm revised criteria, rerun analysis, fetch source or carry decisions forward.
+They are not available in the published v0.2.4 package.
+
 Continue the same validated local review through the CLI with explicit human decisions. Store
 reviewer notes in UTF-8 files when they are needed:
 

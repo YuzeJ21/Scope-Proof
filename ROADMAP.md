@@ -516,6 +516,16 @@ v7 and frozen research remain unchanged. This is source navigation, not a retrie
 repository-search claim. See the [bounded assessment](docs/audits/2026-10-31-source-reference-search.md).
 This completes one source-selection outcome without a release, standing queue or Stage 3 advance.
 
+The next owner-delegated gap review selected **headless retained-analysis handoff**. The local
+workbench could inspect/export retained history, while CLI export required current criteria and
+could not select a historical position. Unreleased source now provides a typed `history` metadata
+catalog and explicit `export-history` JSON/Markdown with a mandatory saved-state fingerprint and
+one-based position. Existing historical services recheck owner, full state and analysis identity;
+the consumer lock covers rendering/publication. Pending criteria stay unconfirmed, missing
+historical provenance still blocks full reports, output creation is atomic/no-overwrite, and saved
+bytes, decisions and gates stay unchanged. See the [bounded handoff assessment](docs/audits/2026-10-31-cli-historical-analysis.md).
+This completes one automatic-workflow outcome without publication, a standing queue or Stage 3 credit.
+
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic
