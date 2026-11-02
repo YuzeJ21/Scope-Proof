@@ -13,6 +13,11 @@ target closed unmet when the owner chose not to pursue Stage 1.
 
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
+The product direction is to **explain and revisit an acceptance decision**: retain the confirmed
+intent, reviewed head, evidence gaps and recorded decisions as work changes. Current
+[official-source market research](docs/commercialization/market-comparison-2026-11-02.md) finds
+substantial overlap elsewhere; this direction is a usefulness hypothesis, not a novelty claim.
+
 Readable Markdown and HTML reports retain the saved review's decision audit: recorded actors,
 times, event IDs, criteria revisions and Current/Superseded/Prior revision status, with explicit
 evidence claims and runtime references. Analysis-only exports disclose unavailable full history.
@@ -274,6 +279,47 @@ The preparation command performs no network request, computes both hashes from t
 bytes and ordered normalized criteria, and refuses to overwrite an existing confirmation file.
 The optional report path may end in `.md`, `.json`, `.csv`, or `.html`; ScopeProof validates the
 selected export and refuses to overwrite an existing file.
+
+Current **unreleased 0.2.5 source** additionally supports a reusable normalized criteria handoff.
+Create an unconfirmed draft, then inspect/edit the complete ordered criteria before attesting:
+
+```bash
+scopeproof prepare-criteria --requirements requirements.txt --output criteria.json
+```
+
+The document contains `schema_version: 1`, the exact requirements `source_text_sha256`, and an
+ordered `criteria` array. Each criterion exposes `criterion_id`, `text`, `priority`,
+`criterion_type`, `criterion_source`, `source_span`, and `required_evidence_level`. The draft
+uses the existing line-parser defaults; it is not approval. An authorized requirements owner
+can explicitly edit or split normalized intent, choose stable IDs and set required E3/E4
+evidence without claiming that evidence exists. Source spans and criterion origins are recorded
+metadata, not verified semantic links or authenticated authority.
+
+Pass the **same** `--criteria criteria.json` to all three commands:
+
+```bash
+scopeproof prepare-requirements-confirmation \
+  --requirements requirements.txt --criteria criteria.json \
+  --source-uri https://github.com/OWNER/REPOSITORY/blob/FULL_SHA/path/to/requirements.txt \
+  --source-revision FULL_SHA --confirmed-by "Requirements owner or authorized role" \
+  --output requirements-confirmation.json
+
+scopeproof validate-requirements-confirmation \
+  --requirements requirements.txt --criteria criteria.json \
+  --confirmation requirements-confirmation.json
+
+scopeproof review --pr https://github.com/OWNER/REPOSITORY/pull/123 \
+  --requirements requirements.txt --criteria criteria.json \
+  --confirmation requirements-confirmation.json --report scopeproof-review.md
+```
+
+Both exact UTF-8 source bytes and the complete normalized fields/order are confirmation-bound.
+Changed, duplicate-ID, empty, unknown-field or malformed documents fail closed before ingestion
+or writes; document input is a regular file capped at 1 MiB. A typed error never falls back to
+E1 defaults. Draft/confirmation output never overwrites an existing file. Omit `--criteria` to
+retain the existing text-only workflow. This option is CLI-only: the GitHub Action, alpha
+commands and published v0.2.4 do not accept it. It does not import or resume a saved review.
+See the [bounded assessment](docs/audits/2026-11-02-typed-criteria-handoff.md).
 
 The command prints JSON containing the local `review_id`, record path, head SHA, and provisional
 gate verdict, plus the requested report path. Use the review identifier later to repeat the export

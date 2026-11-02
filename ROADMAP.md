@@ -11,6 +11,28 @@ This roadmap separates owner-led productization from external validation. Stage 
 this owner decision does not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
+## Current priorities — 2026-11-02
+
+The product direction is **explain and revisit an acceptance decision**. Confirmed intent,
+exact-head evidence, explicit gaps, recorded decisions and later comparison form the working
+product; acceptance checking alone is not distinctive. The [refreshed market assessment](docs/commercialization/market-comparison-2026-11-02.md)
+documents direct overlap and adoption constraints without claiming superiority or demand.
+
+| Stage and order | Concrete outcome | Finish line or boundary |
+| --- | --- | --- |
+| Stage 2 — selected now | Carry complete normalized criteria from preparation into an automated CLI review without rebuilding intent. | Source-bound editable draft; explicit confirmation; stable IDs/order/priority/type/source metadata and required evidence levels; malformed/stale rejection before ingestion/writes; automated and independent agent review plus exact-head CI. See the [bounded assessment](docs/audits/2026-11-02-typed-criteria-handoff.md). |
+| Stage 2 — next distinct option, not started | A recipient can transfer and safely reopen a saved review through supported product controls. | Separate design for version validation, identity, provenance, collision/no-overwrite and resource limits; no automatic import or inferred acceptance. Select this only after completing the current outcome. |
+| Evaluation distribution — separately authorized | Deliver accumulated source improvements in an updated downloadable evaluation release. | Fresh version-bound package/download evidence and explicit publication authorization. Current public release remains v0.2.4. Do not repeat candidate preparation merely to create activity. |
+| Stage 3 — dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. Automated tests, agent reviews, downloads and this roadmap do not satisfy it. The owner is not assigned personal testing or qualifying reviews. |
+
+No additional adapter family, accounts, hosted processing, billing or generic code review is
+needed for the selected outcome. Public-only scope, evaluation-only licensing, local setup,
+asserted actor identity and unknown independent usefulness remain material constraints.
+
+The dated implementation notes below preserve prior milestone context. This priority table is
+the next-stage decision; those notes are not an instruction to reopen completed work or grow
+an endless format-parity queue.
+
 ## Current operating decision
 
 **v0.2.4 is published as a downloadable evaluation release.** Its public wheel, source archive
@@ -51,7 +73,7 @@ deployment, outreach or participant program follows automatically.
 Maintain the confirmed-criteria → exact-head candidate evidence → missing evidence → reviewer
 decisions → re-review workflow. Its usefulness and primary-operator hypothesis (engineer or
 technical QA reviewer, with a PM or requirements owner receiving the report) remain unvalidated.
-The [market comparison](docs/commercialization/market-comparison-2026-07-26.md) documents substantial
+The [market comparison](docs/commercialization/market-comparison-2026-11-02.md) documents substantial
 overlap, including Tiden, CodeRabbit, Qodo, Qase, Spec Kit, and Kiro; it supports no novelty or
 superiority claim.
 
@@ -70,7 +92,7 @@ ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
-moving-head ledger. Current browser coverage comprises twenty-four checks: ten installed-wheel
+moving-head ledger. The PR #247 resulting-main baseline (`5b9860b`) has twenty-five browser checks: eleven installed-wheel
 Chromium cases, eight constructed Streamlit selection checks, and six helper/capture checks.
 Dated five-check CI results below remain
 historical results, not current suite counts.
@@ -332,7 +354,7 @@ promote search diagnostics into evidence or correctness claims.
 Current product, gap, and next-stage details are maintained in the
 [v0.2.3 status audit](docs/releases/v0.2.3-status-and-next-stages.md). Current official-source
 competitive research is maintained separately in the
-[current official-source market comparison](docs/commercialization/market-comparison-2026-07-26.md).
+[current official-source market comparison](docs/commercialization/market-comparison-2026-11-02.md).
 Historical current-main package, security, and environment evidence is recorded
 in the [post-merge release-readiness audit](docs/releases/v0.2.3-post-merge-release-readiness.md).
 The merged product-tree evidence is recorded in the

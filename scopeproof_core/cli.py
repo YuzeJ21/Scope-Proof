@@ -29,7 +29,10 @@ from scopeproof_core.criteria.confirmation import (
     build_criteria_source_provenance,
     read_exact_utf8_text,
     validate_criteria_source_confirmation,
-    validate_requirements_confirmation,
+)
+from scopeproof_core.criteria.document import (
+    MAX_CRITERIA_DOCUMENT_BYTES,
+    NormalizedCriteriaDocument,
 )
 from scopeproof_core.criteria.service import parse_criteria
 from scopeproof_core.evals.comparison_runner import run_bundled_comparison_benchmark
@@ -135,6 +138,18 @@ def _criteria_from_text(source_text: str) -> list[Criterion]:
     return [Criterion(criterion_id=draft.criterion_id, text=draft.text) for draft in drafts]
 
 
+def _criteria_for_args(args: argparse.Namespace, source_text: str) -> list[Criterion]:
+    if args.criteria is None:
+        return _criteria_from_text(source_text)
+    document = NormalizedCriteriaDocument.model_validate_json(
+        _read_bounded_regular_file(
+            Path(args.criteria), max_bytes=MAX_CRITERIA_DOCUMENT_BYTES,
+            label="normalized criteria document",
+        )
+    )
+    return document.criteria_for_source(source_text)
+
+
 def _build_bundle(
     snapshot: PullRequestSnapshot,
     criteria: list[Criterion],
@@ -191,7 +206,7 @@ def _review(args: argparse.Namespace) -> int:
     report_target = _report_target(args.report)
     requirements_path = Path(args.requirements)
     source_text = read_exact_utf8_text(requirements_path)
-    criteria = _criteria_from_text(source_text)
+    criteria = _criteria_for_args(args, source_text)
     provenance = validate_criteria_source_confirmation(
         Path(args.confirmation),
         source_text=source_text,
@@ -606,8 +621,10 @@ def _validate_action_evidence(args: argparse.Namespace) -> int:
 def _validate_requirements_confirmation(args: argparse.Namespace) -> int:
     """Validate a hash-bound Action requirements confirmation without networking."""
 
-    confirmation = validate_requirements_confirmation(
-        Path(args.requirements), Path(args.confirmation)
+    source_text = read_exact_utf8_text(Path(args.requirements))
+    confirmation = validate_criteria_source_confirmation(
+        Path(args.confirmation), source_text=source_text,
+        criteria=_criteria_for_args(args, source_text),
     )
     print(json.dumps(confirmation.model_dump(mode="json"), indent=2, sort_keys=True))
     return 0
@@ -618,7 +635,7 @@ def _prepare_requirements_confirmation(args: argparse.Namespace) -> int:
 
     requirements_path = Path(args.requirements)
     source_text = read_exact_utf8_text(requirements_path)
-    criteria = _criteria_from_text(source_text)
+    criteria = _criteria_for_args(args, source_text)
     source_uri = normalize_public_https_source_uri(args.source_uri)
     confirmation = build_criteria_source_provenance(
         source_uri=source_uri,
@@ -629,8 +646,7 @@ def _prepare_requirements_confirmation(args: argparse.Namespace) -> int:
         confirmed_at=datetime.now(UTC),
     )
     output_path = Path(args.output)
-    with output_path.open("x", encoding="utf-8") as handle:
-        handle.write(confirmation.model_dump_json(indent=2) + "\n")
+    atomic_create_text_with_receipt(output_path, confirmation.model_dump_json(indent=2) + "\n")
     print(
         json.dumps(
             {
@@ -644,6 +660,23 @@ def _prepare_requirements_confirmation(args: argparse.Namespace) -> int:
             sort_keys=True,
         )
     )
+    return 0
+
+
+def _prepare_criteria(args: argparse.Namespace) -> int:
+    """Create an editable unconfirmed intent document, without actor attestation."""
+
+    source_text = read_exact_utf8_text(Path(args.requirements))
+    document = NormalizedCriteriaDocument(
+        schema_version=1, source_text_sha256=sha256(source_text.encode("utf-8")).hexdigest(),
+        criteria=_criteria_from_text(source_text),
+    )
+    output = Path(args.output)
+    rendered = document.model_dump_json(indent=2) + "\n"
+    if len(rendered.encode("utf-8")) > MAX_CRITERIA_DOCUMENT_BYTES:
+        raise ValueError("normalized criteria document exceeds the byte limit")
+    atomic_create_text_with_receipt(output, rendered)
+    print(json.dumps({"criteria_document": str(output), "confirmed": False}, indent=2))
     return 0
 
 
@@ -747,6 +780,7 @@ def _parser() -> argparse.ArgumentParser:
     review.add_argument(
         "--requirements", required=True, help="One user-confirmed criterion per line"
     )
+    review.add_argument("--criteria", help="Optional source-bound normalized criteria JSON")
     review.add_argument(
         "--confirmation",
         required=True,
@@ -880,6 +914,9 @@ def _parser() -> argparse.ArgumentParser:
         help="Validate a hash-bound Action requirements confirmation without networking",
     )
     requirements_confirmation.add_argument("--requirements", required=True)
+    requirements_confirmation.add_argument(
+        "--criteria", help="Optional source-bound normalized criteria JSON"
+    )
     requirements_confirmation.add_argument("--confirmation", required=True)
     requirements_confirmation.set_defaults(handler=_validate_requirements_confirmation)
     prepare_confirmation = commands.add_parser(
@@ -889,6 +926,10 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     prepare_confirmation.add_argument("--requirements", required=True)
+    prepare_confirmation.add_argument(
+        "--criteria",
+        help="Optional source-bound normalized criteria JSON; inspect before attesting",
+    )
     prepare_confirmation.add_argument("--source-uri", required=True)
     prepare_confirmation.add_argument("--source-revision")
     prepare_confirmation.add_argument(
@@ -898,6 +939,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     prepare_confirmation.add_argument("--output", required=True)
     prepare_confirmation.set_defaults(handler=_prepare_requirements_confirmation)
+    prepare_criteria = commands.add_parser(
+        "prepare-criteria", help="Create an editable unconfirmed criteria draft without networking"
+    )
+    prepare_criteria.add_argument("--requirements", required=True)
+    prepare_criteria.add_argument("--output", required=True)
+    prepare_criteria.set_defaults(handler=_prepare_criteria)
     alpha = commands.add_parser(
         "alpha", help="Capture truthful local evidence from genuine public-alpha use"
     )
