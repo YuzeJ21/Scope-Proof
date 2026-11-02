@@ -131,7 +131,12 @@ def render_source_attachment(
     else:
         unavailable_message = None
     st.caption(
-        "Load source for this saved analysis without replacing its criteria, decisions or gate. "
+        "Load matching source to analyze this confirmed criteria revision. "
+        "The retained analysis stays historical; previous decisions and evidence are not copied. "
+        "Only recorded unchanged-file paths are restored."
+        if state.bundle is None
+        else "Load source for this saved analysis without replacing its criteria, "
+        "decisions or gate. "
         "Only recorded unchanged-file paths are restored; this does not refresh the analysis."
     )
     st.text(

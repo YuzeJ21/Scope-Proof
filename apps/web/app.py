@@ -155,6 +155,11 @@ from scopeproof_core.reviews.resolution_history import (
     RESOLUTION_HISTORY_EMPTY,
     resolution_history_event_fields,
 )
+from scopeproof_core.reviews.source_attachment import (
+    attach_saved_pending_analysis,
+    prepare_saved_source_attachment,
+    required_source_candidate_paths,
+)
 from scopeproof_core.schemas.models import (
     CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI,
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
@@ -169,6 +174,7 @@ from scopeproof_core.schemas.models import (
     Priority,
     PullRequestSnapshot,
     ResolutionEvent,
+    RetrievedFile,
     Review,
     ReviewBundle,
     ReviewInputOrigin,
@@ -764,7 +770,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["replace_unsaved_review_reset_pending"] = True
 
 
-def _analyze() -> ReviewBundle:
+def _analyze(*, unchanged_files: list[RetrievedFile] | None = None) -> ReviewBundle:
     snapshot = st.session_state["snapshot"]
     criteria = st.session_state["criteria"]
     input_origin = (
@@ -791,7 +797,10 @@ def _analyze() -> ReviewBundle:
         analysis_source_identity=current_core_source_identity(),
     )
     retrieval_result = retrieve_evidence_with_diagnostics(
-        snapshot, criteria, unchanged_files=st.session_state["candidate_files"]
+        snapshot, criteria,
+        unchanged_files=(
+            st.session_state["candidate_files"] if unchanged_files is None else unchanged_files
+        ),
     )
     evidence = retrieval_result.evidence
     findings = build_findings(criteria, evidence, snapshot.ingestion_state)
@@ -2085,19 +2094,50 @@ if not analysis_disabled and analysis_continuation_placeholder is not None:
 st.markdown("### Run deterministic analysis")
 if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis_disabled):
     try:
-        bundle = _analyze()
         existing_state = st.session_state["review_state"]
-        state = (
-            new_review_state(bundle)
-            if existing_state is None
-            else attach_analysis(existing_state, bundle)
+        saved_continuation = (
+            existing_state is not None
+            and st.session_state["reopened_review_id"] == existing_state.review.review_id
         )
-    except ValueError:
+        if saved_continuation:
+            snapshot = st.session_state["snapshot"]
+            required_paths = set(required_source_candidate_paths(existing_state))
+            candidates = [
+                file for file in st.session_state["candidate_files"]
+                if file.path in required_paths
+            ]
+            attachment = st.session_state.get("review_source_attachment")
+            if attachment is None:
+                attachment = prepare_saved_source_attachment(
+                    review_store, existing_state, snapshot=snapshot, candidate_files=candidates,
+                    source_origin=existing_state.review.input_origin,
+                    expected_state_fingerprint=_review_state_fingerprint(existing_state),
+                )
+            bundle = _analyze(unchanged_files=candidates)
+            state = attach_saved_pending_analysis(
+                review_store, existing_state, bundle, attachment=attachment,
+                snapshot=snapshot, candidate_files=candidates,
+            )
+        else:
+            bundle = _analyze()
+            state = (
+                new_review_state(bundle)
+                if existing_state is None
+                else attach_analysis(existing_state, bundle)
+            )
+    except (OSError, ValueError):
         st.error(
             "Analysis could not be completed. No review state was changed. Verify the "
             "confirmed criteria and loaded source, then try again."
         )
     else:
+        if saved_continuation:
+            st.session_state["candidate_files"] = candidates
+            st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(state)
+            st.session_state["failed_review_save_fingerprint"] = None
+            st.session_state["review_save_conflict"] = False
+            st.session_state["deleted_review_save_fingerprint"] = None
+        clear_source_attachment()
         st.session_state["review_state"] = state
         st.session_state["bundle"] = state.bundle
         st.session_state["source_reload_notice"] = None

@@ -589,6 +589,14 @@ again; correct its active replacement instead. History is bounded to 128 retaine
 retained history rejects further additions/corrections explicitly. Withdrawal remains available.
 No action changes automatic findings, gate decisions, scope coverage or runtime verification.
 
+Current **unreleased0.2.5 source** also resumes a reopened review after criteria edits: explicitly
+confirm the revised criteria, load matching reviewed source if it is missing, then run deterministic
+analysis. The review ID and old analysis/audit history remain; prior decisions, runtime records,
+references, JUnit context and acceptance are not copied into the new analysis. Pending source leases
+bind the full saved state and reject concurrent changes. Already-loaded matching source can be
+revalidated without refetch. Changed/unknown source remains blocked. See the
+[bounded continuation assessment](docs/audits/2026-11-02-pending-analysis-continuation.md).
+
 After reopening a saved review, **Load matching reviewed source** restores source for continued
 inspection without replacing the analysis or reconfirming unchanged criteria. It is available for
 complete confirmed analyses with verified-public live origin or the explicit constructed demo.
