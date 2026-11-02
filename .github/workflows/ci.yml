@@ -134,6 +134,8 @@ jobs:
         run: python -m pytest -q tests/reviews/test_junit_audit.py tests/reviews/test_junit_audit_safety.py tests/storage/test_junit_audit_migration.py tests/apps/test_junit_audit.py tests/cli/test_junit_audit.py tests/reporting/test_junit_audit.py tests/reviews/test_junit_audit_comparison.py tests/reporting/test_junit_audit_markdown_safety.py
       - name: Saved JUnit mapping correction compatibility
         run: python -m pytest -q tests/reviews/test_junit_correction.py tests/reviews/test_junit_correction_safety.py tests/storage/test_junit_correction_migration.py tests/apps/test_junit_correction.py tests/apps/test_junit_correction_review_fixes.py tests/cli/test_junit_correction.py tests/reporting/test_junit_correction.py tests/reviews/test_junit_correction_comparison.py
+      - name: Saved pending revision continuation compatibility
+        run: python -m pytest -q tests/reviews/test_pending_source_continuation.py tests/apps/test_pending_source_continuation.py tests/reviews/test_source_attachment.py tests/apps/test_source_attachment_review_fixes.py
       - name: Workbench resolution audit compatibility
         run: python -m pytest -q tests/apps/test_resolution_history.py
       - name: Recorded decision comparison compatibility

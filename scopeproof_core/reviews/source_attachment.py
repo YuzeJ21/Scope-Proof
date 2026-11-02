@@ -1,4 +1,4 @@
-"""Read-only source continuation for an already confirmed, saved analysis."""
+"""Exact-source continuation for confirmed saved analyses and pending revisions."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.gates.validation import validated_review_state
+from scopeproof_core.reviews.lifecycle import attach_analysis
 from scopeproof_core.reviews.reference_audit import active_references
 from scopeproof_core.reviews.selected_references import _eligible_reference_lines
 from scopeproof_core.schemas.models import (
@@ -18,6 +19,7 @@ from scopeproof_core.schemas.models import (
     LocalReviewId,
     PullRequestSnapshot,
     RetrievedFile,
+    ReviewBundle,
     ReviewInputOrigin,
     ReviewState,
     SelectableReferenceLine,
@@ -80,14 +82,13 @@ def _attachable_state(state: ReviewState) -> ReviewState:
     state = _validated_state(state)
     review = state.review
     if (
-        state.bundle is None
-        or not state.criteria_revision.confirmed
+        not state.criteria_revision.confirmed
         or not review.criteria_confirmed
         or review.criteria_source_provenance is None
         or review.changed_file_inventory is None
     ):
         raise SourceAttachmentUnavailable(
-            "A confirmed active analysis with known inventory is required."
+            "A confirmed saved revision with known inventory is required."
         )
     if (
         review.ingestion_state is not IngestionState.COMPLETE
@@ -106,17 +107,45 @@ def _attachable_state(state: ReviewState) -> ReviewState:
             re.fullmatch(r"[0-9a-f]{40}", sha) for sha in (review.base_sha, review.head_sha)
         ):
             raise SourceAttachmentUnavailable("Live reviewed source requires full commit SHAs.")
+    _source_path_anchor(state)
     return state
+
+
+def _source_path_anchor(state: ReviewState) -> ReviewBundle:
+    if state.bundle is not None:
+        return state.bundle
+    if not state.analysis_history:
+        raise SourceAttachmentUnavailable(
+            "Pending continuation requires a retained source analysis."
+        )
+    anchor = state.analysis_history[-1]
+    source_fields = (
+        "repository",
+        "pr_number",
+        "base_sha",
+        "head_sha",
+        "repository_visibility",
+        "input_origin",
+        "changed_file_inventory",
+        "ingestion_state",
+        "ingestion_warnings",
+        "skipped_files",
+        "check_state",
+        "ci_observation",
+    )
+    if any(getattr(anchor.review, name) != getattr(state.review, name) for name in source_fields):
+        raise SourceAttachmentUnavailable("Latest retained source differs; use explicit re-review.")
+    return anchor
 
 
 def required_source_candidate_paths(state: ReviewState) -> list[str]:
     """Recover only explicitly recorded unchanged paths, never inferred repository scans."""
     state = _attachable_state(state)
-    assert state.bundle is not None
+    anchor = _source_path_anchor(state)
     paths = sorted(
         {
             item.file_path
-            for item in [*state.bundle.evidence, *active_references(state.bundle)]
+            for item in [*anchor.evidence, *active_references(anchor)]
             if item.source_scope is EvidenceSourceScope.UNCHANGED_CANDIDATE
         }
     )
@@ -247,12 +276,13 @@ def _validated_source(
             raise ValueError("Candidate source bytes exceed the existing bound.")
     except ValueError as error:
         raise SourceAttachmentUnavailable(str(error)) from error
-    assert state.bundle is not None
+    # Pending revisions use historical references only as explicit path context.
+    # New analysis recomputes findings; it never copies or reaffirms old references.
     recorded = {
         (r.source_scope, r.file_path, r.line_number): SelectableReferenceLine.model_validate(
             {name: getattr(r, name) for name in SelectableReferenceLine.model_fields}
         )
-        for r in active_references(state.bundle)
+        for r in (active_references(state.bundle) if state.bundle is not None else [])
     }
     if recorded:
         for line in _eligible_reference_lines(state, snapshot, list(candidates)):
@@ -331,6 +361,10 @@ def validate_source_attachment(
         receipt = ReviewSourceAttachment.model_validate(attachment.model_dump(mode="python"))
         if (
             receipt.review_id != state.review.review_id
+            or (
+                state.bundle is None
+                and receipt.saved_state_fingerprint != JsonReviewStore.state_fingerprint(state)
+            )
             or receipt.context_fingerprint != review_source_context_fingerprint(state)
             or receipt.source_fingerprint
             != _source_fingerprint(receipt.snapshot, receipt.candidate_files)
@@ -351,3 +385,48 @@ def validate_source_attachment(
         raise
     except ValueError as error:
         raise SourceAttachmentUnavailable(str(error)) from error
+
+
+def attach_saved_pending_analysis(
+    store: JsonReviewStore,
+    current: ReviewState,
+    bundle: ReviewBundle,
+    *,
+    attachment: ReviewSourceAttachment,
+    snapshot: PullRequestSnapshot,
+    candidate_files: list[RetrievedFile],
+) -> ReviewState:
+    """Install fresh analysis under the complete source lease and record mutation lock."""
+    current = _attachable_state(current)
+    if current.bundle is not None:
+        raise SourceAttachmentUnavailable("Analysis continuation requires a pending revision.")
+    validate_source_attachment(current, attachment, snapshot, candidate_files)
+    bundle = ReviewBundle.model_validate(bundle.model_dump(mode="python"))
+    if (
+        any(
+            getattr(bundle, name)
+            for name in (
+                "resolutions",
+                "runtime_evidence",
+                "file_scope_decisions",
+                "reviewer_selected_references",
+                "selected_reference_events",
+                "junit_evidence_imports",
+                "junit_import_events",
+            )
+        )
+        or bundle.review.final_acceptance
+    ):
+        raise SourceAttachmentUnavailable("Fresh analysis cannot inherit prior review context.")
+    expected = JsonReviewStore.state_fingerprint(current)
+
+    def transition(saved: ReviewState) -> ReviewState:
+        if JsonReviewStore.state_fingerprint(saved) != expected:
+            raise SourceAttachmentUnavailable(
+                "Saved revision changed before analysis was committed."
+            )
+        validate_source_attachment(saved, attachment, snapshot, candidate_files)
+        return attach_analysis(saved, bundle)
+
+    updated, _ = store.mutate(current.review.review_id, transition)
+    return updated

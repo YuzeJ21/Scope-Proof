@@ -620,6 +620,17 @@ consumer, installed and integration evidence. No reparse/replacement/reactivatio
 qualifying-use evidence or Stage3 advancement is included.
 
 
+The next owner-delegated gap review selected **continue a reopened review after confirmed criteria
+edits**. Archiving the old analysis correctly removed its current verdict, but also disabled source
+attachment and prevented fresh analysis in the same review. Unreleased source now supports an explicit
+matching-source continuation for confirmed pending revisions, retaining the review ID, revised
+criteria, old analyses and audit. Full-state/source leases and locked completion reject stale or
+conflicting input. New analysis carries no prior manual/runtime/import context or acceptance; known
+complete source and bounded recorded unchanged paths remain required. See the
+[bounded assessment](docs/audits/2026-11-02-pending-analysis-continuation.md). Typed CLI criteria input
+and portable record transfer were considered and deferred as distinct later outcomes. This closes one
+existing lifecycle workflow without creating a parity queue, release or Stage3 credit.
+
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
 addresses the concrete non-LF separator defect found during M3 review. It corrects new automatic
 references while preserving historical evidence and frozen research; it is bounded defect upkeep,
