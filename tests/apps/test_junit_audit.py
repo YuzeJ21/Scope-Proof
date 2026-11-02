@@ -72,7 +72,9 @@ def test_queued_withdrawal_does_not_overwrite_delete_recreate_or_mutate_on_save_
             ),
         )
     elif change == "deleted":
-        store.delete(state.review.review_id)
+        # Simulate external deletion of our disposable record. Product deletion
+        # deliberately requires capabilities unavailable on some platforms.
+        path.unlink()
     else:
 
         def fail_write(*_args, **_kwargs):
