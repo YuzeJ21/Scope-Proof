@@ -33,8 +33,8 @@ try:
 except ImportError:  # pragma: no cover - exercised through the Windows-lock seam
     msvcrt = None  # type: ignore[assignment]
 
-RECORD_VERSION = 7
-_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
+RECORD_VERSION = 8
+_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _LEGACY_CI_CATEGORIES = {
     "successful_legacy_statuses",
@@ -542,8 +542,12 @@ class JsonReviewStore:
                 recorded_reviews.append(bundle.get("review"))
                 if record_version < 7 and bundle.get("selected_reference_events", []) != []:
                     raise ValueError("reference audit events require saved record version 7")
-                if record_version == 7 and "selected_reference_events" not in bundle:
+                if record_version >= 7 and "selected_reference_events" not in bundle:
                     raise ValueError("version 7 requires explicit reference audit history")
+                if record_version < 8 and bundle.get("junit_import_events", []) != []:
+                    raise ValueError("JUnit audit events require saved record version 8")
+                if record_version >= 8 and "junit_import_events" not in bundle:
+                    raise ValueError("version 8 requires explicit JUnit audit history")
             for review in recorded_reviews:
                 if isinstance(review, dict):
                     # Constructor defaults describe new reviews, never absent saved facts.
