@@ -226,8 +226,8 @@ def test_installed_wheel_pending_revision_continues_same_review_after_restart(
                             assert _saved_state(record) == pending
                             expect(run_analysis).to_be_enabled()
                             _run_and_wait_for_streamlit_rerun(page, run_analysis.click)
-                            expect(page.get_by_text(
-                                "Review saved automatically. ID:", exact=False,
+                            expect(page.get_by_role(
+                                "link", name="Complete — Analysis generated", exact=True,
                             )).to_be_visible()
                             completed = _saved_state(record)
                             _assert_fresh_continuation(completed, original, pending)
