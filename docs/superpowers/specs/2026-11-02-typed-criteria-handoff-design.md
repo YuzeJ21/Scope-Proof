@@ -36,7 +36,8 @@ judgments, not user-tested requirements or evidence of market demand.
 - Source is exact UTF-8 bytes, including CRLF and non-ASCII. Edited/split normalized criteria may
   differ from original source lines, as in the existing workbench; explicit confirmation binds
   both the original source and the selected complete normalized intent. No semantic equivalence
-  is inferred. Changing either after confirmation invalidates it.
+  is inferred. Changing either after confirmation invalidates it. Empty/whitespace original
+  source is rejected before confirmation or ingestion, matching existing owning-source rules.
 - Existing confirmation schema and explicit `--confirmed-by` attestation remain. The preparer
   must inspect the complete normalized document before attesting. Identity/authority remain
   asserted, not authenticated. Automated fixtures use clearly CONSTRUCTED actors only.

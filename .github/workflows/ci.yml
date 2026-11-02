@@ -147,7 +147,7 @@ jobs:
       - name: Historical CLI handoff compatibility
         run: python -m pytest -q tests/cli/test_history.py tests/cli/test_history_safety.py tests/cli/test_criteria_changes.py tests/cli/test_criteria_changes_safety.py
       - name: Typed criteria handoff compatibility
-        run: python -m pytest -q tests/cli/test_criteria_document.py tests/criteria/test_confirmation.py
+        run: python -m pytest -q tests/cli/test_criteria_document.py tests/cli/test_criteria_document_review_fixes.py tests/criteria/test_confirmation.py
       - name: Saved criteria revision comparison compatibility
         run: python -m pytest -q tests/reviews/test_criteria_comparison.py tests/reviews/test_criteria_comparison_safety.py tests/reporting/test_criteria_comparison.py
       - name: Platform-safe storage and CLI regressions

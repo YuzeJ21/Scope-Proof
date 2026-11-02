@@ -31,6 +31,8 @@ class NormalizedCriteriaDocument(BaseModel):
     def criteria_for_source(self, source_text: str) -> list[Criterion]:
         """Fail closed on source changes; never reinterpret normalized intent as lines."""
 
+        if not source_text.strip():
+            raise ValueError("requirements source must contain non-whitespace text")
         if self.source_text_sha256 != source_text_sha256(source_text):
             raise ValueError("criteria document source_text_sha256 does not match requirements")
         return self.criteria

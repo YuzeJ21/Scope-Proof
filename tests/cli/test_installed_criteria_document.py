@@ -142,7 +142,7 @@ def test_installed_typed_criteria_handoff(tmp_path):
     readable = cli(
         "export", metadata["review_id"], "--storage-dir", str(storage), "--format", "markdown",
     ).stdout.replace("\\-", "-").replace("\\_", "_")
-    for field in ("AC-20", "AC-03", "E4", "E3", "café", "should_have"):
+    for field in ("AC-20", "AC-03", "E4", "E3", "café", "Should have"):
         assert field in readable
     assert record.read_bytes() == record_before
 
