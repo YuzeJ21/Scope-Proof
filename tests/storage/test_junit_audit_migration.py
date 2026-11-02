@@ -155,12 +155,12 @@ def test_v8_does_not_weaken_v7_selected_reference_audit_requirements(
         JsonReviewStore(tmp_path).load(state.review.review_id)
 
 
-def test_new_save_uses_v8_and_round_trips_originals_and_history(tmp_path) -> None:
+def test_new_save_uses_v9_and_round_trips_originals_and_history(tmp_path) -> None:
     state = with_history(withdrawn_state())
     store = JsonReviewStore(tmp_path)
     path = store.save(state)
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["record_version"] == 8
+    assert payload["record_version"] == 9
     for bundle in [payload["state"]["bundle"], *payload["state"]["analysis_history"]]:
         assert len(bundle["junit_import_events"]) == 1
         assert bundle["selected_reference_events"] == []

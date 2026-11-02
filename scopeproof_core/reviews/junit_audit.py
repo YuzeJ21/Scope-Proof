@@ -1,11 +1,15 @@
 """Append-only withdrawal of external JUnit context, independent of UI or execution."""
 
+import json
 from datetime import datetime
 from typing import Literal
 
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.schemas.models import (
+    JUnitCriterionMapping,
+    JUnitImportEvent,
     JUnitImportWithdrawalEvent,
+    JUnitMappingCorrectionEvent,
     ReviewBundle,
     ReviewState,
 )
@@ -20,7 +24,8 @@ def junit_import_withdrawal_event(
     if import_id not in {item.import_id for item in bundle.junit_evidence_imports}:
         raise ValueError("unknown retained JUnit import")
     return next(
-        (event for event in bundle.junit_import_events if event.import_id == import_id),
+        (event for event in bundle.junit_import_events
+         if event.import_id == import_id and event.action == "withdrawn"),
         None,
     )
 
@@ -29,15 +34,42 @@ def junit_import_status(bundle: ReviewBundle, import_id: str) -> Literal["active
     return "withdrawn" if junit_import_withdrawal_event(bundle, import_id) else "active"
 
 
-def junit_withdrawal_fields(event: JUnitImportWithdrawalEvent) -> list[tuple[str, str]]:
-    """Plain recorded audit fields shared by UI and readable reports."""
+def effective_junit_mappings(bundle: ReviewBundle, import_id: str) -> list[JUnitCriterionMapping]:
+    try:
+        return bundle.effective_junit_mappings[import_id]
+    except KeyError as error:
+        raise ValueError("unknown retained JUnit import") from error
+
+
+def junit_mapping_correction_events(
+    bundle: ReviewBundle, import_id: str,
+) -> list[JUnitMappingCorrectionEvent]:
+    effective_junit_mappings(bundle, import_id)
+    return [event.model_copy(deep=True) for event in bundle.junit_import_events
+            if event.import_id == import_id and event.action == "mapping_corrected"]
+
+
+def junit_mapping_criterion_ids(bundle: ReviewBundle, import_id: str) -> set[str]:
+    """All original/intermediate/current associations, including retired groups."""
+    current = effective_junit_mappings(bundle, import_id)
+    original = next(x for x in bundle.junit_evidence_imports if x.import_id == import_id)
+    return {mapping.criterion_id for mapping in (
+        *original.criterion_mappings, *current,
+        *(mapping for event in junit_mapping_correction_events(bundle, import_id)
+          for mapping in event.criterion_mappings),
+    )}
+
+
+def _junit_event_fields(
+    event: JUnitImportEvent, prefix: str, verb: str,
+) -> list[tuple[str, str]]:
     provenance = event.criteria_source_provenance
     return [
-        ("Withdrawal event ID", event.event_id),
-        ("Withdrawal schema", event.schema_version),
-        ("Withdrawal action", event.action),
-        ("Withdrawn import ID", event.import_id),
-        ("Withdrawal artifact SHA-256", event.artifact_sha256),
+        (f"{prefix} event ID", event.event_id),
+        (f"{prefix} schema", event.schema_version),
+        (f"{prefix} action", event.action),
+        (f"{verb} import ID", event.import_id),
+        (f"{prefix} artifact SHA-256", event.artifact_sha256),
         ("Owning review ID", event.review_id),
         ("Bound repository", event.repository),
         ("Bound PR", str(event.pr_number)),
@@ -50,10 +82,26 @@ def junit_withdrawal_fields(event: JUnitImportWithdrawalEvent) -> list[tuple[str
         ("Criteria source normalized SHA-256", provenance.normalized_criteria_sha256),
         ("Criteria confirmer", provenance.confirmed_by),
         ("Criteria confirmed at (UTC)", provenance.confirmed_at.isoformat()),
-        ("Withdrawal reviewer", event.reviewer),
-        ("Withdrawal reason", event.reason),
-        ("Withdrawn at (UTC)", event.occurred_at.isoformat()),
-        ("Withdrawal evidence boundary", event.evidence_boundary.model_dump_json()),
+        (f"{prefix} reviewer", event.reviewer),
+        (f"{prefix} reason", event.reason),
+        (f"{verb} at (UTC)", event.occurred_at.isoformat()),
+        (f"{prefix} evidence boundary", event.evidence_boundary.model_dump_json()),
+    ]
+
+
+def junit_withdrawal_fields(event: JUnitImportWithdrawalEvent) -> list[tuple[str, str]]:
+    """Plain recorded audit fields shared by UI and readable reports."""
+    return _junit_event_fields(event, "Withdrawal", "Withdrawn")
+
+
+def junit_correction_fields(event: JUnitMappingCorrectionEvent) -> list[tuple[str, str]]:
+    return [
+        *_junit_event_fields(event, "Correction", "Corrected"),
+        ("Previous mapping SHA-256", event.previous_mapping_sha256),
+        ("Previous correction event ID", event.previous_correction_event_id or "None (original)"),
+        ("Corrected mappings", json.dumps(
+            [x.model_dump(mode="json") for x in event.criterion_mappings], sort_keys=True,
+        )),
     ]
 
 
@@ -62,6 +110,7 @@ def _without_audit(state: ReviewState) -> dict:
     if data["bundle"] is not None:
         data["bundle"].pop("junit_import_events", None)
         data["bundle"].pop("active_junit_import_ids", None)
+        data["bundle"].pop("effective_junit_mappings", None)
     return data
 
 

@@ -25,6 +25,12 @@ from apps.web.junit_audit import (
     render_junit_import_audit,
     render_junit_withdrawal,
 )
+from apps.web.junit_correction import (
+    clear_junit_correction_draft,
+    junit_correction_draft_pending,
+    prepare_junit_correction_context,
+    render_junit_correction,
+)
 from apps.web.junit_mapping import clear_junit_mapping_draft, render_junit_mapping_draft
 from apps.web.saved_comparison import (
     clear_saved_comparison_selection,
@@ -122,9 +128,13 @@ from scopeproof_core.reviews.comparison import (
     compare_reviews,
 )
 from scopeproof_core.reviews.junit_audit import (
+    effective_junit_mappings,
+    junit_correction_fields,
+    junit_mapping_criterion_ids,
     junit_withdrawal_fields,
     withdraw_junit_evidence_import,
 )
+from scopeproof_core.reviews.junit_correction import correct_junit_mappings
 from scopeproof_core.reviews.lifecycle import (
     acceptance_requires_comment,
     append_external_verification,
@@ -912,8 +922,13 @@ def _junit_artifact_upload_key() -> str:
     )
 
 
+def _junit_audit_draft_pending() -> bool:
+    return junit_withdrawal_draft_pending() or junit_correction_draft_pending()
+
+
 def _criterion_detail_draft_pending(
     *, include_selected_reference: bool = True, include_junit_withdrawal: bool = True,
+    include_junit_correction: bool = True,
 ) -> bool:
     runtime_text_keys = (
         "runtime_artifact_reference",
@@ -932,7 +947,8 @@ def _criterion_detail_draft_pending(
     )
     selected_pending = include_selected_reference and selected_reference_draft_pending()
     withdrawal_pending = include_junit_withdrawal and junit_withdrawal_draft_pending()
-    return selected_pending or junit_pending or withdrawal_pending or any(
+    correction_pending = include_junit_correction and junit_correction_draft_pending()
+    return selected_pending or junit_pending or withdrawal_pending or correction_pending or any(
         bool(str(st.session_state.get(key, ""))) for key in runtime_text_keys
     ) or (
         st.session_state.get("runtime_evidence_level", EvidenceLevel.E3)
@@ -980,6 +996,7 @@ def _clear_criterion_detail_drafts() -> bool:
     _clear_resolution_draft()
     _clear_junit_import_draft()
     clear_junit_withdrawal_draft()
+    clear_junit_correction_draft()
     clear_selected_reference_draft()
     return had_pending_input
 
@@ -1100,6 +1117,8 @@ if st.session_state.pop("junit_import_form_reset_pending", False):
     _clear_junit_import_draft()
 if st.session_state.pop("junit_withdrawal_reset_pending", False):
     clear_junit_withdrawal_draft()
+if st.session_state.pop("junit_correction_reset_pending", False):
+    clear_junit_correction_draft()
 if st.session_state.pop("resolution_form_reset_pending", False):
     _clear_resolution_draft()
 if st.session_state.pop("criteria_draft_reset_pending", False):
@@ -1124,6 +1143,7 @@ else:
 
 current_review_state: ReviewState | None = st.session_state["review_state"]
 prepare_junit_withdrawal_context(current_review_state, st.session_state.get("selected_criterion"))
+prepare_junit_correction_context(current_review_state, st.session_state.get("selected_criterion"))
 has_pending_criteria_draft = _criteria_draft_pending(st.session_state["criteria"])
 has_pending_criteria_authoring_draft = _criteria_authoring_draft_pending()
 has_pending_requirements_draft = _requirements_draft_pending()
@@ -2285,6 +2305,17 @@ else:
                             for field, value in junit_withdrawal_fields(reference.withdrawal_event):
                                 st.caption(field)
                                 st.text(value)
+                        for event in reference.mapping_correction_events:
+                            for field, value in junit_correction_fields(event):
+                                st.caption(field)
+                                st.text(value)
+                        if reference.mapping_correction_events:
+                            st.caption("Original mappings (retained)")
+                            for mapping in reference.original_mappings or []:
+                                st.text(
+                                    f"{mapping.criterion_id}: " + ", ".join(mapping.test_case_ids)
+                                )
+                            st.caption("Current effective mappings")
                         for mapping in reference.mappings:
                             st.text(
                                 f"{mapping.criterion_id}: "
@@ -2648,9 +2679,9 @@ else:
                 decision is None
                 or not decision_reviewer_ready
                 or not resolution_note_ready
-                or junit_withdrawal_draft_pending()
+                or _junit_audit_draft_pending()
             ),
-        ) and not junit_withdrawal_draft_pending():
+        ) and not _junit_audit_draft_pending():
             if review_state is None:
                 st.error("Run analysis before recording a human resolution.")
             else:
@@ -2796,8 +2827,8 @@ else:
             if st.button(
                 "Save imported JUnit results",
                 key="save_junit_import",
-                disabled=junit_import_candidate is None or junit_withdrawal_draft_pending(),
-            ) and not junit_withdrawal_draft_pending():
+                disabled=junit_import_candidate is None or _junit_audit_draft_pending(),
+            ) and not _junit_audit_draft_pending():
                 assert review_state is not None
                 assert junit_import_candidate is not None
                 try:
@@ -2855,12 +2886,60 @@ else:
         if withdrawal_notice:
             st.success(withdrawal_notice)
 
+        prepare_junit_correction_context(review_state, selected_id)
+        correction_request = render_junit_correction(
+            review_state,
+            disabled=(
+                not review_store_available or not _review_matches_local_save(review_state)
+                or st.session_state["review_save_conflict"] or source_observation_conflict
+                or st.session_state["deleted_review_save_fingerprint"] is not None
+                or has_pending_criteria_draft or has_pending_criteria_authoring_draft
+                or has_pending_requirements_draft or has_pending_criteria_source
+                or _criterion_detail_draft_pending(include_junit_correction=False)
+            ),
+        )
+        if correction_request is not None:
+            try:
+                updated, _saved_path = review_store.mutate(
+                    review_state.review.review_id,
+                    lambda current: correct_junit_mappings(current, **correction_request),
+                )
+            except (OSError, ValueError):
+                st.error(
+                    "JUnit mapping correction could not be saved. The record changed, was "
+                    "deleted or storage failed; reopen the record before trying again."
+                )
+            else:
+                st.session_state["review_state"] = updated
+                st.session_state["bundle"] = updated.bundle
+                st.session_state["saved_review_fingerprint"] = _review_state_fingerprint(updated)
+                st.session_state["failed_review_save_fingerprint"] = None
+                st.session_state["review_save_conflict"] = False
+                st.session_state["junit_correction_reset_pending"] = True
+                st.session_state["junit_correction_notice"] = "JUnit mapping correction saved."
+                st.rerun()
+        correction_notice = st.session_state.pop("junit_correction_notice", None)
+        if correction_notice:
+            st.success(correction_notice)
+
         selected_junit_imports = [
             (evidence_import, mapping)
             for evidence_import in bundle.junit_evidence_imports
-            for mapping in evidence_import.criterion_mappings
+            for mapping in effective_junit_mappings(bundle, evidence_import.import_id)
             if mapping.criterion_id == selected_id
         ]
+        retired_junit_imports = [
+            item for item in bundle.junit_evidence_imports
+            if selected_id in junit_mapping_criterion_ids(bundle, item.import_id)
+            and selected_id not in {mapping.criterion_id for mapping in
+                                    effective_junit_mappings(bundle, item.import_id)}
+        ]
+        if retired_junit_imports:
+            with st.expander(f"Retained JUnit mapping history ({len(retired_junit_imports)})"):
+                st.caption("No current mapped cases; retained mapping history only.")
+                for item in retired_junit_imports:
+                    st.code(item.import_id, language=None)
+                    render_junit_import_audit(bundle, item.import_id)
         with st.expander(
             f"Recorded imported JUnit results ({len(selected_junit_imports)})",
             expanded=False,
@@ -2966,8 +3045,8 @@ else:
             if st.button(
                 "Save external verification",
                 key="save_runtime_evidence",
-                disabled=not runtime_evidence_ready or junit_withdrawal_draft_pending(),
-            ) and not junit_withdrawal_draft_pending():
+                disabled=not runtime_evidence_ready or _junit_audit_draft_pending(),
+            ) and not _junit_audit_draft_pending():
                 if review_state is None:
                     st.error("Run analysis before recording external verification.")
                 else:
@@ -3254,9 +3333,9 @@ else:
                     )
                     or not scope_note.strip()
                     or not decision_reviewer_ready
-                    or junit_withdrawal_draft_pending()
+                    or _junit_audit_draft_pending()
                 ),
-            ) and not junit_withdrawal_draft_pending():
+            ) and not _junit_audit_draft_pending():
                 try:
                     assert review_state is not None
                     review_state = append_file_scope_decision(

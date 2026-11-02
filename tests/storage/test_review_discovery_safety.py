@@ -172,7 +172,7 @@ def test_default_loader_uses_current_store_maximum_without_changing_v7(tmp_path,
     before = path.read_bytes()
     assert store.load("review-001") == state
     assert store.load("review-001", max_bytes=None) == state
-    assert json.loads(before)["record_version"] == 8
+    assert json.loads(before)["record_version"] == 9
     assert path.read_bytes() == before
     path.write_bytes(before + b" ")
     with pytest.raises(ValueError, match="byte limit"):
