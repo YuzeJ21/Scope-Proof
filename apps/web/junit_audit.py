@@ -44,7 +44,7 @@ def render_junit_import_audit(bundle: ReviewBundle, import_id: str) -> None:
 
 def render_junit_withdrawal(state: ReviewState, *, disabled: bool) -> dict[str, str] | None:
     """Return explicit request values; parent commits them under the store mutation lock."""
-    with st.expander("Withdraw a saved JUnit import", expanded=False):
+    with st.expander("Withdraw a saved JUnit import", expanded=False, key="junit_withdrawal_panel"):
         st.caption(
             "Whole-import withdrawal retains the original results and every criterion mapping. "
             "It changes no gate or reviewer decision, frees no history slot, and does not permit "

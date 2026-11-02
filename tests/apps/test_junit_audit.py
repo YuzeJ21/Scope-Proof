@@ -31,6 +31,7 @@ def test_reopened_import_requires_explicit_target_attribution_and_whole_import_s
     before = path.read_bytes()
     assert app.selectbox(key="junit_withdrawal_target").value is None
     assert app.button(key="withdraw_junit_import").disabled
+    assert not app.download_button(key="download_json").disabled
     app = stage(app)
     assert app.download_button(key="download_json").disabled
     assert not app.button(key="withdraw_junit_import").disabled

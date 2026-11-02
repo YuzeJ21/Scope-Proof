@@ -353,7 +353,7 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
                 )
         event = junit_import_withdrawal_event(bundle, evidence_import.import_id)
         if event is not None:
-            lines.extend(f"- {label}: {_render_markdown_code(value)}"
+            lines.extend(f"- {label}: {_escape_markdown_text(value)}"
                          for label, value in junit_withdrawal_fields(event))
         if evidence_import.parser_warnings:
             lines.append("- Parser warnings:")
@@ -979,7 +979,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
             lines.append(f"  - Import status: {_render_markdown_code(status)}")
             if reference.withdrawal_event is not None:
                 lines.extend(
-                    f"  - {field}: {_render_markdown_code(value)}"
+                    f"  - {field}: {_escape_markdown_text(value)}"
                     for field, value in junit_withdrawal_fields(reference.withdrawal_event)
                 )
             for mapping in reference.mappings:

@@ -4,6 +4,7 @@ import csv
 import html
 import io
 import json
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -87,7 +88,10 @@ def _assert_event_payload(event, event_id):
     assert event["evidence_boundary"]["execution"] == "not_executed_by_scopeproof"
 
 
-def _assert_inert_complete_event(report, event_id):
+def _assert_inert_complete_event(report, event_id, *, markdown=False):
+    # Compare displayed facts across the two encodings without assuming HTML code spans.
+    display_text = re.sub(r"\\([^\w\s])", r"\1", report) if markdown else report
+    display_text = html.unescape(display_text)
     for value in (
         event_id, "constructed-junit-import", _ARTIFACT, "a" * 40,
         "constructed-junit-audit-review", "constructed/audit-example",
@@ -96,9 +100,14 @@ def _assert_inert_complete_event(report, event_id):
         "1088d3732ddc7d51ae46032c87254c1ad05cf068a4a9ad488c9c8ea152bebb29",
         "cec2daac042dee106625eb37bd737d679f11cced8527b27ac40930fa288218ef",
     ):
-        assert value in report
-    assert html.escape(_REVIEWER, quote=True) in report
-    assert html.escape(_REASON, quote=True) in report
+        assert value in display_text
+    assert _REVIEWER in display_text
+    assert _REASON in display_text
+    if markdown:
+        assert r"\[actor\]\(" in report
+        assert r"\[details\]\(" in report
+        assert "[actor](" not in report
+        assert "[details](" not in report
     assert "<script>" not in report
     assert "<img src=x" not in report
     assert '<a href="javascript:' not in report
@@ -144,7 +153,10 @@ def test_human_reports_label_both_retained_import_statuses_and_complete_audit(ex
     assert "suite-0001-case-0001" in report
     assert "suite-0001-case-0002" in report
     assert "CONSTRUCTED pass" in report and "CONSTRUCTED failure" in report
-    _assert_inert_complete_event(report, state.bundle.junit_import_events[0].event_id)
+    _assert_inert_complete_event(
+        report, state.bundle.junit_import_events[0].event_id,
+        markdown=exporter is export_markdown,
+    )
     assert "non-gating" in report
     assert "asserted, not authenticated" in report
     assert "organizational context, not proof" in report
@@ -214,7 +226,9 @@ def test_comparison_exports_show_withdrawn_event_both_mappings_and_unchanged_gat
     markdown = export_comparison_markdown(comparison)
     assert "Previous import" in markdown and "Current import" in markdown
     assert "Active" in markdown and "Withdrawn" in markdown
-    _assert_inert_complete_event(markdown, current.bundle.junit_import_events[0].event_id)
+    _assert_inert_complete_event(
+        markdown, current.bundle.junit_import_events[0].event_id, markdown=True,
+    )
 
 
 def test_legacy_comparison_markdown_explicitly_labels_status_unavailable():
@@ -253,7 +267,7 @@ def test_archived_exports_keep_the_original_owning_revision_and_terminal_event(t
     _assert_event_payload(event, withdrawn.bundle.junit_import_events[0].event_id)
     assert event["criteria_revision_number"] != state.criteria_revision.number
     assert "Withdrawn" in markdown
-    _assert_inert_complete_event(markdown, event["event_id"])
+    _assert_inert_complete_event(markdown, event["event_id"], markdown=True)
     assert "not current-head verification" in markdown
     assert path.read_bytes() == original_bytes
 
