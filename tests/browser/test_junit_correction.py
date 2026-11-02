@@ -248,6 +248,28 @@ def _associations(page: Page, state: dict) -> None:
             expect(block.get_by_text(
                 "No external JUnit results are mapped to this criterion.", exact=True,
             )).to_be_visible()
+            history_title = page.get_by_text("Retained JUnit mapping history (1)", exact=True)
+            history = history_title.locator("xpath=ancestor::details[1]")
+            if history.get_attribute("open") is None:
+                history_title.click()
+            expect(history.get_by_text(
+                "No current mapped cases; retained mapping history only.", exact=True,
+            )).to_be_visible()
+            expect(history.get_by_text("Original mappings (retained)", exact=True)).to_be_visible()
+            expect(history.get_by_text("Current effective mappings", exact=True)).to_be_visible()
+            expect(history.get_by_text(REASON, exact=True)).to_be_visible()
+            history_text = history.inner_text()
+            for event in state["bundle"]["junit_import_events"]:
+                for value in _audit_strings(event):
+                    assert value.replace("Z", "+00:00") in history_text.replace("Z", "+00:00")
+            for case in cases:
+                expect(history.get_by_text(
+                    f"{case['test_case_id']} · {case['status']} · {case['test_name']}", exact=True,
+                )).to_have_count(0)
+            expect(history.locator("script, img, a")).to_have_count(0)
+            assert page.evaluate("window.__scopeproofCorrectionExecuted === undefined")
+            history_title.click()
+            expect(history).not_to_have_attribute("open", "")
 
 
 def _audit_downloads(page: Page, state: dict, output: Path) -> None:
