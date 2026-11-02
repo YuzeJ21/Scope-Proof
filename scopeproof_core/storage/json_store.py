@@ -515,12 +515,31 @@ class JsonReviewStore:
             raise ValueError(
                 "record byte limit must be a positive integer within the store maximum"
             )
-        payload = json.loads(
-            read_text_no_follow(
-                self._existing_record_path(review_id),
-                max_bytes=limit,
-            )
-        )
+        return self.decode_record(read_text_no_follow(
+            self._existing_record_path(review_id), max_bytes=limit,
+        ))
+
+    @classmethod
+    def decode_record(cls, text: str, *, require_recorded_facts: bool = False) -> ReviewState:
+        """Validate a detached saved record through the same conservative migrations."""
+        if len(text.encode("utf-8")) > MAX_SAVED_RECORD_BYTES:
+            raise ValueError("saved review record exceeds the byte limit")
+        try:
+            return cls._decode_record(text, require_recorded_facts=require_recorded_facts)
+        except RecursionError as error:
+            raise ValueError("saved review nesting exceeds validation limits") from error
+
+    @classmethod
+    def _decode_record(cls, text: str, *, require_recorded_facts: bool) -> ReviewState:
+        def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+            result: dict[str, object] = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("saved review contains duplicate JSON keys")
+                result[key] = value
+            return result
+
+        payload = json.loads(text, object_pairs_hook=unique_object)
         if not isinstance(payload, dict):
             raise ValueError("invalid review record envelope")
         record_version = payload.get("record_version")
@@ -620,13 +639,31 @@ class JsonReviewStore:
                     if isinstance(historical_bundle, dict):
                         historical_bundle["criteria_revision_number"] = "unknown"
         if record_version in {1, 2}:
-            self._migrate_runtime_evidence(state_payload)
-            self._unlink_legacy_manual_runtime_evidence(state_payload)
-        migrate_ci_gates = self._state_payload_needs_ci_gate_migration(state_payload)
+            cls._migrate_runtime_evidence(state_payload)
+            cls._unlink_legacy_manual_runtime_evidence(state_payload)
+        migrate_ci_gates = cls._state_payload_needs_ci_gate_migration(state_payload)
         state = ReviewState.model_validate(state_payload)
+        if require_recorded_facts:
+            cls._require_recorded_facts(state)
         if record_version < 8 or migrate_ci_gates:
-            state = self._recompute_all_gates(state)
+            state = cls._recompute_all_gates(state)
         return validated_review_state(state)
+
+    @staticmethod
+    def _require_recorded_facts(value: object) -> None:
+        """Transfer cannot turn fresh-object UUID/time defaults into historical facts."""
+        if isinstance(value, BaseModel):
+            for name, field in type(value).model_fields.items():
+                if (
+                    field.default_factory is not None
+                    and field.annotation in (str, datetime)
+                    and name not in value.model_fields_set
+                ):
+                    raise ValueError(f"transfer requires explicitly recorded {name}")
+                JsonReviewStore._require_recorded_facts(getattr(value, name))
+        elif isinstance(value, list):
+            for item in value:
+                JsonReviewStore._require_recorded_facts(item)
 
     @staticmethod
     def detect_head_change(state: ReviewState, snapshot: PullRequestSnapshot) -> HeadChange:

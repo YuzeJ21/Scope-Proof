@@ -568,6 +568,40 @@ Anonymous public-repository access is the default. `--token` is optional and can
 free rate limit, but it is not required or persisted. The CLI never comments on the pull request,
 executes its code, or converts static candidates into runtime verification.
 
+### Transfer and reopen a saved review (unreleased source)
+
+Use `export-review` to copy a complete saved record, including historical analyses and audit
+records. Ordinary `export --format json` produces a report and is not an import file.
+
+```bash
+scopeproof export-review REVIEW_ID --storage-dir /absolute/sender/reviews --output /absolute/handoff/review.json
+scopeproof import-review --input /absolute/handoff/review.json --storage-dir "$HOME/.scopeproof/reviews"
+```
+
+Both commands print a validated JSON receipt with the original review/head identity, saved
+record version/time, byte count, SHA-256 and loaded-state fingerprint. The recipient can then
+start `scopeproof-web`, choose **Resume a saved review**, select the original review ID and
+click **Reopen local review**. If the workbench is already open, refresh its saved-review list.
+Use the actual workbench store when overriding local storage; CLI commands otherwise default
+to `.scopeproof/reviews` relative to the current directory.
+
+Transfer preserves the full original UTF-8 record bytes, including confirmed criteria, pending
+revisions, historical analyses, original producer metadata and recorded decisions. Reopening
+uses the installed reader's validation and conservative migration rules. A historical Ready
+claim may therefore display Needs review while the transferred original file stays unchanged.
+A subsequent normal save uses the current record writer as before.
+
+Imports require an explicitly selected saved-record file no larger than 64 MiB. Invalid,
+unsupported-version or duplicate-key JSON, missing recorded IDs or audit times, unsafe paths and filename/owner mismatches on export
+are rejected. Existing destination files are never overwritten, even if they are identical or
+corrupt. Use a separate destination store to inspect an ID collision; there is no history merge
+or automatic renaming. These commands do not attach source files or reconfirm criteria.
+
+Recorded actors remain asserted, and a matching hash proves byte identity rather than author
+identity or correctness. Review files may include source excerpts, requirements and reviewer
+notes; select the intended recipient and transport separately. Transfer performs no upload,
+network verification or target-code execution. See the [transfer assessment](docs/audits/2026-11-02-saved-review-transfer.md).
+
 ## Contributor setup
 
 For a fully pinned setup, use the [reproducible development environment](docs/development-environment.md). The standard editable setup remains available below.

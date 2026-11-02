@@ -54,9 +54,10 @@ def test_actual_descriptor_read_accepts_exact_cap_and_probes_only_one_extra_byte
     original = atomic_files.read_bounded_utf8
     observations = []
 
-    def observe(handle, *, max_bytes):
+    def observe(handle, *, max_bytes, preserve_newlines=False):
         return original(
-            ObservedRead(handle, observations, path if grow else None), max_bytes=max_bytes
+            ObservedRead(handle, observations, path if grow else None), max_bytes=max_bytes,
+            preserve_newlines=preserve_newlines,
         )
 
     monkeypatch.setattr(atomic_files, "read_bounded_utf8", observe)
@@ -83,8 +84,11 @@ def test_ten_real_reads_bound_the_aggregate_and_never_parse_other_pages(tmp_path
     original_read = atomic_files.read_bounded_utf8
     original_parse = json.loads
 
-    def observe(handle, *, max_bytes):
-        return original_read(ObservedRead(handle, observations), max_bytes=max_bytes)
+    def observe(handle, *, max_bytes, preserve_newlines=False):
+        return original_read(
+            ObservedRead(handle, observations), max_bytes=max_bytes,
+            preserve_newlines=preserve_newlines,
+        )
 
     def parse(value, *args, **kwargs):
         parsed.append(value)
