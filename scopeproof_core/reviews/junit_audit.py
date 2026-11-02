@@ -49,6 +49,17 @@ def junit_mapping_correction_events(
             if event.import_id == import_id and event.action == "mapping_corrected"]
 
 
+def junit_mapping_criterion_ids(bundle: ReviewBundle, import_id: str) -> set[str]:
+    """All original/intermediate/current associations, including retired groups."""
+    current = effective_junit_mappings(bundle, import_id)
+    original = next(x for x in bundle.junit_evidence_imports if x.import_id == import_id)
+    return {mapping.criterion_id for mapping in (
+        *original.criterion_mappings, *current,
+        *(mapping for event in junit_mapping_correction_events(bundle, import_id)
+          for mapping in event.criterion_mappings),
+    )}
+
+
 def _junit_event_fields(
     event: JUnitImportEvent, prefix: str, verb: str,
 ) -> list[tuple[str, str]]:

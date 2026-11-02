@@ -130,6 +130,7 @@ from scopeproof_core.reviews.comparison import (
 from scopeproof_core.reviews.junit_audit import (
     effective_junit_mappings,
     junit_correction_fields,
+    junit_mapping_criterion_ids,
     junit_withdrawal_fields,
     withdraw_junit_evidence_import,
 )
@@ -2308,6 +2309,13 @@ else:
                             for field, value in junit_correction_fields(event):
                                 st.caption(field)
                                 st.text(value)
+                        if reference.mapping_correction_events:
+                            st.caption("Original mappings (retained)")
+                            for mapping in reference.original_mappings or []:
+                                st.text(
+                                    f"{mapping.criterion_id}: " + ", ".join(mapping.test_case_ids)
+                                )
+                            st.caption("Current effective mappings")
                         for mapping in reference.mappings:
                             st.text(
                                 f"{mapping.criterion_id}: "
@@ -2920,6 +2928,18 @@ else:
             for mapping in effective_junit_mappings(bundle, evidence_import.import_id)
             if mapping.criterion_id == selected_id
         ]
+        retired_junit_imports = [
+            item for item in bundle.junit_evidence_imports
+            if selected_id in junit_mapping_criterion_ids(bundle, item.import_id)
+            and selected_id not in {mapping.criterion_id for mapping in
+                                    effective_junit_mappings(bundle, item.import_id)}
+        ]
+        if retired_junit_imports:
+            with st.expander(f"Retained JUnit mapping history ({len(retired_junit_imports)})"):
+                st.caption("No current mapped cases; retained mapping history only.")
+                for item in retired_junit_imports:
+                    st.code(item.import_id, language=None)
+                    render_junit_import_audit(bundle, item.import_id)
         with st.expander(
             f"Recorded imported JUnit results ({len(selected_junit_imports)})",
             expanded=False,

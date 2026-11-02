@@ -43,6 +43,7 @@ from scopeproof_core.reviews.junit_audit import (
     junit_import_status,
     junit_import_withdrawal_event,
     junit_mapping_correction_events,
+    junit_mapping_criterion_ids,
     junit_withdrawal_fields,
 )
 from scopeproof_core.reviews.lifecycle import resolution_event_statuses
@@ -299,20 +300,6 @@ def _retrieval_diagnostic_html(
             f'<p class="note">{html.escape(_RETRIEVAL_BOUNDARY)}</p>',
         ]
     )
-
-
-def _junit_audit_criterion_ids(
-    bundle: ReviewBundle, evidence_import: JUnitEvidenceImport,
-) -> set[str]:
-    return {
-        mapping.criterion_id for mapping in (
-            *evidence_import.criterion_mappings,
-            *effective_junit_mappings(bundle, evidence_import.import_id),
-            *(mapping
-              for event in junit_mapping_correction_events(bundle, evidence_import.import_id)
-              for mapping in event.criterion_mappings),
-        )
-    }
 
 
 def _junit_mapping_cases(
@@ -1590,7 +1577,7 @@ def export_csv(bundle: ExportableReview) -> str:
         ]
         junit_audit_imports = [
             item for item in bundle.junit_evidence_imports
-            if criterion.criterion_id in _junit_audit_criterion_ids(bundle, item)
+            if criterion.criterion_id in junit_mapping_criterion_ids(bundle, item.import_id)
         ]
         writer.writerow(
             {
