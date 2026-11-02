@@ -106,3 +106,23 @@ README.md; ROADMAP.md; release-status record; new docs/audits/2026-11-01-junit-m
   analysis jobs; do not invent a missing main aggregate check.
 - [ ] Save final evidence/report/assertions, archive/hash-check only own execution ledger and complete
   goal. Expected: no pending required work and no personal testing/qualifying/Stage3 evidence claim.
+
+### Task 4: Fail closed on untagged correction shapes in historical v8
+
+**Trigger:** Final verification found that removing both defaulted type tags allowed the new union
+to accept a correction-shaped event under a v8 envelope. This violates the existing migration
+contract despite not changing gates. Complete this bounded follow-up before Task3 goal closure.
+
+**Files:** storage/json_store.py; tests/storage/test_junit_correction_migration.py;
+tests/cli/test_installed_junit_correction.py; existing bounded audit document and this plan.
+
+- [ ] Reproduce active/history tag-removal combinations and positive defaulted withdrawal-v8 /
+  correction-v9 compatibility. Expected:2 rejection failures,8 compatibility/rejection passes.
+- [ ] Reproduce installed catalog rejection against preserved PR245 wheel. Expected: exit0 instead
+  of required2 proves the packaged counterexample; preserve original log.
+- [ ] Validate every v8 event with the original JUnitImportWithdrawalEvent schema before permitting
+  the expanded union. Expected:10 probes pass without disk writes or legacy-default loss.
+- [ ] Run broad migration/core tests, fresh full>=95% coverage, installed CLI/package journeys,
+  benchmarks/frozen hashes and exact-head CI. Fresh independent review of this bounded follow-up.
+- [ ] Guarded PR merge and resulting-main checks; preserve the already merged PR245 evidence
+  separately. Expected: final main includes both feature and historical rejection fix, all green.

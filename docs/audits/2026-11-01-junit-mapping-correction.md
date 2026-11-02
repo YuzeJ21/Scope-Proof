@@ -41,6 +41,13 @@ cutoff<8 (or prior CI migration) is retained, so a v9 writer does not silently r
 v8 gates. New/attached analyses still reject preloaded imports/events; history remains read-only.
 Old builds cannot read newly savedv9 files.
 
+Final verification constructed one additional unsupported-envelope case: deleting both defaulted
+type tags from a correction snapshot let the expanded union recognize it inside v8. The bounded
+follow-up validates each v8 event against the complete original withdrawal schema before union
+parsing. Active/history tag-removal probes reject without writes, while defaulted old withdrawals
+and valid v9 corrections retain compatibility. These new cases and the prior failure are recorded
+separately; no frozen expectation is rewritten and no genuine historical action is fabricated.
+
 ## Workbench, CLI and handoffs
 
 The source-free editor explicitly selects an active import, previews original/current/staged
