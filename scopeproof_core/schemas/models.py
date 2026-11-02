@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -112,6 +113,8 @@ def require_verified_public_origin(
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _EXACT_HEAD_PATTERN = r"^[a-f0-9]{40}$"
 MAX_JUNIT_IMPORTS_PER_REVIEW = 20
+MAX_JUNIT_MAPPING_CORRECTIONS_PER_REVIEW = 20
+MAX_JUNIT_IMPORT_EVENTS_PER_REVIEW = 40
 MAX_JUNIT_NOTE_LENGTH = 1_000
 MAX_SELECTABLE_REFERENCE_LINES = 1_000
 MAX_REFERENCE_LINE_BYTES = 4_096
@@ -1597,6 +1600,108 @@ class JUnitImportWithdrawalEvent(BaseModel):
         return ReviewerSelectedReference.require_aware_selection_time(value)
 
 
+class JUnitMappingCorrectionEvent(BaseModel):
+    """One explicit replacement mapping snapshot; original results remain immutable."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["junit-mapping-correction-v1"] = "junit-mapping-correction-v1"
+    action: Literal["mapping_corrected"] = "mapping_corrected"
+    event_id: LocalReviewId = Field(default_factory=lambda: str(uuid4()))
+    import_id: LocalReviewId
+    artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_id: LocalReviewId
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    pr_number: StrictInt = Field(gt=0)
+    head_sha: str = Field(pattern=_EXACT_HEAD_PATTERN)
+    criteria_revision_number: StrictInt = Field(gt=0)
+    confirmed_criteria_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    criteria_source_provenance: CriteriaSourceProvenance
+    previous_mapping_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    previous_correction_event_id: LocalReviewId | None
+    criterion_mappings: list[JUnitCriterionMapping] = Field(min_length=1, max_length=5_000)
+    reviewer: str = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=2_000)
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    evidence_boundary: JUnitEvidenceBoundary = Field(default_factory=JUnitEvidenceBoundary)
+
+    @field_validator("reviewer", "reason", mode="before")
+    @classmethod
+    def required_attribution(cls, value: object) -> object:
+        return ReviewerSelectedReference.normalize_required_attribution(value)
+
+    @field_validator("occurred_at")
+    @classmethod
+    def aware_time(cls, value: datetime) -> datetime:
+        return ReviewerSelectedReference.require_aware_selection_time(value)
+
+    @model_validator(mode="after")
+    def canonical_mappings(self) -> JUnitMappingCorrectionEvent:
+        _validate_junit_mapping_snapshot(self.criterion_mappings)
+        return self
+
+
+# Retain legacy withdrawal defaults; disjoint Literal tags/extra-forbid reject mixed shapes.
+JUnitImportEvent = JUnitImportWithdrawalEvent | JUnitMappingCorrectionEvent
+
+
+def _validate_junit_mapping_snapshot(mappings: Sequence[JUnitCriterionMapping]) -> None:
+    criteria = [item.criterion_id for item in mappings]
+    if criteria != sorted(set(criteria)):
+        raise ValueError("JUnit criterion mappings must be sorted and unique")
+    cases = [case_id for item in mappings for case_id in item.test_case_ids]
+    if len(cases) != len(set(cases)):
+        raise ValueError("one JUnit test case must not map to multiple criteria")
+
+
+def junit_mapping_sha256(mappings: Sequence[JUnitCriterionMapping]) -> str:
+    """Digest canonical explicit mappings, without trusting serialized presentation fields."""
+    validated = [JUnitCriterionMapping.model_validate(x.model_dump(mode="python"))
+                 for x in mappings]
+    _validate_junit_mapping_snapshot(validated)
+    return sha256(json.dumps(
+        [x.model_dump(mode="json") for x in validated], sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+
+
+def replay_junit_mapping_events(
+    original: Sequence[JUnitCriterionMapping],
+    events: Sequence[JUnitImportEvent],
+    *,
+    known_case_ids: set[str],
+    known_criterion_ids: set[str],
+) -> list[JUnitCriterionMapping]:
+    """Replay a single retained import's validated stream; timestamps never order actions."""
+    current = [x.model_copy(deep=True) for x in original]
+    previous_id = None
+    terminal = False
+    seen_ids: set[str] = set()
+    for event in events:
+        if event.event_id in seen_ids or terminal:
+            raise ValueError("JUnit audit events must be unique and withdrawal is terminal")
+        seen_ids.add(event.event_id)
+        if event.action == "withdrawn":
+            terminal = True
+            continue
+        if (
+            event.previous_mapping_sha256 != junit_mapping_sha256(current)
+            or event.previous_correction_event_id != previous_id
+        ):
+            raise ValueError("JUnit correction chain must match its previous mapping and event")
+        if event.criterion_mappings == current:
+            raise ValueError("JUnit correction must change the current mappings")
+        if any(x.criterion_id not in known_criterion_ids for x in event.criterion_mappings):
+            raise ValueError("JUnit correction mappings must reference known criteria")
+        if any(case_id not in known_case_ids for x in event.criterion_mappings
+               for case_id in x.test_case_ids):
+            raise ValueError(
+                "JUnit correction mapped test case IDs must resolve in retained import"
+            )
+        current = [x.model_copy(deep=True) for x in event.criterion_mappings]
+        previous_id = event.event_id
+    return current
+
+
 class JUnitImportMutationMetadata(BaseModel):
     """Validated CLI output for one persisted JUnit import mutation."""
 
@@ -1863,8 +1968,8 @@ class ReviewBundle(BaseModel):
     junit_evidence_imports: list[JUnitEvidenceImport] = Field(
         default_factory=list, max_length=MAX_JUNIT_IMPORTS_PER_REVIEW
     )
-    junit_import_events: list[JUnitImportWithdrawalEvent] = Field(
-        default_factory=list, max_length=MAX_JUNIT_IMPORTS_PER_REVIEW
+    junit_import_events: list[JUnitImportEvent] = Field(
+        default_factory=list, max_length=MAX_JUNIT_IMPORT_EVENTS_PER_REVIEW
     )
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
@@ -1894,15 +1999,28 @@ class ReviewBundle(BaseModel):
                 "reviewer_decision_state",
                 "active_reviewer_selected_reference_ids",
                 "active_junit_import_ids",
+                "effective_junit_mappings",
             }
         }
 
     @computed_field
     @property
     def active_junit_import_ids(self) -> list[str]:
-        withdrawn = {event.import_id for event in self.junit_import_events}
+        withdrawn = {event.import_id for event in self.junit_import_events
+                     if event.action == "withdrawn"}
         return [item.import_id for item in self.junit_evidence_imports
                 if item.import_id not in withdrawn]
+
+    @computed_field
+    @property
+    def effective_junit_mappings(self) -> dict[str, list[JUnitCriterionMapping]]:
+        result = {item.import_id: [x.model_copy(deep=True) for x in item.criterion_mappings]
+                  for item in self.junit_evidence_imports}
+        for event in self.junit_import_events:
+            if event.action == "mapping_corrected" and event.import_id in result:
+                result[event.import_id] = [x.model_copy(deep=True)
+                                           for x in event.criterion_mappings]
+        return result
 
     @computed_field
     @property
@@ -2164,15 +2282,16 @@ class ReviewBundle(BaseModel):
             raise ValueError("JUnit import IDs must be unique")
         junit_by_id = {item.import_id: item for item in self.junit_evidence_imports}
         audit_ids: set[str] = set()
-        withdrawn_ids: set[str] = set()
+        corrections = sum(event.action == "mapping_corrected" for event in self.junit_import_events)
+        if corrections > MAX_JUNIT_MAPPING_CORRECTIONS_PER_REVIEW:
+            raise ValueError("JUnit correction history limit reached; withdrawal remains available")
         for event in self.junit_import_events:
-            if event.event_id in audit_ids or event.import_id in withdrawn_ids:
-                raise ValueError("JUnit withdrawal event IDs and targets must be unique")
+            if event.event_id in audit_ids:
+                raise ValueError("JUnit audit event IDs must be unique")
             audit_ids.add(event.event_id)
-            withdrawn_ids.add(event.import_id)
             target = junit_by_id.get(event.import_id)
             if target is None:
-                raise ValueError("JUnit withdrawal target must reference a retained import")
+                raise ValueError("JUnit audit target must reference a retained import")
             if event.review_id != self.review.review_id or (
                 event.artifact_sha256, event.repository, event.pr_number, event.head_sha,
                 event.criteria_revision_number, event.confirmed_criteria_sha256,
@@ -2182,7 +2301,15 @@ class ReviewBundle(BaseModel):
                 target.criteria_revision_number, target.confirmed_criteria_sha256,
                 target.criteria_source_provenance,
             ):
-                raise ValueError("JUnit withdrawal identity must match its owning retained import")
+                raise ValueError("JUnit audit identity must match its owning retained import")
+        for target in self.junit_evidence_imports:
+            replay_junit_mapping_events(
+                target.criterion_mappings,
+                [event for event in self.junit_import_events
+                 if event.import_id == target.import_id],
+                known_case_ids={case.test_case_id for case in target.test_cases},
+                known_criterion_ids=known_criteria,
+            )
         junit_artifact_digests = [
             item.artifact_sha256 for item in self.junit_evidence_imports
         ]

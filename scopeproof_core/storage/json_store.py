@@ -33,8 +33,8 @@ try:
 except ImportError:  # pragma: no cover - exercised through the Windows-lock seam
     msvcrt = None  # type: ignore[assignment]
 
-RECORD_VERSION = 8
-_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8)
+RECORD_VERSION = 9
+_SUPPORTED_RECORD_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9)
 _REVIEW_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _LEGACY_CI_CATEGORIES = {
     "successful_legacy_statuses",
@@ -548,6 +548,18 @@ class JsonReviewStore:
                     raise ValueError("JUnit audit events require saved record version 8")
                 if record_version >= 8 and "junit_import_events" not in bundle:
                     raise ValueError("version 8 requires explicit JUnit audit history")
+                if record_version == 8:
+                    events = bundle.get("junit_import_events", [])
+                    if not isinstance(events, list) or any(
+                        not isinstance(event, dict)
+                        or event.get("action", "withdrawn") != "withdrawn"
+                        or event.get("schema_version", "junit-import-withdrawal-v1")
+                        != "junit-import-withdrawal-v1"
+                        for event in events
+                    ):
+                        raise ValueError(
+                            "JUnit mapping correction events require saved record version 9"
+                        )
             for review in recorded_reviews:
                 if isinstance(review, dict):
                     # Constructor defaults describe new reviews, never absent saved facts.
@@ -599,7 +611,7 @@ class JsonReviewStore:
             self._unlink_legacy_manual_runtime_evidence(state_payload)
         migrate_ci_gates = self._state_payload_needs_ci_gate_migration(state_payload)
         state = ReviewState.model_validate(state_payload)
-        if record_version < RECORD_VERSION or migrate_ci_gates:
+        if record_version < 8 or migrate_ci_gates:
             state = self._recompute_all_gates(state)
         return validated_review_state(state)
 
