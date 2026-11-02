@@ -38,8 +38,11 @@ from scopeproof_core.reviews.final_acceptance_comparison import (
     FinalAcceptanceComparison,
 )
 from scopeproof_core.reviews.junit_audit import (
+    effective_junit_mappings,
+    junit_correction_fields,
     junit_import_status,
     junit_import_withdrawal_event,
+    junit_mapping_correction_events,
     junit_withdrawal_fields,
 )
 from scopeproof_core.reviews.lifecycle import resolution_event_statuses
@@ -298,12 +301,26 @@ def _retrieval_diagnostic_html(
     )
 
 
+def _junit_audit_criterion_ids(
+    bundle: ReviewBundle, evidence_import: JUnitEvidenceImport,
+) -> set[str]:
+    return {
+        mapping.criterion_id for mapping in (
+            *evidence_import.criterion_mappings,
+            *effective_junit_mappings(bundle, evidence_import.import_id),
+            *(mapping
+              for event in junit_mapping_correction_events(bundle, evidence_import.import_id)
+              for mapping in event.criterion_mappings),
+        )
+    }
+
+
 def _junit_mapping_cases(
-    evidence_import: JUnitEvidenceImport, criterion_id: str
+    evidence_import: JUnitEvidenceImport, criterion_id: str, mappings
 ) -> list[JUnitCaseResult]:
     mapped_ids = {
         case_id
-        for mapping in evidence_import.criterion_mappings
+        for mapping in mappings
         if mapping.criterion_id == criterion_id
         for case_id in mapping.test_case_ids
     }
@@ -320,6 +337,7 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
     if not bundle.junit_evidence_imports:
         return [*lines, "No external JUnit results were imported.", ""]
     for evidence_import in bundle.junit_evidence_imports:
+        corrections = junit_mapping_correction_events(bundle, evidence_import.import_id)
         lines.extend(
             [
                 f"### Import {_render_markdown_code(evidence_import.import_id)}",
@@ -336,21 +354,29 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
                 f"{evidence_import.totals.failures} failed; "
                 f"{evidence_import.totals.errors} errors; "
                 f"{evidence_import.totals.skipped} skipped.",
-                "- Explicit mappings:",
+                "- Original mappings (retained):" if corrections else "- Explicit mappings:",
             ]
         )
         cases_by_id = {item.test_case_id: item for item in evidence_import.test_cases}
-        for mapping in evidence_import.criterion_mappings:
-            lines.append(f"  - Criterion {_render_markdown_code(mapping.criterion_id)}")
-            for case_id in mapping.test_case_ids:
-                case = cases_by_id[case_id]
-                lines.append(
-                    "    - "
-                    f"{_render_markdown_code(case.test_case_id)} · "
-                    f"{_render_markdown_code(case.status.value)} · "
-                    f"{_render_markdown_code(case.suite_name)} · "
-                    f"{_render_markdown_code(case.test_name)}"
-                )
+        groups = [evidence_import.criterion_mappings]
+        if corrections:
+            groups.append(effective_junit_mappings(bundle, evidence_import.import_id))
+        for index, mappings in enumerate(groups):
+            if index:
+                lines.append("- Current effective mappings:")
+            render = _escape_markdown_text if corrections else _render_markdown_code
+            for mapping in mappings:
+                lines.append(f"  - Criterion {render(mapping.criterion_id)}")
+                for case_id in mapping.test_case_ids:
+                    case = cases_by_id[case_id]
+                    lines.append(
+                        "    - " + " · ".join(render(value) for value in (
+                            case.test_case_id, case.status.value, case.suite_name, case.test_name,
+                        ))
+                    )
+        for correction in corrections:
+            lines.extend(f"- {label}: {_escape_markdown_text(value)}"
+                         for label, value in junit_correction_fields(correction))
         event = junit_import_withdrawal_event(bundle, evidence_import.import_id)
         if event is not None:
             lines.extend(f"- {label}: {_escape_markdown_text(value)}"
@@ -374,6 +400,7 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
     if not bundle.junit_evidence_imports:
         return [*lines, "<p>No external JUnit results were imported.</p>"]
     for evidence_import in bundle.junit_evidence_imports:
+        corrections = junit_mapping_correction_events(bundle, evidence_import.import_id)
         cases_by_id = {item.test_case_id: item for item in evidence_import.test_cases}
         lines.extend(
             [
@@ -386,22 +413,30 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
                 f"<li>Bound head: <code>{html.escape(evidence_import.head_sha)}</code></li>",
                 "<li>Asserted importer: "
                 f"<code>{html.escape(evidence_import.imported_by)}</code></li>",
-                "<li>Explicit mappings:<ul>",
+                "<li>Original mappings (retained):<ul>"
+                if corrections else "<li>Explicit mappings:<ul>",
             ]
         )
-        for mapping in evidence_import.criterion_mappings:
-            lines.append(f"<li>Criterion <code>{html.escape(mapping.criterion_id)}</code><ul>")
-            for case_id in mapping.test_case_ids:
-                case = cases_by_id[case_id]
-                lines.append(
-                    "<li>"
-                    f"<code>{html.escape(case.test_case_id)}</code> · "
-                    f"<code>{html.escape(case.status.value)}</code> · "
-                    f"<code>{html.escape(case.suite_name)}</code> · "
-                    f"<code>{html.escape(case.test_name)}</code></li>"
-                )
+        groups = [evidence_import.criterion_mappings]
+        if corrections:
+            groups.append(effective_junit_mappings(bundle, evidence_import.import_id))
+        for index, mappings in enumerate(groups):
+            if index:
+                lines.append("<li>Current effective mappings:<ul>")
+            for mapping in mappings:
+                lines.append(f"<li>Criterion <code>{html.escape(mapping.criterion_id)}</code><ul>")
+                for case_id in mapping.test_case_ids:
+                    case = cases_by_id[case_id]
+                    lines.append("<li>" + " · ".join(
+                        f"<code>{html.escape(value)}</code>" for value in (
+                            case.test_case_id, case.status.value, case.suite_name, case.test_name,
+                        )
+                    ) + "</li>")
+                lines.append("</ul></li>")
             lines.append("</ul></li>")
-        lines.extend(["</ul></li>"])
+        for correction in corrections:
+            lines.extend(f"<li>{label}: <code>{html.escape(value)}</code></li>"
+                         for label, value in junit_correction_fields(correction))
         event = junit_import_withdrawal_event(bundle, evidence_import.import_id)
         if event is not None:
             lines.extend(f"<li>{label}: <code>{html.escape(value)}</code></li>"
@@ -972,7 +1007,6 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
                     "  - Sanitized context digest: "
                     f"{_render_markdown_code(reference.context_sha256)}",
                     f"  - Asserted importer: {_render_markdown_code(reference.asserted_importer)}",
-                    "  - Explicit mappings:",
                 ]
             )
             status = reference.status.title() if reference.status else "Status unavailable"
@@ -982,6 +1016,18 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
                     f"  - {field}: {_escape_markdown_text(value)}"
                     for field, value in junit_withdrawal_fields(reference.withdrawal_event)
                 )
+            for correction in reference.mapping_correction_events:
+                lines.extend(f"  - {field}: {_escape_markdown_text(value)}"
+                             for field, value in junit_correction_fields(correction))
+            if reference.mapping_correction_events:
+                lines.append("  - Original mappings (retained):")
+                for mapping in reference.original_mappings or []:
+                    lines.append("    - " + _escape_markdown_text(mapping.criterion_id) + ": "
+                                 + ", ".join(_escape_markdown_text(x)
+                                             for x in mapping.test_case_ids))
+                lines.append("  - Current effective mappings:")
+            else:
+                lines.append("  - Explicit mappings:")
             for mapping in reference.mappings:
                 lines.append(
                     f"    - {_render_markdown_code(mapping.criterion_id)}: "
@@ -1539,8 +1585,12 @@ def export_csv(bundle: ExportableReview) -> str:
             for item in bundle.junit_evidence_imports
             if any(
                 mapping.criterion_id == criterion.criterion_id
-                for mapping in item.criterion_mappings
+                for mapping in effective_junit_mappings(bundle, item.import_id)
             )
+        ]
+        junit_audit_imports = [
+            item for item in bundle.junit_evidence_imports
+            if criterion.criterion_id in _junit_audit_criterion_ids(bundle, item)
         ]
         writer.writerow(
             {
@@ -1699,7 +1749,10 @@ def export_csv(bundle: ExportableReview) -> str:
                             "test_name": case.test_name,
                         }
                         for evidence_import in junit_imports
-                        for case in _junit_mapping_cases(evidence_import, criterion.criterion_id)
+                        for case in _junit_mapping_cases(
+                            evidence_import, criterion.criterion_id,
+                            effective_junit_mappings(bundle, evidence_import.import_id),
+                        )
                     ],
                     ensure_ascii=False,
                     sort_keys=True,
@@ -1761,9 +1814,19 @@ def export_csv(bundle: ExportableReview) -> str:
                 "junit_import_audit": json.dumps([
                     {"import_id": item.import_id, "artifact_sha256": item.artifact_sha256,
                      "status": junit_import_status(bundle, item.import_id),
-                     "withdrawal_event": event.model_dump(mode="json") if event else None}
-                    for item in junit_imports
+                     "withdrawal_event": event.model_dump(mode="json") if event else None,
+                     **({
+                         "original_mappings": [x.model_dump(mode="json")
+                                               for x in item.criterion_mappings],
+                         "effective_mappings": [x.model_dump(mode="json")
+                                                for x in effective_junit_mappings(
+                                                    bundle, item.import_id)],
+                         "mapping_correction_events": [x.model_dump(mode="json")
+                                                       for x in corrections],
+                     } if corrections else {})}
+                    for item in junit_audit_imports
                     for event in [junit_import_withdrawal_event(bundle, item.import_id)]
+                    for corrections in [junit_mapping_correction_events(bundle, item.import_id)]
                 ], ensure_ascii=False, sort_keys=True),
                 **gate_context,
             }

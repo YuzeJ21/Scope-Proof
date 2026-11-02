@@ -9,14 +9,19 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.reviews.junit_audit import (
+    effective_junit_mappings,
     junit_import_status,
     junit_import_withdrawal_event,
+    junit_mapping_correction_events,
     withdraw_junit_evidence_import,
 )
+from scopeproof_core.reviews.junit_correction import correct_junit_mappings
 from scopeproof_core.schemas.models import (
     MAX_JUNIT_IMPORTS_PER_REVIEW,
     GateVerdict,
+    JUnitCriterionMapping,
     JUnitImportWithdrawalEvent,
+    JUnitMappingCorrectionEvent,
     LocalReviewId,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
@@ -30,6 +35,9 @@ class JUnitImportCatalogEntry(BaseModel):
     mapped_criterion_ids: list[str] = Field(min_length=1)
     status: Literal["active", "withdrawn"]
     withdrawal_event: JUnitImportWithdrawalEvent | None
+    original_mappings: list[JUnitCriterionMapping] = Field(min_length=1)
+    effective_mappings: list[JUnitCriterionMapping] = Field(min_length=1)
+    mapping_correction_events: list[JUnitMappingCorrectionEvent] = Field(max_length=20)
 
 
 class JUnitImportCatalog(BaseModel):
@@ -54,6 +62,18 @@ class JUnitWithdrawalMutationMetadata(BaseModel):
     evidence_boundary: Literal["externally_supplied_non_gating"] = "externally_supplied_non_gating"
 
 
+class JUnitCorrectionMutationMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    review_id: LocalReviewId
+    record: str
+    state_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    event: JUnitMappingCorrectionEvent
+    verdict: GateVerdict
+    final_acceptance: bool
+    evidence_boundary: Literal["externally_supplied_non_gating"] = "externally_supplied_non_gating"
+
+
 def _junit_imports(args: argparse.Namespace) -> int:
     store = JsonReviewStore(Path(args.storage_dir))
     with store.locked_load(args.review_id) as state:
@@ -69,8 +89,14 @@ def _junit_imports(args: argparse.Namespace) -> int:
                     import_id=item.import_id,
                     artifact_sha256=item.artifact_sha256,
                     mapped_criterion_ids=[
-                        mapping.criterion_id for mapping in item.criterion_mappings
+                        mapping.criterion_id
+                        for mapping in effective_junit_mappings(bundle, item.import_id)
                     ],
+                    original_mappings=[x.model_copy(deep=True) for x in item.criterion_mappings],
+                    effective_mappings=effective_junit_mappings(bundle, item.import_id),
+                    mapping_correction_events=junit_mapping_correction_events(
+                        bundle, item.import_id,
+                    ),
                     status=junit_import_status(bundle, item.import_id),
                     withdrawal_event=junit_import_withdrawal_event(bundle, item.import_id),
                 )
@@ -111,6 +137,38 @@ def _withdraw_junit(args: argparse.Namespace) -> int:
     return 0
 
 
+def _correct_junit(args: argparse.Namespace) -> int:
+    store = JsonReviewStore(Path(args.storage_dir))
+    grouped: dict[str, list[str]] = {}
+    for selection in args.map:
+        if selection.count("=") != 1:
+            raise ValueError("JUnit correction --map must be CRITERION=CASE")
+        criterion, case_id = [part.strip() for part in selection.split("=", 1)]
+        grouped.setdefault(criterion, []).append(case_id)
+    mappings = [JUnitCriterionMapping(criterion_id=criterion, test_case_ids=sorted(cases))
+                for criterion, cases in sorted(grouped.items())]
+
+    def transition(state):
+        if state.review.review_id != args.review_id:
+            raise ValueError("saved filename and JUnit correction owner differ")
+        return correct_junit_mappings(
+            state, import_id=args.import_id, criterion_mappings=mappings,
+            reviewer=args.reviewer, reason=args.reason,
+            expected_state_fingerprint=args.expected_state_fingerprint,
+            confirm_whole_import=args.confirm_whole_import,
+        )
+
+    state, path = store.mutate(args.review_id, transition)
+    result = JUnitCorrectionMutationMetadata(
+        review_id=state.review.review_id, record=str(path),
+        state_fingerprint=store.state_fingerprint(state),
+        event=state.bundle.junit_import_events[-1], verdict=state.bundle.gate.verdict,
+        final_acceptance=state.review.final_acceptance,
+    )
+    print(result.model_dump_json())
+    return 0
+
+
 def register_junit_audit_commands(commands: argparse._SubParsersAction) -> None:
     catalog = commands.add_parser(
         "junit-imports", help="Describe retained active-analysis JUnit imports"
@@ -128,3 +186,15 @@ def register_junit_audit_commands(commands: argparse._SubParsersAction) -> None:
     withdraw.add_argument("--reason", required=True)
     withdraw.add_argument("--expected-state-fingerprint", required=True)
     withdraw.set_defaults(handler=_withdraw_junit)
+    correction = commands.add_parser(
+        "correct-junit-mappings", help="Audit replacement mappings of one saved active import"
+    )
+    correction.add_argument("review_id")
+    correction.add_argument("--storage-dir", default=".scopeproof/reviews")
+    correction.add_argument("--import-id", required=True)
+    correction.add_argument("--map", action="append", required=True, metavar="CRITERION=CASE")
+    correction.add_argument("--reviewer", required=True)
+    correction.add_argument("--reason", required=True)
+    correction.add_argument("--expected-state-fingerprint", required=True)
+    correction.add_argument("--confirm-whole-import", action="store_true")
+    correction.set_defaults(handler=_correct_junit)

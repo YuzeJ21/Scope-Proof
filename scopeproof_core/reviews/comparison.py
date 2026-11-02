@@ -16,6 +16,7 @@ from scopeproof_core.reviews.final_acceptance_comparison import FinalAcceptanceC
 from scopeproof_core.reviews.scope_comparison import FileScopeComparison, FileScopeSnapshot
 from scopeproof_core.reviews.selected_reference_comparison import SelectedReferenceComparison
 from scopeproof_core.schemas.models import (
+    MAX_JUNIT_MAPPING_CORRECTIONS_PER_REVIEW,
     EvidenceItem,
     EvidenceLevel,
     EvidenceSourceScope,
@@ -23,11 +24,16 @@ from scopeproof_core.schemas.models import (
     FindingStatus,
     GateVerdict,
     HumanDecision,
+    JUnitCriterionMapping,
     JUnitEvidenceBoundary,
     JUnitEvidenceImport,
+    JUnitImportEvent,
     JUnitImportWithdrawalEvent,
+    JUnitMappingCorrectionEvent,
     ReviewBundle,
     ReviewInputOrigin,
+    junit_mapping_sha256,
+    replay_junit_mapping_events,
 )
 
 _EXACT_GIT_HEAD = re.compile(r"^[0-9a-f]{40}$")
@@ -190,6 +196,12 @@ class JUnitImportReference(BaseModel):
     mappings: list[JUnitMappingReference] = Field(min_length=1)
     status: Literal["active", "withdrawn"] | None = None
     withdrawal_event: JUnitImportWithdrawalEvent | None = None
+    original_mappings: list[JUnitMappingReference] | None = None
+    retained_test_case_ids: list[str] | None = None
+    confirmed_criterion_ids: list[str] | None = None
+    mapping_correction_events: list[JUnitMappingCorrectionEvent] = Field(
+        default_factory=list, max_length=20,
+    )
 
     @model_validator(mode="after")
     def _withdrawal_matches_reference(self) -> JUnitImportReference:
@@ -200,18 +212,60 @@ class JUnitImportReference(BaseModel):
             self.import_id, self.artifact_sha256, self.head_sha,
         ):
             raise ValueError("JUnit withdrawal event must match its comparison reference")
+        if self.mapping_correction_events and (
+            self.original_mappings is None or self.retained_test_case_ids is None
+            or self.confirmed_criterion_ids is None
+        ):
+            raise ValueError("JUnit correction comparison requires original mappings and catalogs")
+        for correction in self.mapping_correction_events:
+            if (correction.import_id, correction.artifact_sha256, correction.head_sha) != (
+                self.import_id, self.artifact_sha256, self.head_sha,
+            ):
+                raise ValueError("JUnit correction event must match its comparison reference")
+        if self.original_mappings is not None:
+            original = [JUnitCriterionMapping.model_validate(x.model_dump(mode="python"))
+                        for x in self.original_mappings]
+            effective = [JUnitCriterionMapping.model_validate(x.model_dump(mode="python"))
+                         for x in self.mappings]
+            junit_mapping_sha256(original)
+            junit_mapping_sha256(effective)
+            for catalog in (self.retained_test_case_ids, self.confirmed_criterion_ids):
+                if catalog is not None and (not catalog or catalog != sorted(set(catalog))):
+                    raise ValueError("JUnit comparison catalogs must be nonempty canonical IDs")
+            for mapping in (*original, *effective):
+                if self.retained_test_case_ids is not None and any(
+                    case_id not in self.retained_test_case_ids for case_id in mapping.test_case_ids
+                ):
+                    raise ValueError("JUnit comparison mappings must use retained test cases")
+                if (self.confirmed_criterion_ids is not None
+                    and mapping.criterion_id not in self.confirmed_criterion_ids):
+                    raise ValueError("JUnit comparison mappings must use confirmed criteria")
+            replayed = replay_junit_mapping_events(
+                original, self.mapping_correction_events,
+                known_case_ids=set(self.retained_test_case_ids or []),
+                known_criterion_ids=set(self.confirmed_criterion_ids or []),
+            )
+            if replayed != effective:
+                raise ValueError("JUnit comparison effective mappings must match correction replay")
         return self
 
     @classmethod
     def from_import(
         cls, evidence_import: JUnitEvidenceImport,
         withdrawal_event: JUnitImportWithdrawalEvent | None = None,
+        mapping_correction_events: list[JUnitMappingCorrectionEvent] | None = None,
+        confirmed_criterion_ids: list[str] | None = None,
     ) -> JUnitImportReference:
         """Project only sanitized identity and explicit mappings."""
 
         sanitized_context = evidence_import.model_dump(mode="json", exclude={"criterion_mappings"})
         if withdrawal_event is not None:
             sanitized_context["withdrawal_event"] = withdrawal_event.model_dump(mode="json")
+        corrections = mapping_correction_events or []
+        if corrections:
+            sanitized_context["mapping_correction_events"] = [
+                event.model_dump(mode="json") for event in corrections
+            ]
         context_sha256 = sha256(
             json.dumps(sanitized_context, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
@@ -225,12 +279,22 @@ class JUnitImportReference(BaseModel):
             asserted_importer=evidence_import.imported_by,
             context_sha256=context_sha256,
             evidence_boundary=evidence_import.evidence_boundary.model_copy(deep=True),
+            original_mappings=[JUnitMappingReference(
+                criterion_id=mapping.criterion_id, test_case_ids=list(mapping.test_case_ids),
+            ) for mapping in evidence_import.criterion_mappings],
+            retained_test_case_ids=[x.test_case_id for x in evidence_import.test_cases],
+            confirmed_criterion_ids=confirmed_criterion_ids,
+            mapping_correction_events=[event.model_copy(deep=True) for event in corrections],
             mappings=[
                 JUnitMappingReference(
                     criterion_id=mapping.criterion_id,
                     test_case_ids=mapping.test_case_ids,
                 )
-                for mapping in evidence_import.criterion_mappings
+                for mapping in replay_junit_mapping_events(
+                    evidence_import.criterion_mappings, corrections,
+                    known_case_ids={x.test_case_id for x in evidence_import.test_cases},
+                    known_criterion_ids=set(confirmed_criterion_ids or []),
+                )
             ],
         )
 
@@ -296,30 +360,42 @@ class ReviewComparison(BaseModel):
     criteria_requiring_decision_review: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _junit_withdrawals_match_owning_context(self) -> ReviewComparison:
+    def _junit_audit_matches_owning_context(self) -> ReviewComparison:
+        audit_ids: dict[str, set[str]] = {"previous": set(), "current": set()}
+        correction_counts = {"previous": 0, "current": 0}
         for change in self.junit_import_changes:
             for side in ("previous", "current"):
                 reference = getattr(change, side)
-                event = reference.withdrawal_event if reference is not None else None
-                if event is None:
+                if reference is None:
                     continue
-                if self.decision_context_comparison is None:
-                    raise ValueError("JUnit withdrawal requires owning decision-context identities")
-                context = self.decision_context_comparison
-                owner = getattr(context, side)
-                if (
-                    event.review_id, event.repository, event.pr_number, event.head_sha,
-                    event.criteria_revision_number, event.confirmed_criteria_sha256,
-                    event.criteria_source_provenance,
-                ) != (
-                    owner.review_id, context.repository, context.pr_number, owner.head_sha,
-                    owner.criteria_revision_number,
-                    owner.criteria_source_provenance.normalized_criteria_sha256,
-                    owner.criteria_source_provenance,
-                ):
-                    raise ValueError(
-                        "JUnit withdrawal must match the full owning analysis identity"
-                    )
+                correction_counts[side] += len(reference.mapping_correction_events)
+                if correction_counts[side] > MAX_JUNIT_MAPPING_CORRECTIONS_PER_REVIEW:
+                    raise ValueError("JUnit comparison correction history exceeds its owning limit")
+                events = [*reference.mapping_correction_events]
+                if reference.withdrawal_event is not None:
+                    events.append(reference.withdrawal_event)
+                for event in events:
+                    if event.event_id in audit_ids[side]:
+                        raise ValueError("JUnit comparison audit event IDs must be unique per side")
+                    audit_ids[side].add(event.event_id)
+                    if self.decision_context_comparison is None:
+                        raise ValueError("JUnit audit requires owning decision-context identities")
+                    context = self.decision_context_comparison
+                    owner = getattr(context, side)
+                    if (reference.mapping_correction_events
+                        and reference.confirmed_criterion_ids != owner.criterion_ids):
+                        raise ValueError("JUnit correction criteria catalog must match its owner")
+                    if (
+                        event.review_id, event.repository, event.pr_number, event.head_sha,
+                        event.criteria_revision_number, event.confirmed_criteria_sha256,
+                        event.criteria_source_provenance,
+                    ) != (
+                        owner.review_id, context.repository, context.pr_number, owner.head_sha,
+                        owner.criteria_revision_number,
+                        owner.criteria_source_provenance.normalized_criteria_sha256,
+                        owner.criteria_source_provenance,
+                    ):
+                        raise ValueError("JUnit audit must match the full owning analysis identity")
         return self
 
     @computed_field
@@ -757,13 +833,17 @@ def _resolution_decisions(bundle: ReviewBundle) -> dict[str, HumanDecision]:
 def _compare_junit_imports(
     previous_items: list[JUnitEvidenceImport],
     current_items: list[JUnitEvidenceImport],
-    previous_events: list[JUnitImportWithdrawalEvent] | None = None,
-    current_events: list[JUnitImportWithdrawalEvent] | None = None,
+    previous_events: list[JUnitImportEvent] | None = None,
+    current_events: list[JUnitImportEvent] | None = None,
+    previous_criterion_ids: list[str] | None = None,
+    current_criterion_ids: list[str] | None = None,
 ) -> list[JUnitImportChange]:
     previous_by_digest = {item.artifact_sha256: item for item in previous_items}
     current_by_digest = {item.artifact_sha256: item for item in current_items}
-    previous_audit = {event.import_id: event for event in previous_events or []}
-    current_audit = {event.import_id: event for event in current_events or []}
+    previous_audit = {event.import_id: event for event in previous_events or []
+                      if event.action == "withdrawn"}
+    current_audit = {event.import_id: event for event in current_events or []
+                     if event.action == "withdrawn"}
     changes: list[JUnitImportChange] = []
     for digest in sorted(set(previous_by_digest) | set(current_by_digest)):
         previous_item = previous_by_digest.get(digest)
@@ -771,12 +851,16 @@ def _compare_junit_imports(
         previous_reference = (
             JUnitImportReference.from_import(
                 previous_item, previous_audit.get(previous_item.import_id),
+                [event for event in previous_events or [] if event.action == "mapping_corrected"
+                 and event.import_id == previous_item.import_id], previous_criterion_ids,
             )
             if previous_item is not None else None
         )
         current_reference = (
             JUnitImportReference.from_import(
                 current_item, current_audit.get(current_item.import_id),
+                [event for event in current_events or [] if event.action == "mapping_corrected"
+                 and event.import_id == current_item.import_id], current_criterion_ids,
             )
             if current_item is not None else None
         )
@@ -811,7 +895,11 @@ def _changed_junit_criteria(changes: list[JUnitImportChange]) -> set[str]:
         if change.kind is not JUnitImportChangeKind.UNCHANGED
         for reference in (change.previous, change.current)
         if reference is not None
-        for mapping in reference.mappings
+        for mapping in (
+            *reference.mappings, *(reference.original_mappings or []),
+            *(mapping for event in reference.mapping_correction_events
+              for mapping in event.criterion_mappings),
+        )
     }
 
 
@@ -892,6 +980,8 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
     junit_import_changes = _compare_junit_imports(
         previous.junit_evidence_imports, current.junit_evidence_imports,
         previous.junit_import_events, current.junit_import_events,
+        sorted(x.criterion_id for x in previous.criteria),
+        sorted(x.criterion_id for x in current.criteria),
     )
     changed_criterion_ids = {
         change.criterion_id

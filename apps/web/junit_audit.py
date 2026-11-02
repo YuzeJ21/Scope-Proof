@@ -3,8 +3,11 @@
 import streamlit as st
 
 from scopeproof_core.reviews.junit_audit import (
+    effective_junit_mappings,
+    junit_correction_fields,
     junit_import_status,
     junit_import_withdrawal_event,
+    junit_mapping_correction_events,
     junit_withdrawal_fields,
 )
 from scopeproof_core.schemas.models import ReviewBundle, ReviewState
@@ -34,6 +37,19 @@ def prepare_junit_withdrawal_context(state: ReviewState | None, criterion_id: st
 def render_junit_import_audit(bundle: ReviewBundle, import_id: str) -> None:
     st.caption("Import status")
     st.text(junit_import_status(bundle, import_id).title())
+    corrections = junit_mapping_correction_events(bundle, import_id)
+    if corrections:
+        original = next(x for x in bundle.junit_evidence_imports if x.import_id == import_id)
+        st.caption("Original mappings (retained)")
+        for mapping in original.criterion_mappings:
+            st.text(f"{mapping.criterion_id}: " + ", ".join(mapping.test_case_ids))
+        st.caption("Current effective mappings")
+        for mapping in effective_junit_mappings(bundle, import_id):
+            st.text(f"{mapping.criterion_id}: " + ", ".join(mapping.test_case_ids))
+        for event in corrections:
+            for label, value in junit_correction_fields(event):
+                st.caption(label)
+                st.text(value)
     event = junit_import_withdrawal_event(bundle, import_id)
     if event is not None:
         st.caption("Retained original; withdrawn from current imported context.")
@@ -63,7 +79,8 @@ def render_junit_withdrawal(state: ReviewState, *, disabled: bool) -> dict[str, 
                 item for item in state.bundle.junit_evidence_imports if item.import_id == target
             )
             st.caption("This whole-import action affects every mapped criterion")
-            st.text(", ".join(mapping.criterion_id for mapping in item.criterion_mappings))
+            mappings = effective_junit_mappings(state.bundle, item.import_id)
+            st.text(", ".join(mapping.criterion_id for mapping in mappings))
         reviewer = st.text_input("Withdrawal reviewer", key="junit_withdrawal_reviewer")
         reason = st.text_area("Withdrawal reason", key="junit_withdrawal_reason")
         if disabled:
