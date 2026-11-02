@@ -37,6 +37,11 @@ from scopeproof_core.reviews.final_acceptance_comparison import (
     FINAL_ACCEPTANCE_COMPARISON_BOUNDARY,
     FinalAcceptanceComparison,
 )
+from scopeproof_core.reviews.junit_audit import (
+    junit_import_status,
+    junit_import_withdrawal_event,
+    junit_withdrawal_fields,
+)
 from scopeproof_core.reviews.lifecycle import resolution_event_statuses
 from scopeproof_core.reviews.reference_audit import reference_status
 from scopeproof_core.reviews.resolution_history import (
@@ -319,6 +324,9 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
             [
                 f"### Import {_render_markdown_code(evidence_import.import_id)}",
                 "",
+                "- Import status: " + _render_markdown_code(
+                    junit_import_status(bundle, evidence_import.import_id).title(),
+                ),
                 f"- Artifact SHA-256: {_render_markdown_code(evidence_import.artifact_sha256)}",
                 f"- Bound head: {_render_markdown_code(evidence_import.head_sha)}",
                 f"- Asserted importer: {_render_markdown_code(evidence_import.imported_by)}",
@@ -343,6 +351,10 @@ def _junit_import_markdown(bundle: ReviewBundle) -> list[str]:
                     f"{_render_markdown_code(case.suite_name)} · "
                     f"{_render_markdown_code(case.test_name)}"
                 )
+        event = junit_import_withdrawal_event(bundle, evidence_import.import_id)
+        if event is not None:
+            lines.extend(f"- {label}: {_render_markdown_code(value)}"
+                         for label, value in junit_withdrawal_fields(event))
         if evidence_import.parser_warnings:
             lines.append("- Parser warnings:")
             lines.extend(
@@ -367,6 +379,8 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
             [
                 f"<h3>Import <code>{html.escape(evidence_import.import_id)}</code></h3>",
                 "<ul>",
+                "<li>Import status: <code>"
+                + junit_import_status(bundle, evidence_import.import_id).title() + "</code></li>",
                 "<li>Artifact SHA-256: "
                 f"<code>{html.escape(evidence_import.artifact_sha256)}</code></li>",
                 f"<li>Bound head: <code>{html.escape(evidence_import.head_sha)}</code></li>",
@@ -388,6 +402,10 @@ def _junit_import_html(bundle: ReviewBundle) -> list[str]:
                 )
             lines.append("</ul></li>")
         lines.extend(["</ul></li>"])
+        event = junit_import_withdrawal_event(bundle, evidence_import.import_id)
+        if event is not None:
+            lines.extend(f"<li>{label}: <code>{html.escape(value)}</code></li>"
+                         for label, value in junit_withdrawal_fields(event))
         if evidence_import.parser_warnings:
             lines.extend(
                 [
@@ -957,6 +975,13 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
                     "  - Explicit mappings:",
                 ]
             )
+            status = reference.status.title() if reference.status else "Status unavailable"
+            lines.append(f"  - Import status: {_render_markdown_code(status)}")
+            if reference.withdrawal_event is not None:
+                lines.extend(
+                    f"  - {field}: {_render_markdown_code(value)}"
+                    for field, value in junit_withdrawal_fields(reference.withdrawal_event)
+                )
             for mapping in reference.mappings:
                 lines.append(
                     f"    - {_render_markdown_code(mapping.criterion_id)}: "
@@ -1492,6 +1517,7 @@ def export_csv(bundle: ExportableReview) -> str:
         }.items()
     }
     fieldnames.extend(gate_context)
+    fieldnames.append("junit_import_audit")
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
     writer.writeheader()
@@ -1732,6 +1758,13 @@ def export_csv(bundle: ExportableReview) -> str:
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
+                "junit_import_audit": json.dumps([
+                    {"import_id": item.import_id, "artifact_sha256": item.artifact_sha256,
+                     "status": junit_import_status(bundle, item.import_id),
+                     "withdrawal_event": event.model_dump(mode="json") if event else None}
+                    for item in junit_imports
+                    for event in [junit_import_withdrawal_event(bundle, item.import_id)]
+                ], ensure_ascii=False, sort_keys=True),
                 **gate_context,
             }
         )

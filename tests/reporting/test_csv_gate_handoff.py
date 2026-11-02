@@ -49,8 +49,9 @@ def _rows(value):
     rendered = export_csv(value)
     reader = csv.DictReader(io.StringIO(rendered))
     rows = list(reader)
-    assert reader.fieldnames[-6:] == _GATE_COLUMNS
-    assert reader.fieldnames[-7] == "junit_limitations"
+    assert reader.fieldnames[-7:-1] == _GATE_COLUMNS
+    assert reader.fieldnames[-8] == "junit_limitations"
+    assert reader.fieldnames[-1] == "junit_import_audit"
     assert reader.fieldnames[:5] == [
         "review_id", "repository", "repository_visibility", "pr_number", "base_sha"
     ]

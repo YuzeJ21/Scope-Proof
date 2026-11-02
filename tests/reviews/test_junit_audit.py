@@ -21,9 +21,12 @@ def imported_state():
 
 def withdraw(state, **kwargs):
     return import_module("scopeproof_core.reviews.junit_audit").withdraw_junit_evidence_import(
-        state, import_id=state.bundle.junit_evidence_imports[0].import_id,
-        reviewer="  Constructed audit reviewer  ", reason="  Wrong context retired.  ",
-        expected_state_fingerprint=JsonReviewStore.state_fingerprint(state), **kwargs,
+        state,
+        import_id=state.bundle.junit_evidence_imports[0].import_id,
+        reviewer="  Constructed audit reviewer  ",
+        reason="  Wrong context retired.  ",
+        expected_state_fingerprint=JsonReviewStore.state_fingerprint(state),
+        **kwargs,
     )
 
 
@@ -74,10 +77,14 @@ def test_withdrawal_is_terminal_and_does_not_permit_same_artifact_reimport():
 def test_accepted_review_keeps_its_explicit_acceptance_after_nongating_withdrawal():
     state = imported_state()
     for criterion in state.criteria_revision.criteria:
-        state = append_resolution(state, ResolutionEvent(
-            criterion_id=criterion.criterion_id, decision=HumanDecision.ACCEPTED,
-            comment="Constructed acceptance remains separate from imported context",
-        ))
+        state = append_resolution(
+            state,
+            ResolutionEvent(
+                criterion_id=criterion.criterion_id,
+                decision=HumanDecision.ACCEPTED,
+                comment="Constructed acceptance remains separate from imported context",
+            ),
+        )
     state = append_resolution(state, ResolutionEvent(final_acceptance=True))
     assert state.review.final_acceptance
     updated = withdraw(state)
@@ -89,15 +96,18 @@ def test_withdrawal_stays_in_archived_owner_and_requires_a_confirmed_active_anal
     from scopeproof_core.demo import build_demo_review
 
     state = withdraw(imported_state())
-    archived = revise_criteria(state, [Criterion(criterion_id="AC-01", text="New requirement")],
-                              "New requirement")
+    archived = revise_criteria(
+        state, [Criterion(criterion_id="AC-01", text="New requirement")], "New requirement"
+    )
     assert archived.bundle is None
     assert archived.analysis_history[-1].junit_import_events == state.bundle.junit_import_events
     api = import_module("scopeproof_core.reviews.junit_audit")
     with pytest.raises(ValueError, match=r"active|analysis|confirmed"):
         api.withdraw_junit_evidence_import(
-            archived, import_id=state.bundle.junit_evidence_imports[0].import_id,
-            reviewer="Constructed actor", reason="No active analysis",
+            archived,
+            import_id=state.bundle.junit_evidence_imports[0].import_id,
+            reviewer="Constructed actor",
+            reason="No active analysis",
             expected_state_fingerprint=JsonReviewStore.state_fingerprint(archived),
         )
     fresh = build_demo_review()

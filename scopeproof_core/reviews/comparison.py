@@ -6,6 +6,7 @@ import json
 import re
 from enum import StrEnum
 from hashlib import sha256
+from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
@@ -24,6 +25,7 @@ from scopeproof_core.schemas.models import (
     HumanDecision,
     JUnitEvidenceBoundary,
     JUnitEvidenceImport,
+    JUnitImportWithdrawalEvent,
     ReviewBundle,
     ReviewInputOrigin,
 )
@@ -186,17 +188,37 @@ class JUnitImportReference(BaseModel):
     context_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evidence_boundary: JUnitEvidenceBoundary = Field(default_factory=JUnitEvidenceBoundary)
     mappings: list[JUnitMappingReference] = Field(min_length=1)
+    status: Literal["active", "withdrawn"] | None = None
+    withdrawal_event: JUnitImportWithdrawalEvent | None = None
+
+    @model_validator(mode="after")
+    def _withdrawal_matches_reference(self) -> JUnitImportReference:
+        if (self.status == "withdrawn") != (self.withdrawal_event is not None):
+            raise ValueError("withdrawn JUnit comparison requires its explicit audit event")
+        event = self.withdrawal_event
+        if event is not None and (event.import_id, event.artifact_sha256, event.head_sha) != (
+            self.import_id, self.artifact_sha256, self.head_sha,
+        ):
+            raise ValueError("JUnit withdrawal event must match its comparison reference")
+        return self
 
     @classmethod
-    def from_import(cls, evidence_import: JUnitEvidenceImport) -> JUnitImportReference:
+    def from_import(
+        cls, evidence_import: JUnitEvidenceImport,
+        withdrawal_event: JUnitImportWithdrawalEvent | None = None,
+    ) -> JUnitImportReference:
         """Project only sanitized identity and explicit mappings."""
 
         sanitized_context = evidence_import.model_dump(mode="json", exclude={"criterion_mappings"})
+        if withdrawal_event is not None:
+            sanitized_context["withdrawal_event"] = withdrawal_event.model_dump(mode="json")
         context_sha256 = sha256(
             json.dumps(sanitized_context, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
 
         return cls(
+            status="withdrawn" if withdrawal_event is not None else "active",
+            withdrawal_event=withdrawal_event.model_copy(deep=True) if withdrawal_event else None,
             import_id=evidence_import.import_id,
             artifact_sha256=evidence_import.artifact_sha256,
             head_sha=evidence_import.head_sha,
@@ -272,6 +294,33 @@ class ReviewComparison(BaseModel):
     current_gate: GateVerdict
     ruleset_version_changed: bool
     criteria_requiring_decision_review: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _junit_withdrawals_match_owning_context(self) -> ReviewComparison:
+        for change in self.junit_import_changes:
+            for side in ("previous", "current"):
+                reference = getattr(change, side)
+                event = reference.withdrawal_event if reference is not None else None
+                if event is None:
+                    continue
+                if self.decision_context_comparison is None:
+                    raise ValueError("JUnit withdrawal requires owning decision-context identities")
+                context = self.decision_context_comparison
+                owner = getattr(context, side)
+                if (
+                    event.review_id, event.repository, event.pr_number, event.head_sha,
+                    event.criteria_revision_number, event.confirmed_criteria_sha256,
+                    event.criteria_source_provenance,
+                ) != (
+                    owner.review_id, context.repository, context.pr_number, owner.head_sha,
+                    owner.criteria_revision_number,
+                    owner.criteria_source_provenance.normalized_criteria_sha256,
+                    owner.criteria_source_provenance,
+                ):
+                    raise ValueError(
+                        "JUnit withdrawal must match the full owning analysis identity"
+                    )
+        return self
 
     @computed_field
     @property
@@ -708,18 +757,28 @@ def _resolution_decisions(bundle: ReviewBundle) -> dict[str, HumanDecision]:
 def _compare_junit_imports(
     previous_items: list[JUnitEvidenceImport],
     current_items: list[JUnitEvidenceImport],
+    previous_events: list[JUnitImportWithdrawalEvent] | None = None,
+    current_events: list[JUnitImportWithdrawalEvent] | None = None,
 ) -> list[JUnitImportChange]:
     previous_by_digest = {item.artifact_sha256: item for item in previous_items}
     current_by_digest = {item.artifact_sha256: item for item in current_items}
+    previous_audit = {event.import_id: event for event in previous_events or []}
+    current_audit = {event.import_id: event for event in current_events or []}
     changes: list[JUnitImportChange] = []
     for digest in sorted(set(previous_by_digest) | set(current_by_digest)):
         previous_item = previous_by_digest.get(digest)
         current_item = current_by_digest.get(digest)
         previous_reference = (
-            JUnitImportReference.from_import(previous_item) if previous_item is not None else None
+            JUnitImportReference.from_import(
+                previous_item, previous_audit.get(previous_item.import_id),
+            )
+            if previous_item is not None else None
         )
         current_reference = (
-            JUnitImportReference.from_import(current_item) if current_item is not None else None
+            JUnitImportReference.from_import(
+                current_item, current_audit.get(current_item.import_id),
+            )
+            if current_item is not None else None
         )
         if previous_reference is None:
             kind = JUnitImportChangeKind.ADDED
@@ -831,7 +890,8 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
     ]
     evidence_changes = _compare_evidence(previous.evidence, current.evidence)
     junit_import_changes = _compare_junit_imports(
-        previous.junit_evidence_imports, current.junit_evidence_imports
+        previous.junit_evidence_imports, current.junit_evidence_imports,
+        previous.junit_import_events, current.junit_import_events,
     )
     changed_criterion_ids = {
         change.criterion_id
