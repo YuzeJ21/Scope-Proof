@@ -8,6 +8,7 @@ import pytest
 from scopeproof_core.criteria.confirmation import (
     build_criteria_source_provenance,
     canonical_criteria_sha256,
+    read_exact_utf8_text,
     source_text_sha256,
     validate_requirements_confirmation,
 )
@@ -30,7 +31,9 @@ def test_confirmation_record_must_match_the_exact_requirements_file(tmp_path: Pa
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Document the validation demo.\n", encoding="utf-8")
     record = tmp_path / "confirmation.json"
-    record.write_text(json.dumps(confirmation_payload(requirements.read_text())), encoding="utf-8")
+    record.write_text(
+        json.dumps(confirmation_payload(read_exact_utf8_text(requirements))), encoding="utf-8"
+    )
 
     confirmation = validate_requirements_confirmation(requirements, record)
 
@@ -79,7 +82,9 @@ def test_confirmation_record_rejects_changed_requirements(tmp_path: Path) -> Non
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Original requirement.\n", encoding="utf-8")
     record = tmp_path / "confirmation.json"
-    record.write_text(json.dumps(confirmation_payload(requirements.read_text())), encoding="utf-8")
+    record.write_text(
+        json.dumps(confirmation_payload(read_exact_utf8_text(requirements))), encoding="utf-8"
+    )
     requirements.write_text("Changed requirement.\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="does not match"):
@@ -92,7 +97,7 @@ def test_confirmation_record_rejects_blank_confirmer(
 ) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Document the validation demo.\n", encoding="utf-8")
-    payload = confirmation_payload(requirements.read_text())
+    payload = confirmation_payload(read_exact_utf8_text(requirements))
     payload["confirmed_by"] = confirmed_by
     record = tmp_path / "confirmation.json"
     record.write_text(json.dumps(payload), encoding="utf-8")
@@ -104,7 +109,7 @@ def test_confirmation_record_rejects_blank_confirmer(
 def test_confirmation_record_preserves_valid_confirmer_text(tmp_path: Path) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("Document the validation demo.\n", encoding="utf-8")
-    payload = confirmation_payload(requirements.read_text())
+    payload = confirmation_payload(read_exact_utf8_text(requirements))
     payload["confirmed_by"] = "  Demo owner  "
     record = tmp_path / "confirmation.json"
     record.write_text(json.dumps(payload), encoding="utf-8")
@@ -117,7 +122,7 @@ def test_confirmation_record_preserves_valid_confirmer_text(tmp_path: Path) -> N
 def test_confirmation_record_rejects_reordered_normalized_criteria(tmp_path: Path) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("First requirement.\nSecond requirement.\n", encoding="utf-8")
-    payload = confirmation_payload(requirements.read_text())
+    payload = confirmation_payload(read_exact_utf8_text(requirements))
     payload["normalized_criteria_sha256"] = canonical_criteria_sha256(
         [
             Criterion(criterion_id="AC-01", text="Second requirement."),
