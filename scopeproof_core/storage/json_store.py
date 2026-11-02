@@ -20,7 +20,12 @@ from pydantic import BaseModel, ConfigDict, StrictInt, ValidationError
 
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.gates.validation import validated_review_state
-from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewBundle, ReviewState
+from scopeproof_core.schemas.models import (
+    JUnitImportWithdrawalEvent,
+    PullRequestSnapshot,
+    ReviewBundle,
+    ReviewState,
+)
 from scopeproof_core.storage.atomic_files import MAX_SAVED_RECORD_BYTES, read_text_no_follow
 
 try:
@@ -560,6 +565,14 @@ class JsonReviewStore:
                         raise ValueError(
                             "JUnit mapping correction events require saved record version 9"
                         )
+                    for event in events:
+                        try:
+                            JUnitImportWithdrawalEvent.model_validate(event)
+                        except ValidationError as error:
+                            raise ValueError(
+                                "Version 8 requires withdrawal-only JUnit audit; "
+                                "mapping corrections require saved record version 9"
+                            ) from error
             for review in recorded_reviews:
                 if isinstance(review, dict):
                     # Constructor defaults describe new reviews, never absent saved facts.

@@ -68,6 +68,54 @@ def bundles(payload):
     return [payload["state"]["bundle"], *payload["state"]["analysis_history"]]
 
 
+@pytest.mark.parametrize("location", ["active", "history"])
+@pytest.mark.parametrize("missing_tags", [
+    ("action",), ("schema_version",), ("action", "schema_version"),
+])
+def test_v8_rejects_correction_shape_even_when_type_tags_are_missing(
+    tmp_path, location, missing_tags,
+):
+    state = with_history(correct(junit_audit_state()))
+    payload = envelope(state, 8)
+    active, history = bundles(payload)
+    target, other = (active, history) if location == "active" else (history, active)
+    other["junit_import_events"] = []
+    for field in missing_tags:
+        target["junit_import_events"][0].pop(field)
+    path = write_payload(tmp_path, payload)
+    before = path.read_bytes()
+    with pytest.raises(ValueError):
+        JsonReviewStore(tmp_path).load(state.review.review_id)
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("action", ["withdrawal", "correction"])
+@pytest.mark.parametrize("location", ["active", "history"])
+def test_missing_tags_keep_withdrawal_v8_and_correction_v9_default_compatibility(
+    tmp_path, action, location,
+):
+    state = junit_audit_state()
+    if action == "withdrawal":
+        state = withdraw_junit_evidence_import(
+            state, import_id=IMPORT_ID, reviewer="CONSTRUCTED compatibility actor",
+            reason="CONSTRUCTED terminal withdrawal",
+            expected_state_fingerprint=JsonReviewStore.state_fingerprint(state),
+        )
+    else:
+        state = correct(state)
+    state = with_history(state)
+    payload = envelope(state, 8 if action == "withdrawal" else 9)
+    active, history = bundles(payload)
+    target = active if location == "active" else history
+    target["junit_import_events"][0].pop("action")
+    target["junit_import_events"][0].pop("schema_version")
+    path = write_payload(tmp_path, payload)
+    before = path.read_bytes()
+    loaded = JsonReviewStore(tmp_path).load(state.review.review_id)
+    assert loaded.model_dump(mode="json") == state.model_dump(mode="json")
+    assert path.read_bytes() == before
+
+
 @pytest.mark.parametrize("version", range(1, 9))
 @pytest.mark.parametrize("events", ["absent", "empty"])
 def test_old_records_load_without_invented_corrections_or_load_time_write(

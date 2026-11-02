@@ -202,6 +202,24 @@ def test_installed_junit_correction_race_restart_and_four_format_handoffs(tmp_pa
     assert len(after["bundle"]["junit_import_events"]) == 1
     event = after["bundle"]["junit_import_events"][0]
     assert receipt["event"] == event
+    valid_bytes = record.read_bytes()
+    disguised = json.loads(valid_bytes)
+    disguised["record_version"] = 8
+    disguised_event = disguised["state"]["bundle"]["junit_import_events"][0]
+    disguised_event.pop("action")
+    disguised_event.pop("schema_version")
+    record.write_text(json.dumps(disguised), encoding="utf-8")
+    invalid_bytes = record.read_bytes()
+    try:
+        rejected = run_installed(
+            interpreter, tmp_path, "-m", "scopeproof_core.cli", "junit-imports", REVIEW_ID,
+            "--storage-dir", str(records),
+            expected=2,
+        )
+        assert rejected.stdout == ""
+        assert record.read_bytes() == invalid_bytes
+    finally:
+        record.write_bytes(valid_bytes)
     assert event["action"] == "mapping_corrected"
     assert event["reviewer"] == REVIEWER and event["reason"] == REASON
     assert event["previous_correction_event_id"] is None
