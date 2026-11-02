@@ -380,6 +380,10 @@ that the implementation is correct.
 The v0.2.4 release can also inspect and append one bounded local JUnit XML artifact
 without executing target-repository code. First inspect the sanitized scope IDs:
 
+```bash
+scopeproof inspect-junit results.xml
+```
+
 In unreleased **0.2.5 source**, the workbench can stage different scopes from one artifact for
 multiple confirmed criteria before a single import. Choose a **JUnit mapping target criterion**,
 choose its scopes, then **Add selected scopes to mapping draft**. Repeat for another criterion,
@@ -393,9 +397,28 @@ not edit a saved import or permit importing the same artifact again. The draft i
 organizational context; it changes no evidence level, gate, decision or runtime truth. See the
 [bounded assessment](docs/audits/2026-11-01-junit-multi-criterion-draft.md).
 
+Unreleased **0.2.5 source** also supports **Withdraw a saved JUnit import** after reopening a
+saved analysis, without reloading repository source. Explicitly choose one active import, supply
+an asserted reviewer and reason, and withdraw the whole import across every mapped criterion.
+Original results/mappings remain retained with a terminal audit event. Workbench, reports and
+comparisons distinguish Active/Withdrawn; withdrawing context does not change any gate, runtime
+observation, criterion decision or recorded final flag. Withdrawal frees no history slot and does
+not permit reimporting the same artifact, remapping, replacement or reactivation.
+
+The CLI provides the same explicit, locked operation. First obtain the current full-state
+fingerprint from its read-only catalog, then supply the chosen import ID and fingerprint:
+
 ```bash
-scopeproof inspect-junit results.xml
+scopeproof junit-imports REVIEW_ID --storage-dir .scopeproof/reviews
+scopeproof withdraw-junit REVIEW_ID --storage-dir .scopeproof/reviews \
+  --import-id IMPORT_ID --reviewer "Asserted reviewer" --reason "Reason for withdrawal" \
+  --expected-state-fingerprint FINGERPRINT_FROM_CATALOG
 ```
+
+New saves use record version **8**, with explicit JUnit audit history in active and retained
+analyses. Versions 1–7 load without invented events or disk rewrites; older ScopeProof builds
+cannot open newly saved v8 records. CSV appends `junit_import_audit` while retaining prior columns.
+See the [bounded withdrawal assessment](docs/audits/2026-11-01-junit-import-withdrawal.md).
 
 Create a strict mapping document that records an explicit human relationship rather than
 inferring one from test names:

@@ -1564,6 +1564,39 @@ class JUnitEvidenceImport(BaseModel):
         return self
 
 
+class JUnitImportWithdrawalEvent(BaseModel):
+    """Asserted terminal action on retained external context; never test execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["junit-import-withdrawal-v1"] = "junit-import-withdrawal-v1"
+    action: Literal["withdrawn"] = "withdrawn"
+    event_id: LocalReviewId = Field(default_factory=lambda: str(uuid4()))
+    import_id: LocalReviewId
+    artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_id: LocalReviewId
+    repository: str = Field(pattern=GITHUB_REPOSITORY_PATTERN)
+    pr_number: StrictInt = Field(gt=0)
+    head_sha: str = Field(pattern=_EXACT_HEAD_PATTERN)
+    criteria_revision_number: StrictInt = Field(gt=0)
+    confirmed_criteria_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    criteria_source_provenance: CriteriaSourceProvenance
+    reviewer: str = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=2_000)
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    evidence_boundary: JUnitEvidenceBoundary = Field(default_factory=JUnitEvidenceBoundary)
+
+    @field_validator("reviewer", "reason", mode="before")
+    @classmethod
+    def required_attribution(cls, value: object) -> object:
+        return ReviewerSelectedReference.normalize_required_attribution(value)
+
+    @field_validator("occurred_at")
+    @classmethod
+    def aware_time(cls, value: datetime) -> datetime:
+        return ReviewerSelectedReference.require_aware_selection_time(value)
+
+
 class JUnitImportMutationMetadata(BaseModel):
     """Validated CLI output for one persisted JUnit import mutation."""
 
@@ -1830,6 +1863,9 @@ class ReviewBundle(BaseModel):
     junit_evidence_imports: list[JUnitEvidenceImport] = Field(
         default_factory=list, max_length=MAX_JUNIT_IMPORTS_PER_REVIEW
     )
+    junit_import_events: list[JUnitImportWithdrawalEvent] = Field(
+        default_factory=list, max_length=MAX_JUNIT_IMPORTS_PER_REVIEW
+    )
     findings: list[Finding]
     resolutions: list[HumanResolution] = Field(default_factory=list)
     file_scope_decisions: list[FileScopeDecision] = Field(default_factory=list)
@@ -1857,8 +1893,16 @@ class ReviewBundle(BaseModel):
                 "runtime_verification_state",
                 "reviewer_decision_state",
                 "active_reviewer_selected_reference_ids",
+                "active_junit_import_ids",
             }
         }
+
+    @computed_field
+    @property
+    def active_junit_import_ids(self) -> list[str]:
+        withdrawn = {event.import_id for event in self.junit_import_events}
+        return [item.import_id for item in self.junit_evidence_imports
+                if item.import_id not in withdrawn]
 
     @computed_field
     @property
@@ -2118,6 +2162,27 @@ class ReviewBundle(BaseModel):
         junit_import_ids = [item.import_id for item in self.junit_evidence_imports]
         if len(junit_import_ids) != len(set(junit_import_ids)):
             raise ValueError("JUnit import IDs must be unique")
+        junit_by_id = {item.import_id: item for item in self.junit_evidence_imports}
+        audit_ids: set[str] = set()
+        withdrawn_ids: set[str] = set()
+        for event in self.junit_import_events:
+            if event.event_id in audit_ids or event.import_id in withdrawn_ids:
+                raise ValueError("JUnit withdrawal event IDs and targets must be unique")
+            audit_ids.add(event.event_id)
+            withdrawn_ids.add(event.import_id)
+            target = junit_by_id.get(event.import_id)
+            if target is None:
+                raise ValueError("JUnit withdrawal target must reference a retained import")
+            if event.review_id != self.review.review_id or (
+                event.artifact_sha256, event.repository, event.pr_number, event.head_sha,
+                event.criteria_revision_number, event.confirmed_criteria_sha256,
+                event.criteria_source_provenance,
+            ) != (
+                target.artifact_sha256, target.repository, target.pr_number, target.head_sha,
+                target.criteria_revision_number, target.confirmed_criteria_sha256,
+                target.criteria_source_provenance,
+            ):
+                raise ValueError("JUnit withdrawal identity must match its owning retained import")
         junit_artifact_digests = [
             item.artifact_sha256 for item in self.junit_evidence_imports
         ]

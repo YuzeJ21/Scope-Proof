@@ -26,6 +26,9 @@ def saved(tmp_path, *, historical=False):
 @pytest.mark.parametrize("historical", [False, True])
 def test_v7_roundtrip_retains_audit_without_rewriting(tmp_path, historical):
     state, store, path, payload, _ = saved(tmp_path, historical=historical)
+    # Preserve the historical v7 contract independently of the current v8 writer.
+    payload["record_version"] = 7
+    path.write_text(json.dumps(payload))
     assert payload["record_version"] == 7
     before = path.read_bytes()
     assert store.load(state.review.review_id) == state

@@ -52,7 +52,7 @@ def new_review_state(bundle: ReviewBundle) -> ReviewState:
         raise ValueError("initial analysis bundle must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("initial analysis bundle must not contain final acceptance")
-    if bundle.junit_evidence_imports:
+    if bundle.junit_evidence_imports or bundle.junit_import_events:
         raise ValueError("initial analysis bundle must not contain JUnit imports")
     bundle = validated_review_bundle(bundle)
     if bundle.review.criteria_source_provenance is None:
@@ -168,7 +168,7 @@ def attach_analysis(state: ReviewState, bundle: ReviewBundle) -> ReviewState:
         raise ValueError("attached analysis must not contain human resolutions")
     if bundle.review.final_acceptance:
         raise ValueError("attached analysis must not contain final acceptance")
-    if bundle.junit_evidence_imports:
+    if bundle.junit_evidence_imports or bundle.junit_import_events:
         raise ValueError("attached analysis must not contain JUnit imports")
     bundle = validated_review_bundle(bundle)
     if (

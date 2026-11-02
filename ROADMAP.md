@@ -70,8 +70,8 @@ ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
-moving-head ledger. Current browser coverage comprises eighteen checks: four installed-wheel
-Chromium journeys, eight constructed Streamlit selection checks, and six helper/capture checks.
+moving-head ledger. Current browser coverage comprises twenty-one checks: seven installed-wheel
+Chromium cases, eight constructed Streamlit selection checks, and six helper/capture checks.
 Dated five-check CI results below remain
 historical results, not current suite counts.
 
@@ -590,6 +590,19 @@ unchanged. The [bounded assessment](docs/audits/2026-11-01-workbench-resolution-
 isolated AppTest and installed-browser verification, including reopening/download without record
 writes. This closes the concrete display discrepancy found during PR #242; it does not create a
 parity queue, new release, genuine-use evidence or Stage 3 advancement.
+
+The next owner-delegated gap review selected **retire a mistaken saved JUnit import with audit**.
+Two independent source assessments reproduced that saved imports lacked a recovery action, while
+draft edits only affected unsaved mappings. Unreleased source now offers whole-import withdrawal
+after source-free reopening and through fingerprint-bound CLI commands. Immutable original results
+and mappings remain inspectable with asserted withdrawal attribution. Workbench, readable/JSON/CSV
+reports and previous/current comparisons distinguish Active/Withdrawn; withdrawal is a recorded
+context change, never deletion or new runtime evidence. Existing duplicate-artifact protection and
+the20-retained-import limit remain; replacement, reactivation and same-byte remapping are excluded.
+New saves use v8 with explicit bounded audit arrays; v1–7 retain read-only compatibility without
+fabricated events. Decisions, final flags, gates and frozen research stay unchanged. See the
+[bounded assessment](docs/audits/2026-11-01-junit-import-withdrawal.md). This closes one selected
+recovery outcome, without a standing adapter queue, publication or Stage 3 credit.
 
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)
