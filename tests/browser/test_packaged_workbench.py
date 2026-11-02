@@ -1292,6 +1292,10 @@ def _exercise_junit_import_round_trip(
             )
             assert before_bundle.pop("active_junit_import_ids") == []
             assert after_bundle.pop("active_junit_import_ids") == [imports[0]["import_id"]]
+            assert before_bundle.pop("effective_junit_mappings") == {}
+            assert after_bundle.pop("effective_junit_mappings") == {
+                imports[0]["import_id"]: imports[0]["criterion_mappings"],
+            }
             assert before_bundle["junit_import_events"] == after_bundle["junit_import_events"] == []
             assert after_bundle == before_bundle
             assert {key: value for key, value in after_import.items() if key != "bundle"} == {

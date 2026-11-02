@@ -70,7 +70,7 @@ ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
-moving-head ledger. Current browser coverage comprises twenty-one checks: seven installed-wheel
+moving-head ledger. Current browser coverage comprises twenty-four checks: ten installed-wheel
 Chromium cases, eight constructed Streamlit selection checks, and six helper/capture checks.
 Dated five-check CI results below remain
 historical results, not current suite counts.
@@ -599,10 +599,25 @@ and mappings remain inspectable with asserted withdrawal attribution. Workbench,
 reports and previous/current comparisons distinguish Active/Withdrawn; withdrawal is a recorded
 context change, never deletion or new runtime evidence. Existing duplicate-artifact protection and
 the20-retained-import limit remain; replacement, reactivation and same-byte remapping are excluded.
-New saves use v8 with explicit bounded audit arrays; v1–7 retain read-only compatibility without
-fabricated events. Decisions, final flags, gates and frozen research stay unchanged. See the
+That withdrawal milestone introduced v8 with explicit bounded audit arrays and v1–7 read
+compatibility without fabricated events. Decisions, final flags, gates and frozen research stay unchanged. See the
 [bounded assessment](docs/audits/2026-11-01-junit-import-withdrawal.md). This closes one selected
 recovery outcome, without a standing adapter queue, publication or Stage 3 credit.
+
+
+The owner next selected **correct mistaken saved JUnit mappings with audit**, extending recovery
+beyond whole-import withdrawal. Unreleased source retains the complete original import and appends
+explicit replacement mapping snapshots in the same ordered audit stream. Source-free workbench
+staging and fingerprint-bound CLI commands use confirmed criteria and retained cases, with explicit
+whole-import confirmation. All consumers distinguish original/effective mappings and preserve
+removed/intermediate-group audit; comparison detects mapping cycles as context changes. Gates,
+runtime, recorded decisions/final flags, duplicate protection and frozen research stay unchanged.
+Current saves use v9; v1–8 remain readable without invented correction events or load-time writes.
+Twenty retained corrections per analysis are bounded separately from twenty imports/withdrawals,
+so saturated correction history cannot prevent terminal withdrawal. The
+[bounded assessment](docs/audits/2026-11-01-junit-mapping-correction.md) records migration,
+consumer, installed and integration evidence. No reparse/replacement/reactivation, release,
+qualifying-use evidence or Stage3 advancement is included.
 
 
 The [automatic source-coordinate repair](docs/audits/2026-10-30-git-source-coordinates.md)

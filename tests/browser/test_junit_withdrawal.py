@@ -62,7 +62,7 @@ def _seed_installed_review(installed: Path, runtime: Path, home: Path) -> tuple[
     )
     record = store / f"{REVIEW_ID}.json"
     envelope = json.loads(record.read_text(encoding="utf-8"))
-    assert envelope["record_version"] == 8
+    assert envelope["record_version"] == 9
     state = envelope["state"]
     assert state["bundle"]["junit_import_events"] == []
     assert state["bundle"]["active_junit_import_ids"] == [IMPORT_ID]

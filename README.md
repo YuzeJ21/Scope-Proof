@@ -402,8 +402,8 @@ saved analysis, without reloading repository source. Explicitly choose one activ
 an asserted reviewer and reason, and withdraw the whole import across every mapped criterion.
 Original results/mappings remain retained with a terminal audit event. Workbench, reports and
 comparisons distinguish Active/Withdrawn; withdrawing context does not change any gate, runtime
-observation, criterion decision or recorded final flag. Withdrawal frees no history slot and does
-not permit reimporting the same artifact, remapping, replacement or reactivation.
+observation, criterion decision or recorded final flag. Withdrawal frees no history slot. Withdrawn imports cannot be remapped or reactivated, and
+withdrawal does not permit importing the same artifact again.
 
 The CLI provides the same explicit, locked operation. First obtain the current full-state
 fingerprint from its read-only catalog, then supply the chosen import ID and fingerprint:
@@ -415,10 +415,36 @@ scopeproof withdraw-junit REVIEW_ID --storage-dir .scopeproof/reviews \
   --expected-state-fingerprint FINGERPRINT_FROM_CATALOG
 ```
 
-New saves use record version **8**, with explicit JUnit audit history in active and retained
-analyses. Versions 1–7 load without invented events or disk rewrites; older ScopeProof builds
-cannot open newly saved v8 records. CSV appends `junit_import_audit` while retaining prior columns.
+New saves use record version **9**, with explicit JUnit audit history in active and retained
+analyses. Versions 1–8 load without invented events or disk rewrites; older ScopeProof builds
+cannot open newly saved v9 records. CSV appends `junit_import_audit` while retaining prior columns.
 See the [bounded withdrawal assessment](docs/audits/2026-11-01-junit-import-withdrawal.md).
+
+Unreleased **0.2.5 source** supports **Correct saved JUnit mappings** for active imports.
+After source-free reopening, choose the import explicitly. The editor begins with current effective
+mappings and separately shows retained originals. Explicitly remove or replace criterion groups,
+using only retained sanitized test cases and confirmed criteria. Review the complete before/after
+mapping, confirm the whole import, and supply an asserted reviewer and reason before saving.
+Unstaged edits block saving; pending correction drafts block exports, acceptance and other writes.
+Empty final mappings use withdrawal instead. Saved changes append history; original results and
+mappings, gates, runtime observations, reviewer decisions and final flags stay unchanged.
+
+CLI correction likewise replaces the **complete current mapping**, so include every assignment
+that should remain. It requires the current catalog fingerprint and explicit whole-import intent:
+
+```bash
+scopeproof correct-junit-mappings REVIEW_ID --storage-dir .scopeproof/reviews \
+  --import-id IMPORT_ID --map AC-01=suite-0001-case-0001 \
+  --map AC-02=suite-0001-case-0002 --reviewer "Asserted reviewer" \
+  --reason "Reason for correction" --expected-state-fingerprint FINGERPRINT_FROM_CATALOG \
+  --confirm-whole-import
+```
+
+Each analysis retains at most20 imports and20 corrections. Withdrawal capacity is reserved even
+when correction history is full. Correction does not permit reimport, replacement or reactivation.
+Catalog, JSON/Markdown/HTML/CSV and comparisons expose original/effective mappings and complete audit;
+retired criterion groups keep audit visibility without retaining current case associations.
+See the [bounded correction assessment](docs/audits/2026-11-01-junit-mapping-correction.md).
 
 Create a strict mapping document that records an explicit human relationship rather than
 inferring one from test names:
