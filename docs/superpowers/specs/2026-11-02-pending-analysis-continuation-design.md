@@ -42,6 +42,9 @@ resets lifecycle identity. Preserve the ID, revision and retained history while 
   fingerprint. Confirming criteria expires the old receipt. Already-loaded source remains usable after
   explicit Run analysis revalidates it into a pending lease, without refetch. Missing source requires
   the matching-source action. Normal new-review and active-analysis attachment behavior remains.
+- On pending completion, reconcile retained loaded candidates to the latest anchor's required paths
+  before both retrieval and strict receipt preparation. A retired manual-only path is not reused or
+  fetched again; it cannot obstruct a fresh analysis. New attachments retain exact-path validation.
 
 ## Boundaries and verification
 
