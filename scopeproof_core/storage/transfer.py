@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from scopeproof_core.schemas.models import ReviewState
+from scopeproof_core.build_identity import CoreSourceIdentity
+from scopeproof_core.schemas.models import CriteriaSourceProvenance, ReviewInputOrigin, ReviewState
 from scopeproof_core.storage.atomic_files import (
     MAX_SAVED_RECORD_BYTES,
     atomic_create_text,
@@ -23,12 +25,12 @@ BOUNDARY_NOTE = (
 
 
 class ReviewTransferReceipt(BaseModel):
-    """Content identity for a completed transfer, not an authenticity certificate."""
+    """Content identity for inspection or transfer, not an authenticity certificate."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     schema_version: Literal[1] = 1
-    action: Literal["exported", "imported"]
+    action: Literal["exported", "imported", "inspected"]
     review_id: str
     head_sha: str
     record_version: int
@@ -50,7 +52,7 @@ def _read_record(path: Path) -> tuple[str, ReviewState]:
 
 
 def _receipt(
-    text: str, state: ReviewState, action: Literal["exported", "imported"],
+    text: str, state: ReviewState, action: Literal["exported", "imported", "inspected"],
 ) -> ReviewTransferReceipt:
     envelope = _ReviewRecordEnvelope.model_validate_json(text)
     raw = text.encode("utf-8")
@@ -82,3 +84,85 @@ def import_review(store: JsonReviewStore, source: Path) -> ReviewTransferReceipt
     with store._mutation_lock(state.review.review_id):
         atomic_create_text(store._path(state.review.review_id), text)
     return receipt
+
+
+class ReviewTransferPreview(BaseModel):
+    """Recorded context for an explicit import or saved-record download selection."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    receipt: ReviewTransferReceipt
+    repository: str
+    pr_number: int
+    review_created_at: datetime
+    input_origin: ReviewInputOrigin
+    producer_tool_version: str
+    producer_ruleset_version: str
+    producer_source_identity: CoreSourceIdentity | None
+    criteria_source: CriteriaSourceProvenance | None
+    criteria_revision_number: int
+    criteria_confirmed: bool
+    criterion_count: int
+    has_active_analysis: bool
+    resolution_event_count: int
+
+
+def _decode_bytes(raw: bytes) -> tuple[str, ReviewState]:
+    if not isinstance(raw, bytes):
+        raise ValueError("review transfer must contain bytes")
+    if len(raw) > MAX_SAVED_RECORD_BYTES:
+        raise ValueError("saved review record exceeds the byte limit")
+    text = raw.decode("utf-8")
+    state = JsonReviewStore.decode_record(text, require_recorded_facts=True)
+    JsonReviewStore._validate_review_id(state.review.review_id)
+    return text, state
+
+
+def _preview(text: str, state: ReviewState) -> ReviewTransferPreview:
+    review = state.review
+    return ReviewTransferPreview(
+        receipt=_receipt(text, state, "inspected"), repository=review.repository,
+        pr_number=review.pr_number, review_created_at=review.created_at,
+        input_origin=review.input_origin, producer_tool_version=review.tool_version,
+        producer_ruleset_version=review.ruleset_version,
+        producer_source_identity=review.analysis_source_identity,
+        criteria_source=review.criteria_source_provenance,
+        criteria_revision_number=state.criteria_revision.number,
+        criteria_confirmed=state.criteria_revision.confirmed,
+        criterion_count=len(state.criteria_revision.criteria),
+        has_active_analysis=state.bundle is not None,
+        resolution_event_count=len(state.resolution_events),
+    )
+
+
+def inspect_review_bytes(raw: bytes) -> ReviewTransferPreview:
+    """Inspect a bounded upload without creating records or changing review authority."""
+    text, state = _decode_bytes(raw)
+    return _preview(text, state)
+
+
+def import_review_bytes(
+    store: JsonReviewStore, raw: bytes, *, expected_sha256: str,
+) -> ReviewTransferReceipt:
+    """Import exactly the explicitly inspected bytes, never replacing an existing ID."""
+    text, state = _decode_bytes(raw)
+    receipt = _receipt(text, state, "imported")
+    if receipt.record_sha256 != expected_sha256:
+        raise ValueError("review transfer changed since inspection; inspect again")
+    with store._mutation_lock(state.review.review_id):
+        atomic_create_text(store._path(state.review.review_id), text)
+    return receipt
+
+
+def read_review_transfer(
+    store: JsonReviewStore, review_id: str, *, expected_sha256: str | None = None,
+) -> tuple[bytes, ReviewTransferPreview]:
+    """Read one owner-bound saved snapshot, optionally matching an explicit byte preview."""
+    with store._mutation_lock(review_id):
+        text, state = _read_record(store._existing_record_path(review_id))
+        if state.review.review_id != review_id:
+            raise ValueError("saved filename and review identity differ")
+        preview = _preview(text, state)
+        if expected_sha256 is not None and preview.receipt.record_sha256 != expected_sha256:
+            raise ValueError("saved review changed since inspection; prepare again")
+        return text.encode("utf-8"), preview

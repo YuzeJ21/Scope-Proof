@@ -32,6 +32,7 @@ from apps.web.junit_correction import (
     render_junit_correction,
 )
 from apps.web.junit_mapping import clear_junit_mapping_draft, render_junit_mapping_draft
+from apps.web.review_transfer import render_review_transfer
 from apps.web.saved_comparison import (
     clear_saved_comparison_selection,
     render_saved_comparison_selector,
@@ -1612,6 +1613,15 @@ with st.expander("Resume a saved review", expanded=False):
                 st.session_state["requirements_draft_reset_pending"] = True
             st.session_state["delete_saved_review_reset_pending"] = True
             st.rerun()
+    render_review_transfer(
+        review_store, selected_review_id=reopen_id, store_available=review_store_available,
+        # An unconfirmed saved record is transferable without inventing confirmation.
+        has_pending_inputs=(
+            has_pending_criteria_draft or has_pending_criteria_authoring_draft
+            or has_pending_requirements_draft or has_pending_criterion_detail_draft
+            or has_pending_criteria_source
+        ),
+    )
 saved_review_delete_notice = st.session_state.pop("saved_review_delete_notice", None)
 if saved_review_delete_notice is not None:
     if saved_review_delete_notice.startswith("Saved review deleted."):

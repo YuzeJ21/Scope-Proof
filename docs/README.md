@@ -33,6 +33,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 ## Historical evidence records
 
+- [Workbench saved-review handoff](audits/2026-11-02-workbench-review-handoff.md) — explicit recipient inspection/import and saved-record downloads, preserving open work and original provenance.
+
 - [Saved-review transfer](audits/2026-11-02-saved-review-transfer.md) — bounded complete-record transfer, provenance preservation and installed reopening on unreleased source.
 
 - [Dependency declaration alignment](audits/2026-10-29-dependency-baseline-alignment.md) records

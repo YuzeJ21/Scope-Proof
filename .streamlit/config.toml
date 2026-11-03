@@ -6,5 +6,6 @@ secondaryBackgroundColor = "#171a1f"
 textColor = "#f7f7f2"
 
 [server]
-# Multipart framing needs transport headroom; the JUnit widget/parser stay at 1 MiB.
-maxUploadSize = 2
+# Saved-record transfer needs 64 MiB plus transport headroom.
+# The JUnit widget stays at 2 MB and its parser stays at 1 MiB.
+maxUploadSize = 68
