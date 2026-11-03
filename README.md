@@ -570,8 +570,26 @@ executes its code, or converts static candidates into runtime verification.
 
 ### Transfer and reopen a saved review (unreleased source)
 
-Use `export-review` to copy a complete saved record, including historical analyses and audit
-records. Ordinary `export --format json` produces a report and is not an import file.
+In **Resume a saved review**, the sender selects a saved review ID, chooses **Prepare saved
+review download**, then **Download saved review record**. This is the complete saved file,
+including retained history. Pending unsaved edits must be submitted or cleared first.
+An unconfirmed saved revision can be transferred without confirming it.
+
+The recipient chooses the file in **Saved review record to import**, clicks **Inspect uploaded
+review**, and checks the recorded repository, head, confirmation state, history and provenance.
+Import requires the explicit checkbox and **Import inspected review**. Replacing or clearing
+the upload clears its preview and consent. Import adds the original review ID without opening
+it or replacing current work. Select that ID and click **Reopen local review** when ready;
+the existing unsaved-work guard still applies.
+
+Workbench uploads accept up to 64 MiB of complete saved-record JSON. Invalid records, changed
+bytes after inspection and existing destination IDs are rejected. Prepared downloads revalidate
+saved bytes at click time; changing selection or editing review inputs revokes old callbacks.
+Recorded actor/producer metadata remains asserted. Import never confirms criteria or attaches
+source, and ordinary report downloads remain separate.
+
+The CLI path is also supported. Use `export-review` to copy a complete saved record, including
+historical analyses and audit records. Ordinary `export --format json` produces a report and is not an import file.
 
 ```bash
 scopeproof export-review REVIEW_ID --storage-dir /absolute/sender/reviews --output /absolute/handoff/review.json

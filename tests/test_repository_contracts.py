@@ -647,7 +647,7 @@ def test_product_surfaces_share_the_supported_theme_and_alpha_action_hierarchy()
         "secondaryBackgroundColor": "#171a1f",
         "textColor": "#f7f7f2",
     }
-    assert config["server"]["maxUploadSize"] == 2
+    assert config["server"]["maxUploadSize"] == 68
     assert "):focus-visible" in app
     assert '[data-testid="stAppViewContainer"]' in app
     assert "@media (prefers-reduced-motion: reduce)" in app
