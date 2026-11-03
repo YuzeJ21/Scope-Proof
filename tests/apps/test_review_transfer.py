@@ -104,14 +104,14 @@ def test_import_cannot_replace_open_identity_after_external_deletion(
     app = app.checkbox(key="confirm_transfer_import").check().run()
     store = JsonReviewStore(default_local_review_directory())
     if delete_before_render:
-        store.delete(before.review.review_id)
+        (store.directory / f"{before.review.review_id}.json").unlink()
     real_import = ui.import_review_bytes
     attempted = []
 
     def delete_then_import(destination, data, **kwargs):
         attempted.append(True)
         if not delete_before_render:
-            destination.delete(before.review.review_id)
+            (destination.directory / f"{before.review.review_id}.json").unlink()
         return real_import(destination, data, **kwargs)
 
     monkeypatch.setattr(ui, "import_review_bytes", delete_then_import)
