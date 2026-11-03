@@ -87,6 +87,41 @@ def test_import_preserves_open_requirements_draft(tmp_path):
     assert app.button(key="reopen_review").disabled
 
 
+@pytest.mark.parametrize("delete_before_render", [False, True])
+def test_import_cannot_replace_open_identity_after_external_deletion(
+    tmp_path, monkeypatch, delete_before_render,
+):
+    import apps.web.review_transfer as ui
+
+    app = analyzed_demo(new_app())
+    before = app.session_state["review_state"].model_copy(deep=True)
+    incoming = before.model_copy(deep=True)
+    incoming.review.tool_version = "CONSTRUCTED incoming producer"
+    incoming.bundle.review.tool_version = incoming.review.tool_version
+    sender = JsonReviewStore(tmp_path / "sender")
+    raw = sender.save(incoming).read_bytes()
+    app = inspect(upload(app, raw))
+    app = app.checkbox(key="confirm_transfer_import").check().run()
+    store = JsonReviewStore(default_local_review_directory())
+    if delete_before_render:
+        store.delete(before.review.review_id)
+    real_import = ui.import_review_bytes
+    attempted = []
+
+    def delete_then_import(destination, data, **kwargs):
+        attempted.append(True)
+        if not delete_before_render:
+            destination.delete(before.review.review_id)
+        return real_import(destination, data, **kwargs)
+
+    monkeypatch.setattr(ui, "import_review_bytes", delete_then_import)
+    app = app.button(key="import_transfer_upload").click().run()
+    assert not app.exception
+    assert app.session_state["review_state"] == before
+    assert not attempted
+    assert any("currently open review" in item.value for item in app.error)
+
+
 @pytest.mark.parametrize("raw", [b"{}", b"\xff", b"{", b'{"record_version":999,"state":{}}'])
 def test_invalid_upload_never_creates_review(tmp_path, raw):
     app = inspect(upload(new_app(), raw))

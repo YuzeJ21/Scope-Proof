@@ -1615,6 +1615,9 @@ with st.expander("Resume a saved review", expanded=False):
             st.rerun()
     render_review_transfer(
         review_store, selected_review_id=reopen_id, store_available=review_store_available,
+        open_review_id=(
+            current_review_state.review.review_id if current_review_state is not None else None
+        ),
         # An unconfirmed saved record is transferable without inventing confirmation.
         has_pending_inputs=(
             has_pending_criteria_draft or has_pending_criteria_authoring_draft

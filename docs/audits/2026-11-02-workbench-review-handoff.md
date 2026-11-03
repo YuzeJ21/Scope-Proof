@@ -44,6 +44,12 @@ provenance. Using it for transfer incorrectly blocked a reopened unconfirmed sav
 The transfer control now uses actual unsaved-draft flags; other review authority checks are
 unchanged. Independent automated review checked the corrected boundary and clearing uploads.
 
+Independent review also reproduced a concurrent-deletion edge case: importing the open review's
+ID could cause the next refresh to hydrate incoming content as an external update. The workbench
+now reserves the open identity regardless of whether its saved file still exists. Regression
+cases cover deletion before rendering and immediately before an attempted import; neither may
+dispatch the import or replace open state.
+
 Frozen R-002 inputs/results remain unchanged. These are constructed automation results, not
 qualifying practitioner use. Public v0.2.4 is unchanged; source stays unreleased 0.2.5.
 Stage 2 continues, Stage 3 stays dormant, and no personal testing, qualifying reviews, release,

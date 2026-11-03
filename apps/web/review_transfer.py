@@ -112,7 +112,7 @@ def _render_preview(preview: ReviewTransferPreview) -> None:
 
 def render_review_transfer(
     store: JsonReviewStore, *, selected_review_id: str | None,
-    store_available: bool, has_pending_inputs: bool,
+    store_available: bool, has_pending_inputs: bool, open_review_id: str | None,
 ) -> None:
     """Render preparation/download and inspection/import; reopening remains explicit."""
     lease = st.session_state.setdefault("transfer_download_lease", ReviewTransferDownloadLease())
@@ -200,13 +200,23 @@ def render_review_transfer(
             disabled=not confirmed or not store_available,
         ):
             try:
+                # Reserve the open identity even if its saved file disappeared. Otherwise
+                # the next rerun could hydrate the incoming record as an external update.
+                if preview.receipt.review_id == open_review_id:
+                    raise FileExistsError("currently open review identity is reserved")
                 receipt = import_review_bytes(
                     store, _uploaded_bytes(uploaded),
                     expected_sha256=preview.receipt.record_sha256,
                 )
             except FileExistsError:
-                notice = ("error", "A local record with this review ID already exists. "
-                          "Nothing was overwritten. Use a separate store to inspect a collision.")
+                notice = (
+                    "error",
+                    "This ID belongs to the currently open review. Nothing was imported. "
+                    "Use a separate store to inspect it."
+                    if preview.receipt.review_id == open_review_id else
+                    "A local record with this review ID already exists. "
+                    "Nothing was overwritten. Use a separate store to inspect a collision.",
+                )
             except (OSError, ValueError):
                 notice = ("error", "Import could not be completed. Inspect the current file again "
                           "and verify local storage. No existing record was replaced.")
