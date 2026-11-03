@@ -37,7 +37,17 @@ release-preparation work. Eligible areas, subject to that bounded rule, are:
 Every result remains bounded to its actual evidence. Tests and CI are engineering evidence, not
 target-repository runtime proof, accessibility conformance, customer use, demand, or adoption.
 
-### Ordered development outcomes
+### Current next-stage direction
+
+The [current product decision](product-direction-2026-11-02.md) consolidates the implemented
+workflow into one [evaluation entry](../evaluation-guide.md). Typed criteria preservation and
+CLI/workbench record transfer are complete on source through PR #250. The immediate finish line
+is accurate version/capability guidance and a short constructed review/handoff path, verified
+against source and automated checks. The next bounded option is a separately selected current
+distribution packet; public publication still needs its own authorization. Neither option
+requires personal testing or qualifying reviews. Stage 3 stays dormant.
+
+### Implemented development outcomes and historical version context
 
 1. **Implemented in source: scope-aware re-review comparison ([PR #222](https://github.com/YuzeJ21/Scope-Proof/pull/222)).** Show inventory differences, unresolved paths
    and historical unknown scope alongside candidate changes in the workbench and comparison

@@ -2,6 +2,10 @@
 
 **See which acceptance criteria have credible PR evidence—and which still need review.**
 
+**Start here:** [Choose a version and follow one short evaluation workflow](docs/evaluation-guide.md).
+It separates published v0.2.4 from current unreleased source and the older private candidate,
+then shows how to inspect, save and hand off a constructed review.
+
 ScopeProof is a reviewer-controlled acceptance-coverage assistant for public GitHub pull requests.
 The primary-operator hypothesis is an engineer or technical QA reviewer, with a PM or requirements
 owner receiving the report; these roles remain unvalidated. It maps each confirmed criterion to
@@ -15,7 +19,7 @@ ScopeProof is an evidence assistant. It does not replace QA, engineering review,
 
 The product direction is to **explain and revisit an acceptance decision**: retain the confirmed
 intent, reviewed head, evidence gaps and recorded decisions as work changes. Current
-[official-source market research](docs/commercialization/market-comparison-2026-11-02.md) finds
+[current product and market review](docs/commercialization/product-direction-2026-11-02.md) finds
 substantial overlap elsewhere; this direction is a usefulness hypothesis, not a novelty claim.
 
 Readable Markdown and HTML reports retain the saved review's decision audit: recorded actors,
@@ -41,7 +45,7 @@ no personal testing or qualifying reviews are required. Engineering progress doe
 customer value. The completed private v0.2.5 candidate remains bound to its original source and
 bytes; subsequent source work does not update or publish that candidate.
 See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and
-[official-source market comparison](docs/commercialization/market-comparison-2026-07-26.md) for
+[official-source market comparison](docs/commercialization/product-direction-2026-11-02.md) for
 substantial competing workflows and the remaining value hypothesis.
 
 The [R-001 Microsoft public-PR research record](docs/research/r001-microsoft-hve-core/summary.md)
@@ -965,9 +969,9 @@ The review status is **Action required** because must-have gaps remain.
 
 ## Verification
 
-The packaged-browser suite currently contains **seventeen checks: three installed-wheel Chromium
-journeys, eight constructed Streamlit selection checks, and six helper/capture checks**. The total
-is not a count of full end-to-end journeys.
+At PR #250's source snapshot, the packaged-browser suite contains **28 checks: 14 installed-workbench
+cases, 9 constructed selection checks, and 5 helper/capture checks**. The total is not a count of
+full end-to-end journeys. See the [version-bound evidence summary](docs/evaluation-guide.md#what-is-verified-and-what-is-missing).
 These constructed engineering checks do not establish independent use or accessibility conformance.
 
 Unreleased source corrects automatic candidate coordinates using Git LF boundaries, explicit

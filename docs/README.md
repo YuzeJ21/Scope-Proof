@@ -14,17 +14,17 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 ## Current operating documents
 
+- [Start here: evaluation guide](evaluation-guide.md) — published/source/candidate capability map,
+  one constructed workflow, exact-baseline engineering evidence and remaining limits.
+- [Current product and market decision](commercialization/product-direction-2026-11-02.md) —
+  official-source overlap, implemented strengths, adoption constraints and bounded next stages.
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
-- [v0.2.5 evaluation candidate](releases/v0.2.5-evaluation-candidate.md) — unreleased final-version
-  candidate, private distribution/upgrade verification and separate publication authorization.
 - [v0.2.4 public verification](releases/v0.2.4-public-verification.md) — published source/tag/assets,
   automatic public-download checks, upgrade limits and evidence boundaries.
 - [v0.2.3 status and next stages](releases/v0.2.3-status-and-next-stages.md) — published-release
   boundary, current development line, feature ledger, gaps, and stage status.
 - [Stage 2 productization packet](commercialization/stage2-readiness-packet.md) — authorized
   owner-led engineering scope; it does not claim customer validation.
-- [Current official-source market comparison](commercialization/market-comparison-2026-07-26.md)
-  — official-source capability refresh dated 2026-10-27; vendor claims and unvalidated positioning.
 - [Development environment](development-environment.md) — supported and unsupported engineering
   environments.
 - [Engine identity boundary](development/engine-identity.md) — captured core-source identity and
@@ -32,6 +32,13 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [Privacy readiness](privacy-readiness.md) — current local-only data and trust boundaries.
 
 ## Historical evidence records
+
+- [PR #221 private v0.2.5 candidate](releases/v0.2.5-evaluation-candidate.md) — original source,
+  record-v5 scope and preparation guidance; not the later source tree despite the same version.
+- [Earlier market comparison](commercialization/market-comparison-2026-07-26.md) — refreshed
+  2026-10-27, retained as historical research rather than the current product decision.
+- [PR #247 market comparison](commercialization/market-comparison-2026-11-02.md) — original
+  typed-criteria and transfer recommendations, now implemented on source.
 
 - [Workbench saved-review handoff](audits/2026-11-02-workbench-review-handoff.md) — explicit recipient inspection/import and saved-record downloads, preserving open work and original provenance.
 
