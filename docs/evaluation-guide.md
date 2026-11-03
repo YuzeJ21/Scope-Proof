@@ -58,8 +58,11 @@ not installation of the historical private candidate or a newly published releas
    retains its original decisions and history.
 5. On current source, choose **Prepare saved review download**, then **Download saved review
    record**. This complete record is different from an analysis-report JSON download.
-6. In a separate local store without that ID, upload the record, choose **Inspect uploaded
-   review**, inspect its repository/head/confirmation/history, then explicitly consent and choose
+6. For the recipient, run the same source snapshot on another machine or under a separate OS
+   account whose local store does not contain that ID. Another tab, browser or checkout under
+   the same account shares `~/.scopeproof/reviews`; the workbench has no store selector.
+   Upload the record, choose **Inspect uploaded review**, inspect its
+   repository/head/confirmation/history, then explicitly consent and choose
    **Import inspected review**. Finally select its ID and choose **Reopen local review**.
    Import alone must not replace open work. A collision or the currently open ID is rejected;
    do not rename the JSON or erase an existing review to bypass it.
