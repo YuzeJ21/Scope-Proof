@@ -303,7 +303,8 @@ def _require_regular_at(directory_fd: int, name: str) -> os.stat_result:
 
 
 def read_bounded_utf8(
-    handle: BinaryIO, *, max_bytes: int = MAX_SAVED_RECORD_BYTES
+    handle: BinaryIO, *, max_bytes: int = MAX_SAVED_RECORD_BYTES,
+    preserve_newlines: bool = False,
 ) -> str:
     """Decode a regular opened file after reading no more than its byte limit plus one."""
 
@@ -315,7 +316,8 @@ def read_bounded_utf8(
     if len(raw) > max_bytes:
         raise ValueError("app-owned record exceeds the byte limit")
     # Preserve the universal-newline behavior of the former text-mode reader.
-    return raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    text = raw.decode("utf-8")
+    return text if preserve_newlines else text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def read_text_no_follow(
@@ -323,6 +325,7 @@ def read_text_no_follow(
     *,
     claim: MutationClaim | None = None,
     max_bytes: int = MAX_SAVED_RECORD_BYTES,
+    preserve_newlines: bool = False,
 ) -> str:
     """Read one regular UTF-8 file without knowingly following a link or reparse point."""
 
@@ -347,7 +350,9 @@ def read_text_no_follow(
                 raise UnsafeAtomicPath("app-owned record changed while it was being opened")
             with os.fdopen(descriptor, "rb") as handle:
                 descriptor = -1
-                return read_bounded_utf8(handle, max_bytes=max_bytes)
+                return read_bounded_utf8(
+                    handle, max_bytes=max_bytes, preserve_newlines=preserve_newlines,
+                )
         finally:
             if descriptor >= 0:
                 os.close(descriptor)
@@ -376,7 +381,9 @@ def read_text_no_follow(
                     raise UnsafeAtomicPath("app-owned record changed while it was being opened")
                 with os.fdopen(descriptor, "rb") as handle:
                     descriptor = -1
-                    return read_bounded_utf8(handle, max_bytes=max_bytes)
+                    return read_bounded_utf8(
+                        handle, max_bytes=max_bytes, preserve_newlines=preserve_newlines,
+                    )
             finally:
                 if descriptor >= 0:
                     os.close(descriptor)
@@ -400,7 +407,9 @@ def read_text_no_follow(
             raise UnsafeAtomicPath("app-owned record changed while it was being opened")
         with os.fdopen(descriptor, "rb") as handle:
             descriptor = -1
-            return read_bounded_utf8(handle, max_bytes=max_bytes)
+            return read_bounded_utf8(
+                handle, max_bytes=max_bytes, preserve_newlines=preserve_newlines,
+            )
     finally:
         if descriptor >= 0:
             os.close(descriptor)

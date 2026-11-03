@@ -1149,7 +1149,7 @@ def test_version_two_runtime_migration_does_not_mutate_parsed_source(
     original_payload = deepcopy(legacy_payload)
     monkeypatch.setattr(
         "scopeproof_core.storage.json_store.json.loads",
-        lambda _: legacy_payload,
+        lambda _, **kwargs: legacy_payload,
     )
 
     store.load(legacy_payload["state"]["review"]["review_id"])
@@ -1230,7 +1230,7 @@ def test_version_one_migration_does_not_mutate_parsed_source(
     original_payload = json.loads(json.dumps(legacy_payload))
     monkeypatch.setattr(
         "scopeproof_core.storage.json_store.json.loads",
-        lambda _: legacy_payload,
+        lambda _, **kwargs: legacy_payload,
     )
 
     store.load(state.review.review_id)

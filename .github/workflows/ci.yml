@@ -163,6 +163,8 @@ jobs:
           tests/alpha/test_storage.py::test_alpha_case_update_rejects_oversized_result_without_replacing_record
           tests/alpha/test_rehearsal_storage.py::test_rehearsal_load_rejects_one_byte_over_cap_on_both_backends
           tests/alpha/test_rehearsal_storage.py::test_rehearsal_save_rejects_oversized_record_before_creating_a_file
+      - name: Saved-review transfer compatibility
+        run: python -m pytest -q tests/storage/test_review_transfer.py
       - name: Released-record upgrade regressions
         run: python -m pytest -q tests/storage/test_released_v023_upgrade.py
       - name: Saved comparison compatibility
@@ -198,7 +200,7 @@ jobs:
           scopeproof comparison-benchmark
           Pop-Location
           $env:SCOPEPROOF_INSTALLED_PYTHON = (Get-Command python).Source
-          python -m pytest -q tests/cli/test_installed_history.py tests/cli/test_installed_criteria_changes.py tests/cli/test_installed_junit_audit.py tests/cli/test_installed_junit_correction.py tests/cli/test_installed_criteria_document.py
+          python -m pytest -q tests/cli/test_installed_history.py tests/cli/test_installed_criteria_changes.py tests/cli/test_installed_junit_audit.py tests/cli/test_installed_junit_correction.py tests/cli/test_installed_criteria_document.py tests/cli/test_installed_transfer.py
 
   locked-environment:
     runs-on: ubuntu-latest
@@ -291,7 +293,7 @@ jobs:
           (cd "$RUNNER_TEMP" && scopeproof comparison-benchmark)
           (cd "$RUNNER_TEMP" && python -m scopeproof_core.evals.r002_swebench --help)
 
-          SCOPEPROOF_INSTALLED_PYTHON="$(command -v python)" python -m pytest -q tests/cli/test_installed_history.py tests/cli/test_installed_criteria_changes.py tests/cli/test_installed_junit_audit.py tests/cli/test_installed_junit_correction.py tests/cli/test_installed_criteria_document.py
+          SCOPEPROOF_INSTALLED_PYTHON="$(command -v python)" python -m pytest -q tests/cli/test_installed_history.py tests/cli/test_installed_criteria_changes.py tests/cli/test_installed_junit_audit.py tests/cli/test_installed_junit_correction.py tests/cli/test_installed_criteria_document.py tests/cli/test_installed_transfer.py
 
           web_log="$RUNNER_TEMP/scopeproof-web.log"
           web_pid=""
