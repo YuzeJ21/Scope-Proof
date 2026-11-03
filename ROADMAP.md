@@ -15,20 +15,25 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 The product direction is **explain and revisit an acceptance decision**. Confirmed intent,
 exact-head evidence, explicit gaps, recorded decisions and later comparison form the working
-product; acceptance checking alone is not distinctive. The [refreshed market assessment](docs/commercialization/market-comparison-2026-11-02.md)
+product; acceptance checking alone is not distinctive. The [current product and market decision](docs/commercialization/product-direction-2026-11-02.md)
 documents direct overlap and adoption constraints without claiming superiority or demand.
 
 | Stage and order | Concrete outcome | Finish line or boundary |
 | --- | --- | --- |
 | Stage 2 — completed on source | Carry complete normalized criteria from preparation into an automated CLI review without rebuilding intent. | Source-bound editable draft; explicit confirmation; stable IDs/order/priority/type/source metadata and required evidence levels; malformed/stale rejection before ingestion/writes; automated and independent agent review plus exact-head CI. See the [bounded assessment](docs/audits/2026-11-02-typed-criteria-handoff.md). |
 | Stage 2 — completed on source | A recipient can transfer and safely reopen a saved review through supported CLI controls and the existing workbench. | Preserve complete record bytes, history and provenance; validate versions and gates; bounded regular files; atomic no-overwrite import under the original ID; installed reopening and independent automated review. See the [transfer assessment](docs/audits/2026-11-02-saved-review-transfer.md). |
-| Stage 2 — selected outcome | Complete sender-to-recipient saved-review handoff entirely in the local workbench. | Explicit saved-record download, upload inspection, byte-bound consent/import and existing guarded reopen; original history/provenance preserved, collisions and stale callbacks rejected. See the [workbench handoff assessment](docs/audits/2026-11-02-workbench-review-handoff.md). |
-| Evaluation distribution — separately authorized | Deliver accumulated source improvements in an updated downloadable evaluation release. | Fresh version-bound package/download evidence and explicit publication authorization. Current public release remains v0.2.4. Do not repeat candidate preparation merely to create activity. |
+| Stage 2 — completed on source, PR #250 | Complete sender-to-recipient saved-review handoff entirely in the local workbench. | Explicit saved-record download, upload inspection, byte-bound consent/import and existing guarded reopen; original history/provenance preserved, collisions and stale callbacks rejected. See the [workbench handoff assessment](docs/audits/2026-11-02-workbench-review-handoff.md). |
+| Stage 2 — current selected outcome | Make the accumulated workflow coherent to evaluate. | One [evaluation entry](docs/evaluation-guide.md), accurate published/source/historical-candidate map, short constructed handoff path, source-checked claims, independent automated review and required CI. No new product behavior or human-use claim. |
+| Evaluation distribution — next bounded option, not started | Prepare a current-source candidate when separately selected, then publish only when explicitly authorized. | A fresh revision-bound packet with archive parity, installed workflow, v5-to-v9 upgrade copies and hashes. Preserve PR #221's candidate unchanged; never silently replace same-version bytes. Public v0.2.4 remains available. Stop at private readiness unless publication is separately authorized. |
 | Stage 3 — dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. Automated tests, agent reviews, downloads and this roadmap do not satisfy it. The owner is not assigned personal testing or qualifying reviews. |
 
 No additional adapter family, accounts, hosted processing, billing or generic code review is
 needed for the selected outcome. Public-only scope, evaluation-only licensing, local setup,
 asserted actor identity and unknown independent usefulness remain material constraints.
+
+The evaluation path is the selected adjustment; further feature work needs a named observable
+constraint and a bounded finish line. The public/source distribution gap is the reason to consider
+the next option. A green CI run alone is not a reason to rebuild a candidate or add another feature.
 
 The dated implementation notes below preserve prior milestone context. This priority table is
 the next-stage decision; those notes are not an instruction to reopen completed work or grow
