@@ -1,7 +1,7 @@
 # Reproducible development environment
 
-The public evaluation install is v0.2.4; current repository source is unreleased `0.2.5`.
-The [public verification record](releases/v0.2.4-public-verification.md) binds the published
+The public evaluation install is v0.2.5. Development source uses `0.2.6.dev0`.
+The [public verification record](releases/v0.2.5-public-verification.md) binds the published
 archives to their release source and separates public installation checks from earlier candidate
 compatibility evidence. GitHub Releases remains authoritative for availability. Python 3.11,
 Python 3.12, and Python 3.13
@@ -138,15 +138,14 @@ promise: a fresh exact-1.53.0 install selected Pillow 12.3.0, and its `pillow<13
 with the maintained Pillow baseline. The broader Python 3.11 source suite also found 55 existing
 R-002 validation failures with Pydantic 2.8.0; canonical JSON containing criterion enums was rejected
 by strict revalidation. This predates the upload repair and remains a compatibility limit in the
-unchanged public v0.2.4 metadata; current source excludes those old versions. Frozen research
-inputs, labels and results are unchanged. For public v0.2.4, follow the README's explicit
-`pydantic>=2.13.4,<3`, `streamlit>=1.66.1,<2` and `Pillow>=13,<14` install constraints. The locked
-contributor environment
-is reproducible; those ranges do not establish that every later combination has been verified.
+unchanged public v0.2.4 metadata. v0.2.5 excludes those old versions. The
+[v0.2.4 verification record](releases/v0.2.4-public-verification.md) preserves the older checks.
+The lock file pins the contributor environment. The published requirements allow later versions
+within their specified ranges.
 
 The [dated dependency and upload assessment](audits/2026-10-29-runtime-dependency-floor.md)
 separates installed-package results from an older-Streamlit browser-helper mismatch. It also
-records a reproduced upload-boundary defect in published v0.2.4. The unreleased source uses a
+records a reproduced upload-boundary defect in published v0.2.4. v0.2.5 uses a
 bounded 2 MB widget allowance so the exact 1 MiB (1,048,576-byte) payload reaches the existing
 application size check. Larger payloads are rejected before reading or parsing; the allowance is
 not the import limit. Public v0.2.4 retains the defect and has the CLI workaround documented in

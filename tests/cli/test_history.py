@@ -9,6 +9,7 @@ from scopeproof_core.cli import main
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.storage.json_store import JsonReviewStore
+from scopeproof_core.version import __version__
 from tests.historical_analysis_fixture import HISTORICAL_PRODUCER_VERSION, historical_analysis_state
 
 
@@ -87,7 +88,7 @@ def test_export_history_stdout_and_file_preserve_record(tmp_path, capsys, report
         assert data["selection"]["history_index"] == 0
         assert data["analysis"]["criteria_revision_number"] == 1
         assert data["analysis"]["review"]["tool_version"] == HISTORICAL_PRODUCER_VERSION
-        assert data["validation_tool_version"] == "0.2.5"
+        assert data["validation_tool_version"] == __version__
     else:
         assert output.startswith("# ScopeProof Historical Analysis\n")
         assert "Retained history position: 1" in output

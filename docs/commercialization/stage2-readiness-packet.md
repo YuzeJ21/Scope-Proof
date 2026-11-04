@@ -39,13 +39,10 @@ target-repository runtime proof, accessibility conformance, customer use, demand
 
 ### Current next-stage direction
 
-The [current product decision](product-direction-2026-11-02.md) consolidates the implemented
-workflow into one [evaluation entry](../evaluation-guide.md). Typed criteria preservation and
-CLI/workbench record transfer are complete on source through PR #250. The immediate finish line
-is accurate version/capability guidance and a short constructed review/handoff path, verified
-against source and automated checks. The next bounded option is a separately selected current
-distribution packet; public publication still needs its own authorization. Neither option
-requires personal testing or qualifying reviews. Stage 3 stays dormant.
+The [evaluation guide](../evaluation-guide.md) covers the published v0.2.5 workflow, including
+typed criteria and complete-record transfer. Distribution and public verification are complete.
+The [roadmap](../../ROADMAP.md#current-priorities--2026-11-04) records current priorities.
+Stage 3 requires genuine independent use and separate authorization.
 
 ### Implemented development outcomes and historical version context
 
@@ -70,7 +67,9 @@ These outcomes improve engineering capability; their benefit in genuine independ
 unvalidated. No personal testing or qualifying reviews are prerequisites. Stage 1 stays closed
 at zero and Stage 3 dormant. The completed private v0.2.5 candidate from PR #221 remains bound to
 source `4f12ae02dee277705d17ac6ab94f0a74f99be346` and its retained bytes; subsequent source work
-does not rebuild, publish or replace it. The public evaluation download remains v0.2.4.
+preserves that historical identity. The public v0.2.5 download uses the separately verified
+source `72cac01ea6abb99beaf714396eb610fa39fe84f0`. See the
+[release verification](../releases/v0.2.5-public-verification.md).
 
 ### Current bounded adapter slice
 

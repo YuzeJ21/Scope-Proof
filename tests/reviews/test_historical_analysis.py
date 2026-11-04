@@ -7,6 +7,7 @@ import pytest
 from scopeproof_core.reviews.lifecycle import revise_criteria
 from scopeproof_core.schemas.models import Criterion
 from scopeproof_core.storage.json_store import JsonReviewStore
+from scopeproof_core.version import __version__
 from tests.saved_comparison_fixture import saved_comparison_states
 
 
@@ -51,7 +52,7 @@ def test_historical_unknown_revision_and_original_producer_are_not_defaulted(tmp
     ) as report:
         assert report.analysis.criteria_revision_number == "unknown"
         assert report.analysis.review.tool_version == "constructed-old-producer"
-        assert report.validation_tool_version == "0.2.5"
+        assert report.validation_tool_version == __version__
         assert report.analysis.review.analysis_source_identity is not None
 
 

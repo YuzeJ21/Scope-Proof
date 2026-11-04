@@ -9,6 +9,7 @@ from scopeproof_core.demo import build_demo_review
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.storage.json_store import JsonReviewStore
+from scopeproof_core.version import __version__
 from tests.historical_analysis_fixture import historical_analysis_state
 
 
@@ -48,7 +49,7 @@ def test_pending_requirements_json_preserves_exact_source_and_complete_fields(tm
     ]
     assert report["selection"]["historical"]["history_index"] == 0
     assert report["selection"]["historical"]["state_fingerprint"] == store.state_fingerprint(state)
-    assert report["validation_tool_version"] == "0.2.5"
+    assert report["validation_tool_version"] == __version__
     assert "not evidence comparison" in report["boundary"]
     assert "gate" not in report and "evidence" not in report and "resolutions" not in report
     assert {row["kind"] for row in report["criterion_changes"]} == {"only_previous", "only_current"}

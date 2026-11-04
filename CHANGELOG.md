@@ -9,7 +9,18 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Source/package identity: `0.2.5`, unreleased.
+Source/package identity: `0.2.6.dev0`, unreleased.
+
+- Align the README, evaluation guide, and roadmap with the v0.2.5 public download.
+
+## 0.2.5 — Downloadable evaluation release
+
+Published from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Adds complete saved-review handoff,
+separate workbench review folders, typed criteria, saved comparison and attributed audit workflows.
+See the [release and assets](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) and
+[public verification](docs/releases/v0.2.5-public-verification.md).
+
+### Development milestones before publication
 
 - Choose another saved review, then its active or historical analysis as a comparison baseline.
   Bind displayed choices to complete saved-record fingerprints and recheck them under locks, so

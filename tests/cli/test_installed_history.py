@@ -49,7 +49,10 @@ def test_installed_history_handoff(tmp_path):
     assert report["report_kind"] == "scopeproof_historical_analysis"
     assert report["analysis"]["criteria_revision_number"] == 1
     assert report["analysis"]["review"]["tool_version"] == "0.2.4-constructed-historical-producer"
-    assert report["validation_tool_version"] == "0.2.5"
+    installed_version = run(
+        "-c", "from importlib.metadata import version; print(version('scopeproof'))",
+    )
+    assert report["validation_tool_version"] == installed_version.stdout.strip()
     assert report["selection"]["state_fingerprint"] == catalog["state_fingerprint"]
     assert (report["selection"]["analysis_fingerprint"]
             == catalog["entries"][0]["analysis_fingerprint"])

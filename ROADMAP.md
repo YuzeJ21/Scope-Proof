@@ -15,7 +15,7 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 The product direction is **explain and revisit an acceptance decision**. Confirmed intent,
 exact-head evidence, explicit gaps, recorded decisions and later comparison form the working
-product; acceptance checking alone is not distinctive. The [current product and market decision](docs/commercialization/product-direction-2026-11-02.md)
+product; acceptance checking alone is not distinctive. The [November 2 product and market review](docs/commercialization/product-direction-2026-11-02.md)
 documents direct overlap and adoption constraints without claiming superiority or demand.
 
 | Stage and order | Concrete outcome | Finish line or boundary |
@@ -24,9 +24,9 @@ documents direct overlap and adoption constraints without claiming superiority o
 | Stage 2 — completed on source | A recipient can transfer and safely reopen a saved review through supported CLI controls and the existing workbench. | Preserve complete record bytes, history and provenance; validate versions and gates; bounded regular files; atomic no-overwrite import under the original ID; installed reopening and independent automated review. See the [transfer assessment](docs/audits/2026-11-02-saved-review-transfer.md). |
 | Stage 2 — completed on source, PR #250 | Complete sender-to-recipient saved-review handoff entirely in the local workbench. | Explicit saved-record download, upload inspection, byte-bound consent/import and existing guarded reopen; original history/provenance preserved, collisions and stale callbacks rejected. See the [workbench handoff assessment](docs/audits/2026-11-02-workbench-review-handoff.md). |
 | Stage 2 — completed, PR #251 | Make the accumulated workflow coherent to evaluate. | One [evaluation entry](docs/evaluation-guide.md) with the release/source version map and a constructed handoff. |
-| P0 — private distribution verified at `6b39fb4` | Package the accumulated reviewer workflow and verify an upgrade from the public writer. | Matching direct and source-built wheel bytes, isolated installs, artifact hashes and a constructed native v5-to-v9 upgrade on copies. Each packet names its source commit. |
-| P1 — workbench folder selection on source | Run sender and recipient workbenches on one computer using separate review folders. | Explicit launch option, visible selected folder and installed browser handoff with both instances under one OS account. |
-| P2 — publication, gated | Decide whether to distribute a new evaluation download. | Choose one reviewed artifact set and authorize publication before creating a tag or release. Public v0.2.4 remains available. |
+| P0 — distribution verified at `72cac01` | Package the accumulated reviewer workflow and verify an upgrade from the public writer. | Matching direct and source-built wheel bytes, isolated installs, artifact hashes and a constructed native v5-to-v9 upgrade on copies. Each packet names its source commit. |
+| P1 — workbench folder selection in v0.2.5 | Run sender and recipient workbenches on one computer using separate review folders. | Explicit launch option, visible selected folder and installed browser handoff with both instances under one OS account. |
+| P2 — publication complete | Publish v0.2.5 as a downloadable evaluation release. | The public wheel, source archive, and checksum manifest matched the verified candidate. Both archives passed fresh installation. See the [release verification](docs/releases/v0.2.5-public-verification.md). |
 | P3 — Stage 3 dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. |
 
 No additional adapter family, accounts, hosted processing, billing or generic code review is
@@ -34,25 +34,18 @@ needed for the selected outcome. Public-only scope, evaluation-only licensing, l
 asserted actor identity and unknown independent usefulness remain material constraints.
 
 Further feature work needs a named observable constraint and a bounded finish line. The
-evaluation walkthrough identified the single-account storage constraint. The distribution
-packet addresses the gap between the published download and the current reviewer workflow.
+evaluation walkthrough identified the single-account storage constraint. The public v0.2.5 download includes the resulting handoff workflow.
 
-The dated implementation notes below preserve prior milestone context. This priority table is
-the next-stage decision; those notes are not an instruction to reopen completed work or grow
-an endless format-parity queue.
+The implementation notes below describe the state at each milestone, including work that was
+unreleased at the time. The priority table records the current release and next-stage decision.
 
 ## Current operating decision
 
-**v0.2.4 is published as a downloadable evaluation release.** Its public wheel, source archive
-and checksums were automatically verified. The [dated public verification record](docs/releases/v0.2.4-public-verification.md)
-binds those results to release source `11bcdc66f7d8f5a29055688208de1ed337eed07f`.
-Current source/package identity is unreleased `0.2.5`.
-[PR #221](https://github.com/YuzeJ21/Scope-Proof/pull/221) completed private candidate preparation:
-direct/source-built distribution checks, isolated installs, a constructed native v0.2.4 review
-upgrade, and an exact-main packet at `4f12ae02dee277705d17ac6ab94f0a74f99be346`.
-The [candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) retains the separate publication
-gate. Those private archives and their original source binding remain unchanged; later development
-does not update their evidence or trigger another candidate-preparation cycle or publication.
+**v0.2.5 is the published evaluation download.** Its assets and public checks are bound to
+`72cac01ea6abb99beaf714396eb610fa39fe84f0`. Current development uses unreleased `0.2.6.dev0`.
+The [v0.2.4 verification record](docs/releases/v0.2.4-public-verification.md) and the
+[PR #221 private candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) preserve their
+own source and artifact identities.
 The [native saved-review upgrade rehearsal](docs/research/2026-10-29-v023-v024-upgrade.md)
 verified one constructed published-v0.2.3 writer → published-v0.2.4 reader history: original
 facts and linked decisions survived, while missing changed-file inventory correctly changed
@@ -65,7 +58,7 @@ the historical Streamlit minimum cannot use the maintained Pillow baseline, and 
 separate browser upload defect at exactly 1 MiB. Current install guidance names the maintained
 dependency constraints, including the locked Pydantic baseline after broader source checks exposed
 R-002 strict-validation failures at Pydantic 2.8.0. The published package's metadata still permits
-that incompatible older combination. PR #219 integrated the unreleased upload repair, letting the
+that incompatible older combination in v0.2.4. PR #219 integrated the upload repair shipped in v0.2.5, letting the
 full-size artifact reach the unchanged fail-closed parser limit, with unit and installed-browser
 regressions. The [source declaration alignment](docs/audits/2026-10-29-dependency-baseline-alignment.md)
 now enforces the maintained Pydantic, Streamlit and direct Pillow floors, retaining all resolved
@@ -95,8 +88,8 @@ authenticated identity and integrations remain separately scoped options.
 ## Current release and validation state
 
 The GitHub Release record is authoritative for publication availability.
-ScopeProof v0.2.4 is published. Public install: v0.2.4 is available from the
-[v0.2.4 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4),
+ScopeProof v0.2.5 is published. Public install: v0.2.5 is available from the
+[v0.2.5 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5),
 which provides the wheel, source archive, and checksum manifest.
 
 The table and integration notes below preserve dated engineering references. They are not a
@@ -359,8 +352,9 @@ engineering and release work earns zero Stage 1 credit.
 Do not retune against the frozen R-002 cohort, weaken thresholds, add model-generated verdicts, or
 promote search diagnostics into evidence or correctness claims.
 
-Current product, gap, and next-stage details are maintained in the
-[v0.2.3 status audit](docs/releases/v0.2.3-status-and-next-stages.md). Current official-source
+The [earlier status audit](docs/releases/v0.2.3-status-and-next-stages.md) retains the feature
+ledger before v0.2.5. See [current priorities](#current-priorities--2026-11-04) for the next stage.
+Current official-source
 competitive research is maintained separately in the
 [current official-source market comparison](docs/commercialization/market-comparison-2026-11-02.md).
 Historical current-main package, security, and environment evidence is recorded

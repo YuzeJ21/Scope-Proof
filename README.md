@@ -3,7 +3,7 @@
 **See which acceptance criteria have credible PR evidence—and which still need review.**
 
 **Start here:** [Choose a version and follow one short evaluation workflow](docs/evaluation-guide.md).
-It separates published v0.2.4 from current unreleased source and the older private candidate,
+It separates the published v0.2.5 download from development source and the older private candidate,
 then shows how to inspect, save and hand off a constructed review.
 
 ScopeProof is a reviewer-controlled acceptance-coverage assistant for public GitHub pull requests.
@@ -18,8 +18,8 @@ target closed unmet when the owner chose not to pursue Stage 1.
 ScopeProof is an evidence assistant. It does not replace QA, engineering review, runtime testing, or human acceptance.
 
 The product direction is to **explain and revisit an acceptance decision**: retain the confirmed
-intent, reviewed head, evidence gaps and recorded decisions as work changes. Current
-[current product and market review](docs/commercialization/product-direction-2026-11-02.md) finds
+intent, reviewed head, evidence gaps and recorded decisions as work changes. The
+[November 2 product and market review](docs/commercialization/product-direction-2026-11-02.md) finds
 substantial overlap elsewhere; this direction is a usefulness hypothesis, not a novelty claim.
 
 Readable Markdown and HTML reports retain the saved review's decision audit: recorded actors,
@@ -33,17 +33,10 @@ recorded offsets or missing timezones remain explicit. See the
 [workbench consistency assessment](docs/audits/2026-11-01-workbench-resolution-audit.md).
 
 Current direction: develop the reviewer workflow through a short, outcome-driven Stage 2 roadmap.
-The published evaluation
-download is **v0.2.4**, with its wheel, source archive, and checksums verified in the
-[public verification record](docs/releases/v0.2.4-public-verification.md). The current source/package
-identity is **0.2.5**, unreleased. Stage 1 is closed as not pursued with all external
-counts at zero; Stage 3 is dormant and gated. Source supports scope-aware re-review and explicit
-comparison of compatible saved analyses after reopening, plus attributable reviewer-selected
-exact-head static references. Selected references are separate non-gating context; they do not
-upgrade automatic findings, resolve file scope or prove execution. Each milestone has an automated finish line;
-no personal testing or qualifying reviews are required. Engineering progress does not establish
-customer value. The completed private v0.2.5 candidate remains bound to its original source and
-bytes; subsequent source work does not update or publish that candidate.
+The published evaluation download is **v0.2.5**. Its wheel, source archive, and checksums
+were verified after publication. Current development uses **0.2.6.dev0**. Stage 1 closed with all
+external counts at zero, and Stage 3 remains dormant pending independent use. See the
+[v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
 See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and
 [official-source market comparison](docs/commercialization/product-direction-2026-11-02.md) for
 substantial competing workflows and the remaining value hypothesis.
@@ -161,8 +154,7 @@ ScopeProof v0.2.4 is published from
 verified in the [public verification record](docs/releases/v0.2.4-public-verification.md).
 Post-v0.2.3 engineering merged CLI lifecycle commands, strict saved-record validation, installed
 Chromium coverage, Python 3.13 and bounded keyboard/focus evidence, and verified-public provenance
-enforcement. Those changes remain engineering evidence only. Current source/package identity is
-`0.2.5`, unreleased; Stage 1 remains closed as not pursued with every count at zero.
+enforcement. Those changes remain engineering evidence only.
 
 </details>
 
@@ -175,42 +167,37 @@ only explicit success as passing.
 Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
 for the tested Python versions, platform limits, and contributor setup.
 
-**The published evaluation download is v0.2.4.** Its
-[GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4) contains
-`scopeproof-0.2.4-py3-none-any.whl`, `scopeproof-0.2.4.tar.gz`, and `SHA256SUMS.txt`.
-The [public verification record](docs/releases/v0.2.4-public-verification.md) binds the published
-assets to source `11bcdc66f7d8f5a29055688208de1ed337eed07f`. A source version, changelog entry,
-or passing CI run alone is not publication evidence. Current source `0.2.5` is unreleased.
-The [v0.2.5 candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) describes private
-preparation and its separate publication gate. It does not provide another public download.
+**The published evaluation download is v0.2.5.** The
+[GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) includes
+`scopeproof-0.2.5-py3-none-any.whl`, `scopeproof-0.2.5.tar.gz`, and `SHA256SUMS.txt`.
+The [public verification record](docs/releases/v0.2.5-public-verification.md) binds those files
+to source `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Current source `0.2.6.dev0` is unreleased.
 
-The commands below install the **published v0.2.4 wheel** and require no clone. Verify its checksum
-before installation. See the [release preparation and upgrade notes](docs/releases/v0.2.4-evaluation-candidate.md)
-for release boundaries and saved-record guidance. The [documentation map](docs/README.md) separates
-current guidance from historical observations. No personal testing or qualifying review is
-required to download or evaluate the package.
+The commands below install the **published v0.2.5 wheel** without cloning the repository.
+No personal testing or qualifying review is required to download or evaluate the package.
+See the [documentation map](docs/README.md) for related guides and dated records.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4/scopeproof-0.2.4-py3-none-any.whl
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4/SHA256SUMS.txt
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5/scopeproof-0.2.5-py3-none-any.whl
+curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5/SHA256SUMS.txt
 ```
 
 Select the wheel entry from the published manifest and use the command for your platform:
 
 ```bash
 # macOS
-grep " scopeproof-0.2.4-py3-none-any.whl$" SHA256SUMS.txt | shasum -a 256 -c -
+grep " scopeproof-0.2.5-py3-none-any.whl$" SHA256SUMS.txt | shasum -a 256 -c -
 
 # Linux
-grep " scopeproof-0.2.4-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
+grep " scopeproof-0.2.5-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
 ```
 
 Continue only after the checksum check succeeds:
 
 ```bash
-python -m pip install ./scopeproof-0.2.4-py3-none-any.whl "pydantic>=2.13.4,<3" "streamlit>=1.66.1,<2" "Pillow>=13,<14"
+python -m pip install ./scopeproof-0.2.5-py3-none-any.whl
 python -m pip check
 scopeproof --version
 scopeproof benchmark
@@ -222,33 +209,22 @@ provide code-signing or product-correctness assurance. The offline benchmark che
 and bundled constructed regression corpus. It is engineering evidence, not runtime evidence for
 a target pull request or customer validation. Stop the local workbench with `Ctrl+C`.
 
-The explicit dependency constraints follow the current maintained UI baseline. The wheel's older
-Streamlit API minimum is not a promise that every permitted resolution satisfies current patch
-guidance. In the [dated dependency assessment](docs/audits/2026-10-29-runtime-dependency-floor.md),
-Streamlit 1.53.0 required Pillow below 13 and could not use the documented patched Pillow baseline.
-Pydantic 2.8.0 passed the smaller package journeys but failed existing R-002 strict JSON validation
-tests; the guidance uses the locked Pydantic baseline instead of promising full floor compatibility.
-The published wheel and its checksum remain unchanged; the constraints select its dependencies.
-Unreleased `0.2.5` source now declares these maintained floors directly, including Pillow;
-see the [source declaration alignment](docs/audits/2026-10-29-dependency-baseline-alignment.md).
+The v0.2.5 package declares the maintained Pydantic, Streamlit, Pillow and HTTPX requirements.
+See the [dependency alignment record](docs/audits/2026-10-29-dependency-baseline-alignment.md).
 
 ### Upgrade existing reviews
 
-The v0.2.4 release writes saved-record format **v5**. Back up local review storage and retain
-any exported reports before upgrading. Pre-v5 records are conservatively reassessed: missing
-criteria-source provenance, verified-public metadata, or exact-head changed-file inventory is not
-invented, and prior acceptance may require renewed confirmation or analysis. Historical engine
-identity and candidate-selection counts remain unknown when absent. Reopening a record does not
-establish current-head correctness. Compatibility with older versions after saving in v0.2.4 is
-not promised; see the [release preparation and upgrade notes](docs/releases/v0.2.4-evaluation-candidate.md).
+v0.2.5 writes saved-record format **v9**. Back up your review folder and keep original reports
+before saving records with the new version. Automated verification loaded a constructed v5 record
+from v0.2.4 and reopened a separate v9 copy with the recorded producer, decisions, history, and
+blocked status intact. Keep the original v5 file if you still need to open it in v0.2.4.
+See the [release verification](docs/releases/v0.2.5-public-verification.md).
 
 ### Public PR CLI workflow
 
-The commands below describe the published v0.2.4 CLI. They also apply to the current unreleased
-`0.2.5` source checkout after the [locked source setup](docs/development-environment.md);
-they do not apply to the historical v0.2.3 wheel. The examples use the installed `scopeproof`
-command. In a source checkout, prefix it with `uv run`. The CLI provides read-only public-PR ingestion and a deterministic core without
-starting Streamlit.
+The examples use the installed v0.2.5 CLI. In a source checkout, prefix `scopeproof` with
+`uv run` after [locked source setup](docs/development-environment.md#create-or-refresh-the-environment).
+The CLI reads public PRs and runs the deterministic review without starting Streamlit.
 Live ingestion labels a review public only when GitHub returns matching, unambiguous repository
 metadata (`private: false` and `visibility: public`). A token-accessible private repository and
 missing, malformed, or contradictory visibility metadata fail closed before review data is saved.
@@ -284,7 +260,7 @@ bytes and ordered normalized criteria, and refuses to overwrite an existing conf
 The optional report path may end in `.md`, `.json`, `.csv`, or `.html`; ScopeProof validates the
 selected export and refuses to overwrite an existing file.
 
-Current **unreleased 0.2.5 source** additionally supports a reusable normalized criteria handoff.
+v0.2.5 supports a reusable normalized criteria handoff.
 Create an unconfirmed draft, then inspect/edit the complete ordered criteria before attesting:
 
 ```bash
@@ -337,7 +313,7 @@ scopeproof export REVIEW_ID \
 
 Available repeat-export formats are `json`, `markdown`, `csv`, and `html`.
 
-Current **unreleased 0.2.5 source** also supports historical-only CLI handoff after criteria change,
+v0.2.5 supports historical-only CLI handoff after criteria change,
 including a saved record with no active analysis. First discover retained positions and the saved
 fingerprint, then explicitly export the chosen position:
 
@@ -358,7 +334,7 @@ identity remain separate; missing historical source provenance still blocks full
 commands do not confirm revised criteria, rerun analysis, fetch source or carry decisions forward.
 They are not available in the published v0.2.4 package.
 
-Unreleased source also exposes the saved requirements-change report to scripts. Use the chosen
+v0.2.5 also exposes the saved requirements-change report to scripts. Use the chosen
 position and fingerprint from `history` to compare that retained analysis's criteria with the
 current **saved** revision, including an unconfirmed revision with no active analysis:
 
@@ -434,7 +410,7 @@ without executing target-repository code. First inspect the sanitized scope IDs:
 scopeproof inspect-junit results.xml
 ```
 
-In unreleased **0.2.5 source**, the workbench can stage different scopes from one artifact for
+In v0.2.5, the workbench can stage different scopes from one artifact for
 multiple confirmed criteria before a single import. Choose a **JUnit mapping target criterion**,
 choose its scopes, then **Add selected scopes to mapping draft**. Repeat for another criterion,
 inspect the staged preview, and use **Save imported JUnit results** once. Remove a criterion group
@@ -447,7 +423,7 @@ not edit a saved import or permit importing the same artifact again. The draft i
 organizational context; it changes no evidence level, gate, decision or runtime truth. See the
 [bounded assessment](docs/audits/2026-11-01-junit-multi-criterion-draft.md).
 
-Unreleased **0.2.5 source** also supports **Withdraw a saved JUnit import** after reopening a
+v0.2.5 supports **Withdraw a saved JUnit import** after reopening a
 saved analysis, without reloading repository source. Explicitly choose one active import, supply
 an asserted reviewer and reason, and withdraw the whole import across every mapped criterion.
 Original results/mappings remain retained with a terminal audit event. Workbench, reports and
@@ -470,7 +446,7 @@ analyses. Versions 1–8 load without invented events or disk rewrites; older Sc
 cannot open newly saved v9 records. CSV appends `junit_import_audit` while retaining prior columns.
 See the [bounded withdrawal assessment](docs/audits/2026-11-01-junit-import-withdrawal.md).
 
-Unreleased **0.2.5 source** supports **Correct saved JUnit mappings** for active imports.
+v0.2.5 supports **Correct saved JUnit mappings** for active imports.
 After source-free reopening, choose the import explicitly. The editor begins with current effective
 mappings and separately shows retained originals. Explicitly remove or replace criterion groups,
 using only retained sanitized test cases and confirmed criteria. Review the complete before/after
@@ -522,7 +498,7 @@ The adapter accepts at most 1 MiB, 100 suites, 5,000 cases, and 20,000 XML eleme
 can retain at most 20 imports, and each retained warning or asserted limitation is capped at 1,000
 characters. The byte cap is exactly 1,048,576 bytes. In published v0.2.4, the browser upload control
 can reject a valid file at that exact cap on non-Windows browsers; use `inspect-junit` and
-`import-junit` above for the full byte range. The unreleased `0.2.5` source fixes the upload
+`import-junit` above for the full byte range. v0.2.5 fixes the upload
 allowance while preserving the exact parser cap; see the [version-bound reproduction](docs/audits/2026-10-29-runtime-dependency-floor.md).
 The adapter accepts UTF-8 only and rejects DTDs, entities, non-declaration processing
 instructions, XInclude, remote references, unsupported nesting, and ambiguous result markers. It
@@ -572,7 +548,7 @@ Anonymous public-repository access is the default. `--token` is optional and can
 free rate limit, but it is not required or persisted. The CLI never comments on the pull request,
 executes its code, or converts static candidates into runtime verification.
 
-### Transfer and reopen a saved review (unreleased source)
+### Transfer and reopen a saved review
 
 In **Resume a saved review**, the sender selects a saved review ID, chooses **Prepare saved
 review download**, then **Download saved review record**. This is the complete saved file,
@@ -660,7 +636,7 @@ references and external JUnit context,
 external verification, and human resolution controls. Summary & Export provides the Markdown,
 JSON, and CSV review records.
 
-### Select an exact-head source reference (unreleased source)
+### Select an exact-head source reference
 
 After a confirmed analysis with matching source loaded, open **Select a source reference** in
 Criterion Review. Choose **Reference source**, **Reference page** and **Reference line**, inspect the preview, enter
@@ -691,7 +667,7 @@ again; correct its active replacement instead. History is bounded to 128 retaine
 retained history rejects further additions/corrections explicitly. Withdrawal remains available.
 No action changes automatic findings, gate decisions, scope coverage or runtime verification.
 
-Current **unreleased0.2.5 source** also resumes a reopened review after criteria edits: explicitly
+v0.2.5 resumes a reopened review after criteria edits: explicitly
 confirm the revised criteria, load matching reviewed source if it is missing, then run deterministic
 analysis. The review ID and old analysis/audit history remain; prior decisions, runtime records,
 references, JUnit context and acceptance are not copied into the new analysis. Pending source leases
@@ -724,7 +700,7 @@ snapshot is returned; transport/access errors alone do not invent a visibility o
 Editing and reconfirming criteria expires the old receipt while keeping loaded source available
 for the newly confirmed analysis. Previous decisions remain historical and are not carried forward.
 
-Unreleased saved comparisons now include a separate **Reviewer-selected reference comparison**.
+Saved comparisons include a separate **Reviewer-selected reference comparison**.
 Inspect previous/current locations, heads, attribution and rationale without loading source again.
 Its counts distinguish complete identical records, records only in the previous analysis and
 records only in the current analysis. Different heads or attribution never imply equivalence,
@@ -745,13 +721,13 @@ If the selected record changes, choices and downloads expire and require reselec
 selected analyses are rejected without changing the current review or automatically using another
 analysis. Saved history remains usable without reloading GitHub or rerunning analysis.
 
-New saves use record version 7; versions 1–6 remain readable without invented audit events.
-Version 7 requires an explicit event list, including an empty list. Downgraded older records
+New saves use record version 9. Older records remain readable without invented audit events.
+Records at version 7 and later require an explicit selected-reference event list. Downgraded older records
 with nonempty or malformed events are rejected. Older application readers may reject version-7
 records. Keep original saved records before
-opening copies in unreleased source; loading alone does not rewrite them.
+opening copies in v0.2.5; loading alone does not rewrite them.
 
-### Find saved reviews by their recorded details (unreleased source)
+### Find saved reviews by their recorded details
 
 Open **Resume a saved review**, choose **Saved details page**, and click **Load saved review
 details**. This explicitly loads at most ten candidates, with a 1 MiB preview cap per record
@@ -772,7 +748,7 @@ comparison downloads. Changed previewed records require explicit refresh/reselec
 reopen or foreign-analysis selection. Without a loaded catalog, an unrelated new ID preserves
 existing ID-based choices and their fingerprint guards. New targets never inherit deletion
 confirmation; direct-ID entry does not add a deletion path. Discovery does not rewrite saved
-records, load GitHub, rerun analysis or carry forward a decision. Record version 7 is unchanged.
+records, load GitHub, rerun analysis or carry forward a decision. Discovery leaves the original record format intact.
 Loaded-preview deletion also rechecks its exact saved-state fingerprint under the existing
 mutation lock. A changed record cannot be deleted using consent for its old preview. Clearing
 discovery targets clears both selector and direct-ID input; malformed nesting is isolated to
@@ -785,9 +761,9 @@ splitting, reordering, or editing criteria invalidates the previous analysis and
 reconfirmation before another review run. Human decisions and final acceptance are recorded as
 history rather than silently replacing earlier decisions.
 
-### Compare saved analyses after reopening (unreleased source)
+### Compare saved analyses after reopening
 
-In unreleased `0.2.5` source, reopen the current review, expand **Compare saved analyses**, and
+In v0.2.5, reopen the current review, expand **Compare saved analyses**, and
 choose a **Comparison baseline**: another saved review or a retained history entry. Click
 **Compare selected saved analysis** to apply that choice. The current review needs a clean saved
 analysis, and both analyses must describe the same PR with identical confirmed criteria and
@@ -802,7 +778,7 @@ expires the applied comparison; select again to continue. This path does not fet
 reanalyze code, modify saved review bytes, or carry forward a decision. The published v0.2.4
 download does not contain this new entry point.
 
-### Inspect recorded decision changes (unreleased source)
+### Inspect recorded decision changes
 
 Compatible comparisons include a separate **Recorded decision and runtime context** section.
 Expand **Previous decision context** and **Current decision context** to inspect owning record,
@@ -820,7 +796,7 @@ Review-level final acceptance and full decision-event history are outside this s
 record changes expire old comparison downloads, including changes limited to runtime context.
 See the [bounded assessment](docs/audits/2026-10-30-decision-context-comparison.md).
 
-### Inspect recorded final acceptance (unreleased source)
+### Inspect recorded final acceptance
 
 Comparisons also show a separate **Recorded final acceptance** section with previous/current
 explicit Yes/No values, owning record/head/revision/criteria identities and whether the recorded
@@ -835,7 +811,7 @@ The section changes no gate, evidence, decision, confirmation or saved record, a
 acceptance forward. Whole-record saved-comparison guards also reject acceptance-only changes.
 See the [bounded assessment](docs/audits/2026-11-01-recorded-final-acceptance.md).
 
-### Inspect a changed file before deciding its scope (unreleased source)
+### Inspect a changed file before deciding its scope
 
 Under **Changed-file scope**, choose an **Uncited changed file** to inspect its already-loaded
 diff before making an explicit decision. The preview shows base/head identity, recorded status
@@ -850,7 +826,7 @@ disposition, criterion, explanation and preview page; changing review/source con
 the target. Inspection never records a scope decision, cites evidence or changes a gate. See the
 [bounded assessment](docs/audits/2026-11-01-scope-file-inspection.md).
 
-### Find source references by content (unreleased source)
+### Find source references by content
 
 In **Select a source reference**, explicitly choose a loaded **Reference source**, then use
 **Find text in this file (literal, case-insensitive)**. Search covers all eligible already-ingested
@@ -870,7 +846,7 @@ exact-head validation still run when saving. References stay non-gating static c
 do not alter automatic candidates, findings, scope, decisions, runtime evidence or acceptance.
 See the [bounded assessment](docs/audits/2026-10-31-source-reference-search.md).
 
-### Inspect retained historical analyses (unreleased source)
+### Inspect retained historical analyses
 
 Reopen a saved record and expand **Inspect retained analysis** in Decision Progress. Explicitly
 choose a **Retained historical analysis**, then click **Inspect selected historical analysis**.
@@ -890,7 +866,7 @@ provenance show identity and an unavailable-report explanation under the existin
 This path reads saved facts without fetching artifacts, loading source or rerunning analysis.
 See the [bounded assessment](docs/audits/2026-10-31-historical-analysis-inspection.md).
 
-### Inspect saved requirements changes (unreleased source)
+### Inspect saved requirements changes
 
 After inspecting a retained analysis, click **Compare with saved current criteria** to see its
 recorded requirements beside the current saved revision, including a pending unconfirmed revision
@@ -913,8 +889,8 @@ provenance policy remain unchanged. No source is fetched or executed. See the
 
 ### Local review storage
 
-The workbench stores versioned JSON records under `~/.scopeproof/reviews` by default. In source
-builds that expose `--storage-dir` in `scopeproof-web --help`, launch with a separate review folder
+The workbench stores versioned JSON records under `~/.scopeproof/reviews` by default. In v0.2.5,
+use `--storage-dir` to launch with a separate review folder
 for an evaluation or a handoff on one computer:
 
 ```bash
@@ -983,7 +959,7 @@ cases, 9 constructed selection checks, and 5 helper/capture checks**. The total 
 full end-to-end journeys. See the [version-bound evidence summary](docs/evaluation-guide.md#what-is-verified-and-what-is-missing).
 These constructed engineering checks do not establish independent use or accessibility conformance.
 
-Unreleased source corrects automatic candidate coordinates using Git LF boundaries, explicit
+v0.2.5 corrects automatic candidate coordinates using Git LF boundaries, explicit
 CRLF handling and Git's no-final-newline marker. Embedded Unicode/control separators remain
 source content rather than extra diff records. Historical saved coordinates and frozen R-002
 results are retained; fresh analysis supplies corrected references. See the
