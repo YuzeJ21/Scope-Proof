@@ -199,3 +199,52 @@ def test_installed_ui_full_record_limit_reaches_parser_and_overflow_stays_unsave
         finally:
             browser.close()
     assert not external
+
+
+def test_installed_ui_delete_preserves_record_replaced_after_confirmation(
+    tmp_path: Path, installed_wheel: Path,
+) -> None:
+    runtime = tmp_path / "guarded-delete"
+    home, raw = _seed_record(runtime, installed_wheel)
+    record = home / ".scopeproof" / "reviews" / f"{HISTORICAL_REVIEW_ID}.json"
+    diagnostics = _diagnostics(tmp_path, "guarded-delete")
+    external: list[str] = []
+    with _installed_workbench_server(
+        installed_wheel, runtime, home, log_name="guarded-delete.log",
+    ) as (url, log), sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(viewport={"width": 1440, "height": 1000})
+            context.route("**/*", lambda route: _route_loopback_only(route, external))
+            page = context.new_page()
+            with _capture_browser_failure(page, diagnostics, log):
+                page.goto(url, wait_until="domcontentloaded")
+                page.get_by_text("Resume a saved review", exact=True).click()
+                _choose_combobox_option(
+                    page, page.get_by_role("combobox", name="Saved review ID", exact=True),
+                    option_name=HISTORICAL_REVIEW_ID,
+                    settled_control=page.get_by_role("button", name="Reopen local review"),
+                )
+                confirm = page.get_by_text(
+                    "Permanently delete the selected local review", exact=True,
+                )
+                delete = page.get_by_role("button", name="Delete saved review", exact=True)
+                expect(delete).to_be_disabled()
+                _run_and_wait_for_streamlit_rerun(page, confirm.click)
+                expect(delete).to_be_enabled()
+                replacement = record.with_suffix(".tmp")
+                replacement.write_bytes(raw + b"\n")
+                replacement.replace(record)
+
+                _run_and_wait_for_streamlit_rerun(page, delete.click)
+
+                expect(page.get_by_text(
+                    "The selected file or its preview changed after confirmation.",
+                    exact=False,
+                )).to_be_visible()
+                assert record.read_bytes() == raw + b"\n"
+                expect(page.get_by_role("button", name="Delete saved review")).to_have_count(0)
+            context.close()
+        finally:
+            browser.close()
+    assert not external

@@ -17,7 +17,7 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 def _clear_targets() -> None:
     st.session_state["saved_reopen_review_id"] = None
     st.session_state["reopen_review_id"] = ""
-    st.session_state["delete_saved_review_confirmed"] = False
+    clear_saved_delete_confirmation()
     clear_saved_comparison_selection()
     st.session_state["saved_discovery_notice"] = (
         "Saved review choices cleared. Select a record again before reopening or comparing."
@@ -27,6 +27,22 @@ def _clear_targets() -> None:
 def clear_saved_delete_confirmation() -> None:
     """A new reopen target never inherits another target's deletion consent."""
     st.session_state["delete_saved_review_confirmed"] = False
+    st.session_state["saved_review_deletion_target"] = None
+
+
+def capture_saved_delete_confirmation(store: JsonReviewStore, review_id: str) -> None:
+    """Capture the file once when the user checks the deletion confirmation."""
+    st.session_state["saved_review_deletion_target"] = None
+    if not st.session_state["delete_saved_review_confirmed"]:
+        return
+    try:
+        st.session_state["saved_review_deletion_target"] = store.capture_deletion_target(review_id)
+    except (OSError, ValueError):
+        clear_saved_delete_confirmation()
+        st.session_state["saved_review_delete_notice"] = (
+            "The selected file could not be confirmed for deletion. Refresh saved reviews "
+            "and verify that local deletion is available."
+        )
 
 
 def _page_changed() -> None:

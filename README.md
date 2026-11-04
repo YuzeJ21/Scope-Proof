@@ -900,6 +900,10 @@ scopeproof-web --port 8502 --storage-dir "./recipient reviews"
 Relative folders are interpreted from the directory where the launcher starts. The reopen panel
 shows the selected folder and lists its safe record IDs in deterministic order. An empty store
 retains manual ID recovery. Use a different port and folder for each running workbench.
+In the `0.2.6.dev0` workbench, checking the deletion confirmation binds it to the selected
+file. If another workbench saves or replaces that file before you click Delete, ScopeProof
+preserves it and asks you to select it and confirm again. The same check applies to malformed
+regular files, which can still be removed with fresh confirmation.
 The app validates the selected record when it is opened and refuses a configured review path if it
 or any ancestor is a symbolic link or reparse point, or if an existing path component is not a
 directory. This app-owned local directory prevents a browser input from selecting arbitrary file

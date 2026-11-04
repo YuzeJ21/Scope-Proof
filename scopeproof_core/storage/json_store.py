@@ -26,7 +26,11 @@ from scopeproof_core.schemas.models import (
     ReviewBundle,
     ReviewState,
 )
-from scopeproof_core.storage.atomic_files import MAX_SAVED_RECORD_BYTES, read_text_no_follow
+from scopeproof_core.storage.atomic_files import (
+    MAX_SAVED_RECORD_BYTES,
+    read_bounded_utf8,
+    read_text_no_follow,
+)
 
 try:
     import fcntl
@@ -50,8 +54,8 @@ _LEGACY_CI_CATEGORIES = {
 _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED = (
     hasattr(os, "O_DIRECTORY")
     and hasattr(os, "O_NOFOLLOW")
-    and os.stat in os.supports_dir_fd
-    and os.stat in os.supports_follow_symlinks
+    and os.scandir in os.supports_fd
+    and os.open in os.supports_dir_fd
     and os.unlink in os.supports_dir_fd
 )
 _UNCONDITIONAL_SAVE = object()
@@ -81,7 +85,7 @@ class UnsafeReviewStore(ValueError):
 
 
 class StaleReviewState(ValueError):
-    """Raised when a guarded save would replace a newer local review state."""
+    """Raised when a guarded mutation would change a newer local review state."""
 
 
 @dataclass(frozen=True)
@@ -89,6 +93,15 @@ class HeadChange:
     changed: bool
     saved_head_sha: str
     current_head_sha: str
+
+
+@dataclass(frozen=True)
+class ReviewDeletionTarget:
+    """Local file identity observed when a user confirmed deletion."""
+
+    review_id: str
+    directory_identity: tuple[int, int]
+    record_identity: tuple[int, int, int, int, int]
 
 
 class JsonReviewStore:
@@ -203,8 +216,8 @@ class JsonReviewStore:
             and _REVIEW_ID.fullmatch(candidate.stem)
         )
 
-    def delete(self, review_id: str, *, expected_fingerprint: str | None = None) -> None:
-        """Delete one safe ID, optionally bound to an explicitly previewed snapshot."""
+    @contextmanager
+    def _locked_deletion_directory(self, review_id: str) -> Iterator[tuple[int, str]]:
         validated_id = self._validate_review_id(review_id)
         self._require_safe_directory()
         if not self.directory.is_dir():
@@ -212,15 +225,6 @@ class JsonReviewStore:
         if not _SAFE_DIRECTORY_DESCRIPTOR_DELETE_SUPPORTED:
             raise OSError("safe local review deletion is unsupported on this platform")
         with self._mutation_lock(validated_id):
-            if expected_fingerprint is not None:
-                current = self.load(validated_id)
-                if (
-                    current.review.review_id != validated_id
-                    or self.state_fingerprint(current) != expected_fingerprint
-                ):
-                    raise StaleReviewState(
-                        "saved review changed since preview; refresh details before deleting"
-                    )
             try:
                 directory_fd = os.open(
                     self.directory,
@@ -231,23 +235,71 @@ class JsonReviewStore:
             except NotADirectoryError:
                 raise UnsafeReviewStore("review store path must be a directory") from None
             try:
-                record_name = f"{validated_id}.json"
-                with os.scandir(directory_fd) as entries:
-                    matching_entry = next(
-                        (
-                            entry
-                            for entry in entries
-                            if entry.name == record_name
-                            and entry.is_file(follow_symlinks=False)
-                            and stat.S_ISREG(entry.stat(follow_symlinks=False).st_mode)
-                        ),
-                        None,
-                    )
-                if matching_entry is None:
-                    raise FileNotFoundError(validated_id) from None
-                os.unlink(matching_entry.name, dir_fd=directory_fd)
+                yield directory_fd, f"{validated_id}.json"
             finally:
                 os.close(directory_fd)
+
+    @staticmethod
+    def _deletion_target(
+        directory_fd: int, record_name: str, review_id: str,
+    ) -> ReviewDeletionTarget:
+        folder = os.fstat(directory_fd)
+        # Require an exact name even on case-insensitive volumes. Locks are keyed by ID.
+        with os.scandir(directory_fd) as entries:
+            entry = next((item for item in entries if item.name == record_name), None)
+            if entry is None:
+                raise FileNotFoundError(review_id)
+            record = entry.stat(follow_symlinks=False)
+        if not stat.S_ISREG(record.st_mode):
+            raise FileNotFoundError(review_id)
+        return ReviewDeletionTarget(
+            review_id=review_id,
+            directory_identity=(folder.st_dev, folder.st_ino),
+            record_identity=(
+                record.st_dev, record.st_ino, record.st_size, record.st_mtime_ns,
+                record.st_ctime_ns,
+            ),
+        )
+
+    def capture_deletion_target(self, review_id: str) -> ReviewDeletionTarget:
+        """Bind confirmation to a regular file, even if its contents cannot be parsed."""
+        with self._locked_deletion_directory(review_id) as (directory_fd, record_name):
+            return self._deletion_target(directory_fd, record_name, review_id)
+
+    def delete(
+        self,
+        review_id: str,
+        *,
+        expected_fingerprint: str | None = None,
+        expected_target: ReviewDeletionTarget | None = None,
+    ) -> None:
+        """Delete one safe ID, optionally bound to a file and a previewed review state."""
+        with self._locked_deletion_directory(review_id) as (directory_fd, record_name):
+            current_target = self._deletion_target(directory_fd, record_name, review_id)
+            if expected_target is not None and current_target != expected_target:
+                raise StaleReviewState("saved review changed after deletion confirmation")
+            if expected_fingerprint is not None:
+                descriptor = os.open(
+                    record_name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd,
+                )
+                with os.fdopen(descriptor, "rb") as handle:
+                    opened = os.fstat(handle.fileno())
+                    if (
+                        not stat.S_ISREG(opened.st_mode)
+                        or (opened.st_dev, opened.st_ino) != current_target.record_identity[:2]
+                    ):
+                        raise StaleReviewState("saved review changed while opening its preview")
+                    current = self.decode_record(read_bounded_utf8(handle))
+                if (
+                    current.review.review_id != review_id
+                    or self.state_fingerprint(current) != expected_fingerprint
+                ):
+                    raise StaleReviewState(
+                        "saved review changed since preview; refresh details before deleting"
+                    )
+                if self._deletion_target(directory_fd, record_name, review_id) != current_target:
+                    raise StaleReviewState("saved review changed while checking its preview")
+            os.unlink(record_name, dir_fd=directory_fd)
 
     @staticmethod
     def state_fingerprint(state: ReviewState) -> str:

@@ -1,5 +1,7 @@
 """Stale preview metadata cannot authorize a different reopen or deletion."""
 
+import pytest
+
 from scopeproof_core.reviews.lifecycle import revise_criteria
 from scopeproof_core.schemas.models import Criterion
 from tests.apps.test_saved_comparison_ui import rendered
@@ -46,6 +48,51 @@ def test_changed_preview_cannot_delete_a_new_revision_under_old_consent():
     assert path.exists() and path.read_bytes() == before
     assert store.load(CURRENT_REVIEW_ID) == changed
     assert not app.session_state["delete_saved_review_confirmed"]
+
+
+def test_id_only_delete_preserves_revision_saved_after_confirmation():
+    app, store = discovery_app()
+    app = app.selectbox(key="saved_reopen_review_id").set_value(CURRENT_REVIEW_ID).run()
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    changed = change_revision(store)
+    path = store.directory / f"{CURRENT_REVIEW_ID}.json"
+    before = path.read_bytes()
+
+    app = app.button(key="delete_saved_review").click().run()
+
+    assert path.read_bytes() == before
+    assert store.load(CURRENT_REVIEW_ID) == changed
+    assert not app.exception
+    assert not app.session_state["delete_saved_review_confirmed"]
+    assert "changed after confirmation" in rendered(app)
+
+
+@pytest.mark.parametrize("load_preview", [False, True])
+def test_corrupt_record_replacement_requires_new_delete_confirmation(load_preview):
+    app, store = discovery_app()
+    path = store.directory / "constructed-corrupt.json"
+    path.write_bytes(b"corrupt original")
+    app = app.run()
+    if load_preview:
+        app = load_details(app)
+    app = app.selectbox(key="saved_reopen_review_id").set_value(path.stem).run()
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    replacement = store.directory / "replacement.tmp"
+    replacement.write_bytes(b"corrupt replacement")
+    replacement.replace(path)
+
+    app = app.button(key="delete_saved_review").click().run()
+
+    assert path.read_bytes() == b"corrupt replacement"
+    assert not app.exception
+    assert not app.session_state["delete_saved_review_confirmed"]
+
+    app = app.selectbox(key="saved_reopen_review_id").set_value(path.stem).run()
+    assert app.button(key="delete_saved_review").disabled
+    app = app.checkbox(key="delete_saved_review_confirmed").check().run()
+    app = app.button(key="delete_saved_review").click().run()
+    assert not path.exists()
+    assert not app.exception
 
 
 def test_deep_malformed_neighbor_does_not_crash_loaded_details():
