@@ -41,9 +41,13 @@ def test_web_launcher_reports_shared_version_without_starting_streamlit(
 def test_packaged_web_launcher_uses_current_interpreter_without_shell(monkeypatch) -> None:
     launcher = load_launcher()
     calls: list[tuple[list[str], bool]] = []
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", "/unselected/reviews")
 
-    def fake_run(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+    def fake_run(
+        command: list[str], *, check: bool, env: dict[str, str],
+    ) -> subprocess.CompletedProcess[str]:
         calls.append((command, check))
+        assert "SCOPEPROOF_WORKBENCH_STORAGE_DIR" not in env
         return subprocess.CompletedProcess(command, 7)
 
     monkeypatch.setattr(launcher.subprocess, "run", fake_run)
@@ -75,10 +79,47 @@ def test_packaged_web_launcher_uses_current_interpreter_without_shell(monkeypatc
     assert check is False
 
 
+def test_packaged_web_launcher_passes_explicit_storage_directory_to_child(
+    tmp_path, monkeypatch,
+) -> None:
+    launcher = load_launcher()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", raising=False)
+
+    def fake_run(
+        command: list[str], *, check: bool, env: dict[str, str],
+    ) -> subprocess.CompletedProcess[str]:
+        assert Path(env["SCOPEPROOF_WORKBENCH_STORAGE_DIR"]) == tmp_path / "recipient reviews"
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(launcher.subprocess, "run", fake_run)
+    assert launcher.main(["--storage-dir", "recipient reviews"]) == 0
+    assert "SCOPEPROOF_WORKBENCH_STORAGE_DIR" not in launcher.os.environ
+    assert not (tmp_path / "recipient reviews").exists()
+
+
+@pytest.mark.parametrize("value", ["", "  ", "one/../other"])
+def test_packaged_web_launcher_rejects_ambiguous_storage_directory(
+    monkeypatch, capsys, value: str,
+) -> None:
+    launcher = load_launcher()
+
+    def unexpected_run(*args, **kwargs):
+        raise AssertionError("Streamlit must not start for invalid storage arguments")
+
+    monkeypatch.setattr(launcher.subprocess, "run", unexpected_run)
+    with pytest.raises(SystemExit) as raised:
+        launcher.main(["--storage-dir", value])
+    assert raised.value.code == 2
+    assert "storage directory" in capsys.readouterr().err
+
+
 def test_packaged_web_launcher_exits_cleanly_on_keyboard_interrupt(monkeypatch) -> None:
     launcher = load_launcher()
 
-    def interrupted_run(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+    def interrupted_run(
+        command: list[str], *, check: bool, env: dict[str, str],
+    ) -> subprocess.CompletedProcess[str]:
         raise KeyboardInterrupt
 
     monkeypatch.setattr(launcher.subprocess, "run", interrupted_run)

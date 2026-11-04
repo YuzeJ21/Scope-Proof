@@ -25,10 +25,12 @@ pytestmark = pytest.mark.browser
 RECORD_LIMIT = 64 * 1024 * 1024
 
 
-def _seed_record(runtime: Path, installation: Path) -> tuple[Path, bytes]:
+def _seed_record(
+    runtime: Path, installation: Path, *, storage_directory: Path | None = None,
+) -> tuple[Path, bytes]:
     home = runtime / "sender-home"
     home.mkdir(parents=True)
-    store = home / ".scopeproof" / "reviews"
+    store = storage_directory if storage_directory is not None else home / ".scopeproof" / "reviews"
     recipe = runtime / "constructed_history.py"
     shutil.copyfile(Path(__file__).parents[1] / "historical_analysis_fixture.py", recipe)
     _run(str(installation / "bin" / "python"), "-I", "-c",
@@ -55,19 +57,20 @@ def test_installed_ui_download_import_and_reopen_preserves_complete_record(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
     runtime = tmp_path / "ui-handoff"
-    sender, raw = _seed_record(runtime, installed_wheel)
-    recipient = runtime / "recipient-home"
-    recipient.mkdir()
-    target = recipient / ".scopeproof" / "reviews" / f"{HISTORICAL_REVIEW_ID}.json"
+    sender = runtime / "sender reviews"
+    recipient = runtime / "recipient reviews"
+    home, raw = _seed_record(runtime, installed_wheel, storage_directory=sender)
+    target = recipient / f"{HISTORICAL_REVIEW_ID}.json"
     portable = runtime / "downloaded-review.json"
     diagnostics = _diagnostics(tmp_path, "workbench-handoff")
     external: list[str] = []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            for name, home in (("sender", sender), ("recipient", recipient)):
+            for name, storage in (("sender", sender), ("recipient", recipient)):
                 with _installed_workbench_server(
                     installed_wheel, runtime, home, log_name=f"handoff-{name}.log",
+                    storage_directory=storage,
                 ) as (url, log):
                     context = browser.new_context(
                         accept_downloads=True, viewport={"width": 1440, "height": 1000},
@@ -78,6 +81,7 @@ def test_installed_ui_download_import_and_reopen_preserves_complete_record(
                         with _capture_browser_failure(page, diagnostics / name, log):
                             page.goto(url, wait_until="domcontentloaded")
                             page.get_by_text("Resume a saved review", exact=True).click()
+                            expect(page.get_by_text(str(storage), exact=True)).to_be_visible()
                             if name == "sender":
                                 prepare = page.get_by_role(
                                     "button", name="Prepare saved review download", exact=True,
@@ -140,7 +144,8 @@ def test_installed_ui_download_import_and_reopen_preserves_complete_record(
         finally:
             browser.close()
     assert not external
-    assert (sender / ".scopeproof" / "reviews" / target.name).read_bytes() == raw
+    assert (sender / target.name).read_bytes() == raw
+    assert not (home / ".scopeproof" / "reviews").exists()
 
 
 def test_installed_ui_full_record_limit_reaches_parser_and_overflow_stays_unsaved(
