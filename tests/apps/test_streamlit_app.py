@@ -332,6 +332,31 @@ def test_storage_path_is_kept_inside_local_storage_details() -> None:
     )
 
 
+def test_explicit_workbench_storage_saves_only_to_selected_directory(tmp_path, monkeypatch) -> None:
+    selected = tmp_path / "recipient reviews"
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(selected))
+    app = analyzed_demo(new_app())
+
+    assert not app.exception
+    records = list(selected.glob("*.json"))
+    assert len(records) == 1
+    assert not default_local_review_directory().exists()
+    local_storage = next(item for item in app.expander if item.label == "Local review storage")
+    assert any(item.value == str(selected) for item in local_storage.text)
+
+
+def test_invalid_explicit_workbench_storage_does_not_fall_back(tmp_path, monkeypatch) -> None:
+    selected = tmp_path / "regular-file"
+    selected.write_text("keep this file")
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(selected))
+    app = analyzed_demo(new_app())
+
+    assert not app.exception
+    assert any("Local review storage is unavailable." in item.value for item in app.error)
+    assert selected.read_text() == "keep this file"
+    assert not default_local_review_directory().exists()
+
+
 def test_optional_source_revision_is_collapsed_by_default() -> None:
     app = load_demo(new_app())
     revision = next(

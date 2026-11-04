@@ -913,8 +913,17 @@ provenance policy remain unchanged. No source is fetched or executed. See the
 
 ### Local review storage
 
-The workbench stores versioned JSON records under `~/.scopeproof/reviews`. The reopen panel lists
-safe local record IDs in deterministic order, while an empty store retains manual ID recovery.
+The workbench stores versioned JSON records under `~/.scopeproof/reviews` by default. In source
+builds that expose `--storage-dir` in `scopeproof-web --help`, launch with a separate review folder
+for an evaluation or a handoff on one computer:
+
+```bash
+scopeproof-web --port 8502 --storage-dir "./recipient reviews"
+```
+
+Relative folders are interpreted from the directory where the launcher starts. The reopen panel
+shows the selected folder and lists its safe record IDs in deterministic order. An empty store
+retains manual ID recovery. Use a different port and folder for each running workbench.
 The app validates the selected record when it is opened and refuses a configured review path if it
 or any ancestor is a symbolic link or reparse point, or if an existing path component is not a
 directory. This app-owned local directory prevents a browser input from selecting arbitrary file

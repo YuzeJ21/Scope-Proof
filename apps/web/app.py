@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from functools import partial
+from os import getenv
 from pathlib import Path
 from uuid import uuid4
 
@@ -32,6 +33,7 @@ from apps.web.junit_correction import (
     render_junit_correction,
 )
 from apps.web.junit_mapping import clear_junit_mapping_draft, render_junit_mapping_draft
+from apps.web.launcher import WORKBENCH_STORAGE_ENV
 from apps.web.review_transfer import render_review_transfer
 from apps.web.saved_comparison import (
     clear_saved_comparison_selection,
@@ -614,7 +616,8 @@ def _render_local_review_storage(
         st.session_state["deleted_review_save_fingerprint"] == current_fingerprint
     )
     with st.expander("Local review storage", expanded=save_failed):
-        st.caption(f"Storage directory: `{default_local_review_directory()}`")
+        st.caption("Storage directory:")
+        st.text(str(store.directory))
         st.caption("Current review ID")
         st.code(state.review.review_id, language=None)
         for message in pending_messages:
@@ -1141,8 +1144,11 @@ if criteria_authoring_reset_keys:
 if st.session_state.pop("requirements_draft_reset_pending", False):
     _clear_requirements_draft()
 
-storage_directory = default_local_review_directory()
-review_store = JsonReviewStore(Path(storage_directory))
+configured_storage = getenv(WORKBENCH_STORAGE_ENV)
+storage_directory = (
+    Path(configured_storage) if configured_storage else default_local_review_directory()
+)
+review_store = JsonReviewStore(storage_directory)
 try:
     saved_review_ids = review_store.list_review_ids()
 except (OSError, UnsafeReviewStore):
@@ -1507,6 +1513,9 @@ render_source_attachment(
 visible_saved_review_ids = saved_review_ids
 saved_discovery_entries = {}
 with st.expander("Resume a saved review", expanded=False):
+    if configured_storage:
+        st.caption("Review folder for this launch")
+        st.text(str(review_store.directory))
     if review_store_available:
         visible_saved_review_ids, saved_discovery_entries = render_saved_discovery(
             review_store, saved_review_ids,

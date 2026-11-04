@@ -58,9 +58,11 @@ not installation of the historical private candidate or a newly published releas
    retains its original decisions and history.
 5. On current source, choose **Prepare saved review download**, then **Download saved review
    record**. This complete record is different from an analysis-report JSON download.
-6. For the recipient, run the same source snapshot on another machine or under a separate OS
-   account whose local store does not contain that ID. Another tab, browser or checkout under
-   the same account shares `~/.scopeproof/reviews`; the workbench has no store selector.
+6. Open a recipient workbench with a review folder that does not contain the ID. If your build
+   lists `--storage-dir` in `uv run scopeproof-web --help`, launch it on a different port with
+   `uv run scopeproof-web --port 8502 --storage-dir "./recipient reviews"`. For the pinned snapshot above,
+   use another machine or OS account. Tabs and browser profiles under the same account share the
+   default folder.
    Upload the record, choose **Inspect uploaded review**, inspect its
    repository/head/confirmation/history, then explicitly consent and choose
    **Import inspected review**. Finally select its ID and choose **Reopen local review**.
@@ -89,5 +91,5 @@ Source can be missed; candidate presence cannot establish correctness. The evalu
 [use policy](../USE_POLICY.md), public-only source access and asserted identities limit adoption.
 
 See the [current product decision](commercialization/product-direction-2026-11-02.md) and
-[next-stage roadmap](../ROADMAP.md#current-priorities--2026-11-02). Stage 2 remains active;
+[next-stage roadmap](../ROADMAP.md#current-priorities--2026-11-04). Stage 2 remains active;
 Stage 3 stays dormant. No release, deployment or external contact is authorized by this guide.
