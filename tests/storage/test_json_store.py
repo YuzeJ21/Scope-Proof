@@ -47,6 +47,7 @@ from scopeproof_core.schemas.models import (
 )
 from scopeproof_core.storage.json_store import (
     JsonReviewStore,
+    StaleReviewState,
     UnsafeReviewStore,
     UnsupportedRecordVersion,
     default_local_review_directory,
@@ -1575,6 +1576,87 @@ def test_delete_removes_a_corrupt_regular_record_without_parsing_it(
     JsonReviewStore(tmp_path).delete("corrupt")
 
     assert not corrupt_record.exists()
+
+
+def test_delete_and_capture_require_exact_record_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = JsonReviewStore(tmp_path)
+    record = tmp_path / "Review-A.json"
+    record.write_bytes(b"keep this file")
+    real_stat = os.stat
+
+    def case_insensitive_stat(path, *args, **kwargs):
+        if path == "review-a.json" and kwargs.get("dir_fd") is not None:
+            path = record.name
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", case_insensitive_stat)
+
+    with pytest.raises(FileNotFoundError):
+        store.capture_deletion_target("review-a")
+    with pytest.raises(FileNotFoundError):
+        store.delete("review-a")
+    assert record.read_bytes() == b"keep this file"
+
+
+def test_guarded_delete_detects_in_place_edit_with_restored_mtime(tmp_path: Path) -> None:
+    record = tmp_path / "corrupt.json"
+    record.write_bytes(b"original corrupt bytes")
+    store = JsonReviewStore(tmp_path)
+    target = store.capture_deletion_target("corrupt")
+    before = record.stat()
+    changed = b"modified corrupt bytes"
+    assert len(changed) == before.st_size
+    record.write_bytes(changed)
+    os.utime(record, ns=(before.st_atime_ns, before.st_mtime_ns))
+
+    with pytest.raises(StaleReviewState, match="changed after deletion confirmation"):
+        store.delete("corrupt", expected_target=target)
+    assert record.read_bytes() == changed
+
+    store.delete("corrupt", expected_target=store.capture_deletion_target("corrupt"))
+    assert not record.exists()
+
+
+def test_guarded_delete_checks_preview_against_the_pinned_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "reviews"
+    displaced = tmp_path / "displaced"
+    replacement_root = tmp_path / "replacement"
+    store = JsonReviewStore(root)
+    preview = review_state("review-1")
+    newer = revise_criteria(preview, preview.criteria_revision.criteria, "New criteria")
+    record = store.save(newer)
+    newer_bytes = record.read_bytes()
+    replacement = JsonReviewStore(replacement_root).save(preview)
+    preview_bytes = replacement.read_bytes()
+    target = store.capture_deletion_target("review-1")
+    real_open = os.open
+    root_replaced = False
+
+    def replace_root_after_open(path, flags, *args, **kwargs):
+        nonlocal root_replaced
+        descriptor = real_open(path, flags, *args, **kwargs)
+        if path == root and flags & os.O_DIRECTORY and not root_replaced:
+            root.rename(displaced)
+            replacement_root.rename(root)
+            root_replaced = True
+        return descriptor
+
+    monkeypatch.setattr(os, "open", replace_root_after_open)
+
+    with pytest.raises(StaleReviewState, match="changed since preview"):
+        store.delete(
+            "review-1",
+            expected_target=target,
+            expected_fingerprint=store.state_fingerprint(preview),
+        )
+
+    assert root_replaced
+    assert (displaced / record.name).read_bytes() == newer_bytes
+    assert record.read_bytes() == preview_bytes
 
 
 def test_delete_pins_store_directory_when_root_is_replaced_at_unlink(

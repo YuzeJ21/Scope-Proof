@@ -27,6 +27,7 @@ documents direct overlap and adoption constraints without claiming superiority o
 | P0 — distribution verified at `72cac01` | Package the accumulated reviewer workflow and verify an upgrade from the public writer. | Matching direct and source-built wheel bytes, isolated installs, artifact hashes and a constructed native v5-to-v9 upgrade on copies. Each packet names its source commit. |
 | P1 — workbench folder selection in v0.2.5 | Run sender and recipient workbenches on one computer using separate review folders. | Explicit launch option, visible selected folder and installed browser handoff with both instances under one OS account. |
 | P2 — publication complete | Publish v0.2.5 as a downloadable evaluation release. | The public wheel, source archive, and checksum manifest matched the verified candidate. Both archives passed fresh installation. See the [release verification](docs/releases/v0.2.5-public-verification.md). |
+| Stage 2 — development | Keep later saved-review edits from being deleted under earlier consent. | Bind workbench confirmation to the selected file and recheck it under the store lock. Require fresh consent after a change, including when metadata is unavailable. |
 | P3 — Stage 3 dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. |
 
 No additional adapter family, accounts, hosted processing, billing or generic code review is

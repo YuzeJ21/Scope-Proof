@@ -40,6 +40,7 @@ from apps.web.saved_comparison import (
     render_saved_comparison_selector,
 )
 from apps.web.saved_discovery import (
+    capture_saved_delete_confirmation,
     clear_saved_delete_confirmation,
     render_saved_discovery,
     render_saved_review_summary,
@@ -300,6 +301,7 @@ _STATE_DEFAULTS = {
     "replace_unsaved_review_reset_pending": False,
     "review_reopen_notice": None,
     "delete_saved_review_confirmed": False,
+    "saved_review_deletion_target": None,
     "delete_saved_review_reset_pending": False,
     "saved_review_delete_notice": None,
     "source_load_notice": None,
@@ -1121,7 +1123,7 @@ if st.session_state["replace_unsaved_review_reset_pending"]:
 if st.session_state["delete_saved_review_reset_pending"]:
     st.session_state["delete_saved_review_reset_pending"] = False
     st.session_state["saved_reopen_review_id"] = None
-    st.session_state["delete_saved_review_confirmed"] = False
+    clear_saved_delete_confirmation()
 if st.session_state.pop("runtime_evidence_form_reset_pending", False):
     _clear_runtime_evidence_draft()
 if st.session_state.pop("selected_reference_form_reset_pending", False):
@@ -1583,25 +1585,39 @@ with st.expander("Resume a saved review", expanded=False):
         delete_confirmed = st.checkbox(
             "Permanently delete the selected local review",
             key="delete_saved_review_confirmed",
+            on_change=capture_saved_delete_confirmation,
+            args=(review_store, reopen_id),
+        )
+        deletion_target = st.session_state["saved_review_deletion_target"]
+        delete_enabled = (
+            delete_confirmed and deletion_target is not None
+            and deletion_target.review_id == reopen_id
         )
         if st.button(
             "Delete saved review",
             key="delete_saved_review",
-            disabled=not delete_confirmed,
-        ):
+            disabled=not delete_enabled,
+        ) and delete_enabled:
             try:
                 preview = saved_discovery_entries.get(reopen_id)
-                if preview is None or preview.metadata is None:
-                    review_store.delete(reopen_id)
-                else:
-                    review_store.delete(
-                        reopen_id, expected_fingerprint=preview.metadata.state_fingerprint,
-                    )
+                review_store.delete(
+                    reopen_id,
+                    expected_target=deletion_target,
+                    expected_fingerprint=(
+                        preview.metadata.state_fingerprint
+                        if preview is not None and preview.metadata is not None else None
+                    ),
+                )
             except FileNotFoundError:
                 _mark_open_review_deleted(reopen_id)
                 st.session_state["saved_review_delete_notice"] = (
                     "The selected saved review was already removed. Refresh the saved "
                     "review list."
+                )
+            except StaleReviewState:
+                st.session_state["saved_review_delete_notice"] = (
+                    "The selected file or its preview changed after confirmation. "
+                    "Refresh saved details, select the record, and confirm deletion again."
                 )
             except (OSError, ValueError):
                 st.session_state["saved_review_delete_notice"] = (
