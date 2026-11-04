@@ -7,7 +7,7 @@ current product state.
 Current direction: bounded Stage 2 development. Source implements scope-aware re-review and
 durable saved-baseline comparison, plus separately attributed non-gating source references.
 See the ranked outcomes in the [roadmap](../ROADMAP.md).
-Public install is v0.2.4; current source is unreleased `0.2.5`.
+Public install is v0.2.5. Development source uses `0.2.6.dev0`.
 The dated verification record binds released bytes to their own source commit. Stage 1 is closed
 at zero; Stage 3 is dormant and gated. No personal testing or qualifying reviews are required
 for evaluation distribution. Begin with the roadmap's finish line before starting any new slice.
@@ -16,13 +16,15 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 - [Start here: evaluation guide](evaluation-guide.md) — published/source/candidate capability map,
   one constructed workflow, exact-baseline engineering evidence and remaining limits.
-- [Current product and market decision](commercialization/product-direction-2026-11-02.md) —
-  official-source overlap, implemented strengths, adoption constraints and bounded next stages.
+- [November 2 product and market assessment](commercialization/product-direction-2026-11-02.md) —
+  official-source overlap, adoption constraints, and priorities before publication.
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
-- [v0.2.4 public verification](releases/v0.2.4-public-verification.md) — published source/tag/assets,
+- [v0.2.5 public verification](releases/v0.2.5-public-verification.md) — release source, assets,
+  fresh installs and workbench handoff checks.
+- [v0.2.4 public verification](releases/v0.2.4-public-verification.md) — earlier published source/tag/assets,
   automatic public-download checks, upgrade limits and evidence boundaries.
-- [v0.2.3 status and next stages](releases/v0.2.3-status-and-next-stages.md) — published-release
-  boundary, current development line, feature ledger, gaps, and stage status.
+- [Earlier status and next stages](releases/v0.2.3-status-and-next-stages.md) — feature ledger
+  and stage decisions before v0.2.5 publication.
 - [Stage 2 productization packet](commercialization/stage2-readiness-packet.md) — authorized
   owner-led engineering scope; it does not claim customer validation.
 - [Development environment](development-environment.md) — supported and unsupported engineering
@@ -62,9 +64,7 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
   demonstration and publication boundaries at the named source revision.
 
 - `docs/audits/` contains exact-head implementation, verification, and review snapshots.
-- `docs/releases/` contains published-release and post-merge evidence records. The current status
-  document linked above is the exception and explicitly distinguishes live operating status from
-  dated evidence.
+- `docs/releases/` contains published-release records and dated engineering ledgers.
 - `docs/research/` contains constructed or historical research evidence. It does not establish
   customer validation or advance a product stage.
 

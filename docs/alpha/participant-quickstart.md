@@ -1,11 +1,10 @@
 # Evaluation setup and historical public-alpha participant path
 
-The published evaluation download is **v0.2.4**, with its wheel, source archive, and
-`SHA256SUMS.txt` verified in the [public verification record](../releases/v0.2.4-public-verification.md).
-Current source/package identity is **0.2.5**, unreleased. Use the
-[current evaluation quickstart](../../README.md#quickstart) for v0.2.4 installation, checksum
-verification, supported environments, and saved-record v5 upgrade guidance. The
-[current source setup](../development-environment.md) describes the unreleased development line.
+The published evaluation download is **v0.2.5**. The
+[public verification record](../releases/v0.2.5-public-verification.md) identifies the wheel,
+source archive, and checksum manifest. Use the [quickstart](../../README.md#quickstart) for
+installation, checksum verification, and saved-record v9 upgrade guidance.
+Development source uses **0.2.6.dev0**. See the [source setup](../development-environment.md).
 The archived v0.2.3 participant instructions below retain their historical version boundaries.
 
 No personal testing, public case, qualifying review, or participant feedback is required to

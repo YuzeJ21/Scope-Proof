@@ -25,11 +25,11 @@ from scopeproof_core.evals.r002_models import (
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
 from scopeproof_core.version import __version__
 
-PUBLIC_RELEASE_VERSION = "0.2.4"
-PUBLIC_RELEASE_TAG = "v0.2.4"
-SOURCE_VERSION = "0.2.5"
-PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.4-py3-none-any.whl"
-PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.4"
+PUBLIC_RELEASE_VERSION = "0.2.5"
+PUBLIC_RELEASE_TAG = "v0.2.5"
+SOURCE_VERSION = "0.2.6.dev0"
+PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.5-py3-none-any.whl"
+PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5"
 V023_RELEASE_WHEEL = "scopeproof-0.2.3-py3-none-any.whl"
 V023_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
 PUBLIC_RELEASES_INDEX = "https://github.com/YuzeJ21/Scope-Proof/releases"
@@ -692,7 +692,9 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
 
 
 def _assert_published_version_matches_repository(*, repository: Path, current_version: str) -> None:
-    published_final_tags = {"0.2.3": "v0.2.3", PUBLIC_RELEASE_VERSION: PUBLIC_RELEASE_TAG}
+    published_final_tags = {
+        "0.2.3": "v0.2.3", "0.2.4": "v0.2.4", PUBLIC_RELEASE_VERSION: PUBLIC_RELEASE_TAG,
+    }
     published_tag = published_final_tags.get(current_version)
 
     if published_tag is None:
@@ -792,7 +794,7 @@ def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
     )
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5"])
 def test_published_final_contract_rejects_dirty_tracked_tree(
     tmp_path: Path, final_version: str
 ) -> None:
@@ -823,7 +825,7 @@ def test_published_final_contract_rejects_dirty_tracked_tree(
         )
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5"])
 def test_published_final_contract_rejects_untracked_package_input(
     tmp_path: Path, final_version: str
 ) -> None:
@@ -859,7 +861,7 @@ def test_published_final_contract_rejects_untracked_package_input(
     assert ".coverage 2" not in str(error.value)
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5"])
 def test_published_final_contract_rejects_ignored_force_included_input(
     tmp_path: Path,
     final_version: str,
@@ -1604,12 +1606,11 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
         "## Contributor setup", maxsplit=1
     )[0]
     release_install = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[0]
-    for filename in (PUBLIC_RELEASE_WHEEL_FILENAME, "scopeproof-0.2.4.tar.gz", "SHA256SUMS.txt"):
+    for filename in (PUBLIC_RELEASE_WHEEL_FILENAME, "scopeproof-0.2.5.tar.gz", "SHA256SUMS.txt"):
         assert filename in release_install
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in release_install
-    assert "published v0.2.4 wheel" in release_install
+    assert "published v0.2.5 wheel" in release_install
     assert f"Current source `{SOURCE_VERSION}` is unreleased" in release_install
-    assert "conditional v0.2.4" not in release_install
     assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in release_install
     assert "No personal testing or qualifying review" in release_install
     assert PUBLIC_RELEASES_INDEX in readme_quickstart
@@ -1617,11 +1618,11 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
     assert "../../README.md#quickstart" in quickstart
     source_workflow = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[1]
     normalized_workflow = " ".join(source_workflow.split())
-    assert "published v0.2.4 CLI" in normalized_workflow
-    assert "they do not apply to the historical v0.2.3 wheel" in normalized_workflow
+    assert "installed v0.2.5 CLI" in normalized_workflow
     assert f"{V023_DOWNLOAD_ROOT}/{V023_RELEASE_WHEEL}" in quickstart
     assert "Archived v0.2.3" in quickstart
-    assert "v0.2.4" in design_partner
+    assert PUBLIC_RELEASE_TAG in quickstart
+    assert PUBLIC_RELEASE_TAG in design_partner
     assert SOURCE_VERSION in design_partner
     assert "public verification record" in design_partner
     assert "ScopeProof v0.2.3 is published" in readme
@@ -1630,9 +1631,11 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
     assert "PR #183" in readme
     assert "historical source-integration evidence" in readme
 
+    assert f"Public install: v{PUBLIC_RELEASE_VERSION}" in roadmap
+    assert "v0.2.5 is published" in roadmap
+    assert SOURCE_VERSION in roadmap
+    assert "Public install: v0.2.4" in status_page
     for active_status in (roadmap, status_page):
-        assert f"Public install: v{PUBLIC_RELEASE_VERSION}" in active_status
-        assert "v0.2.4 is published" in active_status
         assert "PR #184" in active_status
         assert f"`{PR184_RELEASE_MERGE_SHA}`" in active_status
         assert all(run_id in active_status for run_id in PR184_EXACT_MAIN_RUN_IDS)
@@ -1640,7 +1643,6 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
         assert "The GitHub Release record is authoritative for publication availability." in (
             active_status
         )
-        assert SOURCE_VERSION in active_status
         assert "PR #183" in active_status
         assert f"`{PR183_SOURCE_MERGE_SHA}`" in active_status
         assert all(run_id in active_status for run_id in PR183_EXACT_MAIN_RUN_IDS)
@@ -1695,10 +1697,13 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
         encoding="utf-8"
     )
 
-    for active_surface in (readme, roadmap, environment, status):
-        assert "v0.2.4" in active_surface
+    evaluation = Path("docs/evaluation-guide.md").read_text(encoding="utf-8")
+    for active_surface in (readme, roadmap, evaluation):
+        assert PUBLIC_RELEASE_TAG in active_surface
         assert SOURCE_VERSION in active_surface
-        assert "v0.2.4-public-verification.md" in active_surface
+        assert "v0.2.5-public-verification.md" in active_surface
+    for earlier_surface in (environment, status):
+        assert "v0.2.4-public-verification.md" in earlier_surface
     for dated_surface in (platform, market):
         assert "0.2.4.dev0" in dated_surface
         assert "v0.2.3" in dated_surface
