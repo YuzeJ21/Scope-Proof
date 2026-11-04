@@ -59,8 +59,8 @@ not installation of the historical private candidate or a newly published releas
 5. On current source, choose **Prepare saved review download**, then **Download saved review
    record**. This complete record is different from an analysis-report JSON download.
 6. Open a recipient workbench with a review folder that does not contain the ID. If your build
-   lists `--storage-dir` in `scopeproof-web --help`, launch it on a different port with
-   `scopeproof-web --port 8502 --storage-dir "./recipient reviews"`. For the pinned snapshot above,
+   lists `--storage-dir` in `uv run scopeproof-web --help`, launch it on a different port with
+   `uv run scopeproof-web --port 8502 --storage-dir "./recipient reviews"`. For the pinned snapshot above,
    use another machine or OS account. Tabs and browser profiles under the same account share the
    default folder.
    Upload the record, choose **Inspect uploaded review**, inspect its
