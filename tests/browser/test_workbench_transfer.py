@@ -116,14 +116,13 @@ def test_installed_ui_download_import_and_reopen_preserves_complete_record(
                                 "Import this inspected saved record "
                                 "under its original review ID"
                             ))
-                            consent_label = page.get_by_text(
-                                "Import this inspected saved record "
-                                "under its original review ID", exact=True,
-                            )
                             action = page.get_by_role("button", name="Import inspected review")
                             expect(action).to_be_disabled()
-                            _run_and_wait_for_streamlit_rerun(page, consent_label.click)
+                            # Activate the actual checkbox. Clicking its text sometimes left
+                            # consent unchecked in hosted Chromium without triggering a rerun.
+                            consent.press("Space")
                             expect(consent).to_be_checked()
+                            expect(action).to_be_enabled()
                             _run_and_wait_for_streamlit_rerun(page, action.click)
                             expect(page.get_by_text(
                                 "Open work remains unchanged.", exact=False,
@@ -132,8 +131,10 @@ def test_installed_ui_download_import_and_reopen_preserves_complete_record(
                             expect(page.get_by_role("button", name="Download JSON",
                                                     exact=True)).to_have_count(0)
                             expect(consent).not_to_be_checked()
-                            _run_and_wait_for_streamlit_rerun(page, consent_label.click)
+                            expect(action).to_be_disabled()
+                            consent.press("Space")
                             expect(consent).to_be_checked()
+                            expect(action).to_be_enabled()
                             _run_and_wait_for_streamlit_rerun(page, action.click)
                             expect(page.get_by_text(
                                 "Nothing was overwritten.", exact=False,

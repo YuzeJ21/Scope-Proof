@@ -162,12 +162,18 @@ def deferred_review_export(
     store: JsonReviewStore,
     expected_fingerprint: str | None,
     authority_check: Callable[[], bool] | None = None,
+    expired_by_acceptance_note: Callable[[], bool] | None = None,
 ) -> Callable[[], str]:
     """Return a click-time renderer that refuses stale persisted review state."""
 
     captured = source.model_copy(deep=True)
 
     def require_authority() -> None:
+        if expired_by_acceptance_note is not None and expired_by_acceptance_note():
+            raise DeferredExportUnavailable(
+                "This download expired when the final acceptance note opened. "
+                "Submit or clear the note and use the current download button."
+            )
         if authority_check is not None and not authority_check():
             raise DeferredExportUnavailable(
                 "ScopeProof export was blocked because fresh source observations require re-review."
