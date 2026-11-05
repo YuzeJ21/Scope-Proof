@@ -765,10 +765,10 @@ splitting, reordering, or editing criteria invalidates the previous analysis and
 reconfirmation before another review run. Human decisions and final acceptance are recorded as
 history rather than silently replacing earlier decisions.
 
-In `0.2.6.dev0`, the optional **Final acceptance note** records why a reviewer accepted or
-revoked acceptance. The note is saved with the chosen event and appears in resolution history
-and report exports. An unsubmitted note stays with the active review and reviewer. Record the
-event or clear the draft before replacing the open review or downloading its report.
+In `0.2.6.dev0`, choose **Add final acceptance note** to record why you are accepting or
+revoking acceptance. Submit the form to save the note with the event in resolution history
+and report exports. Record the event or clear its draft before replacing the open review or
+downloading its current report. Changing the review or reviewer clears the old note.
 
 ### Compare saved analyses after reopening
 

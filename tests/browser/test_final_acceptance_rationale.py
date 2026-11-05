@@ -60,6 +60,7 @@ def test_installed_workbench_saves_rationale_on_explicit_acceptance_events(
                 )
                 _run_and_wait_for_streamlit_rerun(page, reopen.click)
                 note = page.get_by_role("textbox", name="Final acceptance note (optional)")
+                add_note = page.get_by_role("button", name="Add final acceptance note", exact=True)
                 export = page.get_by_role("button", name="Download HTML", exact=True)
                 for label, accept, rationale in (
                     ("Revoke final acceptance", False, "Constructed <withdrawal> reason"),
@@ -67,13 +68,13 @@ def test_installed_workbench_saves_rationale_on_explicit_acceptance_events(
                 ):
                     before = record.read_bytes()
                     action = page.get_by_role("button", name=label, exact=True)
+                    _run_and_wait_for_streamlit_rerun(page, add_note.click)
                     expect(action).to_be_enabled()
-                    note.fill(rationale)
-                    _run_and_wait_for_streamlit_rerun(page, lambda: note.press("Tab"))
                     expect(export).to_be_disabled()
+                    note.fill(rationale)
                     assert record.read_bytes() == before
                     _run_and_wait_for_streamlit_rerun(page, action.click)
-                    expect(note).to_have_value("")
+                    expect(note).to_have_count(0)
                     saved = json.loads(record.read_bytes())["state"]
                     event = saved["resolution_events"][-1]
                     assert event["final_acceptance"] is accept

@@ -434,11 +434,12 @@ def _clear_final_acceptance_note() -> None:
     st.session_state.pop("final_acceptance_note_context", None)
 
 
-def _capture_final_acceptance_note(state: ReviewState | None, reviewer: str) -> None:
-    """Bind an edited note to the review and reviewer shown beside the action."""
-    st.session_state["final_acceptance_note_context"] = (
-        (_review_state_fingerprint(state), reviewer) if state is not None else None
-    )
+def _open_final_acceptance_note(state: ReviewState | None, reviewer: str) -> None:
+    """Open a draft for the review and reviewer shown beside the action."""
+    if state is not None:
+        st.session_state["final_acceptance_note_context"] = (
+            _review_state_fingerprint(state), reviewer,
+        )
 
 
 def _review_matches_local_save(state: ReviewState) -> bool:
@@ -1179,10 +1180,11 @@ else:
     review_store_available = True
 
 current_review_state: ReviewState | None = st.session_state["review_state"]
-has_pending_acceptance_note = bool(st.session_state.get("final_acceptance_note", "").strip())
+acceptance_note_context = st.session_state.get("final_acceptance_note_context")
+has_pending_acceptance_note = acceptance_note_context is not None
 acceptance_note_expired = has_pending_acceptance_note and (
     current_review_state is None
-    or st.session_state.get("final_acceptance_note_context") != (
+    or acceptance_note_context != (
         _review_state_fingerprint(current_review_state),
         st.session_state.get("decision_reviewer", "Local reviewer").strip(),
     )
@@ -3547,100 +3549,86 @@ else:
         st.warning("The unsent acceptance note was cleared because the review or reviewer changed.")
     if acceptance_note_conflict:
         st.warning("The saved review changed or was removed. Clear the note before continuing.")
-    acceptance_note = st.text_area(
-        "Final acceptance note (optional)",
-        key="final_acceptance_note",
-        help="Recorded with the next final acceptance or revocation event.",
-        disabled=(
-            acceptance_input_blocked
-            or not decision_reviewer_ready
-            or not (final_acceptance_eligible or final_acceptance_recorded)
-        ),
-        on_change=_capture_final_acceptance_note,
-        args=(review_state, decision_reviewer.strip()),
-    ).strip()
+    acceptance_action: bool | None = None
+    acceptance_note = ""
+    record_blocked = acceptance_input_blocked or not decision_reviewer_ready
     if has_pending_acceptance_note:
+        with st.form("final_acceptance_note_form", enter_to_submit=False, border=False):
+            acceptance_note = st.text_area(
+                "Final acceptance note (optional)", key="final_acceptance_note",
+                help="Recorded with the selected acceptance event.",
+            ).strip()
+            if final_acceptance_recorded:
+                if st.form_submit_button(
+                    "Revoke final acceptance", key="revoke_final_acceptance",
+                    disabled=record_blocked,
+                ):
+                    acceptance_action = False
+            elif st.form_submit_button(
+                "Record final acceptance", key="record_final_acceptance",
+                disabled=record_blocked or not final_acceptance_eligible,
+            ):
+                acceptance_action = True
         st.button(
             "Clear pending final acceptance note", key="clear_final_acceptance_note",
             on_click=_clear_final_acceptance_note,
         )
-    if st.button(
-        "Record final acceptance",
-        key="record_final_acceptance",
-        disabled=(
-            final_acceptance_recorded
-            or not final_acceptance_eligible
-            or not decision_reviewer_ready
-            or acceptance_input_blocked
-        ),
-    ):
-        if acceptance_input_blocked or acceptance_note_expired:
+    else:
+        st.button(
+            "Add final acceptance note", key="add_final_acceptance_note",
+            disabled=record_blocked or not (final_acceptance_eligible or final_acceptance_recorded),
+            on_click=_open_final_acceptance_note, args=(review_state, decision_reviewer.strip()),
+        )
+        if st.button(
+            "Record final acceptance", key="record_final_acceptance",
+            disabled=record_blocked or final_acceptance_recorded or not final_acceptance_eligible,
+        ):
+            acceptance_action = True
+        if final_acceptance_recorded and st.button(
+            "Revoke final acceptance", key="revoke_final_acceptance", disabled=record_blocked,
+        ):
+            acceptance_action = False
+    if acceptance_action is not None:
+        verb = "recorded" if acceptance_action else "revoked"
+        if record_blocked or acceptance_note_expired:
             st.error(
-                "Final acceptance cannot be recorded while review inputs are pending. "
+                f"Final acceptance cannot be {verb} while review inputs are pending. "
                 "Submit or clear them before trying again."
             )
         elif review_state is None:
-            st.error("Run analysis before recording final acceptance.")
+            st.error("Run analysis before changing final acceptance.")
         else:
             try:
-                review_state = append_resolution(
+                updated_acceptance = append_resolution(
                     review_state,
                     ResolutionEvent(
-                        final_acceptance=True,
-                        comment=acceptance_note or "Reviewer recorded final acceptance",
+                        final_acceptance=acceptance_action,
+                        comment=acceptance_note or f"Reviewer {verb} final acceptance",
                         reviewer=decision_reviewer.strip(),
                     ),
                 )
             except ValueError:
                 st.error(
-                    "Final acceptance could not be recorded. The review remains unchanged. "
+                    f"Final acceptance could not be {verb}. The review remains unchanged. "
                     "Verify the active review state and try again."
                 )
             else:
-                st.session_state["review_state"] = review_state
-                st.session_state["bundle"] = review_state.bundle
-                bundle = review_state.bundle
-                st.session_state["final_acceptance_save_notice"] = (
-                    "Final acceptance appended to the local review history."
-                )
-                st.session_state["final_acceptance_note_reset_pending"] = True
-                st.rerun()
-    if final_acceptance_recorded and st.button(
-        "Revoke final acceptance",
-        key="revoke_final_acceptance",
-        disabled=not decision_reviewer_ready or acceptance_input_blocked,
-    ):
-        if acceptance_input_blocked or acceptance_note_expired:
-            st.error(
-                "Final acceptance cannot be revoked while review inputs are pending. "
-                "Submit or clear them before trying again."
-            )
-        elif review_state is None:
-            st.error("Run analysis before revoking final acceptance.")
-        else:
-            try:
-                review_state = append_resolution(
-                    review_state,
-                    ResolutionEvent(
-                        final_acceptance=False,
-                        comment=acceptance_note or "Reviewer revoked final acceptance",
-                        reviewer=decision_reviewer.strip(),
-                    ),
-                )
-            except ValueError:
-                st.error(
-                    "Final acceptance could not be revoked. The review remains unchanged. "
-                    "Verify the active review state and try again."
-                )
-            else:
-                st.session_state["review_state"] = review_state
-                st.session_state["bundle"] = review_state.bundle
-                bundle = review_state.bundle
-                st.session_state["final_acceptance_save_notice"] = (
-                    "Final acceptance revocation appended to the local review history."
-                )
-                st.session_state["final_acceptance_note_reset_pending"] = True
-                st.rerun()
+                if acceptance_note and (
+                    not review_store_available
+                    or not _persist_review_state(updated_acceptance, review_store)
+                ):
+                    st.error("The acceptance event could not be saved. Your note is still pending.")
+                else:
+                    st.session_state["review_state"] = updated_acceptance
+                    st.session_state["bundle"] = updated_acceptance.bundle
+                    event_label = "Final acceptance" if acceptance_action else (
+                        "Final acceptance revocation"
+                    )
+                    st.session_state["final_acceptance_save_notice"] = (
+                        f"{event_label} appended to the local review history."
+                    )
+                    st.session_state["final_acceptance_note_reset_pending"] = True
+                    st.rerun()
     if final_acceptance_save_notice is not None:
         st.success(final_acceptance_save_notice)
 
