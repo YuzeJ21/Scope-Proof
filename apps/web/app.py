@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from functools import partial
 from os import getenv
 from pathlib import Path
+from threading import Event
 from uuid import uuid4
 
 import streamlit as st
@@ -432,11 +433,13 @@ def _review_state_fingerprint(state: ReviewState) -> str:
 def _clear_final_acceptance_note() -> None:
     st.session_state["final_acceptance_note"] = ""
     st.session_state.pop("final_acceptance_note_context", None)
+    st.session_state.pop("final_acceptance_export_expired", None)
 
 
 def _open_final_acceptance_note(state: ReviewState | None, reviewer: str) -> None:
     """Open a draft for the review and reviewer shown beside the action."""
     if state is not None:
+        st.session_state.setdefault("final_acceptance_export_expired", Event()).set()
         st.session_state["final_acceptance_note_context"] = (
             _review_state_fingerprint(state), reviewer,
         )
@@ -3729,6 +3732,9 @@ else:
         )
     export_source = review_state if review_state is not None else bundle
     export_has_provenance = bundle.review.criteria_source_provenance is not None
+    acceptance_export_expired = st.session_state.setdefault(
+        "final_acceptance_export_expired", Event(),
+    )
     expected_export_fingerprint = (
         st.session_state["saved_review_fingerprint"]
         if review_state is not None
@@ -3751,6 +3757,7 @@ else:
             store=review_store,
             expected_fingerprint=expected_export_fingerprint,
             authority_check=source_authority_check(review_state),
+            expired_by_acceptance_note=acceptance_export_expired.is_set,
         ) if export_has_provenance else ""
         column.download_button(
             f"Download {label}",

@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from apps.web import deferred_exports
 from scopeproof_core.reporting.exporters import export_html, export_json, export_markdown
 from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import ResolutionEvent
@@ -124,3 +125,28 @@ def test_save_race_keeps_note_pending_without_claiming_the_event_was_saved(monke
     assert app.text_area(key="final_acceptance_note").value == NOTE
     assert any("Your note is still pending" in notice.value for notice in app.error)
     assert not any("revocation appended" in notice.value for notice in app.success)
+
+
+def test_opening_note_editor_revokes_already_rendered_current_downloads(monkeypatch):
+    html_callbacks = []
+    real_deferred = deferred_exports.deferred_review_export
+
+    def capture_html(source, renderer, **kwargs):
+        callback = real_deferred(source, renderer, **kwargs)
+        if renderer is export_html:
+            html_callbacks.append(callback)
+        return callback
+
+    monkeypatch.setattr(deferred_exports, "deferred_review_export", capture_html)
+    app, _, _, _ = open_acceptance_review()
+    old_download = html_callbacks[-1]
+    assert "ScopeProof Acceptance Review" in old_download()
+
+    app = open_note_editor(app)
+    with pytest.raises(deferred_exports.DeferredExportUnavailable, match="acceptance note"):
+        old_download()
+
+    app = app.button(key="clear_final_acceptance_note").click().run()
+    with pytest.raises(deferred_exports.DeferredExportUnavailable, match="acceptance note"):
+        old_download()
+    assert "ScopeProof Acceptance Review" in html_callbacks[-1]()
