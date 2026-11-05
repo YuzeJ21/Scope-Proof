@@ -633,8 +633,12 @@ The six review sections are:
 
 Criterion Review contains the selected criterion evidence, separate reviewer-selected static
 references and external JUnit context,
-external verification, and human resolution controls. Summary & Export provides the Markdown,
-JSON, and CSV review records.
+external verification, and human resolution controls. Summary & Export provides Markdown,
+JSON, and CSV reports. In `0.2.6.dev0`, **Download HTML** provides a self-contained report
+that the recipient can open in a browser offline. The exact head, gate reasons, next actions, and
+recorded final acceptance appear before the criterion gaps, evidence limitations, and decision
+history. Following evidence links requires network access. Use the separate saved-review transfer
+when the recipient needs to reopen a review.
 
 ### Select an exact-head source reference
 

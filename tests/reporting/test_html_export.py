@@ -1,5 +1,7 @@
 from scopeproof_core.demo import build_demo_review
 from scopeproof_core.reporting.exporters import export_html
+from scopeproof_core.schemas.models import GateVerdict
+from tests.final_acceptance_fixture import acceptance_comparison_states
 
 
 def test_html_export_is_self_contained_and_preserves_audit_identity() -> None:
@@ -28,3 +30,12 @@ def test_html_export_escapes_review_provenance() -> None:
     assert "dev&lt;unsafe&gt;" in html
     assert "rules&lt;unsafe&gt;" in html
     assert "dev<unsafe>" not in html
+
+
+def test_html_summary_distinguishes_final_acceptance_from_an_identical_conditional_gate():
+    current, previous = acceptance_comparison_states(previous=False, current=True)
+    for state, recorded in ((previous, "No"), (current, "Yes")):
+        assert state.bundle.gate.verdict is GateVerdict.CONDITIONAL
+        overview = export_html(state).split("<h2>Criteria Source</h2>", 1)[0]
+        assert "<strong>Review status:</strong> Accepted with exceptions" in overview
+        assert f"<strong>Recorded final acceptance:</strong> {recorded}" in overview
