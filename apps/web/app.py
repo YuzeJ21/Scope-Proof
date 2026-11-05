@@ -375,6 +375,7 @@ def _reset_analysis() -> None:
     st.session_state["criteria_source_widget_sync_pending"] = None
     st.session_state["source_widget_sync_pending"] = None
     st.session_state["replace_unsaved_review_reset_pending"] = True
+    st.session_state["final_acceptance_note_reset_pending"] = True
 
 
 def _remember_criteria_source_draft() -> None:
@@ -426,6 +427,19 @@ def _apply_criteria_update(
 def _review_state_fingerprint(state: ReviewState) -> str:
     """Return a deterministic session-only identity for a validated review state."""
     return JsonReviewStore.state_fingerprint(state)
+
+
+def _clear_final_acceptance_note() -> None:
+    st.session_state["final_acceptance_note"] = ""
+    st.session_state.pop("final_acceptance_note_context", None)
+
+
+def _capture_final_acceptance_note(state: ReviewState | None, reviewer: str) -> None:
+    """Bind an edited note to the review and reviewer shown beside the action."""
+    st.session_state["final_acceptance_note_context"] = (
+        (_review_state_fingerprint(state), reviewer) if state is not None else None
+    )
+    st.session_state["replace_unsaved_review_confirmed"] = False
 
 
 def _review_matches_local_save(state: ReviewState) -> bool:
@@ -777,6 +791,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
         "criteria_source_confirmer": st.session_state["criteria_source_confirmer"],
     }
     st.session_state["replace_unsaved_review_reset_pending"] = True
+    st.session_state["final_acceptance_note_reset_pending"] = True
 
 
 def _analyze(*, unchanged_files: list[RetrievedFile] | None = None) -> ReviewBundle:
@@ -1139,6 +1154,8 @@ if st.session_state.pop("junit_correction_reset_pending", False):
     clear_junit_correction_draft()
 if st.session_state.pop("resolution_form_reset_pending", False):
     _clear_resolution_draft()
+if st.session_state.pop("final_acceptance_note_reset_pending", False):
+    _clear_final_acceptance_note()
 if st.session_state.pop("criteria_draft_reset_pending", False):
     _clear_criteria_draft(st.session_state["criteria"])
 criteria_authoring_reset_keys = st.session_state.pop(
@@ -1163,6 +1180,17 @@ else:
     review_store_available = True
 
 current_review_state: ReviewState | None = st.session_state["review_state"]
+has_pending_acceptance_note = bool(st.session_state.get("final_acceptance_note", "").strip())
+acceptance_note_expired = has_pending_acceptance_note and (
+    current_review_state is None
+    or st.session_state.get("final_acceptance_note_context") != (
+        _review_state_fingerprint(current_review_state),
+        st.session_state.get("decision_reviewer", "Local reviewer").strip(),
+    )
+)
+if acceptance_note_expired:
+    _clear_final_acceptance_note()
+    has_pending_acceptance_note = False
 prepare_junit_withdrawal_context(current_review_state, st.session_state.get("selected_criterion"))
 prepare_junit_correction_context(current_review_state, st.session_state.get("selected_criterion"))
 has_pending_criteria_draft = _criteria_draft_pending(st.session_state["criteria"])
@@ -1176,7 +1204,7 @@ has_missing_active_provenance = bool(
     current_review_state is not None
     and current_review_state.review.criteria_source_provenance is None
 )
-has_pending_review_input = (
+has_other_pending_review_input = (
     has_pending_criteria_draft
     or has_pending_criteria_authoring_draft
     or has_pending_requirements_draft
@@ -1184,6 +1212,7 @@ has_pending_review_input = (
     or has_pending_criteria_source
     or has_missing_active_provenance
 )
+has_pending_review_input = has_other_pending_review_input or has_pending_acceptance_note
 current_review_state = _refresh_clean_review_from_local_store(
     current_review_state,
     store=review_store,
@@ -1211,6 +1240,8 @@ if has_pending_criterion_detail_draft:
         "Pending criterion-detail inputs are not saved or exported. Submit or clear "
         "them before relying on this review ID."
     )
+if has_pending_acceptance_note:
+    pending_storage_messages.append("Record the acceptance event or clear its pending note.")
 if has_pending_criteria_source:
     pending_storage_messages.append(
         "Pending criteria source changes are not saved or exported. Reconfirm the source "
@@ -1268,6 +1299,7 @@ authoring_submission_blocked = bool(
         or has_pending_criteria_draft
         or has_pending_requirements_draft
         or has_pending_criterion_detail_draft
+        or has_pending_acceptance_note
     )
     and not replace_unsaved_review_confirmed
 )
@@ -1278,6 +1310,7 @@ requirements_submission_blocked = bool(
         or has_pending_criteria_draft
         or has_pending_criteria_authoring_draft
         or has_pending_criterion_detail_draft
+        or has_pending_acceptance_note
     )
     and not replace_unsaved_review_confirmed
 )
@@ -1650,7 +1683,7 @@ with st.expander("Resume a saved review", expanded=False):
         has_pending_inputs=(
             has_pending_criteria_draft or has_pending_criteria_authoring_draft
             or has_pending_requirements_draft or has_pending_criterion_detail_draft
-            or has_pending_criteria_source
+            or has_pending_criteria_source or has_pending_acceptance_note
         ),
     )
 saved_review_delete_notice = st.session_state.pop("saved_review_delete_notice", None)
@@ -1956,6 +1989,7 @@ else:
         key="confirm_criteria",
         disabled=(
             bool(blank_criterion_ids)
+            or has_pending_acceptance_note
             or not criteria_source_reference
             or not criteria_source_confirmer
             or (
@@ -3501,6 +3535,34 @@ else:
         )
     if not final_acceptance_recorded and not final_acceptance_eligible:
         st.caption("Resolve every active criterion before recording final acceptance.")
+    acceptance_note_conflict = has_pending_acceptance_note and (
+        st.session_state["review_save_conflict"]
+        or st.session_state["deleted_review_save_fingerprint"] is not None
+    )
+    acceptance_input_blocked = (
+        has_other_pending_review_input or source_observation_conflict or acceptance_note_conflict
+    )
+    if acceptance_note_expired:
+        st.warning("The unsent acceptance note was cleared because the review or reviewer changed.")
+    if acceptance_note_conflict:
+        st.warning("The saved review changed or was removed. Clear the note before continuing.")
+    acceptance_note = st.text_area(
+        "Final acceptance note (optional)",
+        key="final_acceptance_note",
+        help="Recorded with the next final acceptance or revocation event.",
+        disabled=(
+            acceptance_input_blocked
+            or not decision_reviewer_ready
+            or not (final_acceptance_eligible or final_acceptance_recorded)
+        ),
+        on_change=_capture_final_acceptance_note,
+        args=(review_state, decision_reviewer.strip()),
+    ).strip()
+    if has_pending_acceptance_note:
+        st.button(
+            "Clear pending final acceptance note", key="clear_final_acceptance_note",
+            on_click=_clear_final_acceptance_note,
+        )
     if st.button(
         "Record final acceptance",
         key="record_final_acceptance",
@@ -3508,10 +3570,10 @@ else:
             final_acceptance_recorded
             or not final_acceptance_eligible
             or not decision_reviewer_ready
-            or has_pending_review_input
+            or acceptance_input_blocked
         ),
     ):
-        if has_pending_review_input:
+        if acceptance_input_blocked or acceptance_note_expired:
             st.error(
                 "Final acceptance cannot be recorded while review inputs are pending. "
                 "Submit or clear them before trying again."
@@ -3524,7 +3586,7 @@ else:
                     review_state,
                     ResolutionEvent(
                         final_acceptance=True,
-                        comment="Reviewer recorded final acceptance",
+                        comment=acceptance_note or "Reviewer recorded final acceptance",
                         reviewer=decision_reviewer.strip(),
                     ),
                 )
@@ -3540,13 +3602,14 @@ else:
                 st.session_state["final_acceptance_save_notice"] = (
                     "Final acceptance appended to the local review history."
                 )
+                st.session_state["final_acceptance_note_reset_pending"] = True
                 st.rerun()
     if final_acceptance_recorded and st.button(
         "Revoke final acceptance",
         key="revoke_final_acceptance",
-        disabled=(not decision_reviewer_ready or has_pending_review_input),
+        disabled=not decision_reviewer_ready or acceptance_input_blocked,
     ):
-        if has_pending_review_input:
+        if acceptance_input_blocked or acceptance_note_expired:
             st.error(
                 "Final acceptance cannot be revoked while review inputs are pending. "
                 "Submit or clear them before trying again."
@@ -3559,7 +3622,7 @@ else:
                     review_state,
                     ResolutionEvent(
                         final_acceptance=False,
-                        comment="Reviewer revoked final acceptance",
+                        comment=acceptance_note or "Reviewer revoked final acceptance",
                         reviewer=decision_reviewer.strip(),
                     ),
                 )
@@ -3575,6 +3638,7 @@ else:
                 st.session_state["final_acceptance_save_notice"] = (
                     "Final acceptance revocation appended to the local review history."
                 )
+                st.session_state["final_acceptance_note_reset_pending"] = True
                 st.rerun()
     if final_acceptance_save_notice is not None:
         st.success(final_acceptance_save_notice)
