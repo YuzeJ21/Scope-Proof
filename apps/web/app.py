@@ -439,7 +439,6 @@ def _capture_final_acceptance_note(state: ReviewState | None, reviewer: str) -> 
     st.session_state["final_acceptance_note_context"] = (
         (_review_state_fingerprint(state), reviewer) if state is not None else None
     )
-    st.session_state["replace_unsaved_review_confirmed"] = False
 
 
 def _review_matches_local_save(state: ReviewState) -> bool:
@@ -1280,7 +1279,11 @@ has_unsaved_review = bool(
         or has_pending_review_input
     )
 )
-if has_unsaved_review:
+if has_pending_acceptance_note:
+    st.warning("Submit or clear the acceptance note before replacing this review.")
+    st.session_state["replace_unsaved_review_confirmed"] = False
+    replace_unsaved_review_confirmed = False
+elif has_unsaved_review:
     st.warning(
         "The current review has unsaved changes. Replacing it will discard unsaved changes."
     )
@@ -1292,25 +1295,23 @@ else:
     st.session_state["replace_unsaved_review_confirmed"] = False
     replace_unsaved_review_confirmed = False
 replacement_blocked = has_unsaved_review and not replace_unsaved_review_confirmed
-authoring_submission_blocked = bool(
+authoring_submission_blocked = has_pending_acceptance_note or bool(
     current_review_state is not None
     and (
         not _review_matches_local_save(current_review_state)
         or has_pending_criteria_draft
         or has_pending_requirements_draft
         or has_pending_criterion_detail_draft
-        or has_pending_acceptance_note
     )
     and not replace_unsaved_review_confirmed
 )
-requirements_submission_blocked = bool(
+requirements_submission_blocked = has_pending_acceptance_note or bool(
     current_review_state is not None
     and (
         not _review_matches_local_save(current_review_state)
         or has_pending_criteria_draft
         or has_pending_criteria_authoring_draft
         or has_pending_criterion_detail_draft
-        or has_pending_acceptance_note
     )
     and not replace_unsaved_review_confirmed
 )

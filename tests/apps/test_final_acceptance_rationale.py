@@ -36,6 +36,7 @@ def test_optional_rationale_is_only_saved_with_the_explicit_acceptance_event(acc
     assert app.button(key="save_review").disabled
     assert all(button.disabled for button in app.download_button)
     assert app.button(key="reopen_review").disabled
+    assert not [box for box in app.checkbox if box.key == "replace_unsaved_review_confirmed"]
     action = "record_final_acceptance" if accept else "revoke_final_acceptance"
     assert not app.button(key=action).disabled
 
