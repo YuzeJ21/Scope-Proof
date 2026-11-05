@@ -964,6 +964,12 @@ def _exercise_primary_path(
         key="Space",
     )
     expect(page.get_by_role("heading", name="3 · Decision Progress", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="Decision overview", exact=True)).to_be_visible()
+    expect(page.get_by_text("Recorded verdict: Action required", exact=True)).to_be_visible()
+    expect(page.get_by_text("Reviewed head: head-demo-002", exact=True)).to_be_visible()
+    expect(page.get_by_text("Blocking criteria (2): AC-02, AC-03", exact=True)).to_be_visible()
+    expect(page.get_by_text("Recorded final acceptance: No", exact=True)).to_be_visible()
+    expect(page.locator('[id="6-summary-and-export"]')).to_have_count(1)
     expect(page.get_by_text("Missing evidence", exact=True).first).to_be_visible()
     expect(page.get_by_text("Review status: Action required", exact=True)).to_be_visible()
     expect(page.get_by_text("Evidence status:", exact=False).first).to_be_visible()
@@ -1034,6 +1040,7 @@ def _exercise_primary_path(
         expect(
             page.get_by_role("button", name="Check current head", exact=True)
         ).to_be_visible()
+        expect(page.get_by_text("Local save: Saved locally", exact=True)).to_be_visible()
 
     open_ac_02 = page.get_by_role(
         "button", name="Open AC-02 decision controls", exact=True
@@ -1059,6 +1066,13 @@ def _exercise_primary_path(
         "xpath=following::h2[@id='5-evidence-matrix']"
     )
     expect(decision_before_matrix).to_have_count(1)
+
+    if verify_persistence_and_downloads:
+        next_blocker = page.get_by_role("link", name="Go to AC-02 decision controls", exact=True)
+        expect(next_blocker).to_be_visible()
+        next_blocker.press("Enter")
+        expect(page).to_have_url(re.compile(r"#4-criterion-review$"))
+        expect(page.locator('[id="4-criterion-review"]')).to_be_in_viewport()
 
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert page.evaluate("document.body.scrollWidth <= window.innerWidth")

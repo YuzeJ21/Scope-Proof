@@ -50,6 +50,7 @@ from apps.web.scope_comparison import render_file_scope_comparison
 from apps.web.scope_file_preview import (
     prepare_scope_draft_context,
     render_scope_file_preview,
+    scope_draft_pending,
     scope_file_changed,
 )
 from apps.web.selected_reference_comparison import render_selected_reference_comparison
@@ -551,21 +552,22 @@ def _locked_review_status_snapshot(
     store: JsonReviewStore,
     store_available: bool,
     has_pending_review_input: bool,
-) -> Iterator[ReviewState | None]:
-    """Hold persisted review truth stable through Summary status rendering."""
+) -> Iterator[bool]:
+    """Lock persisted review truth and signal when the page needs to refresh."""
 
     if state is None or not store_available:
-        yield _refresh_clean_review_from_local_store(
+        _refresh_clean_review_from_local_store(
             state,
             store=store,
             store_available=store_available,
             has_pending_review_input=has_pending_review_input,
         )
+        yield False
         return
     expected_fingerprint = st.session_state["saved_review_fingerprint"]
     current_fingerprint = _review_state_fingerprint(state)
     if not expected_fingerprint or current_fingerprint != expected_fingerprint:
-        yield state
+        yield False
         return
     lock_stack = ExitStack()
     try:
@@ -577,30 +579,25 @@ def _locked_review_status_snapshot(
         st.session_state["saved_review_fingerprint"] = None
         st.session_state["deleted_review_save_fingerprint"] = current_fingerprint
         st.session_state["review_save_conflict"] = False
-        yield state
+        yield False
         return
     except (OSError, ValueError):
         lock_stack.close()
         st.session_state["saved_review_fingerprint"] = None
         st.session_state["failed_review_save_fingerprint"] = current_fingerprint
         st.session_state["review_save_conflict"] = True
-        yield state
+        yield False
         return
     try:
         persisted_fingerprint = _review_state_fingerprint(persisted)
-        if persisted_fingerprint == expected_fingerprint:
-            refreshed = state
-        elif has_pending_review_input:
+        if persisted_fingerprint != expected_fingerprint:
+            if not has_pending_review_input:
+                # Hydrate on the next pass, before widgets for the old state exist.
+                yield True
+                return
             st.session_state["failed_review_save_fingerprint"] = current_fingerprint
             st.session_state["review_save_conflict"] = True
-            refreshed = state
-        else:
-            _hydrate_reopened_review(persisted)
-            st.session_state["review_save_notice"] = (
-                "Review refreshed from local storage after an external update."
-            )
-            refreshed = persisted
-        yield refreshed
+        yield False
     finally:
         lock_stack.close()
 
@@ -847,6 +844,81 @@ def _analyze(*, unchanged_files: list[RetrievedFile] | None = None) -> ReviewBun
 
 def _status_label(value: str) -> str:
     return value.replace("_", " ").title()
+
+
+def _request_overview_blocker(fingerprint: str, criterion_id: str) -> None:
+    st.session_state["decision_overview_blocker_request"] = (fingerprint, criterion_id)
+
+
+def _render_decision_overview(
+    bundle: ReviewBundle,
+    *,
+    fingerprint: str,
+    blocker_ids: list[str],
+    revalidation_failed: bool,
+    source_conflict: bool,
+    store_available: bool,
+    has_pending_inputs: bool,
+) -> None:
+    refresh_required = source_conflict or revalidation_failed
+    review = bundle.review
+    st.subheader("Decision overview")
+    if refresh_required:
+        st.markdown("**Decision status: Refresh required**")
+    else:
+        st.markdown(f"**Recorded verdict: {review_status_label(bundle.gate.verdict)}**")
+    st.text(f"Reviewed head: {review.head_sha}")
+    snapshot = st.session_state["snapshot"]
+    if source_conflict:
+        st.caption("Source observations conflict with this analysis.")
+    elif review.input_origin is ReviewInputOrigin.CONSTRUCTED_DEMO:
+        st.caption("Constructed demo. The reviewed head comes from the fixture.")
+    elif snapshot is not None and (
+        snapshot.repository, snapshot.pr_number, snapshot.head_sha
+    ) == (review.repository, review.pr_number, review.head_sha):
+        st.caption("Source loaded for the reviewed head.")
+    else:
+        st.caption("Saved analysis. Current PR head unverified in this view.")
+    st.text(f"Recorded final acceptance: {'Yes' if review.final_acceptance else 'No'}")
+
+    if revalidation_failed:
+        save_status = "Revalidation required"
+    elif not store_available:
+        save_status = "Local storage unavailable"
+    elif has_pending_inputs:
+        save_status = "Pending inputs excluded"
+    elif st.session_state["saved_review_fingerprint"] == fingerprint:
+        save_status = "Saved locally"
+    elif st.session_state["deleted_review_save_fingerprint"] == fingerprint:
+        save_status = "Deleted locally"
+    else:
+        save_status = "Unsaved"
+    st.text(f"Local save: {save_status}")
+
+    if refresh_required:
+        st.markdown("[See refresh guidance](#6-summary-and-export)")
+        return
+    count = len(blocker_ids)
+    preview = ", ".join(blocker_ids[:3])
+    if count > 3:
+        preview += f" and {count - 3} more"
+    st.text(f"Blocking criteria ({count}): {preview or 'None'}")
+    if bundle.gate.reason_codes:
+        st.caption("Gate reasons: " + " · ".join(map(_status_label, bundle.gate.reason_codes)))
+    if not blocker_ids:
+        st.markdown("[See next steps](#6-summary-and-export)")
+        return
+    next_id = blocker_ids[0]
+    if not has_pending_inputs and st.session_state.get("selected_criterion") == next_id:
+        st.markdown(f"[Go to {next_id} decision controls](#4-criterion-review)")
+    else:
+        st.button(
+            f"Open next blocker · {next_id}",
+            key="open_next_overview_blocker",
+            disabled=has_pending_inputs,
+            on_click=_request_overview_blocker,
+            args=(fingerprint, next_id),
+        )
 
 
 def _render_comparison_reference(
@@ -1217,11 +1289,12 @@ has_other_pending_review_input = (
     or has_missing_active_provenance
 )
 has_pending_review_input = has_other_pending_review_input or has_pending_acceptance_note
+has_pending_scope_draft = scope_draft_pending(current_review_state)
 current_review_state = _refresh_clean_review_from_local_store(
     current_review_state,
     store=review_store,
     store_available=review_store_available,
-    has_pending_review_input=has_pending_review_input,
+    has_pending_review_input=has_pending_review_input or has_pending_scope_draft,
 )
 pending_storage_messages: list[str] = []
 if has_pending_criteria_draft:
@@ -2232,7 +2305,10 @@ review_matches_local_save = bool(
     and not has_pending_review_input
 )
 review_save_notice = st.session_state.pop("review_save_notice", None)
+overview_blocker_request = st.session_state.pop("decision_overview_blocker_request", None)
+overview_selection_to_restore = st.session_state.pop("decision_overview_restore_selection", None)
 st.header("3 · Decision Progress")
+decision_overview = st.empty() if bundle is not None else None
 render_historical_analysis_selector(
     review_state, store=review_store,
     current_is_saved=(
@@ -2502,6 +2578,10 @@ else:
         row.criterion_id: row for row in criterion_coverage_rows(bundle)
     }
     blocking_criteria = set(bundle.gate.blocking_criteria)
+    overview_blocker_ids = [
+        criterion.criterion_id for criterion in bundle.criteria
+        if criterion.criterion_id in blocking_criteria
+    ]
     unresolved_ids = [
         criterion.criterion_id
         for criterion in bundle.criteria
@@ -2549,6 +2629,21 @@ else:
     else:
         st.success("A current human decision is recorded for every active criterion.")
     st.header("4 · Criterion Review")
+    assert review_state is not None
+    if overview_selection_to_restore is not None:
+        st.session_state["selected_criterion"] = overview_selection_to_restore[0]
+    overview_previous_selection = None
+    if (
+        overview_blocker_request is not None
+        and overview_blocker_ids
+        and not has_pending_review_input
+        and not has_pending_scope_draft
+        and not st.session_state["review_save_conflict"]
+        and overview_blocker_request
+        == (_review_state_fingerprint(review_state), overview_blocker_ids[0])
+    ):
+        overview_previous_selection = (st.session_state.get("selected_criterion"),)
+        st.session_state["selected_criterion"] = overview_blocker_ids[0]
     criterion_ids = [criterion.criterion_id for criterion in bundle.criteria]
     selected_criterion = st.session_state.get("selected_criterion")
     if selected_criterion not in criterion_ids:
@@ -2563,7 +2658,6 @@ else:
         options=criterion_ids,
         key="selected_criterion",
     )
-    assert review_state is not None
     criterion_detail_target = (
         review_state.review.review_id,
         review_state.review.head_sha,
@@ -3670,19 +3764,32 @@ else:
         review_state,
         store=review_store,
         store_available=review_store_available,
-        has_pending_review_input=has_pending_review_input,
-    ) as status_review_state:
-        if status_review_state is not None:
-            review_state = status_review_state
-            if status_review_state.bundle is not None:
-                bundle = status_review_state.bundle
-        st.header("6 · Summary & Export")
-        review_truth_conflict = source_observation_conflict or bool(
-            review_state is not None
-            and st.session_state["review_save_conflict"]
-            and st.session_state["failed_review_save_fingerprint"]
-            == _review_state_fingerprint(review_state)
+        has_pending_review_input=has_pending_review_input or has_pending_scope_draft,
+    ) as refresh_workbench:
+        review_fingerprint = _review_state_fingerprint(review_state)
+        revalidation_failed = (
+            st.session_state["review_save_conflict"]
+            and st.session_state["failed_review_save_fingerprint"] == review_fingerprint
         )
+        if refresh_workbench or (overview_previous_selection is not None and revalidation_failed):
+            if overview_previous_selection is not None:
+                st.session_state["decision_overview_restore_selection"] = (
+                    overview_previous_selection
+                )
+            st.rerun()
+        review_truth_conflict = source_observation_conflict or revalidation_failed
+        assert decision_overview is not None
+        with decision_overview.container(border=True):
+            _render_decision_overview(
+                bundle,
+                fingerprint=review_fingerprint,
+                blocker_ids=overview_blocker_ids,
+                revalidation_failed=revalidation_failed,
+                source_conflict=source_observation_conflict,
+                store_available=review_store_available,
+                has_pending_inputs=actual_pending_review_input or has_pending_scope_draft,
+            )
+        st.header("6 · Summary & Export")
         review_status = (
             "Refresh required"
             if review_truth_conflict

@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from apps.web.deferred_exports import SavedComparisonExportLease
+from apps.web.scope_file_preview import scope_draft_pending
 from scopeproof_core.reviews.comparison import ReviewComparison
 from scopeproof_core.reviews.saved_comparison import (
     SavedComparisonSelection,
@@ -104,29 +105,6 @@ def _render_foreign_analysis_selector(
     )
 
 
-def _scope_draft_pending(current: ReviewState | None) -> bool:
-    """Submitted controls remain populated; only a differing/unsubmitted form is a draft."""
-    path = st.session_state.get("scope_file_path")
-    disposition = st.session_state.get("scope_disposition")
-    note = st.session_state.get("scope_note", "")
-    criterion_id = (
-        st.session_state.get("scope_criterion_id")
-        if disposition == "within_confirmed_criteria" else None
-    )
-    if not any((path, disposition, note, criterion_id)):
-        return False
-    latest = (
-        {item.path: item for item in current.bundle.file_scope_decisions}.get(path)
-        if current is not None and current.bundle is not None else None
-    )
-    return latest is None or (
-        latest.disposition, latest.criterion_id, latest.note, latest.reviewer
-    ) != (
-        disposition, criterion_id, note,
-        st.session_state.get("decision_reviewer", "").strip(),
-    )
-
-
 def _clear_scope_draft() -> None:
     clear_saved_comparison_selection()
     for key in ("scope_file_path", "scope_disposition", "scope_criterion_id"):
@@ -145,10 +123,10 @@ def render_saved_comparison_selector(
     """Read selected saved truth on each rerun; return no stale or unapplied comparison."""
     if "saved_comparison_export_lease" not in st.session_state:
         st.session_state["saved_comparison_export_lease"] = SavedComparisonExportLease()
-    scope_draft_pending = _scope_draft_pending(current)
+    has_scope_draft = scope_draft_pending(current)
     eligible = (
         current is not None and current.bundle is not None
-        and current_is_saved and not scope_draft_pending
+        and current_is_saved and not has_scope_draft
     )
     context = (
         current.review.review_id if current is not None else None,
@@ -196,7 +174,7 @@ def render_saved_comparison_selector(
                 "Saved comparison requires a saved active analysis with no pending inputs "
                 "or save conflict. Save or reopen the review before selecting a baseline."
             )
-        if scope_draft_pending:
+        if has_scope_draft:
             st.info(
                 "Unsubmitted file-scope inputs are not part of the saved review. Save the "
                 "scope decision below or clear those inputs before comparing."
