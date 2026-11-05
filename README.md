@@ -778,6 +778,11 @@ expires the applied comparison; select again to continue. This path does not fet
 reanalyze code, modify saved review bytes, or carry forward a decision. The published v0.2.4
 download does not contain this new entry point.
 
+In `0.2.6.dev0`, **Gate reasons** shows which reasons appeared, stopped appearing, or
+persisted between the compared analyses, even when both have the same verdict. Markdown and
+JSON include the same differences. A reason can stop appearing when another condition takes
+priority. Older comparison artifacts without reason context show it as unavailable.
+
 ### Inspect recorded decision changes
 
 Compatible comparisons include a separate **Recorded decision and runtime context** section.

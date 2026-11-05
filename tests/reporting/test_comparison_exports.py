@@ -17,6 +17,7 @@ from scopeproof_core.reviews.comparison import (
     JUnitMappingReference,
     ResolutionChange,
     ReviewComparison,
+    compare_reviews,
 )
 from scopeproof_core.schemas.models import (
     EvidenceLevel,
@@ -25,6 +26,7 @@ from scopeproof_core.schemas.models import (
     GateVerdict,
     HumanDecision,
 )
+from tests.saved_comparison_fixture import saved_comparison_states
 
 
 def reference(
@@ -105,6 +107,38 @@ def test_comparison_json_is_validated_deterministic_and_counted() -> None:
     assert payload["evidence_changes"][0]["previous"]["commit_sha"] == "old"
     assert payload["evidence_changes"][0]["current"]["commit_sha"] == "new"
     assert payload["criteria_requiring_decision_review"] == ["AC-01"]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_comparison_explains_reason_changes_with_identical_blocked_verdicts(reverse: bool) -> None:
+    current, previous = saved_comparison_states(previous_checks_failing=True)
+    if reverse:
+        previous, current = current, previous
+    assert previous.bundle is not None and current.bundle is not None
+    comparison = compare_reviews(previous.bundle, current.bundle)
+    assert comparison.previous_gate == comparison.current_gate == GateVerdict.BLOCKED
+
+    codes = json.loads(export_comparison_json(comparison))["gate_reason_comparison"]
+    assert codes == {
+        "previous_reason_codes": previous.bundle.gate.reason_codes,
+        "current_reason_codes": current.bundle.gate.reason_codes,
+        "newly_reported": ["required_checks_failing"] if reverse else [],
+        "no_longer_reported": [] if reverse else ["required_checks_failing"],
+        "still_reported": ["blocking_criteria"],
+    }
+    markdown = export_comparison_markdown(comparison)
+    label = "Newly reported" if reverse else "No longer reported"
+    assert f"**{label}:** <code>required_checks_failing</code>" in markdown
+    assert "**Still reported:** <code>blocking_criteria</code>" in markdown
+    assert "when another condition takes priority" in markdown
+
+
+def test_legacy_comparison_keeps_missing_reason_context_unknown() -> None:
+    comparison = example_comparison()
+    assert json.loads(export_comparison_json(comparison))["gate_reason_comparison"] is None
+    markdown = export_comparison_markdown(comparison)
+    assert "Gate reasons are unavailable in this older comparison." in markdown
+    assert "**Newly reported:**" not in markdown
 
 
 def test_comparison_markdown_shows_two_sides_and_evidence_boundary() -> None:
