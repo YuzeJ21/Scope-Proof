@@ -659,7 +659,7 @@ def _validated_comparison(comparison: ReviewComparison) -> ReviewComparison:
     """Revalidate mutable comparison input before rendering an export artifact."""
 
     return ReviewComparison.model_validate(
-        comparison.model_dump(mode="python", exclude={"evidence_change_counts"})
+        comparison.model_dump(mode="python", exclude_computed_fields=True, warnings=False)
     )
 
 

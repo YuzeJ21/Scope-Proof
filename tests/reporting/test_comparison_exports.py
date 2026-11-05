@@ -3,6 +3,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from scopeproof_core.gates.evaluator import unresolved_changed_file_paths
 from scopeproof_core.reporting.exporters import (
     export_comparison_json,
     export_comparison_markdown,
@@ -19,14 +20,21 @@ from scopeproof_core.reviews.comparison import (
     ReviewComparison,
     compare_reviews,
 )
+from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import (
     EvidenceLevel,
     EvidenceSourceScope,
     EvidenceType,
     GateVerdict,
     HumanDecision,
+    ResolutionEvent,
 )
-from tests.saved_comparison_fixture import saved_comparison_states
+from tests.saved_comparison_fixture import (
+    CURRENT_HEAD,
+    PREVIOUS_HEAD,
+    _constructed_state,
+    saved_comparison_states,
+)
 
 
 def reference(
@@ -139,6 +147,43 @@ def test_legacy_comparison_keeps_missing_reason_context_unknown() -> None:
     markdown = export_comparison_markdown(comparison)
     assert "Gate reasons are unavailable in this older comparison." in markdown
     assert "**Newly reported:**" not in markdown
+
+
+def test_comparison_keeps_unresolved_scope_visible_when_failing_checks_suppress_its_reason():
+    bundles = []
+    for head, failing_checks in ((PREVIOUS_HEAD, False), (CURRENT_HEAD, True)):
+        state = _constructed_state(
+            f"constructed-{head[0]}", head, added_path=False, failing_checks=failing_checks,
+        )
+        bundle = append_resolution(state, ResolutionEvent(
+            criterion_id="AC-01", decision=HumanDecision.ACCEPTED_EXCEPTION,
+            reviewer="Constructed reviewer", comment="Constructed exception for the CSV criterion.",
+        )).bundle
+        assert bundle is not None
+        assert unresolved_changed_file_paths(
+            bundle.review, bundle.findings, bundle.evidence, bundle.file_scope_decisions,
+        ) == {"notes.md"}
+        bundles.append(bundle)
+
+    comparison = compare_reviews(*bundles)
+    assert comparison.gate_reason_comparison is not None
+    assert comparison.gate_reason_comparison.no_longer_reported == ["uncited_changed_files"]
+    assert comparison.gate_reason_comparison.newly_reported == ["required_checks_failing"]
+    assert comparison.file_scope is not None
+    assert comparison.file_scope.current.unresolved_paths == ["notes.md"]
+
+
+@pytest.mark.parametrize("exporter", [export_comparison_json, export_comparison_markdown])
+def test_comparison_revalidates_reason_codes_before_deriving_changes(exporter) -> None:
+    current, previous = saved_comparison_states()
+    assert previous.bundle is not None and current.bundle is not None
+    comparison = compare_reviews(previous.bundle, current.bundle)
+    reasons = comparison.gate_reason_comparison
+    assert reasons is not None
+    reasons.current_reason_codes.append({})
+
+    with pytest.raises(ValidationError, match="current_reason_codes"):
+        exporter(comparison)
 
 
 def test_comparison_markdown_shows_two_sides_and_evidence_boundary() -> None:
