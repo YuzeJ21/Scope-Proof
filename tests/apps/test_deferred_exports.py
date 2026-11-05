@@ -12,7 +12,7 @@ from apps.web.deferred_exports import (
     deferred_review_export,
 )
 from scopeproof_core.demo import build_demo_review
-from scopeproof_core.reporting.exporters import export_json
+from scopeproof_core.reporting.exporters import export_html, export_json
 from scopeproof_core.reviews.lifecycle import (
     append_resolution,
     new_review_state,
@@ -72,15 +72,17 @@ def test_deferred_export_renders_the_click_time_validated_saved_review(
     assert exported == state
 
 
+@pytest.mark.parametrize("renderer", [export_json, export_html])
 def test_deferred_export_blocks_external_final_acceptance_revocation(
     tmp_path: Path,
+    renderer,
 ) -> None:
     store = JsonReviewStore(tmp_path)
     accepted = accepted_review_state()
     store.save(accepted)
     deferred = deferred_review_export(
         accepted,
-        export_json,
+        renderer,
         store=store,
         expected_fingerprint=store.state_fingerprint(accepted),
     )

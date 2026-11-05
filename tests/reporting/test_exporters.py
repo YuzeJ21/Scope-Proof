@@ -1159,6 +1159,8 @@ def test_html_keeps_gate_reasons_and_adds_escaped_recovery_guidance(
     assert "What To Do Next" in report
     assert "blocking criteria: AC-01" in report
     assert "Review gate reason `future_&lt;reason&gt;` before acceptance." in report
+    assert report.index("Review Status Reasons") < report.index("Criteria Source")
+    assert report.index("What To Do Next") < report.index("Criteria Source")
 
 
 def test_html_escapes_review_identity_values() -> None:

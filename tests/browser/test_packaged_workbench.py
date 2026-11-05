@@ -963,6 +963,7 @@ def _exercise_primary_path(
         ("Download Markdown", ".md"),
         ("Download JSON", ".json"),
         ("Download CSV", ".csv"),
+        ("Download HTML", ".html"),
     )
     for label, _suffix in export_controls:
         export = page.get_by_role("button", name=label, exact=True)
@@ -3642,6 +3643,41 @@ def _assert_workbench_history_markdown_download(page: Page) -> None:
                 assert f"- {label}: {value}\n" in block
 
 
+def _assert_workbench_history_html_download(page: Page, path: Path, *, head_sha: str) -> None:
+    download = _download_with_retry(page, button_name="Download HTML")
+    assert download.suggested_filename.endswith(".html")
+    download.save_as(path)
+    browser = page.context.browser
+    assert browser is not None
+    recipient = browser.new_context(offline=True)
+    try:
+        report = recipient.new_page()
+        network_requests: list[str] = []
+        report.on("request", lambda request: network_requests.append(request.url)
+                  if request.url.startswith(("http://", "https://")) else None)
+        report.goto(path.as_uri(), wait_until="load")
+        expect(report.get_by_role("heading", name="ScopeProof Acceptance Review")).to_be_visible()
+        expect(report.get_by_text(head_sha, exact=True).first).to_be_visible()
+        expect(report.get_by_text("Review status: Action required", exact=True)).to_be_visible()
+        headings = report.get_by_role("heading", level=2).all_text_contents()
+        assert headings.index("Review Status Reasons") < headings.index("Criteria Source")
+        assert headings.index("What To Do Next") < headings.index("Criteria Source")
+        for position, fields in enumerate(_workbench_history_expected_fields(), 1):
+            event = report.get_by_role("heading", name=f"Event {position}", exact=True).locator(
+                "xpath=following-sibling::dl[1]",
+            )
+            for label, value in fields.items():
+                field = event.get_by_text(label, exact=True).locator(
+                    "xpath=following-sibling::dd[1]",
+                )
+                expect(field).to_have_text(value)
+            expect(event.locator("script, img, a")).to_have_count(0)
+        assert report.evaluate("window.__scopeproofHistoryExecuted === undefined")
+        assert network_requests == []
+    finally:
+        recipient.close()
+
+
 def _capture_automated_workbench_history(page: Page, captures: Path) -> None:
     """Capture actual rendered outcomes and time metadata under constructed automation."""
     manifest = {
@@ -3706,7 +3742,7 @@ def _capture_automated_workbench_history(page: Page, captures: Path) -> None:
 def test_installed_wheel_mixed_resolution_history_survives_restart_without_record_writes(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
-    """Installed UI and downloaded Markdown preserve the same inert recorded event fields."""
+    """Installed UI and portable reports preserve the same inert recorded event fields."""
     runtime_dir = tmp_path / "runtime"
     home_dir = runtime_dir / "home"
     home_dir.mkdir(parents=True)
@@ -3785,6 +3821,10 @@ def test_installed_wheel_mixed_resolution_history_survives_restart_without_recor
                             _assert_workbench_history_fields(page)
                             assert_records_unchanged()
                             _assert_workbench_history_markdown_download(page)
+                            _assert_workbench_history_html_download(
+                                page, tmp_path / "recipient-review.html",
+                                head_sha=saved_state["review"]["head_sha"],
+                            )
                             assert _download_review_state(page) == saved_state
                             assert_records_unchanged()
                             if generation == 0:

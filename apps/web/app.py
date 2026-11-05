@@ -121,6 +121,7 @@ from scopeproof_core.reporting.exporters import (
     export_comparison_json,
     export_comparison_markdown,
     export_csv,
+    export_html,
     export_json,
     export_markdown,
 )
@@ -3681,73 +3682,30 @@ else:
         and _review_matches_local_save(review_state)
         else None
     )
-    if export_has_provenance:
-        markdown_report = deferred_review_export(
+    export_formats = (
+        ("Markdown", "md", "text/markdown", export_markdown),
+        ("JSON", "json", "application/json", export_json),
+        ("CSV", "csv", "text/csv", export_csv),
+        ("HTML", "html", "application/octet-stream", export_html),
+    )
+    st.caption("Open the HTML report in a browser to read it offline.")
+    for column, (label, extension, mime, renderer) in zip(
+        st.columns(len(export_formats)), export_formats, strict=True,
+    ):
+        data = deferred_review_export(
             export_source,
-            export_markdown,
+            renderer,
             store=review_store,
             expected_fingerprint=expected_export_fingerprint,
             authority_check=source_authority_check(review_state),
-        )
-        json_report = deferred_review_export(
-            export_source,
-            export_json,
-            store=review_store,
-            expected_fingerprint=expected_export_fingerprint,
-            authority_check=source_authority_check(review_state),
-        )
-        csv_report = deferred_review_export(
-            export_source,
-            export_csv,
-            store=review_store,
-            expected_fingerprint=expected_export_fingerprint,
-            authority_check=source_authority_check(review_state),
-        )
-    else:
-        markdown_report = ""
-        json_report = ""
-        csv_report = ""
-    markdown_column, json_column, csv_column = st.columns(3)
-    with markdown_column:
-        st.download_button(
-            "Download Markdown",
-            markdown_report,
-            file_name=f"scopeproof-pr-{bundle.review.pr_number}.md",
-            mime="text/markdown",
-            disabled=(
-                has_pending_review_input
-                or review_truth_conflict
-                or not export_has_provenance
-            ),
-            key="download_markdown",
-            on_click="ignore",
-        )
-    with json_column:
-        st.download_button(
-            "Download JSON",
-            json_report,
-            file_name=f"scopeproof-pr-{bundle.review.pr_number}.json",
-            mime="application/json",
-            disabled=(
-                has_pending_review_input
-                or review_truth_conflict
-                or not export_has_provenance
-            ),
-            key="download_json",
-            on_click="ignore",
-        )
-    with csv_column:
-        st.download_button(
-            "Download CSV",
-            csv_report,
-            file_name=f"scopeproof-pr-{bundle.review.pr_number}.csv",
-            mime="text/csv",
-            disabled=(
-                has_pending_review_input
-                or review_truth_conflict
-                or not export_has_provenance
-            ),
-            key="download_csv",
+        ) if export_has_provenance else ""
+        column.download_button(
+            f"Download {label}",
+            data,
+            file_name=f"scopeproof-pr-{bundle.review.pr_number}.{extension}",
+            mime=mime,
+            disabled=has_pending_review_input or review_truth_conflict or not export_has_provenance,
+            key=f"download_{label.lower()}",
             on_click="ignore",
         )
     if review_save_notice is not None:

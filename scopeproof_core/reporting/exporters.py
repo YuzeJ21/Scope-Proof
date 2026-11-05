@@ -1961,6 +1961,27 @@ def export_html(value: ExportableReview) -> str:
             '<p class="note">ScopeProof surfaces auditable candidate evidence. '
             "It does not replace QA or prove correctness.</p>",
             f'<p class="note">{html.escape(_ENGINE_BOUNDARY)}</p>',
+            *(
+                [
+                    "<h2>Review Status Reasons</h2><ul>",
+                    *[
+                        f"<li><code>{html.escape(code)}</code></li>"
+                        for code in bundle.gate.reason_codes
+                    ],
+                    "</ul>",
+                ]
+                if bundle.gate.reason_codes
+                else []
+            ),
+            *(
+                [
+                    "<h2>What To Do Next</h2><ul>",
+                    *[f"<li>{html.escape(message)}</li>" for message in guidance],
+                    "</ul>",
+                ]
+                if guidance
+                else []
+            ),
             "<h2>Criteria Source</h2>",
             '<table aria-label="Criteria Source"><tbody>',
             "<tr><td>Source reference</td><td><code>"
@@ -2052,27 +2073,6 @@ def export_html(value: ExportableReview) -> str:
             "</tbody></table>",
             "<h2>Retrieval Diagnostics</h2>",
             *diagnostic_sections,
-            *(
-                [
-                    "<h2>Review Status Reasons</h2><ul>",
-                    *[
-                        f"<li><code>{html.escape(code)}</code></li>"
-                        for code in bundle.gate.reason_codes
-                    ],
-                    "</ul>",
-                ]
-                if bundle.gate.reason_codes
-                else []
-            ),
-            *(
-                [
-                    "<h2>What To Do Next</h2><ul>",
-                    *[f"<li>{html.escape(message)}</li>" for message in guidance],
-                    "</ul>",
-                ]
-                if guidance
-                else []
-            ),
             *(
                 [
                     "<h2>Manual Resolution Links</h2><ul>",

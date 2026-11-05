@@ -105,7 +105,7 @@ def test_review_downloads_do_not_rerun_during_deferred_generation() -> None:
 
     assert not app.exception
     assert {button.key for button in app.download_button} == {
-        "download_markdown", "download_json", "download_csv",
+        "download_markdown", "download_json", "download_csv", "download_html",
     }
     for button in app.download_button:
         assert button.proto.ignore_rerun, button.key
@@ -243,6 +243,7 @@ def _assert_pending_draft_preserves_authoritative_review(
         "download_markdown",
         "download_json",
         "download_csv",
+        "download_html",
     ]
     assert all(app.download_button(key=key).disabled for key in download_keys)
 
@@ -5160,7 +5161,7 @@ def test_reopened_legacy_verification_can_reverify_but_not_reaccept_without_inve
     final_reopen = final_reopen.button(key="reopen_review").click().run()
     assert final_reopen.session_state["review_state"] == reverified
     download_keys = [button.key for button in final_reopen.download_button]
-    assert download_keys == ["download_markdown", "download_json", "download_csv"]
+    assert download_keys == ["download_markdown", "download_json", "download_csv", "download_html"]
     assert all(
         not final_reopen.download_button(key=key).disabled for key in download_keys
     )
