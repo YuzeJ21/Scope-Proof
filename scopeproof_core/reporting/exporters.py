@@ -1441,9 +1441,13 @@ def _render_candidate_reference_html(item: EvidenceItem) -> str:
     else:
         reference = f"{label}<br><code>{html.escape(item.permalink)}</code>"
     context = f"<br><pre>{html.escape(item.context_excerpt)}</pre>" if item.context_excerpt else ""
+    limitations = "".join(
+        f"<br><strong>Limitation:</strong> {html.escape(limitation)}"
+        for limitation in item.limitations
+    )
     return (
         f"{reference}<br>{html.escape(_candidate_evidence_label(item))}"
-        f"<br><code>{html.escape(item.excerpt)}</code>{context}"
+        f"<br><code>{html.escape(item.excerpt)}</code>{context}{limitations}"
     )
 
 
@@ -1858,6 +1862,16 @@ def export_html(value: ExportableReview) -> str:
             )
             or "No candidate evidence"
         )
+        concern = html.escape(finding.reason)
+        if finding.missing_evidence:
+            concern += "<br><strong>Missing evidence</strong><ul>" + "".join(
+                f"<li>{html.escape(item)}</li>" for item in finding.missing_evidence
+            ) + "</ul>"
+        if finding.recommended_action:
+            concern += (
+                "<br><strong>Recommended action:</strong> "
+                f"{html.escape(finding.recommended_action)}"
+            )
         rows.append(
             "<tr>"
             f"<td>{html.escape(criterion.criterion_id)}</td>"
@@ -1869,7 +1883,7 @@ def export_html(value: ExportableReview) -> str:
             f"<td>{html.escape(coverage.reviewer_decision)}</td>"
             f"<td>{html.escape(finding.confidence_band.value)}</td>"
             f"<td>{len(finding.evidence_ids)}</td>"
-            f"<td>{html.escape(finding.reason)}</td>"
+            f"<td>{concern}</td>"
             f"<td>{evidence}</td>"
             "</tr>"
         )
@@ -1881,6 +1895,7 @@ def export_html(value: ExportableReview) -> str:
         )
     revision = state.criteria_revision.number if state else 1
     review_status = html.escape(review_status_label(bundle.gate.verdict))
+    recorded_acceptance = "Yes" if bundle.review.final_acceptance else "No"
     review_created_at = bundle.review.model_dump(mode="json")["created_at"]
     guidance = gate_guidance(bundle.gate)
     linked_runtime_ids = {
@@ -1904,6 +1919,8 @@ def export_html(value: ExportableReview) -> str:
     ]
     runtime_evidence_items = []
     for item in bundle.runtime_evidence:
+        limitation_items = "".join(f"<li>{html.escape(value)}</li>" for value in item.limitations)
+        limitations = f"<ul>{limitation_items}</ul>" if limitation_items else " None recorded"
         if item.runtime_evidence_id is None:
             identity = (
                 f"<br><strong>Runtime identity:</strong> {html.escape(LEGACY_RUNTIME_LINK)}"
@@ -1931,20 +1948,28 @@ def export_html(value: ExportableReview) -> str:
             f"{_render_artifact_reference_html(item.artifact_reference)} — "
             f"{html.escape(item.scenario)}; {html.escape(item.environment)}; "
             f"{html.escape(item.result)}; {html.escape(item.reviewer)}; "
-            f"{html.escape(item.evidence_level.value)}{identity}</li>"
+            f"{html.escape(item.evidence_level.value)}{identity}"
+            f"<br><strong>Recorded at:</strong> <code>{html.escape(item.timestamp.isoformat())}"
+            "</code><br><strong>Recorded limitations:</strong>"
+            f"{limitations}</li>"
         )
     return "\n".join(
         [
             "<!doctype html>",
             '<html lang="en"><head><meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
             "<title>ScopeProof Acceptance Review</title>",
-            "<style>body{font-family:system-ui;margin:2rem;color:#172033}"
+            "<style>body{font-family:system-ui;margin:clamp(1rem,4vw,2rem);color:#172033;"
+            "overflow-wrap:anywhere}"
             "table{border-collapse:collapse;width:100%}td,th{border:1px solid #cbd5e1;"
             "padding:.55rem;text-align:left}th{background:#eff6ff}.note{color:#475569}"
-            "pre{white-space:pre-wrap}</style>",
+            "pre{white-space:pre-wrap}.evidence-matrix{overflow-x:auto}"
+            ".evidence-matrix table{min-width:64rem}"
+            ".evidence-matrix:focus-visible{outline:2px solid #2563eb}</style>",
             "</head><body>",
             "<h1>ScopeProof Acceptance Review</h1>",
             f"<p><strong>Review status:</strong> {review_status}</p>",
+            f"<p><strong>Recorded final acceptance:</strong> {recorded_acceptance}</p>",
             f"<p>Review ID: <code>{html.escape(bundle.review.review_id)}</code> · "
             f"Repository: <code>{html.escape(bundle.review.repository)}</code> · "
             "Repository visibility: "
@@ -2065,12 +2090,13 @@ def export_html(value: ExportableReview) -> str:
             ),
             "<h2>Confirmed Requirements Source</h2>",
             f"<pre>{html.escape(bundle.source_text)}</pre>",
+            '<div class="evidence-matrix" role="region" aria-label="Evidence matrix" tabindex="0">',
             "<table><thead><tr><th>ID</th><th>Criterion</th><th>Source</th><th>Priority</th>"
             "<th>Evidence status</th><th>Evidence types</th><th>Reviewer decision</th>"
             "<th>Confidence</th><th>Count</th><th>Concern</th>"
             "<th>Evidence</th></tr></thead><tbody>",
             *rows,
-            "</tbody></table>",
+            "</tbody></table></div>",
             "<h2>Retrieval Diagnostics</h2>",
             *diagnostic_sections,
             *(

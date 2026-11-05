@@ -739,6 +739,24 @@ def test_json_and_human_exports_project_runtime_identity_and_link_state() -> Non
     assert "Manual resolution link:</strong> <code>runtime-evidence-7</code>" in html_report
 
 
+def test_html_preserves_criterion_gaps_and_evidence_limitations_as_plain_text() -> None:
+    bundle = example_bundle()
+    bundle.findings[0].missing_evidence = ["Missing <failure test>"]
+    bundle.findings[0].recommended_action = "Exercise <failure branch>"
+    bundle.evidence[0].limitations = ["Static <success branch> only"]
+    bundle.runtime_evidence[0].limitations = ["Observed in <staging> only"]
+
+    report = export_html(bundle)
+
+    for text in (
+        "Missing &lt;failure test&gt;", "Exercise &lt;failure branch&gt;",
+        "Static &lt;success branch&gt; only", "Observed in &lt;staging&gt; only",
+        "2026-07-11T12:10:00+00:00",
+    ):
+        assert text in report
+    assert "<failure test>" not in report and "<staging>" not in report
+
+
 def test_human_and_csv_exports_label_legacy_unlinked_manual_resolution() -> None:
     bundle = example_bundle()
     bundle.resolutions = [
@@ -1109,7 +1127,7 @@ def test_human_readable_exports_complete_the_evidence_matrix_contract() -> None:
     assert "<th>Reviewer decision</th><th>Confidence</th><th>Count</th>" in html_report
     assert "<th>Concern</th>" in html_report
     assert "<td>medium</td><td>1</td>" in html_report
-    assert "<td>Only the export path was found.</td>" in html_report
+    assert "<td>Only the export path was found.<br><strong>Missing evidence</strong>" in html_report
     assert "<td>Change required</td>" in html_report
 
 

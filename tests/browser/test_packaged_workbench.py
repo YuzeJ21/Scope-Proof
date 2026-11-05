@@ -3649,16 +3649,24 @@ def _assert_workbench_history_html_download(page: Page, path: Path, *, head_sha:
     download.save_as(path)
     browser = page.context.browser
     assert browser is not None
-    recipient = browser.new_context(offline=True)
+    recipient = browser.new_context(offline=True, viewport=VIEWPORTS[1], is_mobile=True)
     try:
         report = recipient.new_page()
         network_requests: list[str] = []
         report.on("request", lambda request: network_requests.append(request.url)
                   if request.url.startswith(("http://", "https://")) else None)
         report.goto(path.as_uri(), wait_until="load")
+        assert report.evaluate("window.innerWidth") == VIEWPORTS[1]["width"]
+        assert report.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        matrix = report.get_by_role("region", name="Evidence matrix")
+        expect(matrix).to_be_visible()
+        assert matrix.evaluate("element => element.scrollWidth > element.clientWidth")
+        matrix.focus()
+        expect(matrix).to_be_focused()
         expect(report.get_by_role("heading", name="ScopeProof Acceptance Review")).to_be_visible()
         expect(report.get_by_text(head_sha, exact=True).first).to_be_visible()
         expect(report.get_by_text("Review status: Action required", exact=True)).to_be_visible()
+        expect(report.get_by_text("Recorded final acceptance: No", exact=True)).to_be_visible()
         headings = report.get_by_role("heading", level=2).all_text_contents()
         assert headings.index("Review Status Reasons") < headings.index("Criteria Source")
         assert headings.index("What To Do Next") < headings.index("Criteria Source")

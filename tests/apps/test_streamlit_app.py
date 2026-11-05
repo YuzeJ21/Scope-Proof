@@ -1595,7 +1595,7 @@ def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     assert app.button(key="save_review").disabled is True
     assert app.session_state["review_state"] == review_state
     assert app.session_state["saved_review_fingerprint"] is None
-    assert len(app.download_button) == 3
+    assert len(app.download_button) == 4
     rendered_recovery = "\n".join(
         item.value
         for item in [
@@ -2491,7 +2491,7 @@ def test_demo_summary_requires_explicit_resolution_decision() -> None:
     app = load_demo(new_app())
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
-    assert len(app.download_button) == 3
+    assert len(app.download_button) == 4
     assert app.selectbox(key="resolution_decision").value is None
     assert app.button(key="save_resolution").disabled is True
 
@@ -3492,7 +3492,7 @@ def test_saved_review_can_be_reopened_from_a_fresh_session(
     )
     assert fresh.session_state["snapshot"] is None
     assert fresh.button(key="run_analysis").disabled is True
-    assert len(fresh.download_button) == 3
+    assert len(fresh.download_button) == 4
     assert review_id in [item.value for item in fresh.code]
     caption_text = "\n".join(item.value for item in fresh.caption)
     assert "Saved locally — current review matches local storage." in caption_text
