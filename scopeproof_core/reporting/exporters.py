@@ -26,6 +26,8 @@ from scopeproof_core.reporting.references import (
     render_artifact_reference_markdown,
 )
 from scopeproof_core.reviews.comparison import (
+    GATE_REASON_COMPARISON_BOUNDARY,
+    GATE_REASON_COMPARISON_UNAVAILABLE,
     EvidenceReference,
     ReviewComparison,
 )
@@ -657,7 +659,7 @@ def _validated_comparison(comparison: ReviewComparison) -> ReviewComparison:
     """Revalidate mutable comparison input before rendering an export artifact."""
 
     return ReviewComparison.model_validate(
-        comparison.model_dump(mode="python", exclude={"evidence_change_counts"})
+        comparison.model_dump(mode="python", exclude_computed_fields=True, warnings=False)
     )
 
 
@@ -931,6 +933,19 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
             "Recorded reviewer-selected context is compared separately when available."
         ),
         "",
+        "## Gate Reasons",
+        "",
+    ]
+    reasons = comparison.gate_reason_comparison
+    if reasons is None:
+        lines.append(GATE_REASON_COMPARISON_UNAVAILABLE)
+    else:
+        lines.extend([GATE_REASON_COMPARISON_BOUNDARY, ""])
+        for label, codes in reasons.reason_groups():
+            values = ", ".join(_render_markdown_code(code) for code in codes) or "None"
+            lines.append(f"- **{label}:** {values}")
+    lines.extend([
+        "",
         "## Evidence Change Counts",
         "",
         f"- Modified: {counts.modified}",
@@ -939,7 +954,7 @@ def export_comparison_markdown(comparison: ReviewComparison) -> str:
         f"- Removed: {counts.removed}",
         f"- Unchanged: {counts.unchanged}",
         "",
-    ]
+    ])
     lines.extend(_comparison_file_scope_markdown(comparison))
     lines.extend(_selected_reference_comparison_markdown(comparison.selected_reference_comparison))
     lines.extend(_decision_context_comparison_markdown(comparison.decision_context_comparison))

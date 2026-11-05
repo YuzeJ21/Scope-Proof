@@ -42,6 +42,7 @@ FOREIGN_HISTORY_HEAD = "e" * 40
 def _constructed_state(
     review_id: str, head: str, *, added_path: bool,
     revision_number: int = 1, selected_context: str | None = None,
+    failing_checks: bool = False,
 ) -> ReviewState:
     files = [
         ChangedFile(
@@ -73,12 +74,16 @@ def _constructed_state(
         description="Constructed test input, not an observed public pull request.",
         html_url="https://github.com/acme/widget/pull/7",
         base_sha="d" * 40, head_sha=head,
-        check_state=CheckState.PASSING,
+        check_state=CheckState.FAILING if failing_checks else CheckState.PASSING,
         ci_observation=CIObservation(
-            state=CheckState.PASSING,
-            reason="Constructed successful check metadata; no runtime verification.",
-            reason_code=CIReasonCode.SUCCESSFUL_CHECK_RUNS,
-            total_check_runs=1, successful_check_runs=1,
+            state=CheckState.FAILING if failing_checks else CheckState.PASSING,
+            reason="Constructed check metadata; no runtime verification.",
+            reason_code=(
+                CIReasonCode.FAILING_CHECK_RUNS if failing_checks
+                else CIReasonCode.SUCCESSFUL_CHECK_RUNS
+            ),
+            total_check_runs=1,
+            successful_check_runs=int(not failing_checks), failing_check_runs=int(failing_checks),
         ),
         fetched_at=datetime(2026, 10, 30, 12, tzinfo=UTC), files=files,
     )
@@ -211,6 +216,7 @@ def _with_recorded_acceptance(state: ReviewState, *, accepted: bool) -> ReviewSt
 def saved_comparison_states(
     *, selected_references: bool = False, foreign_history: bool = False,
     decision_context: bool = False, final_acceptance_context: bool = False,
+    previous_checks_failing: bool = False,
 ) -> tuple[ReviewState, ReviewState]:
     """Return compatible constructed active/history and separate-record analyses."""
     current_id = CURRENT_REVIEW_ID + ("-acceptance" if final_acceptance_context else "")
@@ -230,6 +236,7 @@ def saved_comparison_states(
             previous_id, PREVIOUS_HEAD, added_path=False,
             revision_number=2 if foreign_history else 1,
             selected_context="previous" if selected_references else None,
+            failing_checks=previous_checks_failing,
         )
     )
     if decision_context:

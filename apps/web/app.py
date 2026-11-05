@@ -127,6 +127,8 @@ from scopeproof_core.reporting.exporters import (
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
 from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.comparison import (
+    GATE_REASON_COMPARISON_BOUNDARY,
+    GATE_REASON_COMPARISON_UNAVAILABLE,
     EvidenceReference,
     ReviewComparison,
     compare_reviews,
@@ -2259,6 +2261,15 @@ else:
             f"**Review status:** {_status_label(comparison.previous_gate.value)} → "
             f"{_status_label(comparison.current_gate.value)}"
         )
+        st.markdown("#### Gate reasons")
+        reasons = comparison.gate_reason_comparison
+        if reasons is None:
+            st.info(GATE_REASON_COMPARISON_UNAVAILABLE)
+        else:
+            st.caption(GATE_REASON_COMPARISON_BOUNDARY)
+            for label, codes in reasons.reason_groups():
+                values = ", ".join(_status_label(code) for code in codes) or "None"
+                st.text(f"{label} · {values}")
         st.markdown(
             "**Candidate changes:** "
             f"Modified: {comparison.evidence_change_counts.modified} · "

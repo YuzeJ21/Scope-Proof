@@ -37,6 +37,11 @@ from scopeproof_core.schemas.models import (
 )
 
 _EXACT_GIT_HEAD = re.compile(r"^[0-9a-f]{40}$")
+GATE_REASON_COMPARISON_BOUNDARY = (
+    "These are the reasons reported for each analysis under the installed policy. "
+    "A reason may stop appearing when another condition takes priority."
+)
+GATE_REASON_COMPARISON_UNAVAILABLE = "Gate reasons are unavailable in this older comparison."
 
 
 class EvidenceChangeKind(StrEnum):
@@ -343,6 +348,35 @@ class JUnitImportChange(BaseModel):
         return self
 
 
+class GateReasonComparison(BaseModel):
+    """Reason codes from two validated gates, with deterministic differences."""
+
+    previous_reason_codes: list[str]
+    current_reason_codes: list[str]
+
+    @computed_field
+    @property
+    def newly_reported(self) -> list[str]:
+        return sorted(set(self.current_reason_codes).difference(self.previous_reason_codes))
+
+    @computed_field
+    @property
+    def no_longer_reported(self) -> list[str]:
+        return sorted(set(self.previous_reason_codes).difference(self.current_reason_codes))
+
+    @computed_field
+    @property
+    def still_reported(self) -> list[str]:
+        return sorted(set(self.previous_reason_codes).intersection(self.current_reason_codes))
+
+    def reason_groups(self) -> tuple[tuple[str, list[str]], ...]:
+        return (
+            ("Newly reported", self.newly_reported),
+            ("No longer reported", self.no_longer_reported),
+            ("Still reported", self.still_reported),
+        )
+
+
 class ReviewComparison(BaseModel):
     previous_head_sha: str
     current_head_sha: str
@@ -356,6 +390,7 @@ class ReviewComparison(BaseModel):
     final_acceptance_comparison: FinalAcceptanceComparison | None = None
     previous_gate: GateVerdict
     current_gate: GateVerdict
+    gate_reason_comparison: GateReasonComparison | None = None
     ruleset_version_changed: bool
     criteria_requiring_decision_review: list[str] = Field(default_factory=list)
 
@@ -1011,6 +1046,10 @@ def compare_reviews(previous: ReviewBundle, current: ReviewBundle) -> ReviewComp
         junit_import_changes=junit_import_changes,
         previous_gate=previous.gate.verdict,
         current_gate=current.gate.verdict,
+        gate_reason_comparison=GateReasonComparison(
+            previous_reason_codes=list(previous.gate.reason_codes),
+            current_reason_codes=list(current.gate.reason_codes),
+        ),
         ruleset_version_changed=(previous.review.ruleset_version != current.review.ruleset_version),
         criteria_requiring_decision_review=sorted(
             set(previous_resolutions) & changed_criterion_ids

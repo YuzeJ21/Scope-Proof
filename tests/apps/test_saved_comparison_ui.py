@@ -23,9 +23,11 @@ from tests.saved_comparison_fixture import (
 )
 
 
-def reopened_comparison_app(*, selected_references=False):
+def reopened_comparison_app(*, selected_references=False, previous_checks_failing=False):
     store = JsonReviewStore(default_local_review_directory())
-    current, previous = saved_comparison_states(selected_references=selected_references)
+    current, previous = saved_comparison_states(
+        selected_references=selected_references, previous_checks_failing=previous_checks_failing,
+    )
     store.save(current)
     store.save(previous)
     app = new_app()
@@ -77,6 +79,19 @@ def test_saved_comparison_shows_separate_attributed_reference_context_without_mu
     assert "Constructed previous source context; not execution evidence." in text
     assert "Constructed current source context; not execution evidence." in text
     assert "non-gating static context" in text
+    assert {path.name: path.read_bytes() for path in store.directory.glob("*.json")} == before
+
+
+def test_saved_comparison_explains_changed_reasons_under_the_same_blocked_status():
+    app, store = reopened_comparison_app(previous_checks_failing=True)
+    before = {path.name: path.read_bytes() for path in store.directory.glob("*.json")}
+    app = apply_other_baseline(app)
+
+    assert not app.exception
+    text = rendered(app)
+    assert "Blocked → Blocked" in text
+    assert "No longer reported · Required Checks Failing" in text
+    assert "Still reported · Blocking Criteria" in text
     assert {path.name: path.read_bytes() for path in store.directory.glob("*.json")} == before
 
 

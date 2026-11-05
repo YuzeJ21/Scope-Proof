@@ -311,6 +311,10 @@ def test_comparison_reports_evidence_status_resolution_and_gate_changes() -> Non
     assert comparison.changed_human_resolutions[0].current_decision is HumanDecision.ACCEPTED
     assert comparison.previous_gate is GateVerdict.BLOCKED
     assert comparison.current_gate is GateVerdict.READY
+    reasons = comparison.gate_reason_comparison
+    assert reasons is not None
+    assert reasons.current_reason_codes == []
+    assert reasons.no_longer_reported == ["blocking_criteria"]
     assert comparison.criteria_requiring_decision_review == ["AC-01"]
 
 

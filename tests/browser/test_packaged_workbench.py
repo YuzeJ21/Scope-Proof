@@ -2575,6 +2575,17 @@ def _assert_saved_comparison_downloads(
     previous_analysis: dict,
     current_analysis: dict,
 ) -> None:
+    expect(page.get_by_role("heading", name="Gate reasons", exact=True)).to_be_visible()
+    previous_codes = previous_analysis["gate"]["reason_codes"]
+    current_codes = current_analysis["gate"]["reason_codes"]
+    previous_set, current_set = set(previous_codes), set(current_codes)
+    for label, codes in (
+        ("Newly reported", current_set - previous_set),
+        ("No longer reported", previous_set - current_set),
+        ("Still reported", previous_set & current_set),
+    ):
+        values = ", ".join(code.replace("_", " ").title() for code in sorted(codes)) or "None"
+        expect(page.get_by_text(f"{label} · {values}", exact=True)).to_be_visible()
     markdown = _download_with_retry(
         page,
         button_name="Download comparison Markdown",
@@ -2597,6 +2608,8 @@ def _assert_saved_comparison_downloads(
     assert "non-gating static context" in text
     assert "cross-head equivalence" in text and "intent, not execution" in text
     assert "Recorded decision and runtime context" in text
+    assert "## Gate Reasons" in text
+    assert "A reason may stop appearing when another condition takes priority." in text
 
     download = _download_with_retry(page, button_name="Download comparison JSON")
     assert download.suggested_filename.endswith("-comparison.json")
@@ -2604,6 +2617,13 @@ def _assert_saved_comparison_downloads(
     comparison = ReviewComparison.model_validate(payload)
     assert comparison.previous_head_sha == previous_head
     assert comparison.current_head_sha == CURRENT_HEAD
+    assert payload["gate_reason_comparison"] == {
+        "previous_reason_codes": previous_codes,
+        "current_reason_codes": current_codes,
+        "newly_reported": sorted(current_set - previous_set),
+        "no_longer_reported": sorted(previous_set - current_set),
+        "still_reported": sorted(previous_set & current_set),
+    }
     context = payload["selected_reference_comparison"]
     assert payload["reviewer_selected_references_compared"] is True
     assert context["change_counts"] == {
