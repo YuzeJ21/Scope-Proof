@@ -583,11 +583,16 @@ def selectbox_page(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[P
         "format_func=lambda value: value.replace('_', ' ').title(), key='scope')\n"
         "st.text(f'SERVER_SELECTION={selected}')\n"
         "st.text(f'SERVER_RUN={st.session_state[\"runs\"]}')\n"
-        "st.text_input('Constructed focus target', key='focus_target')\n"
+        "if st.button('Dismiss fixture popup'):\n"
+        "    st.session_state.popup_dismissed = True\n"
+        "def record_mapping_commit():\n"
+        "    st.session_state.mapping_commits = st.session_state.get('mapping_commits', 0) + 1\n"
         "mapping = st.multiselect('Map JUnit scopes to the selected criterion', "
         "['suite-0001 · suite · unit', 'suite-0001 · suite · unit extra'], "
-        "key='mapping')\n"
-        "st.text(f'SERVER_MAPPING={mapping}')\n",
+        "key='mapping', on_change=record_mapping_commit)\n"
+        "st.text(f'SERVER_MAPPING={mapping}')\n"
+        "st.text(f'SERVER_MAPPING_COMMITS={st.session_state.get(\"mapping_commits\", 0)}')\n"
+        "st.text(f'SERVER_POPUP_DISMISSED={st.session_state.get(\"popup_dismissed\", False)}')\n",
         encoding="utf-8",
     )
     port = _available_port()
@@ -718,13 +723,19 @@ def test_choose_multiselect_option_recovers_from_constructed_popup_loss(
         nonlocal lost_popup
         original_fill(value)
         if not lost_popup:
+            expect(combobox).to_have_attribute("aria-expanded", "true")
             combobox.press("Escape")
             if combobox.get_attribute("aria-expanded") == "true":
                 combobox.press("Escape")
-            page.get_by_role("textbox", name="Constructed focus target", exact=True).click()
+            page.get_by_role("button", name="Dismiss fixture popup", exact=True).press("Space")
             expect(combobox).to_have_attribute("aria-expanded", "false")
+            expect(page.get_by_text("SERVER_POPUP_DISMISSED=True", exact=True)).to_be_visible()
+            expect(page.get_by_test_id("stApp")).to_have_attribute(
+                "data-test-script-state", "notRunning",
+            )
             expect(page.get_by_text("SERVER_MAPPING=[]", exact=True)).to_be_visible()
-            expect(page.get_by_text("SERVER_RUN=2", exact=True)).to_be_visible()
+            # An unrelated fixture action can rerun without committing a mapping.
+            expect(page.get_by_text("SERVER_MAPPING_COMMITS=0", exact=True)).to_be_visible()
             lost_popup = True
 
     monkeypatch.setattr(combobox, "fill", fill_and_lose_popup_once)
@@ -735,7 +746,7 @@ def test_choose_multiselect_option_recovers_from_constructed_popup_loss(
 
     assert lost_popup
     expect(page.get_by_text(f"SERVER_MAPPING={[option_name]}", exact=True)).to_be_visible()
-    expect(page.get_by_text("SERVER_RUN=3", exact=True)).to_be_visible()
+    expect(page.get_by_text("SERVER_MAPPING_COMMITS=1", exact=True)).to_be_visible()
 
 
 def test_choose_multiselect_option_preserves_an_open_popup_and_commits_once(
