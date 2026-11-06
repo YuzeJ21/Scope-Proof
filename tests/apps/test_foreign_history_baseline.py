@@ -5,7 +5,9 @@ from unittest.mock import patch
 
 import pytest
 
+from apps.web import deferred_exports
 from apps.web.deferred_exports import DeferredExportUnavailable, deferred_saved_comparison_export
+from scopeproof_core.reporting import criteria_comparison as criteria_exports
 from scopeproof_core.reporting.exporters import export_comparison_json
 from scopeproof_core.schemas.models import ReviewState
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
@@ -77,14 +79,65 @@ def test_foreign_requirements_view_stays_separate_from_evidence_comparison():
     assert "https://example.test/constructed-other-active-source" in rendered(app)
     assert "Recorded source provenance changed: Yes" in rendered(app)
     assert comparison_downloads(app) == []
+    assert app.download_button(key="download_saved_requirements_markdown").proto.deferred_file_id
     assert record_bytes(store) == before
 
     app = choose_history(app)
     assert "Saved requirements comparison" not in rendered(app)
+    assert not any(
+        button.key == "download_saved_requirements_markdown" for button in app.download_button
+    )
     app = app.button(key="compare_saved_requirements").click().run()
     assert FOREIGN_HISTORY_HEAD in rendered(app)
     assert comparison_downloads(app) == []
     assert record_bytes(store) == before
+
+
+def test_requirements_download_expires_after_switching_away_and_back():
+    app, store = foreign_history_app()
+    app = choose_history(app).button(key="compare_saved_requirements").click().run()
+    lease = app.session_state["saved_requirements_export_lease"]
+    old_download = deferred_exports.deferred_saved_requirements_export(
+        lease.selection, criteria_exports.export_saved_requirements_markdown,
+        store=store, lease=lease,
+    )
+    assert FOREIGN_HISTORY_HEAD in old_download()
+    before = record_bytes(store)
+    app = app.selectbox(key="saved_comparison_analysis").set_value("active").run()
+    app = choose_history(app).button(key="compare_saved_requirements").click().run()
+    assert app.download_button(key="download_saved_requirements_markdown").proto.deferred_file_id
+    with pytest.raises(DeferredExportUnavailable):
+        old_download()
+    assert record_bytes(store) == before
+
+
+@pytest.mark.parametrize("changed", [CURRENT_REVIEW_ID, PREVIOUS_REVIEW_ID])
+@pytest.mark.parametrize("change", ["edit", "delete"])
+def test_requirements_download_revalidates_both_records_before_render(changed, change):
+    app, store = foreign_history_app()
+    app = app.button(key="compare_saved_requirements").click().run()
+    lease = app.session_state["saved_requirements_export_lease"]
+    with patch.object(
+        criteria_exports, "export_saved_requirements_markdown",
+        wraps=criteria_exports.export_saved_requirements_markdown,
+    ) as renderer:
+        old_download = deferred_exports.deferred_saved_requirements_export(
+            lease.selection, renderer, store=store, lease=lease,
+        )
+        if change == "delete":
+            store.delete(changed)
+        else:
+            def edit(state):
+                references = state.bundle.reviewer_selected_references
+                references[0] = references[0].model_copy(update={
+                    "rationale": "Constructed edit outside the requirements projection.",
+                })
+                return state
+
+            store.mutate(changed, edit)
+        with pytest.raises(DeferredExportUnavailable):
+            old_download()
+        renderer.assert_not_called()
 
 
 @pytest.mark.parametrize("mode", ["normal", "history_only", "incompatible_active"])

@@ -5,7 +5,15 @@ from importlib import import_module
 
 import pytest
 
+from scopeproof_core.reporting import criteria_comparison as exporters
+from scopeproof_core.reviews import saved_comparison as saved_api
+from scopeproof_core.storage.json_store import JsonReviewStore
 from tests.reviews.test_criteria_comparison import report_for
+from tests.saved_comparison_fixture import (
+    CURRENT_HEAD,
+    FOREIGN_HISTORY_HEAD,
+    saved_requirements_states,
+)
 
 
 def test_json_contains_only_validated_requirements_context(tmp_path):
@@ -53,3 +61,33 @@ def test_export_revalidates_tampered_requirements(tmp_path, format):
     exporter = import_module("scopeproof_core.reporting.criteria_comparison")
     with pytest.raises(ValueError):
         getattr(exporter, f"export_criteria_comparison_{format}")(report)
+
+
+def test_saved_requirements_markdown_binds_both_records_and_selected_history(tmp_path):
+    current, baseline = saved_requirements_states()
+    store = JsonReviewStore(tmp_path)
+    paths = [store.save(state) for state in (current, baseline)]
+    before = [path.read_bytes() for path in paths]
+    selection = saved_api.prepare_saved_requirements_comparison(
+        store, current, baseline.review.review_id, history_index=0,
+    )
+    with saved_api.locked_saved_requirements_report(store, selection) as report:
+        text = exporters.export_saved_requirements_markdown(report)
+        assert text == exporters.export_saved_requirements_markdown(report)
+        tampered = report.model_copy(update={
+            "previous": report.previous.model_copy(update={"head_sha": "tampered-head"}),
+        })
+        with pytest.raises(ValueError, match="requirements snapshot"):
+            exporters.export_saved_requirements_markdown(tampered)
+
+    assert text.startswith("# ScopeProof Saved Requirements Comparison\n")
+    assert "Baseline analysis: Retained history position 1" in text
+    assert current.review.review_id in text and baseline.review.review_id in text
+    assert CURRENT_HEAD in text and FOREIGN_HISTORY_HEAD in text
+    assert selection.current_fingerprint in text and selection.baseline_fingerprint in text
+    assert "Recorded requirements only" in text
+    assert "Complete ordered criterion records" in text
+    assert "CONSTRUCTED Export XML" in text
+    assert "` CONSTRUCTED Export JSON <img src=https://example.invalid/fixture> `" in text
+    assert "## Evidence" not in text and "## Resolution History" not in text
+    assert [path.read_bytes() for path in paths] == before

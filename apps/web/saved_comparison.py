@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from apps.web.deferred_exports import SavedComparisonExportLease
+from apps.web.deferred_exports import SavedComparisonExportLease, deferred_saved_requirements_export
 from apps.web.scope_file_preview import scope_draft_pending
+from scopeproof_core.reporting.criteria_comparison import export_saved_requirements_markdown
 from scopeproof_core.reviews.comparison import ReviewComparison
 from scopeproof_core.reviews.criteria_comparison import (
     CRITERIA_COMPARISON_BOUNDARY,
@@ -29,9 +30,10 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 
 def clear_saved_comparison_selection(*, clear_choice: bool = True) -> None:
     """Invalidate callbacks without accessing Streamlit state from download workers."""
-    lease = st.session_state.get("saved_comparison_export_lease")
-    if lease is not None:
-        lease.invalidate()
+    for lease_key in ("saved_comparison_export_lease", "saved_requirements_export_lease"):
+        lease = st.session_state.get(lease_key)
+        if lease is not None:
+            lease.invalidate()
     st.session_state["saved_comparison_selection"] = None
     st.session_state["saved_requirements_selection"] = None
     if clear_choice:
@@ -184,6 +186,9 @@ def render_saved_comparison_selector(
     """Read selected saved truth on each rerun; return no stale or unapplied comparison."""
     if "saved_comparison_export_lease" not in st.session_state:
         st.session_state["saved_comparison_export_lease"] = SavedComparisonExportLease()
+    requirements_lease = st.session_state.setdefault(
+        "saved_requirements_export_lease", SavedComparisonExportLease(),
+    )
     has_scope_draft = scope_draft_pending(current)
     eligible = (
         current is not None and current.bundle is not None
@@ -311,6 +316,17 @@ def render_saved_comparison_selector(
             try:
                 with locked_saved_requirements_comparison(store, requirements_selection) as diff:
                     _render_saved_requirements(diff, requirements_selection)
+                    requirements_lease.selection = requirements_selection
+                    st.download_button(
+                        "Download requirements comparison",
+                        data=deferred_saved_requirements_export(
+                            requirements_selection, export_saved_requirements_markdown,
+                            store=store, lease=requirements_lease,
+                        ),
+                        file_name=f"{requirements_selection.current_review_id}-requirements.md",
+                        mime="text/markdown",
+                        key="download_saved_requirements_markdown", on_click="ignore",
+                    )
             except (OSError, ValueError):
                 clear_saved_comparison_selection(clear_choice=False)
                 st.warning("Saved requirements changed or became unavailable. Select again.")

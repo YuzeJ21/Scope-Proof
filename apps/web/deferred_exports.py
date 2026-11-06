@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from typing import TypeVar
 
 from scopeproof_core.reviews.comparison import ReviewComparison
 from scopeproof_core.reviews.criteria_comparison import (
@@ -18,13 +20,16 @@ from scopeproof_core.reviews.historical_analysis import (
 )
 from scopeproof_core.reviews.saved_comparison import (
     SavedComparisonSelection,
+    SavedRequirementsReport,
     locked_saved_comparison,
+    locked_saved_requirements_report,
 )
 from scopeproof_core.schemas.models import ReviewBundle, ReviewState
 from scopeproof_core.storage.json_store import JsonReviewStore
 
 ExportSource = ReviewState | ReviewBundle
 ExportRenderer = Callable[[ExportSource], str]
+_SavedReport = TypeVar("_SavedReport")
 _EXPORT_REVALIDATION_MESSAGE = (
     "ScopeProof export was blocked because the saved review could not be revalidated. "
     "Rerun the workbench and reopen the review before exporting."
@@ -133,19 +138,48 @@ def deferred_saved_comparison_export(
     store: JsonReviewStore,
     lease: SavedComparisonExportLease,
 ) -> Callable[[], str]:
+    return _deferred_saved_selection_export(
+        selection, renderer, store=store, lease=lease, load=locked_saved_comparison,
+        message=(
+            "ScopeProof comparison export was blocked because a saved review or selection "
+            "changed. Reopen the current review and select the baseline again before exporting."
+        ),
+    )
+
+
+def deferred_saved_requirements_export(
+    selection: SavedComparisonSelection,
+    renderer: Callable[[SavedRequirementsReport], str],
+    *,
+    store: JsonReviewStore,
+    lease: SavedComparisonExportLease,
+) -> Callable[[], str]:
+    return _deferred_saved_selection_export(
+        selection, renderer, store=store, lease=lease, load=locked_saved_requirements_report,
+        message="Saved requirements changed or selection expired. Select the baseline again.",
+    )
+
+
+def _deferred_saved_selection_export(
+    selection: SavedComparisonSelection,
+    renderer: Callable[[_SavedReport], str],
+    *,
+    store: JsonReviewStore,
+    lease: SavedComparisonExportLease,
+    load: Callable[
+        [JsonReviewStore, SavedComparisonSelection], AbstractContextManager[_SavedReport]
+    ],
+    message: str,
+) -> Callable[[], str]:
     captured = selection.model_copy(deep=True)
     generation = lease.generation
-    message = (
-        "ScopeProof comparison export was blocked because a saved review or selection changed. "
-        "Reopen the current review and select the baseline again before exporting."
-    )
 
     def render() -> str:
         if lease.generation != generation or lease.selection != captured:
             raise DeferredExportUnavailable(message)
         try:
-            with locked_saved_comparison(store, captured) as comparison:
-                rendered = renderer(comparison)
+            with load(store, captured) as report:
+                rendered = renderer(report)
                 if lease.generation != generation or lease.selection != captured:
                     raise DeferredExportUnavailable(message)
                 return rendered

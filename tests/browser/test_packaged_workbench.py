@@ -2545,17 +2545,36 @@ def test_installed_wheel_compares_requirements_across_saved_analyses(
                 expect(page.get_by_text("AC-01 · Fields changed", exact=False)).to_be_visible()
                 expect(page.locator('img[src*="example.invalid/fixture"]')).to_have_count(0)
                 expect(page.get_by_role("button", name="Download comparison JSON")).to_have_count(0)
+                download_button = page.get_by_role(
+                    "button", name="Download requirements comparison", exact=True,
+                )
+                expect(download_button).to_be_enabled()
 
                 _choose_combobox_option(
                     page, page.get_by_role("combobox", name="Baseline analysis"),
                     option_name=f"History 1 · criteria revision 1 · head {FOREIGN_HISTORY_HEAD}",
                 )
                 expect(heading).to_have_count(0)
+                expect(download_button).to_have_count(0)
                 compare.press("Enter")
                 expect(page.get_by_text(f"Recorded head: {FOREIGN_HISTORY_HEAD}", exact=True)
                        ).to_be_visible()
                 expect(page.get_by_text(f"Recorded head: {CURRENT_HEAD}", exact=True)
                        ).to_be_visible()
+                download = _download_with_retry(
+                    page, button_name="Download requirements comparison",
+                )
+                assert download.suggested_filename.endswith("-requirements.md")
+                report = download.path().read_text(encoding="utf-8")
+                assert report.startswith("# ScopeProof Saved Requirements Comparison\n")
+                assert "Baseline analysis: Retained history position 1" in report
+                assert PREVIOUS_REVIEW_ID in report and paths[0].stem in report
+                assert FOREIGN_HISTORY_HEAD in report and CURRENT_HEAD in report
+                recorded_text = (
+                    "` CONSTRUCTED Export JSON <img src=https://example.invalid/fixture> `"
+                )
+                assert recorded_text in report
+                assert "## Evidence" not in report and "## Resolution History" not in report
                 assert [path.read_bytes() for path in paths] == saved
                 assert external_requests == []
         finally:

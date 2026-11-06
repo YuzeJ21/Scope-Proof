@@ -6,12 +6,13 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from scopeproof_core.reviews.comparison import ReviewComparison, compare_reviews
 from scopeproof_core.reviews.criteria_comparison import (
     RecordedCriteriaDiff,
     analysis_criteria_snapshot,
+    criteria_snapshot_fingerprint,
 )
 from scopeproof_core.schemas.models import LocalReviewId, ReviewBundle, ReviewState
 from scopeproof_core.storage.json_store import JsonReviewStore
@@ -33,6 +34,29 @@ class SavedComparisonSelection(BaseModel):
     current_fingerprint: Fingerprint
     baseline_fingerprint: Fingerprint
     history_index: Annotated[StrictInt, Field(ge=0)] | None = None
+
+
+class SavedRequirementsReport(RecordedCriteriaDiff):
+    """Portable requirements context bound to an explicitly selected saved pair."""
+
+    selection: SavedComparisonSelection
+    baseline_criteria_fingerprint: Fingerprint
+    current_criteria_fingerprint: Fingerprint
+
+    @model_validator(mode="after")
+    def _selected_records(self) -> SavedRequirementsReport:
+        if (
+            self.previous.review_id != self.selection.baseline_review_id
+            or self.current.review_id != self.selection.current_review_id
+            or self.previous.review_id == self.current.review_id
+        ):
+            raise ValueError("requirements report requires two selected owning records")
+        if (
+            criteria_snapshot_fingerprint(self.previous) != self.baseline_criteria_fingerprint
+            or criteria_snapshot_fingerprint(self.current) != self.current_criteria_fingerprint
+        ):
+            raise ValueError("requirements snapshot differs from the selected saved analysis")
+        return self
 
 
 def _baseline_bundle(state: ReviewState, history_index: int | None) -> ReviewBundle:
@@ -167,3 +191,17 @@ def locked_saved_requirements_comparison(
     """Hold both saved records stable while inspecting recorded requirements."""
     with _locked_saved_selection(store, selection) as (current, baseline, index):
         yield _compare_requirements(current, baseline, index)
+
+
+@contextmanager
+def locked_saved_requirements_report(
+    store: JsonReviewStore, selection: SavedComparisonSelection,
+) -> Iterator[SavedRequirementsReport]:
+    """Revalidate both saved records and keep them stable through report generation."""
+    selection = SavedComparisonSelection.model_validate(selection.model_dump(mode="python"))
+    with locked_saved_requirements_comparison(store, selection) as diff:
+        yield SavedRequirementsReport(
+            selection=selection, previous=diff.previous, current=diff.current,
+            baseline_criteria_fingerprint=criteria_snapshot_fingerprint(diff.previous),
+            current_criteria_fingerprint=criteria_snapshot_fingerprint(diff.current),
+        )

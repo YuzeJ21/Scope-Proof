@@ -903,7 +903,10 @@ See the [bounded assessment](docs/audits/2026-10-31-historical-analysis-inspecti
 For two separately saved analyses of the same PR, select the other record and its active
 or retained analysis under **Compare saved analyses**. Choose **Compare saved requirements**
 to see both record IDs and reviewed heads, recorded source details, and criterion changes.
-The view is read-only and expires when either saved record changes or disappears.
+Choose **Download requirements comparison** to share those recorded changes in Markdown
+with someone who does not have the saved reviews. ScopeProof checks both records again
+at download time. The download expires if the selection changes or either record changes
+or disappears.
 Evidence comparison still requires identical confirmed criteria and compatible source details.
 
 After inspecting a retained analysis, click **Compare with saved current criteria** to see its
