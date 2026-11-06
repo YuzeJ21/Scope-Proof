@@ -853,9 +853,12 @@ full file or runtime verification. Overlong records are explicitly omitted, and 
 truncated or ambiguous content is unavailable.
 
 Reopened records need the existing **Load matching reviewed source** action to restore source
-inspection. Mismatched or conflicted source is withheld. Changing the file clears its unsaved
-disposition, criterion, explanation and preview page; changing review/source context also clears
-the target. Inspection never records a scope decision, cites evidence or changes a gate. See the
+inspection. Mismatched or conflicted source is withheld. Selecting a file or diff page keeps saved
+comparisons, **Check current head**, and the overview’s blocker navigation available when their
+other requirements are met. An unsubmitted disposition or explanation pauses those actions.
+Changing the file clears its unsaved disposition, criterion, explanation and preview page.
+Changing review or source context also clears the target. Inspection never records a scope
+decision, cites evidence or changes a gate. See the
 [bounded assessment](docs/audits/2026-11-01-scope-file-inspection.md).
 
 ### Find source references by content

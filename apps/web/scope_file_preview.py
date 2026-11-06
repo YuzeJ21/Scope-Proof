@@ -41,7 +41,7 @@ def prepare_scope_draft_context(
 
 
 def scope_draft_pending(current: ReviewState | None) -> bool:
-    """Submitted controls remain populated; a differing or unsubmitted form is a draft."""
+    """Treat inspection as read-only and compare decision inputs with the saved decision."""
     path = st.session_state.get("scope_file_path")
     disposition = st.session_state.get("scope_disposition")
     note = st.session_state.get("scope_note", "")
@@ -49,7 +49,7 @@ def scope_draft_pending(current: ReviewState | None) -> bool:
         st.session_state.get("scope_criterion_id")
         if disposition == "within_confirmed_criteria" else None
     )
-    if not any((path, disposition, note, criterion_id)):
+    if not any((disposition, note, criterion_id)):
         return False
     latest = (
         {item.path: item for item in current.bundle.file_scope_decisions}.get(path)
