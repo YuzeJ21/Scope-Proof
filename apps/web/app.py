@@ -50,6 +50,7 @@ from apps.web.scope_comparison import render_file_scope_comparison
 from apps.web.scope_file_preview import (
     prepare_scope_draft_context,
     render_scope_file_preview,
+    render_scope_overview,
     scope_draft_pending,
     scope_file_changed,
 )
@@ -903,6 +904,7 @@ def _render_decision_overview(
     if count > 3:
         preview += f" and {count - 3} more"
     st.text(f"Blocking criteria ({count}): {preview or 'None'}")
+    render_scope_overview(bundle)
     if bundle.gate.reason_codes:
         st.caption("Gate reasons: " + " · ".join(map(_status_label, bundle.gate.reason_codes)))
     if not blocker_ids:

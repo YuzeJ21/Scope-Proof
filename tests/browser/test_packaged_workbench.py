@@ -2464,6 +2464,7 @@ def _reopen_saved_comparison_current(
 
 
 def _assert_scope_source_unavailable(page: Page) -> None:
+    expect(page.get_by_text("Unresolved inspected changed files: 2", exact=True)).to_be_visible()
     path = page.get_by_role("combobox", name="Uncited changed file", exact=True)
     _choose_combobox_option(page, path, option_name="notes.md")
     preview = page.locator(".st-key-scope_file_preview")
@@ -2528,8 +2529,16 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
     )
     _choose_combobox_option(page, criterion, option_name="AC-01")
     note = page.get_by_label("File scope explanation (required)", exact=True)
-    note.fill("CONSTRUCTED unsaved notes.md decision; must not retarget another file.")
+    draft_note = "CONSTRUCTED unsaved notes.md decision; must not retarget another file."
+    note.fill(draft_note)
     _run_and_wait_for_streamlit_rerun(page, lambda: note.press("Tab"))
+    scope_jump = page.get_by_role("link", name="Go to changed-file scope", exact=True)
+    expect(scope_jump).to_be_visible()
+    scope_jump.press("Enter")
+    expect(page).to_have_url(re.compile(r"#changed-file-scope$"))
+    expect(page.locator('[id="changed-file-scope"]')).to_be_in_viewport()
+    expect(path).to_have_value("notes.md")
+    expect(note).to_have_value(draft_note)
     _choose_combobox_option(page, path, option_name="src/unrelated.py")
     expect(disposition).to_have_value("")
     expect(criterion).to_have_count(0)

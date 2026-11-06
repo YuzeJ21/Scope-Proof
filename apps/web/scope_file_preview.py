@@ -7,9 +7,15 @@ from unicodedata import category
 
 import streamlit as st
 
+from scopeproof_core.gates.evaluator import unresolved_changed_file_paths
 from scopeproof_core.gates.validation import validated_review_state
 from scopeproof_core.reviews.scope_file_preview import build_scope_file_preview
-from scopeproof_core.schemas.models import LineChangeType, PullRequestSnapshot, ReviewState
+from scopeproof_core.schemas.models import (
+    LineChangeType,
+    PullRequestSnapshot,
+    ReviewBundle,
+    ReviewState,
+)
 
 
 def scope_file_changed() -> None:
@@ -66,6 +72,27 @@ def _visible_content(content: str) -> str:
         else character
         for character in content
     )
+
+
+def render_scope_overview(bundle: ReviewBundle) -> None:
+    """Surface recorded file scope independently of the gate's reason precedence."""
+    unresolved = unresolved_changed_file_paths(
+        bundle.review, bundle.findings, bundle.evidence, bundle.file_scope_decisions,
+    )
+    if unresolved is None:
+        st.text("Changed-file scope: Inventory unavailable for this analysis.")
+    else:
+        st.text(f"Unresolved inspected changed files: {len(unresolved)}")
+        if not unresolved:
+            return
+        preview = sorted(unresolved)[:3]
+        st.text("\n".join(
+            _visible_content(path.replace("\\", "\\\\")).replace("\t", "\\t") for path in preview
+        ))
+        remaining = len(unresolved) - len(preview)
+        if remaining:
+            st.caption(f"{remaining} more in changed-file scope.")
+    st.markdown("[Go to changed-file scope](#changed-file-scope)")
 
 
 def render_scope_file_preview(
