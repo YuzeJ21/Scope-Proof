@@ -36,18 +36,22 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from scopeproof_core.demo import load_demo_snapshot
+from scopeproof_core.demo import build_review, load_demo_labels, load_demo_snapshot
 from scopeproof_core.importers.junit import MAX_JUNIT_BYTES
 from scopeproof_core.reviews.comparison import ReviewComparison
 from scopeproof_core.reviews.criteria_comparison import CriteriaSnapshot
+from scopeproof_core.reviews.lifecycle import new_review_state
 from scopeproof_core.schemas.models import (
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     ChangedFile,
     ChangedLine,
     LineChangeType,
     PullRequestSnapshot,
+    RepositoryVisibility,
+    ReviewInputOrigin,
     ReviewState,
 )
+from scopeproof_core.storage.json_store import JsonReviewStore
 from tests.candidate_selection_fixture import selection_criteria, selection_snapshot
 from tests.historical_analysis_fixture import (
     HISTORICAL_HEAD,
@@ -1427,6 +1431,7 @@ def installed_wheel(
 def _installed_workbench_server(
     environment_dir: Path, runtime_dir: Path, home_dir: Path, *, log_name: str,
     constructed_snapshot: Path | None = None,
+    constructed_candidate_failure: bool = False,
     storage_directory: Path | None = None,
 ) -> Iterator[tuple[str, Path]]:
     port = _available_port()
@@ -1448,6 +1453,16 @@ def _installed_workbench_server(
         # executing any source text carried by that data. Other journeys exercise
         # the ordinary installed CLI launcher.
         bootstrap = runtime_dir / "constructed-reference-bootstrap.py"
+        head_check_fixture = ""
+        if constructed_candidate_failure:
+            head_check_fixture = (
+                "from scopeproof_core.github.client import GitHubClient, GitHubNetworkError\n"
+                "GitHubClient.fetch_pull_request = lambda self, url: constructed_snapshot()\n"
+                "def fail_candidates(self, repository, head_sha, paths):\n"
+                "    assert paths == ['src/helper.py']\n"
+                "    raise GitHubNetworkError('Constructed candidate request failed.')\n"
+                "GitHubClient.fetch_candidate_files = fail_candidates\n"
+            )
         bootstrap.write_text(
             "from pathlib import Path\nimport runpy\nimport sys\n"
             "import apps\nimport scopeproof_core\nimport scopeproof_core.demo as demo\n"
@@ -1458,6 +1473,7 @@ def _installed_workbench_server(
             "def constructed_snapshot():\n"
             "    return PullRequestSnapshot.model_validate_json(fixture.read_text())\n"
             "demo.load_demo_snapshot = constructed_snapshot\n"
+            f"{head_check_fixture}"
             "runpy.run_module('apps.web.app', run_name='__main__')\n",
             encoding="utf-8",
         )
@@ -2485,6 +2501,63 @@ def _assert_scope_source_unavailable(page: Page) -> None:
     expect(page.get_by_role(
         "button", name="Save file scope decision", exact=True,
     )).to_be_disabled()
+
+
+def test_installed_wheel_failed_candidate_fetch_preserves_head_conflict(
+    tmp_path: Path, installed_wheel: Path,
+) -> None:
+    """A constructed same-PR observation invalidates authority before a fetch fails."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    previous = load_demo_snapshot().model_copy(update={
+        "base_sha": "a" * 40, "head_sha": "b" * 40,
+        "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+    })
+    bundle = build_review(previous, load_demo_labels())
+    # Exercise the live-origin path using only fixture bytes and loopback.
+    bundle.review.input_origin = ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+    record = JsonReviewStore(home_dir / ".scopeproof" / "reviews").save(new_review_state(bundle))
+    original_bytes = record.read_bytes()
+    current = previous.model_copy(update={"head_sha": "c" * 40})
+    fixture = tmp_path / "constructed-current-head.json"
+    fixture.write_text(current.model_dump_json(), encoding="utf-8")
+    external_requests: list[str] = []
+    with (
+        _installed_workbench_server(
+            installed_wheel, tmp_path, home_dir,
+            log_name="constructed-current-head.log", constructed_snapshot=fixture,
+            constructed_candidate_failure=True,
+        ) as (base_url, log_path),
+        sync_playwright() as playwright,
+    ):
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.route("**/*", lambda route: _route_loopback_only(route, external_requests))
+            with _capture_browser_failure(page, tmp_path / "diagnostics", log_path):
+                _reopen_saved_comparison_current(page, base_url, review_id=record.stem)
+                download = page.get_by_role("button", name="Download JSON", exact=True)
+                expect(download).to_be_enabled()
+                page.get_by_text("Advanced source options", exact=True).click()
+                paths = page.get_by_label("Bounded unchanged candidate paths (optional)")
+                paths.fill("src/helper.py")
+                _run_and_wait_for_streamlit_rerun(page, lambda: paths.press("Tab"))
+                page.get_by_role("button", name="Check current head", exact=True).click()
+                expect(page.get_by_text(
+                    "Decision status: Refresh required", exact=True,
+                )).to_be_visible()
+                expect(page.get_by_text(
+                    "Constructed candidate request failed. The saved review was preserved.",
+                    exact=False,
+                )).to_be_visible()
+                expect(download).to_be_disabled()
+                expect(page.get_by_text(
+                    f"Reviewed head: {previous.head_sha}", exact=True,
+                )).to_be_visible()
+                assert record.read_bytes() == original_bytes
+                assert external_requests == []
+        finally:
+            browser.close()
 
 
 def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:

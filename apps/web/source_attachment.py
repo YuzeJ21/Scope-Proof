@@ -19,10 +19,11 @@ from scopeproof_core.reviews.source_attachment import (
     prepare_saved_source_attachment,
     required_source_candidate_paths,
     review_source_context_fingerprint,
+    validate_recorded_review_snapshot,
     validate_review_source_snapshot,
     validate_source_attachment,
 )
-from scopeproof_core.schemas.models import ReviewInputOrigin, ReviewState
+from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewInputOrigin, ReviewState
 from scopeproof_core.storage.json_store import JsonReviewStore
 
 
@@ -72,12 +73,30 @@ def clear_source_attachment() -> None:
     st.session_state["review_source_attachment"] = None
 
 
-def _block_source_context(state: ReviewState) -> None:
+def block_source_context(state: ReviewState) -> None:
     source_authority_guard().block(state)
     clear_source_attachment()
     st.session_state["snapshot"] = None
     st.session_state["candidate_files"] = []
     clear_saved_comparison_selection()
+
+
+def observe_current_head(state: ReviewState, snapshot: PullRequestSnapshot) -> None:
+    """Record contradictions without treating source replacement as an attachment."""
+    if (
+        snapshot.repository.casefold() != state.review.repository.casefold()
+        or snapshot.pr_number != state.review.pr_number
+    ):
+        return
+    try:
+        validate_recorded_review_snapshot(
+            state.review,
+            snapshot.model_copy(update={"repository": state.review.repository}),
+            source_origin=ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+        )
+    except SourceAttachmentUnavailable as unavailable:
+        if unavailable.observed_conflict:
+            block_source_context(state)
 
 
 def validate_current_source_attachment(state: ReviewState | None) -> None:
@@ -93,7 +112,7 @@ def validate_current_source_attachment(state: ReviewState | None) -> None:
             raise SourceAttachmentUnavailable("Attached source is no longer available.")
         validate_source_attachment(state, attachment, snapshot, st.session_state["candidate_files"])
     except ValueError:
-        _block_source_context(state)
+        block_source_context(state)
         st.session_state["reviewed_source_error"] = (
             "Attached source changed or expired. "
             "Load matching source again or use explicit re-review."
@@ -186,7 +205,7 @@ def render_source_attachment(
         )
     except SourceAttachmentUnavailable as unavailable:
         if unavailable.observed_conflict:
-            _block_source_context(state)
+            block_source_context(state)
         st.session_state["reviewed_source_error"] = (
             str(unavailable) + " The saved analysis was not changed."
         )
@@ -195,7 +214,7 @@ def render_source_attachment(
         st.rerun()
     except PrivateOrInaccessibleRepository as unavailable:
         if unavailable.observed_non_public:
-            _block_source_context(state)
+            block_source_context(state)
         st.session_state["reviewed_source_error"] = (
             "Matching source could not be loaded. The saved analysis was not changed."
         )

@@ -706,7 +706,11 @@ Observed source contradictions preserve the saved record but make current workbe
 **Refresh required** and block final acceptance and authoritative downloads, including older
 deferred callbacks. Clearing a draft or reopening the same context does not clear that session
 guard. Explicit matching-source recovery or a new analysis is required. **Check current head**
-remains the separate source-replacement/re-review path. The session guard does not rewrite
+is the separate source-replacement and re-review path. It records a contradiction for the same
+public pull request as soon as it is observed, before fetching optional candidate files. If a
+later fetch fails, the saved review remains open with **Refresh required** and the old
+authoritative downloads expire. A transport failure alone gives no new source observation.
+The session guard does not rewrite
 historical records, refresh their CI automatically or revoke previously downloaded reports.
 Explicit non-public repository metadata also blocks authority when loading stops before a
 snapshot is returned; transport/access errors alone do not invent a visibility observation.

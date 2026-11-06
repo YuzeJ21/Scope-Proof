@@ -19,6 +19,7 @@ from scopeproof_core.schemas.models import (
     LocalReviewId,
     PullRequestSnapshot,
     RetrievedFile,
+    Review,
     ReviewBundle,
     ReviewInputOrigin,
     ReviewState,
@@ -167,9 +168,19 @@ def validate_review_source_snapshot(
     *,
     source_origin: ReviewInputOrigin,
 ) -> PullRequestSnapshot:
-    """Check fresh observations before a later candidate fetch can fail or time out."""
-    state = _attachable_state(state)
-    review = state.review
+    """Check source facts for a review eligible for matching-source continuation."""
+    return validate_recorded_review_snapshot(
+        _attachable_state(state).review, snapshot, source_origin=source_origin,
+    )
+
+
+def validate_recorded_review_snapshot(
+    review: Review,
+    snapshot: PullRequestSnapshot,
+    *,
+    source_origin: ReviewInputOrigin,
+) -> PullRequestSnapshot:
+    """Check fresh source facts without authorizing a source attachment."""
     try:
         snapshot = PullRequestSnapshot.model_validate(snapshot.model_dump(mode="python"))
     except ValueError as error:
@@ -192,6 +203,8 @@ def validate_review_source_snapshot(
         review.head_sha,
         review.repository_visibility,
         review.ingestion_state,
+        review.ingestion_warnings,
+        review.skipped_files,
         review.check_state,
         review.ci_observation.model_dump(mode="python"),
     )
@@ -202,6 +215,8 @@ def validate_review_source_snapshot(
         snapshot.head_sha,
         snapshot.repository_visibility,
         snapshot.ingestion_state,
+        snapshot.warnings,
+        snapshot.skipped_files,
         snapshot.check_state,
         snapshot.ci_observation.model_dump(mode="python"),
     )
@@ -211,17 +226,17 @@ def validate_review_source_snapshot(
         raise SourceAttachmentUnavailable(
             "Fresh source inventory is inconsistent.", observed_conflict=True
         ) from error
-    assert review.changed_file_inventory is not None
-    expected_files = {
-        (f.path, f.status, f.previous_path) for f in review.changed_file_inventory.files
-    }
-    observed_files = {(f.path, f.status, f.previous_path) for f in inventory.files}
+    recorded_inventory = review.changed_file_inventory
+    inventory_differs = recorded_inventory is not None and {
+        (f.path, f.status, f.previous_path) for f in recorded_inventory.files
+    } != {(f.path, f.status, f.previous_path) for f in inventory.files}
     if (
         expected != observed
-        or expected_files != observed_files
-        or snapshot.warnings
-        or snapshot.skipped_files
-        or any(f.truncated for f in snapshot.files)
+        or inventory_differs
+        or (
+            review.ingestion_state is IngestionState.COMPLETE
+            and any(f.truncated for f in snapshot.files)
+        )
     ):
         raise SourceAttachmentUnavailable(
             "Fresh source facts differ from the saved analysis. Use explicit re-review.",
