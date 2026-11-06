@@ -148,8 +148,8 @@ class RecordedCriteriaDiff(BaseModel):
 
     @model_validator(mode="after")
     def _same_pull_request(self) -> RecordedCriteriaDiff:
-        if (self.previous.repository, self.previous.pr_number) != (
-            self.current.repository, self.current.pr_number,
+        if (self.previous.repository.casefold(), self.previous.pr_number) != (
+            self.current.repository.casefold(), self.current.pr_number,
         ):
             raise ValueError("criteria comparison requires the same pull request")
         return self

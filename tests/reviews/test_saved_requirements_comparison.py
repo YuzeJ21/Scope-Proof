@@ -72,3 +72,16 @@ def test_requirements_comparison_rejects_another_pull_request(tmp_path):
     store.save(baseline)
     with pytest.raises(ValueError, match="same pull request"):
         api.prepare_saved_requirements_comparison(store, current, baseline.review.review_id)
+
+
+def test_requirements_view_accepts_github_case_variants_without_relaxing_evidence(tmp_path):
+    current, baseline = saved_requirements_states(baseline_repository="ACME/WIDGET")
+    store = JsonReviewStore(tmp_path)
+    store.save(current)
+    store.save(baseline)
+    with pytest.raises(ValueError, match="same repository"):
+        api.prepare_saved_comparison(store, current, baseline.review.review_id)
+    selection = api.prepare_saved_requirements_comparison(store, current, baseline.review.review_id)
+    with api.locked_saved_requirements_comparison(store, selection) as diff:
+        assert diff.previous.repository == "ACME/WIDGET"
+        assert diff.current.repository == "acme/widget"
