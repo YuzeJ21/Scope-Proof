@@ -100,7 +100,7 @@ class CriteriaSnapshot(BaseModel):
         return self
 
 
-def _fingerprint(snapshot: CriteriaSnapshot) -> str:
+def criteria_snapshot_fingerprint(snapshot: CriteriaSnapshot) -> str:
     snapshot = CriteriaSnapshot.model_validate(snapshot.model_dump(mode="python"))
     return sha256(snapshot.model_dump_json().encode("utf-8")).hexdigest()
 
@@ -219,8 +219,10 @@ class CriteriaRevisionComparison(RecordedCriteriaDiff):
                for snapshot in (self.previous, self.current)):
             raise ValueError("criteria snapshots must match their selected owning identity")
         if (
-            _fingerprint(self.previous) != self.selection.previous_criteria_fingerprint
-            or _fingerprint(self.current) != self.selection.current_criteria_fingerprint
+            criteria_snapshot_fingerprint(self.previous)
+            != self.selection.previous_criteria_fingerprint
+            or criteria_snapshot_fingerprint(self.current)
+            != self.selection.current_criteria_fingerprint
         ):
             raise ValueError("criteria comparison snapshots differ from the selected saved facts")
         if self.current.revision_number == "unknown" or (
@@ -271,8 +273,8 @@ def _selection(state: ReviewState, index: int) -> CriteriaComparisonSelection:
             review_id=state.review.review_id,
             state_fingerprint=JsonReviewStore.state_fingerprint(state), history_index=index,
             analysis_fingerprint=historical_analysis_fingerprint(state.analysis_history[index]),
-        ), previous_criteria_fingerprint=_fingerprint(previous),
-        current_criteria_fingerprint=_fingerprint(current),
+        ), previous_criteria_fingerprint=criteria_snapshot_fingerprint(previous),
+        current_criteria_fingerprint=criteria_snapshot_fingerprint(current),
     )
 
 
