@@ -36,6 +36,7 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
+from scopeproof_core.criteria.confirmation import build_criteria_source_provenance
 from scopeproof_core.demo import build_review, load_demo_labels, load_demo_snapshot
 from scopeproof_core.importers.junit import MAX_JUNIT_BYTES
 from scopeproof_core.reviews.comparison import ReviewComparison
@@ -45,6 +46,7 @@ from scopeproof_core.schemas.models import (
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     ChangedFile,
     ChangedLine,
+    CriterionSource,
     LineChangeType,
     PullRequestSnapshot,
     RepositoryVisibility,
@@ -1459,6 +1461,8 @@ def _installed_workbench_server(
                 "from scopeproof_core.github.client import GitHubClient, GitHubNetworkError\n"
                 "GitHubClient.fetch_pull_request = lambda self, url: constructed_snapshot()\n"
                 "def fail_candidates(self, repository, head_sha, paths):\n"
+                "    if not paths:\n"
+                "        return []\n"
                 "    assert paths == ['src/helper.py']\n"
                 "    raise GitHubNetworkError('Constructed candidate request failed.')\n"
                 "GitHubClient.fetch_candidate_files = fail_candidates\n"
@@ -2503,10 +2507,10 @@ def _assert_scope_source_unavailable(page: Page) -> None:
     )).to_be_disabled()
 
 
-def test_installed_wheel_failed_candidate_fetch_preserves_head_conflict(
+def test_installed_wheel_failed_refresh_can_retry_with_saved_requirements_draft(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
-    """A constructed same-PR observation invalidates authority before a fetch fails."""
+    """A constructed same-PR retry stages requirements after invalidating the old review."""
     home_dir = tmp_path / "home"
     home_dir.mkdir()
     previous = load_demo_snapshot().model_copy(update={
@@ -2515,9 +2519,20 @@ def test_installed_wheel_failed_candidate_fetch_preserves_head_conflict(
     })
     bundle = build_review(previous, load_demo_labels())
     # Exercise the live-origin path using only fixture bytes and loopback.
+    bundle.criteria[0].criterion_source = CriterionSource.IMPLICIT_RULE_PACK
+    bundle.criteria[0].source_span = "Constructed requirements line 1"
+    source_reference = "https://github.com/scopeproof/demo-stock-research/issues/4"
+    source_revision = "constructed-issue-edit-4"
+    provenance = build_criteria_source_provenance(
+        source_uri=source_reference, source_revision=source_revision,
+        source_text=bundle.source_text, criteria=bundle.criteria,
+        confirmed_by="Constructed prior confirmer",
+        confirmed_at=bundle.review.criteria_source_provenance.confirmed_at,
+    )
     bundle.review = bundle.review.model_copy(update={
         "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
         "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+        "criteria_source_provenance": provenance,
     })
     state = new_review_state(bundle)
     assert state.review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
@@ -2561,6 +2576,45 @@ def test_installed_wheel_failed_candidate_fetch_preserves_head_conflict(
                 expect(page.get_by_text(
                     f"Reviewed head: {previous.head_sha}", exact=True,
                 )).to_be_visible()
+                assert record.read_bytes() == original_bytes
+
+                paths.fill("")
+                _run_and_wait_for_streamlit_rerun(page, lambda: paths.press("Tab"))
+                page.get_by_role("button", name="Check current head", exact=True).click()
+                expect(page.get_by_text(
+                    "Public PR loaded. Saved requirements and source details are staged "
+                    "for confirmation.", exact=True,
+                )).to_be_visible()
+                expect(page.get_by_role(
+                    "textbox", name="Product requirements or acceptance criteria", exact=True,
+                )).to_have_value(bundle.source_text)
+                expect(page.get_by_role(
+                    "textbox", name="Source reference", exact=True,
+                )).to_have_value(source_reference)
+                page.get_by_text("Source revision (optional)", exact=True).click()
+                expect(page.get_by_role(
+                    "textbox", name="Revision identifier", exact=True,
+                )).to_have_value(source_revision)
+                confirmer = page.get_by_role("textbox", name="Confirmed by", exact=True)
+                expect(confirmer).to_have_value("")
+                confirm = page.get_by_role(
+                    "button", name="Apply edits and confirm criteria", exact=True,
+                )
+                run_analysis = page.get_by_role("button", name="Run deterministic analysis")
+                expect(confirm).to_be_disabled()
+                confirmer.fill("Constructed new confirmer")
+                _run_and_wait_for_streamlit_rerun(page, lambda: confirmer.press("Tab"))
+                expect(run_analysis).to_be_disabled()
+                confirm.click()
+                expect(run_analysis).to_be_enabled()
+                run_analysis.click()
+                expect(page.get_by_role("heading", name="Re-review comparison")).to_be_visible()
+                rereview = ReviewState.model_validate(_download_review_state(page))
+                assert rereview.criteria_revision.criteria == bundle.criteria
+                assert rereview.review.head_sha == current.head_sha
+                assert rereview.review.criteria_source_provenance.confirmed_by == (
+                    "Constructed new confirmer"
+                )
                 assert record.read_bytes() == original_bytes
                 assert external_requests == []
         finally:

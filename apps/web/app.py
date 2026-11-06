@@ -178,6 +178,7 @@ from scopeproof_core.schemas.models import (
     JUNIT_EVIDENCE_BOUNDARY_DESCRIPTION,
     RULESET_VERSION,
     CheckState,
+    CriteriaRevision,
     Criterion,
     EvidenceLevel,
     EvidenceSourceScope,
@@ -186,6 +187,7 @@ from scopeproof_core.schemas.models import (
     IngestionState,
     Priority,
     PullRequestSnapshot,
+    RepositoryVisibility,
     ResolutionEvent,
     RetrievedFile,
     Review,
@@ -721,6 +723,35 @@ def _record_reopened_source_reload(snapshot: PullRequestSnapshot) -> None:
         st.session_state["source_reload_notice"] = notice
         if state.bundle is not None:
             st.session_state["comparison_base_bundle"] = state.bundle.model_copy(deep=True)
+
+
+def _saved_requirements_for_refresh(
+    state: ReviewState | None, snapshot: PullRequestSnapshot, store: JsonReviewStore,
+) -> CriteriaRevision | None:
+    """Read the exact reopened record before copying its requirements as a draft."""
+    if (
+        state is None
+        or snapshot.repository_visibility is not RepositoryVisibility.VERIFIED_PUBLIC
+        or snapshot.repository.casefold() != state.review.repository.casefold()
+        or snapshot.pr_number != state.review.pr_number
+        or not _review_matches_local_save(state)
+    ):
+        return None
+    revision = state.criteria_revision
+    provenance = revision.source_provenance
+    if (
+        not revision.confirmed
+        or provenance is None
+        or provenance.source_uri == CONSTRUCTED_DEMO_CRITERIA_SOURCE_URI
+    ):
+        return None
+    try:
+        saved = load_discovered_review(
+            store, state.review.review_id, expected_fingerprint=_review_state_fingerprint(state),
+        )
+    except (OSError, ValueError):
+        return None
+    return saved.criteria_revision
 
 
 def _prepare_from_text(text: str) -> None:
@@ -1614,22 +1645,41 @@ if fetch_action_placeholder.button(
         candidate_files = client.fetch_candidate_files(
             snapshot.repository, snapshot.head_sha, candidate_paths
         )
+        saved_requirements = _saved_requirements_for_refresh(
+            None if alpha_feedback_mode else head_check_state, snapshot, review_store,
+        )
+        if checking_reopened_review:
+            criteria = saved_requirements.criteria if saved_requirements is not None else []
+            source_text = saved_requirements.source_text if saved_requirements is not None else ""
+            st.session_state["criteria"] = criteria
+            st.session_state["source_text"] = source_text
+            st.session_state["requirements_input"] = source_text
+            _clear_criteria_draft(criteria)
+            _clear_criteria_authoring_drafts(("new_criterion_text", "split_criterion_text"))
         _record_reopened_source_reload(snapshot)
         st.session_state["snapshot"] = snapshot
         st.session_state["candidate_files"] = candidate_files
         st.session_state["alpha_case_id"] = None
         st.session_state["criteria_source_mode"] = "standard"
-        st.session_state["criteria_source_reference"] = ""
-        st.session_state["criteria_source_revision"] = ""
-        st.session_state["criteria_source_confirmer"] = ""
-        st.session_state["criteria_source_draft"] = {
-            "criteria_source_reference": "",
-            "criteria_source_revision": "",
+        previous_provenance = (
+            saved_requirements.source_provenance if saved_requirements is not None else None
+        )
+        source_draft = {
+            "criteria_source_reference": (
+                previous_provenance.source_uri if previous_provenance is not None else ""
+            ),
+            "criteria_source_revision": (
+                previous_provenance.source_revision or "" if previous_provenance is not None else ""
+            ),
             "criteria_source_confirmer": "",
         }
+        st.session_state.update(source_draft)
+        st.session_state["criteria_source_draft"] = source_draft
         _reset_analysis()
         st.session_state["source_load_notice"] = (
-            "Public PR loaded. Add and confirm criteria before analysis."
+            "Public PR loaded. Saved requirements and source details are staged for confirmation."
+            if saved_requirements is not None
+            else "Public PR loaded. Add and confirm criteria before analysis."
         )
         st.rerun()
     except (GitHubIngestionError, ValueError) as error:
@@ -2005,7 +2055,10 @@ else:
             f"{displayed_level.value}"
         )
         with st.expander(editor_label, expanded=False):
-            st.caption("Confirmed requirement")
+            st.caption(
+                "Confirmed requirement" if st.session_state["criteria_confirmed"]
+                else "Draft requirement"
+            )
             st.text(criterion.text)
             text_column, priority_column, level_column, actions_column = st.columns(
                 [5, 2, 2, 2]
@@ -2065,6 +2118,7 @@ else:
                     text=edited_text,
                     priority=priority,
                     criterion_type=criterion.criterion_type,
+                    criterion_source=criterion.criterion_source,
                     source_span=criterion.source_span,
                     required_evidence_level=level,
                 )

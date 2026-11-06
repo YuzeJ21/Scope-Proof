@@ -183,7 +183,7 @@ def test_orphan_candidate_does_not_hide_file_scope_control() -> None:
     assert "src/unrelated.py" in app.selectbox(key="scope_file_path").options
 
 
-def analyzed_exact_head_standard_demo(app: AppTest) -> AppTest:
+def analyzed_exact_head_standard_demo(app: AppTest, *, source_revision: str = "") -> AppTest:
     app = app.button(key="load_demo").click().run()
     app.session_state["snapshot"] = app.session_state["snapshot"].model_copy(
         update={
@@ -199,6 +199,8 @@ def analyzed_exact_head_standard_demo(app: AppTest) -> AppTest:
     app = app.text_input(key="criteria_source_confirmer").set_value(
         "Product owner"
     ).run()
+    if source_revision:
+        app = app.text_input(key="criteria_source_revision").set_value(source_revision).run()
     app = app.button(key="confirm_criteria").click().run()
     return app.button(key="run_analysis").click().run()
 
@@ -3587,9 +3589,15 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    saved = analyzed_exact_head_standard_demo(new_app())
-    review_id = saved.session_state["review_state"].review.review_id
-    previous_head = saved.session_state["review_state"].review.head_sha
+    saved = resolve_all_criteria(analyzed_exact_head_standard_demo(
+        new_app(), source_revision="constructed-issue-revision-2",
+    ))
+    saved = saved.button(key="record_final_acceptance").click().run()
+    previous = saved.session_state["review_state"]
+    review_id = previous.review.review_id
+    previous_head = previous.review.head_sha
+    record = default_local_review_directory() / f"{review_id}.json"
+    original_bytes = record.read_bytes()
     changed_snapshot = load_demo_snapshot().model_copy(
         update={
             "head_sha": "b" * 40,
@@ -3600,22 +3608,44 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     fresh = new_app()
     fresh = select_saved_review(fresh, review_id)
     fresh = fresh.button(key="reopen_review").click().run()
-    fresh = fresh.text_input(key="pr_url").set_value(
-        "https://github.com/scopeproof/demo-stock-research/pull/7"
+    fresh = fresh.text_area(key="requirements_input").set_value(
+        "Unprepared changes should be discarded under explicit consent."
     ).run()
+    fresh = fresh.text_input(key="criterion_text_AC-01").set_value(
+        "Unconfirmed criterion edit"
+    ).run()
+    fresh = fresh.checkbox(key="replace_unsaved_review_confirmed").check().run()
     with patch(
         "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
         return_value=changed_snapshot,
     ):
         fresh = fresh.button(key="fetch_pr").click().run()
-    fresh = fresh.text_input(key="criteria_source_reference").set_value(
+    assert fresh.text_area(key="requirements_input").value == previous.criteria_revision.source_text
+    assert fresh.session_state["criteria"] == previous.criteria_revision.criteria
+    assert fresh.text_input(key="criterion_text_AC-01").value == (
+        previous.criteria_revision.criteria[0].text
+    )
+    assert fresh.text_input(key="criteria_source_reference").value == (
         "https://github.com/acme/repo/issues/6"
-    ).run()
+    )
+    assert fresh.text_input(key="criteria_source_revision").value == "constructed-issue-revision-2"
+    assert fresh.text_input(key="criteria_source_confirmer").value == ""
+    assert fresh.session_state["criteria_source_provenance"] is None
+    assert fresh.button(key="confirm_criteria").disabled
+    assert fresh.button(key="run_analysis").disabled
+    assert record.read_bytes() == original_bytes
     fresh = fresh.text_input(key="criteria_source_confirmer").set_value(
         "Local reviewer"
     ).run()
+    assert fresh.button(key="run_analysis").disabled
     fresh = fresh.button(key="confirm_criteria").click().run()
     fresh = fresh.button(key="run_analysis").click().run()
+    current = fresh.session_state["review_state"]
+    assert current.review.review_id != review_id
+    assert current.review.criteria_source_provenance.confirmed_by == "Local reviewer"
+    assert not current.review.final_acceptance
+    assert not current.resolution_events
+    assert record.read_bytes() == original_bytes
 
     rendered = "\n".join(
         item.value for item in [*fresh.markdown, *fresh.caption, *fresh.code]
@@ -3627,6 +3657,65 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     assert "Current candidate" in rendered
     assert "review the current evidence" in rendered.lower()
     assert "does not prove criterion satisfaction" in rendered.lower()
+
+
+@pytest.mark.parametrize("source", ["unrelated", "unverified", "constructed", "changed-record"])
+def test_reopened_refresh_only_stages_the_matching_saved_revision(source: str) -> None:
+    saved = (
+        analyzed_demo(new_app()) if source == "constructed"
+        else analyzed_exact_head_standard_demo(new_app())
+    )
+    previous = saved.session_state["review_state"]
+    fresh = select_saved_review(new_app(), previous.review.review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+    snapshot = load_demo_snapshot().model_copy(update={
+        "head_sha": "b" * 40,
+        "repository_visibility": (
+            RepositoryVisibility.UNVERIFIED if source == "unverified"
+            else RepositoryVisibility.VERIFIED_PUBLIC
+        ),
+    })
+    if source == "unrelated":
+        snapshot.pr_number = 999
+        fresh = fresh.text_input(key="pr_url").set_value(
+            f"https://github.com/{snapshot.repository}/pull/{snapshot.pr_number}"
+        ).run()
+    store = JsonReviewStore(default_local_review_directory())
+
+    def load_candidates(*args):
+        if source == "changed-record":
+            store.mutate(
+                previous.review.review_id,
+                lambda state: append_resolution(
+                    state,
+                    ResolutionEvent(
+                        criterion_id="AC-01",
+                        decision=HumanDecision.CHANGE_REQUIRED,
+                        comment="Constructed concurrent record change",
+                    ),
+                ),
+            )
+        return []
+
+    with (
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+            return_value=snapshot,
+        ),
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_candidate_files",
+            side_effect=load_candidates,
+        ),
+    ):
+        fresh = fresh.button(key="fetch_pr").click().run()
+    assert not fresh.exception
+    assert not fresh.session_state["criteria"]
+    assert fresh.text_area(key="requirements_input").value == ""
+    assert fresh.session_state["criteria_source_draft"] == {
+        "criteria_source_reference": "",
+        "criteria_source_revision": "",
+        "criteria_source_confirmer": "",
+    }
 
 
 def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_exports(
