@@ -3971,17 +3971,14 @@ def test_rereview_comparison_shows_modified_candidate_excerpt(
     fresh = new_app()
     fresh = select_saved_review(fresh, review_id)
     fresh = fresh.button(key="reopen_review").click().run()
-    fresh = fresh.text_input(key="pr_url").set_value(
-        "https://github.com/scopeproof/demo-stock-research/pull/7"
-    ).run()
     with patch(
         "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
         return_value=changed_snapshot,
     ):
         fresh = fresh.button(key="fetch_pr").click().run()
-    fresh = fresh.text_input(key="criteria_source_reference").set_value(
+    assert fresh.text_input(key="criteria_source_reference").value == (
         "https://github.com/acme/repo/issues/6"
-    ).run()
+    )
     fresh = fresh.text_input(key="criteria_source_confirmer").set_value(
         "Local reviewer"
     ).run()
