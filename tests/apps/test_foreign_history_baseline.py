@@ -64,6 +64,29 @@ def record_bytes(store):
     return {path.name: path.read_bytes() for path in store.directory.glob("*.json")}
 
 
+def test_foreign_requirements_view_stays_separate_from_evidence_comparison():
+    app, store = foreign_history_app(incompatible_active=True)
+    before = record_bytes(store)
+    app = app.button(key="compare_saved_analysis").click().run()
+    assert "identical confirmed criteria and criteria source" in rendered(app)
+    assert comparison_downloads(app) == []
+
+    app = app.button(key="compare_saved_requirements").click().run()
+    assert not app.exception
+    assert "Saved requirements comparison" in rendered(app)
+    assert "https://example.test/constructed-other-active-source" in rendered(app)
+    assert "Recorded source provenance changed: Yes" in rendered(app)
+    assert comparison_downloads(app) == []
+    assert record_bytes(store) == before
+
+    app = choose_history(app)
+    assert "Saved requirements comparison" not in rendered(app)
+    app = app.button(key="compare_saved_requirements").click().run()
+    assert FOREIGN_HISTORY_HEAD in rendered(app)
+    assert comparison_downloads(app) == []
+    assert record_bytes(store) == before
+
+
 @pytest.mark.parametrize("mode", ["normal", "history_only", "incompatible_active"])
 def test_foreign_history_can_be_explicitly_selected_without_source_reload_or_saved_mutation(mode):
     app, store = foreign_history_app(

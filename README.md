@@ -900,6 +900,12 @@ See the [bounded assessment](docs/audits/2026-10-31-historical-analysis-inspecti
 
 ### Inspect saved requirements changes
 
+For two separately saved analyses of the same PR, select the other record and its active
+or retained analysis under **Compare saved analyses**. Choose **Compare saved requirements**
+to see both record IDs and reviewed heads, recorded source details, and criterion changes.
+The view is read-only and expires when either saved record changes or disappears.
+Evidence comparison still requires identical confirmed criteria and compatible source details.
+
 After inspecting a retained analysis, click **Compare with saved current criteria** to see its
 recorded requirements beside the current saved revision, including a pending unconfirmed revision
 without an active analysis. **Download criteria changes JSON/Markdown** provides a separate

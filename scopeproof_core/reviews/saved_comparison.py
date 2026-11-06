@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from scopeproof_core.reviews.comparison import ReviewComparison, compare_reviews
+from scopeproof_core.reviews.criteria_comparison import (
+    RecordedCriteriaDiff,
+    analysis_criteria_snapshot,
+)
 from scopeproof_core.schemas.models import LocalReviewId, ReviewBundle, ReviewState
 from scopeproof_core.storage.json_store import JsonReviewStore
 
@@ -56,15 +60,26 @@ def _compare(
     return compare_reviews(_baseline_bundle(baseline, history_index), current.bundle)
 
 
-def prepare_saved_comparison(
+def _compare_requirements(
+    current: ReviewState, baseline: ReviewState, history_index: int | None,
+) -> RecordedCriteriaDiff:
+    if current.bundle is None or current.review.review_id == baseline.review.review_id:
+        raise ValueError("requirements comparison needs another saved record and active analysis")
+    return RecordedCriteriaDiff(
+        previous=analysis_criteria_snapshot(_baseline_bundle(baseline, history_index)),
+        current=analysis_criteria_snapshot(current.bundle),
+    )
+
+
+def _prepare_saved_selection(
     store: JsonReviewStore,
     current: ReviewState,
     baseline_review_id: str,
+    compare: Callable[[ReviewState, ReviewState, int | None], object],
     *,
     history_index: int | None = None,
     expected_baseline_fingerprint: Fingerprint | None = None,
 ) -> SavedComparisonSelection:
-    """Explicitly select compatible saved truth, rejecting unsaved current changes."""
     expected_current = store.state_fingerprint(current)
     with store.locked_load_many((current.review.review_id, baseline_review_id)) as (
         saved_current,
@@ -90,16 +105,37 @@ def prepare_saved_comparison(
         )
         if baseline_fingerprint != selection.baseline_fingerprint:
             raise SavedComparisonUnavailable("selected saved baseline changed; select again")
-        _compare(saved_current, baseline, selection.history_index)
+        compare(saved_current, baseline, selection.history_index)
         return selection
 
 
+def prepare_saved_comparison(
+    store: JsonReviewStore, current: ReviewState, baseline_review_id: str, *,
+    history_index: int | None = None, expected_baseline_fingerprint: Fingerprint | None = None,
+) -> SavedComparisonSelection:
+    """Explicitly select compatible saved truth, rejecting unsaved current changes."""
+    return _prepare_saved_selection(
+        store, current, baseline_review_id, _compare, history_index=history_index,
+        expected_baseline_fingerprint=expected_baseline_fingerprint,
+    )
+
+
+def prepare_saved_requirements_comparison(
+    store: JsonReviewStore, current: ReviewState, baseline_review_id: str, *,
+    history_index: int | None = None, expected_baseline_fingerprint: Fingerprint | None = None,
+) -> SavedComparisonSelection:
+    """Select recorded requirements independently of evidence compatibility."""
+    return _prepare_saved_selection(
+        store, current, baseline_review_id, _compare_requirements, history_index=history_index,
+        expected_baseline_fingerprint=expected_baseline_fingerprint,
+    )
+
+
 @contextmanager
-def locked_saved_comparison(
+def _locked_saved_selection(
     store: JsonReviewStore,
     selection: SavedComparisonSelection,
-) -> Iterator[ReviewComparison]:
-    """Revalidate both selected records and hold their locks through the consumer."""
+) -> Iterator[tuple[ReviewState, ReviewState, int | None]]:
     selection = SavedComparisonSelection.model_validate(selection.model_dump(mode="python"))
     with store.locked_load_many((selection.current_review_id, selection.baseline_review_id)) as (
         current,
@@ -112,4 +148,22 @@ def locked_saved_comparison(
             or store.state_fingerprint(baseline) != selection.baseline_fingerprint
         ):
             raise SavedComparisonUnavailable("saved comparison changed; select the baseline again")
-        yield _compare(current, baseline, selection.history_index)
+        yield current, baseline, selection.history_index
+
+
+@contextmanager
+def locked_saved_comparison(
+    store: JsonReviewStore, selection: SavedComparisonSelection,
+) -> Iterator[ReviewComparison]:
+    """Revalidate both selected records and hold their locks through the consumer."""
+    with _locked_saved_selection(store, selection) as (current, baseline, index):
+        yield _compare(current, baseline, index)
+
+
+@contextmanager
+def locked_saved_requirements_comparison(
+    store: JsonReviewStore, selection: SavedComparisonSelection,
+) -> Iterator[RecordedCriteriaDiff]:
+    """Hold both saved records stable while inspecting recorded requirements."""
+    with _locked_saved_selection(store, selection) as (current, baseline, index):
+        yield _compare_requirements(current, baseline, index)
