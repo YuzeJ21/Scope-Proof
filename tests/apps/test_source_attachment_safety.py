@@ -104,7 +104,9 @@ def test_current_head_check_keeps_pending_file_scope_draft_until_cleared():
     assert app.button(key="fetch_pr").label == "Check current head"
     assert not app.button(key="fetch_pr").disabled
     app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    assert not app.button(key="fetch_pr").disabled
     app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
+    assert app.button(key="fetch_pr").disabled
     draft = "Constructed unsubmitted scope explanation"
     app = app.text_area(key="scope_note").set_value(draft).run()
     assert app.button(key="fetch_pr").disabled

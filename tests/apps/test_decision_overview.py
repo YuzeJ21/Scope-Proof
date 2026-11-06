@@ -34,6 +34,9 @@ def test_overview_excludes_unsubmitted_file_scope_draft_from_save_status() -> No
     assert "Unresolved inspected changed files: 1" in [item.value for item in app.text]
     app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
     app = app.selectbox(key="scope_file_path").set_value("src/unrelated.py").run()
+    assert "Local save: Saved locally" in [item.value for item in app.text]
+    assert not app.button(key="open_next_overview_blocker").disabled
+    assert app.button(key="save_scope_decision").disabled
     app = app.text_area(key="scope_note").set_value("Unsubmitted scope explanation").run()
     assert "Local save: Pending inputs excluded" in [item.value for item in app.text]
     assert app.button(key="open_next_overview_blocker").disabled

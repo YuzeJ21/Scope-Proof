@@ -289,12 +289,21 @@ def test_pending_file_scope_inputs_invalidate_comparison_and_can_be_cleared_read
     app, store = reopened_comparison_app()
     app = apply_other_baseline(app)
     lease = app.session_state["saved_comparison_export_lease"]
+    download = deferred_saved_comparison_export(
+        lease.selection, export_comparison_json, store=store, lease=lease,
+    )
     before = {p.name: p.read_bytes() for p in store.directory.glob("*.json")}
+    app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    assert len(comparison_downloads(app)) == 2
+    assert PREVIOUS_HEAD in download()
+    assert app.button(key="save_scope_decision").disabled
     app = app.text_area(key="scope_note").set_value("Unsubmitted scope explanation").run()
     assert not app.exception
     assert comparison_downloads(app) == []
     assert lease.selection is None
     assert app.button(key="compare_saved_analysis").disabled
+    with pytest.raises(DeferredExportUnavailable):
+        download()
     app = app.button(key="clear_saved_comparison_scope_draft").click().run()
     assert not app.exception
     assert app.text_area(key="scope_note").value == ""
