@@ -178,8 +178,7 @@ class JsonReviewStore:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
             else:
                 assert msvcrt is not None
-                if os.fstat(descriptor).st_size == 0:
-                    os.write(descriptor, b"\0")
+                # Windows can lock past EOF, so an empty lock file needs no initialization.
                 os.lseek(descriptor, 0, os.SEEK_SET)
                 msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
                 try:
