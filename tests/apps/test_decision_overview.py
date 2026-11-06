@@ -33,6 +33,7 @@ def test_overview_opens_next_blocker_without_writing_or_discarding_inputs() -> N
     app = analyzed_demo(new_app())
     state = app.session_state["review_state"]
     store = JsonReviewStore(default_local_review_directory())
+    assert "### Decision overview" in [item.value for item in app.markdown]
     assert "**Recorded verdict: Action required**" in [item.value for item in app.markdown]
     assert f"Reviewed head: {state.review.head_sha}" in [item.value for item in app.text]
     assert "Blocking criteria (2): AC-02, AC-03" in [item.value for item in app.text]
@@ -134,7 +135,7 @@ def test_overview_and_exports_disappear_after_late_external_revision() -> None:
     assert not app.exception
     assert locks >= 2
     assert app.session_state["review_state"] == store.load(before.review.review_id) == revised
-    assert not any(item.value == "Decision overview" for item in app.subheader)
+    assert "### Decision overview" not in [item.value for item in app.markdown]
     assert not app.download_button
 
 

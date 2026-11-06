@@ -862,7 +862,7 @@ def _render_decision_overview(
 ) -> None:
     refresh_required = source_conflict or revalidation_failed
     review = bundle.review
-    st.subheader("Decision overview")
+    st.markdown("### Decision overview")
     if refresh_required:
         st.markdown("**Decision status: Refresh required**")
     else:
