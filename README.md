@@ -631,6 +631,12 @@ The six review sections are:
 5. Evidence Matrix.
 6. Summary & Export.
 
+In unreleased `0.2.6.dev0`, **Decision overview** appears after analysis and when reopening
+a saved analysis. It shows the reviewed head, recorded verdict, blockers, final acceptance,
+and local save status. Use its blocker control to open the first blocking criterion.
+A reopened analysis shows whether matching source is loaded. A source conflict or an
+unverifiable saved record requires a refresh before relying on the verdict.
+
 Criterion Review contains the selected criterion evidence, separate reviewer-selected static
 references and external JUnit context,
 external verification, and human resolution controls. Summary & Export provides Markdown,

@@ -34,6 +34,29 @@ def prepare_scope_draft_context(
         st.session_state["scope_draft_context"] = context
 
 
+def scope_draft_pending(current: ReviewState | None) -> bool:
+    """Submitted controls remain populated; a differing or unsubmitted form is a draft."""
+    path = st.session_state.get("scope_file_path")
+    disposition = st.session_state.get("scope_disposition")
+    note = st.session_state.get("scope_note", "")
+    criterion_id = (
+        st.session_state.get("scope_criterion_id")
+        if disposition == "within_confirmed_criteria" else None
+    )
+    if not any((path, disposition, note, criterion_id)):
+        return False
+    latest = (
+        {item.path: item for item in current.bundle.file_scope_decisions}.get(path)
+        if current is not None and current.bundle is not None else None
+    )
+    return latest is None or (
+        latest.disposition, latest.criterion_id, latest.note, latest.reviewer
+    ) != (
+        disposition, criterion_id, note,
+        st.session_state.get("decision_reviewer", "").strip(),
+    )
+
+
 def _visible_content(content: str) -> str:
     # Preserve physical record boundaries without presenting separators as extra source lines.
     return "".join(
