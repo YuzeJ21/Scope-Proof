@@ -2515,8 +2515,13 @@ def test_installed_wheel_failed_candidate_fetch_preserves_head_conflict(
     })
     bundle = build_review(previous, load_demo_labels())
     # Exercise the live-origin path using only fixture bytes and loopback.
-    bundle.review.input_origin = ReviewInputOrigin.LIVE_PUBLIC_GITHUB
-    record = JsonReviewStore(home_dir / ".scopeproof" / "reviews").save(new_review_state(bundle))
+    bundle.review = bundle.review.model_copy(update={
+        "input_origin": ReviewInputOrigin.LIVE_PUBLIC_GITHUB,
+        "repository_visibility": RepositoryVisibility.VERIFIED_PUBLIC,
+    })
+    state = new_review_state(bundle)
+    assert state.review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+    record = JsonReviewStore(home_dir / ".scopeproof" / "reviews").save(state)
     original_bytes = record.read_bytes()
     current = previous.model_copy(update={"head_sha": "c" * 40})
     fixture = tmp_path / "constructed-current-head.json"
@@ -2539,7 +2544,9 @@ def test_installed_wheel_failed_candidate_fetch_preserves_head_conflict(
                 download = page.get_by_role("button", name="Download JSON", exact=True)
                 expect(download).to_be_enabled()
                 page.get_by_text("Advanced source options", exact=True).click()
-                paths = page.get_by_label("Bounded unchanged candidate paths (optional)")
+                paths = page.get_by_role(
+                    "textbox", name="Bounded unchanged candidate paths (optional)", exact=True,
+                )
                 paths.fill("src/helper.py")
                 _run_and_wait_for_streamlit_rerun(page, lambda: paths.press("Tab"))
                 page.get_by_role("button", name="Check current head", exact=True).click()

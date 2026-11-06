@@ -1581,6 +1581,7 @@ checking_reopened_review = (
     reopened_review is not None
     and st.session_state["reopened_review_id"] == reopened_review.review.review_id
 )
+scope_draft_blocks_head_check = checking_reopened_review and has_pending_scope_draft
 if fetch_action_placeholder.button(
     "Check current head" if checking_reopened_review else "Fetch public PR",
     key="fetch_pr",
@@ -1588,6 +1589,7 @@ if fetch_action_placeholder.button(
         not pr_url_is_valid
         or not alpha_qualification_ready
         or replacement_blocked
+        or scope_draft_blocks_head_check
     ),
     use_container_width=True,
 ):
@@ -1649,6 +1651,8 @@ if fetch_action_placeholder.button(
             "try again. Use the optional token only if GitHub reports a rate limit."
         )
 
+if scope_draft_blocks_head_check:
+    st.caption("Save or clear pending file-scope inputs before checking the current head.")
 
 render_source_attachment(
     st.session_state["review_state"], store=review_store,
