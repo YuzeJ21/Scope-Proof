@@ -62,9 +62,9 @@ from apps.web.selected_references import (
     selected_reference_draft_pending,
 )
 from apps.web.source_attachment import (
-    block_source_context,
     clear_source_attachment,
     observe_current_head,
+    observe_repository_visibility,
     render_source_attachment,
     source_authority_check,
     source_authority_guard,
@@ -896,6 +896,7 @@ def _render_decision_overview(
     blocker_ids: list[str],
     revalidation_failed: bool,
     source_conflict: bool,
+    source_conflict_detail: str | None,
     store_available: bool,
     has_pending_inputs: bool,
 ) -> None:
@@ -910,6 +911,8 @@ def _render_decision_overview(
     snapshot = st.session_state["snapshot"]
     if source_conflict:
         st.caption("Source observations conflict with this analysis.")
+        if source_conflict_detail is not None:
+            st.text(source_conflict_detail)
     elif review.input_origin is ReviewInputOrigin.CONSTRUCTED_DEMO:
         st.caption("Constructed demo. The reviewed head comes from the fixture.")
     elif snapshot is not None and (
@@ -1704,12 +1707,8 @@ if fetch_action_placeholder.button(
         st.rerun()
     except (GitHubIngestionError, ValueError) as error:
         if head_check_state is not None:
-            if (
-                snapshot is None
-                and isinstance(error, PrivateOrInaccessibleRepository)
-                and error.observed_non_public
-            ):
-                block_source_context(head_check_state)
+            if snapshot is None and isinstance(error, PrivateOrInaccessibleRepository):
+                observe_repository_visibility(head_check_state, error)
             if not source_authority_guard().allows(head_check_state):
                 st.session_state["reviewed_source_error"] = (
                     f"{error} The saved review was preserved. "
@@ -3895,6 +3894,10 @@ else:
                 blocker_ids=overview_blocker_ids,
                 revalidation_failed=revalidation_failed,
                 source_conflict=source_observation_conflict,
+                source_conflict_detail=(
+                    source_authority_guard().conflict_detail(review_state)
+                    if source_observation_conflict else None
+                ),
                 store_available=review_store_available,
                 has_pending_inputs=actual_pending_review_input or has_pending_scope_draft,
             )

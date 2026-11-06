@@ -50,9 +50,13 @@ class PullRequestNotFound(GitHubIngestionError):
 class PrivateOrInaccessibleRepository(GitHubIngestionError):
     """Keep explicit non-public metadata distinct from an ambiguous access failure."""
 
-    def __init__(self, *args: object, observed_non_public: bool = False) -> None:
+    def __init__(
+        self, *args: object, observed_non_public: bool = False,
+        observed_non_public_repository: str | None = None,
+    ) -> None:
         super().__init__(*args)
         self.observed_non_public = observed_non_public
+        self.observed_non_public_repository = observed_non_public_repository
 
 
 class RepositoryVisibilityUnverified(GitHubIngestionError):
@@ -311,6 +315,9 @@ class GitHubClient:
             )
 
         full_name = repository.get("full_name")
+        matches_repository = (
+            isinstance(full_name, str) and full_name.casefold() == expected_repository.casefold()
+        )
         private = repository.get("private")
         visibility = repository.get("visibility")
         if private is True or (
@@ -319,10 +326,10 @@ class GitHubClient:
             raise PrivateOrInaccessibleRepository(
                 "ScopeProof accepts only a verified public GitHub repository.",
                 observed_non_public=True,
+                observed_non_public_repository=expected_repository if matches_repository else None,
             )
         if (
-            not isinstance(full_name, str)
-            or full_name.casefold() != expected_repository.casefold()
+            not matches_repository
             or private is not False
             or visibility != "public"
         ):

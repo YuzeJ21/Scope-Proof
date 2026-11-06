@@ -2650,6 +2650,9 @@ def test_installed_wheel_failed_refresh_can_retry_with_saved_requirements_draft(
                 expect(page.get_by_text(
                     f"Reviewed head: {previous.head_sha}", exact=True,
                 )).to_be_visible()
+                expect(page.get_by_text(
+                    f"Observed different head: {current.head_sha}", exact=True,
+                )).to_be_visible()
                 assert record.read_bytes() == original_bytes
 
                 paths.fill("")
