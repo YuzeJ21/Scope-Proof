@@ -62,7 +62,9 @@ from apps.web.selected_references import (
     selected_reference_draft_pending,
 )
 from apps.web.source_attachment import (
+    block_source_context,
     clear_source_attachment,
+    observe_current_head,
     render_source_attachment,
     source_authority_check,
     source_authority_guard,
@@ -106,6 +108,7 @@ from scopeproof_core.github.client import (
     GitHubClient,
     GitHubIngestionError,
     InvalidPullRequestUrl,
+    PrivateOrInaccessibleRepository,
     parse_pr_url,
 )
 from scopeproof_core.importers.junit import (
@@ -1573,26 +1576,41 @@ if alpha_feedback_mode:
 else:
     st.caption("Standard review mode does not create participant research records.")
 
-reopened_review = st.session_state["review_state"]
-fetch_action_label = (
-    "Check current head"
-    if reopened_review is not None
+reopened_review: ReviewState | None = st.session_state["review_state"]
+checking_reopened_review = (
+    reopened_review is not None
     and st.session_state["reopened_review_id"] == reopened_review.review.review_id
-    else "Fetch public PR"
 )
+scope_draft_blocks_head_check = checking_reopened_review and has_pending_scope_draft
 if fetch_action_placeholder.button(
-    fetch_action_label,
+    "Check current head" if checking_reopened_review else "Fetch public PR",
     key="fetch_pr",
     disabled=(
         not pr_url_is_valid
         or not alpha_qualification_ready
         or replacement_blocked
+        or scope_draft_blocks_head_check
     ),
     use_container_width=True,
 ):
+    head_check_state = None
+    if (
+        checking_reopened_review
+        and reopened_review is not None
+        and reopened_review.review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+    ):
+        owner, repository, pr_number = parse_pr_url(pr_url)
+        if (
+            f"{owner}/{repository}".casefold() == reopened_review.review.repository.casefold()
+            and pr_number == reopened_review.review.pr_number
+        ):
+            head_check_state = reopened_review
+    snapshot = None
     try:
         client = GitHubClient(token=github_token or None)
         snapshot = client.fetch_pull_request(pr_url)
+        if head_check_state is not None:
+            observe_current_head(head_check_state, snapshot)
         candidate_files = client.fetch_candidate_files(
             snapshot.repository, snapshot.head_sha, candidate_paths
         )
@@ -1615,11 +1633,26 @@ if fetch_action_placeholder.button(
         )
         st.rerun()
     except (GitHubIngestionError, ValueError) as error:
+        if head_check_state is not None:
+            if (
+                snapshot is None
+                and isinstance(error, PrivateOrInaccessibleRepository)
+                and error.observed_non_public
+            ):
+                block_source_context(head_check_state)
+            if not source_authority_guard().allows(head_check_state):
+                st.session_state["reviewed_source_error"] = (
+                    f"{error} The saved review was preserved. "
+                    "Refresh the source before relying on this analysis."
+                )
+                st.rerun()
         st.error(
             f"{error} No review data was changed. Verify that the PR is public and "
             "try again. Use the optional token only if GitHub reports a rate limit."
         )
 
+if scope_draft_blocks_head_check:
+    st.caption("Save or clear pending file-scope inputs before checking the current head.")
 
 render_source_attachment(
     st.session_state["review_state"], store=review_store,

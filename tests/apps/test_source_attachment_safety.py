@@ -13,6 +13,7 @@ from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
 from scopeproof_core.reviews.lifecycle import append_resolution, new_review_state
 from scopeproof_core.reviews.selected_references import selectable_reference_lines
 from scopeproof_core.schemas.models import (
+    ChangedFile,
     CheckState,
     CIObservation,
     HumanDecision,
@@ -27,7 +28,7 @@ from tests.apps.test_source_attachment import load_matching, reopen, saved_refer
 from tests.reviews.test_selected_references import append
 
 
-def simulated_live_saved_source():
+def simulated_live_saved_source(*, with_uncited_file: bool = False):
     """A wholly constructed network response, never a genuine public review or alpha case."""
     snapshot = load_demo_snapshot().model_copy(
         update={
@@ -37,6 +38,8 @@ def simulated_live_saved_source():
         },
         deep=True,
     )
+    if with_uncited_file:
+        snapshot.files.append(ChangedFile(path="notes.md", status="added"))
     bundle = build_review(snapshot, load_demo_labels())
     bundle.review.input_origin = ReviewInputOrigin.LIVE_PUBLIC_GITHUB
     bundle.review.repository_visibility = RepositoryVisibility.VERIFIED_PUBLIC
@@ -78,6 +81,40 @@ def simulated_live_saved_source():
     store = JsonReviewStore(default_local_review_directory())
     store.save(state)
     return reopen(state.review.review_id), state, snapshot, candidates, store
+
+
+def test_current_head_check_keeps_pending_file_scope_draft_until_cleared():
+    app, state, snapshot, candidates, store = simulated_live_saved_source(
+        with_uncited_file=True,
+    )
+    record = store.directory / f"{state.review.review_id}.json"
+    original_bytes = record.read_bytes()
+    with (
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+            return_value=snapshot,
+        ),
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_candidate_files",
+            return_value=candidates,
+        ),
+    ):
+        app = app.button(key="load_reviewed_source").click().run()
+    assert not app.exception
+    assert app.button(key="fetch_pr").label == "Check current head"
+    assert not app.button(key="fetch_pr").disabled
+    app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
+    draft = "Constructed unsubmitted scope explanation"
+    app = app.text_area(key="scope_note").set_value(draft).run()
+    assert app.button(key="fetch_pr").disabled
+    assert app.text_area(key="scope_note").value == draft
+    assert record.read_bytes() == original_bytes
+
+    app = app.button(key="clear_saved_comparison_scope_draft").click().run()
+    assert not app.button(key="fetch_pr").disabled
+    assert app.text_area(key="scope_note").value == ""
+    assert record.read_bytes() == original_bytes
 
 
 def queued_export(app, state, store):

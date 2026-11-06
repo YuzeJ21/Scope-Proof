@@ -6,6 +6,7 @@ import pytest
 
 from apps.web.deferred_exports import DeferredExportUnavailable, deferred_review_export
 from scopeproof_core.demo import load_demo_snapshot
+from scopeproof_core.github.client import GitHubNetworkError, PrivateOrInaccessibleRepository
 from scopeproof_core.reporting.exporters import export_json
 from scopeproof_core.schemas.models import (
     ChangedFile,
@@ -17,7 +18,12 @@ from scopeproof_core.schemas.models import (
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
 from tests.apps.test_deferred_exports import accepted_review_state
 from tests.apps.test_selected_references import complete_reference
-from tests.apps.test_streamlit_app import load_demo, new_app
+from tests.apps.test_streamlit_app import (
+    analyzed_exact_head_standard_demo,
+    load_demo,
+    new_app,
+    resolve_all_criteria,
+)
 
 
 def reopen(review_id):
@@ -169,3 +175,137 @@ def test_new_current_head_path_still_requires_explicit_reanalysis():
     assert not app.exception
     assert app.session_state["review_state"] is None
     assert not app.session_state["criteria_confirmed"]
+
+
+def reopened_live_review_with_export():
+    prepared = resolve_all_criteria(analyzed_exact_head_standard_demo(new_app()))
+    prepared = prepared.button(key="record_final_acceptance").click().run()
+    state = prepared.session_state["review_state"]
+    snapshot = prepared.session_state["snapshot"].model_copy(deep=True)
+    store = JsonReviewStore(default_local_review_directory())
+    path = store.directory / f"{state.review.review_id}.json"
+    app = reopen(state.review.review_id)
+    guard = app.session_state["source_authority_guard"]
+    deferred = deferred_review_export(
+        state,
+        export_json,
+        store=store,
+        expected_fingerprint=store.state_fingerprint(state),
+        authority_check=lambda: guard.allows(state),
+    )
+    assert deferred()
+    assert app.button(key="fetch_pr").label == "Check current head"
+    return app, state, snapshot, path, deferred
+
+
+@pytest.mark.parametrize("change", ["head", "same-head-checks", "unrelated", "matching"])
+def test_current_head_observation_precedes_a_failed_candidate_fetch(change):
+    app, state, snapshot, path, deferred = reopened_live_review_with_export()
+    before = path.read_bytes()
+    app = app.text_area(key="candidate_paths").set_value("src/helper.py").run()
+    if change == "head":
+        snapshot.head_sha = "b" * 40
+    elif change == "same-head-checks":
+        snapshot.ci_observation = CIObservation(
+            state=CheckState.FAILING,
+            total_check_runs=1,
+            failing_check_runs=1,
+            reason="Constructed fresh CI failure",
+        )
+        snapshot.check_state = snapshot.ci_observation.state
+    elif change == "unrelated":
+        app = app.text_input(key="pr_url").set_value(
+            "https://github.com/elsewhere/example/pull/23"
+        ).run()
+        snapshot.repository = "elsewhere/example"
+        snapshot.pr_number = 23
+    elif change == "matching":
+        snapshot.repository = snapshot.repository.upper()
+    contradictory = change in {"head", "same-head-checks"}
+
+    availability = []
+
+    def fail_candidate(*args):
+        try:
+            availability.append(bool(deferred()))
+        except DeferredExportUnavailable:
+            availability.append(False)
+        raise GitHubNetworkError("Constructed candidate request failed.")
+
+    with (
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_pull_request", return_value=snapshot
+        ),
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_candidate_files",
+            side_effect=fail_candidate,
+        ) as fetch_candidates,
+    ):
+        app = app.button(key="fetch_pr").click().run()
+
+    assert not app.exception
+    fetch_candidates.assert_called_once_with(
+        snapshot.repository, snapshot.head_sha, ["src/helper.py"],
+    )
+    assert availability == [not contradictory]
+    assert app.session_state["review_state"] == state
+    assert path.read_bytes() == before
+    assert app.text_area(key="candidate_paths").value == "src/helper.py"
+    assert any("Constructed candidate request failed." in error.value for error in app.error)
+    overview = [item.value for item in app.markdown]
+    if contradictory:
+        assert "**Decision status: Refresh required**" in overview
+        assert "**Recorded verdict: Review complete**" not in overview
+        assert all(button.disabled for button in app.download_button)
+        app = app.button(key="reopen_review").click().run()
+        assert "**Decision status: Refresh required**" in [item.value for item in app.markdown]
+        with pytest.raises(DeferredExportUnavailable):
+            deferred()
+    else:
+        assert "**Recorded verdict: Review complete**" in overview
+        assert all(not button.disabled for button in app.download_button)
+
+
+def test_successful_changed_head_reload_revokes_prior_authoritative_export():
+    app, _, snapshot, path, deferred = reopened_live_review_with_export()
+    before = path.read_bytes()
+    snapshot.head_sha = "b" * 40
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request", return_value=snapshot
+    ):
+        app = app.button(key="fetch_pr").click().run()
+    assert not app.exception
+    assert app.session_state["snapshot"] == snapshot
+    assert app.session_state["review_state"] is None
+    assert not app.session_state["criteria_confirmed"]
+    assert path.read_bytes() == before
+    with pytest.raises(DeferredExportUnavailable):
+        deferred()
+
+
+@pytest.mark.parametrize("observed_non_public", [True, False])
+def test_current_head_distinguishes_explicit_visibility_from_access_failure(observed_non_public):
+    app, state, _, path, deferred = reopened_live_review_with_export()
+    before = path.read_bytes()
+    # A URL with different GitHub owner casing still identifies the same PR.
+    app = app.text_input(key="pr_url").set_value(
+        f"https://github.com/{state.review.repository.upper()}/pull/{state.review.pr_number}"
+    ).run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+        side_effect=PrivateOrInaccessibleRepository(
+            "Constructed inaccessible repository.", observed_non_public=observed_non_public,
+        ),
+    ):
+        app = app.button(key="fetch_pr").click().run()
+    assert not app.exception
+    assert app.session_state["review_state"] == state
+    assert path.read_bytes() == before
+    assert ("**Decision status: Refresh required**" in [m.value for m in app.markdown]) == (
+        observed_non_public
+    )
+    if observed_non_public:
+        with pytest.raises(DeferredExportUnavailable):
+            deferred()
+    else:
+        assert deferred()
