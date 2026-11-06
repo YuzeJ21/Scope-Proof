@@ -710,6 +710,10 @@ is the separate source-replacement and re-review path. It records a contradictio
 public pull request as soon as it is observed, before fetching optional candidate files. If a
 later fetch fails, the saved review remains open with **Refresh required** and the old
 authoritative downloads expire. Save or clear pending file-scope inputs before checking.
+After a successful refresh of the same verified public PR, the workbench copies the saved
+requirements, normalized criteria, source reference, and revision into editable drafts.
+Enter the confirmer for this review and explicitly confirm the draft before analysis.
+Loading a different PR clears any requirements staged from the previous saved review.
 A transport failure alone gives no new source observation.
 The session guard does not rewrite
 historical records, refresh their CI automatically or revoke previously downloaded reports.
