@@ -148,6 +148,10 @@ def test_uncited_file_has_explicit_scope_decision_control() -> None:
     assert decisions[-1].path == uncited[0]
     assert decisions[-1].disposition == "outside_confirmed_criteria"
     assert decisions[-1].head_sha == bundle.review.head_sha
+    assert "Unresolved inspected changed files: 0" in [item.value for item in app.text]
+    assert "[Go to changed-file scope](#changed-file-scope)" not in [
+        item.value for item in app.markdown
+    ]
 
 
 def test_orphan_candidate_does_not_hide_file_scope_control() -> None:
@@ -5084,6 +5088,12 @@ def test_reopened_legacy_verification_can_reverify_but_not_reaccept_without_inve
     migrated = reopened.session_state["review_state"]
     assert migrated.review.changed_file_inventory is None
     assert "changed_file_inventory_unknown" in migrated.bundle.gate.reason_codes
+    assert "Changed-file scope: Inventory unavailable for this analysis." in [
+        item.value for item in reopened.text
+    ]
+    assert "Unresolved inspected changed files: 0" not in [
+        item.value for item in reopened.text
+    ]
     assert any(event.final_acceptance is True for event in migrated.resolution_events)
 
     warning = "Legacy unlinked; re-record at the active head"

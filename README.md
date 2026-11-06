@@ -634,6 +634,9 @@ The six review sections are:
 In unreleased `0.2.6.dev0`, **Decision overview** appears after analysis and when reopening
 a saved analysis. It shows the reviewed head, recorded verdict, blockers, final acceptance,
 and local save status. Use its blocker control to open the first blocking criterion.
+The overview counts unresolved inspected changed files separately from criterion blockers,
+previews up to three paths, and links to **Changed-file scope**. An unavailable inventory
+gets an explicit status instead of a zero count.
 A reopened analysis shows whether matching source is loaded. A source conflict or an
 unverifiable saved record requires a refresh before relying on the verdict.
 
