@@ -511,10 +511,19 @@ def test_delete_serializes_with_an_in_flight_lifecycle_mutation(tmp_path: Path) 
         store.load("review-1")
 
 
-def test_save_uses_windows_file_lock_when_fcntl_is_unavailable(
+@pytest.mark.parametrize("existing_lock_bytes", [None, b"\0"], ids=["new", "existing"])
+def test_save_locks_the_windows_file_without_writing_a_sentinel(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    existing_lock_bytes: bytes | None,
 ) -> None:
+    state = review_state()
+    lock_hash = sha256(state.review.review_id.encode("utf-8")).hexdigest()
+    lock_path = tmp_path / f".{lock_hash}.lock"
+    if existing_lock_bytes is not None:
+        lock_path.write_bytes(existing_lock_bytes)
+    expected_lock_bytes = existing_lock_bytes or b""
+
     class FakeMsvcrt:
         LK_LOCK = 1
         LK_UNLCK = 2
@@ -523,15 +532,18 @@ def test_save_uses_windows_file_lock_when_fcntl_is_unavailable(
             self.calls: list[tuple[int, int, int]] = []
 
         def locking(self, descriptor: int, mode: int, byte_count: int) -> None:
+            assert os.lseek(descriptor, 0, os.SEEK_CUR) == 0
+            assert os.fstat(descriptor).st_size == len(expected_lock_bytes)
             self.calls.append((descriptor, mode, byte_count))
 
     windows_lock = FakeMsvcrt()
     monkeypatch.setattr(json_store_module, "fcntl", None)
     monkeypatch.setattr(json_store_module, "msvcrt", windows_lock, raising=False)
 
-    target = JsonReviewStore(tmp_path).save(review_state())
+    target = JsonReviewStore(tmp_path).save(state)
 
     assert target.exists()
+    assert lock_path.read_bytes() == expected_lock_bytes
     assert [mode for _, mode, _ in windows_lock.calls] == [
         windows_lock.LK_LOCK,
         windows_lock.LK_UNLCK,
