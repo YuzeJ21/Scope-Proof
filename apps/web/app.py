@@ -62,10 +62,9 @@ from apps.web.selected_references import (
     selected_reference_draft_pending,
 )
 from apps.web.source_attachment import (
-    NON_PUBLIC_SOURCE_DETAIL,
-    block_source_context,
     clear_source_attachment,
     observe_current_head,
+    observe_repository_visibility,
     render_source_attachment,
     source_authority_check,
     source_authority_guard,
@@ -1708,12 +1707,8 @@ if fetch_action_placeholder.button(
         st.rerun()
     except (GitHubIngestionError, ValueError) as error:
         if head_check_state is not None:
-            if (
-                snapshot is None
-                and isinstance(error, PrivateOrInaccessibleRepository)
-                and error.observed_non_public
-            ):
-                block_source_context(head_check_state, detail=NON_PUBLIC_SOURCE_DETAIL)
+            if snapshot is None and isinstance(error, PrivateOrInaccessibleRepository):
+                observe_repository_visibility(head_check_state, error)
             if not source_authority_guard().allows(head_check_state):
                 st.session_state["reviewed_source_error"] = (
                     f"{error} The saved review was preserved. "

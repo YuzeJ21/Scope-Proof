@@ -26,8 +26,6 @@ from scopeproof_core.reviews.source_attachment import (
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewInputOrigin, ReviewState
 from scopeproof_core.storage.json_store import JsonReviewStore
 
-NON_PUBLIC_SOURCE_DETAIL = "GitHub reported non-public repository visibility."
-
 
 @dataclass
 class SourceAuthorityGuard:
@@ -53,7 +51,12 @@ class SourceAuthorityGuard:
             return None
 
     def block(self, state: ReviewState, *, detail: str | None = None) -> None:
-        self.conflicts[review_source_context_fingerprint(state)] = detail
+        context = review_source_context_fingerprint(state)
+        if detail is None:
+            # An inconclusive retry cannot replace an earlier specific observation.
+            self.conflicts.setdefault(context, None)
+        else:
+            self.conflicts[context] = detail
 
     def restore(self, state: ReviewState) -> None:
         self.conflicts.pop(review_source_context_fingerprint(state), None)
@@ -87,6 +90,22 @@ def block_source_context(state: ReviewState, *, detail: str | None = None) -> No
     st.session_state["snapshot"] = None
     st.session_state["candidate_files"] = []
     clear_saved_comparison_selection()
+
+
+def observe_repository_visibility(
+    state: ReviewState, unavailable: PrivateOrInaccessibleRepository,
+) -> None:
+    if unavailable.observed_non_public:
+        repository = unavailable.observed_non_public_repository
+        matches_saved_repository = (
+            repository is not None
+            and repository.casefold() == state.review.repository.casefold()
+        )
+        detail = (
+            "GitHub reported non-public repository visibility."
+            if matches_saved_repository else None
+        )
+        block_source_context(state, detail=detail)
 
 
 def _observed_conflict_detail(
@@ -237,8 +256,7 @@ def render_source_attachment(
         # render, before comparison and criteria widgets have been instantiated.
         st.rerun()
     except PrivateOrInaccessibleRepository as unavailable:
-        if unavailable.observed_non_public:
-            block_source_context(state, detail=NON_PUBLIC_SOURCE_DETAIL)
+        observe_repository_visibility(state, unavailable)
         st.session_state["reviewed_source_error"] = (
             "Matching source could not be loaded. The saved analysis was not changed."
         )

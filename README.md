@@ -710,9 +710,10 @@ is the separate source-replacement and re-review path. It records a contradictio
 public pull request as soon as it is observed, before fetching optional candidate files. If a
 later fetch fails, the saved review remains open with **Refresh required** and the old
 authoritative downloads expire. The decision overview can show the different head that was
-observed, changes in GitHub check details at the same head, or explicit non-public visibility.
-The explanation stays with that saved analysis in the current session and clears when matching
-source is restored. Save or clear pending file-scope inputs before checking.
+observed, changes in GitHub check details at the same head, or explicit non-public visibility
+for the saved repository. A retry without a specific observation keeps the last explanation for
+that analysis in the current session. Restoring matching source clears it. Save or clear pending
+file-scope inputs before checking.
 After a successful refresh of the same verified public PR, the workbench copies the saved
 requirements, normalized criteria, source reference, and revision into editable drafts.
 Enter the confirmer for this review and explicitly confirm the draft before analysis.
