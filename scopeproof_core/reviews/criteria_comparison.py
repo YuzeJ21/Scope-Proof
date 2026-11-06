@@ -30,6 +30,7 @@ from scopeproof_core.schemas.models import (
     CriteriaSourceProvenance,
     Criterion,
     LocalReviewId,
+    ReviewBundle,
     ReviewState,
     normalized_criteria_sha256,
     source_text_sha256,
@@ -130,18 +131,13 @@ _DERIVED = {"criterion_changes", "source_text_changed", "source_provenance_chang
             "criterion_order_changed"}
 
 
-class CriteriaRevisionComparison(BaseModel):
+class RecordedCriteriaDiff(BaseModel):
+    """Compare complete recorded requirements without comparing evidence."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
 
-    report_kind: Literal["scopeproof_criteria_revision_comparison"]
-    schema_version: StrictInt = Field(ge=1, le=1)
-    boundary: Literal[CRITERIA_COMPARISON_BOUNDARY]
-    selection: CriteriaComparisonSelection
     previous: CriteriaSnapshot
     current: CriteriaSnapshot
-    validation_tool_version: str
-    validation_ruleset_version: str
-    validation_source_identity: CoreSourceIdentity
 
     @model_validator(mode="before")
     @classmethod
@@ -151,28 +147,11 @@ class CriteriaRevisionComparison(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _bound_snapshots(self) -> CriteriaRevisionComparison:
-        identity = (self.selection.historical.review_id,
-                    self.selection.repository, self.selection.pr_number)
-        if any((snapshot.review_id, snapshot.repository, snapshot.pr_number) != identity
-               for snapshot in (self.previous, self.current)):
-            raise ValueError("criteria snapshots must match their selected owning identity")
-        if (
-            _fingerprint(self.previous) != self.selection.previous_criteria_fingerprint
-            or _fingerprint(self.current) != self.selection.current_criteria_fingerprint
+    def _same_pull_request(self) -> RecordedCriteriaDiff:
+        if (self.previous.repository, self.previous.pr_number) != (
+            self.current.repository, self.current.pr_number,
         ):
-            raise ValueError("criteria comparison snapshots differ from the selected saved facts")
-        if self.current.revision_number == "unknown" or (
-            self.previous.revision_number != "unknown"
-            and self.previous.revision_number >= self.current.revision_number
-        ):
-            raise ValueError("retained criteria revision must precede the saved current revision")
-        if (
-            self.validation_tool_version != __version__
-            or self.validation_ruleset_version != RULESET_VERSION
-            or self.validation_source_identity != current_core_source_identity()
-        ):
-            raise ValueError("criteria comparison validation identity differs from policy")
+            raise ValueError("criteria comparison requires the same pull request")
         return self
 
     @computed_field
@@ -223,19 +202,58 @@ class CriteriaRevisionComparison(BaseModel):
         return previous != current
 
 
+class CriteriaRevisionComparison(RecordedCriteriaDiff):
+    report_kind: Literal["scopeproof_criteria_revision_comparison"]
+    schema_version: StrictInt = Field(ge=1, le=1)
+    boundary: Literal[CRITERIA_COMPARISON_BOUNDARY]
+    selection: CriteriaComparisonSelection
+    validation_tool_version: str
+    validation_ruleset_version: str
+    validation_source_identity: CoreSourceIdentity
+
+    @model_validator(mode="after")
+    def _bound_snapshots(self) -> CriteriaRevisionComparison:
+        identity = (self.selection.historical.review_id,
+                    self.selection.repository, self.selection.pr_number)
+        if any((snapshot.review_id, snapshot.repository, snapshot.pr_number) != identity
+               for snapshot in (self.previous, self.current)):
+            raise ValueError("criteria snapshots must match their selected owning identity")
+        if (
+            _fingerprint(self.previous) != self.selection.previous_criteria_fingerprint
+            or _fingerprint(self.current) != self.selection.current_criteria_fingerprint
+        ):
+            raise ValueError("criteria comparison snapshots differ from the selected saved facts")
+        if self.current.revision_number == "unknown" or (
+            self.previous.revision_number != "unknown"
+            and self.previous.revision_number >= self.current.revision_number
+        ):
+            raise ValueError("retained criteria revision must precede the saved current revision")
+        if (
+            self.validation_tool_version != __version__
+            or self.validation_ruleset_version != RULESET_VERSION
+            or self.validation_source_identity != current_core_source_identity()
+        ):
+            raise ValueError("criteria comparison validation identity differs from policy")
+        return self
+
+
+def analysis_criteria_snapshot(bundle: ReviewBundle) -> CriteriaSnapshot:
+    """Project a selected analysis's recorded criteria and source metadata."""
+    return CriteriaSnapshot(
+        review_id=bundle.review.review_id, repository=bundle.review.repository,
+        pr_number=bundle.review.pr_number,
+        head_sha=bundle.review.head_sha, revision_number=bundle.criteria_revision_number,
+        confirmed=bundle.review.criteria_confirmed, source_text=bundle.source_text,
+        criteria=[item.model_copy(deep=True) for item in bundle.criteria],
+        source_provenance=bundle.review.criteria_source_provenance,
+    )
+
+
 def _snapshots(state: ReviewState, index: int) -> tuple[CriteriaSnapshot, CriteriaSnapshot]:
     if type(index) is not int or not 0 <= index < len(state.analysis_history):
         raise ValueError("selected retained criteria are unavailable")
-    old = state.analysis_history[index]
     revision = state.criteria_revision
-    return CriteriaSnapshot(
-        review_id=old.review.review_id, repository=old.review.repository,
-        pr_number=old.review.pr_number,
-        head_sha=old.review.head_sha, revision_number=old.criteria_revision_number,
-        confirmed=old.review.criteria_confirmed, source_text=old.source_text,
-        criteria=[item.model_copy(deep=True) for item in old.criteria],
-        source_provenance=old.review.criteria_source_provenance,
-    ), CriteriaSnapshot(
+    return analysis_criteria_snapshot(state.analysis_history[index]), CriteriaSnapshot(
         review_id=state.review.review_id, repository=state.review.repository,
         pr_number=state.review.pr_number,
         head_sha=state.review.head_sha, revision_number=revision.number,

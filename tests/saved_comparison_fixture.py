@@ -43,6 +43,7 @@ def _constructed_state(
     review_id: str, head: str, *, added_path: bool,
     revision_number: int = 1, selected_context: str | None = None,
     failing_checks: bool = False,
+    requirement_text: str = "Export CSV",
 ) -> ReviewState:
     files = [
         ChangedFile(
@@ -88,12 +89,12 @@ def _constructed_state(
         fetched_at=datetime(2026, 10, 30, 12, tzinfo=UTC), files=files,
     )
     criterion = Criterion(
-        criterion_id="AC-01", text="Export CSV", required_evidence_level=EvidenceLevel.E2,
+        criterion_id="AC-01", text=requirement_text, required_evidence_level=EvidenceLevel.E2,
     )
     bundle = build_review(snapshot, {
         "fixture": "constructed-durable-saved-comparison-v1",
         "deliberately_constructed_demo": True,
-        "source_text": "Export CSV",
+        "source_text": requirement_text,
         "criteria": [criterion.model_dump(mode="json")],
         "criteria_confirmed": True,
         "resolutions": [],
@@ -121,6 +122,23 @@ def _constructed_state(
             "selected_at": datetime(2026, 10, 30, 12, tzinfo=UTC),
         })
     return ReviewState.model_validate(state.model_dump(mode="python"))
+
+
+def saved_requirements_states() -> tuple[ReviewState, ReviewState]:
+    """One PR with different criteria in active and retained saved analyses."""
+    current = _constructed_state(
+        CURRENT_REVIEW_ID, CURRENT_HEAD, added_path=True,
+        requirement_text="CONSTRUCTED Export JSON <img src=https://example.invalid/fixture>",
+    )
+    previous = _constructed_state(
+        PREVIOUS_REVIEW_ID, PREVIOUS_HEAD, added_path=False, revision_number=2,
+    )
+    retained = _constructed_state(
+        PREVIOUS_REVIEW_ID, FOREIGN_HISTORY_HEAD, added_path=False,
+        requirement_text="CONSTRUCTED Export XML",
+    )
+    previous.analysis_history = [retained.bundle]
+    return current, previous
 
 
 def _with_prior_scope_decision(state: ReviewState) -> ReviewState:

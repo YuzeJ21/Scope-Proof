@@ -7,10 +7,16 @@ import streamlit as st
 from apps.web.deferred_exports import SavedComparisonExportLease
 from apps.web.scope_file_preview import scope_draft_pending
 from scopeproof_core.reviews.comparison import ReviewComparison
+from scopeproof_core.reviews.criteria_comparison import (
+    CRITERIA_COMPARISON_BOUNDARY,
+    RecordedCriteriaDiff,
+)
 from scopeproof_core.reviews.saved_comparison import (
     SavedComparisonSelection,
     locked_saved_comparison,
+    locked_saved_requirements_comparison,
     prepare_saved_comparison,
+    prepare_saved_requirements_comparison,
 )
 from scopeproof_core.schemas.models import ReviewState
 from scopeproof_core.storage.discovery import (
@@ -27,6 +33,7 @@ def clear_saved_comparison_selection(*, clear_choice: bool = True) -> None:
     if lease is not None:
         lease.invalidate()
     st.session_state["saved_comparison_selection"] = None
+    st.session_state["saved_requirements_selection"] = None
     if clear_choice:
         st.session_state["saved_comparison_baseline"] = None
         st.session_state["saved_comparison_analysis"] = None
@@ -110,6 +117,60 @@ def _clear_scope_draft() -> None:
     for key in ("scope_file_path", "scope_disposition", "scope_criterion_id"):
         st.session_state[key] = None
     st.session_state["scope_note"] = ""
+
+
+def _render_saved_requirements(
+    diff: RecordedCriteriaDiff, selection: SavedComparisonSelection,
+) -> None:
+    st.markdown("### Saved requirements comparison")
+    st.warning(CRITERIA_COMPARISON_BOUNDARY)
+    st.text(f"{diff.current.repository} · PR #{diff.current.pr_number}")
+    location = (
+        f"History {selection.history_index + 1}" if selection.history_index is not None
+        else "Active analysis"
+    )
+    st.text(f"Baseline analysis: {location}")
+    st.text(f"Recorded source text changed: {'Yes' if diff.source_text_changed else 'No'}")
+    st.text(
+        f"Recorded source provenance changed: {'Yes' if diff.source_provenance_changed else 'No'}"
+    )
+    st.text(f"Shared criterion order changed: {'Yes' if diff.criterion_order_changed else 'No'}")
+    for change in diff.criterion_changes:
+        st.text(
+            f"{change.criterion_id} · {change.kind.replace('_', ' ').capitalize()}\n"
+            f"Baseline position: {change.previous_position or 'None'}\n"
+            f"Current position: {change.current_position or 'None'}\n"
+            f"Changed fields: {', '.join(change.changed_fields) or 'None'}"
+        )
+    for label, snapshot in (
+        ("Baseline recorded requirements", diff.previous),
+        ("Current recorded requirements", diff.current),
+    ):
+        st.markdown(f"#### {label}")
+        st.text(f"Saved record: {snapshot.review_id}")
+        st.text(f"Recorded head: {snapshot.head_sha}")
+        st.text(f"Criteria revision: {snapshot.revision_number}")
+        st.text(f"Confirmation: {'Confirmed (asserted)' if snapshot.confirmed else 'Unconfirmed'}")
+        provenance = snapshot.source_provenance
+        if provenance is None:
+            st.text("Recorded source provenance unavailable")
+        else:
+            st.text(f"Source reference: {provenance.source_uri}")
+            st.text(f"Source revision: {provenance.source_revision or 'Not recorded'}")
+            st.text(
+                f"Confirmed by: {provenance.confirmed_by} · {provenance.confirmed_at.isoformat()}"
+            )
+        st.caption("Recorded source text")
+        st.text(snapshot.source_text)
+        st.caption("Recorded criterion definitions")
+        for criterion in snapshot.criteria:
+            st.text(
+                f"{criterion.criterion_id} · {criterion.priority.value} · "
+                f"{criterion.required_evidence_level.value}\n{criterion.text}\n"
+                f"Type: {criterion.criterion_type.value} · "
+                f"Origin: {criterion.criterion_source.value}\n"
+                f"Source span: {criterion.source_span or 'Not recorded'}"
+            )
 
 
 def render_saved_comparison_selector(
@@ -225,6 +286,34 @@ def render_saved_comparison_selector(
                 )
             else:
                 st.session_state["saved_comparison_selection"] = selection
+
+        if baseline_id is not None and baseline_id != current.review.review_id:
+            requirements_clicked = st.button(
+                "Compare saved requirements", key="compare_saved_requirements",
+                disabled=not eligible or not has_analysis,
+            )
+            if requirements_clicked and eligible and has_analysis:
+                _analysis_changed()
+                try:
+                    st.session_state["saved_requirements_selection"] = (
+                        prepare_saved_requirements_comparison(
+                            store, current, baseline_id, history_index=history_index,
+                            expected_baseline_fingerprint=expected_baseline_fingerprint,
+                        )
+                    )
+                except (OSError, ValueError):
+                    st.warning(
+                        "Saved requirements could not be compared. Select available analyses "
+                        "from the same pull request."
+                    )
+        requirements_selection = st.session_state.get("saved_requirements_selection")
+        if requirements_selection is not None and eligible:
+            try:
+                with locked_saved_requirements_comparison(store, requirements_selection) as diff:
+                    _render_saved_requirements(diff, requirements_selection)
+            except (OSError, ValueError):
+                clear_saved_comparison_selection(clear_choice=False)
+                st.warning("Saved requirements changed or became unavailable. Select again.")
 
         selection = st.session_state.get("saved_comparison_selection")
         if selection is not None and eligible:

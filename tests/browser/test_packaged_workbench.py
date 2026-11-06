@@ -71,6 +71,7 @@ from tests.saved_comparison_fixture import (
     HISTORY_HEAD,
     PREVIOUS_HEAD,
     PREVIOUS_REVIEW_ID,
+    saved_requirements_states,
 )
 from tests.workbench_resolution_history_fixture import (
     WORKBENCH_HISTORY_HOSTILE_NOTE,
@@ -2505,6 +2506,60 @@ def _assert_scope_source_unavailable(page: Page) -> None:
     expect(page.get_by_role(
         "button", name="Save file scope decision", exact=True,
     )).to_be_disabled()
+
+
+def test_installed_wheel_compares_requirements_across_saved_analyses(
+    tmp_path: Path, installed_wheel: Path,
+) -> None:
+    home = tmp_path / "home"
+    store = JsonReviewStore(home / ".scopeproof" / "reviews")
+    paths = [store.save(state) for state in saved_requirements_states()]
+    saved = [path.read_bytes() for path in paths]
+    external_requests: list[str] = []
+    with (
+        _installed_workbench_server(
+            installed_wheel, tmp_path, home, log_name="saved-requirements.log",
+        ) as (base_url, log_path),
+        sync_playwright() as playwright,
+    ):
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.route("**/*", lambda route: _route_loopback_only(route, external_requests))
+            with _capture_browser_failure(page, tmp_path / "diagnostics", log_path):
+                _reopen_saved_comparison_current(page, base_url)
+                evidence = page.get_by_role("button", name="Compare selected saved analysis")
+                _choose_combobox_option(
+                    page, page.get_by_role("combobox", name="Comparison baseline"),
+                    option_name=f"Saved review · {PREVIOUS_REVIEW_ID}", settled_control=evidence,
+                )
+                evidence.press("Enter")
+                expect(page.get_by_text("Selected saved analysis cannot be compared", exact=False)
+                       ).to_be_visible()
+                compare = page.get_by_role("button", name="Compare saved requirements", exact=True)
+                compare.press("Enter")
+                heading = page.get_by_role("heading", name="Saved requirements comparison")
+                expect(heading).to_be_visible()
+                expect(page.get_by_text(f"Recorded head: {PREVIOUS_HEAD}", exact=True)
+                       ).to_be_visible()
+                expect(page.get_by_text("AC-01 · Fields changed", exact=False)).to_be_visible()
+                expect(page.locator('img[src*="example.invalid/fixture"]')).to_have_count(0)
+                expect(page.get_by_role("button", name="Download comparison JSON")).to_have_count(0)
+
+                _choose_combobox_option(
+                    page, page.get_by_role("combobox", name="Baseline analysis"),
+                    option_name=f"History 1 · criteria revision 1 · head {FOREIGN_HISTORY_HEAD}",
+                )
+                expect(heading).to_have_count(0)
+                compare.press("Enter")
+                expect(page.get_by_text(f"Recorded head: {FOREIGN_HISTORY_HEAD}", exact=True)
+                       ).to_be_visible()
+                expect(page.get_by_text(f"Recorded head: {CURRENT_HEAD}", exact=True)
+                       ).to_be_visible()
+                assert [path.read_bytes() for path in paths] == saved
+                assert external_requests == []
+        finally:
+            browser.close()
 
 
 def test_installed_wheel_failed_refresh_can_retry_with_saved_requirements_draft(
