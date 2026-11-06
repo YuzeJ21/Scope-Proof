@@ -176,11 +176,12 @@ def test_constructed_live_reload_restores_automatic_and_selected_only_unchanged_
 
 
 def test_fresh_failed_ci_blocks_authority_before_candidate_loading_can_hide_observation():
-    app, state, snapshot, _, store = simulated_live_saved_source()
+    app, state, matching_snapshot, candidates, store = simulated_live_saved_source()
     path = store.directory / f"{state.review.review_id}.json"
     before = path.read_bytes()
     export = queued_export(app, state, store)
     assert export()
+    snapshot = matching_snapshot.model_copy(deep=True)
     snapshot.ci_observation = CIObservation(
         state=CheckState.FAILING,
         total_check_runs=1,
@@ -202,10 +203,31 @@ def test_fresh_failed_ci_blocks_authority_before_candidate_loading_can_hide_obse
     assert app.session_state["review_state"] == state
     assert app.session_state["review_source_attachment"] is None
     assert not app.session_state["source_authority_guard"].allows(state)
+    explanation = (
+        "GitHub check details differ at the reviewed head. "
+        "Saved status Passing, observed status Failing."
+    )
+    assert explanation in [item.value for item in app.text]
     assert all(b.disabled for b in app.download_button if b.key.startswith("download_"))
     assert path.read_bytes() == before
     with pytest.raises(DeferredExportUnavailable):
         export()
+
+    with (
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_pull_request",
+            return_value=matching_snapshot,
+        ),
+        patch(
+            "scopeproof_core.github.client.GitHubClient.fetch_candidate_files",
+            return_value=candidates,
+        ),
+    ):
+        app = app.button(key="load_reviewed_source").click().run()
+    assert not app.exception
+    assert explanation not in [item.value for item in app.text]
+    assert app.session_state["source_authority_guard"].allows(state)
+    assert path.read_bytes() == before
 
 
 def test_saved_update_during_network_load_prevents_attachment_without_overwriting_newer_decision():

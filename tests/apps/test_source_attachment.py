@@ -198,7 +198,10 @@ def reopened_live_review_with_export():
     return app, state, snapshot, path, deferred
 
 
-@pytest.mark.parametrize("change", ["head", "same-head-checks", "unrelated", "matching"])
+@pytest.mark.parametrize(
+    "change",
+    ["head", "same-head-checks", "same-head-counts", "invalid-head", "unrelated", "matching"],
+)
 def test_current_head_observation_precedes_a_failed_candidate_fetch(change):
     app, state, snapshot, path, deferred = reopened_live_review_with_export()
     before = path.read_bytes()
@@ -213,6 +216,11 @@ def test_current_head_observation_precedes_a_failed_candidate_fetch(change):
             reason="Constructed fresh CI failure",
         )
         snapshot.check_state = snapshot.ci_observation.state
+    elif change == "same-head-counts":
+        snapshot.ci_observation.total_check_runs += 1
+        snapshot.ci_observation.successful_check_runs += 1
+    elif change == "invalid-head":
+        snapshot.head_sha = "invalid-head"
     elif change == "unrelated":
         app = app.text_input(key="pr_url").set_value(
             "https://github.com/elsewhere/example/pull/23"
@@ -221,7 +229,17 @@ def test_current_head_observation_precedes_a_failed_candidate_fetch(change):
         snapshot.pr_number = 23
     elif change == "matching":
         snapshot.repository = snapshot.repository.upper()
-    contradictory = change in {"head", "same-head-checks"}
+    explanation = {
+        "head": f"Observed different head: {snapshot.head_sha}",
+        "same-head-checks": (
+            "GitHub check details differ at the reviewed head. "
+            "Saved status Passing, observed status Failing."
+        ),
+        "same-head-counts": (
+            "GitHub check details differ at the reviewed head. Both observations report Passing."
+        ),
+    }.get(change)
+    contradictory = explanation is not None or change == "invalid-head"
 
     availability = []
 
@@ -256,14 +274,24 @@ def test_current_head_observation_precedes_a_failed_candidate_fetch(change):
     if contradictory:
         assert "**Decision status: Refresh required**" in overview
         assert "**Recorded verdict: Review complete**" not in overview
+        if explanation is not None:
+            assert explanation in [item.value for item in app.text]
+        else:
+            assert not any("invalid-head" in item.value for item in app.text)
         assert all(button.disabled for button in app.download_button)
         app = app.button(key="reopen_review").click().run()
         assert "**Decision status: Refresh required**" in [item.value for item in app.markdown]
+        if explanation is not None:
+            assert explanation in [item.value for item in app.text]
         with pytest.raises(DeferredExportUnavailable):
             deferred()
     else:
         assert "**Recorded verdict: Review complete**" in overview
         assert all(not button.disabled for button in app.download_button)
+        assert not any(
+            item.value.startswith(("Observed different head:", "GitHub check details differ"))
+            for item in app.text
+        )
 
 
 def test_successful_changed_head_reload_revokes_prior_authoritative_export():
@@ -304,6 +332,9 @@ def test_current_head_distinguishes_explicit_visibility_from_access_failure(obse
     assert ("**Decision status: Refresh required**" in [m.value for m in app.markdown]) == (
         observed_non_public
     )
+    assert (
+        "GitHub reported non-public repository visibility." in [item.value for item in app.text]
+    ) == observed_non_public
     if observed_non_public:
         with pytest.raises(DeferredExportUnavailable):
             deferred()

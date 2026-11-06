@@ -14,6 +14,7 @@ from scopeproof_core.reviews.lifecycle import attach_analysis
 from scopeproof_core.reviews.reference_audit import active_references
 from scopeproof_core.reviews.selected_references import _eligible_reference_lines
 from scopeproof_core.schemas.models import (
+    CheckState,
     EvidenceSourceScope,
     IngestionState,
     LocalReviewId,
@@ -31,14 +32,20 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 MAX_ATTACHED_CANDIDATE_FILES = 8
 MAX_ATTACHED_CANDIDATE_BYTES = 200_000
 Fingerprint = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+_FULL_SHA_PATTERN = r"^[0-9a-f]{40}$"
 
 
 class SourceAttachmentUnavailable(ValueError):
     """Reject continuation without changing saved truth or inventing observations."""
 
-    def __init__(self, message: str, *, observed_conflict: bool = False) -> None:
+    def __init__(
+        self, message: str, *, observed_conflict: bool = False,
+        observed_head_sha: str | None = None, observed_check_state: CheckState | None = None,
+    ) -> None:
         super().__init__(message)
         self.observed_conflict = observed_conflict
+        self.observed_head_sha = observed_head_sha
+        self.observed_check_state = observed_check_state
 
 
 class ReviewSourceAttachment(BaseModel):
@@ -105,7 +112,7 @@ def _attachable_state(state: ReviewState) -> ReviewState:
     if review.input_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB:
         require_verified_public_origin(review.repository_visibility, review.input_origin)
         if not all(
-            re.fullmatch(r"[0-9a-f]{40}", sha) for sha in (review.base_sha, review.head_sha)
+            re.fullmatch(_FULL_SHA_PATTERN, sha) for sha in (review.base_sha, review.head_sha)
         ):
             raise SourceAttachmentUnavailable("Live reviewed source requires full commit SHAs.")
     _source_path_anchor(state)
@@ -205,8 +212,6 @@ def validate_recorded_review_snapshot(
         review.ingestion_state,
         review.ingestion_warnings,
         review.skipped_files,
-        review.check_state,
-        review.ci_observation.model_dump(mode="python"),
     )
     observed = (
         snapshot.repository,
@@ -217,8 +222,11 @@ def validate_recorded_review_snapshot(
         snapshot.ingestion_state,
         snapshot.warnings,
         snapshot.skipped_files,
-        snapshot.check_state,
-        snapshot.ci_observation.model_dump(mode="python"),
+    )
+    checks_differ = (
+        review.check_state != snapshot.check_state
+        or review.ci_observation.model_dump(mode="python")
+        != snapshot.ci_observation.model_dump(mode="python")
     )
     try:
         inventory = snapshot.scope_inventory()
@@ -232,15 +240,31 @@ def validate_recorded_review_snapshot(
     } != {(f.path, f.status, f.previous_path) for f in inventory.files}
     if (
         expected != observed
+        or checks_differ
         or inventory_differs
         or (
             review.ingestion_state is IngestionState.COMPLETE
             and any(f.truncated for f in snapshot.files)
         )
     ):
+        exact_public_pr = (
+            source_origin is ReviewInputOrigin.LIVE_PUBLIC_GITHUB
+            and snapshot.repository.casefold() == review.repository.casefold()
+            and snapshot.pr_number == review.pr_number
+            and all(
+                re.fullmatch(_FULL_SHA_PATTERN, sha)
+                for sha in (review.head_sha, snapshot.head_sha)
+            )
+        )
+        head_changed = snapshot.head_sha != review.head_sha
         raise SourceAttachmentUnavailable(
             "Fresh source facts differ from the saved analysis. Use explicit re-review.",
             observed_conflict=True,
+            observed_head_sha=snapshot.head_sha if exact_public_pr and head_changed else None,
+            observed_check_state=(
+                snapshot.check_state if exact_public_pr and not head_changed and checks_differ
+                else None
+            ),
         )
     return snapshot
 

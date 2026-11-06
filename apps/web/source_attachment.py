@@ -26,12 +26,14 @@ from scopeproof_core.reviews.source_attachment import (
 from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewInputOrigin, ReviewState
 from scopeproof_core.storage.json_store import JsonReviewStore
 
+NON_PUBLIC_SOURCE_DETAIL = "GitHub reported non-public repository visibility."
+
 
 @dataclass
 class SourceAuthorityGuard:
     """A reopened context cannot discard known contradictions by clearing a draft."""
 
-    conflicts: set[str] = field(default_factory=set)
+    conflicts: dict[str, str | None] = field(default_factory=dict)
 
     def allows_context(self, context: str) -> bool:
         return context not in self.conflicts
@@ -44,11 +46,17 @@ class SourceAuthorityGuard:
         except ValueError:
             return False
 
-    def block(self, state: ReviewState) -> None:
-        self.conflicts.add(review_source_context_fingerprint(state))
+    def conflict_detail(self, state: ReviewState) -> str | None:
+        try:
+            return self.conflicts.get(review_source_context_fingerprint(state))
+        except ValueError:
+            return None
+
+    def block(self, state: ReviewState, *, detail: str | None = None) -> None:
+        self.conflicts[review_source_context_fingerprint(state)] = detail
 
     def restore(self, state: ReviewState) -> None:
-        self.conflicts.discard(review_source_context_fingerprint(state))
+        self.conflicts.pop(review_source_context_fingerprint(state), None)
 
 
 def source_authority_guard() -> SourceAuthorityGuard:
@@ -73,12 +81,28 @@ def clear_source_attachment() -> None:
     st.session_state["review_source_attachment"] = None
 
 
-def block_source_context(state: ReviewState) -> None:
-    source_authority_guard().block(state)
+def block_source_context(state: ReviewState, *, detail: str | None = None) -> None:
+    source_authority_guard().block(state, detail=detail)
     clear_source_attachment()
     st.session_state["snapshot"] = None
     st.session_state["candidate_files"] = []
     clear_saved_comparison_selection()
+
+
+def _observed_conflict_detail(
+    state: ReviewState, unavailable: SourceAttachmentUnavailable,
+) -> str | None:
+    if unavailable.observed_head_sha is not None:
+        return f"Observed different head: {unavailable.observed_head_sha}"
+    if unavailable.observed_check_state is None:
+        return None
+    saved = state.review.check_state.value.capitalize()
+    observed = unavailable.observed_check_state.value.capitalize()
+    statuses = (
+        f"Both observations report {saved}." if saved == observed
+        else f"Saved status {saved}, observed status {observed}."
+    )
+    return f"GitHub check details differ at the reviewed head. {statuses}"
 
 
 def observe_current_head(state: ReviewState, snapshot: PullRequestSnapshot) -> None:
@@ -96,7 +120,7 @@ def observe_current_head(state: ReviewState, snapshot: PullRequestSnapshot) -> N
         )
     except SourceAttachmentUnavailable as unavailable:
         if unavailable.observed_conflict:
-            block_source_context(state)
+            block_source_context(state, detail=_observed_conflict_detail(state, unavailable))
 
 
 def validate_current_source_attachment(state: ReviewState | None) -> None:
@@ -205,7 +229,7 @@ def render_source_attachment(
         )
     except SourceAttachmentUnavailable as unavailable:
         if unavailable.observed_conflict:
-            block_source_context(state)
+            block_source_context(state, detail=_observed_conflict_detail(state, unavailable))
         st.session_state["reviewed_source_error"] = (
             str(unavailable) + " The saved analysis was not changed."
         )
@@ -214,7 +238,7 @@ def render_source_attachment(
         st.rerun()
     except PrivateOrInaccessibleRepository as unavailable:
         if unavailable.observed_non_public:
-            block_source_context(state)
+            block_source_context(state, detail=NON_PUBLIC_SOURCE_DETAIL)
         st.session_state["reviewed_source_error"] = (
             "Matching source could not be loaded. The saved analysis was not changed."
         )
