@@ -713,6 +713,7 @@ authoritative downloads expire. Save or clear pending file-scope inputs before c
 After a successful refresh of the same verified public PR, the workbench copies the saved
 requirements, normalized criteria, source reference, and revision into editable drafts.
 Enter the confirmer for this review and explicitly confirm the draft before analysis.
+Loading a different PR clears any requirements staged from the previous saved review.
 A transport failure alone gives no new source observation.
 The session guard does not rewrite
 historical records, refresh their CI automatically or revoke previously downloaded reports.

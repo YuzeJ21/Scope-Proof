@@ -324,6 +324,7 @@ _STATE_DEFAULTS = {
     "criteria_source_provenance": None,
     "criteria_source_mode": "standard",
     "criteria_source_draft": None,
+    "staged_requirements_pr": None,
     "criteria_source_widget_sync_pending": None,
     "source_widget_sync_pending": None,
     "junit_artifact_upload_version": 0,
@@ -747,7 +748,8 @@ def _saved_requirements_for_refresh(
         return None
     try:
         saved = load_discovered_review(
-            store, state.review.review_id, expected_fingerprint=_review_state_fingerprint(state),
+            store, state.review.review_id,
+            expected_fingerprint=st.session_state["saved_review_fingerprint"],
         )
     except (OSError, ValueError):
         return None
@@ -756,6 +758,7 @@ def _saved_requirements_for_refresh(
 
 def _prepare_from_text(text: str) -> None:
     drafts = parse_criteria(text)
+    st.session_state["staged_requirements_pr"] = None
     st.session_state["criteria"] = [
         Criterion(criterion_id=draft.criterion_id, text=draft.text) for draft in drafts
     ]
@@ -768,6 +771,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     clear_saved_comparison_selection()
     clear_historical_analysis_selection()
     st.session_state["snapshot"] = None
+    st.session_state["staged_requirements_pr"] = None
     st.session_state["criteria"] = state.criteria_revision.criteria
     st.session_state["criteria_confirmed"] = state.review.criteria_confirmed
     st.session_state["bundle"] = state.bundle
@@ -1484,6 +1488,7 @@ with st.container(border=True):
         snapshot = load_demo_snapshot()
         _record_reopened_source_reload(snapshot)
         st.session_state["snapshot"] = snapshot
+        st.session_state["staged_requirements_pr"] = None
         st.session_state["source_text"] = labels["source_text"]
         st.session_state["requirements_input"] = labels["source_text"]
         st.session_state["criteria"] = [
@@ -1648,9 +1653,24 @@ if fetch_action_placeholder.button(
         saved_requirements = _saved_requirements_for_refresh(
             None if alpha_feedback_mode else head_check_state, snapshot, review_store,
         )
-        if checking_reopened_review:
+        if saved_requirements is not None:
+            assert head_check_state is not None
+            snapshot = snapshot.model_copy(
+                update={"repository": head_check_state.review.repository},
+            )
+        loaded_pr = (
+            (snapshot.repository.casefold(), snapshot.pr_number)
+            if snapshot.repository_visibility is RepositoryVisibility.VERIFIED_PUBLIC
+            and not alpha_feedback_mode
+            else None
+        )
+        staged_pr = st.session_state["staged_requirements_pr"]
+        if checking_reopened_review or (staged_pr is not None and staged_pr != loaded_pr):
             criteria = saved_requirements.criteria if saved_requirements is not None else []
             source_text = saved_requirements.source_text if saved_requirements is not None else ""
+            st.session_state["staged_requirements_pr"] = (
+                loaded_pr if saved_requirements is not None else None
+            )
             st.session_state["criteria"] = criteria
             st.session_state["source_text"] = source_text
             st.session_state["requirements_input"] = source_text

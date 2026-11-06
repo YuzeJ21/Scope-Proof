@@ -3585,8 +3585,9 @@ def test_reopened_review_reports_changed_head_before_invalidating_analysis(
     assert fresh.button(key="run_analysis").disabled is True
 
 
+@pytest.mark.parametrize("uppercase_url", [False, True], ids=["canonical", "case-variant"])
 def test_reanalysis_shows_previous_and_current_head_sha(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, uppercase_url: bool,
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     saved = resolve_all_criteria(analyzed_exact_head_standard_demo(
@@ -3608,6 +3609,11 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     fresh = new_app()
     fresh = select_saved_review(fresh, review_id)
     fresh = fresh.button(key="reopen_review").click().run()
+    if uppercase_url:
+        changed_snapshot.repository = changed_snapshot.repository.upper()
+        fresh = fresh.text_input(key="pr_url").set_value(
+            f"https://github.com/{changed_snapshot.repository}/pull/{changed_snapshot.pr_number}"
+        ).run()
     fresh = fresh.text_area(key="requirements_input").set_value(
         "Unprepared changes should be discarded under explicit consent."
     ).run()
@@ -3642,6 +3648,7 @@ def test_reanalysis_shows_previous_and_current_head_sha(
     fresh = fresh.button(key="run_analysis").click().run()
     current = fresh.session_state["review_state"]
     assert current.review.review_id != review_id
+    assert current.review.repository == previous.review.repository
     assert current.review.criteria_source_provenance.confirmed_by == "Local reviewer"
     assert not current.review.final_acceptance
     assert not current.resolution_events
@@ -3716,6 +3723,42 @@ def test_reopened_refresh_only_stages_the_matching_saved_revision(source: str) -
         "criteria_source_revision": "",
         "criteria_source_confirmer": "",
     }
+
+
+def test_retargeting_a_staged_rereview_keeps_requirements_bound_to_its_pr() -> None:
+    saved = analyzed_exact_head_standard_demo(new_app())
+    previous = saved.session_state["review_state"]
+    fresh = select_saved_review(new_app(), previous.review.review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+    snapshot = saved.session_state["snapshot"].model_copy(update={"head_sha": "b" * 40})
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request", return_value=snapshot,
+    ):
+        fresh = fresh.button(key="fetch_pr").click().run()
+    assert fresh.session_state["criteria"] == previous.criteria_revision.criteria
+    assert fresh.button(key="fetch_pr").label == "Fetch public PR"
+
+    unrelated = snapshot.model_copy(update={"pr_number": 999})
+    fresh = fresh.text_input(key="pr_url").set_value(
+        f"https://github.com/{unrelated.repository}/pull/{unrelated.pr_number}"
+    ).run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request", return_value=unrelated
+    ):
+        fresh = fresh.button(key="fetch_pr").click().run()
+    assert fresh.session_state["snapshot"] == unrelated
+    assert not fresh.session_state["criteria"]
+    assert fresh.text_area(key="requirements_input").value == ""
+
+    manual_text = "This review requires manually prepared output."
+    fresh = fresh.text_area(key="requirements_input").set_value(manual_text).run()
+    fresh = fresh.button(key="prepare_criteria").click().run()
+    with patch(
+        "scopeproof_core.github.client.GitHubClient.fetch_pull_request", return_value=unrelated
+    ):
+        fresh = fresh.button(key="fetch_pr").click().run()
+    assert fresh.text_area(key="requirements_input").value == manual_text
+    assert [criterion.text for criterion in fresh.session_state["criteria"]] == [manual_text]
 
 
 def test_same_head_reanalysis_exposes_unchanged_candidates_and_comparison_exports(

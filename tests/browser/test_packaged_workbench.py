@@ -2588,13 +2588,17 @@ def test_installed_wheel_failed_refresh_can_retry_with_saved_requirements_draft(
                 expect(page.get_by_role(
                     "textbox", name="Product requirements or acceptance criteria", exact=True,
                 )).to_have_value(bundle.source_text)
-                expect(page.get_by_role(
+                source_input = page.get_by_role(
                     "textbox", name="Source reference", exact=True,
-                )).to_have_value(source_reference)
+                )
+                expect(source_input).to_have_value(source_reference)
+                expect(source_input).to_be_editable()
                 page.get_by_text("Source revision (optional)", exact=True).click()
-                expect(page.get_by_role(
+                revision_input = page.get_by_role(
                     "textbox", name="Revision identifier", exact=True,
-                )).to_have_value(source_revision)
+                )
+                expect(revision_input).to_have_value(source_revision)
+                expect(revision_input).to_be_editable()
                 confirmer = page.get_by_role("textbox", name="Confirmed by", exact=True)
                 expect(confirmer).to_have_value("")
                 confirm = page.get_by_role(
