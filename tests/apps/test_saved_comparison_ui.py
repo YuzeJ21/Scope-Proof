@@ -324,6 +324,9 @@ def test_submitted_scope_controls_do_not_permanently_block_saved_comparison() ->
     assert app.session_state["review_state"].bundle.file_scope_decisions[-1].note == (
         "Recorded current-head scope explanation"
     )
+    app = app.text_input(key="decision_reviewer").set_value("Constructed next reviewer").run()
+    assert "Save or discard the pending file-scope decision" not in rendered(app)
+    assert not app.button(key="reopen_review").disabled
     assert not app.selectbox(key="saved_comparison_baseline").disabled
     app = apply_other_baseline(app)
     assert not app.exception

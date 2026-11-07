@@ -50,7 +50,7 @@ def prepare_scope_draft_context(
 
 
 def scope_draft_pending(current: ReviewState | None) -> bool:
-    """Treat inspection as read-only and compare decision inputs with the saved decision."""
+    """Compare scope-owned inputs with the saved decision, excluding the shared reviewer."""
     path = st.session_state.get("scope_file_path")
     disposition = st.session_state.get("scope_disposition")
     note = st.session_state.get("scope_note", "")
@@ -65,11 +65,8 @@ def scope_draft_pending(current: ReviewState | None) -> bool:
         if current is not None and current.bundle is not None else None
     )
     return latest is None or (
-        latest.disposition, latest.criterion_id, latest.note, latest.reviewer
-    ) != (
-        disposition, criterion_id, note,
-        st.session_state.get("decision_reviewer", "").strip(),
-    )
+        latest.disposition, latest.criterion_id, latest.note
+    ) != (disposition, criterion_id, note)
 
 
 def _visible_content(content: str) -> str:
