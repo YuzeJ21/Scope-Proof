@@ -451,7 +451,7 @@ def _clear_final_acceptance_note() -> None:
 
 def _open_final_acceptance_note(state: ReviewState | None, reviewer: str) -> None:
     """Open a draft for the review and reviewer shown beside the action."""
-    if state is not None:
+    if state is not None and not scope_draft_pending(state):
         st.session_state.setdefault("final_acceptance_export_expired", Event()).set()
         st.session_state["final_acceptance_note_context"] = (
             _review_state_fingerprint(state), reviewer,
@@ -540,6 +540,9 @@ def _refresh_clean_review_from_local_store(
                 st.session_state["failed_review_save_fingerprint"] = current_fingerprint
                 st.session_state["review_save_conflict"] = True
                 return state
+            # Submitted scope fields belong to the previous saved state. Keep inspection
+            # when the scope context matches and let its normal binding handle source changes.
+            discard_scope_decision_draft()
             _hydrate_reopened_review(persisted)
             st.session_state["review_save_notice"] = (
                 "Review refreshed from local storage after an external update."
@@ -775,7 +778,6 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     clear_source_attachment()
     clear_saved_comparison_selection()
     clear_historical_analysis_selection()
-    reset_scope_file_selection()
     st.session_state["snapshot"] = None
     st.session_state["staged_requirements_pr"] = None
     st.session_state["criteria"] = state.criteria_revision.criteria
@@ -1804,6 +1806,7 @@ with st.expander("Resume a saved review", expanded=False):
                 "or verify its ID and record integrity."
             )
         else:
+            reset_scope_file_selection()
             _hydrate_reopened_review(reopened_state)
             st.session_state["review_reopen_notice"] = (
                 "Review reopened from local storage after validation."
