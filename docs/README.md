@@ -7,7 +7,9 @@ current product state.
 Current direction: bounded Stage 2 development. Source implements scope-aware re-review and
 durable saved-baseline comparison, plus separately attributed non-gating source references.
 See the ranked outcomes in the [roadmap](../ROADMAP.md).
-Public install is v0.2.5. Development source uses `0.2.6.dev0`.
+Versioned source uses `0.2.6`. For v0.2.6 download availability and completed public verification,
+use the [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
+Install only after its final assets and verification are present; verified v0.2.5 remains a fallback.
 The dated verification record binds released bytes to their own source commit. Stage 1 is closed
 at zero; Stage 3 is dormant and gated. No personal testing or qualifying reviews are required
 for evaluation distribution. Begin with the roadmap's finish line before starting any new slice.

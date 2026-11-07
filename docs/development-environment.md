@@ -1,7 +1,10 @@
 # Reproducible development environment
 
-The public evaluation install is v0.2.5. Development source uses `0.2.6.dev0`.
-The [public verification record](releases/v0.2.5-public-verification.md) binds the published
+Versioned source uses `0.2.6`. The v0.2.6 evaluation build is available for installation only
+when its final assets and public-download verification appear on
+[GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
+The verified v0.2.5 download remains a fallback.
+The [v0.2.5 public verification record](releases/v0.2.5-public-verification.md) binds those published
 archives to their release source and separates public installation checks from earlier candidate
 compatibility evidence. GitHub Releases remains authoritative for availability. Python 3.11,
 Python 3.12, and Python 3.13

@@ -39,13 +39,18 @@ target-repository runtime proof, accessibility conformance, customer use, demand
 
 ### Current product checkpoint
 
-The [evaluation guide](../evaluation-guide.md) covers the published v0.2.5 workflow, including
-typed criteria and complete-record transfer. Distribution and public verification are complete.
-The newer development workflow is consolidated in an
-[unpublished evaluation candidate](../releases/v0.2.6-dev0-evaluation-candidate.md), with native
-public-writer compatibility and exact-artifact checks recorded separately from public verification.
+The [evaluation guide](../evaluation-guide.md) covers the `0.2.6` source/release build and the
+verified public v0.2.5 fallback, including typed criteria and complete-record transfer.
+Use final v0.2.6 downloads only when the
+[GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) lists the final
+source, wheel, source archive, checksum manifest and completed public-download verification.
+That entry is authoritative for availability. The
+[private `0.2.6.dev0` candidate](../releases/v0.2.6-dev0-evaluation-candidate.md) remains a historical,
+unpublished artifact; its native public-writer compatibility and exact-artifact checks apply only
+to the recorded development bytes, not the final v0.2.6 package.
 The [roadmap](../../ROADMAP.md#current-priorities--2026-11-07) records the bounded finish line.
-No new feature queue or publication is authorized by completion of engineering checks.
+The owner separately authorized final v0.2.6 publication and automatic public-download verification
+on 2026-11-07. Completing engineering checks does not authorize another release or feature queue.
 Stage 3 requires genuine independent use and separate authorization.
 
 ### Implemented development outcomes and historical version context
@@ -86,8 +91,9 @@ One review retains at most 20 imports, each retained warning or asserted limitat
 1,000 characters, and a new analysis never inherits an earlier criteria revision's imports.
 Other adapter families remain unimplemented and require their own bounded design and owner scope.
 
-This stage does not authorize outreach, participant contact, a merge, release, tag, or package
-publication, R-002 retuning, R-003 generation, billing, accounts, private-repository support,
+Apart from the separately authorized final v0.2.6 release, this stage does not authorize outreach,
+participant contact, a merge, release, tag, or package publication, R-002 retuning, R-003 generation,
+billing, accounts, private-repository support,
 hosted source processing, or paid APIs. Each requires its own owner decision where applicable.
 Generic code review, security scanning, and auto-fix features remain excluded under
 [AGENTS.md](../../AGENTS.md).

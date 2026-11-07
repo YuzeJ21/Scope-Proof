@@ -3,10 +3,10 @@
 **See which acceptance criteria have credible PR evidence—and which still need review.**
 
 **Start here:** [Choose a version and follow one short evaluation workflow](docs/evaluation-guide.md).
-It separates the published v0.2.5 download from development source and the older private candidate,
+It separates verified downloads from current source and the older private candidates,
 then shows how to inspect, save and hand off a constructed review.
-The unpublished `0.2.6.dev0` line adds a decision overview, offline HTML handoff and saved
-requirements comparison; see [Unreleased changes](CHANGELOG.md#unreleased) and the
+The `0.2.6` source and release build add a decision overview, offline HTML handoff and saved
+requirements comparison; see [v0.2.6 changes](CHANGELOG.md#026--evaluation-release-build) and the
 [current roadmap](ROADMAP.md#current-priorities--2026-11-07).
 
 ScopeProof is a reviewer-controlled acceptance-coverage assistant for public GitHub pull requests.
@@ -36,10 +36,12 @@ recorded offsets or missing timezones remain explicit. See the
 [workbench consistency assessment](docs/audits/2026-11-01-workbench-resolution-audit.md).
 
 Current direction: develop the reviewer workflow through a short, outcome-driven Stage 2 roadmap.
-The published evaluation download is **v0.2.5**. Its wheel, source archive, and checksums
-were verified after publication. Current development uses **0.2.6.dev0**. Stage 1 closed with all
-external counts at zero, and Stage 3 remains dormant pending independent use. See the
-[v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
+Current source identifies itself as **0.2.6**. The
+[GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) is authoritative for
+download availability and completed public verification. Use v0.2.6 after its final assets and
+public-download verification are available there; the verified **v0.2.5** download remains a
+fallback. Stage 1 closed with all external counts at zero, and Stage 3 remains dormant pending
+independent use. See the [v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
 See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and
 [official-source market comparison](docs/commercialization/product-direction-2026-11-02.md) for
 substantial competing workflows and the remaining value hypothesis.
@@ -170,31 +172,75 @@ only explicit success as passing.
 Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
 for the tested Python versions, platform limits, and contributor setup.
 
-**The published evaluation download is v0.2.5.** The
-[GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) includes
-`scopeproof-0.2.5-py3-none-any.whl`, `scopeproof-0.2.5.tar.gz`, and `SHA256SUMS.txt`.
-The [public verification record](docs/releases/v0.2.5-public-verification.md) binds those files
-to source `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Current source `0.2.6.dev0` is unreleased.
+**Current source/package version: 0.2.6.** A versioned source tree or local build does not
+establish public availability. The [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases)
+is authoritative for publication availability. Use the v0.2.6 path below only when its
+[release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) lists the final source,
+`scopeproof-0.2.6-py3-none-any.whl`, `scopeproof-0.2.6.tar.gz`, `SHA256SUMS.txt`, and completed
+public-download verification. If those are absent, use the verified v0.2.5 fallback.
 
-The commands below install the **published v0.2.5 wheel** without cloning the repository.
 No personal testing or qualifying review is required to download or evaluate the package.
 See the [documentation map](docs/README.md) for related guides and dated records.
+
+### v0.2.6 after public verification
+
+After checking the release entry above, install in a fresh environment:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5/scopeproof-0.2.5-py3-none-any.whl
-curl -LO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5/SHA256SUMS.txt
+curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.6/scopeproof-0.2.6-py3-none-any.whl
+curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.6/SHA256SUMS.txt
 ```
 
 Select the wheel entry from the published manifest and use the command for your platform:
 
 ```bash
 # macOS
-grep " scopeproof-0.2.5-py3-none-any.whl$" SHA256SUMS.txt | shasum -a 256 -c -
+grep " scopeproof-0.2.6-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && shasum -a 256 -c wheel.SHA256
 
 # Linux
-grep " scopeproof-0.2.5-py3-none-any.whl$" SHA256SUMS.txt | sha256sum -c -
+grep " scopeproof-0.2.6-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && sha256sum -c wheel.SHA256
+```
+
+Continue only after the checksum check succeeds:
+
+```bash
+python -m pip install ./scopeproof-0.2.6-py3-none-any.whl
+python -m pip check
+scopeproof --version
+scopeproof benchmark
+scopeproof-web --host 127.0.0.1 --port 8501
+```
+
+The launcher must report version `0.2.6`. Do not rename a `0.2.6.dev0` candidate archive to
+install it as a final release.
+
+### Verified v0.2.5 fallback
+
+The [v0.2.5 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) includes
+`scopeproof-0.2.5-py3-none-any.whl`, `scopeproof-0.2.5.tar.gz`, and `SHA256SUMS.txt`.
+The [public verification record](docs/releases/v0.2.5-public-verification.md) binds those files
+to source `72cac01ea6abb99beaf714396eb610fa39fe84f0`.
+
+The commands below install the **published v0.2.5 wheel** in a fresh environment without cloning
+the repository.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5/scopeproof-0.2.5-py3-none-any.whl
+curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5/SHA256SUMS.txt
+```
+
+Select the wheel entry from the published manifest and use the command for your platform:
+
+```bash
+# macOS
+grep " scopeproof-0.2.5-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && shasum -a 256 -c wheel.SHA256
+
+# Linux
+grep " scopeproof-0.2.5-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && sha256sum -c wheel.SHA256
 ```
 
 Continue only after the checksum check succeeds:
@@ -212,20 +258,23 @@ provide code-signing or product-correctness assurance. The offline benchmark che
 and bundled constructed regression corpus. It is engineering evidence, not runtime evidence for
 a target pull request or customer validation. Stop the local workbench with `Ctrl+C`.
 
-The v0.2.5 package declares the maintained Pydantic, Streamlit, Pillow and HTTPX requirements.
+The v0.2.5 and v0.2.6 package metadata declare the maintained Pydantic, Streamlit, Pillow and
+HTTPX requirements.
 See the [dependency alignment record](docs/audits/2026-10-29-dependency-baseline-alignment.md).
 
 ### Upgrade existing reviews
 
-v0.2.5 writes saved-record format **v9**. Back up your review folder and keep original reports
-before saving records with the new version. Automated verification loaded a constructed v5 record
-from v0.2.4 and reopened a separate v9 copy with the recorded producer, decisions, history, and
-blocked status intact. Keep the original v5 file if you still need to open it in v0.2.4.
+v0.2.5 and v0.2.6 write saved-record format **v9**. Back up your review folder and keep original
+reports before saving records with the new version. The v0.2.5 automated verification loaded a
+constructed v5 record from v0.2.4 and reopened a separate v9 copy with the recorded producer,
+decisions, history, and blocked status intact. Keep the original v5 file if you still need to
+open it in v0.2.4.
 See the [release verification](docs/releases/v0.2.5-public-verification.md).
 
 ### Public PR CLI workflow
 
-The examples use the installed v0.2.5 CLI. In a source checkout, prefix `scopeproof` with
+The examples use the installed v0.2.6 CLI after its public verification is available; the
+verified v0.2.5 fallback also supports these commands. In a source checkout, prefix `scopeproof` with
 `uv run` after [locked source setup](docs/development-environment.md#create-or-refresh-the-environment).
 The CLI reads public PRs and runs the deterministic review without starting Streamlit.
 Live ingestion labels a review public only when GitHub returns matching, unambiguous repository
@@ -634,7 +683,7 @@ The six review sections are:
 5. Evidence Matrix.
 6. Summary & Export.
 
-In unreleased `0.2.6.dev0`, **Decision overview** appears after analysis and when reopening
+In `0.2.6`, **Decision overview** appears after analysis and when reopening
 a saved analysis. It shows the reviewed head, recorded verdict, blockers, final acceptance,
 and local save status. Use its blocker control to open the first blocking criterion.
 The overview counts unresolved inspected changed files separately from criterion blockers,
@@ -646,7 +695,7 @@ unverifiable saved record requires a refresh before relying on the verdict.
 Criterion Review contains the selected criterion evidence, separate reviewer-selected static
 references and external JUnit context,
 external verification, and human resolution controls. Summary & Export provides Markdown,
-JSON, and CSV reports. In `0.2.6.dev0`, **Download HTML** provides a self-contained report
+JSON, and CSV reports. In `0.2.6`, **Download HTML** provides a self-contained report
 that the recipient can open in a browser offline. The exact head, gate reasons, next actions, and
 recorded final acceptance appear before the criterion gaps, evidence limitations, and decision
 history. Following evidence links requires network access. Use the separate saved-review transfer
@@ -790,7 +839,7 @@ splitting, reordering, or editing criteria invalidates the previous analysis and
 reconfirmation before another review run. Human decisions and final acceptance are recorded as
 history rather than silently replacing earlier decisions.
 
-In `0.2.6.dev0`, choose **Add final acceptance note** to record why you are accepting or
+In `0.2.6`, choose **Add final acceptance note** to record why you are accepting or
 revoking acceptance. Submit the form to save the note with the event in resolution history
 and report exports. Record the event or clear its draft before replacing the open review or
 downloading its current report. Changing the review or reviewer clears the old note.
@@ -816,7 +865,7 @@ expires the applied comparison; select again to continue. This path does not fet
 reanalyze code, modify saved review bytes, or carry forward a decision. The published v0.2.4
 download does not contain this new entry point.
 
-In `0.2.6.dev0`, **Gate reasons** shows which reasons appeared, stopped appearing, or
+In `0.2.6`, **Gate reasons** shows which reasons appeared, stopped appearing, or
 persisted between the compared analyses, even when both have the same verdict. Markdown and
 JSON include the same differences. A reason can stop appearing when another condition takes
 priority. Older comparison artifacts without reason context show it as unavailable.
@@ -957,7 +1006,7 @@ scopeproof-web --port 8502 --storage-dir "./recipient reviews"
 Relative folders are interpreted from the directory where the launcher starts. The reopen panel
 shows the selected folder and lists its safe record IDs in deterministic order. An empty store
 retains manual ID recovery. Use a different port and folder for each running workbench.
-In the `0.2.6.dev0` workbench, checking the deletion confirmation binds it to the selected
+In the `0.2.6` workbench, checking the deletion confirmation binds it to the selected
 file. If another workbench saves or replaces that file before you click Delete, ScopeProof
 preserves it and asks you to select it and confirm again. The same check applies to malformed
 regular files, which can still be removed with fresh confirmation.

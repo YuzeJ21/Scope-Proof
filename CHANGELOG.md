@@ -9,9 +9,17 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Source/package identity: `0.2.6.dev0`, unreleased.
+No changes recorded after the `0.2.6` release build in this source tree.
 
-Changes since public v0.2.5 (`72cac01`) through the source checkpoint `95897bc`:
+## 0.2.6 — Evaluation release build
+
+Source/package identity: `0.2.6`. The [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6)
+is authoritative for publication availability, final source identity, assets and public-download
+verification. Use v0.2.6 downloads only when that record includes the wheel, source archive,
+checksum manifest and completed public verification; otherwise use the verified v0.2.5 fallback.
+The private `0.2.6.dev0` candidate remains a historical, unpublished artifact with its own identity.
+
+Changes since public v0.2.5 (`72cac01`):
 
 - Show a decision overview after analysis and reopening: reviewed head, recorded verdict,
   blockers, unresolved changed-file scope, final acceptance and local save status (#259, #261).
@@ -29,7 +37,7 @@ Changes since public v0.2.5 (`72cac01`) through the source checkpoint `95897bc`:
 - Refuse deletion under stale consent after a concurrent saved-record edit (#254), fix Windows
   concurrent save locking (#260), and stabilize a constructed browser popup-recovery check (#258).
 - Align published-versus-development guidance (#253); consolidate the roadmap, bounded goals and
-  evaluation-candidate verification. No new public release is implied by these source changes.
+  historical evaluation-candidate verification. Source changes alone do not establish publication.
 
 Saved-record format remains v9. These changes do not change core gate predicates or turn static
 candidates into runtime verification. Historical R-002 inputs and results remain frozen.
