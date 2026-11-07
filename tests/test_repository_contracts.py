@@ -25,11 +25,11 @@ from scopeproof_core.evals.r002_models import (
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
 from scopeproof_core.version import __version__
 
-PUBLIC_RELEASE_VERSION = "0.2.5"
-PUBLIC_RELEASE_TAG = "v0.2.5"
-SOURCE_VERSION = "0.2.6.dev0"
-PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.5-py3-none-any.whl"
-PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5"
+PUBLIC_RELEASE_VERSION = "0.2.6"
+PUBLIC_RELEASE_TAG = "v0.2.6"
+SOURCE_VERSION = "0.2.6"
+PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.6-py3-none-any.whl"
+PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.6"
 V023_RELEASE_WHEEL = "scopeproof-0.2.3-py3-none-any.whl"
 V023_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.3"
 PUBLIC_RELEASES_INDEX = "https://github.com/YuzeJ21/Scope-Proof/releases"
@@ -613,9 +613,13 @@ def test_readme_documents_optional_release_checksum_verification() -> None:
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/SHA256SUMS.txt" in readme
     assert (
-        f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | shasum -a 256 -c -'
+        f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt > wheel.SHA256'
+        " && shasum -a 256 -c wheel.SHA256"
     ) in readme
-    assert (f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt | sha256sum -c -') in readme
+    assert (
+        f'grep " {PUBLIC_RELEASE_WHEEL_FILENAME}$" SHA256SUMS.txt > wheel.SHA256'
+        " && sha256sum -c wheel.SHA256"
+    ) in readme
     assert f"{PUBLIC_RELEASE_WHEEL_FILENAME}.sha256" not in readme
     assert f"python -m pip install ./{PUBLIC_RELEASE_WHEEL_FILENAME}" in readme
     assert "does not provide code-signing or product-correctness assurance" in " ".join(
@@ -693,13 +697,24 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
 
 def _assert_published_version_matches_repository(*, repository: Path, current_version: str) -> None:
     published_final_tags = {
-        "0.2.3": "v0.2.3", "0.2.4": "v0.2.4", PUBLIC_RELEASE_VERSION: PUBLIC_RELEASE_TAG,
+        "0.2.3": "v0.2.3", "0.2.4": "v0.2.4", "0.2.5": "v0.2.5",
     }
     published_tag = published_final_tags.get(current_version)
 
     if published_tag is None:
         assert current_version == SOURCE_VERSION
-        return
+        if re.fullmatch(r"\d+\.\d+\.\d+", current_version) is None:
+            return
+        # CI fetches full history/tags. Local absence is prepublication only;
+        # it cannot establish remote release availability in an incomplete clone.
+        published_tag = f"v{current_version}"
+        tag_lookup = subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", f"refs/tags/{published_tag}"],
+            cwd=repository, check=False, capture_output=True, text=True,
+        )
+        assert tag_lookup.returncode in {0, 1}, "Git could not inspect the current release tag"
+        if tag_lookup.returncode == 1:
+            return
 
     current_tree = subprocess.run(
         ["git", "rev-parse", "HEAD^{tree}"],
@@ -794,7 +809,7 @@ def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
     )
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6"])
 def test_published_final_contract_rejects_dirty_tracked_tree(
     tmp_path: Path, final_version: str
 ) -> None:
@@ -825,7 +840,7 @@ def test_published_final_contract_rejects_dirty_tracked_tree(
         )
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6"])
 def test_published_final_contract_rejects_untracked_package_input(
     tmp_path: Path, final_version: str
 ) -> None:
@@ -861,7 +876,7 @@ def test_published_final_contract_rejects_untracked_package_input(
     assert ".coverage 2" not in str(error.value)
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6"])
 def test_published_final_contract_rejects_ignored_force_included_input(
     tmp_path: Path,
     final_version: str,
@@ -899,6 +914,43 @@ def test_published_final_contract_rejects_ignored_force_included_input(
         )
 
     assert "evals/probe.pyc" in str(error.value)
+
+
+def test_current_release_contract_rejects_divergent_committed_tree(tmp_path: Path) -> None:
+    repository = tmp_path / "published"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(["git", "config", "user.email", "scopeproof-contract@example.test"],
+                   cwd=repository, check=True)
+    subprocess.run(["git", "config", "user.name", "ScopeProof contract"],
+                   cwd=repository, check=True)
+    tracked = repository / "versioned.txt"
+    tracked.write_text("published\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "published"], cwd=repository, check=True)
+    subprocess.run(["git", "tag", f"v{SOURCE_VERSION}"], cwd=repository, check=True)
+    tracked.write_text("different committed bytes\n", encoding="utf-8")
+    subprocess.run(["git", "commit", "-qam", "different"], cwd=repository, check=True)
+    with pytest.raises(AssertionError, match="current committed tree differs"):
+        _assert_published_version_matches_repository(
+            repository=repository, current_version=SOURCE_VERSION,
+        )
+
+
+def test_current_release_contract_allows_absent_prepublication_tag(tmp_path: Path) -> None:
+    repository = tmp_path / "prepublication"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    _assert_published_version_matches_repository(
+        repository=repository, current_version=SOURCE_VERSION,
+    )
+
+
+def test_current_release_contract_rejects_unavailable_git_metadata(tmp_path: Path) -> None:
+    with pytest.raises(AssertionError, match="Git could not inspect the current release tag"):
+        _assert_published_version_matches_repository(
+            repository=tmp_path, current_version=SOURCE_VERSION,
+        )
 
 
 class _StrictVerificationModel(BaseModel):
@@ -1606,11 +1658,17 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
         "## Contributor setup", maxsplit=1
     )[0]
     release_install = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[0]
-    for filename in (PUBLIC_RELEASE_WHEEL_FILENAME, "scopeproof-0.2.5.tar.gz", "SHA256SUMS.txt"):
+    for filename in (
+        PUBLIC_RELEASE_WHEEL_FILENAME,
+        f"scopeproof-{PUBLIC_RELEASE_VERSION}.tar.gz",
+        "SHA256SUMS.txt",
+    ):
         assert filename in release_install
     assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in release_install
     assert "published v0.2.5 wheel" in release_install
-    assert f"Current source `{SOURCE_VERSION}` is unreleased" in release_install
+    assert f"Current source/package version: {SOURCE_VERSION}" in release_install
+    assert f"Use the {PUBLIC_RELEASE_TAG} path below only when" in release_install
+    assert "completed public-download verification" in " ".join(release_install.split())
     assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in release_install
     assert "No personal testing or qualifying review" in release_install
     assert PUBLIC_RELEASES_INDEX in readme_quickstart
@@ -1618,7 +1676,7 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
     assert "../../README.md#quickstart" in quickstart
     source_workflow = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[1]
     normalized_workflow = " ".join(source_workflow.split())
-    assert "installed v0.2.5 CLI" in normalized_workflow
+    assert f"installed {PUBLIC_RELEASE_TAG} CLI" in normalized_workflow
     assert f"{V023_DOWNLOAD_ROOT}/{V023_RELEASE_WHEEL}" in quickstart
     assert "Archived v0.2.3" in quickstart
     assert PUBLIC_RELEASE_TAG in quickstart
@@ -1631,7 +1689,9 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
     assert "PR #183" in readme
     assert "historical source-integration evidence" in readme
 
-    assert f"Public install: v{PUBLIC_RELEASE_VERSION}" in roadmap
+    assert (
+        f"For {PUBLIC_RELEASE_TAG}, use the final assets only when its"
+    ) in " ".join(roadmap.split())
     assert "v0.2.5 is published" in roadmap
     assert SOURCE_VERSION in roadmap
     assert "Public install: v0.2.4" in status_page

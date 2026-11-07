@@ -10,18 +10,22 @@ or supply qualifying reviews. All verification cited below is automated engineer
 
 ## Choose the right version
 
-Start with the **published v0.2.5** wheel for the shortest setup. Follow the
-[README Quickstart](../README.md#quickstart) to download, verify and install it.
+Use the **v0.2.6** wheel when its [GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6)
+contains the final source identity, wheel, source archive, checksum manifest and completed
+public-download verification. The [GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases)
+is authoritative for availability. Until those are available, use the verified **v0.2.5** fallback.
+Follow the [README Quickstart](../README.md#quickstart) for both install paths.
 
 | Path | Identity and capabilities |
 | --- | --- |
-| Published **v0.2.5** | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Includes saved comparisons, audited references, JUnit audit history, typed criteria and complete-record handoff. Writes v9. |
+| **v0.2.6** source / final release build | Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. Source identity alone does not establish publication; use its wheel only after the release entry and public verification above are available. For source work, use the [locked contributor setup](development-environment.md#create-or-refresh-the-environment). |
+| Published **v0.2.5** fallback | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Includes saved comparisons, audited references, JUnit audit history, typed criteria and complete-record handoff. Writes v9. |
 | Published **v0.2.4** | [Earlier release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4). Writes v5. |
-| Development source **0.2.6.dev0**, unpublished | Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [Unreleased changes](../CHANGELOG.md#unreleased). Writes v9. Use the [locked contributor setup](development-environment.md#create-or-refresh-the-environment); candidate verification does not replace public v0.2.5. |
+| Historical private **0.2.6.dev0** candidate, unpublished | The [fixed-source packet](releases/v0.2.6-dev0-evaluation-candidate.md) records this development artifact's identities and constructed checks. It is not the final v0.2.6 build or a public-download verification record. |
 | Historical private **0.2.5 candidate**, PR #221 | Prepared at `4f12ae02dee277705d17ac6ab94f0a74f99be346` with its own v5 upgrade evidence. See the [dated guide](releases/v0.2.5-evaluation-candidate.md). |
 
-The [unpublished development candidate packet](releases/v0.2.6-dev0-evaluation-candidate.md)
-records fixed-source artifact identities and constructed checks; it is separate from the public download.
+Keep each candidate's recorded identity intact. A final v0.2.6 package requires its own
+versioned build and verification; a renamed development archive is not a final release.
 
 Back up local reviews before switching versions. The default store is `~/.scopeproof/reviews`.
 Do not point an older release at newly saved v9 records or assume downgrade compatibility.
@@ -30,20 +34,24 @@ share them only when those contents are appropriate to share. Recorded identity 
 
 ## Run the released source
 
-To run the source used for the published package,
-use a new directory, Python 3.11–3.13 and [uv](development-environment.md):
+For v0.2.6, first check the completed public verification and final source identity in its
+Release entry. Use a new directory, Python 3.11–3.13 and [uv](development-environment.md):
 
 ```bash
 git clone https://github.com/YuzeJ21/Scope-Proof.git ScopeProof-evaluation
 cd ScopeProof-evaluation
-git checkout --detach 72cac01ea6abb99beaf714396eb610fa39fe84f0
+git checkout --detach v0.2.6
 uv sync --extra dev --extra research --locked
 uv run scopeproof --version
 uv run scopeproof benchmark
 uv run scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
-The launcher reports version 0.2.5. Stop it with Ctrl+C.
+Confirm that the checked-out commit matches the source named in the Release entry; the launcher
+reports version `0.2.6`. If v0.2.6 is not yet publicly verified, use the v0.2.5 fallback source
+instead: replace the checkout command with
+`git checkout --detach 72cac01ea6abb99beaf714396eb610fa39fe84f0`. That launcher reports `0.2.5`.
+Stop either launcher with Ctrl+C.
 
 ## One constructed review, then a handoff
 
@@ -61,7 +69,7 @@ The launcher reports version 0.2.5. Stop it with Ctrl+C.
 5. Choose **Prepare saved review download**, then **Download saved review
    record**. This complete record is different from an analysis-report JSON download.
 6. Start a recipient workbench on a different port and with a separate review folder.
-   For an installed v0.2.5 wheel, run
+   For an installed v0.2.5 or v0.2.6 wheel, run
    `scopeproof-web --port 8502 --storage-dir "./recipient reviews"`. In a source checkout,
    prefix the command with `uv run`.
    Upload the record, choose **Inspect uploaded review**, inspect its
@@ -77,7 +85,12 @@ becomes a genuine review by substituting a real person's name.
 
 ## What is verified, and what is missing
 
-The [public verification record](releases/v0.2.5-public-verification.md) records the downloaded
+For final v0.2.6 artifacts, use only the completed public verification recorded in its
+[GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6). Source changes,
+private candidate checks and earlier-release results do not establish those downloads' identity
+or installed behavior.
+
+The historical [v0.2.5 public verification record](releases/v0.2.5-public-verification.md) records the downloaded
 wheel, source archive and checksum manifest. Both archives passed fresh installation, benchmarks,
 and workbench health checks. The downloaded wheel passed the installed CLI checks and a concurrent
 sender-to-recipient Chromium handoff. The [release-source CI run](https://github.com/YuzeJ21/Scope-Proof/actions/runs/41900982073)
@@ -92,4 +105,6 @@ Source can be missed; candidate presence cannot establish correctness. The evalu
 
 See the [November 2 product assessment](commercialization/product-direction-2026-11-02.md) and
 [next-stage roadmap](../ROADMAP.md#current-priorities--2026-11-07). Stage 2 remains active;
-Stage 3 stays dormant. No release, deployment or external contact is authorized by this guide.
+Stage 3 stays dormant. The owner separately authorized final v0.2.6 publication and automatic
+public-download verification. This guide does not authorize another release, deployment or
+external contact, and requests no personal testing or qualifying reviews.
