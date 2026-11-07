@@ -7,7 +7,11 @@ import streamlit as st
 from apps.web.deferred_exports import SavedComparisonExportLease, deferred_saved_requirements_export
 from apps.web.scope_file_preview import scope_draft_pending
 from scopeproof_core.reporting.criteria_comparison import export_saved_requirements_markdown
-from scopeproof_core.reviews.comparison import ReviewComparison
+from scopeproof_core.reviews.comparison import (
+    ComparisonIncompatible,
+    ComparisonRejectionReason,
+    ReviewComparison,
+)
 from scopeproof_core.reviews.criteria_comparison import (
     CRITERIA_COMPARISON_BOUNDARY,
     RecordedCriteriaDiff,
@@ -26,6 +30,31 @@ from scopeproof_core.storage.discovery import (
     load_discovered_review,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
+
+_COMPARISON_REFUSAL_GUIDANCE = {
+    ComparisonRejectionReason.DIFFERENT_REPOSITORY: (
+        "The recorded repository identifiers differ. Choose a baseline from the same repository."
+    ),
+    ComparisonRejectionReason.DIFFERENT_PULL_REQUEST: (
+        "The recorded pull request numbers differ. Choose a baseline from the same pull request."
+    ),
+    ComparisonRejectionReason.MISSING_EXACT_HEAD: (
+        "One analysis lacks the full reviewed head required for evidence comparison. "
+        "Use analyses that record their full reviewed heads."
+    ),
+    ComparisonRejectionReason.DIFFERENT_CRITERIA: (
+        "The confirmed criterion definitions differ. "
+        "Evidence comparison requires the same definitions in the same order."
+    ),
+    ComparisonRejectionReason.MISSING_CRITERIA_SOURCE: (
+        "One analysis is missing confirmed criteria source provenance. "
+        "Use analyses with recorded confirmed sources."
+    ),
+    ComparisonRejectionReason.DIFFERENT_CRITERIA_SOURCE: (
+        "The recorded criteria source provenance differs. "
+        "Evidence comparison requires matching source details."
+    ),
+}
 
 
 def clear_saved_comparison_selection(*, clear_choice: bool = True) -> None:
@@ -283,11 +312,23 @@ def render_saved_comparison_selector(
                     store, current, baseline_id, history_index=history_index,
                     expected_baseline_fingerprint=expected_baseline_fingerprint,
                 )
+            except ComparisonIncompatible as error:
+                st.warning(
+                    "Selected saved analysis cannot be compared. "
+                    + _COMPARISON_REFUSAL_GUIDANCE[error.reason]
+                )
+                if baseline_id != current.review.review_id and error.reason in {
+                    ComparisonRejectionReason.DIFFERENT_CRITERIA,
+                    ComparisonRejectionReason.DIFFERENT_CRITERIA_SOURCE,
+                }:
+                    st.caption(
+                        "Use Compare saved requirements to inspect the recorded differences."
+                    )
             except (OSError, ValueError):
                 st.warning(
-                    "Selected saved analysis cannot be compared. Choose analyses from the "
-                    "same pull request with identical confirmed criteria and criteria source, "
-                    "and verify both saved records are available. The current review is unchanged."
+                    "Selected saved analysis cannot be compared. The selected comparison "
+                    "could not be validated. Reopen the current review and select the "
+                    "baseline again."
                 )
             else:
                 st.session_state["saved_comparison_selection"] = selection

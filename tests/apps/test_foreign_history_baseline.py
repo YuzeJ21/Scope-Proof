@@ -70,7 +70,8 @@ def test_foreign_requirements_view_stays_separate_from_evidence_comparison():
     app, store = foreign_history_app(incompatible_active=True)
     before = record_bytes(store)
     app = app.button(key="compare_saved_analysis").click().run()
-    assert "identical confirmed criteria and criteria source" in rendered(app)
+    assert "The recorded criteria source provenance differs." in rendered(app)
+    assert "Use Compare saved requirements to inspect the recorded differences." in rendered(app)
     assert comparison_downloads(app) == []
 
     app = app.button(key="compare_saved_requirements").click().run()
@@ -276,7 +277,7 @@ def test_incompatible_foreign_history_rejects_even_if_active_is_compatible():
     assert not app.exception
     assert comparison_downloads(app) == []
     assert app.session_state["saved_comparison_selection"] is None
-    assert "cannot be compared" in rendered(app)
+    assert "The recorded criteria source provenance differs." in rendered(app)
     assert record_bytes(store) == before
 
 
@@ -307,7 +308,8 @@ def test_discovery_to_prepare_change_is_rejected_instead_of_repointing_history()
     assert not app.exception
     assert comparison_downloads(app) == []
     assert app.session_state["saved_comparison_selection"] is None
-    assert "cannot be compared" in rendered(app)
+    assert "Reopen the current review and select the baseline again." in rendered(app)
+    assert "Use Compare saved requirements" not in rendered(app)
 
 
 def test_switching_foreign_analysis_invalidates_old_download_even_after_reselection():

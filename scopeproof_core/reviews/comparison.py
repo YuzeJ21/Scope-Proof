@@ -44,6 +44,23 @@ GATE_REASON_COMPARISON_BOUNDARY = (
 GATE_REASON_COMPARISON_UNAVAILABLE = "Gate reasons are unavailable in this older comparison."
 
 
+class ComparisonRejectionReason(StrEnum):
+    DIFFERENT_REPOSITORY = "different_repository"
+    DIFFERENT_PULL_REQUEST = "different_pull_request"
+    MISSING_EXACT_HEAD = "missing_exact_head"
+    DIFFERENT_CRITERIA = "different_criteria"
+    MISSING_CRITERIA_SOURCE = "missing_criteria_source"
+    DIFFERENT_CRITERIA_SOURCE = "different_criteria_source"
+
+
+class ComparisonIncompatible(ValueError):
+    """A validated pair failed an explicit evidence comparison requirement."""
+
+    def __init__(self, reason: ComparisonRejectionReason, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class EvidenceChangeKind(StrEnum):
     """Observable relationship between previous and current evidence candidates."""
 
@@ -941,7 +958,10 @@ def _changed_junit_criteria(changes: list[JUnitImportChange]) -> set[str]:
 def _criteria_source_identity(bundle: ReviewBundle) -> tuple[str, str | None, str, str]:
     provenance = bundle.review.criteria_source_provenance
     if provenance is None:
-        raise ValueError("comparison requires confirmed criteria-source provenance")
+        raise ComparisonIncompatible(
+            ComparisonRejectionReason.MISSING_CRITERIA_SOURCE,
+            "comparison requires confirmed criteria-source provenance",
+        )
     return (
         provenance.source_uri,
         provenance.source_revision,
@@ -960,7 +980,10 @@ def _validate_review_head_identity(bundle: ReviewBundle) -> None:
         }
         and _EXACT_GIT_HEAD.fullmatch(review.head_sha) is None
     ):
-        raise ValueError("comparison live or unknown-origin reviews require exact head SHAs")
+        raise ComparisonIncompatible(
+            ComparisonRejectionReason.MISSING_EXACT_HEAD,
+            "comparison live or unknown-origin reviews require exact head SHAs",
+        )
     if any(item.commit_sha != review.head_sha for item in bundle.evidence):
         raise ValueError("comparison evidence candidates must match the reviewed head")
 
@@ -973,15 +996,27 @@ def validate_comparison_relationship(
     previous = validated_review_bundle(previous)
     current = validated_review_bundle(current)
     if previous.review.repository != current.review.repository:
-        raise ValueError("comparison requires the same repository")
+        raise ComparisonIncompatible(
+            ComparisonRejectionReason.DIFFERENT_REPOSITORY,
+            "comparison requires the same repository",
+        )
     if previous.review.pr_number != current.review.pr_number:
-        raise ValueError("comparison requires the same pull request")
+        raise ComparisonIncompatible(
+            ComparisonRejectionReason.DIFFERENT_PULL_REQUEST,
+            "comparison requires the same pull request",
+        )
     _validate_review_head_identity(previous)
     _validate_review_head_identity(current)
     if previous.criteria != current.criteria:
-        raise ValueError("comparison requires identical ordered criterion definitions")
+        raise ComparisonIncompatible(
+            ComparisonRejectionReason.DIFFERENT_CRITERIA,
+            "comparison requires identical ordered criterion definitions",
+        )
     if _criteria_source_identity(previous) != _criteria_source_identity(current):
-        raise ValueError("comparison requires compatible criteria-source provenance")
+        raise ComparisonIncompatible(
+            ComparisonRejectionReason.DIFFERENT_CRITERIA_SOURCE,
+            "comparison requires compatible criteria-source provenance",
+        )
     return previous, current
 
 

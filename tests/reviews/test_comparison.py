@@ -9,6 +9,8 @@ from scopeproof_core.criteria.confirmation import (
 )
 from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reviews.comparison import (
+    ComparisonIncompatible,
+    ComparisonRejectionReason,
     EvidenceChange,
     EvidenceChangeKind,
     EvidenceReference,
@@ -549,21 +551,25 @@ def test_change_model_rejects_reference_for_a_different_criterion() -> None:
 
 
 @pytest.mark.parametrize(
-    ("field_name", "field_value", "message"),
+    ("field_name", "field_value", "message", "reason"),
     [
-        ("repository", "acme/other", "same repository"),
-        ("pr_number", 2, "same pull request"),
+        (
+            "repository", "acme/other", "same repository",
+            ComparisonRejectionReason.DIFFERENT_REPOSITORY,
+        ),
+        ("pr_number", 2, "same pull request", ComparisonRejectionReason.DIFFERENT_PULL_REQUEST),
     ],
 )
 def test_comparison_relationship_rejects_different_pull_request_identity(
-    field_name: str, field_value: str | int, message: str
+    field_name: str, field_value: str | int, message: str, reason: ComparisonRejectionReason,
 ) -> None:
     previous = bundle(head_sha="old-head", status=FindingStatus.MISSING, with_evidence=False)
     current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
     current.review = current.review.model_copy(update={field_name: field_value})
 
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(ComparisonIncompatible, match=message) as rejected:
         compare_reviews(previous, current)
+    assert rejected.value.reason is reason
 
 
 def test_comparison_relationship_rejects_changed_ordered_criteria() -> None:
@@ -590,8 +596,11 @@ def test_comparison_relationship_rejects_changed_ordered_criteria() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="identical ordered criterion definitions"):
+    with pytest.raises(
+        ComparisonIncompatible, match="identical ordered criterion definitions",
+    ) as rejected:
         compare_reviews(previous, current)
+    assert rejected.value.reason is ComparisonRejectionReason.DIFFERENT_CRITERIA
 
 
 @pytest.mark.parametrize(
@@ -614,8 +623,11 @@ def test_comparison_relationship_rejects_incompatible_criteria_source_provenance
         }
     )
 
-    with pytest.raises(ValueError, match="compatible criteria-source provenance"):
+    with pytest.raises(
+        ComparisonIncompatible, match="compatible criteria-source provenance",
+    ) as rejected:
         compare_reviews(previous, current)
+    assert rejected.value.reason is ComparisonRejectionReason.DIFFERENT_CRITERIA_SOURCE
 
 
 def test_comparison_relationship_rejects_missing_criteria_source_provenance() -> None:
@@ -623,8 +635,9 @@ def test_comparison_relationship_rejects_missing_criteria_source_provenance() ->
     current = bundle(head_sha="new-head", status=FindingStatus.MISSING, with_evidence=False)
     current.review = current.review.model_copy(update={"criteria_source_provenance": None})
 
-    with pytest.raises(ValueError, match="criteria-source provenance"):
+    with pytest.raises(ComparisonIncompatible, match="criteria-source provenance") as rejected:
         compare_reviews(previous, current)
+    assert rejected.value.reason is ComparisonRejectionReason.MISSING_CRITERIA_SOURCE
 
 
 def test_comparison_relationship_allows_new_confirmation_attestation() -> None:
@@ -676,8 +689,9 @@ def test_comparison_relationship_rejects_non_exact_live_public_head() -> None:
             }
         )
 
-    with pytest.raises(ValueError, match="exact head SHAs"):
+    with pytest.raises(ComparisonIncompatible, match="exact head SHAs") as rejected:
         compare_reviews(previous, current)
+    assert rejected.value.reason is ComparisonRejectionReason.MISSING_EXACT_HEAD
 
 
 def test_comparison_relationship_rejects_non_exact_legacy_unknown_head() -> None:
