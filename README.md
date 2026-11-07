@@ -5,6 +5,9 @@
 **Start here:** [Choose a version and follow one short evaluation workflow](docs/evaluation-guide.md).
 It separates the published v0.2.5 download from development source and the older private candidate,
 then shows how to inspect, save and hand off a constructed review.
+The unpublished `0.2.6.dev0` line adds a decision overview, offline HTML handoff and saved
+requirements comparison; see [Unreleased changes](CHANGELOG.md#unreleased) and the
+[current roadmap](ROADMAP.md#current-priorities--2026-11-07).
 
 ScopeProof is a reviewer-controlled acceptance-coverage assistant for public GitHub pull requests.
 The primary-operator hypothesis is an engineer or technical QA reviewer, with a PM or requirements

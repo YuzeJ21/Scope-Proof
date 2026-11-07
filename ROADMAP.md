@@ -7,11 +7,11 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, following a short, outcome-driven development queue;
+`owner_led_productization_active`, with a bounded evaluation-candidate milestone;
 this owner decision does not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
-## Current priorities — 2026-11-04
+## Current priorities — 2026-11-07
 
 The product direction is **explain and revisit an acceptance decision**. Confirmed intent,
 exact-head evidence, explicit gaps, recorded decisions and later comparison form the working
@@ -40,18 +40,78 @@ documents direct overlap and adoption constraints without claiming superiority o
 | Stage 2 — completed on source, PR #266 | Inspect an uncited changed file and continue comparing saved analyses, checking the current head, or navigating to the next blocking criterion. | Selecting a file or diff page keeps those actions available. An unsubmitted disposition or explanation still pauses them. Explicit scope decisions and exact-head gate rules stay in force. |
 | Stage 2 — completed on source, PR #267 | Know why a saved analysis requires refresh when fresh observations conflict. | The decision overview distinguishes an observed different head, changed check details at the reviewed head, and explicit non-public visibility. Keep the explanation in the current session and preserve the saved review and export guards. |
 | Stage 2 — completed on source, PR #268 | Recover when a selected saved analysis cannot be used for evidence comparison. | Explain which relationship check failed or when records need to be reopened or reselected. Point to requirements-only comparison for eligible same-PR criteria or source differences. Preserve exact-head and comparison rules. |
-| Stage 2 — protect file-scope drafts | Keep an unsubmitted scope decision with its review when a replacement, source load, or criteria change would invalidate it. | Require saving or explicitly discarding the draft before changing its context. Discard in place and keep read-only inspection available. Preserve recorded decisions and report rules. |
+| Stage 2 — completed on source, PR #269 | Keep an unsubmitted scope decision with its review when a replacement, source load, or criteria change would invalidate it. | Require saving or explicitly discarding the draft before changing its context. Discard in place and keep read-only inspection available. Preserve recorded decisions and report rules. |
 | P3 — Stage 3 dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. |
 
+### Product and architecture checkpoint
+
+The consolidated milestone is an **unpublished `0.2.6.dev0` evaluation candidate**:
+**explain a saved acceptance decision, share it offline, and safely revisit it after changes**.
+The public v0.2.5 source is `72cac01`; the checkpoint source `95897bc` contains 17 later
+commits. The completed source rows above are not capabilities of the public download.
+See [Unreleased changes](CHANGELOG.md#unreleased), the [version guide](docs/evaluation-guide.md#choose-the-right-version)
+and the [fixed-source candidate packet](docs/releases/v0.2.6-dev0-evaluation-candidate.md). Local
+candidate checks are complete; integration requires independent review and green exact-head CI.
+
+| Priority | Gap and action | Completion criterion / decision |
+| --- | --- | --- |
+| P0 — candidate prepared | Consolidate the accumulated workflow, version guidance and release notes. Prepare a candidate from one fixed source commit. | Wheel and source archive identities, matching source-built wheel, clean installs, installed CLI/browser journeys, native public-v0.2.5 writer upgrade on copies, independent engineering review and exact-head CI. Record evidence in a dated candidate packet; preparation does not authorize publication. |
+| P1 — lifecycle verified by automation | Verify the complete lifecycle rather than add another parity feature: confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Reuse current consequential transition tests, especially stale downloads, source contradictions and pending scope drafts. Fix only a demonstrated blocker. Record platform, policy, identity and retrieval limits. End this development queue when the candidate packet is complete. |
+| Conditional engineering follow-up | Static evidence discovery can miss relevant candidates. Frozen R-002 found candidates for 5/20 research criteria; this is a historical result, not a production accuracy estimate. | Only if further engineering investigation is selected: classify omissions against unchanged frozen inputs/results, identify one observable failure type, and record any new constructed cases separately before proposing a bounded change. No gate weakening or score relabeling. |
+| Conditional architecture follow-up | Workbench session-state guards are distributed across a large entrypoint. Complete histories are processed repeatedly; stores reject records above 64 MiB. Filesystem operations depend on platform support. | Retain existing stale-state, Windows and storage regressions. Extract one boundary or change storage only for a reproduced maintenance or operating-envelope constraint. No rewrite, database or multiuser service is needed for the local handoff outcome. |
+| Separate publication decision | A verified candidate is not a new public release. Public v0.2.5 remains available. | Separate authorization names the final version and fixed candidate; publication must reverify final artifact identity and public downloads. |
+| Stage 3 — dormant | Usefulness, operator/recipient fit and independent reuse are unproven. | Genuine independent-use evidence and separate authorization; no personal testing or qualifying reviews are requested by this roadmap. If such evidence is not pursued, remain an engineering reference/evaluation product. |
+
+**Product strengths:** explicit intent, inspectable gaps, exact-head history and portable decision
+handoff already form a coherent engineering demonstration. **Product limits:** local setup,
+public-only intake, evaluation-only use rights, asserted identities and unvalidated usefulness
+constrain adoption. Acceptance-criteria checking overlaps with existing review tools; the lifecycle
+is a hypothesis worth explaining, not established differentiation.
+
+**Architecture strengths:** the deterministic core is independent of the workbench, persistence
+and exports are schema-validated, stale operations fail closed, and target code is not executed.
+**Architecture limits:** producer identity and current validation are different; there is no
+historical executable replay. Candidate verification must preserve the producer and name the
+installed reader separately. No policy/schema change is required merely to verify v9-to-v9 upgrade.
+
 No additional adapter family, accounts, hosted processing, billing or generic code review is
-needed for the selected outcome. Public-only scope, evaluation-only licensing, local setup,
-asserted actor identity and unknown independent usefulness remain material constraints.
+needed for this outcome. Licensing expansion, authenticated collaboration and private-repository
+support require a separately chosen product direction. Do not start them automatically.
 
-Further feature work needs a named observable constraint and a bounded finish line. The
-evaluation walkthrough identified the single-account storage constraint. The public v0.2.5 download includes the resulting handoff workflow.
+### Reusable goal prompts
 
-The implementation notes below describe the state at each milestone, including work that was
-unreleased at the time. The priority table records the current release and next-stage decision.
+**Executed consolidation goal — retain as a reproducible prompt:**
+
+> Create and pursue a bounded ScopeProof consolidation and evaluation-candidate goal. Establish
+> live main and public-release identities; reconcile the changes since v0.2.5 and close completed
+> milestones. Build unpublished `0.2.6.dev0` wheel and source artifacts from a fixed commit. Verify
+> clean installations, source-built parity, actual published-v0.2.5 writer compatibility on copied
+> constructed records, installed CLI/browser journeys, frozen benchmarks and required CI. Preserve
+> producer/history/provenance and all AGENTS.md evidence, confirmation and fail-closed boundaries.
+> Record artifact hashes, source identity, results and limits; obtain independent engineering
+> review, merge only after exact-head checks pass and verify main. No personal testing, qualifying
+> reviews, publication, deployment or outreach. Stop when the candidate evidence is reviewable.
+
+**Conditional next engineering goal — one observable constraint:**
+
+> Perform one bounded ScopeProof product checkpoint. Find the single most consequential observable
+> obstacle to explaining a recorded acceptance decision and revisiting it after changes, grounded
+> in current source, rendered behavior or existing automation. Separate engineering defects from
+> unvalidated usefulness. Implement at most one justified outcome with a named finish line,
+> automated verification and independent engineering review, then merge on green exact-head CI.
+> Preserve frozen R-002 and every evidence gate. If no consequential gap is demonstrated, recommend
+> no new development and stop. Do not generate parity features or repeat closed investigations.
+
+**Future publication goal — requires separate authorization:**
+
+> After explicit authorization for a named evaluation version and fixed candidate, recheck the
+> candidate's source, final version, artifact hashes, compatibility and CI. Publish only that
+> downloadable evaluation release, then independently fetch and verify the public wheel, source
+> archive and checksum manifest and repeat isolated installed checks. Preserve evaluation-only
+> positioning. Do not deploy, contact participants or claim genuine-use evidence or Stage 3.
+
+The implementation notes below describe each historical milestone. Their then-unreleased wording
+is dated evidence; the current priorities and version guide above govern the present direction.
 
 ## Current operating decision
 
@@ -367,7 +427,7 @@ Do not retune against the frozen R-002 cohort, weaken thresholds, add model-gene
 promote search diagnostics into evidence or correctness claims.
 
 The [earlier status audit](docs/releases/v0.2.3-status-and-next-stages.md) retains the feature
-ledger before v0.2.5. See [current priorities](#current-priorities--2026-11-04) for the next stage.
+ledger before v0.2.5. See [current priorities](#current-priorities--2026-11-07) for the next stage.
 Current official-source
 competitive research is maintained separately in the
 [current official-source market comparison](docs/commercialization/market-comparison-2026-11-02.md).
@@ -758,7 +818,8 @@ evidence.
 - Unsupported platform rows may remain unsupported; absence of an environment is not a mandate
   for repeated attempts or for personal testing.
 
-- Do not create synthetic validation, invented users, or constructed outcomes.
+- Do not create synthetic validation or present constructed fixtures as human validation;
+  do not invent users and outcomes.
 - Do not create recurring external-evidence monitors merely to manufacture activity.
 - Do not execute pull-request code or promote implementation evidence to test or runtime proof.
 - Do not weaken deterministic gates to improve apparent completion.

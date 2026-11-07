@@ -11,7 +11,28 @@ its linked release entry for the exact published source and assets.
 
 Source/package identity: `0.2.6.dev0`, unreleased.
 
-- Align the README, evaluation guide, and roadmap with the v0.2.5 public download.
+Changes since public v0.2.5 (`72cac01`) through the source checkpoint `95897bc`:
+
+- Show a decision overview after analysis and reopening: reviewed head, recorded verdict,
+  blockers, unresolved changed-file scope, final acceptance and local save status (#259, #261).
+- Explain newly reported, no longer reported and persistent gate reasons when comparing saved
+  analyses, including cases where the verdict stayed the same (#255).
+- Download complete validated HTML acceptance reports from the workbench for offline recipients;
+  record optional final-acceptance and revocation rationale in the existing audit (#256, #257).
+- Preserve confirmed same-PR source contradictions even if later candidate loading fails;
+  explain refresh requirements and refused evidence comparisons without changing saved records
+  or weakening report guards (#262, #267, #268).
+- Prepare saved same-PR requirements as editable, unconfirmed drafts. Compare requirements from
+  separate saved analyses and export their differences with source provenance (#263–#265).
+- Keep changed-file inspection read-only and protect pending scope decisions from context changes
+  until explicitly submitted or discarded (#266, #269).
+- Refuse deletion under stale consent after a concurrent saved-record edit (#254), fix Windows
+  concurrent save locking (#260), and stabilize a constructed browser popup-recovery check (#258).
+- Align published-versus-development guidance (#253); consolidate the roadmap, bounded goals and
+  evaluation-candidate verification. No new public release is implied by these source changes.
+
+Saved-record format remains v9. These changes do not change core gate predicates or turn static
+candidates into runtime verification. Historical R-002 inputs and results remain frozen.
 
 ## 0.2.5 — Downloadable evaluation release
 
