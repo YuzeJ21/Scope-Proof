@@ -1,7 +1,10 @@
 # ScopeProof Market Positioning Hypotheses
 
-Last researched and product direction updated: 2026-11-02.
-The [current market comparison](market-comparison-2026-11-02.md) records the official-source
+Historical research and direction snapshot: 2026-11-02.
+The versions and proposed next tasks below describe that date. For current versions and priorities,
+use the [evaluation guide](../evaluation-guide.md#choose-the-right-version) and
+[roadmap](../../ROADMAP.md#current-priorities--2026-11-07).
+The [November 2 market comparison](market-comparison-2026-11-02.md) records the official-source
 refresh, repository baseline and limits. The [older comparison](market-comparison-2026-07-26.md)
 remains historical.
 
@@ -74,7 +77,7 @@ understanding and unprompted reuse on a later PR. Narrow or reject the hypothesi
 workflows suffice, useful gaps are rare, cost exceeds value or evidence boundaries are misunderstood.
 Engineering checks, benchmark results, stars, downloads and releases cannot supply that evidence.
 
-## Current bounded direction
+## Bounded direction at the November 2 checkpoint
 
 Finish **source-bound typed CLI normalized-criteria handoff** next: an optional validated draft
 that preserves IDs, ordering, text, priority, type, source metadata and required evidence levels,

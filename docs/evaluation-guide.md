@@ -17,7 +17,7 @@ Start with the **published v0.2.5** wheel for the shortest setup. Follow the
 | --- | --- |
 | Published **v0.2.5** | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Includes saved comparisons, audited references, JUnit audit history, typed criteria and complete-record handoff. Writes v9. |
 | Published **v0.2.4** | [Earlier release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4). Writes v5. |
-| Development source **0.2.6.dev0** | Use the [locked contributor setup](development-environment.md#create-or-refresh-the-environment) when evaluating changes on main. |
+| Development source **0.2.6.dev0**, unpublished | Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [Unreleased changes](../CHANGELOG.md#unreleased). Writes v9. Use the [locked contributor setup](development-environment.md#create-or-refresh-the-environment); candidate verification does not replace public v0.2.5. |
 | Historical private **0.2.5 candidate**, PR #221 | Prepared at `4f12ae02dee277705d17ac6ab94f0a74f99be346` with its own v5 upgrade evidence. See the [dated guide](releases/v0.2.5-evaluation-candidate.md). |
 
 Back up local reviews before switching versions. The default store is `~/.scopeproof/reviews`.
@@ -88,5 +88,5 @@ Source can be missed; candidate presence cannot establish correctness. The evalu
 [use policy](../USE_POLICY.md), public-only source access and asserted identities limit adoption.
 
 See the [November 2 product assessment](commercialization/product-direction-2026-11-02.md) and
-[next-stage roadmap](../ROADMAP.md#current-priorities--2026-11-04). Stage 2 remains active;
+[next-stage roadmap](../ROADMAP.md#current-priorities--2026-11-07). Stage 2 remains active;
 Stage 3 stays dormant. No release, deployment or external contact is authorized by this guide.
