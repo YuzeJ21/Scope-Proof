@@ -240,7 +240,8 @@ def test_incompatible_saved_baseline_is_explained_without_replacing_current() ->
     app = apply_other_baseline(app)
     assert not app.exception
     assert comparison_downloads(app) == []
-    assert "identical confirmed criteria" in rendered(app)
+    assert "The recorded pull request numbers differ." in rendered(app)
+    assert "Use Compare saved requirements" not in rendered(app)
     assert app.session_state["review_state"].review.review_id == CURRENT_REVIEW_ID
     assert before == {p.name: p.read_bytes() for p in store.directory.glob("*.json")}
 

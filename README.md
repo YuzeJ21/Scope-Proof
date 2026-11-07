@@ -798,7 +798,11 @@ In v0.2.5, reopen the current review, expand **Compare saved analyses**, and
 choose a **Comparison baseline**: another saved review or a retained history entry. Click
 **Compare selected saved analysis** to apply that choice. The current review needs a clean saved
 analysis, and both analyses must describe the same PR with identical confirmed criteria and
-criteria-source identity. An incompatible choice leaves the current review unchanged.
+criteria-source identity. The workbench explains a refusal from the validated comparison checks
+and leaves the current review unchanged. When the warning suggests **Compare saved requirements**,
+use it to inspect recorded criteria or source differences across separately saved analyses of
+the same PR. Reopen the current review and select the baseline again if the selection could
+not be validated.
 
 Unsubmitted file-scope inputs must be saved or cleared using **Clear pending file-scope inputs**;
 clearing inputs preserves recorded decisions. The comparison shows both saved identities and
