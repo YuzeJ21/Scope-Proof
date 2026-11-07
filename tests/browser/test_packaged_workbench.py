@@ -2536,8 +2536,9 @@ def test_installed_wheel_compares_requirements_across_saved_analyses(
                 evidence.press("Enter")
                 expect(page.get_by_text("Selected saved analysis cannot be compared", exact=False)
                        ).to_be_visible()
-                expect(page.get_by_text("The confirmed criterion definitions differ.", exact=False)
-                       ).to_be_visible()
+                expect(page.get_by_text(
+                    "The recorded criterion definitions or their order differ.", exact=False,
+                )).to_be_visible()
                 expect(page.get_by_text(
                     "Use Compare saved requirements to inspect the recorded differences.",
                     exact=True,

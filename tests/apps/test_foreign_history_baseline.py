@@ -7,6 +7,7 @@ import pytest
 
 from apps.web import deferred_exports
 from apps.web.deferred_exports import DeferredExportUnavailable, deferred_saved_comparison_export
+from scopeproof_core.gates.evaluator import evaluate_gate
 from scopeproof_core.reporting import criteria_comparison as criteria_exports
 from scopeproof_core.reporting.exporters import export_comparison_json
 from scopeproof_core.schemas.models import ReviewState
@@ -18,6 +19,7 @@ from tests.saved_comparison_fixture import (
     FOREIGN_HISTORY_HEAD,
     PREVIOUS_REVIEW_ID,
     saved_comparison_states,
+    saved_requirements_states,
 )
 
 
@@ -90,6 +92,33 @@ def test_foreign_requirements_view_stays_separate_from_evidence_comparison():
     )
     app = app.button(key="compare_saved_requirements").click().run()
     assert FOREIGN_HISTORY_HEAD in rendered(app)
+    assert comparison_downloads(app) == []
+    assert record_bytes(store) == before
+
+
+def test_ineligible_foreign_history_does_not_suggest_requirements_comparison():
+    current, previous = saved_requirements_states()
+    history = previous.analysis_history[0]
+    history.review.criteria_confirmed = False
+    history.gate = evaluate_gate(
+        history.review, history.criteria, history.findings, history.resolutions, history.evidence,
+        history.file_scope_decisions,
+    )
+    store = JsonReviewStore(default_local_review_directory())
+    store.save(current)
+    store.save(previous)
+    before = record_bytes(store)
+    app = new_app().selectbox(key="saved_reopen_review_id").set_value(CURRENT_REVIEW_ID).run()
+    app = app.button(key="reopen_review").click().run()
+    app = (
+        app.selectbox(key="saved_comparison_baseline")
+        .set_value(f"saved:{PREVIOUS_REVIEW_ID}")
+        .run()
+    )
+    app = choose_history(app).button(key="compare_saved_analysis").click().run()
+    assert not app.exception
+    assert "Selected saved analysis cannot be compared." in rendered(app)
+    assert "Use Compare saved requirements" not in rendered(app)
     assert comparison_downloads(app) == []
     assert record_bytes(store) == before
 

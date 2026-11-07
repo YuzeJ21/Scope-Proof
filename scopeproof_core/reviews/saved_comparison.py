@@ -8,7 +8,12 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
-from scopeproof_core.reviews.comparison import ReviewComparison, compare_reviews
+from scopeproof_core.reviews.comparison import (
+    ComparisonIncompatible,
+    ComparisonRejectionReason,
+    ReviewComparison,
+    compare_reviews,
+)
 from scopeproof_core.reviews.criteria_comparison import (
     RecordedCriteriaDiff,
     analysis_criteria_snapshot,
@@ -22,6 +27,14 @@ Fingerprint = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 class SavedComparisonUnavailable(ValueError):
     """A previously selected saved comparison no longer matches its record snapshot."""
+
+
+class SavedComparisonIncompatible(ComparisonIncompatible):
+    """A criteria-related refusal with eligibility for the requirements-only comparison."""
+
+    def __init__(self, rejection: ComparisonIncompatible, *, requirements_available: bool) -> None:
+        super().__init__(rejection.reason, str(rejection))
+        self.requirements_available = requirements_available
 
 
 class SavedComparisonSelection(BaseModel):
@@ -81,7 +94,24 @@ def _compare(
 ) -> ReviewComparison:
     if current.bundle is None:
         raise ValueError("saved comparison requires an active analysis in the current review")
-    return compare_reviews(_baseline_bundle(baseline, history_index), current.bundle)
+    try:
+        return compare_reviews(_baseline_bundle(baseline, history_index), current.bundle)
+    except ComparisonIncompatible as error:
+        if error.reason not in {
+            ComparisonRejectionReason.DIFFERENT_CRITERIA,
+            ComparisonRejectionReason.DIFFERENT_CRITERIA_SOURCE,
+        }:
+            raise
+        # Both records are still locked. Check the same projection the explicit action uses.
+        try:
+            _compare_requirements(current, baseline, history_index)
+        except ValueError:
+            requirements_available = False
+        else:
+            requirements_available = True
+        raise SavedComparisonIncompatible(
+            error, requirements_available=requirements_available,
+        ) from error
 
 
 def _compare_requirements(

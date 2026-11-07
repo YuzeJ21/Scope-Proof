@@ -17,6 +17,7 @@ from scopeproof_core.reviews.criteria_comparison import (
     RecordedCriteriaDiff,
 )
 from scopeproof_core.reviews.saved_comparison import (
+    SavedComparisonIncompatible,
     SavedComparisonSelection,
     locked_saved_comparison,
     locked_saved_requirements_comparison,
@@ -43,8 +44,8 @@ _COMPARISON_REFUSAL_GUIDANCE = {
         "Use analyses that record their full reviewed heads."
     ),
     ComparisonRejectionReason.DIFFERENT_CRITERIA: (
-        "The confirmed criterion definitions differ. "
-        "Evidence comparison requires the same definitions in the same order."
+        "The recorded criterion definitions or their order differ. "
+        "Evidence comparison requires identical ordered criteria."
     ),
     ComparisonRejectionReason.MISSING_CRITERIA_SOURCE: (
         "One analysis is missing confirmed criteria source provenance. "
@@ -317,10 +318,7 @@ def render_saved_comparison_selector(
                     "Selected saved analysis cannot be compared. "
                     + _COMPARISON_REFUSAL_GUIDANCE[error.reason]
                 )
-                if baseline_id != current.review.review_id and error.reason in {
-                    ComparisonRejectionReason.DIFFERENT_CRITERIA,
-                    ComparisonRejectionReason.DIFFERENT_CRITERIA_SOURCE,
-                }:
+                if isinstance(error, SavedComparisonIncompatible) and error.requirements_available:
                     st.caption(
                         "Use Compare saved requirements to inspect the recorded differences."
                     )
