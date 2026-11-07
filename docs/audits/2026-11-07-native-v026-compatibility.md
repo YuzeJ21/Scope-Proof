@@ -37,7 +37,11 @@ The [strict Pydantic manifest schema](../../tests/fixtures/released_v026_upgrade
 binds producer identity, lifecycle, counts and artifact digests and rejects altered credit flags
 and coercions. The manifest also hashes the generation recipe and schema. Record timestamps are
 construction timestamps, not evidence of human actions. Original bytes are preserved with Git
-text conversion disabled, including on Windows.
+text conversion disabled, including on Windows. The two hash-bound packaged demo JSON inputs
+also retain their committed bytes. Initial Windows CI exposed CRLF conversion of those shared
+inputs; a temporary Git checkout with `core.autocrlf=true` reproduced the same digest failure.
+Exact-path attributes fix checkout conversion without changing the input blobs, corpus or hashes,
+and the Windows-style checkout regression now protects every locally hash-bound artifact.
 
 - Public writer wheel SHA-256: `48b308b3f92d912932734aa4907e958d78351bb956f1a9ce65353e9206741896`.
 - Producer core SHA-256: `7b3a9180fa8658e800486cac4cc0cb1a3ff236bb88c0ad9c9f165a699e04eb64`.

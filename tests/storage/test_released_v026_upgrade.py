@@ -8,6 +8,7 @@ import csv
 import html
 import io
 import json
+import subprocess
 from hashlib import sha256
 from pathlib import Path
 
@@ -305,6 +306,43 @@ def test_native_public_v026_provenance_matches_offline_corpus() -> None:
         _assert_digest(FIXTURES.parents[2] / artifact.name, artifact)
     for record in provenance.records:
         _assert_digest(FIXTURES / record.record.name, record.record)
+
+
+def test_hash_bound_corpus_inputs_survive_windows_style_checkout(tmp_path: Path) -> None:
+    """Git's automatic CRLF conversion must not alter any recorded artifact digest."""
+    provenance = _provenance()
+    root = FIXTURES.parents[2]
+    artifacts = [
+        *(
+            (FIXTURES / item.name, item)
+            for item in (provenance.recipe, provenance.provenance_schema)
+        ),
+        *((FIXTURES / item.record.name, item.record) for item in provenance.records),
+        *(
+            (root / item.name, item)
+            for item in (provenance.packaged_fixture, provenance.packaged_labels)
+        ),
+    ]
+    checkout = tmp_path / "crlf-checkout"
+    checkout.mkdir()
+    (checkout / ".gitattributes").write_bytes((root / ".gitattributes").read_bytes())
+    for path, _ in artifacts:
+        destination = checkout / path.relative_to(root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(path.read_bytes())
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=checkout, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "core.autocrlf", "true")
+    git("config", "core.safecrlf", "false")
+    git("add", ".")
+    for path, _ in artifacts:
+        (checkout / path.relative_to(root)).unlink()
+    git("checkout-index", "--all", "--force")
+    for path, digest in artifacts:
+        _assert_digest(checkout / path.relative_to(root), digest)
 
 
 @pytest.mark.parametrize("case", CASES)
