@@ -26,16 +26,16 @@ No personal testing, qualifying reviews, release publication, deployment or outr
 
 ## Task 1: Consolidate direction and freeze source
 
-- [ ] Reconcile README, evaluation guide, changelog and roadmap against `72cac01..95897bc`.
-- [ ] Preserve dated research and redirect current guidance; close #269.
-- [ ] Validate links and diff, then commit the candidate's clean source.
+- [x] Reconcile README, evaluation guide, changelog and roadmap against `72cac01..95897bc`.
+- [x] Preserve dated research and redirect current guidance; close #269.
+- [x] Validate links and diff, then commit the candidate's clean source.
 
 ## Task 2: Verify the fixed candidate
 
-- [ ] Archive the exact source; build wheel/sdist and compare direct/source-built wheel bytes.
-- [ ] Verify clean wheel/source installs, Python compatibility, deterministic benchmarks,
+- [x] Archive the exact source; build wheel/sdist and compare direct/source-built wheel bytes.
+- [x] Verify clean wheel/source installs, Python compatibility, deterministic benchmarks,
   installed CLI/browser journeys and native v0.2.5-writer records on copies.
-- [ ] Record hashes, source, commands/results and limitations in a validated private manifest and
+- [x] Record hashes, source, commands/results and limitations in a validated private manifest and
   a reviewable repository packet. If source changes are needed, regenerate affected artifacts.
 
 ## Task 3: Review and integrate

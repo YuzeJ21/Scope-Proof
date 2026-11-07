@@ -7,7 +7,7 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, following a short, outcome-driven development queue;
+`owner_led_productization_active`, with a bounded evaluation-candidate milestone;
 this owner decision does not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
@@ -45,16 +45,18 @@ documents direct overlap and adoption constraints without claiming superiority o
 
 ### Product and architecture checkpoint
 
-The next milestone is one coherent **unpublished `0.2.6.dev0` evaluation candidate**:
+The consolidated milestone is an **unpublished `0.2.6.dev0` evaluation candidate**:
 **explain a saved acceptance decision, share it offline, and safely revisit it after changes**.
 The public v0.2.5 source is `72cac01`; the checkpoint source `95897bc` contains 17 later
 commits. The completed source rows above are not capabilities of the public download.
-See [Unreleased changes](CHANGELOG.md#unreleased) and the [version guide](docs/evaluation-guide.md#choose-the-right-version).
+See [Unreleased changes](CHANGELOG.md#unreleased), the [version guide](docs/evaluation-guide.md#choose-the-right-version)
+and the [fixed-source candidate packet](docs/releases/v0.2.6-dev0-evaluation-candidate.md). Local
+candidate checks are complete; integration requires independent review and green exact-head CI.
 
 | Priority | Gap and action | Completion criterion / decision |
 | --- | --- | --- |
-| P0 — execute now | Consolidate the accumulated workflow, version guidance and release notes. Prepare a candidate from one fixed source commit. | Wheel and source archive identities, matching source-built wheel, clean installs, installed CLI/browser journeys, native public-v0.2.5 writer upgrade on copies, independent engineering review and exact-head CI. Record evidence in a dated candidate packet; preparation does not authorize publication. |
-| P1 — complete the engineering milestone | Verify the complete lifecycle rather than add another parity feature: confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Reuse current consequential transition tests, especially stale downloads, source contradictions and pending scope drafts. Fix only a demonstrated blocker. Record platform, policy, identity and retrieval limits. End this development queue when the candidate packet is complete. |
+| P0 — candidate prepared | Consolidate the accumulated workflow, version guidance and release notes. Prepare a candidate from one fixed source commit. | Wheel and source archive identities, matching source-built wheel, clean installs, installed CLI/browser journeys, native public-v0.2.5 writer upgrade on copies, independent engineering review and exact-head CI. Record evidence in a dated candidate packet; preparation does not authorize publication. |
+| P1 — lifecycle verified by automation | Verify the complete lifecycle rather than add another parity feature: confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Reuse current consequential transition tests, especially stale downloads, source contradictions and pending scope drafts. Fix only a demonstrated blocker. Record platform, policy, identity and retrieval limits. End this development queue when the candidate packet is complete. |
 | Conditional engineering follow-up | Static evidence discovery can miss relevant candidates. Frozen R-002 found candidates for 5/20 research criteria; this is a historical result, not a production accuracy estimate. | Only if further engineering investigation is selected: classify omissions against unchanged frozen inputs/results, identify one observable failure type, and record any new constructed cases separately before proposing a bounded change. No gate weakening or score relabeling. |
 | Conditional architecture follow-up | Workbench session-state guards are distributed across a large entrypoint. Complete histories are processed repeatedly; stores reject records above 64 MiB. Filesystem operations depend on platform support. | Retain existing stale-state, Windows and storage regressions. Extract one boundary or change storage only for a reproduced maintenance or operating-envelope constraint. No rewrite, database or multiuser service is needed for the local handoff outcome. |
 | Separate publication decision | A verified candidate is not a new public release. Public v0.2.5 remains available. | Separate authorization names the final version and fixed candidate; publication must reverify final artifact identity and public downloads. |
@@ -78,7 +80,7 @@ support require a separately chosen product direction. Do not start them automat
 
 ### Reusable goal prompts
 
-**Current goal — consolidation and candidate verification:**
+**Executed consolidation goal — retain as a reproducible prompt:**
 
 > Create and pursue a bounded ScopeProof consolidation and evaluation-candidate goal. Establish
 > live main and public-release identities; reconcile the changes since v0.2.5 and close completed
@@ -425,7 +427,7 @@ Do not retune against the frozen R-002 cohort, weaken thresholds, add model-gene
 promote search diagnostics into evidence or correctness claims.
 
 The [earlier status audit](docs/releases/v0.2.3-status-and-next-stages.md) retains the feature
-ledger before v0.2.5. See [current priorities](#current-priorities--2026-11-04) for the next stage.
+ledger before v0.2.5. See [current priorities](#current-priorities--2026-11-07) for the next stage.
 Current official-source
 competitive research is maintained separately in the
 [current official-source market comparison](docs/commercialization/market-comparison-2026-11-02.md).
@@ -816,7 +818,7 @@ evidence.
 - Unsupported platform rows may remain unsupported; absence of an environment is not a mandate
   for repeated attempts or for personal testing.
 
-- Do not create synthetic validation, invented users, or constructed outcomes.
+- Do not present constructed fixtures as human validation or invent users and outcomes.
 - Do not create recurring external-evidence monitors merely to manufacture activity.
 - Do not execute pull-request code or promote implementation evidence to test or runtime proof.
 - Do not weaken deterministic gates to improve apparent completion.

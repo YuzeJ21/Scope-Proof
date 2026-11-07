@@ -20,6 +20,9 @@ Start with the **published v0.2.5** wheel for the shortest setup. Follow the
 | Development source **0.2.6.dev0**, unpublished | Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [Unreleased changes](../CHANGELOG.md#unreleased). Writes v9. Use the [locked contributor setup](development-environment.md#create-or-refresh-the-environment); candidate verification does not replace public v0.2.5. |
 | Historical private **0.2.5 candidate**, PR #221 | Prepared at `4f12ae02dee277705d17ac6ab94f0a74f99be346` with its own v5 upgrade evidence. See the [dated guide](releases/v0.2.5-evaluation-candidate.md). |
 
+The [unpublished development candidate packet](releases/v0.2.6-dev0-evaluation-candidate.md)
+records fixed-source artifact identities and constructed checks; it is separate from the public download.
+
 Back up local reviews before switching versions. The default store is `~/.scopeproof/reviews`.
 Do not point an older release at newly saved v9 records or assume downgrade compatibility.
 Complete saved records can contain requirements, source excerpts and asserted reviewer details;

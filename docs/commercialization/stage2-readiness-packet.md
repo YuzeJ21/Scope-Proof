@@ -37,11 +37,15 @@ release-preparation work. Eligible areas, subject to that bounded rule, are:
 Every result remains bounded to its actual evidence. Tests and CI are engineering evidence, not
 target-repository runtime proof, accessibility conformance, customer use, demand, or adoption.
 
-### Current next-stage direction
+### Current product checkpoint
 
 The [evaluation guide](../evaluation-guide.md) covers the published v0.2.5 workflow, including
 typed criteria and complete-record transfer. Distribution and public verification are complete.
-The [roadmap](../../ROADMAP.md#current-priorities--2026-11-04) records current priorities.
+The newer development workflow is consolidated in an
+[unpublished evaluation candidate](../releases/v0.2.6-dev0-evaluation-candidate.md), with native
+public-writer compatibility and exact-artifact checks recorded separately from public verification.
+The [roadmap](../../ROADMAP.md#current-priorities--2026-11-07) records the bounded finish line.
+No new feature queue or publication is authorized by completion of engineering checks.
 Stage 3 requires genuine independent use and separate authorization.
 
 ### Implemented development outcomes and historical version context
