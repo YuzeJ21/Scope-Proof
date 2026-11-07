@@ -1,0 +1,156 @@
+{
+  "schema_version": "scopeproof-released-v026-corpus-v1",
+  "boundary": "Constructed automation only; no actual target runtime or human use.",
+  "timestamps_note": "Record timestamps belong to constructed automation, not human actions or target-runtime observations; generated_at_utc records corpus generation.",
+  "actual_target_runtime": false,
+  "human_use": false,
+  "network_access": false,
+  "generated_at_utc": "2026-11-07T23:20:13.009311Z",
+  "package_version": "0.2.6",
+  "core_version": "0.2.6",
+  "python_version": "3.11.15",
+  "release_source_commit": "68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1",
+  "release_url": "https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6",
+  "installed_core_source_sha256": "7b3a9180fa8658e800486cac4cc0cb1a3ff236bb88c0ad9c9f165a699e04eb64",
+  "installed_import_relative_to_environment": "lib/python3.11/site-packages/scopeproof_core/__init__.py",
+  "public_wheel": {
+    "name": "scopeproof-0.2.6-py3-none-any.whl",
+    "bytes": 448322,
+    "sha256": "48b308b3f92d912932734aa4907e958d78351bb956f1a9ce65353e9206741896"
+  },
+  "public_checksums": {
+    "name": "SHA256SUMS.txt",
+    "bytes": 190,
+    "sha256": "b6f6f3833ce0479812eb42994dfc5aec2ea23907ec3f9ed55a3085ae01cd3252"
+  },
+  "recipe": {
+    "name": "generate_records.py",
+    "bytes": 23871,
+    "sha256": "7734ba68e80b0b4d2176f448e027ac55781ab489a56b16446f1ba4ec65f42f49"
+  },
+  "provenance_schema": {
+    "name": "provenance_schema.py",
+    "bytes": 6796,
+    "sha256": "f9a8be6fa9306144b19a8fa2e84556db10dbf4da8e111e10bf94c77789e998fb"
+  },
+  "packaged_fixture": {
+    "name": "evals/fixtures/csv_export_pr.json",
+    "bytes": 2464,
+    "sha256": "1df8cf60a5ccd2283f1cc38634c6345612d1e776c1b8e0f1dcddde7d7e88e90c"
+  },
+  "packaged_labels": {
+    "name": "evals/labels/csv_export_expected.json",
+    "bytes": 1685,
+    "sha256": "be427bb1ccdeb830323cbe14892271a8553ec6f14987d4735316a610f699f0b5"
+  },
+  "records": [
+    {
+      "case": "active-rich",
+      "record": {
+        "name": "active-rich-v9.json",
+        "bytes": 90878,
+        "sha256": "044793a5894c13da7bd846f6926bbeac39955389c8897cdecaaf0bbe4e7b0ba5"
+      },
+      "review_id": "constructed-v026-active-rich",
+      "record_version": 9,
+      "producer_tool_version": "0.2.6",
+      "producer_ruleset_version": "2.0.0",
+      "producer_core_sha256": "7b3a9180fa8658e800486cac4cc0cb1a3ff236bb88c0ad9c9f165a699e04eb64",
+      "criteria_revision_number": 2,
+      "criteria_confirmed": true,
+      "has_active_analysis": true,
+      "historical_revision_numbers": [
+        1
+      ],
+      "active_gate": "blocked",
+      "historical_gates": [
+        "ready"
+      ],
+      "runtime_evidence_ids": [
+        "constructed-historical-runtime",
+        "constructed-active-runtime"
+      ],
+      "resolution_event_ids": [
+        "constructed-historical-manual",
+        "constructed-historical-AC-02",
+        "constructed-historical-AC-03",
+        "constructed-historical-AC-04",
+        "constructed-historical-acceptance",
+        "constructed-active-manual",
+        "constructed-active-AC-02",
+        "constructed-active-AC-03",
+        "constructed-active-AC-04"
+      ],
+      "counts": {
+        "historical_analyses": 1,
+        "resolution_events": 9,
+        "runtime_records": 2,
+        "selected_references": 4,
+        "selected_reference_events": 4,
+        "junit_imports": 2,
+        "junit_events": 4,
+        "scope_decisions": 2
+      }
+    },
+    {
+      "case": "pending-rich",
+      "record": {
+        "name": "pending-rich-v9.json",
+        "bytes": 91580,
+        "sha256": "bde341db1b28b4f2b5531748f63913dae32291c2eac63c46ec4acdec4e20a0b9"
+      },
+      "review_id": "constructed-v026-pending-rich",
+      "record_version": 9,
+      "producer_tool_version": "0.2.6",
+      "producer_ruleset_version": "2.0.0",
+      "producer_core_sha256": "7b3a9180fa8658e800486cac4cc0cb1a3ff236bb88c0ad9c9f165a699e04eb64",
+      "criteria_revision_number": 3,
+      "criteria_confirmed": false,
+      "has_active_analysis": false,
+      "historical_revision_numbers": [
+        1,
+        2
+      ],
+      "active_gate": null,
+      "historical_gates": [
+        "ready",
+        "blocked"
+      ],
+      "runtime_evidence_ids": [
+        "constructed-historical-runtime",
+        "constructed-active-runtime"
+      ],
+      "resolution_event_ids": [
+        "constructed-historical-manual",
+        "constructed-historical-AC-02",
+        "constructed-historical-AC-03",
+        "constructed-historical-AC-04",
+        "constructed-historical-acceptance",
+        "constructed-active-manual",
+        "constructed-active-AC-02",
+        "constructed-active-AC-03",
+        "constructed-active-AC-04"
+      ],
+      "counts": {
+        "historical_analyses": 2,
+        "resolution_events": 9,
+        "runtime_records": 2,
+        "selected_references": 4,
+        "selected_reference_events": 4,
+        "junit_imports": 2,
+        "junit_events": 4,
+        "scope_decisions": 2
+      }
+    }
+  ],
+  "native_round_trip_exact": true,
+  "load_preserved_original_bytes": true,
+  "limitations": [
+    "Two constructed native v9 histories, not all records, dependencies or platforms.",
+    "Constructed actors, approvals, runtime values and check metadata supply no human or target-runtime credit.",
+    "Recorded producer identity is distinct from a later reader's validation identity.",
+    "No actor authentication, historical executable replay, live GitHub checks or downgrade guarantee.",
+    "No genuine independent use, qualifying reviews, adoption or production-readiness evidence.",
+    "Frozen benchmarks, prior fixtures and public release assets are unchanged."
+  ]
+}

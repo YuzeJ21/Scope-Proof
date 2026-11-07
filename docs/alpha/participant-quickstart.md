@@ -1,13 +1,14 @@
 # Evaluation setup and historical public-alpha participant path
 
-The v0.2.6 evaluation build is the current versioned source. Install it only after the final
-assets and completed public-download verification appear on
+The published v0.2.6 evaluation download is publicly verified from
+`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Check its final assets and completed public-download
+verification on
 [GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
 The published **v0.2.5** download remains a fallback. Its
 [public verification record](../releases/v0.2.5-public-verification.md) identifies the wheel,
 source archive, and checksum manifest. Use the [quickstart](../../README.md#quickstart) for
 installation, checksum verification, and saved-record v9 upgrade guidance.
-Versioned source uses **0.2.6**. See the [source setup](../development-environment.md).
+Versioned source uses unpublished **0.2.7.dev0**. See the [source setup](../development-environment.md).
 The archived v0.2.3 participant instructions below retain their historical version boundaries.
 
 No personal testing, public case, qualifying review, or participant feedback is required to
