@@ -48,9 +48,11 @@ from apps.web.saved_discovery import (
 )
 from apps.web.scope_comparison import render_file_scope_comparison
 from apps.web.scope_file_preview import (
+    discard_scope_decision_draft,
     prepare_scope_draft_context,
     render_scope_file_preview,
     render_scope_overview,
+    reset_scope_file_selection,
     scope_draft_pending,
     scope_file_changed,
 )
@@ -370,6 +372,7 @@ def _reset_analysis() -> None:
     clear_source_attachment()
     clear_saved_comparison_selection()
     clear_historical_analysis_selection()
+    reset_scope_file_selection()
     st.session_state["criteria_confirmed"] = False
     st.session_state["bundle"] = None
     st.session_state["resolutions"] = []
@@ -417,6 +420,8 @@ def _apply_criteria_update(
     *,
     consumed_input_keys: tuple[str, ...] = (),
 ) -> None:
+    if scope_draft_pending(st.session_state["review_state"]):
+        return
     try:
         updated_criteria = operation()
     except ValueError:
@@ -770,6 +775,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     clear_source_attachment()
     clear_saved_comparison_selection()
     clear_historical_analysis_selection()
+    reset_scope_file_selection()
     st.session_state["snapshot"] = None
     st.session_state["staged_requirements_pr"] = None
     st.session_state["criteria"] = state.criteria_revision.criteria
@@ -1400,8 +1406,13 @@ has_unsaved_review = bool(
         or has_pending_review_input
     )
 )
+if has_pending_scope_draft:
+    st.warning("Save or discard the pending file-scope decision before changing this review.")
+    st.markdown("[Return to the file-scope draft](#changed-file-scope)")
 if has_pending_acceptance_note:
     st.warning("Submit or clear the acceptance note before replacing this review.")
+explicit_draft_resolution_required = has_pending_acceptance_note or has_pending_scope_draft
+if explicit_draft_resolution_required:
     st.session_state["replace_unsaved_review_confirmed"] = False
     replace_unsaved_review_confirmed = False
 elif has_unsaved_review:
@@ -1415,8 +1426,10 @@ elif has_unsaved_review:
 else:
     st.session_state["replace_unsaved_review_confirmed"] = False
     replace_unsaved_review_confirmed = False
-replacement_blocked = has_unsaved_review and not replace_unsaved_review_confirmed
-authoring_submission_blocked = has_pending_acceptance_note or bool(
+replacement_blocked = explicit_draft_resolution_required or (
+    has_unsaved_review and not replace_unsaved_review_confirmed
+)
+authoring_submission_blocked = explicit_draft_resolution_required or bool(
     current_review_state is not None
     and (
         not _review_matches_local_save(current_review_state)
@@ -1426,7 +1439,7 @@ authoring_submission_blocked = has_pending_acceptance_note or bool(
     )
     and not replace_unsaved_review_confirmed
 )
-requirements_submission_blocked = has_pending_acceptance_note or bool(
+requirements_submission_blocked = explicit_draft_resolution_required or bool(
     current_review_state is not None
     and (
         not _review_matches_local_save(current_review_state)
@@ -1486,7 +1499,7 @@ with st.container(border=True):
         key="load_demo",
         disabled=replacement_blocked or alpha_feedback_mode,
         use_container_width=True,
-    ):
+    ) and not has_pending_scope_draft:
         labels = load_demo_labels()
         snapshot = load_demo_snapshot()
         _record_reopened_source_reload(snapshot)
@@ -1620,7 +1633,6 @@ checking_reopened_review = (
     reopened_review is not None
     and st.session_state["reopened_review_id"] == reopened_review.review.review_id
 )
-scope_draft_blocks_head_check = checking_reopened_review and has_pending_scope_draft
 if fetch_action_placeholder.button(
     "Check current head" if checking_reopened_review else "Fetch public PR",
     key="fetch_pr",
@@ -1628,10 +1640,9 @@ if fetch_action_placeholder.button(
         not pr_url_is_valid
         or not alpha_qualification_ready
         or replacement_blocked
-        or scope_draft_blocks_head_check
     ),
     use_container_width=True,
-):
+) and not has_pending_scope_draft:
     head_check_state = None
     if (
         checking_reopened_review
@@ -1720,14 +1731,12 @@ if fetch_action_placeholder.button(
             "try again. Use the optional token only if GitHub reports a rate limit."
         )
 
-if scope_draft_blocks_head_check:
-    st.caption("Save or clear pending file-scope inputs before checking the current head.")
-
 render_source_attachment(
     st.session_state["review_state"], store=review_store,
     current_is_saved=(review_store_available and st.session_state["review_state"] is not None
                       and _review_matches_local_save(st.session_state["review_state"])),
-    has_pending_inputs=actual_pending_review_input, token=github_token or None,
+    has_pending_inputs=actual_pending_review_input or has_pending_scope_draft,
+    token=github_token or None,
     research_mode=alpha_feedback_mode,
 )
 
@@ -1775,7 +1784,7 @@ with st.expander("Resume a saved review", expanded=False):
         "Reopen local review",
         key="reopen_review",
         disabled=not reopen_id or replacement_blocked or not review_store_available,
-    ):
+    ) and not has_pending_scope_draft:
         try:
             preview = saved_discovery_entries.get(reopen_id.strip())
             reopened_state = load_discovered_review(
@@ -1938,7 +1947,7 @@ if st.button(
         or requirements_submission_blocked
         or requirements_are_prepared
     ),
-):
+) and not has_pending_scope_draft:
     st.session_state["source_text"] = requirements_text
     _prepare_from_text(requirements_text)
     st.rerun()
@@ -2176,7 +2185,7 @@ else:
         key="confirm_criteria",
         disabled=(
             bool(blank_criterion_ids)
-            or has_pending_acceptance_note
+            or explicit_draft_resolution_required
             or not criteria_source_reference
             or not criteria_source_confirmer
             or (
@@ -2202,7 +2211,7 @@ else:
             "Unconfirmed criteria edits discarded without changing the review."
         )
         st.rerun()
-    if confirm_clicked:
+    if confirm_clicked and not has_pending_scope_draft:
         state: ReviewState | None = st.session_state["review_state"]
         alpha_case = None
         try:
@@ -2275,6 +2284,7 @@ else:
             if state is not None:
                 st.session_state["review_state"] = state
             clear_source_attachment()
+            reset_scope_file_selection()
             st.session_state["criteria"] = edited_criteria
             st.session_state["criteria_confirmed"] = True
             st.session_state["criteria_source_provenance"] = provenance
@@ -3651,6 +3661,11 @@ else:
             scope_note = st.text_area(
                 "File scope explanation (required)", key="scope_note"
             )
+            if has_pending_scope_draft:
+                st.button(
+                    "Discard file-scope draft", key="discard_scope_decision_draft",
+                    on_click=discard_scope_decision_draft,
+                )
             if st.button(
                 "Save file scope decision",
                 key="save_scope_decision",
@@ -3748,7 +3763,8 @@ else:
         or st.session_state["deleted_review_save_fingerprint"] is not None
     )
     acceptance_input_blocked = (
-        has_other_pending_review_input or source_observation_conflict or acceptance_note_conflict
+        has_other_pending_review_input or has_pending_scope_draft
+        or source_observation_conflict or acceptance_note_conflict
     )
     if acceptance_note_expired:
         st.warning("The unsent acceptance note was cleared because the review or reviewer changed.")

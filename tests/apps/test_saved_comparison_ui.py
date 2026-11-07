@@ -328,3 +328,57 @@ def test_submitted_scope_controls_do_not_permanently_block_saved_comparison() ->
     app = apply_other_baseline(app)
     assert not app.exception
     assert len(comparison_downloads(app)) == 2
+    app = app.button(key="load_demo").click().run()
+    assert "Save or discard the pending file-scope decision" not in rendered(app)
+    app = app.text_input(key="criteria_source_confirmer").set_value("Constructed confirmer").run()
+    assert not app.button(key="confirm_criteria").disabled
+
+
+def test_pending_scope_draft_survives_until_explicit_discard_before_reopening() -> None:
+    app, store = reopened_comparison_app()
+    before = {path.name: path.read_bytes() for path in store.directory.glob("*.json")}
+    app = app.selectbox(key="saved_reopen_review_id").set_value(PREVIOUS_REVIEW_ID).run()
+    app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    assert not app.button(key="reopen_review").disabled
+    assert not app.button(key="load_demo").disabled
+    draft = "Constructed draft must stay with the open review."
+    app.text_area(key="scope_note").set_value(draft)
+    app = app.button(key="reopen_review").click().run()
+    assert not app.exception
+    assert app.button(key="reopen_review").disabled
+    assert app.button(key="load_demo").disabled
+    assert app.text_area(key="scope_note").value == draft
+    assert app.session_state["review_state"].review.review_id == CURRENT_REVIEW_ID
+    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
+
+    app = app.button(key="discard_scope_decision_draft").click().run()
+    assert not app.exception
+    assert app.text_area(key="scope_note").value == ""
+    assert app.selectbox(key="scope_disposition").value is None
+    assert app.selectbox(key="scope_file_path").value == "notes.md"
+    assert not app.button(key="reopen_review").disabled
+    app = app.button(key="reopen_review").click().run()
+    assert app.session_state["review_state"].review.review_id == PREVIOUS_REVIEW_ID
+    assert {path.name: path.read_bytes() for path in store.directory.glob("*.json")} == before
+
+
+def test_pending_scope_draft_blocks_applying_criteria_edits_until_discarded() -> None:
+    app, store = reopened_comparison_app()
+    before = {path.name: path.read_bytes() for path in store.directory.glob("*.json")}
+    app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    revised = "Export CSV with headers"
+    app = app.text_input(key="criterion_text_AC-01").set_value(revised).run()
+    assert not app.button(key="confirm_criteria").disabled
+    draft = "Constructed unsubmitted scope explanation."
+    app.text_area(key="scope_note").set_value(draft)
+    app = app.button(key="confirm_criteria").click().run()
+    assert not app.exception
+    assert app.button(key="confirm_criteria").disabled
+    assert app.button(key="remove_AC-01").disabled
+    assert app.text_area(key="scope_note").value == draft
+    assert app.session_state["review_state"].bundle is not None
+    app = app.button(key="discard_scope_decision_draft").click().run()
+    assert not app.exception
+    assert app.text_input(key="criterion_text_AC-01").value == revised
+    assert not app.button(key="confirm_criteria").disabled
+    assert {path.name: path.read_bytes() for path in store.directory.glob("*.json")} == before

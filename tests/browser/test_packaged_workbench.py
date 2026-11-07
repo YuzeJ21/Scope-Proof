@@ -2713,7 +2713,17 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
     """Inspect constructed inert records and discard a draft without saving it."""
     _assert_scope_source_unavailable(page)
     before = _download_review_state(page)
-    page.get_by_role("button", name="Load matching reviewed source", exact=True).click()
+    attach = page.get_by_role("button", name="Load matching reviewed source", exact=True)
+    scope_note = page.get_by_label("File scope explanation (required)", exact=True)
+    scope_note.fill("Constructed pending note before source attachment.")
+    _run_and_wait_for_streamlit_rerun(page, lambda: scope_note.press("Tab"))
+    expect(attach).to_be_disabled()
+    discard = page.get_by_role("button", name="Discard file-scope draft", exact=True)
+    _run_and_wait_for_streamlit_rerun(page, discard.click)
+    expect(scope_note).to_have_value("")
+    expect(page.get_by_role("combobox", name="Uncited changed file", exact=True)
+           ).to_have_value("notes.md")
+    attach.click()
     expect(page.get_by_text(
         "Matching reviewed source loaded. Saved analysis and decisions were preserved.",
         exact=True,
@@ -2761,6 +2771,14 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
     expect(page.locator('[id="changed-file-scope"]')).to_be_in_viewport()
     expect(path).to_have_value("notes.md")
     expect(note).to_have_value(draft_note)
+    _run_and_wait_for_streamlit_rerun(page, discard.click)
+    expect(path).to_have_value("notes.md")
+    expect(page_picker).to_have_value("Page 2 of 2")
+    expect(note).to_have_value("")
+    _choose_combobox_option(page, disposition, option_name="Within Confirmed Criteria")
+    _choose_combobox_option(page, criterion, option_name="AC-01")
+    note.fill(draft_note)
+    _run_and_wait_for_streamlit_rerun(page, lambda: note.press("Tab"))
     _choose_combobox_option(page, path, option_name="src/unrelated.py")
     expect(disposition).to_have_value("")
     expect(criterion).to_have_count(0)

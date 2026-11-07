@@ -105,16 +105,20 @@ def test_current_head_check_keeps_pending_file_scope_draft_until_cleared():
     assert not app.button(key="fetch_pr").disabled
     app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
     assert not app.button(key="fetch_pr").disabled
-    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
-    assert app.button(key="fetch_pr").disabled
     draft = "Constructed unsubmitted scope explanation"
-    app = app.text_area(key="scope_note").set_value(draft).run()
+    app.text_area(key="scope_note").set_value(draft)
+    with patch("scopeproof_core.github.client.GitHubClient.fetch_pull_request") as fetch:
+        app = app.button(key="load_reviewed_source").click().run()
+        fetch.assert_not_called()
+    assert not app.exception
     assert app.button(key="fetch_pr").disabled
+    assert app.button(key="load_reviewed_source").disabled
     assert app.text_area(key="scope_note").value == draft
     assert record.read_bytes() == original_bytes
 
     app = app.button(key="clear_saved_comparison_scope_draft").click().run()
     assert not app.button(key="fetch_pr").disabled
+    assert not app.button(key="load_reviewed_source").disabled
     assert app.text_area(key="scope_note").value == ""
     assert record.read_bytes() == original_bytes
 

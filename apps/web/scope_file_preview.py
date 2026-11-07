@@ -18,12 +18,22 @@ from scopeproof_core.schemas.models import (
 )
 
 
-def scope_file_changed() -> None:
-    """A note and disposition belong only to the file the operator selected."""
+def discard_scope_decision_draft() -> None:
+    """Clear decision inputs while leaving the selected file and diff page open."""
     st.session_state["scope_disposition"] = None
     st.session_state["scope_criterion_id"] = None
     st.session_state["scope_note"] = ""
+
+
+def scope_file_changed() -> None:
+    """A note and disposition belong only to the file the operator selected."""
+    discard_scope_decision_draft()
     st.session_state["scope_preview_page"] = 0
+
+
+def reset_scope_file_selection() -> None:
+    st.session_state["scope_file_path"] = None
+    scope_file_changed()
 
 
 def prepare_scope_draft_context(
@@ -35,8 +45,7 @@ def prepare_scope_draft_context(
     ) + ("" if snapshot is None else snapshot.model_dump_json())
     context = sha256(payload.encode("utf-8")).hexdigest()
     if st.session_state.get("scope_draft_context") != context:
-        st.session_state["scope_file_path"] = None
-        scope_file_changed()
+        reset_scope_file_selection()
         st.session_state["scope_draft_context"] = context
 
 

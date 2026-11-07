@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from apps.web.deferred_exports import SavedComparisonExportLease, deferred_saved_requirements_export
-from apps.web.scope_file_preview import scope_draft_pending
+from apps.web.scope_file_preview import reset_scope_file_selection, scope_draft_pending
 from scopeproof_core.reporting.criteria_comparison import export_saved_requirements_markdown
 from scopeproof_core.reviews.comparison import (
     ComparisonIncompatible,
@@ -146,9 +146,7 @@ def _render_foreign_analysis_selector(
 
 def _clear_scope_draft() -> None:
     clear_saved_comparison_selection()
-    for key in ("scope_file_path", "scope_disposition", "scope_criterion_id"):
-        st.session_state[key] = None
-    st.session_state["scope_note"] = ""
+    reset_scope_file_selection()
 
 
 def _render_saved_requirements(
