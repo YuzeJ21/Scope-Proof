@@ -818,7 +818,8 @@ evidence.
 - Unsupported platform rows may remain unsupported; absence of an environment is not a mandate
   for repeated attempts or for personal testing.
 
-- Do not present constructed fixtures as human validation or invent users and outcomes.
+- Do not create synthetic validation or present constructed fixtures as human validation;
+  do not invent users and outcomes.
 - Do not create recurring external-evidence monitors merely to manufacture activity.
 - Do not execute pull-request code or promote implementation evidence to test or runtime proof.
 - Do not weaken deterministic gates to improve apparent completion.
