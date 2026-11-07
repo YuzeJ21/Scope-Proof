@@ -219,7 +219,7 @@ def render_source_attachment(
             or research_mode
             or unavailable_message is not None
         ),
-    ):
+    ) or has_pending_inputs:
         return
     fingerprint = JsonReviewStore.state_fingerprint(state)
     origin = state.review.input_origin

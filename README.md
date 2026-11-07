@@ -863,7 +863,9 @@ truncated or ambiguous content is unavailable.
 Reopened records need the existing **Load matching reviewed source** action to restore source
 inspection. Mismatched or conflicted source is withheld. Selecting a file or diff page keeps saved
 comparisons, **Check current head**, and the overview’s blocker navigation available when their
-other requirements are met. An unsubmitted disposition or explanation pauses those actions.
+other requirements are met. Save the decision or choose **Discard file-scope draft** before
+switching reviews, loading source, applying criteria changes, or changing final acceptance.
+Discarding the draft keeps the selected file and diff page open.
 Changing the file clears its unsaved disposition, criterion, explanation and preview page.
 Changing review or source context also clears the target. Inspection never records a scope
 decision, cites evidence or changes a gate. See the
