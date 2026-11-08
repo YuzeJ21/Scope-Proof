@@ -9,6 +9,10 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+- Align the static evaluation website source with public v0.2.6 and unpublished 0.2.7.dev0,
+  route readers to the evaluation guide, and explain saved decisions, offline HTML handoff and
+  revisiting. Label the retained video as an earlier constructed coverage example. Source
+  integration and private preview checks do not deploy the website or publish another package.
 - Repair the saved-review continuation browser test's ID-commit synchronization: wait for the
   server-computed Reopen control while retaining actual validated reopening, state/history checks
   and the existing timeout. This test-only repair addresses a controlled replay of the observed

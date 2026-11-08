@@ -42,12 +42,18 @@ verified** from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; the verified **v0.2.
 a fallback. [PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed the permanent
 native-v0.2.6 saved-history compatibility contract. [PR #273](https://github.com/YuzeJ21/Scope-Proof/pull/273)
 completed the CSV/HTML revision-label correction, preserving `unknown` and pending-review export
-guards. Current bounded Stage 2 work repairs a browser test's saved-review ID commit wait using
-the server-computed Reopen control, while retaining actual validated reopening and history checks.
-This is test synchronization work, not a product feature. See the
+guards. [PR #274](https://github.com/YuzeJ21/Scope-Proof/pull/274) completed the browser test's
+saved-review ID commit wait repair at main `37799a04942e2926bf9c73882a9e0f4e1e44698f`.
+[Resulting-main CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42450620236) passed
+4,872 tests, 38 intentional skips, 95.5067% coverage, seven installed CLI checks and 34 browser-suite
+checks. This is test synchronization work, not a product feature. See the
 [observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md) for the natural-run and
 controlled signal-loss evidence; the precise natural Streamlit transition remains unproven.
 These development changes are separate from the published v0.2.6 download.
+The current bounded Stage 2 outcome aligns the existing evaluation website source with that
+release and the saved-decision workflow. Desktop/mobile previews and source integration do not
+publish the website; Pages deployment requires separate authorization. See the
+[evaluation-page assessment](docs/audits/2026-11-08-evaluation-page-alignment.md).
 Stage 1 closed with all external counts at zero, and Stage 3 remains dormant pending independent
 use. See the [v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
 See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and

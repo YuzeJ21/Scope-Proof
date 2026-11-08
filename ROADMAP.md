@@ -7,11 +7,14 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, with one bounded browser-test synchronization repair;
+`owner_led_productization_active`, with one bounded evaluation-website source alignment;
 this owner decision does not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current priorities — 2026-11-07
+
+Updated 2026-11-08: PR #274 is complete. The selected outcome is a source-only correction of
+the existing evaluation entry; private previews and merge do not deploy the website.
 
 The product direction is **explain and revisit an acceptance decision**. Confirmed intent,
 exact-head evidence, explicit gaps, recorded decisions and later comparison form the working
@@ -44,7 +47,8 @@ documents direct overlap and adoption constraints without claiming superiority o
 | Stage 2 — publication and public verification complete | Deliver the consolidated v0.2.6 evaluation workflow as downloadable artifacts. | The [v0.2.6 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, wheel, source archive, checksum manifest and completed public-download verification. No further release follows automatically. |
 | Stage 2 — completed on source, PR #272 | Preserve rich native v0.2.6 saved-review histories as development readers change. | Immutable records from the actual public writer, provenance-bound generation, active and unconfirmed historical-only states, complete-state preservation through load/copy-only resave/transfer/reopen, active reports and pending current-report denial, Linux/Windows CI and independent engineering review. Resulting main `069af259ac17b6c555d10b10f36e7211b068aac4` is verified. See the [bounded assessment](docs/audits/2026-11-07-native-v026-compatibility.md). No current data-loss defect was asserted. |
 | Stage 2 — completed on source, PR #273 | Show the recorded criteria revision in CSV/HTML reports of explicitly selected analyses. | Use the validated bundle's revision, including `unknown`, instead of inventing revision 1. Preserve full-state labels, pending current-report denial, producer/history and analysis-only boundaries. Resulting main `1d1358097dc34c69c68e93dc5d45066ff4506b1e` passed CI attempt 2; the initial browser timeout remains documented. See the [revision-label assessment](docs/audits/2026-11-07-historical-report-revision.md). |
-| Stage 2 — current bounded outcome | Stop a browser test from rejecting a committed saved-review ID solely because a generic rerun signal was missed. | Wait for the real server-computed Reopen control after an empty/disabled precondition, then retain actual validated reopening and all saved-state/history assertions. Three natural baseline runs passed; controlled signal-loss replay with the real app reproduces the old wait failure. Keep the same timeout and product/core/gates; no blind retries or new feature. Finish with regressions, independent review, exact-head CI and resulting-main verification. See the [observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md). |
+| Stage 2 — completed on source, PR #274 | Stop a browser test from rejecting a committed saved-review ID solely because a generic rerun signal was missed. | Retain actual validated reopening, saved-state/history checks and the same timeout. Natural baseline passes and controlled signal-loss replay remain distinct; the precise natural Streamlit transition remains unproven. Resulting main `37799a04942e2926bf9c73882a9e0f4e1e44698f` passed CI. See the [observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md). |
+| Stage 2 — current bounded outcome | Find the current verified evaluation release and understand saved decisions, offline handoff and revisiting from the existing website. | Correct the stale v0.2.4 / unreleased 0.2.5 page to distinguish public v0.2.6 and unpublished 0.2.7.dev0. Route readers to the evaluation guide; label retained constructed media accurately. Verify desktop/mobile private previews, links, contracts, independent engineering review and exact-head/main CI. Merge source only; Pages remains manual-only and deployment requires separate authorization. See the [evaluation-page assessment](docs/audits/2026-11-08-evaluation-page-alignment.md). |
 | P3 — Stage 3 dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. |
 
 ### Product and architecture checkpoint
@@ -80,13 +84,21 @@ natural baseline passes and a separate controlled signal-loss replay with the re
 The replay supports the scoped test wait repair; the precise natural Streamlit transition remains
 unproven. These results do not change product-stage or genuine-use evidence.
 
+[PR #274](https://github.com/YuzeJ21/Scope-Proof/pull/274) completed that scoped test repair at
+main `37799a04942e2926bf9c73882a9e0f4e1e44698f`.
+[Resulting-main CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42450620236) passed
+4,872 tests, 38 intentional skips, 95.5067% unrounded coverage, seven installed CLI checks and 34
+browser-suite checks. CodeQL and base-advance checks also passed. This closes that selected
+investigation; it does not reopen a general observer-hardening queue.
+
 | Priority | Gap and action | Completion criterion / decision |
 | --- | --- | --- |
 | P0 — final v0.2.6 distribution complete | Published the consolidated workflow from one fixed final-version source commit. | Final wheel, source archive and checksum manifest were publicly downloaded and verified. Release-source main checks passed 4,842 tests with 95.5067% coverage; installed checks passed seven CLI checks and 32 browser-suite checks. Use the Release entry for source and exact artifact identities; the historical dev0 packet is not a substitute. |
 | Lifecycle consolidation complete | Confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Consequential transition checks, including stale downloads, source contradictions and pending scope drafts, are retained. The release preparation queue is closed; no additional parity feature is selected. |
 | Native released-writer compatibility complete, PR #272 | A published v0.2.6 rich saved history remains intact under the verified development reader. | Two immutable, provenance-bound actual-writer records now run in Linux/Windows CI. Complete-state and producer/history preservation, copy-only resave, transfer, reopening, active reports and pending current-report denial are covered. Exact-head and resulting-main checks passed. This closes the durable coverage gap; no current data-loss repair or further corpus generation is selected. |
 | Selected-analysis revision labels complete, PR #273 | CSV/HTML reports use the validated selected bundle's recorded revision, including `unknown`. | Full-state labels, pending current-report denial, producer/history and analysis-only boundaries remain intact. Dedicated historical JSON/Markdown and download controls are unchanged. Exact-head and resulting-main checks passed; the initial browser timeout remains recorded separately. |
-| Current bounded engineering outcome | A settled saved-review ID can be rejected by a test waiting for a generic script-state transition. | Use the real disabled-to-enabled Reopen transition for this ID commit, retaining actual validation, history checks and the same timeout. Three natural runs did not reproduce the failure; a clearly labelled controlled signal-loss replay did. Do not claim the exact natural mechanism is fixed or broaden to all observers. Stop after regressions, independent review, exact-head CI and resulting-main verification. See the [observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md). |
+| Browser synchronization complete, PR #274 | A settled saved-review ID was rejected by a test waiting for a generic script-state transition. | The scoped control wait retains actual reopening and history checks at the same timeout. Exact-head and resulting-main checks passed; natural and controlled evidence stay separate. No further observer task is selected. |
+| Current bounded evaluation-entry outcome | The existing static page advertises v0.2.4 and unreleased 0.2.5 and stops at coverage/export, despite the published v0.2.6 lifecycle. | Correct release/source routing and describe save/share/revisit, preserve earlier constructed media with explicit scope, verify local desktop/mobile previews and integrate on green checks. No package rebuild, new product feature or website deployment. |
 | R-002 omission classification complete | The [existing miss taxonomy](docs/research/r002-swebench-verified/miss-taxonomy.md) classified the 15 frozen misses: 14 threshold rejections and one lexical mismatch. | Frozen inputs/results and the 5/20 candidate baseline stay unchanged. Do not repeat classification, retune or relabel R-002. No new retrieval change or separately labelled holdout is selected. |
 | Conditional architecture follow-up | Workbench session-state guards are distributed across a large entrypoint. Complete histories are processed repeatedly; stores reject records above 64 MiB. Filesystem operations depend on platform support. | Retain existing stale-state, Windows and storage regressions. Extract one boundary or change storage only for a reproduced maintenance or operating-envelope constraint. No rewrite, database or multiuser service is needed for the local handoff outcome. |
 | Stage 3 — dormant | Usefulness, operator/recipient fit and independent reuse are unproven. | Genuine independent-use evidence and separate authorization; no personal testing or qualifying reviews are requested by this roadmap. If such evidence is not pursued, remain an engineering reference/evaluation product. |
@@ -148,7 +160,7 @@ support require a separately chosen product direction. Do not start them automat
 > unchanged. No personal testing, qualifying reviews, new release, deployment, outreach or
 > additional report format/download path.
 
-**Current bounded engineering goal — saved-review browser synchronization:**
+**Executed browser synchronization goal — closed by PR #274:**
 
 > Create and pursue one bounded ScopeProof browser-observer investigation. Preserve the captured
 > CI timeout and passing rerun evidence; attempt a bounded natural reproduction and keep those
@@ -161,6 +173,17 @@ support require a separately chosen product direction. Do not start them automat
 > independently review, merge on green exact-head CI and verify resulting main, then stop. Do not
 > claim the exact natural Streamlit mechanism is known. No personal testing, qualifying reviews,
 > new release, deployment, outreach or new product feature.
+
+**Current bounded goal — evaluation website source alignment:**
+
+> Create and pursue one bounded ScopeProof evaluation-entry goal. Verify live main and public
+> release identity; close PR #274 in current guidance. Correct the existing static page to
+> distinguish public v0.2.6 and unpublished 0.2.7.dev0, route readers to the evaluation guide,
+> and explain saved decisions, offline HTML handoff and revisiting. Preserve earlier constructed
+> media with accurate scope, evidence boundaries, evaluation-only rights and dormant Stage 3.
+> Check desktop/mobile private previews, links, existing contracts and required CI; independently
+> review, merge on green exact-head checks and verify resulting main. Preserve manual-only Pages.
+> No personal testing, qualifying reviews, publication, deployment, outreach or new feature.
 
 **Future publication goal — requires separate authorization:**
 

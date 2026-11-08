@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="ScopeProof maps source-owner-confirmed acceptance criteria to auditable evidence in public GitHub pull requests.">
-    <title>ScopeProof — Acceptance coverage for public PRs</title>
+    <meta name="description" content="Explain a saved PR decision, share its evidence offline, and revisit it after changes. ScopeProof is a local evidence assistant for public GitHub pull requests.">
+    <title>ScopeProof — Explain and revisit a PR decision</title>
     <link rel="icon" href="assets/scopeproof-linkedin-alpha.png" type="image/png">
     <link rel="stylesheet" href="styles.css">
   </head>
@@ -26,41 +26,43 @@
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow">Local-first · deterministic · public PRs only</p>
-          <h1 id="hero-title">Review acceptance coverage before merge</h1>
-          <p class="lede">ScopeProof shows which confirmed acceptance criteria have credible implementation or test candidates—and which still need human review.</p>
+          <h1 id="hero-title">Explain a saved PR decision</h1>
+          <p class="lede">Keep confirmed requirements, exact-head evidence and recorded decisions together. Share the report offline, then revisit it when the work changes.</p>
           <div class="actions">
-            <a class="button button-primary" href="https://github.com/YuzeJ21/Scope-Proof/releases">View evaluation releases</a>
-            <a class="button button-secondary" href="https://github.com/YuzeJ21/Scope-Proof">View the repository</a>
+            <a class="button button-primary" href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/evaluation-guide.md">Start the evaluation guide</a>
+            <a class="button button-secondary" href="https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6">View v0.2.6 release</a>
           </div>
-          <p class="disclosure">Published evaluation download: v0.2.4, with its wheel, source archive, and checksums documented in the <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/releases/v0.2.4-public-verification.md">public verification record</a>. Current source: 0.2.5, unreleased. No personal testing or qualifying review is required to evaluate a download.</p>
+          <p class="disclosure">Published evaluation download: v0.2.6, with verified wheel, source archive and checksums in its <a href="https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6">Release entry</a>. Development source: 0.2.7.dev0, unpublished. Check <a href="https://github.com/YuzeJ21/Scope-Proof/releases">all evaluation releases</a> for availability.</p>
           <p class="boundary">Evidence assistant, not a correctness oracle. ScopeProof does not execute pull-request code, replace QA, or turn static evidence into runtime verification.</p>
         </div>
         <div class="hero-visual">
-          <img src="assets/scopeproof-linkedin-alpha.png" width="1200" height="1200" alt="ScopeProof product overview showing criteria, evidence, and human review boundaries">
+          <img src="assets/scopeproof-linkedin-alpha.png" width="1200" height="1200" alt="Earlier constructed ScopeProof visual labelled Public Alpha; Stage 1 is now closed">
+          <p>Earlier constructed visual; Stage 1 is closed.</p>
         </div>
       </section>
 
       <section id="workflow" class="section" aria-labelledby="workflow-title">
-        <p class="eyebrow">A bounded review</p>
-        <h2 id="workflow-title">Public PR → Confirm criteria → Review coverage → Record decisions → Export</h2>
+        <p class="eyebrow">The v0.2.6 evaluation workflow</p>
+        <h2 id="workflow-title">Confirm intent → Inspect evidence → Record decisions → Share → Revisit</h2>
         <div class="workflow-grid">
-          <article><span>01</span><h3>PR</h3><p>Load a public GitHub pull request without executing its code.</p></article>
-          <article><span>02</span><h3>Criteria</h3><p>The source owner confirms one atomic requirement per line before analysis.</p></article>
-          <article><span>03</span><h3>Coverage</h3><p>Deterministic rules cite immutable candidates or state what evidence is missing.</p></article>
-          <article><span>04</span><h3>Decisions</h3><p>A human accepts, rejects, verifies, or records an exception with a reason.</p></article>
-          <article><span>05</span><h3>Export</h3><p>Save or export a reproducible review without turning candidates into correctness claims.</p></article>
+          <article><span>01</span><h3>Confirm intent</h3><p>Load a public PR without executing its code. Explicitly confirm normalized criteria before analysis.</p></article>
+          <article><span>02</span><h3>Inspect evidence</h3><p>See exact-head static candidates, missing evidence and unresolved file scope. Candidates do not prove execution.</p></article>
+          <article><span>03</span><h3>Record decisions</h3><p>Save reviewer decisions and reasons with their history. Recorded identities and runtime statements are assertions, not authenticated proof.</p></article>
+          <article><span>04</span><h3>Share</h3><p>A recipient can open the HTML report offline without installing ScopeProof. Transfer the complete saved record to continue in another local workbench.</p></article>
+          <article><span>05</span><h3>Revisit</h3><p>Reopen saved work, inspect recorded history and compare eligible analyses or requirements. Changed criteria need fresh confirmation; earlier decisions are not carried forward.</p></article>
         </div>
       </section>
 
       <section id="demo" class="section demo-section" aria-labelledby="demo-title">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">60-second product walkthrough</p>
+            <p class="eyebrow">Earlier constructed coverage walkthrough</p>
             <h2 id="demo-title">See the evidence boundary in action</h2>
           </div>
           <a href="demo-transcript.html">Read the full demo transcript</a>
         </div>
         <p class="disclosure">This is a deliberately constructed demo case. ScopeProof uses deterministic evidence rules and human review; it does not guarantee correctness or replace QA.</p>
+        <p>This earlier 60-second recording does not demonstrate the complete saved-review lifecycle. Use the <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/evaluation-guide.md">current evaluation guide</a> for saving, offline handoff and revisiting.</p>
         <video controls preload="metadata" poster="assets/scopeproof-demo-poster.jpg" aria-label="ScopeProof deliberately constructed 60-second demo">
           <source src="assets/scopeproof-captioned-demo.mp4" type="video/mp4">
           <track kind="captions" src="assets/scopeproof-captioned-demo.vtt" srclang="en" label="English" default>
@@ -95,6 +97,7 @@
     <footer>
       <p>ScopeProof · evaluation and review only</p>
       <div>
+        <a href="https://github.com/YuzeJ21/Scope-Proof">Repository</a>
         <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/USE_POLICY.md">Use policy</a>
         <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/SECURITY.md">Security</a>
         <a href="https://github.com/YuzeJ21/Scope-Proof/blob/main/ROADMAP.md">Roadmap</a>
