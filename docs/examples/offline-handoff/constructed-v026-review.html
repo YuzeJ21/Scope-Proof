@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScopeProof Acceptance Review</title>
+<style>body{font-family:system-ui;margin:clamp(1rem,4vw,2rem);color:#172033;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%}td,th{border:1px solid #cbd5e1;padding:.55rem;text-align:left}th{background:#eff6ff}.note{color:#475569}pre{white-space:pre-wrap}.evidence-matrix{overflow-x:auto}.evidence-matrix table{min-width:64rem}.evidence-matrix:focus-visible{outline:2px solid #2563eb}</style>
+</head><body><aside aria-label="Constructed sample disclosure" style="border:3px solid #b45309;padding:1rem;margin-bottom:1.5rem"><strong>CONSTRUCTED EXAMPLE — NOT A REAL REVIEW</strong><p>This is an automated demonstration: no actual target runtime or human use. All recorded actors, decisions, CI metadata and runtime statements are simulated. Repository/head/source links are synthetic and do not resolve to a genuine reviewed PR.</p><p>Expected current result: Action required; recorded final acceptance: No. This active review report includes recorded audit context. It is not an importable saved record or an export of every historical analysis.</p></aside>
+<h1>ScopeProof Acceptance Review</h1>
+<p><strong>Review status:</strong> Action required</p>
+<p><strong>Recorded final acceptance:</strong> No</p>
+<p>Review ID: <code>constructed-v026-active-rich</code> · Repository: <code>scopeproof/demo-stock-research</code> · Repository visibility: <code>unverified</code> · PR #17 · Base SHA <code>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</code> · Head SHA <code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code> · Review created <code>2026-11-07T23:20:12.772351Z</code> · Tool <code>0.2.6</code> · Ruleset <code>2.0.0</code> · Analysis core source: <code>core-python-source-v1:7b3a9180fa8658e800486cac4cc0cb1a3ff236bb88c0ad9c9f165a699e04eb64</code> · Ingestion <code>complete</code> · Criteria revision 2</p>
+<p class="note">ScopeProof surfaces auditable candidate evidence. It does not replace QA or prove correctness.</p>
+<p class="note">Analysis source records the observed core Python files, not dependencies, UI, or an execution attestation; validation uses the installed policy.</p>
+<h2>Review Status Reasons</h2><ul>
+<li><code>blocking_criteria</code></li>
+</ul>
+<h2>What To Do Next</h2><ul>
+<li>Review required changes or missing or partial evidence for blocking criteria: AC-03.</li>
+</ul>
+<h2>Criteria Source</h2>
+<table aria-label="Criteria Source"><tbody>
+<tr><td>Source reference</td><td><code>scopeproof://constructed-demo/acceptance-criteria</code></td></tr>
+<tr><td>Revision</td><td><code>constructed-v026-compatibility-revision-2</code></td></tr>
+<tr><td>Source-text SHA-256</td><td><code>fe44608729d47f758aad8a38a0e63df9a6a26a26587f6d12b4d32b8f22ae2a48</code></td></tr>
+<tr><td>Normalized-criteria SHA-256</td><td><code>987d5db1329b69a63e052c92fa02c9ba7bd043464c5b8574c36124475f706b37</code></td></tr>
+<tr><td>Confirmed by</td><td><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></td></tr>
+<tr><td>Confirmed at (UTC)</td><td><code>2026-11-07T23:20:12.809040Z</code></td></tr>
+</tbody></table>
+<h2>Observed CI</h2>
+<p>Observed CI: <code>passing</code><br>Reason: Observed 1 successful completed check run; no concrete legacy statuses.<br>Check runs: 1 total; 1 successful; 0 pending; 0 failing; 0 neutral; 0 skipped; 0 concrete legacy statuses.<br>Collection: complete</p>
+<h2>Confirmed Requirements Source</h2>
+<pre>Users can export the filtered research list as CSV. The export must respect all active filters, show an error if export fails, and record a research_exported analytics event.
+Constructed automation only; no actual target runtime or human use. Revision two.</pre>
+<div class="evidence-matrix" role="region" aria-label="Evidence matrix" tabindex="0">
+<table><thead><tr><th>ID</th><th>Criterion</th><th>Source</th><th>Priority</th><th>Evidence status</th><th>Evidence types</th><th>Reviewer decision</th><th>Confidence</th><th>Count</th><th>Concern</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>AC-01</td><td>User can export the research list as CSV (CONSTRUCTED later revision)</td><td>User confirmed</td><td>Must have</td><td>Reviewer verified</td><td>Implementation, Test</td><td>Manually verified</td><td>high</td><td>4</td><td>Strong candidate evidence was found; a reviewer must still judge sufficiency.<br><strong>Recommended action:</strong> Open the cited lines and accept, reject, or supplement the candidate evidence.</td><td><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/src/export.py#L42-L42">src/export.py:L42</a><br>Implementation (E1)<br><code>def export_research_list_csv(rows, active_sector=None):</code><br><pre>def export_research_list_csv(rows, active_sector=None):
+    filtered_rows = apply_filters(rows, sector=active_sector)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied<br><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tests/test_export.py#L18-L18">tests/test_export.py:L18</a><br>Test (E2; test/eval definition shows intent, not execution)<br><code>def test_export_research_list_csv_uses_sector_filter():</code><br><pre>def test_export_research_list_csv_uses_sector_filter():
+    assert export_research_list_csv(rows, active_sector=&quot;energy&quot;)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied<br><strong>Limitation:</strong> Candidate test evidence requires reviewer confirmation<br><strong>Limitation:</strong> Candidate test/eval definition shows test intent, not execution<br><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tests/test_export.py#L19-L19">tests/test_export.py:L19</a><br>Test (E2; test/eval definition shows intent, not execution)<br><code>assert export_research_list_csv(rows, active_sector=&quot;energy&quot;)</code><br><pre>def test_export_research_list_csv_uses_sector_filter():
+    assert export_research_list_csv(rows, active_sector=&quot;energy&quot;)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied<br><strong>Limitation:</strong> Candidate test evidence requires reviewer confirmation<br><strong>Limitation:</strong> Candidate test/eval definition shows test intent, not execution<br><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/src/export.py#L44-L44">src/export.py:L44</a><br>Implementation (E1)<br><code>return to_csv(filtered_rows)</code><br><pre>    filtered_rows = apply_filters(rows, sector=active_sector)
+    return to_csv(filtered_rows)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied</td></tr>
+<tr><td>AC-02</td><td>Export respects all active filters</td><td>User confirmed</td><td>Must have</td><td>Weak candidate</td><td>Implementation, Test</td><td>Accepted</td><td>medium</td><td>5</td><td>Candidate evidence covers only part of the wording or is below the required level.<br><strong>Missing evidence</strong><ul><li>Stronger evidence covering the remaining criterion terms</li></ul><br><strong>Recommended action:</strong> Review the candidate and provide stronger or additional evidence.</td><td><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/src/export.py#L42-L42">src/export.py:L42</a><br>Implementation (E1)<br><code>def export_research_list_csv(rows, active_sector=None):</code><br><pre>def export_research_list_csv(rows, active_sector=None):
+    filtered_rows = apply_filters(rows, sector=active_sector)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied<br><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tests/test_export.py#L18-L18">tests/test_export.py:L18</a><br>Test (E2; test/eval definition shows intent, not execution)<br><code>def test_export_research_list_csv_uses_sector_filter():</code><br><pre>def test_export_research_list_csv_uses_sector_filter():
+    assert export_research_list_csv(rows, active_sector=&quot;energy&quot;)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied<br><strong>Limitation:</strong> Candidate test evidence requires reviewer confirmation<br><strong>Limitation:</strong> Candidate test/eval definition shows test intent, not execution<br><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/src/export.py#L43-L43">src/export.py:L43</a><br>Implementation (E1)<br><code>filtered_rows = apply_filters(rows, sector=active_sector)</code><br><pre>def export_research_list_csv(rows, active_sector=None):
+    filtered_rows = apply_filters(rows, sector=active_sector)
+    return to_csv(filtered_rows)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied<br><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/tests/test_export.py#L19-L19">tests/test_export.py:L19</a><br>Test (E2; test/eval definition shows intent, not execution)<br><code>assert export_research_list_csv(rows, active_sector=&quot;energy&quot;)</code><br><pre>def test_export_research_list_csv_uses_sector_filter():
+    assert export_research_list_csv(rows, active_sector=&quot;energy&quot;)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied<br><strong>Limitation:</strong> Candidate test evidence requires reviewer confirmation<br><strong>Limitation:</strong> Candidate test/eval definition shows test intent, not execution<br><a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/src/export.py#L44-L44">src/export.py:L44</a><br>Implementation (E1)<br><code>return to_csv(filtered_rows)</code><br><pre>    filtered_rows = apply_filters(rows, sector=active_sector)
+    return to_csv(filtered_rows)</pre><br><strong>Limitation:</strong> Candidate evidence does not prove the criterion is satisfied</td></tr>
+<tr><td>AC-03</td><td>Failed export shows an error message</td><td>User confirmed</td><td>Must have</td><td>No candidate</td><td>None</td><td>Change required</td><td>low</td><td>0</td><td>No candidate evidence was found in the complete changed-file analysis.<br><strong>Missing evidence</strong><ul><li>Required evidence level E1</li></ul><br><strong>Recommended action:</strong> Add implementation evidence or identify evidence for reviewer inspection.</td><td>No candidate evidence</td></tr>
+<tr><td>AC-04</td><td>Successful export records research_exported</td><td>User confirmed</td><td>Should have</td><td>No candidate</td><td>None</td><td>Accepted</td><td>low</td><td>0</td><td>No candidate evidence was found in the complete changed-file analysis.<br><strong>Missing evidence</strong><ul><li>Required evidence level E1</li></ul><br><strong>Recommended action:</strong> Add implementation evidence or identify evidence for reviewer inspection.</td><td>No candidate evidence</td></tr>
+</tbody></table></div>
+<h2>Retrieval Diagnostics</h2>
+<h3>AC-01 — How ScopeProof searched</h3><ul><li>Outcome: Candidates Found</li><li>Searched terms: <code>csv</code>, <code>export</code>, <code>list</code>, <code>research</code></li><li>Exact identifiers: None</li><li>Searched paths: <code>notes/constructed-unrelated.txt</code>, <code>src/export.py</code>, <code>tests/test_export.py</code></li><li>Searched evidence types: implementation, test</li><li>Counts: 6 inspectable lines; 0 exact-identifier matches; 4 term-overlap lines; 0 below threshold; 4 accepted candidates.</li><li>Candidate selection: 4 of 4 candidates passing search filters shown; 0 omitted during selection (limit: 8).</li></ul><p class="note">Search diagnostics explain retrieval; they are not evidence that the criterion is satisfied or missing from the repository.</p>
+<h3>AC-02 — How ScopeProof searched</h3><ul><li>Outcome: Candidates Found</li><li>Searched terms: <code>active</code>, <code>export</code>, <code>filter</code>, <code>respect</code></li><li>Exact identifiers: None</li><li>Searched paths: <code>notes/constructed-unrelated.txt</code>, <code>src/export.py</code>, <code>tests/test_export.py</code></li><li>Searched evidence types: implementation, test</li><li>Counts: 6 inspectable lines; 0 exact-identifier matches; 5 term-overlap lines; 0 below threshold; 5 accepted candidates.</li><li>Candidate selection: 5 of 5 candidates passing search filters shown; 0 omitted during selection (limit: 8).</li></ul><p class="note">Search diagnostics explain retrieval; they are not evidence that the criterion is satisfied or missing from the repository.</p>
+<h3>AC-03 — How ScopeProof searched</h3><ul><li>Outcome: Below Relevance Threshold</li><li>Searched terms: <code>error</code>, <code>export</code>, <code>fail</code>, <code>message</code>, <code>show</code></li><li>Exact identifiers: None</li><li>Searched paths: <code>notes/constructed-unrelated.txt</code>, <code>src/export.py</code>, <code>tests/test_export.py</code></li><li>Searched evidence types: implementation, test</li><li>Counts: 6 inspectable lines; 0 exact-identifier matches; 3 term-overlap lines; 3 below threshold; 0 accepted candidates.</li><li>Candidate selection: 0 of 0 candidates passing search filters shown; 0 omitted during selection (limit: 8).</li></ul><p class="note">Search diagnostics explain retrieval; they are not evidence that the criterion is satisfied or missing from the repository.</p>
+<h3>AC-04 — How ScopeProof searched</h3><ul><li>Outcome: Exact Identifier Not Found</li><li>Searched terms: <code>export</code>, <code>record</code>, <code>research</code>, <code>research_exported</code>, <code>successful</code></li><li>Exact identifiers: <code>research_exported</code></li><li>Searched paths: <code>notes/constructed-unrelated.txt</code>, <code>src/export.py</code>, <code>tests/test_export.py</code></li><li>Searched evidence types: implementation, test</li><li>Counts: 6 inspectable lines; 0 exact-identifier matches; 3 term-overlap lines; 0 below threshold; 0 accepted candidates.</li><li>Candidate selection: 0 of 0 candidates passing search filters shown; 0 omitted during selection (limit: 8).</li></ul><p class="note">Search diagnostics explain retrieval; they are not evidence that the criterion is satisfied or missing from the repository.</p>
+<h2>Manual Resolution Links</h2><ul>
+<li>AC-01 — <strong>Manual resolution link:</strong> <code>constructed-active-runtime</code></li>
+</ul>
+<h2>Manual Runtime Evidence</h2><ul>
+<li>AC-01: scopeproof://constructed/active — Constructed automation only; no actual target runtime or human use. Synthetic CSV persistence scenario.; Constructed automation only; no actual target runtime or human use. Offline packaged-fixture rehearsal.; Constructed automation only; no actual target runtime or human use. Constructed passed schema value, not an observed test result.; CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.; E4<br><strong>Runtime evidence ID:</strong> <code>constructed-active-runtime</code><br><strong>Repository / PR:</strong> <code>scopeproof/demo-stock-research</code> / #17<br><strong>Bound head:</strong> <code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code><br><strong>Manual resolution link:</strong> <code>constructed-active-runtime</code><br><strong>Recorded at:</strong> <code>2026-11-07T23:20:12.860121+00:00</code><br><strong>Recorded limitations:</strong><ul><li>Constructed automation only; no actual target runtime or human use.</li></ul></li>
+</ul>
+<h2>Resolution History</h2>
+<p>Current events are the latest recorded inputs for their target in the active criteria revision. Superseded and prior-revision events remain audit history and do not independently control the gate. Reviewer names and timestamps are recorded assertions, not authenticated identity or runtime verification. Events do not record historical heads or criteria-source provenance; none is inferred here. Review-level flags are shown only as recorded values.</p>
+<p>Active criteria revision: 2</p>
+<h3>Event 1</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-historical-manual</code></dd>
+<dt>Event status</dt><dd><code>Prior revision</code></dd>
+<dt>Criteria revision</dt><dd><code>1</code></dd>
+<dt>Target</dt><dd><code>AC-01</code></dd>
+<dt>Recorded outcome</dt><dd><code>manually_verified</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.796760+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Constructed linked decision, not actual verification.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>E3</code></dd>
+<dt>Runtime evidence link</dt><dd><code>constructed-historical-runtime</code></dd>
+</dl>
+<h3>Event 2</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-historical-AC-02</code></dd>
+<dt>Event status</dt><dd><code>Prior revision</code></dd>
+<dt>Criteria revision</dt><dd><code>1</code></dd>
+<dt>Target</dt><dd><code>AC-02</code></dd>
+<dt>Recorded outcome</dt><dd><code>accepted</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.799473+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Explicit synthetic decision for compatibility coverage.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>Not recorded</code></dd>
+<dt>Runtime evidence link</dt><dd><code>Not recorded</code></dd>
+</dl>
+<h3>Event 3</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-historical-AC-03</code></dd>
+<dt>Event status</dt><dd><code>Prior revision</code></dd>
+<dt>Criteria revision</dt><dd><code>1</code></dd>
+<dt>Target</dt><dd><code>AC-03</code></dd>
+<dt>Recorded outcome</dt><dd><code>accepted</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.801759+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Explicit synthetic decision for compatibility coverage.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>Not recorded</code></dd>
+<dt>Runtime evidence link</dt><dd><code>Not recorded</code></dd>
+</dl>
+<h3>Event 4</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-historical-AC-04</code></dd>
+<dt>Event status</dt><dd><code>Prior revision</code></dd>
+<dt>Criteria revision</dt><dd><code>1</code></dd>
+<dt>Target</dt><dd><code>AC-04</code></dd>
+<dt>Recorded outcome</dt><dd><code>accepted</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.803654+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Explicit synthetic decision for compatibility coverage.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>Not recorded</code></dd>
+<dt>Runtime evidence link</dt><dd><code>Not recorded</code></dd>
+</dl>
+<h3>Event 5</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-historical-acceptance</code></dd>
+<dt>Event status</dt><dd><code>Prior revision</code></dd>
+<dt>Criteria revision</dt><dd><code>1</code></dd>
+<dt>Target</dt><dd><code>Final acceptance</code></dd>
+<dt>Recorded outcome</dt><dd><code>final_acceptance=true</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.806034+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Constructed final-acceptance flag, not genuine approval.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>Not recorded</code></dd>
+<dt>Runtime evidence link</dt><dd><code>Not recorded</code></dd>
+</dl>
+<h3>Event 6</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-active-manual</code></dd>
+<dt>Event status</dt><dd><code>Current</code></dd>
+<dt>Criteria revision</dt><dd><code>2</code></dd>
+<dt>Target</dt><dd><code>AC-01</code></dd>
+<dt>Recorded outcome</dt><dd><code>manually_verified</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.860128+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Constructed linked decision, not actual verification.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>E4</code></dd>
+<dt>Runtime evidence link</dt><dd><code>constructed-active-runtime</code></dd>
+</dl>
+<h3>Event 7</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-active-AC-02</code></dd>
+<dt>Event status</dt><dd><code>Current</code></dd>
+<dt>Criteria revision</dt><dd><code>2</code></dd>
+<dt>Target</dt><dd><code>AC-02</code></dd>
+<dt>Recorded outcome</dt><dd><code>accepted</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.863626+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Explicit synthetic decision for compatibility coverage.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>Not recorded</code></dd>
+<dt>Runtime evidence link</dt><dd><code>Not recorded</code></dd>
+</dl>
+<h3>Event 8</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-active-AC-03</code></dd>
+<dt>Event status</dt><dd><code>Current</code></dd>
+<dt>Criteria revision</dt><dd><code>2</code></dd>
+<dt>Target</dt><dd><code>AC-03</code></dd>
+<dt>Recorded outcome</dt><dd><code>change_required</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.867393+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Explicit synthetic decision for compatibility coverage.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>Not recorded</code></dd>
+<dt>Runtime evidence link</dt><dd><code>Not recorded</code></dd>
+</dl>
+<h3>Event 9</h3><dl>
+<dt>Event ID</dt><dd><code>constructed-active-AC-04</code></dd>
+<dt>Event status</dt><dd><code>Current</code></dd>
+<dt>Criteria revision</dt><dd><code>2</code></dd>
+<dt>Target</dt><dd><code>AC-04</code></dd>
+<dt>Recorded outcome</dt><dd><code>accepted</code></dd>
+<dt>Asserted reviewer</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Recorded at (as recorded)</dt><dd><code>2026-11-07T23:20:12.870327+00:00</code></dd>
+<dt>Reviewer note</dt><dd><code>Constructed automation only; no actual target runtime or human use. Explicit synthetic decision for compatibility coverage.</code></dd>
+<dt>Evidence URL (as recorded)</dt><dd><code>Not recorded</code></dd>
+<dt>Claimed evidence level</dt><dd><code>Not recorded</code></dd>
+<dt>Runtime evidence link</dt><dd><code>Not recorded</code></dd>
+</dl>
+<h2>Reviewer-selected references</h2>
+<p>Reviewer-selected references are non-gating static context. They do not change automatic findings, confidence, file scope, reviewer decisions, runtime verification or final acceptance. Test/eval definitions show test intent, not execution. The stored excerpt digest establishes internal consistency, not independent source authenticity.</p>
+<p>Active references: 0</p>
+<dl>
+<dt>Status</dt><dd><code>Corrected</code></dd>
+<dt>Reference ID</dt><dd><code>9cb6ce06-f691-4293-9e5b-fea537b993b9</code></dd>
+<dt>Review ID</dt><dd><code>constructed-v026-active-rich</code></dd>
+<dt>Repository / PR</dt><dd><code>scopeproof/demo-stock-research / #17</code></dd>
+<dt>Criterion / revision</dt><dd><code>AC-01 / 2</code></dd>
+<dt>Confirmed criteria digest</dt><dd><code>987d5db1329b69a63e052c92fa02c9ba7bd043464c5b8574c36124475f706b37</code></dd>
+<dt>Criteria source</dt><dd><code>scopeproof://constructed-demo/acceptance-criteria</code></dd>
+<dt>Head</dt><dd><code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code></dd>
+<dt>Location</dt><dd><code>notes/constructed-unrelated.txt:1</code></dd>
+<dt>Source scope</dt><dd><code>changed_file</code></dd>
+<dt>Static type / level</dt><dd><code>implementation / E1</code></dd>
+<dt>Selected by</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Selected at</dt><dd><code>2026-11-07T23:20:12.827969+00:00</code></dd>
+<dt>Rationale</dt><dd><code>Constructed automation only; no actual target runtime or human use. Constructed static selection.</code></dd>
+<dt>Excerpt SHA256</dt><dd><code>478ef25254a8142b5a7d3da79a9298437929cf5179fe6c6d42e2238f213025dc</code></dd>
+</dl>
+<a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/notes/constructed-unrelated.txt#L1-L1">https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/notes/constructed-unrelated.txt#L1-L1</a>
+<pre><code>CONSTRUCTED unrelated housekeeping context</code></pre>
+<dl>
+<dt>Status</dt><dd><code>Withdrawn</code></dd>
+<dt>Reference ID</dt><dd><code>66c40d8b-c4ed-4e1d-89a4-a81bee77628a</code></dd>
+<dt>Review ID</dt><dd><code>constructed-v026-active-rich</code></dd>
+<dt>Repository / PR</dt><dd><code>scopeproof/demo-stock-research / #17</code></dd>
+<dt>Criterion / revision</dt><dd><code>AC-01 / 2</code></dd>
+<dt>Confirmed criteria digest</dt><dd><code>987d5db1329b69a63e052c92fa02c9ba7bd043464c5b8574c36124475f706b37</code></dd>
+<dt>Criteria source</dt><dd><code>scopeproof://constructed-demo/acceptance-criteria</code></dd>
+<dt>Head</dt><dd><code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code></dd>
+<dt>Location</dt><dd><code>src/export.py:42</code></dd>
+<dt>Source scope</dt><dd><code>changed_file</code></dd>
+<dt>Static type / level</dt><dd><code>implementation / E1</code></dd>
+<dt>Selected by</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Selected at</dt><dd><code>2026-11-07T23:20:12.832800+00:00</code></dd>
+<dt>Rationale</dt><dd><code>Constructed automation only; no actual target runtime or human use. Constructed replacement context.</code></dd>
+<dt>Excerpt SHA256</dt><dd><code>95c03fcc7d8baea34be515660101535372b1dbe99e0bb79fcbdcb809a20c2e66</code></dd>
+</dl>
+<a href="https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/src/export.py#L42-L42">https://github.com/scopeproof/demo-stock-research/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/src/export.py#L42-L42</a>
+<pre><code>def export_research_list_csv(rows, active_sector=None):</code></pre>
+<h3>Audit event · Corrected</h3><dl>
+<dt>Event ID</dt><dd><code>37a2d62d-389a-4f0a-93f9-e955a2486ee4</code></dd>
+<dt>Reference ID</dt><dd><code>9cb6ce06-f691-4293-9e5b-fea537b993b9</code></dd>
+<dt>Replacement ID</dt><dd><code>66c40d8b-c4ed-4e1d-89a4-a81bee77628a</code></dd>
+<dt>Asserted actor</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Reason</dt><dd><code>Constructed automation only; no actual target runtime or human use. Rehearse attributable static-reference correction.</code></dd>
+<dt>Recorded at</dt><dd><code>2026-11-07T23:20:12.832800+00:00</code></dd>
+</dl>
+<h3>Audit event · Withdrawn</h3><dl>
+<dt>Event ID</dt><dd><code>17b4df61-ecaf-4d8d-9536-1f0e22a36fb7</code></dd>
+<dt>Reference ID</dt><dd><code>66c40d8b-c4ed-4e1d-89a4-a81bee77628a</code></dd>
+<dt>Replacement ID</dt><dd><code>(none)</code></dd>
+<dt>Asserted actor</dt><dd><code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></dd>
+<dt>Reason</dt><dd><code>Constructed automation only; no actual target runtime or human use. Rehearse terminal static-reference withdrawal.</code></dd>
+<dt>Recorded at</dt><dd><code>2026-11-07T23:20:12.838569+00:00</code></dd>
+</dl>
+<h2>Imported external test results</h2>
+<p class="note">Imported test results are externally supplied, non-gating context. ScopeProof did not execute the tests or target-repository code; the artifact digest covers imported bytes only; importer identity is asserted, not authenticated; and criterion mapping is organizational context, not proof.</p>
+<h3>Import <code>constructed-active-junit</code></h3>
+<ul>
+<li>Import status: <code>Withdrawn</code></li>
+<li>Artifact SHA-256: <code>4383758c036840cb596b62933175f6e2c709b4b89fd88dc49353365332727d78</code></li>
+<li>Bound head: <code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code></li>
+<li>Asserted importer: <code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></li>
+<li>Original mappings (retained):<ul>
+<li>Criterion <code>AC-01</code><ul>
+<li><code>suite-0001-case-0001</code> · <code>passed</code> · <code>CONSTRUCTED active</code> · <code>CONSTRUCTED pass</code></li>
+</ul></li>
+<li>Criterion <code>AC-02</code><ul>
+<li><code>suite-0001-case-0002</code> · <code>failure</code> · <code>CONSTRUCTED active</code> · <code>CONSTRUCTED failure</code></li>
+</ul></li>
+</ul></li>
+<li>Current effective mappings:<ul>
+<li>Criterion <code>AC-01</code><ul>
+<li><code>suite-0001-case-0002</code> · <code>failure</code> · <code>CONSTRUCTED active</code> · <code>CONSTRUCTED failure</code></li>
+</ul></li>
+<li>Criterion <code>AC-02</code><ul>
+<li><code>suite-0001-case-0001</code> · <code>passed</code> · <code>CONSTRUCTED active</code> · <code>CONSTRUCTED pass</code></li>
+</ul></li>
+</ul></li>
+<li>Correction event ID: <code>84f63432-ca57-4eea-ab10-d6127a0a52c5</code></li>
+<li>Correction schema: <code>junit-mapping-correction-v1</code></li>
+<li>Correction action: <code>mapping_corrected</code></li>
+<li>Corrected import ID: <code>constructed-active-junit</code></li>
+<li>Correction artifact SHA-256: <code>4383758c036840cb596b62933175f6e2c709b4b89fd88dc49353365332727d78</code></li>
+<li>Owning review ID: <code>constructed-v026-active-rich</code></li>
+<li>Bound repository: <code>scopeproof/demo-stock-research</code></li>
+<li>Bound PR: <code>17</code></li>
+<li>Bound head: <code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code></li>
+<li>Criteria revision: <code>2</code></li>
+<li>Confirmed criteria SHA-256: <code>987d5db1329b69a63e052c92fa02c9ba7bd043464c5b8574c36124475f706b37</code></li>
+<li>Criteria source URI: <code>scopeproof://constructed-demo/acceptance-criteria</code></li>
+<li>Criteria source revision: <code>constructed-v026-compatibility-revision-2</code></li>
+<li>Criteria source text SHA-256: <code>fe44608729d47f758aad8a38a0e63df9a6a26a26587f6d12b4d32b8f22ae2a48</code></li>
+<li>Criteria source normalized SHA-256: <code>987d5db1329b69a63e052c92fa02c9ba7bd043464c5b8574c36124475f706b37</code></li>
+<li>Criteria confirmer: <code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></li>
+<li>Criteria confirmed at (UTC): <code>2026-11-07T23:20:12.809040+00:00</code></li>
+<li>Correction reviewer: <code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></li>
+<li>Correction reason: <code>Constructed automation only; no actual target runtime or human use. Rehearse explicit mapping correction.</code></li>
+<li>Corrected at (UTC): <code>2026-11-07T23:20:12.847629+00:00</code></li>
+<li>Correction evidence boundary: <code>{&quot;source&quot;:&quot;externally_supplied&quot;,&quot;gate_effect&quot;:&quot;non_gating&quot;,&quot;execution&quot;:&quot;not_executed_by_scopeproof&quot;,&quot;artifact_digest_scope&quot;:&quot;imported_bytes_only&quot;,&quot;importer_identity&quot;:&quot;asserted_not_authenticated&quot;,&quot;criterion_mapping&quot;:&quot;organizational_context_not_proof&quot;}</code></li>
+<li>Previous mapping SHA-256: <code>985c83547c73261e143f477e44093e0b85f5064b1a86049fd195fa23d7af7dca</code></li>
+<li>Previous correction event ID: <code>None (original)</code></li>
+<li>Corrected mappings: <code>[{&quot;criterion_id&quot;: &quot;AC-01&quot;, &quot;test_case_ids&quot;: [&quot;suite-0001-case-0002&quot;]}, {&quot;criterion_id&quot;: &quot;AC-02&quot;, &quot;test_case_ids&quot;: [&quot;suite-0001-case-0001&quot;]}]</code></li>
+<li>Withdrawal event ID: <code>92bcc65e-aba9-40b3-a6b9-69102c8b100f</code></li>
+<li>Withdrawal schema: <code>junit-import-withdrawal-v1</code></li>
+<li>Withdrawal action: <code>withdrawn</code></li>
+<li>Withdrawn import ID: <code>constructed-active-junit</code></li>
+<li>Withdrawal artifact SHA-256: <code>4383758c036840cb596b62933175f6e2c709b4b89fd88dc49353365332727d78</code></li>
+<li>Owning review ID: <code>constructed-v026-active-rich</code></li>
+<li>Bound repository: <code>scopeproof/demo-stock-research</code></li>
+<li>Bound PR: <code>17</code></li>
+<li>Bound head: <code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code></li>
+<li>Criteria revision: <code>2</code></li>
+<li>Confirmed criteria SHA-256: <code>987d5db1329b69a63e052c92fa02c9ba7bd043464c5b8574c36124475f706b37</code></li>
+<li>Criteria source URI: <code>scopeproof://constructed-demo/acceptance-criteria</code></li>
+<li>Criteria source revision: <code>constructed-v026-compatibility-revision-2</code></li>
+<li>Criteria source text SHA-256: <code>fe44608729d47f758aad8a38a0e63df9a6a26a26587f6d12b4d32b8f22ae2a48</code></li>
+<li>Criteria source normalized SHA-256: <code>987d5db1329b69a63e052c92fa02c9ba7bd043464c5b8574c36124475f706b37</code></li>
+<li>Criteria confirmer: <code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></li>
+<li>Criteria confirmed at (UTC): <code>2026-11-07T23:20:12.809040+00:00</code></li>
+<li>Withdrawal reviewer: <code>CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use.</code></li>
+<li>Withdrawal reason: <code>Constructed automation only; no actual target runtime or human use. Rehearse whole-import withdrawal.</code></li>
+<li>Withdrawn at (UTC): <code>2026-11-07T23:20:12.854170+00:00</code></li>
+<li>Withdrawal evidence boundary: <code>{&quot;source&quot;:&quot;externally_supplied&quot;,&quot;gate_effect&quot;:&quot;non_gating&quot;,&quot;execution&quot;:&quot;not_executed_by_scopeproof&quot;,&quot;artifact_digest_scope&quot;:&quot;imported_bytes_only&quot;,&quot;importer_identity&quot;:&quot;asserted_not_authenticated&quot;,&quot;criterion_mapping&quot;:&quot;organizational_context_not_proof&quot;}</code></li>
+<li>Limitations:<ul>
+<li><code>ScopeProof did not execute the imported tests or target-repository code.</code></li>
+<li><code>The artifact digest does not prove criterion correctness or runtime behavior.</code></li>
+<li><code>The asserted importer identity is not authenticated.</code></li>
+<li><code>Explicit human mapping is organizational context, not proof that a criterion passed.</code></li>
+<li><code>Constructed automation only; no actual target runtime or human use.</code></li>
+</ul></li>
+</ul>
+<h2>Changed-file Scope</h2>
+<p>Inventory: <code>verified</code>; head <code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code></p>
+<p>Changed paths: notes/constructed-unrelated.txt, src/export.py, tests/test_export.py</p>
+<p>Unresolved changed paths: None recorded</p>
+<h3>File decision history</h3><ul>
+<li><code>notes/constructed-unrelated.txt</code>: outside_confirmed_criteria by CONSTRUCTED compatibility actor. Constructed automation only; no actual target runtime or human use. at 2026-11-07T23:20:12.857279+00:00; review <code>constructed-v026-active-rich</code>; head <code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code>; criteria revision 2; digest <code>987d5db1329b69a63e052c92fa02c9ba7bd043464c5b8574c36124475f706b37</code>; note: Constructed automation only; no actual target runtime or human use. Housekeeping explicitly outside this constructed intent.</li>
+</ul>
+<h2>Runtime Verification Boundary</h2>
+<p>Manual runtime evidence is recorded separately. Observed CI and static candidates do not establish runtime verification.</p>
+</body></html>

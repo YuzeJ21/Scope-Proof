@@ -1,0 +1,40 @@
+{
+  "schema_version": "scopeproof-offline-handoff-sample-v1",
+  "boundary": "Constructed automation only; no actual target runtime or human use.",
+  "package_version": "0.2.6",
+  "release_source_commit": "68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1",
+  "exporter_core_sha256": "7b3a9180fa8658e800486cac4cc0cb1a3ff236bb88c0ad9c9f165a699e04eb64",
+  "public_wheel_sha256": "48b308b3f92d912932734aa4907e958d78351bb956f1a9ce65353e9206741896",
+  "input_record": {
+    "bytes": 90878,
+    "sha256": "044793a5894c13da7bd846f6926bbeac39955389c8897cdecaaf0bbe4e7b0ba5",
+    "name": "tests/fixtures/released_v026_upgrade/active-rich-v9.json"
+  },
+  "recipe": {
+    "bytes": 10184,
+    "sha256": "6c4dc1b45f0efd67cdf5da8ffc11827eab9cb32d5ba67253c50f82988f93b144",
+    "name": "scripts/build_offline_handoff_sample.py"
+  },
+  "exported_html": {
+    "bytes": 37078,
+    "sha256": "99b1e798b58f929969b8a72b4862220c9b473eef37a86d89f8f72ec1f6b49275"
+  },
+  "presented_report": {
+    "bytes": 37730,
+    "sha256": "206c68bce34fc45a625b75e46620fd689fbd9b840630f6eb69a0ace9deeb61d2",
+    "name": "constructed-v026-review.html"
+  },
+  "download_archive": {
+    "bytes": 6413,
+    "sha256": "d0087ada26d855ef72482012f7e874601e5d709ba4667cbbbe970e206929164b",
+    "name": "constructed-v026-review.zip"
+  },
+  "presentation_transform": "one constructed-example disclosure immediately after body",
+  "review_id": "constructed-v026-active-rich",
+  "criteria_revision_number": 2,
+  "active_gate": "blocked",
+  "recorded_final_acceptance": false,
+  "actual_target_runtime": false,
+  "human_use": false,
+  "network_access_during_export": false
+}

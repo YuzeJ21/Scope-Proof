@@ -4,8 +4,10 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: align the existing evaluation website source with public v0.2.6 and the
-saved-decision workflow, verify private desktop/mobile previews, then integrate without deployment.
+Current direction: provide a no-install constructed HTML report through the existing evaluation
+guide's repository download, with actual public v0.2.6 exporter provenance and offline checks.
+PR #275's website alignment and the separately authorized Pages publication are complete at
+`388b7dae276253ac015efd852cd510bc3999f9fd`; no additional deployment is selected.
 PR #272 completed native-v0.2.6 compatibility; PR #273 completed CSV/HTML revision labels;
 PR #274 completed the bounded browser-test synchronization repair at main
 `37799a04942e2926bf9c73882a9e0f4e1e44698f`, with green resulting-main CI. Natural baseline runs
@@ -25,11 +27,14 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 - [Start here: evaluation guide](evaluation-guide.md) — published/source/candidate capability map,
   one constructed workflow, exact-baseline engineering evidence and remaining limits.
+- [No-install constructed HTML report](examples/offline-handoff/README.md) — download before setup,
+  expected Action required, simulation boundaries, provenance and regeneration.
 - [November 2 product and market assessment](commercialization/product-direction-2026-11-02.md) —
   official-source overlap, adoption constraints, and priorities before publication.
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
 - [Evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md) — current-release routing,
-  saved-decision positioning and private static previews; no website publication.
+  saved-decision positioning and the earlier source-only preview scope. The later authorized
+  [Pages publication](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672) is complete.
 - [v0.2.6 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) —
   fixed source, three public assets and completed public-download verification.
 - [Historical-analysis revision-label assessment](audits/2026-11-07-historical-report-revision.md) —

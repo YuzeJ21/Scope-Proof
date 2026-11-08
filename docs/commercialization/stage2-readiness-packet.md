@@ -65,11 +65,18 @@ and [observer assessment](../audits/2026-11-07-browser-observer-reopen.md) retai
 boundary. Resulting main `37799a04942e2926bf9c73882a9e0f4e1e44698f` passed
 [CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42450620236): 4,872 tests, 38 intentional
 skips, 95.5067% coverage, seven installed CLI checks and 34 browser-suite checks.
-The current bounded outcome corrects the existing evaluation website source's stale release
-identity and explains the published saved-decision, offline handoff and revisit workflow.
-Private desktop/mobile previews and source integration do not publish the website. Pages remains
-manual-only and deployment needs separate authorization. See the
-[evaluation-page assessment](../audits/2026-11-08-evaluation-page-alignment.md).
+PR #275 completed the evaluation website source alignment at main
+`388b7dae276253ac015efd852cd510bc3999f9fd`, with green resulting-main CI. The separately authorized
+[Pages run](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672) published that exact
+revision. All 12 public files matched source; 20 link destinations and desktop/mobile/media checks
+passed. The [earlier assessment](../audits/2026-11-08-evaluation-page-alignment.md) remains source-only
+historical evidence; it is not rewritten to imply that it performed the later deployment.
+The current bounded artifact is a [no-install constructed HTML report](../examples/offline-handoff/README.md),
+exported by actual public v0.2.6 from the unchanged native active record. An evaluator can inspect
+the output before setup. It retains Action required and no final acceptance, with prominent
+simulation/synthetic-link warnings and strict provenance. It adds no application feature or
+human-use evidence and needs no new Pages or package publication. Pages remains manual-only;
+future deployments require separate authorization.
 Product/core behavior, gates and dedicated report/download controls stay unchanged.
 Completing engineering checks does not authorize another release or feature queue.
 Stage 3 requires genuine independent use and separate authorization.
