@@ -1653,7 +1653,9 @@ def export_csv(bundle: ExportableReview) -> str:
                 ),
                 "runtime_verification_state": bundle.runtime_verification_state.value,
                 "reviewer_decision_state": bundle.reviewer_decision_state.value,
-                "criteria_revision": state.criteria_revision.number if state else 1,
+                "criteria_revision": (
+                    state.criteria_revision.number if state else bundle.criteria_revision_number
+                ),
                 "changed_file_inventory_state": scope_status,
                 "changed_file_inventory_paths": _csv_text(json.dumps(changed_paths)),
                 "unresolved_changed_paths": _csv_text(json.dumps(unresolved_paths)),
@@ -1893,7 +1895,7 @@ def export_html(value: ExportableReview) -> str:
                 diagnostic_by_id.get(criterion.criterion_id),
             )
         )
-    revision = state.criteria_revision.number if state else 1
+    revision = state.criteria_revision.number if state else bundle.criteria_revision_number
     review_status = html.escape(review_status_label(bundle.gate.verdict))
     recorded_acceptance = "Yes" if bundle.review.final_acceptance else "No"
     review_created_at = bundle.review.model_dump(mode="json")["created_at"]

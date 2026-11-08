@@ -9,6 +9,11 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+- Correct CSV/HTML criteria-revision labels for explicitly selected validated analysis bundles:
+  use the recorded revision and preserve legacy `unknown` instead of defaulting to revision 1.
+  Keep full-state labels, pending current-state export denial, producer/history provenance and
+  analysis-only history boundaries. This adds no report format or workbench download control.
+  See the [revision-label assessment](docs/audits/2026-11-07-historical-report-revision.md).
 - Advance development identity to `0.2.7.dev0`; public v0.2.6 assets retain their original source
   and version.
 - Add a permanent compatibility regression corpus produced by the actual public v0.2.6 writer,

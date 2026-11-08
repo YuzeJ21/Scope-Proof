@@ -4,10 +4,12 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: one bounded Stage 2 compatibility outcome. Rich native v0.2.6 saved-review
-histories become a permanent regression contract; no current data-loss defect is asserted.
-See the finish line in the [roadmap](../ROADMAP.md) and the
-[compatibility assessment](audits/2026-11-07-native-v026-compatibility.md).
+Current direction: one bounded Stage 2 CSV/HTML historical-analysis revision-label repair.
+The permanent native-v0.2.6 compatibility contract is complete in PR #272. The current task
+uses a validated selected bundle's recorded revision, including `unknown`, while preserving
+pending current-report denial and analysis-only boundaries. See the finish line in the
+[roadmap](../ROADMAP.md) and the
+[revision-label assessment](audits/2026-11-07-historical-report-revision.md).
 Versioned source uses unpublished `0.2.7.dev0`. The published **v0.2.6** download is publicly verified
 from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Its
 [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) is authoritative
@@ -25,8 +27,10 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
 - [v0.2.6 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) —
   fixed source, three public assets and completed public-download verification.
+- [Historical-analysis revision-label assessment](audits/2026-11-07-historical-report-revision.md) —
+  bounded CSV/HTML display correction and retained current-state export guards.
 - [Native v0.2.6 compatibility assessment](audits/2026-11-07-native-v026-compatibility.md) —
-  provenance-bound constructed saved histories and the permanent regression boundary.
+  completed PR #272 provenance-bound constructed histories and permanent regression boundary.
 - [v0.2.5 public verification](releases/v0.2.5-public-verification.md) — release source, assets,
   fresh installs and workbench handoff checks.
 - [v0.2.4 public verification](releases/v0.2.4-public-verification.md) — earlier published source/tag/assets,

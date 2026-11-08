@@ -7,7 +7,7 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, with one bounded native-v0.2.6 saved-history compatibility outcome;
+`owner_led_productization_active`, with one bounded historical-analysis revision-label repair;
 this owner decision does not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
@@ -42,7 +42,8 @@ documents direct overlap and adoption constraints without claiming superiority o
 | Stage 2 — completed on source, PR #268 | Recover when a selected saved analysis cannot be used for evidence comparison. | Explain which relationship check failed or when records need to be reopened or reselected. Point to requirements-only comparison for eligible same-PR criteria or source differences. Preserve exact-head and comparison rules. |
 | Stage 2 — completed on source, PR #269 | Keep an unsubmitted scope decision with its review when a replacement, source load, or criteria change would invalidate it. | Require saving or explicitly discarding the draft before changing its context. Discard in place and keep read-only inspection available. Preserve recorded decisions and report rules. |
 | Stage 2 — publication and public verification complete | Deliver the consolidated v0.2.6 evaluation workflow as downloadable artifacts. | The [v0.2.6 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, wheel, source archive, checksum manifest and completed public-download verification. No further release follows automatically. |
-| Stage 2 — current bounded outcome | Preserve rich native v0.2.6 saved-review histories as development readers change. | Immutable records from the actual public writer, provenance-bound generation, active and unconfirmed historical-only states, complete-state preservation through load/copy-only resave/transfer/reopen, active reports and pending current-report denial, existing Linux and Windows CI and independent engineering review. See the [bounded assessment](docs/audits/2026-11-07-native-v026-compatibility.md). No current data-loss defect is asserted. |
+| Stage 2 — completed on source, PR #272 | Preserve rich native v0.2.6 saved-review histories as development readers change. | Immutable records from the actual public writer, provenance-bound generation, active and unconfirmed historical-only states, complete-state preservation through load/copy-only resave/transfer/reopen, active reports and pending current-report denial, Linux/Windows CI and independent engineering review. Resulting main `069af259ac17b6c555d10b10f36e7211b068aac4` is verified. See the [bounded assessment](docs/audits/2026-11-07-native-v026-compatibility.md). No current data-loss defect was asserted. |
+| Stage 2 — current bounded outcome | Show the recorded criteria revision in CSV/HTML reports of explicitly selected analyses. | Use the validated bundle's revision, including `unknown`, instead of inventing revision 1. Preserve full-state revision labels, pending current-report denial, original producer/history and analysis-only boundaries. No new format or workbench download control. Finish with regression coverage, independent engineering review, green exact-head CI and resulting-main verification. See the [revision-label assessment](docs/audits/2026-11-07-historical-report-revision.md). |
 | P3 — Stage 3 dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. |
 
 ### Product and architecture checkpoint
@@ -60,12 +61,19 @@ on 2026-11-07, without personal testing or qualifying reviews. The
 for availability, final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, all three assets and
 completed public verification. Current source is unpublished `0.2.7.dev0`; v0.2.5 remains a verified fallback.
 
+[PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed native released-writer
+compatibility at resulting main `069af259ac17b6c555d10b10f36e7211b068aac4`.
+[Resulting-main CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42428549217) passed
+4,860 tests with 36 intentional skips, 95.5067% unrounded coverage, seven installed CLI checks
+and 32 browser-suite checks. These are constructed engineering checks, not independent-use
+or qualifying-review evidence. The corpus and frozen research remain immutable.
+
 | Priority | Gap and action | Completion criterion / decision |
 | --- | --- | --- |
 | P0 — final v0.2.6 distribution complete | Published the consolidated workflow from one fixed final-version source commit. | Final wheel, source archive and checksum manifest were publicly downloaded and verified. Release-source main checks passed 4,842 tests with 95.5067% coverage; installed checks passed seven CLI checks and 32 browser-suite checks. Use the Release entry for source and exact artifact identities; the historical dev0 packet is not a substitute. |
 | Lifecycle consolidation complete | Confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Consequential transition checks, including stale downloads, source contradictions and pending scope drafts, are retained. The release preparation queue is closed; no additional parity feature is selected. |
-| Current bounded engineering outcome | A published v0.2.6 rich saved history must remain intact under future development readers. | Turn actual released-writer active and unconfirmed records into immutable, provenance-bound CI fixtures. Verify complete state and producer/history preservation through load, copy-only resave, byte-preserving transfer and recipient reopening; verify active reports and pending current-report denial on existing Linux/Windows lanes. Stop after independent review, green exact-head checks and resulting-main verification. This is test-only regression hardening, not a demonstrated current data-loss repair. |
-| Next reproduced defect, separately bounded | A bare retained revision-2 analysis can display revision 1 in CSV/HTML. | Derive displayed analysis revision from the selected bundle without fabricating a current state. Preserve pending current-report denial and analysis-only report boundaries. Reproduction and exact scope are recorded in the compatibility assessment; this change does not fix exporters. |
+| Native released-writer compatibility complete, PR #272 | A published v0.2.6 rich saved history remains intact under the verified development reader. | Two immutable, provenance-bound actual-writer records now run in Linux/Windows CI. Complete-state and producer/history preservation, copy-only resave, transfer, reopening, active reports and pending current-report denial are covered. Exact-head and resulting-main checks passed. This closes the durable coverage gap; no current data-loss repair or further corpus generation is selected. |
+| Current bounded engineering outcome | A bare retained revision-2 analysis can display revision 1 in CSV/HTML. | Derive displayed analysis revision from the validated selected bundle, preserving `unknown`, without fabricating a current state. Preserve full-state revision labels, pending current-report denial and analysis-only report boundaries. Dedicated historical JSON/Markdown and download controls stay unchanged. Stop after regressions, independent engineering review, green exact-head checks and resulting-main verification. See the [revision-label assessment](docs/audits/2026-11-07-historical-report-revision.md). |
 | R-002 omission classification complete | The [existing miss taxonomy](docs/research/r002-swebench-verified/miss-taxonomy.md) classified the 15 frozen misses: 14 threshold rejections and one lexical mismatch. | Frozen inputs/results and the 5/20 candidate baseline stay unchanged. Do not repeat classification, retune or relabel R-002. No new retrieval change or separately labelled holdout is selected. |
 | Conditional architecture follow-up | Workbench session-state guards are distributed across a large entrypoint. Complete histories are processed repeatedly; stores reject records above 64 MiB. Filesystem operations depend on platform support. | Retain existing stale-state, Windows and storage regressions. Extract one boundary or change storage only for a reproduced maintenance or operating-envelope constraint. No rewrite, database or multiuser service is needed for the local handoff outcome. |
 | Stage 3 — dormant | Usefulness, operator/recipient fit and independent reuse are unproven. | Genuine independent-use evidence and separate authorization; no personal testing or qualifying reviews are requested by this roadmap. If such evidence is not pursued, remain an engineering reference/evaluation product. |
@@ -100,7 +108,7 @@ support require a separately chosen product direction. Do not start them automat
 > review, merge only after exact-head checks pass and verify main. No personal testing, qualifying
 > reviews, publication, deployment or outreach. Stop when the candidate evidence is reviewable.
 
-**Current bounded engineering goal — native released-writer compatibility:**
+**Executed native released-writer compatibility goal — closed by PR #272:**
 
 > Create and pursue one bounded ScopeProof compatibility goal. Establish unpublished `0.2.7.dev0`
 > source separately from public v0.2.6. Use the verified actual public v0.2.6 writer to produce
@@ -113,6 +121,19 @@ support require a separately chosen product direction. Do not start them automat
 > coverage gap, not a demonstrated current data-loss defect. Preserve all evidence/confirmation
 > gates, public-release guards and frozen R-002. No personal testing, qualifying reviews, new
 > publication, deployment, outreach, parity feature queue or repeated R-002 investigation.
+
+**Current bounded engineering goal — historical-analysis revision labels:**
+
+> Create and pursue one bounded ScopeProof report-correction goal. Reproduce the CSV/HTML
+> revision-label error using an explicitly selected retained analysis from the immutable native
+> v0.2.6 corpus. Render the validated bundle's recorded criteria revision, including `unknown`,
+> without fabricating a current ReviewState. Preserve current-state labels, pending-report denial,
+> analysis-only boundaries, producer/history provenance, schemas, deterministic gates and frozen
+> R-002. Add regressions, run required automated checks at the existing 95% coverage floor and
+> packaged journeys, obtain independent engineering review, merge on green exact-head CI and
+> verify resulting main, then stop. Keep source at unpublished `0.2.7.dev0`; public v0.2.6 is
+> unchanged. No personal testing, qualifying reviews, new release, deployment, outreach or
+> additional report format/download path.
 
 **Future publication goal — requires separate authorization:**
 
@@ -157,7 +178,8 @@ The older-stack
 browser observation remains partial because its saved-review selector differs from the current
 test helper; it is not a full compatibility pass. The upload, dependency, CI and candidate
 preparation questions are closed. The v0.2.6 distribution and public verification are complete.
-Current bounded work adds the native released-writer compatibility contract in the
+PR #272 closed the native released-writer compatibility contract. Current bounded work repairs
+historical-analysis CSV/HTML revision labels in the
 [current priorities](#current-priorities--2026-11-07). This remains evaluation
 distribution, not a Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
