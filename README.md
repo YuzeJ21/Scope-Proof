@@ -39,9 +39,11 @@ Current source identifies itself as **0.2.7.dev0**, an unpublished development v
 [GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) is authoritative for
 download availability and completed public verification. **v0.2.6 is published and publicly
 verified** from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; the verified **v0.2.5** download remains
-a fallback. Current bounded Stage 2 work makes rich native v0.2.6 saved-review histories a
-permanent compatibility regression contract; it does not assert a current data-loss defect.
-See the [compatibility assessment](docs/audits/2026-11-07-native-v026-compatibility.md).
+a fallback. [PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed the permanent
+native-v0.2.6 saved-history compatibility contract. Current bounded Stage 2 work corrects CSV/HTML
+revision labels for explicitly selected analysis bundles, preserving `unknown` and the existing
+pending-review export guards. See the [revision-label assessment](docs/audits/2026-11-07-historical-report-revision.md).
+These development changes are separate from the published v0.2.6 download.
 Stage 1 closed with all external counts at zero, and Stage 3 remains dormant pending independent
 use. See the [v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
 See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and

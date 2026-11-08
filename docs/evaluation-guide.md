@@ -22,7 +22,7 @@ Follow the [README Quickstart](../README.md#quickstart) for both install paths.
 | Path | Identity and capabilities |
 | --- | --- |
 | Published **v0.2.6** evaluation release | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
-| Unpublished **0.2.7.dev0** development source | Retains the v0.2.6 workflow. Current work makes rich native v0.2.6 saved histories a permanent compatibility regression contract; it does not claim a current data-loss defect or add a product feature. Use the [locked contributor setup](development-environment.md#create-or-refresh-the-environment). This source identity does not establish a public download. |
+| Unpublished **0.2.7.dev0** development source | Retains the v0.2.6 workflow and the completed native-v0.2.6 saved-history compatibility contract. Current bounded work corrects CSV/HTML revision labels for explicitly selected analysis bundles, preserving `unknown` and pending current-report denial. See the [revision-label assessment](audits/2026-11-07-historical-report-revision.md) and [locked contributor setup](development-environment.md#create-or-refresh-the-environment). These development changes do not establish a public download or add a report format/download control. |
 | Published **v0.2.5** fallback | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Includes saved comparisons, audited references, JUnit audit history, typed criteria and complete-record handoff. Writes v9. |
 | Published **v0.2.4** | [Earlier release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4). Writes v5. |
 | Historical private **0.2.6.dev0** candidate, unpublished | The [fixed-source packet](releases/v0.2.6-dev0-evaluation-candidate.md) records this development artifact's identities and constructed checks. It is not the final v0.2.6 build or a public-download verification record. |
@@ -100,9 +100,16 @@ journeys. Current source changes, private candidate checks and earlier-release r
 establish those published bytes' identity or installed behavior.
 
 The [native v0.2.6 compatibility assessment](audits/2026-11-07-native-v026-compatibility.md)
-records the separately bounded permanent regression outcome for published-writer saved histories.
-That corpus protects future development readers; it does not expand compatibility to every
-historical environment or establish downgrade support.
+records the permanent regression outcome completed in PR #272 at main
+`069af259ac17b6c555d10b10f36e7211b068aac4`. Its
+[resulting-main CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42428549217) passed
+4,860 tests, 36 intentional skips, 95.5067% coverage, seven installed CLI checks and 32 browser-suite
+checks. That corpus protects future development readers; it does not expand compatibility to every
+historical environment or establish downgrade support. The current
+[revision-label correction](audits/2026-11-07-historical-report-revision.md) uses a selected
+analysis's recorded revision in CSV/HTML, preserving `unknown`; it does not turn an analysis-only
+report into a complete current review. Pending current-state exports remain blocked. Dedicated
+historical JSON/Markdown reports and available download controls are unchanged.
 
 The historical [v0.2.5 public verification record](releases/v0.2.5-public-verification.md) records the downloaded
 wheel, source archive and checksum manifest. Both archives passed fresh installation, benchmarks,

@@ -48,10 +48,14 @@ The [private `0.2.6.dev0` candidate](../releases/v0.2.6-dev0-evaluation-candidat
 unpublished artifact; its native public-writer compatibility and exact-artifact checks apply only
 to the recorded development bytes, not the final v0.2.6 package.
 The owner-authorized final v0.2.6 publication and automatic public-download verification completed
-on 2026-11-07. Current bounded work makes rich native v0.2.6 saved-review histories a permanent
-compatibility regression contract; no current data-loss defect is asserted. The
-[roadmap](../../ROADMAP.md#current-priorities--2026-11-07) and
-[compatibility assessment](../audits/2026-11-07-native-v026-compatibility.md) name its finish line.
+on 2026-11-07. PR #272 completed the permanent native-v0.2.6 saved-history compatibility
+contract at resulting main `069af259ac17b6c555d10b10f36e7211b068aac4`; its green
+[resulting-main CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42428549217) remains
+engineering evidence only. Current bounded work corrects CSV/HTML revision labels for explicitly
+selected analysis bundles, preserving `unknown`, pending current-report denial and analysis-only
+boundaries. The [roadmap](../../ROADMAP.md#current-priorities--2026-11-07) and
+[revision-label assessment](../audits/2026-11-07-historical-report-revision.md) name its finish line.
+Dedicated historical JSON/Markdown and download controls stay unchanged.
 Completing engineering checks does not authorize another release or feature queue.
 Stage 3 requires genuine independent use and separate authorization.
 
