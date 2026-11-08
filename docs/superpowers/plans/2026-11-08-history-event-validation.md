@@ -31,6 +31,6 @@ New constructed inputs, separate from all frozen/native fixtures, cover 1–500 
 ## Task 2 — Verify and integrate
 
 - [x] Record method, input identities, measured results and limitations; update the roadmap only for this reproduced constraint.
-- [ ] Obtain independent whole-branch engineering review and resolve supported findings.
+- [x] Obtain independent whole-branch engineering review and resolve supported findings (stale operating-decision wording corrected; no source findings; independent 83-test selection passed).
 - [ ] Require exact-head CI, full suite and unrounded 95% coverage, deterministic benchmarks, installed CLI/browser journeys, Python and Windows lanes.
 - [ ] Merge the reviewed exact head; verify resulting main CI and clean synchronized checkouts. Public v0.2.6 and Pages remain unchanged.

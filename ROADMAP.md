@@ -258,8 +258,9 @@ test helper; it is not a full compatibility pass. The upload, dependency, CI and
 preparation questions are closed. The v0.2.6 distribution and public verification are complete.
 PR #272 closed the native released-writer compatibility contract and PR #273 closed CSV/HTML
 revision labels. PR #274 closed its bounded browser wait repair; PR #275 and the separately
-authorized exact-revision Pages publication closed the website milestone. The no-install
-constructed report example is the bounded outcome in the
+authorized exact-revision Pages publication closed the website milestone. PR #276 completed
+the no-install constructed report example. The measured saved-history validation repair is
+the bounded follow-up in the
 [current priorities](#current-priorities--2026-11-07). This remains evaluation
 distribution, not a Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
