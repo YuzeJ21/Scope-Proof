@@ -40,9 +40,13 @@ Current source identifies itself as **0.2.7.dev0**, an unpublished development v
 download availability and completed public verification. **v0.2.6 is published and publicly
 verified** from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; the verified **v0.2.5** download remains
 a fallback. [PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed the permanent
-native-v0.2.6 saved-history compatibility contract. Current bounded Stage 2 work corrects CSV/HTML
-revision labels for explicitly selected analysis bundles, preserving `unknown` and the existing
-pending-review export guards. See the [revision-label assessment](docs/audits/2026-11-07-historical-report-revision.md).
+native-v0.2.6 saved-history compatibility contract. [PR #273](https://github.com/YuzeJ21/Scope-Proof/pull/273)
+completed the CSV/HTML revision-label correction, preserving `unknown` and pending-review export
+guards. Current bounded Stage 2 work repairs a browser test's saved-review ID commit wait using
+the server-computed Reopen control, while retaining actual validated reopening and history checks.
+This is test synchronization work, not a product feature. See the
+[observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md) for the natural-run and
+controlled signal-loss evidence; the precise natural Streamlit transition remains unproven.
 These development changes are separate from the published v0.2.6 download.
 Stage 1 closed with all external counts at zero, and Stage 3 remains dormant pending independent
 use. See the [v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).

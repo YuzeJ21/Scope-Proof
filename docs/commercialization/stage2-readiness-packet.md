@@ -51,11 +51,18 @@ The owner-authorized final v0.2.6 publication and automatic public-download veri
 on 2026-11-07. PR #272 completed the permanent native-v0.2.6 saved-history compatibility
 contract at resulting main `069af259ac17b6c555d10b10f36e7211b068aac4`; its green
 [resulting-main CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42428549217) remains
-engineering evidence only. Current bounded work corrects CSV/HTML revision labels for explicitly
-selected analysis bundles, preserving `unknown`, pending current-report denial and analysis-only
-boundaries. The [roadmap](../../ROADMAP.md#current-priorities--2026-11-07) and
-[revision-label assessment](../audits/2026-11-07-historical-report-revision.md) name its finish line.
-Dedicated historical JSON/Markdown and download controls stay unchanged.
+engineering evidence only. PR #273 completed the CSV/HTML revision-label correction at main
+`1d1358097dc34c69c68e93dc5d45066ff4506b1e`, preserving `unknown`, pending current-report denial
+and analysis-only boundaries. Its [main CI attempt 2](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42441483388/attempts/2)
+passed 4,872 tests, 36 intentional skips, 95.5067% coverage, seven installed CLI checks and 32
+browser-suite checks. Attempt 1's browser-observer timeout and the two fresh unchanged local
+passes before the one failed-job retry remain evidence; they are not erased by the passing retry.
+Current bounded work changes only the continuation test's saved-review ID commit wait. Three
+further natural baseline runs passed; controlled signal-loss replay with the real installed app
+reproduces the old wait failure. This supports a semantic control wait, not a claim that the precise
+natural Streamlit transition is known. The [roadmap](../../ROADMAP.md#current-priorities--2026-11-07)
+and [observer assessment](../audits/2026-11-07-browser-observer-reopen.md) name the test-only finish
+line. Product/core behavior, gates and dedicated report/download controls stay unchanged.
 Completing engineering checks does not authorize another release or feature queue.
 Stage 3 requires genuine independent use and separate authorization.
 

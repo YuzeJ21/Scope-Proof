@@ -22,7 +22,7 @@ Follow the [README Quickstart](../README.md#quickstart) for both install paths.
 | Path | Identity and capabilities |
 | --- | --- |
 | Published **v0.2.6** evaluation release | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
-| Unpublished **0.2.7.dev0** development source | Retains the v0.2.6 workflow and the completed native-v0.2.6 saved-history compatibility contract. Current bounded work corrects CSV/HTML revision labels for explicitly selected analysis bundles, preserving `unknown` and pending current-report denial. See the [revision-label assessment](audits/2026-11-07-historical-report-revision.md) and [locked contributor setup](development-environment.md#create-or-refresh-the-environment). These development changes do not establish a public download or add a report format/download control. |
+| Unpublished **0.2.7.dev0** development source | Retains the v0.2.6 workflow, native saved-history compatibility contract and PR #273 CSV/HTML revision-label correction, preserving `unknown` and pending current-report denial. Current bounded work repairs only the continuation browser test's saved-review ID commit wait; no product feature, report format or download control is added. See the [observer assessment](audits/2026-11-07-browser-observer-reopen.md) and [locked contributor setup](development-environment.md#create-or-refresh-the-environment). This source identity does not establish a public download. |
 | Published **v0.2.5** fallback | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Includes saved comparisons, audited references, JUnit audit history, typed criteria and complete-record handoff. Writes v9. |
 | Published **v0.2.4** | [Earlier release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4). Writes v5. |
 | Historical private **0.2.6.dev0** candidate, unpublished | The [fixed-source packet](releases/v0.2.6-dev0-evaluation-candidate.md) records this development artifact's identities and constructed checks. It is not the final v0.2.6 build or a public-download verification record. |
@@ -105,11 +105,22 @@ records the permanent regression outcome completed in PR #272 at main
 [resulting-main CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42428549217) passed
 4,860 tests, 36 intentional skips, 95.5067% coverage, seven installed CLI checks and 32 browser-suite
 checks. That corpus protects future development readers; it does not expand compatibility to every
-historical environment or establish downgrade support. The current
+historical environment or establish downgrade support. The completed PR #273
 [revision-label correction](audits/2026-11-07-historical-report-revision.md) uses a selected
 analysis's recorded revision in CSV/HTML, preserving `unknown`; it does not turn an analysis-only
 report into a complete current review. Pending current-state exports remain blocked. Dedicated
 historical JSON/Markdown reports and available download controls are unchanged.
+
+PR #273 resulting main `1d1358097dc34c69c68e93dc5d45066ff4506b1e` passed
+[main CI attempt 2](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42441483388/attempts/2):
+4,872 tests, 36 intentional skips, 95.5067% coverage, seven installed CLI checks and 32 browser-suite
+checks. Attempt 1 retained a 10-second browser-observer timeout before Reopen; two fresh local
+journeys passed unchanged before the one failed-job retry. That passing retry did not establish
+the synchronization mechanism was fixed. The current
+[observer investigation](audits/2026-11-07-browser-observer-reopen.md) separates three further
+natural baseline passes from a controlled signal-loss replay with the real installed app.
+The narrowly supported repair changes only the test's ID commit wait, retaining actual validated
+reopening and saved-state/history checks. The exact natural Streamlit transition remains unproven.
 
 The historical [v0.2.5 public verification record](releases/v0.2.5-public-verification.md) records the downloaded
 wheel, source archive and checksum manifest. Both archives passed fresh installation, benchmarks,
