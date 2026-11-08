@@ -4,12 +4,14 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: one bounded Stage 2 CSV/HTML historical-analysis revision-label repair.
-The permanent native-v0.2.6 compatibility contract is complete in PR #272. The current task
-uses a validated selected bundle's recorded revision, including `unknown`, while preserving
-pending current-report denial and analysis-only boundaries. See the finish line in the
-[roadmap](../ROADMAP.md) and the
-[revision-label assessment](audits/2026-11-07-historical-report-revision.md).
+Current direction: one bounded Stage 2 browser-test synchronization repair. PR #272 completed the
+native-v0.2.6 compatibility contract; PR #273 completed CSV/HTML revision labels. The current task
+waits for the server-computed saved-review ID commit outcome, preserving actual validated reopening
+and saved-state/history assertions. Three natural baseline runs did not reproduce the timeout;
+a controlled signal-loss replay with the real installed app reproduces the old wait failure.
+This is test-only evidence, not proof of the precise natural Streamlit mechanism or a product
+feature. See the [roadmap](../ROADMAP.md) and
+[observer assessment](audits/2026-11-07-browser-observer-reopen.md).
 Versioned source uses unpublished `0.2.7.dev0`. The published **v0.2.6** download is publicly verified
 from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Its
 [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) is authoritative
@@ -28,7 +30,9 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [v0.2.6 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) —
   fixed source, three public assets and completed public-download verification.
 - [Historical-analysis revision-label assessment](audits/2026-11-07-historical-report-revision.md) —
-  bounded CSV/HTML display correction and retained current-state export guards.
+  completed PR #273 CSV/HTML display correction and retained current-state export guards.
+- [Browser-observer assessment](audits/2026-11-07-browser-observer-reopen.md) — captured timeout,
+  bounded natural runs, controlled signal-loss replay and the test-only synchronization boundary.
 - [Native v0.2.6 compatibility assessment](audits/2026-11-07-native-v026-compatibility.md) —
   completed PR #272 provenance-bound constructed histories and permanent regression boundary.
 - [v0.2.5 public verification](releases/v0.2.5-public-verification.md) — release source, assets,

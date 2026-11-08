@@ -9,6 +9,11 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+- Repair the saved-review continuation browser test's ID-commit synchronization: wait for the
+  server-computed Reopen control while retaining actual validated reopening, state/history checks
+  and the existing timeout. This test-only repair addresses a controlled replay of the observed
+  missing rerun signal; it does not establish the precise natural Streamlit failure mechanism or
+  add a product feature. See the [observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md).
 - Correct CSV/HTML criteria-revision labels for explicitly selected validated analysis bundles:
   use the recorded revision and preserve legacy `unknown` instead of defaulting to revision 1.
   Keep full-state labels, pending current-state export denial, producer/history provenance and

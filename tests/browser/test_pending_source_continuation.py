@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Page, expect, sync_playwright
 
+from tests.browser import test_packaged_workbench as workbench_helpers
 from tests.browser.test_packaged_workbench import (
     _capture_browser_failure,
     _installed_workbench_server,
@@ -23,6 +24,58 @@ pytestmark = pytest.mark.browser
 REVIEW_ID = "constructed-pending-source-continuation"
 CHANGED_CRITERION = "CONSTRUCTED changed requirement: export the research list as JSON"
 CONSTRUCTED_ACTOR = "CONSTRUCTED automatic continuation fixture actor"
+
+# Controlled replay of the observed failure predicate, not a claim about the
+# precise Streamlit race: ID input reaches the real server, while this test's
+# generic script-state observer cannot report that commit. The app and the
+# browser's MutationObserver implementation remain untouched.
+CONTROLLED_ID_STATUS_LOSS = """() => {
+    document.addEventListener("input", event => {
+        if (event.target?.getAttribute("aria-label") !== "Review ID") return;
+        window.__scopeproofRerunObserver?.disconnect();
+        window.__scopeproofRerunObserved = false;
+        window.__scopeproofControlledIDLosses =
+            (window.__scopeproofControlledIDLosses || 0) + 1;
+        const reopen = () => [...document.querySelectorAll("button")].find(
+            button => button.textContent.trim() === "Reopen local review");
+        window.__scopeproofControlledIDInitiallyDisabled = reopen()?.disabled === true;
+        const observer = new MutationObserver(() => {
+            if (!reopen() || reopen().disabled ||
+                window.__scopeproofControlledIDEnabledWithoutSignal != null) return;
+            window.__scopeproofControlledIDEnabledWithoutSignal =
+                window.__scopeproofRerunObserved === false;
+        });
+        observer.observe(document.documentElement, {
+            attributes: true, attributeFilter: ["disabled"], childList: true, subtree: true,
+        });
+        window.__scopeproofControlledIDSemanticObserver = observer;
+    }, true);
+}"""
+
+
+def _suppress_only_review_id_status_signal(monkeypatch: pytest.MonkeyPatch) -> None:
+    original = workbench_helpers.ARM_STREAMLIT_RERUN_OBSERVER_SCRIPT
+    monkeypatch.setattr(
+        workbench_helpers,
+        "ARM_STREAMLIT_RERUN_OBSERVER_SCRIPT",
+        """() => {
+        if (document.activeElement?.getAttribute("aria-label") === "Review ID") {
+            window.__scopeproofRerunObserver?.disconnect();
+            window.__scopeproofRerunObserved = false;
+            return;
+        }
+        return ("""
+        + original
+        + """)();
+    }""",
+    )
+
+
+def _assert_controlled_review_id_signal_loss(page: Page) -> None:
+    assert page.evaluate("window.__scopeproofControlledIDLosses === 1")
+    assert page.evaluate("window.__scopeproofControlledIDInitiallyDisabled === true")
+    assert page.evaluate("window.__scopeproofControlledIDEnabledWithoutSignal === true")
+
 
 # This is trusted test setup, copied outside the checkout and run by the installed
 # interpreter. Source carried by the demo snapshot is data and is never executed.
@@ -87,17 +140,29 @@ def _reopen(page: Page, base_url: str) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     page.get_by_text("Resume a saved review", exact=True).click()
     _run_and_wait_for_streamlit_rerun(
-        page, page.get_by_text("Enter a review ID directly", exact=True).click,
+        page,
+        page.get_by_text("Enter a review ID directly", exact=True).click,
     )
     review_id = page.get_by_role("textbox", name="Review ID", exact=True)
+    reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    expect(review_id).to_have_value("")
+    expect(reopen).to_be_disabled()
     review_id.fill(REVIEW_ID)
-    _run_and_wait_for_streamlit_rerun(page, lambda: review_id.press("Tab"))
+    review_id.press("Tab")
+    expect(review_id).to_have_value(REVIEW_ID)
+    # This server-computed transition proves the ID committed even if the
+    # generic DOM script-state observer misses its short-lived rerun signal.
+    expect(reopen).to_be_enabled(timeout=10_000)
     _run_and_wait_for_streamlit_rerun(
-        page, page.get_by_role("button", name="Reopen local review", exact=True).click,
+        page,
+        reopen.click,
     )
-    expect(page.get_by_text(
-        "Review reopened from local storage after validation.", exact=True,
-    )).to_be_visible()
+    expect(
+        page.get_by_text(
+            "Review reopened from local storage after validation.",
+            exact=True,
+        )
+    ).to_be_visible()
     expect(page.get_by_text("Loaded source", exact=True)).to_have_count(0)
 
 
@@ -135,8 +200,12 @@ def _assert_fresh_continuation(state: dict, original: dict, pending: dict) -> No
     assert active["effective_junit_mappings"] == {}
 
 
+@pytest.mark.parametrize(
+    "lose_review_id_status_signal", [False, True], ids=["normal", "controlled-status-loss"],
+)
 def test_installed_wheel_pending_revision_continues_same_review_after_restart(
-    tmp_path: Path, installed_wheel: Path,
+    tmp_path: Path, installed_wheel: Path, monkeypatch: pytest.MonkeyPatch,
+    lose_review_id_status_signal: bool,
 ) -> None:
     """Reopen, explicitly reconfirm, reload exact demo source, analyze and reopen."""
     runtime = tmp_path / "pending-continuation-runtime"
@@ -160,6 +229,8 @@ def test_installed_wheel_pending_revision_continues_same_review_after_restart(
     completed: dict | None = None
     completed_bytes: bytes | None = None
     pending: dict | None = None
+    if lose_review_id_status_signal:
+        _suppress_only_review_id_status_signal(monkeypatch)
 
     with sync_playwright() as playwright:
         for generation in range(2):
@@ -173,11 +244,15 @@ def test_installed_wheel_pending_revision_continues_same_review_after_restart(
                         "**/*", lambda route: _route_loopback_only(route, external_requests),
                     )
                     page = context.new_page()
+                    if lose_review_id_status_signal:
+                        page.add_init_script("(" + CONTROLLED_ID_STATUS_LOSS + ")()")
                     page.on("pageerror", lambda error: browser_errors.append(str(error)))
                     with _capture_browser_failure(
                         page, diagnostics / f"generation-{generation}", log_path,
                     ):
                         _reopen(page, base_url)
+                        if lose_review_id_status_signal:
+                            _assert_controlled_review_id_signal_loss(page)
                         if generation == 0:
                             assert _saved_state(record) == original
                             page.get_by_text("AC-01 · Must Have · E1", exact=True).click()
@@ -250,5 +325,56 @@ def test_installed_wheel_pending_revision_continues_same_review_after_restart(
                             )
                 finally:
                     browser.close()
+    assert external_requests == []
+    assert browser_errors == []
+
+
+def test_installed_reopen_does_not_accept_an_enabled_button_as_validation(
+    tmp_path: Path,
+    installed_wheel: Path,
+) -> None:
+    """A nonempty ID enables the real control, but an absent record cannot reopen."""
+    runtime = tmp_path / "missing-record-runtime"
+    home = runtime / "home"
+    store = home / ".scopeproof" / "reviews"
+    store.mkdir(parents=True)
+    external_requests: list[str] = []
+    browser_errors: list[str] = []
+    with _installed_workbench_server(
+        installed_wheel,
+        runtime,
+        home,
+        log_name="missing-record.log",
+    ) as (base_url, _), sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(viewport={"width": 1280, "height": 900})
+            context.route(
+                "**/*",
+                lambda route: _route_loopback_only(route, external_requests),
+            )
+            page = context.new_page()
+            page.on("pageerror", lambda error: browser_errors.append(str(error)))
+            with pytest.raises(
+                AssertionError,
+                match="Review reopened from local storage after validation",
+            ):
+                _reopen(page, base_url)
+            expect(
+                page.get_by_text(
+                    "No saved review was found for that review ID.",
+                    exact=True,
+                )
+            ).to_be_visible()
+            expect(
+                page.get_by_text(
+                    "Review reopened from local storage after validation.",
+                    exact=True,
+                )
+            ).to_have_count(0)
+            assert list(store.glob("*.json")) == []
+            page.screenshot(path=str(runtime / "missing-record-rejected.png"), full_page=True)
+        finally:
+            browser.close()
     assert external_requests == []
     assert browser_errors == []
