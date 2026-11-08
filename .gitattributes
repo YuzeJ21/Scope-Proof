@@ -8,3 +8,9 @@ tests/fixtures/released_v026_upgrade/*.py -text
 # The public writer's provenance also binds these packaged demo inputs byte-for-byte.
 evals/fixtures/csv_export_pr.json -text
 evals/labels/csv_export_expected.json -text
+
+# Keep the no-install example and its hash-bound generation recipe byte-identical.
+docs/examples/offline-handoff/*.html -text
+docs/examples/offline-handoff/*.json -text
+docs/examples/offline-handoff/*.zip -text
+scripts/build_offline_handoff_sample.py -text

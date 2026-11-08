@@ -9,6 +9,11 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+- Add a no-install constructed HTML handoff sample, generated with the verified public v0.2.6
+  exporter from the unchanged native active record. Bind input/recipe/raw/presented bytes,
+  prepend a simulation disclosure and link the download before installation. The report stays
+  Action required with no recorded final acceptance. This repository artifact adds no application
+  feature, release, Pages deployment or genuine-use evidence.
 - Align the static evaluation website source with public v0.2.6 and unpublished 0.2.7.dev0,
   route readers to the evaluation guide, and explain saved decisions, offline HTML handoff and
   revisiting. Label the retained video as an earlier constructed coverage example. Source

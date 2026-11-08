@@ -3,6 +3,10 @@
 **See which acceptance criteria have credible PR evidence—and which still need review.**
 
 **Start here:** [Choose a version and follow one short evaluation workflow](docs/evaluation-guide.md).
+**Inspect the output first:** [Download the constructed report ZIP](https://github.com/YuzeJ21/Scope-Proof/raw/refs/heads/main/docs/examples/offline-handoff/constructed-v026-review.zip),
+extract it and open the HTML file in a browser; no ScopeProof installation is needed. It stays **Action required**.
+All actors, decisions, CI/runtime statements and source links are simulated. See the
+[sample provenance and limits](docs/examples/offline-handoff/README.md).
 It separates verified downloads from current source and the older private candidates,
 then shows how to inspect, save and hand off a constructed review.
 The published `0.2.6` evaluation release adds a decision overview, offline HTML handoff and saved
@@ -50,10 +54,16 @@ checks. This is test synchronization work, not a product feature. See the
 [observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md) for the natural-run and
 controlled signal-loss evidence; the precise natural Streamlit transition remains unproven.
 These development changes are separate from the published v0.2.6 download.
-The current bounded Stage 2 outcome aligns the existing evaluation website source with that
-release and the saved-decision workflow. Desktop/mobile previews and source integration do not
-publish the website; Pages deployment requires separate authorization. See the
-[evaluation-page assessment](docs/audits/2026-11-08-evaluation-page-alignment.md).
+[PR #275](https://github.com/YuzeJ21/Scope-Proof/pull/275) completed the website source alignment
+at main `388b7dae276253ac015efd852cd510bc3999f9fd`; its resulting-main CI passed. The separately
+authorized [Pages publication](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672)
+then published that exact revision. All 12 public files matched source, 20 link destinations and
+desktop/mobile/media checks passed. The [live evaluation site](https://yuzej21.github.io/Scope-Proof/)
+is current for that revision. The historical
+[source-only assessment](docs/audits/2026-11-08-evaluation-page-alignment.md) retains its earlier scope.
+The next bounded evaluation artifact is the no-install constructed HTML report linked above.
+It uses the actual public v0.2.6 exporter; source remains `0.2.7.dev0`. No new package or Pages
+publication follows from adding this repository download.
 Stage 1 closed with all external counts at zero, and Stage 3 remains dormant pending independent
 use. See the [v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
 See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and

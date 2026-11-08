@@ -5,6 +5,23 @@ confirmed requirements have candidate evidence, what remains unresolved, and wha
 since the recorded decision. A PM or requirements owner is the proposed report recipient.
 These roles and the value of the workflow have not been independently validated.
 
+## Inspect a report without installing
+
+[Download the constructed report ZIP](https://github.com/YuzeJ21/Scope-Proof/raw/refs/heads/main/docs/examples/offline-handoff/constructed-v026-review.zip),
+extract it, then open its `.html` file in a browser. No ScopeProof installation, server or network
+connection is needed to read the downloaded report. The current website's evaluation-guide link
+leads here; adding this repository download does not require another Pages deployment.
+
+Expect **Action required**, recorded final acceptance **No**, confirmed revision **2**, and blocker
+**AC-03**. Inspect the reasons, next action and recorded decision audit. All actors, decisions,
+CI metadata and runtime statements are simulated. Repository/head/source links are synthetic and
+do not resolve to a genuine reviewed PR. This report is not an importable saved record or an
+export of every historical analysis; recorded earlier acceptance is not current authority.
+
+The [sample provenance and regeneration guide](examples/offline-handoff/README.md) identifies the
+actual public v0.2.6 exporter, unchanged constructed input and byte-bound presentation disclosure.
+The example supplies zero qualifying-review, genuine-use or runtime-verification evidence.
+
 This is an optional evaluation guide, not a request for the project owner to test the product
 or supply qualifying reviews. All verification cited below is automated engineering evidence.
 
@@ -22,7 +39,7 @@ Follow the [README Quickstart](../README.md#quickstart) for both install paths.
 | Path | Identity and capabilities |
 | --- | --- |
 | Published **v0.2.6** evaluation release | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
-| Unpublished **0.2.7.dev0** development source | Retains the v0.2.6 workflow, native saved-history compatibility contract and PR #273 CSV/HTML revision-label correction, preserving `unknown` and pending current-report denial. PR #274 completed the continuation browser test's saved-review ID commit wait repair. The current bounded outcome aligns the static evaluation website source; source integration does not deploy it. No new product feature, report format or download control is added. See the [observer assessment](audits/2026-11-07-browser-observer-reopen.md), [evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md) and [locked contributor setup](development-environment.md#create-or-refresh-the-environment). This source identity does not establish a public download. |
+| Unpublished **0.2.7.dev0** development source | Retains the v0.2.6 workflow, native saved-history compatibility contract and PR #273 CSV/HTML revision-label correction, preserving `unknown` and pending current-report denial. PR #274 completed the continuation browser test repair; PR #275 aligned the website source, subsequently published from exact main `388b7da`. The no-install example is exported by public v0.2.6, independently of this development version. No new application feature, report format or download control is added. See the [sample guide](examples/offline-handoff/README.md) and [locked contributor setup](development-environment.md#create-or-refresh-the-environment). This source identity does not establish another public package download. |
 | Published **v0.2.5** fallback | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Includes saved comparisons, audited references, JUnit audit history, typed criteria and complete-record handoff. Writes v9. |
 | Published **v0.2.4** | [Earlier release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4). Writes v5. |
 | Historical private **0.2.6.dev0** candidate, unpublished | The [fixed-source packet](releases/v0.2.6-dev0-evaluation-candidate.md) records this development artifact's identities and constructed checks. It is not the final v0.2.6 build or a public-download verification record. |
@@ -124,8 +141,13 @@ reopening and saved-state/history checks. The exact natural Streamlit transition
 PR #274 resulting main `37799a04942e2926bf9c73882a9e0f4e1e44698f` passed
 [main CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42450620236): 4,872 tests,
 38 intentional skips, 95.5067% coverage, seven installed CLI checks and 34 browser-suite checks.
-The current website-source alignment uses private previews; it does not establish that the
-deployed website changed or alter the published package.
+PR #275 resulting main `388b7dae276253ac015efd852cd510bc3999f9fd` passed
+[CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42490554348): 4,872 tests, 38 intentional
+skips, 95.5067% coverage, seven installed CLI checks and 34 browser-suite checks. The separately
+authorized [Pages run](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672) then deployed
+that exact revision. All 12 public files matched source; 20 link destinations, five viewport sizes,
+transcript navigation, video playback and captions passed automatic checks. Form creation routes
+require GitHub sign-in; none were submitted. That publication left the v0.2.6 package unchanged.
 
 The historical [v0.2.5 public verification record](releases/v0.2.5-public-verification.md) records the downloaded
 wheel, source archive and checksum manifest. Both archives passed fresh installation, benchmarks,
