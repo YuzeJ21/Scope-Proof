@@ -166,7 +166,10 @@ jobs:
       - name: Saved-review transfer compatibility
         run: python -m pytest -q tests/storage/test_review_transfer.py tests/storage/test_transfer_inspection.py tests/apps/test_review_transfer.py
       - name: Released-record upgrade regressions
-        run: python -m pytest -q tests/storage/test_released_v023_upgrade.py
+        run: >-
+          python -m pytest -q
+          tests/storage/test_released_v023_upgrade.py
+          tests/storage/test_released_v026_upgrade.py
       - name: Saved comparison compatibility
         run: python -m pytest -q tests/reviews/test_saved_comparison.py tests/reviews/test_foreign_history_comparison.py tests/apps/test_saved_comparison_exports.py
       - name: Reviewer-selected reference compatibility

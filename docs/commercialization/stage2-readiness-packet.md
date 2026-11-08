@@ -39,18 +39,20 @@ target-repository runtime proof, accessibility conformance, customer use, demand
 
 ### Current product checkpoint
 
-The [evaluation guide](../evaluation-guide.md) covers the `0.2.6` source/release build and the
-verified public v0.2.5 fallback, including typed criteria and complete-record transfer.
-Use final v0.2.6 downloads only when the
-[GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) lists the final
-source, wheel, source archive, checksum manifest and completed public-download verification.
-That entry is authoritative for availability. The
-[private `0.2.6.dev0` candidate](../releases/v0.2.6-dev0-evaluation-candidate.md) remains a historical,
+The [evaluation guide](../evaluation-guide.md) separates unpublished `0.2.7.dev0` source from the
+published, publicly verified v0.2.6 download and the verified public v0.2.5 fallback. The
+[v0.2.6 GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies
+the final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, wheel, source archive, checksum
+manifest and completed public-download verification. That entry is authoritative for availability.
+The [private `0.2.6.dev0` candidate](../releases/v0.2.6-dev0-evaluation-candidate.md) remains a historical,
 unpublished artifact; its native public-writer compatibility and exact-artifact checks apply only
 to the recorded development bytes, not the final v0.2.6 package.
-The [roadmap](../../ROADMAP.md#current-priorities--2026-11-07) records the bounded finish line.
-The owner separately authorized final v0.2.6 publication and automatic public-download verification
-on 2026-11-07. Completing engineering checks does not authorize another release or feature queue.
+The owner-authorized final v0.2.6 publication and automatic public-download verification completed
+on 2026-11-07. Current bounded work makes rich native v0.2.6 saved-review histories a permanent
+compatibility regression contract; no current data-loss defect is asserted. The
+[roadmap](../../ROADMAP.md#current-priorities--2026-11-07) and
+[compatibility assessment](../audits/2026-11-07-native-v026-compatibility.md) name its finish line.
+Completing engineering checks does not authorize another release or feature queue.
 Stage 3 requires genuine independent use and separate authorization.
 
 ### Implemented development outcomes and historical version context
@@ -91,10 +93,12 @@ One review retains at most 20 imports, each retained warning or asserted limitat
 1,000 characters, and a new analysis never inherits an earlier criteria revision's imports.
 Other adapter families remain unimplemented and require their own bounded design and owner scope.
 
-Apart from the separately authorized final v0.2.6 release, this stage does not authorize outreach,
-participant contact, a merge, release, tag, or package publication, R-002 retuning, R-003 generation,
+The completed final v0.2.6 publication does not authorize further outreach, participant contact,
+a release, tag, or package publication, R-002 retuning, R-003 generation,
 billing, accounts, private-repository support,
 hosted source processing, or paid APIs. Each requires its own owner decision where applicable.
+Existing explicit merge authorization remains in force; stage status itself grants no new
+integration authority.
 Generic code review, security scanning, and auto-fix features remain excluded under
 [AGENTS.md](../../AGENTS.md).
 

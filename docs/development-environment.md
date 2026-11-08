@@ -1,7 +1,8 @@
 # Reproducible development environment
 
-Versioned source uses `0.2.6`. The v0.2.6 evaluation build is available for installation only
-when its final assets and public-download verification appear on
+Versioned source uses unpublished `0.2.7.dev0`. The published v0.2.6 evaluation download is publicly
+verified from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Check its final assets and completed
+public-download verification on
 [GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
 The verified v0.2.5 download remains a fallback.
 The [v0.2.5 public verification record](releases/v0.2.5-public-verification.md) binds those published

@@ -7,7 +7,7 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, with a bounded v0.2.6 evaluation-release milestone;
+`owner_led_productization_active`, with one bounded native-v0.2.6 saved-history compatibility outcome;
 this owner decision does not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
@@ -41,30 +41,33 @@ documents direct overlap and adoption constraints without claiming superiority o
 | Stage 2 — completed on source, PR #267 | Know why a saved analysis requires refresh when fresh observations conflict. | The decision overview distinguishes an observed different head, changed check details at the reviewed head, and explicit non-public visibility. Keep the explanation in the current session and preserve the saved review and export guards. |
 | Stage 2 — completed on source, PR #268 | Recover when a selected saved analysis cannot be used for evidence comparison. | Explain which relationship check failed or when records need to be reopened or reselected. Point to requirements-only comparison for eligible same-PR criteria or source differences. Preserve exact-head and comparison rules. |
 | Stage 2 — completed on source, PR #269 | Keep an unsubmitted scope decision with its review when a replacement, source load, or criteria change would invalidate it. | Require saving or explicitly discarding the draft before changing its context. Discard in place and keep read-only inspection available. Preserve recorded decisions and report rules. |
+| Stage 2 — publication and public verification complete | Deliver the consolidated v0.2.6 evaluation workflow as downloadable artifacts. | The [v0.2.6 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, wheel, source archive, checksum manifest and completed public-download verification. No further release follows automatically. |
+| Stage 2 — current bounded outcome | Preserve rich native v0.2.6 saved-review histories as development readers change. | Immutable records from the actual public writer, provenance-bound generation, active and unconfirmed historical-only states, complete-state preservation through load/copy-only resave/transfer/reopen, active reports and pending current-report denial, existing Linux and Windows CI and independent engineering review. See the [bounded assessment](docs/audits/2026-11-07-native-v026-compatibility.md). No current data-loss defect is asserted. |
 | P3 — Stage 3 dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. |
 
 ### Product and architecture checkpoint
 
-The consolidated milestone is the **`0.2.6` evaluation release build**:
+The completed consolidated milestone is the **published, publicly verified `0.2.6` evaluation release**:
 **explain a saved acceptance decision, share it offline, and safely revisit it after changes**.
 The verified v0.2.5 fallback source is `72cac01`. The later PR #254–#269 source outcomes above
 are included in v0.2.6 and absent from v0.2.5. See [v0.2.6 changes](CHANGELOG.md#026--evaluation-release-build)
 and the [version guide](docs/evaluation-guide.md#choose-the-right-version).
 The [private `0.2.6.dev0` candidate packet](docs/releases/v0.2.6-dev0-evaluation-candidate.md)
 remains a historical unpublished artifact. Its checks do not verify final v0.2.6 bytes.
-The owner authorized final v0.2.6 publication and automatic public-download verification on
-2026-11-07, without personal testing or qualifying reviews. The
+The owner-authorized final v0.2.6 publication and automatic public-download verification completed
+on 2026-11-07, without personal testing or qualifying reviews. The
 [GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) is authoritative
-for availability, final source, assets and completed public verification; use the verified
-v0.2.5 fallback until those are available.
+for availability, final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, all three assets and
+completed public verification. Current source is unpublished `0.2.7.dev0`; v0.2.5 remains a verified fallback.
 
 | Priority | Gap and action | Completion criterion / decision |
 | --- | --- | --- |
-| P0 — final v0.2.6 distribution | Package the consolidated workflow from one fixed final-version source commit. | Wheel and source archive identities, matching source-built wheel, clean installs, installed CLI/browser journeys, native public-v0.2.5 writer upgrade on copies, independent engineering review and exact-head CI. Final build evidence must name its actual source and bytes; the historical dev0 packet is not a substitute. |
-| P1 — lifecycle verified by automation | Verify the complete lifecycle rather than add another parity feature: confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Reuse current consequential transition tests, especially stale downloads, source contradictions and pending scope drafts. Fix only a demonstrated blocker. Record platform, policy, identity and retrieval limits. End this development queue when the candidate packet is complete. |
-| Conditional engineering follow-up | Static evidence discovery can miss relevant candidates. Frozen R-002 found candidates for 5/20 research criteria; this is a historical result, not a production accuracy estimate. | Only if further engineering investigation is selected: classify omissions against unchanged frozen inputs/results, identify one observable failure type, and record any new constructed cases separately before proposing a bounded change. No gate weakening or score relabeling. |
+| P0 — final v0.2.6 distribution complete | Published the consolidated workflow from one fixed final-version source commit. | Final wheel, source archive and checksum manifest were publicly downloaded and verified. Release-source main checks passed 4,842 tests with 95.5067% coverage; installed checks passed seven CLI checks and 32 browser-suite checks. Use the Release entry for source and exact artifact identities; the historical dev0 packet is not a substitute. |
+| Lifecycle consolidation complete | Confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Consequential transition checks, including stale downloads, source contradictions and pending scope drafts, are retained. The release preparation queue is closed; no additional parity feature is selected. |
+| Current bounded engineering outcome | A published v0.2.6 rich saved history must remain intact under future development readers. | Turn actual released-writer active and unconfirmed records into immutable, provenance-bound CI fixtures. Verify complete state and producer/history preservation through load, copy-only resave, byte-preserving transfer and recipient reopening; verify active reports and pending current-report denial on existing Linux/Windows lanes. Stop after independent review, green exact-head checks and resulting-main verification. This is test-only regression hardening, not a demonstrated current data-loss repair. |
+| Next reproduced defect, separately bounded | A bare retained revision-2 analysis can display revision 1 in CSV/HTML. | Derive displayed analysis revision from the selected bundle without fabricating a current state. Preserve pending current-report denial and analysis-only report boundaries. Reproduction and exact scope are recorded in the compatibility assessment; this change does not fix exporters. |
+| R-002 omission classification complete | The [existing miss taxonomy](docs/research/r002-swebench-verified/miss-taxonomy.md) classified the 15 frozen misses: 14 threshold rejections and one lexical mismatch. | Frozen inputs/results and the 5/20 candidate baseline stay unchanged. Do not repeat classification, retune or relabel R-002. No new retrieval change or separately labelled holdout is selected. |
 | Conditional architecture follow-up | Workbench session-state guards are distributed across a large entrypoint. Complete histories are processed repeatedly; stores reject records above 64 MiB. Filesystem operations depend on platform support. | Retain existing stale-state, Windows and storage regressions. Extract one boundary or change storage only for a reproduced maintenance or operating-envelope constraint. No rewrite, database or multiuser service is needed for the local handoff outcome. |
-| Authorized v0.2.6 publication | Publish the verified final-version wheel, source archive and checksum manifest, then automatically fetch and verify public downloads. | Release entry names the fixed source, actual artifact hashes and completed public verification. Availability follows that entry, not this source milestone. v0.2.5 remains the verified fallback. No deployment, external contact or Stage 3 follows. |
 | Stage 3 — dormant | Usefulness, operator/recipient fit and independent reuse are unproven. | Genuine independent-use evidence and separate authorization; no personal testing or qualifying reviews are requested by this roadmap. If such evidence is not pursued, remain an engineering reference/evaluation product. |
 
 **Product strengths:** explicit intent, inspectable gaps, exact-head history and portable decision
@@ -97,15 +100,19 @@ support require a separately chosen product direction. Do not start them automat
 > review, merge only after exact-head checks pass and verify main. No personal testing, qualifying
 > reviews, publication, deployment or outreach. Stop when the candidate evidence is reviewable.
 
-**Conditional next engineering goal — one observable constraint:**
+**Current bounded engineering goal — native released-writer compatibility:**
 
-> Perform one bounded ScopeProof product checkpoint. Find the single most consequential observable
-> obstacle to explaining a recorded acceptance decision and revisiting it after changes, grounded
-> in current source, rendered behavior or existing automation. Separate engineering defects from
-> unvalidated usefulness. Implement at most one justified outcome with a named finish line,
-> automated verification and independent engineering review, then merge on green exact-head CI.
-> Preserve frozen R-002 and every evidence gate. If no consequential gap is demonstrated, recommend
-> no new development and stop. Do not generate parity features or repeat closed investigations.
+> Create and pursue one bounded ScopeProof compatibility goal. Establish unpublished `0.2.7.dev0`
+> source separately from public v0.2.6. Use the verified actual public v0.2.6 writer to produce
+> explicitly constructed rich active and unconfirmed saved histories through supported APIs.
+> Retain immutable record bytes, reproducible generation and schema-validated artifact provenance.
+> Make complete state, producer identities, history and existing decisions a permanent regression
+> contract through load, copy-only resave, complete-record transfer, recipient reopen and exports.
+> Exercise the contract through existing Linux/Windows CI, obtain independent engineering review,
+> merge on green exact-head checks and verify resulting main, then stop. This closes a durable
+> coverage gap, not a demonstrated current data-loss defect. Preserve all evidence/confirmation
+> gates, public-release guards and frozen R-002. No personal testing, qualifying reviews, new
+> publication, deployment, outreach, parity feature queue or repeated R-002 investigation.
 
 **Future publication goal — requires separate authorization:**
 
@@ -120,9 +127,11 @@ is dated evidence; the current priorities and version guide above govern the pre
 
 ## Current operating decision
 
-**Current source/package version is 0.2.6.** Use its download after the
-[v0.2.6 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) lists final assets
-and completed public verification. The verified v0.2.5 fallback and its public checks are bound to
+**Current development source/package version is 0.2.7.dev0.** The published v0.2.6 download and its
+completed public verification are bound to final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1` in the
+[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6). Check its final assets
+and verification before installing; the current development tree is not a new published release.
+The verified v0.2.5 fallback and its public checks are bound to
 `72cac01ea6abb99beaf714396eb610fa39fe84f0`.
 The [v0.2.4 verification record](docs/releases/v0.2.4-public-verification.md) and the
 [PR #221 private candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) preserve their
@@ -147,8 +156,9 @@ lock versions. These are verified baseline choices, not proven earliest compatib
 The older-stack
 browser observation remains partial because its saved-review selector differs from the current
 test helper; it is not a full compatibility pass. The upload, dependency, CI and candidate
-preparation questions are closed. The current bounded work finalizes v0.2.6 distribution through
-the [current priorities](#current-priorities--2026-11-07). This is evaluation
+preparation questions are closed. The v0.2.6 distribution and public verification are complete.
+Current bounded work adds the native released-writer compatibility contract in the
+[current priorities](#current-priorities--2026-11-07). This remains evaluation
 distribution, not a Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
 
@@ -169,14 +179,18 @@ authenticated identity and integrations remain separately scoped options.
 ## Current release and validation state
 
 The GitHub Release record is authoritative for publication availability.
-ScopeProof v0.2.5 is published. Public install: v0.2.5 is available from the
+ScopeProof v0.2.6 is published and all three public assets are verified from final source
+`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Use the
+[v0.2.6 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) for exact source,
+artifact hashes and completed public-download checks. ScopeProof v0.2.5 is published as a fallback;
+v0.2.5 is available from the
 [v0.2.5 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5),
 which provides the wheel, source archive, and checksum manifest.
 
-For v0.2.6, use the final assets only when its
-[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) also records completed
-public-download verification. This source tree declares `0.2.6`; declaration and the historical
+This source tree declares unpublished `0.2.7.dev0`. A source declaration and the historical
 private `0.2.6.dev0` candidate do not establish public availability or final artifact identity.
+The permanent native v0.2.6 regression corpus is engineering evidence only and does not create
+independent-use evidence, another release or Stage 3 credit.
 
 The table and integration notes below preserve dated engineering references. They are not a
 moving-head ledger. The PR #247 resulting-main baseline (`5b9860b`) has twenty-five browser checks: eleven installed-wheel

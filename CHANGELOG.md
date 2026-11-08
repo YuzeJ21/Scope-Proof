@@ -9,7 +9,13 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-No changes recorded after the `0.2.6` release build in this source tree.
+- Advance development identity to `0.2.7.dev0`; public v0.2.6 assets retain their original source
+  and version.
+- Add a permanent compatibility regression corpus produced by the actual public v0.2.6 writer,
+  covering rich active and unconfirmed saved reviews, retained histories, copy-only resave,
+  complete-record transfer and exports. This test-only work preserves existing evidence gates
+  and producer identities; it does not fix a demonstrated current data-loss defect or add a
+  product feature. See the [bounded assessment](docs/audits/2026-11-07-native-v026-compatibility.md).
 
 ## 0.2.6 — Evaluation release build
 

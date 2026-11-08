@@ -5,7 +5,7 @@
 **Start here:** [Choose a version and follow one short evaluation workflow](docs/evaluation-guide.md).
 It separates verified downloads from current source and the older private candidates,
 then shows how to inspect, save and hand off a constructed review.
-The `0.2.6` source and release build add a decision overview, offline HTML handoff and saved
+The published `0.2.6` evaluation release adds a decision overview, offline HTML handoff and saved
 requirements comparison; see [v0.2.6 changes](CHANGELOG.md#026--evaluation-release-build) and the
 [current roadmap](ROADMAP.md#current-priorities--2026-11-07).
 
@@ -35,13 +35,15 @@ fields remain visible with extra fields explicitly marked as not applied to that
 recorded offsets or missing timezones remain explicit. See the
 [workbench consistency assessment](docs/audits/2026-11-01-workbench-resolution-audit.md).
 
-Current direction: develop the reviewer workflow through a short, outcome-driven Stage 2 roadmap.
-Current source identifies itself as **0.2.6**. The
+Current source identifies itself as **0.2.7.dev0**, an unpublished development version. The
 [GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) is authoritative for
-download availability and completed public verification. Use v0.2.6 after its final assets and
-public-download verification are available there; the verified **v0.2.5** download remains a
-fallback. Stage 1 closed with all external counts at zero, and Stage 3 remains dormant pending
-independent use. See the [v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
+download availability and completed public verification. **v0.2.6 is published and publicly
+verified** from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; the verified **v0.2.5** download remains
+a fallback. Current bounded Stage 2 work makes rich native v0.2.6 saved-review histories a
+permanent compatibility regression contract; it does not assert a current data-loss defect.
+See the [compatibility assessment](docs/audits/2026-11-07-native-v026-compatibility.md).
+Stage 1 closed with all external counts at zero, and Stage 3 remains dormant pending independent
+use. See the [v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
 See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and
 [official-source market comparison](docs/commercialization/product-direction-2026-11-02.md) for
 substantial competing workflows and the remaining value hypothesis.
@@ -172,9 +174,11 @@ only explicit success as passing.
 Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
 for the tested Python versions, platform limits, and contributor setup.
 
-**Current source/package version: 0.2.6.** A versioned source tree or local build does not
+**Current development source/package version: 0.2.7.dev0. Published evaluation download: v0.2.6.**
+A versioned source tree or local build does not
 establish public availability. The [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases)
-is authoritative for publication availability. Use the v0.2.6 path below only when its
+is authoritative for publication availability. The verified v0.2.6 release comes from
+`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Use the v0.2.6 path below only when its
 [release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) lists the final source,
 `scopeproof-0.2.6-py3-none-any.whl`, `scopeproof-0.2.6.tar.gz`, `SHA256SUMS.txt`, and completed
 public-download verification. If those are absent, use the verified v0.2.5 fallback.

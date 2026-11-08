@@ -1,3 +1,10 @@
 # Preserve the observed old-writer bytes and the recipe bound by provenance hashes.
 tests/fixtures/released_v023_upgrade/native_v4.json -text
 tests/fixtures/released_v023_upgrade/generate_record.py -text
+
+# Preserve the observed public-v0.2.6 native v9 records and hash-bound recipe/provenance.
+tests/fixtures/released_v026_upgrade/*.json -text
+tests/fixtures/released_v026_upgrade/*.py -text
+# The public writer's provenance also binds these packaged demo inputs byte-for-byte.
+evals/fixtures/csv_export_pr.json -text
+evals/labels/csv_export_expected.json -text

@@ -4,13 +4,15 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: bounded Stage 2 development. Source implements scope-aware re-review and
-durable saved-baseline comparison, plus separately attributed non-gating source references.
-See the ranked outcomes in the [roadmap](../ROADMAP.md).
-Versioned source uses `0.2.6`. For v0.2.6 download availability and completed public verification,
-use the [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
-Install only after its final assets and verification are present; verified v0.2.5 remains a fallback.
-The dated verification record binds released bytes to their own source commit. Stage 1 is closed
+Current direction: one bounded Stage 2 compatibility outcome. Rich native v0.2.6 saved-review
+histories become a permanent regression contract; no current data-loss defect is asserted.
+See the finish line in the [roadmap](../ROADMAP.md) and the
+[compatibility assessment](audits/2026-11-07-native-v026-compatibility.md).
+Versioned source uses unpublished `0.2.7.dev0`. The published **v0.2.6** download is publicly verified
+from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Its
+[GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) is authoritative
+for source, final assets and completed public verification. Install only after checking those
+entries; verified v0.2.5 remains a fallback. Released bytes retain their own source commit. Stage 1 is closed
 at zero; Stage 3 is dormant and gated. No personal testing or qualifying reviews are required
 for evaluation distribution. Begin with the roadmap's finish line before starting any new slice.
 
@@ -21,6 +23,10 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [November 2 product and market assessment](commercialization/product-direction-2026-11-02.md) —
   official-source overlap, adoption constraints, and priorities before publication.
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
+- [v0.2.6 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) —
+  fixed source, three public assets and completed public-download verification.
+- [Native v0.2.6 compatibility assessment](audits/2026-11-07-native-v026-compatibility.md) —
+  provenance-bound constructed saved histories and the permanent regression boundary.
 - [v0.2.5 public verification](releases/v0.2.5-public-verification.md) — release source, assets,
   fresh installs and workbench handoff checks.
 - [v0.2.4 public verification](releases/v0.2.4-public-verification.md) — earlier published source/tag/assets,

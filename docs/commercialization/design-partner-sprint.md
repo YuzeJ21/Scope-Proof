@@ -9,8 +9,9 @@ Stage 2 is `owner_led_productization_active` with a bounded development queue in
 [roadmap](../../ROADMAP.md). Stage 3 remains dormant and gated. Neither status supplies a participant, customer,
 demand, adoption, repeat-use, price, or paid-demand signal.
 
-Versioned source uses `0.2.6`. Use the v0.2.6 evaluation build only after final assets and
-completed public verification are available on
+Versioned source uses unpublished `0.2.7.dev0`. The published v0.2.6 evaluation download is publicly
+verified from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Check its final assets and completed
+public verification on
 [GitHub Releases](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
 The published fallback is
 [v0.2.5](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5).

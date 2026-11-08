@@ -10,22 +10,26 @@ or supply qualifying reviews. All verification cited below is automated engineer
 
 ## Choose the right version
 
-Use the **v0.2.6** wheel when its [GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6)
-contains the final source identity, wheel, source archive, checksum manifest and completed
-public-download verification. The [GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases)
-is authoritative for availability. Until those are available, use the verified **v0.2.5** fallback.
+The **v0.2.6** wheel is published and publicly verified from
+`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Check its
+[GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) for that final
+source identity, wheel, source archive, checksum manifest and completed public-download
+verification. The [GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) is
+authoritative for availability. If the expected assets or verification are absent, use the
+verified **v0.2.5** fallback.
 Follow the [README Quickstart](../README.md#quickstart) for both install paths.
 
 | Path | Identity and capabilities |
 | --- | --- |
-| **v0.2.6** source / final release build | Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. Source identity alone does not establish publication; use its wheel only after the release entry and public verification above are available. For source work, use the [locked contributor setup](development-environment.md#create-or-refresh-the-environment). |
+| Published **v0.2.6** evaluation release | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
+| Unpublished **0.2.7.dev0** development source | Retains the v0.2.6 workflow. Current work makes rich native v0.2.6 saved histories a permanent compatibility regression contract; it does not claim a current data-loss defect or add a product feature. Use the [locked contributor setup](development-environment.md#create-or-refresh-the-environment). This source identity does not establish a public download. |
 | Published **v0.2.5** fallback | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Includes saved comparisons, audited references, JUnit audit history, typed criteria and complete-record handoff. Writes v9. |
 | Published **v0.2.4** | [Earlier release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4). Writes v5. |
 | Historical private **0.2.6.dev0** candidate, unpublished | The [fixed-source packet](releases/v0.2.6-dev0-evaluation-candidate.md) records this development artifact's identities and constructed checks. It is not the final v0.2.6 build or a public-download verification record. |
 | Historical private **0.2.5 candidate**, PR #221 | Prepared at `4f12ae02dee277705d17ac6ab94f0a74f99be346` with its own v5 upgrade evidence. See the [dated guide](releases/v0.2.5-evaluation-candidate.md). |
 
-Keep each candidate's recorded identity intact. A final v0.2.6 package requires its own
-versioned build and verification; a renamed development archive is not a final release.
+Keep each candidate's recorded identity intact. The final v0.2.6 package has its own versioned
+build and verification; a renamed development archive is not a final release.
 
 Back up local reviews before switching versions. The default store is `~/.scopeproof/reviews`.
 Do not point an older release at newly saved v9 records or assume downgrade compatibility.
@@ -48,7 +52,8 @@ uv run scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
 Confirm that the checked-out commit matches the source named in the Release entry; the launcher
-reports version `0.2.6`. If v0.2.6 is not yet publicly verified, use the v0.2.5 fallback source
+reports version `0.2.6`. Current development source reports `0.2.7.dev0` and is a separate path.
+If the expected v0.2.6 public verification is unavailable, use the v0.2.5 fallback source
 instead: replace the checkout command with
 `git checkout --detach 72cac01ea6abb99beaf714396eb610fa39fe84f0`. That launcher reports `0.2.5`.
 Stop either launcher with Ctrl+C.
@@ -85,10 +90,19 @@ becomes a genuine review by substituting a real person's name.
 
 ## What is verified, and what is missing
 
-For final v0.2.6 artifacts, use only the completed public verification recorded in its
-[GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6). Source changes,
-private candidate checks and earlier-release results do not establish those downloads' identity
-or installed behavior.
+The completed public verification in the
+[v0.2.6 GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) binds
+the public wheel, source archive and checksum manifest to final source
+`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. The release-source main checks passed 4,842 tests
+with 95.5067% coverage; installed verification passed seven CLI checks and 32 browser-suite checks.
+These are constructed engineering checks, not a count of independent users or full end-to-end
+journeys. Current source changes, private candidate checks and earlier-release results do not
+establish those published bytes' identity or installed behavior.
+
+The [native v0.2.6 compatibility assessment](audits/2026-11-07-native-v026-compatibility.md)
+records the separately bounded permanent regression outcome for published-writer saved histories.
+That corpus protects future development readers; it does not expand compatibility to every
+historical environment or establish downgrade support.
 
 The historical [v0.2.5 public verification record](releases/v0.2.5-public-verification.md) records the downloaded
 wheel, source archive and checksum manifest. Both archives passed fresh installation, benchmarks,
@@ -105,6 +119,6 @@ Source can be missed; candidate presence cannot establish correctness. The evalu
 
 See the [November 2 product assessment](commercialization/product-direction-2026-11-02.md) and
 [next-stage roadmap](../ROADMAP.md#current-priorities--2026-11-07). Stage 2 remains active;
-Stage 3 stays dormant. The owner separately authorized final v0.2.6 publication and automatic
-public-download verification. This guide does not authorize another release, deployment or
+Stage 3 stays dormant. The separately authorized final v0.2.6 publication and automatic
+public-download verification are complete. This guide does not authorize another release, deployment or
 external contact, and requests no personal testing or qualifying reviews.
