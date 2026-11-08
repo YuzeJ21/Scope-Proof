@@ -4,14 +4,15 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: one bounded Stage 2 browser-test synchronization repair. PR #272 completed the
-native-v0.2.6 compatibility contract; PR #273 completed CSV/HTML revision labels. The current task
-waits for the server-computed saved-review ID commit outcome, preserving actual validated reopening
-and saved-state/history assertions. Three natural baseline runs did not reproduce the timeout;
-a controlled signal-loss replay with the real installed app reproduces the old wait failure.
-This is test-only evidence, not proof of the precise natural Streamlit mechanism or a product
-feature. See the [roadmap](../ROADMAP.md) and
-[observer assessment](audits/2026-11-07-browser-observer-reopen.md).
+Current direction: align the existing evaluation website source with public v0.2.6 and the
+saved-decision workflow, verify private desktop/mobile previews, then integrate without deployment.
+PR #272 completed native-v0.2.6 compatibility; PR #273 completed CSV/HTML revision labels;
+PR #274 completed the bounded browser-test synchronization repair at main
+`37799a04942e2926bf9c73882a9e0f4e1e44698f`, with green resulting-main CI. Natural baseline runs
+and controlled signal-loss evidence remain distinct; the exact natural Streamlit transition
+remains unproven. See the [roadmap](../ROADMAP.md),
+[observer assessment](audits/2026-11-07-browser-observer-reopen.md) and
+[evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md).
 Versioned source uses unpublished `0.2.7.dev0`. The published **v0.2.6** download is publicly verified
 from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Its
 [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) is authoritative
@@ -27,6 +28,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [November 2 product and market assessment](commercialization/product-direction-2026-11-02.md) —
   official-source overlap, adoption constraints, and priorities before publication.
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
+- [Evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md) — current-release routing,
+  saved-decision positioning and private static previews; no website publication.
 - [v0.2.6 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) —
   fixed source, three public assets and completed public-download verification.
 - [Historical-analysis revision-label assessment](audits/2026-11-07-historical-report-revision.md) —

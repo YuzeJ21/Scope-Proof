@@ -57,12 +57,20 @@ and analysis-only boundaries. Its [main CI attempt 2](https://github.com/YuzeJ21
 passed 4,872 tests, 36 intentional skips, 95.5067% coverage, seven installed CLI checks and 32
 browser-suite checks. Attempt 1's browser-observer timeout and the two fresh unchanged local
 passes before the one failed-job retry remain evidence; they are not erased by the passing retry.
-Current bounded work changes only the continuation test's saved-review ID commit wait. Three
+PR #274 completed the continuation test's saved-review ID commit wait repair. Three
 further natural baseline runs passed; controlled signal-loss replay with the real installed app
 reproduces the old wait failure. This supports a semantic control wait, not a claim that the precise
 natural Streamlit transition is known. The [roadmap](../../ROADMAP.md#current-priorities--2026-11-07)
-and [observer assessment](../audits/2026-11-07-browser-observer-reopen.md) name the test-only finish
-line. Product/core behavior, gates and dedicated report/download controls stay unchanged.
+and [observer assessment](../audits/2026-11-07-browser-observer-reopen.md) retain the test-only
+boundary. Resulting main `37799a04942e2926bf9c73882a9e0f4e1e44698f` passed
+[CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42450620236): 4,872 tests, 38 intentional
+skips, 95.5067% coverage, seven installed CLI checks and 34 browser-suite checks.
+The current bounded outcome corrects the existing evaluation website source's stale release
+identity and explains the published saved-decision, offline handoff and revisit workflow.
+Private desktop/mobile previews and source integration do not publish the website. Pages remains
+manual-only and deployment needs separate authorization. See the
+[evaluation-page assessment](../audits/2026-11-08-evaluation-page-alignment.md).
+Product/core behavior, gates and dedicated report/download controls stay unchanged.
 Completing engineering checks does not authorize another release or feature queue.
 Stage 3 requires genuine independent use and separate authorization.
 

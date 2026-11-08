@@ -1750,8 +1750,9 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
     assert "70bdca1a0d609c81ac8cd2274dc4915612067cfdb1c2205276faafd7c6358ac8" in candidate
     assert "7fff8ba0b6b6c85ae0f22fe487762de8a525d04145c50eab46792233b798573e" in candidate
     assert (
-        f'<a class="button button-primary" href="{PUBLIC_RELEASES_INDEX}">'
-        "View evaluation releases</a>"
+        '<a class="button button-primary" '
+        'href="https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/evaluation-guide.md">'
+        "Start the evaluation guide</a>"
     ) in site
     candidate_notes = Path("docs/releases/v0.2.4-evaluation-candidate.md").read_text(
         encoding="utf-8"
@@ -2516,7 +2517,17 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert html.count("<h1") == 1
     assert disclosure in html
     assert disclosure in transcript
-    assert "Public PR → Confirm criteria → Review coverage → Record decisions → Export" in html
+    assert "Confirm intent → Inspect evidence → Record decisions → Share → Revisit" in html
+    assert f"Published evaluation download: {PUBLIC_RELEASE_TAG}" in html
+    assert f"Development source: {SOURCE_VERSION}, unpublished" in html
+    assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in parser.links
+    assert (
+        "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/evaluation-guide.md"
+        in parser.links
+    )
+    assert "Earlier constructed coverage walkthrough" in html
+    assert "does not demonstrate the complete saved-review lifecycle" in html
+    assert "does not demonstrate the complete saved-review lifecycle" in transcript
     assert "downloads, constructed demos, and automated checks are not product validation." in html
     assert "https://github.com/YuzeJ21/Scope-Proof" in html
     assert PUBLIC_RELEASES_INDEX in html
