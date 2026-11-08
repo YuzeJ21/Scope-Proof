@@ -7,15 +7,19 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, with one bounded no-install report example;
+`owner_led_productization_active`, with the no-install example complete and one measured
+saved-history validation improvement;
 this owner decision does not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current priorities — 2026-11-07
 
-Updated 2026-11-08: PR #275 and the separately authorized Pages publication are complete.
-The selected outcome is an inspectable constructed HTML handoff before installation, available
-through a repository download from the existing evaluation guide. No new deployment is selected.
+Updated 2026-11-08: PR #276 completed the constructed report download; resulting-main CI
+42502782742 passed. The selected follow-up is a bounded saved-history operating-envelope
+assessment and the smallest repair justified by a reproduced constraint. Ordered per-revision
+event projection removes repeated full-history scans while retaining all validation. See the
+[measurement and limits](docs/audits/2026-11-08-history-event-validation.md).
+No new release or deployment is selected.
 
 The product direction is **explain and revisit an acceptance decision**. Confirmed intent,
 exact-head evidence, explicit gaps, recorded decisions and later comparison form the working
@@ -109,9 +113,10 @@ the source and publication milestones without advancing product validation.
 | Selected-analysis revision labels complete, PR #273 | CSV/HTML reports use the validated selected bundle's recorded revision, including `unknown`. | Full-state labels, pending current-report denial, producer/history and analysis-only boundaries remain intact. Dedicated historical JSON/Markdown and download controls are unchanged. Exact-head and resulting-main checks passed; the initial browser timeout remains recorded separately. |
 | Browser synchronization complete, PR #274 | A settled saved-review ID was rejected by a test waiting for a generic script-state transition. | The scoped control wait retains actual reopening and history checks at the same timeout. Exact-head and resulting-main checks passed; natural and controlled evidence stay separate. No further observer task is selected. |
 | Evaluation website complete, PR #275 plus authorized publication | The existing page now identifies v0.2.6/source0.2.7.dev0 and describes save/share/revisit. | The exact `388b7da` site is public and verified. Keep its historic source-only assessment separate from the later deployment evidence; do not restart that slice. |
-| Bounded no-install evaluation example | A new evaluator currently must install/run ScopeProof to obtain an actual handoff report, although recipients can already read exported HTML offline. | Supply a repository-download sample with actual public v0.2.6 export provenance and prominent constructed boundaries. Verify expected blocked semantics, immutable input, deterministic presentation and offline desktop/mobile/no-network behavior. Link it before installation through the live site's existing guide route; no additional deployment. |
+| No-install evaluation example complete, PR #276 | An evaluator can download a constructed handoff report before installation through the existing guide. | Actual public v0.2.6 export provenance, labelled boundaries, deterministic ZIP/HTML, offline rendering and public download checks passed. Resulting main c749917 passed CI with 4,884 tests, 38 skips and 95.5124% unrounded coverage. Do not repeat sample generation or deploy another site. |
+| Measured history constraint — bounded repair | Valid large records repeatedly scan every audit event for each historical analysis. | New separate constructed cases reproduce the constraint below the unchanged cap. Group validated events once by revision, preserve every projection/gate/evidence/temporal check, and require regression, independent engineering review and exact-head CI. Local largest-case comparison preparation measured 12.191 → 3.924 seconds; this is not a UI guarantee or customer workload. See the assessment. |
 | R-002 omission classification complete | The [existing miss taxonomy](docs/research/r002-swebench-verified/miss-taxonomy.md) classified the 15 frozen misses: 14 threshold rejections and one lexical mismatch. | Frozen inputs/results and the 5/20 candidate baseline stay unchanged. Do not repeat classification, retune or relabel R-002. No new retrieval change or separately labelled holdout is selected. |
-| Conditional architecture follow-up | Workbench session-state guards are distributed across a large entrypoint. Complete histories are processed repeatedly; stores reject records above 64 MiB. Filesystem operations depend on platform support. | Retain existing stale-state, Windows and storage regressions. Extract one boundary or change storage only for a reproduced maintenance or operating-envelope constraint. No rewrite, database or multiuser service is needed for the local handoff outcome. |
+| Conditional architecture follow-up | Workbench session-state guards remain distributed; complete-state validation/serialization and memory costs remain after the bounded event-scan repair. Stores reject records above 64 MiB; that cap is not a responsiveness guarantee. Filesystem operations depend on platform support. | Retain existing stale-state, Windows and storage regressions. The measured event-scan repair does not authorize further extraction, caching or storage changes. Require another consequential reproduced constraint before such work. No rewrite, database or multiuser service is selected. |
 | Stage 3 — dormant | Usefulness, operator/recipient fit and independent reuse are unproven. | Genuine independent-use evidence and separate authorization; no personal testing or qualifying reviews are requested by this roadmap. If such evidence is not pursued, remain an engineering reference/evaluation product. |
 
 **Product strengths:** explicit intent, inspectable gaps, exact-head history and portable decision
@@ -253,8 +258,9 @@ test helper; it is not a full compatibility pass. The upload, dependency, CI and
 preparation questions are closed. The v0.2.6 distribution and public verification are complete.
 PR #272 closed the native released-writer compatibility contract and PR #273 closed CSV/HTML
 revision labels. PR #274 closed its bounded browser wait repair; PR #275 and the separately
-authorized exact-revision Pages publication closed the website milestone. The no-install
-constructed report example is the bounded outcome in the
+authorized exact-revision Pages publication closed the website milestone. PR #276 completed
+the no-install constructed report example. The measured saved-history validation repair is
+the bounded follow-up in the
 [current priorities](#current-priorities--2026-11-07). This remains evaluation
 distribution, not a Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
