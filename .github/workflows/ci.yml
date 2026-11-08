@@ -144,6 +144,8 @@ jobs:
         run: python -m pytest -q tests/reviews/test_final_acceptance_comparison.py tests/reviews/test_final_acceptance_safety.py tests/reporting/test_final_acceptance_comparison.py tests/apps/test_final_acceptance_comparison.py
       - name: Retained historical analysis compatibility
         run: python -m pytest -q tests/reviews/test_historical_analysis.py tests/reviews/test_historical_analysis_safety.py tests/reviews/test_historical_analysis_producer.py tests/reporting/test_historical_analysis.py tests/reporting/test_historical_revision_labels.py
+      - name: Ordered historical event validation compatibility
+        run: python -m pytest -q tests/gates/test_validation.py tests/gates/test_history_event_validation.py tests/schemas/test_review_state_integrity.py
       - name: Historical CLI handoff compatibility
         run: python -m pytest -q tests/cli/test_history.py tests/cli/test_history_safety.py tests/cli/test_criteria_changes.py tests/cli/test_criteria_changes_safety.py
       - name: Typed criteria handoff compatibility
