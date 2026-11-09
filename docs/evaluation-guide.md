@@ -27,25 +27,25 @@ or supply qualifying reviews. All verification cited below is automated engineer
 
 ## Choose the right version
 
-The **v0.2.6** wheel is published and publicly verified from
-`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Check its
-[GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) for that final
-source identity, wheel, source archive, checksum manifest and completed public-download
-verification. The [GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) is
-authoritative for availability. If the expected assets or verification are absent, use the
-verified **v0.2.5** fallback.
+Current source/package is **0.2.7**, prepared for the authorized final evaluation release build
+and distribution. The [v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7)
+is authoritative for final source identity, wheel, source archive, checksum manifest and completed
+public-download verification. Use v0.2.7 only when all these are present. A source declaration or
+private build does not establish public availability; otherwise use the published, publicly
+verified **v0.2.6** fallback from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`.
 Follow the [README Quickstart](../README.md#quickstart) for both install paths.
 
 | Path | Identity and capabilities |
 | --- | --- |
-| Published **v0.2.6** evaluation release | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Adds the decision overview, offline HTML download, acceptance rationale, source-conflict explanations and saved requirements comparison described in [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
-| Unpublished **0.2.7.dev0** development source | Retains the v0.2.6 workflow, native saved-history compatibility contract and PR #273 CSV/HTML revision-label correction, preserving `unknown` and pending current-report denial. PR #274 completed the continuation browser test repair; PR #275 aligned the website source, subsequently published from exact main `388b7da`. The no-install example is exported by public v0.2.6, independently of this development version. No new application feature, report format or download control is added. See the [sample guide](examples/offline-handoff/README.md) and [locked contributor setup](development-environment.md#create-or-refresh-the-environment). This source identity does not establish another public package download. |
-| Published **v0.2.5** fallback | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Includes saved comparisons, audited references, JUnit audit history, typed criteria and complete-record handoff. Writes v9. |
+| Final **v0.2.7** source/package; public availability conditional | Use the [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) only after all three final assets and completed public verification are listed. Includes native v0.2.6 history compatibility, CSV/HTML revision labels and bounded event-scan repair, plus constructed browser/sample evidence. No new application feature or record format. Writes v9. |
+| Published **v0.2.6** fallback | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Includes decision overview, offline HTML, acceptance rationale, source-conflict explanations and saved requirements comparison; see [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
+| Historical private **0.2.7.dev0** candidate, unpublished | Its source, version and artifact identities remain historical; it is not final v0.2.7 or public-download verification. The no-install example separately retains its actual public v0.2.6 producer and unchanged input. See the [sample guide](examples/offline-handoff/README.md). |
+| Published **v0.2.5** earlier release | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Writes v9. |
 | Published **v0.2.4** | [Earlier release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.4). Writes v5. |
 | Historical private **0.2.6.dev0** candidate, unpublished | The [fixed-source packet](releases/v0.2.6-dev0-evaluation-candidate.md) records this development artifact's identities and constructed checks. It is not the final v0.2.6 build or a public-download verification record. |
 | Historical private **0.2.5 candidate**, PR #221 | Prepared at `4f12ae02dee277705d17ac6ab94f0a74f99be346` with its own v5 upgrade evidence. See the [dated guide](releases/v0.2.5-evaluation-candidate.md). |
 
-Keep each candidate's recorded identity intact. The final v0.2.6 package has its own versioned
+Keep each candidate's recorded identity intact. A final v0.2.7 package requires its own versioned
 build and verification; a renamed development archive is not a final release.
 
 Back up local reviews before switching versions. The default store is `~/.scopeproof/reviews`.
@@ -55,13 +55,13 @@ share them only when those contents are appropriate to share. Recorded identity 
 
 ## Run the released source
 
-For v0.2.6, first check the completed public verification and final source identity in its
+For v0.2.7, first check the completed public verification and final source identity in its
 Release entry. Use a new directory, Python 3.11–3.13 and [uv](development-environment.md):
 
 ```bash
 git clone https://github.com/YuzeJ21/Scope-Proof.git ScopeProof-evaluation
 cd ScopeProof-evaluation
-git checkout --detach v0.2.6
+git checkout --detach v0.2.7
 uv sync --extra dev --extra research --locked
 uv run scopeproof --version
 uv run scopeproof benchmark
@@ -69,10 +69,10 @@ uv run scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
 Confirm that the checked-out commit matches the source named in the Release entry; the launcher
-reports version `0.2.6`. Current development source reports `0.2.7.dev0` and is a separate path.
-If the expected v0.2.6 public verification is unavailable, use the v0.2.5 fallback source
+reports version `0.2.7`. The private `0.2.7.dev0` candidate remains historical and unpublished.
+If the expected v0.2.7 assets or public verification are unavailable, use the v0.2.6 fallback source
 instead: replace the checkout command with
-`git checkout --detach 72cac01ea6abb99beaf714396eb610fa39fe84f0`. That launcher reports `0.2.5`.
+`git checkout --detach 68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. That launcher reports `0.2.6`.
 Stop either launcher with Ctrl+C.
 
 ## One constructed review, then a handoff
@@ -91,7 +91,7 @@ Stop either launcher with Ctrl+C.
 5. Choose **Prepare saved review download**, then **Download saved review
    record**. This complete record is different from an analysis-report JSON download.
 6. Start a recipient workbench on a different port and with a separate review folder.
-   For an installed v0.2.5 or v0.2.6 wheel, run
+   For an installed v0.2.6 or verified v0.2.7 wheel, run
    `scopeproof-web --port 8502 --storage-dir "./recipient reviews"`. In a source checkout,
    prefix the command with `uv run`.
    Upload the record, choose **Inspect uploaded review**, inspect its
@@ -106,6 +106,11 @@ participation is required to complete this engineering milestone. For real publi
 becomes a genuine review by substituting a real person's name.
 
 ## What is verified, and what is missing
+
+Final v0.2.7 verification must be read from its
+[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7), including final source,
+all three assets and completed public-download checks. Earlier package checks and private
+`0.2.7.dev0` candidate results do not verify final v0.2.7 bytes or establish availability.
 
 The completed public verification in the
 [v0.2.6 GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) binds
@@ -149,6 +154,12 @@ that exact revision. All 12 public files matched source; 20 link destinations, f
 transcript navigation, video playback and captions passed automatic checks. Form creation routes
 require GitHub sign-in; none were submitted. That publication left the v0.2.6 package unchanged.
 
+PR #276 completed the no-install sample; its actual v0.2.6 export provenance remains intact.
+PR #277 completed the bounded event-scan repair at resulting main `944c791`; see the
+[measurement and limits](audits/2026-11-08-history-event-validation.md). Constructed engineering
+evidence establishes no customer workload or responsiveness guarantee. The exact `388b7da`
+Pages deployment remains unchanged; final package distribution does not deploy it.
+
 The historical [v0.2.5 public verification record](releases/v0.2.5-public-verification.md) records the downloaded
 wheel, source archive and checksum manifest. Both archives passed fresh installation, benchmarks,
 and workbench health checks. The downloaded wheel passed the installed CLI checks and a concurrent
@@ -164,6 +175,7 @@ Source can be missed; candidate presence cannot establish correctness. The evalu
 
 See the [November 2 product assessment](commercialization/product-direction-2026-11-02.md) and
 [next-stage roadmap](../ROADMAP.md#current-priorities--2026-11-07). Stage 2 remains active;
-Stage 3 stays dormant. The separately authorized final v0.2.6 publication and automatic
-public-download verification are complete. This guide does not authorize another release, deployment or
-external contact, and requests no personal testing or qualifying reviews.
+Stage 3 stays dormant with external-evidence counts at zero. Final v0.2.7 build, automated
+verification, engineering review and package publication/public-download verification are the
+authorized distribution scope. The Release record determines whether that distribution is
+complete. No Pages deployment, external contact, personal testing or qualifying reviews are requested.

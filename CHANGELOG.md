@@ -9,6 +9,23 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+No further feature or release is selected automatically. Stage 3 remains gated by genuine
+independent-use evidence and separate authorization.
+
+## 0.2.7 — Evaluation release build
+
+Source/package identity: `0.2.7`. The [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7)
+is authoritative for publication, final source, assets and public-download verification. Use
+v0.2.7 only when that record includes the wheel, source archive, checksum manifest and completed
+public verification; otherwise use verified v0.2.6. The private `0.2.7.dev0` candidate remains
+historical and unpublished; its archives are not final release assets.
+
+Changes since public v0.2.6:
+
+- Reduce repeated event scans when validating saved histories by grouping already validated
+  events once per revision (#277). Preserve event order, full validation, gate predicates,
+  producer/history and all acceptance/revocation rules. Constructed local measurements are not
+  latency, memory or maximum-history guarantees. See the [bounded assessment](docs/audits/2026-11-08-history-event-validation.md).
 - Add a no-install constructed HTML handoff sample, generated with the verified public v0.2.6
   exporter from the unchanged native active record. Bind input/recipe/raw/presented bytes,
   prepend a simulation disclosure and link the download before installation. The report stays
@@ -28,13 +45,16 @@ its linked release entry for the exact published source and assets.
   Keep full-state labels, pending current-state export denial, producer/history provenance and
   analysis-only history boundaries. This adds no report format or workbench download control.
   See the [revision-label assessment](docs/audits/2026-11-07-historical-report-revision.md).
-- Advance development identity to `0.2.7.dev0`; public v0.2.6 assets retain their original source
-  and version.
+- Finalize package identity as `0.2.7`; public v0.2.6 and the private `0.2.7.dev0` candidate retain
+  their original source, version and artifact identities.
 - Add a permanent compatibility regression corpus produced by the actual public v0.2.6 writer,
   covering rich active and unconfirmed saved reviews, retained histories, copy-only resave,
   complete-record transfer and exports. This test-only work preserves existing evidence gates
   and producer identities; it does not fix a demonstrated current data-loss defect or add a
   product feature. See the [bounded assessment](docs/audits/2026-11-07-native-v026-compatibility.md).
+
+Saved format remains v9 and ruleset remains 2.0.0. Frozen R-002/native inputs and results remain
+unchanged. Automated engineering checks do not establish customer validation or a completed beta.
 
 ## 0.2.6 — Evaluation release build
 

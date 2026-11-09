@@ -27,7 +27,12 @@ from scopeproof_core.version import __version__
 
 PUBLIC_RELEASE_VERSION = "0.2.6"
 PUBLIC_RELEASE_TAG = "v0.2.6"
-SOURCE_VERSION = "0.2.7.dev0"
+SOURCE_VERSION = "0.2.7"
+# The separately deployed website remains bound to its verified 388b7da snapshot.
+SITE_SOURCE_VERSION = "0.2.7.dev0"
+RELEASE_BUILD_TAG = "v0.2.7"
+RELEASE_BUILD_WHEEL_FILENAME = "scopeproof-0.2.7-py3-none-any.whl"
+RELEASE_BUILD_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.7"
 PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.6-py3-none-any.whl"
 PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.6"
 V023_RELEASE_WHEEL = "scopeproof-0.2.3-py3-none-any.whl"
@@ -1673,24 +1678,24 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
     )[0]
     release_install = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[0]
     for filename in (
-        PUBLIC_RELEASE_WHEEL_FILENAME,
-        f"scopeproof-{PUBLIC_RELEASE_VERSION}.tar.gz",
+        RELEASE_BUILD_WHEEL_FILENAME,
+        f"scopeproof-{SOURCE_VERSION}.tar.gz",
         "SHA256SUMS.txt",
     ):
         assert filename in release_install
-    assert f"{PUBLIC_RELEASE_DOWNLOAD_ROOT}/{PUBLIC_RELEASE_WHEEL_FILENAME}" in release_install
-    assert "published v0.2.5 wheel" in release_install
-    assert f"Current development source/package version: {SOURCE_VERSION}" in release_install
-    assert f"Use the {PUBLIC_RELEASE_TAG} path below only when" in release_install
+    assert f"{RELEASE_BUILD_DOWNLOAD_ROOT}/{RELEASE_BUILD_WHEEL_FILENAME}" in release_install
+    assert "v0.2.6" in release_install
+    assert f"Current source/package version: {SOURCE_VERSION}" in release_install
+    assert f"Use the {RELEASE_BUILD_TAG} path below only when" in release_install
     assert "completed public-download verification" in " ".join(release_install.split())
-    assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in release_install
+    assert f"{PUBLIC_RELEASES_INDEX}/tag/{RELEASE_BUILD_TAG}" in release_install
     assert "No personal testing or qualifying review" in release_install
     assert PUBLIC_RELEASES_INDEX in readme_quickstart
     assert PUBLIC_RELEASES_INDEX in quickstart
     assert "../../README.md#quickstart" in quickstart
     source_workflow = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[1]
     normalized_workflow = " ".join(source_workflow.split())
-    assert f"installed {PUBLIC_RELEASE_TAG} CLI" in normalized_workflow
+    assert f"installed {RELEASE_BUILD_TAG} CLI" in normalized_workflow
     assert f"{V023_DOWNLOAD_ROOT}/{V023_RELEASE_WHEEL}" in quickstart
     assert "Archived v0.2.3" in quickstart
     assert PUBLIC_RELEASE_TAG in quickstart
@@ -2519,7 +2524,7 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert disclosure in transcript
     assert "Confirm intent → Inspect evidence → Record decisions → Share → Revisit" in html
     assert f"Published evaluation download: {PUBLIC_RELEASE_TAG}" in html
-    assert f"Development source: {SOURCE_VERSION}, unpublished" in html
+    assert f"Development source: {SITE_SOURCE_VERSION}, unpublished" in html
     assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in parser.links
     assert (
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/evaluation-guide.md"

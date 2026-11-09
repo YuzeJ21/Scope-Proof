@@ -8,7 +8,11 @@ The published **v0.2.5** download remains a fallback. Its
 [public verification record](../releases/v0.2.5-public-verification.md) identifies the wheel,
 source archive, and checksum manifest. Use the [quickstart](../../README.md#quickstart) for
 installation, checksum verification, and saved-record v9 upgrade guidance.
-Versioned source uses unpublished **0.2.7.dev0**. See the [source setup](../development-environment.md).
+Current source/package is final **0.2.7** for authorized evaluation distribution. Use the
+[v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) only when final
+source, wheel, source archive, checksum manifest and completed public verification are present;
+otherwise use verified v0.2.6. The private `0.2.7.dev0` candidate stays historical and unpublished.
+See the [source setup](../development-environment.md).
 The archived v0.2.3 participant instructions below retain their historical version boundaries.
 
 No personal testing, public case, qualifying review, or participant feedback is required to

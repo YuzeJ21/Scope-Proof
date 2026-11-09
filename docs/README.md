@@ -4,9 +4,12 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: provide a no-install constructed HTML report through the existing evaluation
-guide's repository download, with actual public v0.2.6 exporter provenance and offline checks.
-PR #275's website alignment and the separately authorized Pages publication are complete at
+Current direction: complete the authorized final v0.2.7 evaluation build and distribution.
+PR #276 completed the no-install constructed HTML repository download; its actual public
+v0.2.6 exporter provenance, unchanged input and offline checks remain intact. PR #277 completed
+the bounded saved-history event-scan repair at main `944c791`; see the
+[measurement and limits](audits/2026-11-08-history-event-validation.md).
+PR #275's website alignment and separately authorized Pages publication remain complete at
 `388b7dae276253ac015efd852cd510bc3999f9fd`; no additional deployment is selected.
 PR #272 completed native-v0.2.6 compatibility; PR #273 completed CSV/HTML revision labels;
 PR #274 completed the bounded browser-test synchronization repair at main
@@ -15,11 +18,13 @@ and controlled signal-loss evidence remain distinct; the exact natural Streamlit
 remains unproven. See the [roadmap](../ROADMAP.md),
 [observer assessment](audits/2026-11-07-browser-observer-reopen.md) and
 [evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md).
-Versioned source uses unpublished `0.2.7.dev0`. The published **v0.2.6** download is publicly verified
-from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Its
-[GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) is authoritative
-for source, final assets and completed public verification. Install only after checking those
-entries; verified v0.2.5 remains a fallback. Released bytes retain their own source commit. Stage 1 is closed
+Current source/package is final **0.2.7**. Use the
+[v0.2.7 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) only when it
+lists final source, wheel, source archive, checksum manifest and completed public-download
+verification; otherwise use verified **v0.2.6** from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`
+with its [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
+The private `0.2.7.dev0` candidate remains historical and unpublished; it does not establish final
+availability or artifact identity. Released bytes retain their own source commit. Stage 1 is closed
 at zero; Stage 3 is dormant and gated. No personal testing or qualifying reviews are required
 for evaluation distribution. Begin with the roadmap's finish line before starting any new slice.
 

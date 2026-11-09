@@ -39,11 +39,14 @@ fields remain visible with extra fields explicitly marked as not applied to that
 recorded offsets or missing timezones remain explicit. See the
 [workbench consistency assessment](docs/audits/2026-11-01-workbench-resolution-audit.md).
 
-Current source identifies itself as **0.2.7.dev0**, an unpublished development version. The
-[GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) is authoritative for
-download availability and completed public verification. **v0.2.6 is published and publicly
-verified** from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; the verified **v0.2.5** download remains
-a fallback. [PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed the permanent
+Current source/package identifies itself as **0.2.7** for the authorized final evaluation
+release build and distribution. The [v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7)
+is authoritative for final source, wheel, source archive, checksum manifest and completed
+public-download verification. Use v0.2.7 only when all those assets and verification are present;
+otherwise use the published, publicly verified **v0.2.6** fallback from
+`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. A source version or private build alone does not
+establish public availability. The private **0.2.7.dev0** candidate remains historical and unpublished.
+[PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed the permanent
 native-v0.2.6 saved-history compatibility contract. [PR #273](https://github.com/YuzeJ21/Scope-Proof/pull/273)
 completed the CSV/HTML revision-label correction, preserving `unknown` and pending-review export
 guards. [PR #274](https://github.com/YuzeJ21/Scope-Proof/pull/274) completed the browser test's
@@ -53,7 +56,7 @@ saved-review ID commit wait repair at main `37799a04942e2926bf9c73882a9e0f4e1e44
 checks. This is test synchronization work, not a product feature. See the
 [observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md) for the natural-run and
 controlled signal-loss evidence; the precise natural Streamlit transition remains unproven.
-These development changes are separate from the published v0.2.6 download.
+These source changes are included in final v0.2.7 build scope and do not alter public v0.2.6.
 [PR #275](https://github.com/YuzeJ21/Scope-Proof/pull/275) completed the website source alignment
 at main `388b7dae276253ac015efd852cd510bc3999f9fd`; its resulting-main CI passed. The separately
 authorized [Pages publication](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672)
@@ -61,9 +64,11 @@ then published that exact revision. All 12 public files matched source, 20 link 
 desktop/mobile/media checks passed. The [live evaluation site](https://yuzej21.github.io/Scope-Proof/)
 is current for that revision. The historical
 [source-only assessment](docs/audits/2026-11-08-evaluation-page-alignment.md) retains its earlier scope.
-The next bounded evaluation artifact is the no-install constructed HTML report linked above.
-It uses the actual public v0.2.6 exporter; source remains `0.2.7.dev0`. No new package or Pages
-publication follows from adding this repository download.
+PR #276 completed the no-install constructed HTML report linked above. It retains its actual
+public v0.2.6 exporter and unchanged input; it has not been regenerated or relabelled for v0.2.7.
+PR #277 completed the bounded saved-history event-scan repair at main `944c791`; see the
+[measurement and limits](docs/audits/2026-11-08-history-event-validation.md). The authorized final
+v0.2.7 package distribution adds no new feature or Pages deployment; the website stays at exact `388b7da`.
 Stage 1 closed with all external counts at zero, and Stage 3 remains dormant pending independent
 use. See the [v0.2.5 verification record](docs/releases/v0.2.5-public-verification.md).
 See the [public roadmap](ROADMAP.md#stage-2--owner-led-productization) for outcomes and limits and
@@ -196,21 +201,59 @@ only explicit success as passing.
 Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
 for the tested Python versions, platform limits, and contributor setup.
 
-**Current development source/package version: 0.2.7.dev0. Published evaluation download: v0.2.6.**
-A versioned source tree or local build does not
-establish public availability. The [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases)
-is authoritative for publication availability. The verified v0.2.6 release comes from
-`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Use the v0.2.6 path below only when its
-[release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) lists the final source,
-`scopeproof-0.2.6-py3-none-any.whl`, `scopeproof-0.2.6.tar.gz`, `SHA256SUMS.txt`, and completed
-public-download verification. If those are absent, use the verified v0.2.5 fallback.
+**Current source/package version: 0.2.7.** A versioned source tree or local build does not
+establish public availability. The [v0.2.7 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7)
+is authoritative. Use the v0.2.7 path below only when that entry lists final source,
+`scopeproof-0.2.7-py3-none-any.whl`, `scopeproof-0.2.7.tar.gz`, `SHA256SUMS.txt`, and completed
+public-download verification. If any are absent, use the verified v0.2.6 fallback.
+The historical private `0.2.7.dev0` candidate is a different artifact and remains unpublished.
 
 No personal testing or qualifying review is required to download or evaluate the package.
 See the [documentation map](docs/README.md) for related guides and dated records.
 
-### v0.2.6 after public verification
+### v0.2.7 after public verification
 
 After checking the release entry above, install in a fresh environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.7/scopeproof-0.2.7-py3-none-any.whl
+curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.7/SHA256SUMS.txt
+```
+
+Select the wheel entry from the published manifest and use the command for your platform:
+
+```bash
+# macOS
+grep " scopeproof-0.2.7-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && shasum -a 256 -c wheel.SHA256
+
+# Linux
+grep " scopeproof-0.2.7-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && sha256sum -c wheel.SHA256
+```
+
+Continue only after the checksum check succeeds:
+
+```bash
+python -m pip install ./scopeproof-0.2.7-py3-none-any.whl
+python -m pip check
+scopeproof --version
+scopeproof benchmark
+scopeproof-web --host 127.0.0.1 --port 8501
+```
+
+The launcher must report version `0.2.7`. Do not rename a `0.2.7.dev0` candidate archive to
+install it as a final release.
+
+### Verified v0.2.6 fallback
+
+The [v0.2.6 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) includes
+`scopeproof-0.2.6-py3-none-any.whl`, `scopeproof-0.2.6.tar.gz`, and `SHA256SUMS.txt`.
+The Release entry binds those files
+to source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`.
+
+The commands below install the **published v0.2.6 wheel** in a fresh environment without cloning
+the repository.
 
 ```bash
 python3 -m venv .venv
@@ -239,58 +282,18 @@ scopeproof benchmark
 scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
-The launcher must report version `0.2.6`. Do not rename a `0.2.6.dev0` candidate archive to
-install it as a final release.
-
-### Verified v0.2.5 fallback
-
-The [v0.2.5 GitHub Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) includes
-`scopeproof-0.2.5-py3-none-any.whl`, `scopeproof-0.2.5.tar.gz`, and `SHA256SUMS.txt`.
-The [public verification record](docs/releases/v0.2.5-public-verification.md) binds those files
-to source `72cac01ea6abb99beaf714396eb610fa39fe84f0`.
-
-The commands below install the **published v0.2.5 wheel** in a fresh environment without cloning
-the repository.
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5/scopeproof-0.2.5-py3-none-any.whl
-curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.5/SHA256SUMS.txt
-```
-
-Select the wheel entry from the published manifest and use the command for your platform:
-
-```bash
-# macOS
-grep " scopeproof-0.2.5-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && shasum -a 256 -c wheel.SHA256
-
-# Linux
-grep " scopeproof-0.2.5-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && sha256sum -c wheel.SHA256
-```
-
-Continue only after the checksum check succeeds:
-
-```bash
-python -m pip install ./scopeproof-0.2.5-py3-none-any.whl
-python -m pip check
-scopeproof --version
-scopeproof benchmark
-scopeproof-web --host 127.0.0.1 --port 8501
-```
-
 A matching checksum verifies the downloaded bytes against the published manifest; it does not
 provide code-signing or product-correctness assurance. The offline benchmark checks the installed package
 and bundled constructed regression corpus. It is engineering evidence, not runtime evidence for
 a target pull request or customer validation. Stop the local workbench with `Ctrl+C`.
 
-The v0.2.5 and v0.2.6 package metadata declare the maintained Pydantic, Streamlit, Pillow and
+The v0.2.7 and v0.2.6 package metadata declare the maintained Pydantic, Streamlit, Pillow and
 HTTPX requirements.
 See the [dependency alignment record](docs/audits/2026-10-29-dependency-baseline-alignment.md).
 
 ### Upgrade existing reviews
 
-v0.2.5 and v0.2.6 write saved-record format **v9**. Back up your review folder and keep original
+v0.2.7 and v0.2.6 write saved-record format **v9**. Back up your review folder and keep original
 reports before saving records with the new version. The v0.2.5 automated verification loaded a
 constructed v5 record from v0.2.4 and reopened a separate v9 copy with the recorded producer,
 decisions, history, and blocked status intact. Keep the original v5 file if you still need to
@@ -299,8 +302,8 @@ See the [release verification](docs/releases/v0.2.5-public-verification.md).
 
 ### Public PR CLI workflow
 
-The examples use the installed v0.2.6 CLI after its public verification is available; the
-verified v0.2.5 fallback also supports these commands. In a source checkout, prefix `scopeproof` with
+The examples use the installed v0.2.7 CLI after its public verification is available; the
+verified v0.2.6 fallback also supports these commands. In a source checkout, prefix `scopeproof` with
 `uv run` after [locked source setup](docs/development-environment.md#create-or-refresh-the-environment).
 The CLI reads public PRs and runs the deterministic review without starting Streamlit.
 Live ingestion labels a review public only when GitHub returns matching, unambiguous repository
