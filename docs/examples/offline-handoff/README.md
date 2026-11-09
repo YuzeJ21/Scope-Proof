@@ -20,7 +20,13 @@ downloading the example supplies no qualifying-review, independent-use or custom
 The actual installed **public v0.2.6** package produced the report. Its source is
 `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; its verified public wheel SHA-256 is
 `48b308b3f92d912932734aa4907e958d78351bb956f1a9ce65353e9206741896`.
-This does not relabel current `0.2.7.dev0` development as a released producer.
+This sample retains its actual v0.2.6 producer. Current source/package is final `0.2.7` for
+authorized evaluation distribution; use its
+[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) only when final source,
+wheel, source archive, checksum manifest and completed public-download verification are present.
+Otherwise use verified v0.2.6. The private `0.2.7.dev0` candidate remains historical and unpublished.
+Neither that candidate nor final v0.2.7 is relabelled as this report's producer; its HTML, ZIP, input,
+recipe and provenance remain unchanged.
 
 The input is the existing immutable
 [`active-rich-v9.json`](../../../tests/fixtures/released_v026_upgrade/active-rich-v9.json),

@@ -39,8 +39,12 @@ target-repository runtime proof, accessibility conformance, customer use, demand
 
 ### Current product checkpoint
 
-The [evaluation guide](../evaluation-guide.md) separates unpublished `0.2.7.dev0` source from the
-published, publicly verified v0.2.6 download and the verified public v0.2.5 fallback. The
+The [evaluation guide](../evaluation-guide.md) identifies final source/package `0.2.7` for the
+authorized evaluation build and distribution. Use the
+[v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) only when final
+source, wheel, source archive, checksum manifest and completed public-download verification are
+present; otherwise use the published, publicly verified v0.2.6 fallback. The private `0.2.7.dev0`
+candidate stays historical and unpublished; its checks do not verify final v0.2.7 bytes. The
 [v0.2.6 GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies
 the final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, wheel, source archive, checksum
 manifest and completed public-download verification. That entry is authoritative for availability.
