@@ -7,24 +7,34 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, with PR #276 and PR #277 complete and the authorized
-final v0.2.7 build and distribution selected;
-this owner decision does not create customer validation. Stage 3 is dormant and gated.
+`owner_led_productization_active`, with PR #276, PR #277 and PR #278 complete and v0.2.7
+published with public-download verification. The current entry points align with that release;
+the separately authorized site publication is tracked by the manual Pages workflow.
+These engineering outcomes do not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current priorities — 2026-11-07
 
-Updated 2026-11-08: PR #276 completed the constructed report download at main `c749917`;
+Updated 2026-11-10: PR #278 completed final v0.2.7 at release source
+`e099679ed63309716a7ce4726557ef794bfd5c80`; publication and public-download verification completed
+on 2026-11-09. PR #276 completed the constructed report download at main `c749917`;
 PR #277 completed the bounded saved-history event-scan repair at main `944c791`.
 The [measurement and limits](docs/audits/2026-11-08-history-event-validation.md) remain constructed
 engineering evidence. Both implementation scopes are closed; no further feature is selected.
-The owner authorized the final **0.2.7** build, automated checks, independent engineering review,
-merge, package publication and public-download verification. The
-[v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) is authoritative:
-use v0.2.7 only when final source, wheel, source archive, checksum manifest and completed public
-verification are present; otherwise use verified v0.2.6. The private `0.2.7.dev0` candidate stays
-historical and unpublished. No personal testing, qualifying reviews or Pages deployment are selected.
-The public website remains exact `388b7da`; the sample retains its actual v0.2.6 producer.
+The [v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records
+the final wheel, source archive, checksum manifest, anonymous download checks and fresh installs
+from both public archives. Its [release-source CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42547822181)
+passed 4,888 tests, 38 intentional skips and 95.5192% coverage, with Python/Windows lanes.
+Public-archive installs were checked on macOS/Python 3.11, not Windows. These are automated
+engineering results, not genuine-use evidence. The private `0.2.7.dev0` candidate stays historical
+and unpublished; verified v0.2.6 remains an earlier fallback.
+
+The owner separately authorized the bounded README, evaluation-guide, roadmap and website
+alignment, including review, green exact-head/main checks, Pages publication and automatic
+public verification. The [manual Pages workflow](https://github.com/YuzeJ21/Scope-Proof/actions/workflows/pages.yml)
+records the site revision separately from the package source. The previous publication at
+`388b7da` remains historical evidence; the sample retains its actual v0.2.6 producer.
+No personal testing, qualifying reviews, new package build or additional feature is selected.
 
 The product direction is **explain and revisit an acceptance decision**. Confirmed intent,
 exact-head evidence, explicit gaps, recorded decisions and later comparison form the working
@@ -58,10 +68,10 @@ documents direct overlap and adoption constraints without claiming superiority o
 | Stage 2 — completed on source, PR #272 | Preserve rich native v0.2.6 saved-review histories as development readers change. | Immutable records from the actual public writer, provenance-bound generation, active and unconfirmed historical-only states, complete-state preservation through load/copy-only resave/transfer/reopen, active reports and pending current-report denial, Linux/Windows CI and independent engineering review. Resulting main `069af259ac17b6c555d10b10f36e7211b068aac4` is verified. See the [bounded assessment](docs/audits/2026-11-07-native-v026-compatibility.md). No current data-loss defect was asserted. |
 | Stage 2 — completed on source, PR #273 | Show the recorded criteria revision in CSV/HTML reports of explicitly selected analyses. | Use the validated bundle's revision, including `unknown`, instead of inventing revision 1. Preserve full-state labels, pending current-report denial, producer/history and analysis-only boundaries. Resulting main `1d1358097dc34c69c68e93dc5d45066ff4506b1e` passed CI attempt 2; the initial browser timeout remains documented. See the [revision-label assessment](docs/audits/2026-11-07-historical-report-revision.md). |
 | Stage 2 — completed on source, PR #274 | Stop a browser test from rejecting a committed saved-review ID solely because a generic rerun signal was missed. | Retain actual validated reopening, saved-state/history checks and the same timeout. Natural baseline passes and controlled signal-loss replay remain distinct; the precise natural Streamlit transition remains unproven. Resulting main `37799a04942e2926bf9c73882a9e0f4e1e44698f` passed CI. See the [observer assessment](docs/audits/2026-11-07-browser-observer-reopen.md). |
-| Stage 2 — source and publication complete, PR #275 | Find the current verified evaluation release and understand saved decisions, offline handoff and revisiting from the existing website. | Main `388b7dae276253ac015efd852cd510bc3999f9fd` passed CI, then separately authorized Pages run `42494611672` deployed that exact revision. All 12 files matched source; 20 link destinations and desktop/mobile/media checks passed. The [earlier source-only assessment](docs/audits/2026-11-08-evaluation-page-alignment.md) retains its historical boundary. No website alignment or publication task remains open. |
+| Stage 2 — source and publication complete, PR #275 | Find the then-current verified evaluation release and understand saved decisions, offline handoff and revisiting from the existing website. | Main `388b7dae276253ac015efd852cd510bc3999f9fd` passed CI, then separately authorized Pages run `42494611672` deployed that exact revision. All 12 files matched source; 20 link destinations and desktop/mobile/media checks passed. The [earlier source-only assessment](docs/audits/2026-11-08-evaluation-page-alignment.md) retains its historical boundary. That milestone is closed; later v0.2.7 alignment is separately authorized above. |
 | Stage 2 — complete, PR #276 | Inspect an actual acceptance report before installing ScopeProof. | [Downloadable constructed HTML](docs/examples/offline-handoff/README.md), generated by the verified public v0.2.6 exporter from the unchanged native active record. Preserve Action required, explicit simulation/synthetic-link labels, strict input/recipe/raw/presented provenance, offline rendering/no-network checks, independent review, exact-head/main CI and public repository-download verification. No application feature, package or Pages deployment. |
 | Stage 2 — complete, PR #277 | Bound repeated event scans in saved-history validation. | Ordered per-revision projection retains all validation and complete state; resulting main `944c791`. See the [assessment](docs/audits/2026-11-08-history-event-validation.md). Constructed timings are not a UI or customer-workload guarantee. |
-| Stage 2 — authorized final v0.2.7 distribution | Rebuild final-version artifacts and verify their public downloads. | Final source/package `0.2.7`, automated and independent engineering review, exact-head/resulting-main checks, final artifacts and public verification in the [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7). Availability remains conditional until complete. No new feature or deployment. |
+| Stage 2 — publication and public verification complete, PR #278 | Deliver final v0.2.7 with verified public downloads. | Final source `e099679ed63309716a7ce4726557ef794bfd5c80`, three public assets and completed anonymous-download/fresh-install checks are recorded in the [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7). The later entry-point/site update leaves those package bytes unchanged. |
 | P3 — Stage 3 dormant | Determine whether independent practitioners find the acceptance handoff useful and reuse it. | Genuine independent-use evidence and separate authorization. |
 
 ### Product and architecture checkpoint
@@ -77,10 +87,11 @@ The owner-authorized final v0.2.6 publication and automatic public-download veri
 on 2026-11-07, without personal testing or qualifying reviews. The
 [GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) is authoritative
 for availability, final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, all three assets and
-completed public verification. Current source/package is final `0.2.7` for the authorized distribution. Use its
-[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) only after all three
-assets and completed public verification are present; otherwise use verified v0.2.6. The private
-`0.2.7.dev0` candidate remains historical and unpublished.
+completed public verification. The current default is the published, publicly verified `0.2.7`
+evaluation release from `e099679ed63309716a7ce4726557ef794bfd5c80`; its
+[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records all three
+assets and completed public verification. Later documentation changes do not alter those bytes.
+The private `0.2.7.dev0` candidate remains historical and unpublished.
 
 [PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed native released-writer
 compatibility at resulting main `069af259ac17b6c555d10b10f36e7211b068aac4`.
@@ -117,14 +128,15 @@ the source and publication milestones without advancing product validation.
 
 | Priority | Gap and action | Completion criterion / decision |
 | --- | --- | --- |
-| P0 — authorized final v0.2.7 distribution | Rebuild final `0.2.7` artifacts from a fixed source, run automatic and independent engineering checks, merge and publish, then verify public wheel/source/manifest downloads and isolated installs. | The [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) must identify final source, all three assets and completed public verification before use. Until then, verified v0.2.6 is the fallback. Private dev0 checks do not establish final bytes. No personal testing, qualifying reviews or Pages deployment. |
+| Final v0.2.7 distribution complete, PR #278 | Published final `0.2.7` from `e099679ed63309716a7ce4726557ef794bfd5c80` after automatic checks and independent engineering review. | The [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) binds final source, all three assets, completed anonymous downloads and fresh isolated installs. No personal testing or qualifying reviews; package publication did not deploy Pages. |
+| Current entry-point alignment | README, evaluation guide, roadmap and existing website identify published v0.2.7 without relabelling older examples or release records. | Owner-authorized review, exact-head/main checks, manual Pages publication and public byte/link/render verification. The [Pages workflow](https://github.com/YuzeJ21/Scope-Proof/actions/workflows/pages.yml) identifies the later site revision; release artifacts and sample/media producers stay unchanged. No new feature or release follows automatically. |
 | Historical final v0.2.6 distribution complete | Published the consolidated workflow from one fixed final-version source commit. | Final wheel, source archive and checksum manifest were publicly downloaded and verified. Release-source main checks passed 4,842 tests with 95.5067% coverage; installed checks passed seven CLI checks and 32 browser-suite checks. Use the Release entry for source and exact artifact identities; the historical dev0 packet is not a substitute. |
 | Lifecycle consolidation complete | Confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Consequential transition checks, including stale downloads, source contradictions and pending scope drafts, are retained. The release preparation queue is closed; no additional parity feature is selected. |
 | Native released-writer compatibility complete, PR #272 | A published v0.2.6 rich saved history remains intact under the verified development reader. | Two immutable, provenance-bound actual-writer records now run in Linux/Windows CI. Complete-state and producer/history preservation, copy-only resave, transfer, reopening, active reports and pending current-report denial are covered. Exact-head and resulting-main checks passed. This closes the durable coverage gap; no current data-loss repair or further corpus generation is selected. |
 | Selected-analysis revision labels complete, PR #273 | CSV/HTML reports use the validated selected bundle's recorded revision, including `unknown`. | Full-state labels, pending current-report denial, producer/history and analysis-only boundaries remain intact. Dedicated historical JSON/Markdown and download controls are unchanged. Exact-head and resulting-main checks passed; the initial browser timeout remains recorded separately. |
 | Browser synchronization complete, PR #274 | A settled saved-review ID was rejected by a test waiting for a generic script-state transition. | The scoped control wait retains actual reopening and history checks at the same timeout. Exact-head and resulting-main checks passed; natural and controlled evidence stay separate. No further observer task is selected. |
-| Evaluation website complete, PR #275 plus authorized publication | The existing page now identifies v0.2.6/source0.2.7.dev0 and describes save/share/revisit. | The exact `388b7da` site is public and verified. Keep its historic source-only assessment separate from the later deployment evidence; do not restart that slice. |
-| No-install evaluation example complete, PR #276 | An evaluator can download a constructed handoff report before installation through the existing guide. | Actual public v0.2.6 export provenance, labelled boundaries, deterministic ZIP/HTML, offline rendering and public download checks passed. Resulting main c749917 passed CI with 4,884 tests, 38 skips and 95.5124% unrounded coverage. Do not repeat sample generation or deploy another site. |
+| Earlier evaluation website complete, PR #275 plus authorized publication | The then-current page identified v0.2.6/source0.2.7.dev0 and described save/share/revisit. | The exact `388b7da` publication was publicly verified. Keep that historical assessment and deployment evidence intact; the later v0.2.7 entry-point alignment is separately authorized above. |
+| No-install evaluation example complete, PR #276 | An evaluator can download a constructed handoff report before installation through the existing guide. | Actual public v0.2.6 export provenance, labelled boundaries, deterministic ZIP/HTML, offline rendering and public download checks passed. Resulting main c749917 passed CI with 4,884 tests, 38 skips and 95.5124% unrounded coverage. Preserve the sample's original producer; current release/site alignment does not regenerate it. |
 | Measured history constraint — complete, PR #277 | Repeated full-history event scans are bounded by ordered per-revision projection at main `944c791`. | Separate constructed cases reproduced the constraint below the unchanged cap. All projection/gate/evidence/temporal validation remains; regression, independent engineering review and exact-head/resulting-main checks close the scope. Local largest-case comparison preparation measured 12.191 → 3.924 seconds; this is not a UI guarantee or customer workload. See the assessment. |
 | R-002 omission classification complete | The [existing miss taxonomy](docs/research/r002-swebench-verified/miss-taxonomy.md) classified the 15 frozen misses: 14 threshold rejections and one lexical mismatch. | Frozen inputs/results and the 5/20 candidate baseline stay unchanged. Do not repeat classification, retune or relabel R-002. No new retrieval change or separately labelled holdout is selected. |
 | Conditional architecture follow-up | Workbench session-state guards remain distributed; complete-state validation/serialization and memory costs remain after the bounded event-scan repair. Stores reject records above 64 MiB; that cap is not a responsiveness guarantee. Filesystem operations depend on platform support. | Retain existing stale-state, Windows and storage regressions. The measured event-scan repair does not authorize further extraction, caching or storage changes. Require another consequential reproduced constraint before such work. No rewrite, database or multiuser service is selected. |
@@ -237,12 +249,13 @@ is dated evidence; the current priorities and version guide above govern the pre
 
 ## Current operating decision
 
-**Current source/package version is 0.2.7.** The authorized final build and distribution is
-separate from the historical unpublished `0.2.7.dev0` candidate. The
-[v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) determines
-availability: require final source, wheel, source archive, checksum manifest and completed public
-verification. If any are absent, use verified v0.2.6 from
-`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, identified in its
+**Current source/package version is 0.2.8.dev0**, unpublished. Final v0.2.7 is published and
+publicly verified from
+`e099679ed63309716a7ce4726557ef794bfd5c80`, separately from the historical unpublished
+`0.2.7.dev0` candidate. Its
+[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records final source,
+wheel, source archive, checksum manifest and completed public verification. The earlier verified
+v0.2.6 fallback from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1` retains its own
 [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
 The [v0.2.4 verification record](docs/releases/v0.2.4-public-verification.md) and the
 [PR #221 private candidate guide](docs/releases/v0.2.5-evaluation-candidate.md) preserve their
@@ -272,7 +285,8 @@ PR #272 closed the native released-writer compatibility contract and PR #273 clo
 revision labels. PR #274 closed its bounded browser wait repair; PR #275 and the separately
 authorized exact-revision Pages publication closed the website milestone. PR #276 completed
 the no-install constructed report example. PR #277 completed the measured saved-history
-validation repair. Final v0.2.7 build/distribution is now selected in the
+validation repair. PR #278 completed final v0.2.7 build/distribution; current-entry alignment and
+the separately authorized Pages publication are described in the
 [current priorities](#current-priorities--2026-11-07). This remains evaluation
 distribution, not a Stage 3 beta. No personal testing or qualifying reviews are required. No further release,
 deployment, outreach or participant program follows automatically.
@@ -293,10 +307,12 @@ authenticated identity and integrations remain separately scoped options.
 
 ## Current release and validation state
 
-The GitHub Release record is authoritative for publication availability. Current source/package
-is final `0.2.7`; use its [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7)
-only when final source, all three assets and completed public-download verification are present.
-Otherwise the verified v0.2.6 download remains the fallback from
+The GitHub Release record is authoritative for publication availability. Published `0.2.7` is
+publicly verified from `e099679ed63309716a7ce4726557ef794bfd5c80`; its
+[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records all three assets
+and completed public-download verification. Current development source reports `0.2.8.dev0`,
+unpublished; later documentation and website changes do not change the release tag or bytes.
+The earlier verified v0.2.6 fallback is from
 `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; see the
 [v0.2.6 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
 ScopeProof v0.2.5 is published as an earlier verified release; its historical verification remains

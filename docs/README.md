@@ -4,13 +4,15 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: complete the authorized final v0.2.7 evaluation build and distribution.
+Current direction: align current entry points and the separately authorized website publication
+with the completed, publicly verified v0.2.7 release from `e099679ed63309716a7ce4726557ef794bfd5c80`.
 PR #276 completed the no-install constructed HTML repository download; its actual public
 v0.2.6 exporter provenance, unchanged input and offline checks remain intact. PR #277 completed
 the bounded saved-history event-scan repair at main `944c791`; see the
 [measurement and limits](audits/2026-11-08-history-event-validation.md).
 PR #275's website alignment and separately authorized Pages publication remain complete at
-`388b7dae276253ac015efd852cd510bc3999f9fd`; no additional deployment is selected.
+`388b7dae276253ac015efd852cd510bc3999f9fd` as historical evidence. The later v0.2.7 site alignment
+has its own owner-authorized publication through the manual Pages workflow.
 PR #272 completed native-v0.2.6 compatibility; PR #273 completed CSV/HTML revision labels;
 PR #274 completed the bounded browser-test synchronization repair at main
 `37799a04942e2926bf9c73882a9e0f4e1e44698f`, with green resulting-main CI. Natural baseline runs
@@ -18,10 +20,11 @@ and controlled signal-loss evidence remain distinct; the exact natural Streamlit
 remains unproven. See the [roadmap](../ROADMAP.md),
 [observer assessment](audits/2026-11-07-browser-observer-reopen.md) and
 [evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md).
-Current source/package is final **0.2.7**. Use the
-[v0.2.7 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) only when it
-lists final source, wheel, source archive, checksum manifest and completed public-download
-verification; otherwise use verified **v0.2.6** from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`
+Current development source/package is **0.2.8.dev0**, unpublished. The
+[v0.2.7 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) identifies the
+published default evaluation download, final source, wheel, source archive, checksum manifest
+and completed public-download verification. Earlier verified **v0.2.6** remains at
+`68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`
 with its [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
 The private `0.2.7.dev0` candidate remains historical and unpublished; it does not establish final
 availability or artifact identity. Released bytes retain their own source commit. Stage 1 is closed
@@ -40,7 +43,7 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [Evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md) — current-release routing,
   saved-decision positioning and the earlier source-only preview scope. The later authorized
   [Pages publication](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672) is complete.
-- [v0.2.6 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) —
+- [v0.2.7 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) —
   fixed source, three public assets and completed public-download verification.
 - [Historical-analysis revision-label assessment](audits/2026-11-07-historical-report-revision.md) —
   completed PR #273 CSV/HTML display correction and retained current-state export guards.

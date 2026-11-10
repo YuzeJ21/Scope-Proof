@@ -1,10 +1,10 @@
 # Reproducible development environment
 
-Current source/package is final **0.2.7** for the authorized evaluation build and distribution.
-The [v0.2.7 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) is
-authoritative for availability: use it only when final source, wheel, source archive, checksum
-manifest and completed public-download verification are present. Otherwise use verified v0.2.6
-from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; its
+Current development source/package is **0.2.8.dev0**, unpublished. The default evaluation download
+is published, publicly verified **v0.2.7** from `e099679ed63309716a7ce4726557ef794bfd5c80`.
+Its [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) identifies final
+source, wheel, source archive, checksum manifest and completed public-download verification.
+The earlier verified v0.2.6 fallback remains at `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; its
 [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies final
 assets and completed verification. The private `0.2.7.dev0` candidate remains historical and
 unpublished; its checks do not verify final v0.2.7 bytes or establish availability.
