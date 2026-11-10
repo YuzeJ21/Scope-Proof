@@ -25,11 +25,12 @@ from scopeproof_core.evals.r002_models import (
 from scopeproof_core.reviews.comparison import EvidenceChangeKind
 from scopeproof_core.version import __version__
 
+# Retain the earlier/fallback identity used by archived participant documents.
 PUBLIC_RELEASE_VERSION = "0.2.6"
 PUBLIC_RELEASE_TAG = "v0.2.6"
-SOURCE_VERSION = "0.2.7"
-# The separately deployed website remains bound to its verified 388b7da snapshot.
-SITE_SOURCE_VERSION = "0.2.7.dev0"
+SOURCE_VERSION = "0.2.8.dev0"
+RELEASE_BUILD_VERSION = "0.2.7"
+RELEASE_SOURCE_SHA = "e099679ed63309716a7ce4726557ef794bfd5c80"
 RELEASE_BUILD_TAG = "v0.2.7"
 RELEASE_BUILD_WHEEL_FILENAME = "scopeproof-0.2.7-py3-none-any.whl"
 RELEASE_BUILD_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.7"
@@ -703,6 +704,7 @@ def test_hatch_and_reviews_share_one_version_source() -> None:
 def _assert_published_version_matches_repository(*, repository: Path, current_version: str) -> None:
     published_final_tags = {
         "0.2.3": "v0.2.3", "0.2.4": "v0.2.4", "0.2.5": "v0.2.5", "0.2.6": "v0.2.6",
+        "0.2.7": "v0.2.7",
     }
     published_tag = published_final_tags.get(current_version)
 
@@ -814,7 +816,7 @@ def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
     )
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7"])
 def test_published_final_contract_rejects_dirty_tracked_tree(
     tmp_path: Path, final_version: str
 ) -> None:
@@ -845,7 +847,7 @@ def test_published_final_contract_rejects_dirty_tracked_tree(
         )
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7"])
 def test_published_final_contract_rejects_untracked_package_input(
     tmp_path: Path, final_version: str
 ) -> None:
@@ -881,7 +883,7 @@ def test_published_final_contract_rejects_untracked_package_input(
     assert ".coverage 2" not in str(error.value)
 
 
-@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6"])
+@pytest.mark.parametrize("final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7"])
 def test_published_final_contract_rejects_ignored_force_included_input(
     tmp_path: Path,
     final_version: str,
@@ -1679,14 +1681,15 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
     release_install = readme_quickstart.split("### Public PR CLI workflow", maxsplit=1)[0]
     for filename in (
         RELEASE_BUILD_WHEEL_FILENAME,
-        f"scopeproof-{SOURCE_VERSION}.tar.gz",
+        f"scopeproof-{RELEASE_BUILD_VERSION}.tar.gz",
         "SHA256SUMS.txt",
     ):
         assert filename in release_install
     assert f"{RELEASE_BUILD_DOWNLOAD_ROOT}/{RELEASE_BUILD_WHEEL_FILENAME}" in release_install
     assert "v0.2.6" in release_install
     assert f"Current source/package version: {SOURCE_VERSION}" in release_install
-    assert f"Use the {RELEASE_BUILD_TAG} path below only when" in release_install
+    assert f"Published {RELEASE_BUILD_TAG}" in release_install
+    assert RELEASE_SOURCE_SHA in release_install
     assert "completed public-download verification" in " ".join(release_install.split())
     assert f"{PUBLIC_RELEASES_INDEX}/tag/{RELEASE_BUILD_TAG}" in release_install
     assert "No personal testing or qualifying review" in release_install
@@ -1710,8 +1713,9 @@ def test_published_release_surfaces_align_without_rewriting_history() -> None:
 
     normalized_roadmap = " ".join(roadmap.split())
     assert (
-        f"published, publicly verified `{PUBLIC_RELEASE_VERSION}` evaluation release"
+        f"published, publicly verified `{RELEASE_BUILD_VERSION}` evaluation release"
     ) in normalized_roadmap
+    assert RELEASE_SOURCE_SHA in roadmap
     assert "final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`" in normalized_roadmap
     assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in roadmap
     assert "v0.2.5 is published" in roadmap
@@ -2523,9 +2527,11 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert disclosure in html
     assert disclosure in transcript
     assert "Confirm intent → Inspect evidence → Record decisions → Share → Revisit" in html
-    assert f"Published evaluation download: {PUBLIC_RELEASE_TAG}" in html
-    assert f"Development source: {SITE_SOURCE_VERSION}, unpublished" in html
-    assert f"{PUBLIC_RELEASES_INDEX}/tag/{PUBLIC_RELEASE_TAG}" in parser.links
+    assert f"Published evaluation download: {RELEASE_BUILD_TAG}" in html
+    assert f"View {RELEASE_BUILD_TAG} release" in html
+    assert f"{PUBLIC_RELEASES_INDEX}/tag/{RELEASE_BUILD_TAG}" in parser.links
+    assert f"https://github.com/YuzeJ21/Scope-Proof/commit/{RELEASE_SOURCE_SHA}" in parser.links
+    assert "Development source: 0.2.7.dev0, unpublished" not in html
     assert (
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/evaluation-guide.md"
         in parser.links

@@ -9,6 +9,10 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+Current development identity is `0.2.8.dev0`, unpublished, for post-v0.2.7 documentation and
+website alignment. Published v0.2.7 and its immutable artifacts remain the default evaluation
+download; no v0.2.8 release is selected.
+
 No further feature or release is selected automatically. Stage 3 remains gated by genuine
 independent-use evidence and separate authorization.
 

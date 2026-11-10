@@ -39,11 +39,12 @@ target-repository runtime proof, accessibility conformance, customer use, demand
 
 ### Current product checkpoint
 
-The [evaluation guide](../evaluation-guide.md) identifies final source/package `0.2.7` for the
-authorized evaluation build and distribution. Use the
-[v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) only when final
-source, wheel, source archive, checksum manifest and completed public-download verification are
-present; otherwise use the published, publicly verified v0.2.6 fallback. The private `0.2.7.dev0`
+The [evaluation guide](../evaluation-guide.md) identifies published, publicly verified v0.2.7 from
+`e099679ed63309716a7ce4726557ef794bfd5c80` as the default evaluation download. Its
+[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records final source,
+wheel, source archive, checksum manifest and completed public-download/fresh-install verification.
+Current development source is `0.2.8.dev0`, unpublished; the earlier verified v0.2.6 fallback
+retains its own source and checks. The private `0.2.7.dev0`
 candidate stays historical and unpublished; its checks do not verify final v0.2.7 bytes. The
 [v0.2.6 GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies
 the final source `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`, wheel, source archive, checksum
@@ -80,7 +81,8 @@ exported by actual public v0.2.6 from the unchanged native active record. An eva
 the output before setup. It retains Action required and no final acceptance, with prominent
 simulation/synthetic-link warnings and strict provenance. It adds no application feature or
 human-use evidence and needs no new Pages or package publication. Pages remains manual-only;
-future deployments require separate authorization.
+the later v0.2.7 entry-point alignment has separately authorized site publication and public
+verification. Its deployment revision is distinct from the immutable package source.
 Product/core behavior, gates and dedicated report/download controls stay unchanged.
 Completing engineering checks does not authorize another release or feature queue.
 Stage 3 requires genuine independent use and separate authorization.
