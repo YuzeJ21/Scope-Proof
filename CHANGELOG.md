@@ -18,6 +18,8 @@ independent-use evidence and separate authorization.
 
 - Candidate excerpts in new analyses use consecutive lines at the cited commit. When a diff
   omits a neighboring line, the excerpt stops at that gap.
+- Reopen CLI-created reviews with E0 or E4 requirements in the workbench and display their
+  saved evidence levels in the criteria editor.
 
 ## 0.2.7 — Evaluation release build
 
