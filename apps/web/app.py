@@ -73,6 +73,8 @@ from apps.web.source_attachment import (
     validate_current_source_attachment,
 )
 from apps.web.view_models import (
+    EXTERNAL_VERIFICATION_LABEL,
+    criterion_next_actions,
     default_criterion_detail_id,
     group_candidate_evidence,
     prioritize_unresolved_criterion_ids,
@@ -2697,6 +2699,15 @@ else:
             else "Ruleset unchanged between reviews."
         )
     finding_by_id = {finding.criterion_id: finding for finding in bundle.findings}
+    next_action_by_id = criterion_next_actions(
+        bundle,
+        suggest_external_verification=not (
+            source_observation_conflict
+            or st.session_state["review_save_conflict"]
+            or st.session_state["deleted_review_save_fingerprint"] is not None
+            or _junit_audit_draft_pending()
+        ),
+    )
     diagnostic_by_id = {
         diagnostic.criterion_id: diagnostic
         for diagnostic in bundle.retrieval_diagnostics
@@ -2750,7 +2761,7 @@ else:
                     "Observed runtime evidence and the human acceptance decision remain "
                     "separate from static implementation or test candidates."
                 )
-                st.text(finding_by_id[criterion_id].recommended_action)
+                st.text(next_action_by_id[criterion_id])
                 if st.button(
                     f"Open {criterion_id} decision controls",
                     key=f"inspect_queue_{criterion_id}",
@@ -2911,7 +2922,7 @@ else:
             for missing in selected_finding.missing_evidence:
                 st.text(missing)
         st.markdown("**Recommended next action**")
-        st.code(selected_finding.recommended_action, language=None)
+        st.code(next_action_by_id[selected_id], language=None)
         st.markdown("### Candidate evidence")
         evidence_by_id = {item.evidence_id: item for item in bundle.evidence}
         if not selected_finding.evidence_ids:
@@ -3344,7 +3355,7 @@ else:
             st.success(runtime_evidence_save_notice)
 
         with st.expander(
-            "Record optional external verification (E3/E4)",
+            EXTERNAL_VERIFICATION_LABEL,
             expanded=False,
         ):
             st.caption(
@@ -3558,7 +3569,7 @@ else:
                 "Candidate count": len(finding.evidence_ids),
                 "Rationale": finding.reason,
                 "Missing evidence": finding.missing_evidence,
-                "Recommended action": finding.recommended_action,
+                "Recommended action": next_action_by_id[criterion.criterion_id],
             }
         )
     if not matrix:
