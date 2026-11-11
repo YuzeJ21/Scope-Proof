@@ -16,6 +16,9 @@ download; no v0.2.8 release is selected.
 No further feature or release is selected automatically. Stage 3 remains gated by genuine
 independent-use evidence and separate authorization.
 
+- Candidate excerpts in new analyses use consecutive lines at the cited commit. When a diff
+  omits a neighboring line, the excerpt stops at that gap.
+
 ## 0.2.7 — Evaluation release build
 
 Source/package identity: `0.2.7`. The [GitHub Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7)

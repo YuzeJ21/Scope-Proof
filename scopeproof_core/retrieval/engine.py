@@ -130,7 +130,7 @@ def _candidate_file(retrieved: RetrievedFile) -> ChangedFile:
 
 
 def _context_excerpt(changed_file: ChangedFile, line_number: int) -> str:
-    """Return the matched line with at most one inspectable neighbor on each side."""
+    """Return the matched line and its available consecutive head lines."""
 
     inspectable = [
         line
@@ -142,9 +142,16 @@ def _context_excerpt(changed_file: ChangedFile, line_number: int) -> str:
         for index, line in enumerate(inspectable)
         if line.line_number == line_number
     )
-    start = max(0, match_index - 1)
-    end = min(len(inspectable), match_index + 2)
-    return "\n".join(line.content for line in inspectable[start:end])
+    context = [inspectable[match_index].content]
+    if match_index > 0:
+        preceding = inspectable[match_index - 1]
+        if preceding.line_number == line_number - 1:
+            context.insert(0, preceding.content)
+    if match_index + 1 < len(inspectable):
+        following = inspectable[match_index + 1]
+        if following.line_number == line_number + 1:
+            context.append(following.content)
+    return "\n".join(context)
 
 
 def retrieve_evidence_with_diagnostics(

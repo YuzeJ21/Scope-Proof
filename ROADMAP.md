@@ -15,6 +15,16 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current priorities — 2026-11-07
 
+Updated 2026-11-11: Stage 2 now covers source-context accuracy. A constructed multi-hunk
+diff reproduced distant lines appearing beside an exact citation in the workbench and reports.
+New automatic candidates use consecutive head lines for context. The regression covers gaps on
+both sides and retains the original citation and evidence level.
+
+The next recommended workflow fix is reopening CLI-created reviews that require E0 or E4.
+An isolated automated check saved and validated each record through the CLI. Reopening either
+record in the workbench then failed because its criteria editor only lists E1 through E3.
+Preserving the recorded level on reopen would let reviewers continue those reviews.
+
 Updated 2026-11-10: PR #278 completed final v0.2.7 at release source
 `e099679ed63309716a7ce4726557ef794bfd5c80`; publication and public-download verification completed
 on 2026-11-09. PR #276 completed the constructed report download at main `c749917`;
