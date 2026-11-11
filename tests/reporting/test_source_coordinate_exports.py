@@ -112,6 +112,69 @@ def test_new_exports_retain_whole_context_and_literal_git_line_two():
     assert state.bundle.gate.verdict.value != "ready"
 
 
+@pytest.mark.parametrize(
+    ("match_hunk", "expected_context"),
+    [
+        (
+            "@@ -100 +100 @@\n-previous_export()\n+target_identifier()\n",
+            "target_identifier()",
+        ),
+        (
+            "@@ -99,2 +99,2 @@\n before_match()\n-previous_export()\n+target_identifier()\n",
+            "before_match()\ntarget_identifier()",
+        ),
+        (
+            "@@ -100,2 +100,2 @@\n-previous_export()\n+target_identifier()\n after_match()\n",
+            "target_identifier()\nafter_match()",
+        ),
+    ],
+    ids=["isolated", "preceding-line", "following-line"],
+)
+def test_new_exports_only_show_consecutive_head_lines(match_hunk, expected_context):
+    patch = (
+        "@@ -1 +1 @@\n-previous_setup()\n+distant_setup()\n"
+        + match_hunk
+        + "@@ -200 +200 @@\n-previous_cleanup()\n+distant_cleanup()"
+    )
+    snapshot = PullRequestSnapshot(
+        repository="acme/widget",
+        pr_number=7,
+        title="Constructed multi-hunk patch",
+        html_url="https://github.com/acme/widget/pull/7",
+        base_sha="1" * 40,
+        head_sha=_HEAD,
+        files=[
+            ChangedFile(
+                path="src/coordinates.txt",
+                status="modified",
+                patch=patch,
+                lines=_parse_patch(patch),
+            )
+        ],
+    )
+    state = new_review_state(build_review(snapshot, _LABELS))
+    link = f"https://github.com/acme/widget/blob/{_HEAD}/src/coordinates.txt#L100-L100"
+
+    payload = json.loads(export_json(state))
+    (candidate,) = payload["bundle"]["evidence"]
+    assert candidate["context_excerpt"] == expected_context
+    assert candidate["excerpt"] == "target_identifier()"
+    assert candidate["line_start"] == candidate["line_end"] == 100
+    assert candidate["permalink"] == link
+    assert candidate["evidence_level"] == "E1"
+    markdown, html = export_markdown(state), export_html(state)
+    assert expected_context.replace("\n", " ") in markdown
+    assert expected_context in html
+    for report in (markdown, html):
+        assert link in report
+        assert "distant_setup()" not in report
+        assert "distant_cleanup()" not in report
+        assert "previous_export()" not in report
+    assert state.bundle.runtime_evidence == []
+    assert not state.review.final_acceptance
+    assert state.bundle.gate.verdict.value == "needs_review"
+
+
 @pytest.mark.parametrize("archived", [False, True])
 def test_loading_and_exporting_old_coordinates_does_not_reparse_or_renumber(tmp_path, archived):
     state = coordinate_state(legacy=True)
