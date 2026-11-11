@@ -20,10 +20,9 @@ diff reproduced distant lines appearing beside an exact citation in the workbenc
 New automatic candidates use consecutive head lines for context. The regression covers gaps on
 both sides and retains the original citation and evidence level.
 
-The next recommended workflow fix is reopening CLI-created reviews that require E0 or E4.
-An isolated automated check saved and validated each record through the CLI. Reopening either
-record in the workbench then failed because its criteria editor only lists E1 through E3.
-Preserving the recorded level on reopen would let reviewers continue those reviews.
+CLI-created reviews with E0 or E4 requirements can reopen in the workbench. The criterion
+editor includes the saved level alongside E1 through E3 for that row. Reopening preserves
+the saved review, and changing the required level still requires explicit confirmation.
 
 Updated 2026-11-10: PR #278 completed final v0.2.7 at release source
 `e099679ed63309716a7ce4726557ef794bfd5c80`; publication and public-download verification completed

@@ -770,6 +770,7 @@ def _prepare_from_text(text: str) -> None:
     st.session_state["criteria"] = [
         Criterion(criterion_id=draft.criterion_id, text=draft.text) for draft in drafts
     ]
+    _clear_criteria_draft(st.session_state["criteria"])
     _reset_analysis()
 
 
@@ -781,6 +782,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     st.session_state["snapshot"] = None
     st.session_state["staged_requirements_pr"] = None
     st.session_state["criteria"] = state.criteria_revision.criteria
+    _clear_criteria_draft(state.criteria_revision.criteria)
     st.session_state["criteria_confirmed"] = state.review.criteria_confirmed
     st.session_state["bundle"] = state.bundle
     st.session_state["source_text"] = state.criteria_revision.source_text
@@ -1011,12 +1013,10 @@ def _criteria_draft_pending(criteria: list[Criterion]) -> bool:
 
 
 def _clear_criteria_draft(criteria: list[Criterion]) -> None:
+    """Let the editor rebuild from the current criteria defaults."""
     for item in criteria:
-        st.session_state[f"criterion_text_{item.criterion_id}"] = item.text
-        st.session_state[f"criterion_priority_{item.criterion_id}"] = item.priority
-        st.session_state[f"criterion_level_{item.criterion_id}"] = (
-            item.required_evidence_level
-        )
+        for field in ("text", "priority", "level"):
+            st.session_state.pop(f"criterion_{field}_{item.criterion_id}", None)
 
 
 def _criteria_authoring_draft_pending() -> bool:
@@ -1512,6 +1512,7 @@ with st.container(border=True):
         st.session_state["criteria"] = [
             Criterion.model_validate(item) for item in labels["criteria"]
         ]
+        _clear_criteria_draft(st.session_state["criteria"])
         st.session_state["candidate_files"] = []
         st.session_state["criteria_source_mode"] = "demo"
         st.session_state["criteria_source_reference"] = (
@@ -2109,12 +2110,20 @@ else:
                     key=f"criterion_priority_{criterion.criterion_id}",
                 )
             with level_column:
+                level_options = [
+                    level
+                    for level in EvidenceLevel
+                    if level in (
+                        EvidenceLevel.E1,
+                        EvidenceLevel.E2,
+                        EvidenceLevel.E3,
+                        criterion.required_evidence_level,
+                    )
+                ]
                 level = st.selectbox(
                     f"Required evidence for {criterion.criterion_id}",
-                    options=[EvidenceLevel.E1, EvidenceLevel.E2, EvidenceLevel.E3],
-                    index=[EvidenceLevel.E1, EvidenceLevel.E2, EvidenceLevel.E3].index(
-                        criterion.required_evidence_level
-                    ),
+                    options=level_options,
+                    index=level_options.index(criterion.required_evidence_level),
                     key=f"criterion_level_{criterion.criterion_id}",
                 )
             with actions_column:
