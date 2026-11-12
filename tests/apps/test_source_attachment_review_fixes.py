@@ -6,12 +6,14 @@ import httpx
 import pytest
 
 from apps.web.deferred_exports import DeferredExportUnavailable
+from scopeproof_core.demo import load_demo_snapshot
 from scopeproof_core.github.client import GitHubClient
 from scopeproof_core.reviews.lifecycle import append_resolution
-from scopeproof_core.schemas.models import HumanDecision, ResolutionEvent
+from scopeproof_core.schemas.models import CheckState, CIObservation, HumanDecision, ResolutionEvent
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
 from tests.apps.test_source_attachment import load_matching, reopen, saved_reference
 from tests.apps.test_source_attachment_safety import queued_export, simulated_live_saved_source
+from tests.apps.test_streamlit_app import analyzed_demo, new_app
 
 
 @pytest.mark.parametrize(
@@ -89,6 +91,114 @@ def test_unavailable_403_source_does_not_invent_non_public_observation_or_block_
     assert app.session_state["source_authority_guard"].allows(state)
     assert all(not b.disabled for b in app.download_button if b.key.startswith("download_"))
     assert export()
+
+
+def _load_contradictory_ci(app):
+    contradictory_snapshot = load_demo_snapshot()
+    contradictory_snapshot.check_state = CheckState.FAILING
+    contradictory_snapshot.ci_observation = CIObservation(
+        state=CheckState.FAILING,
+        total_check_runs=1,
+        failing_check_runs=1,
+        reason="Constructed fresh CI failure",
+    )
+    return load_matching(app, contradictory_snapshot)
+
+
+def _stage_criterion_save(app, save_key):
+    if save_key == "save_resolution":
+        app.selectbox(key="resolution_decision").set_value(HumanDecision.CHANGE_REQUIRED)
+        app.text_area(key="resolution_note").set_value("Constructed reviewer decision")
+    else:
+        app.text_input(key="runtime_artifact_reference").set_value("constructed-run")
+        app.text_area(key="runtime_scenario").set_value("Export configured columns")
+        app.text_input(key="runtime_environment").set_value("Controlled environment")
+        app.text_input(key="runtime_result").set_value("Observed exported columns")
+        app.text_input(key="runtime_reviewer").set_value("Constructed reviewer")
+    return app.run()
+
+
+def _submit_stale_save_click(app, save_key):
+    button = app.button(key=save_key)
+    # Model a click queued by a client before it received the new disabled state.
+    button.proto.disabled = False
+    return button.click().run()
+
+
+@pytest.mark.parametrize("save_key", ["save_resolution", "save_runtime_evidence"])
+def test_observed_source_conflict_rejects_criterion_save_without_mutation(save_key):
+    analyzed = analyzed_demo(new_app())
+    state = analyzed.session_state["review_state"].model_copy(deep=True)
+    review_id = state.review.review_id
+    store = JsonReviewStore(default_local_review_directory())
+    path = store.directory / f"{review_id}.json"
+    before = path.read_bytes()
+    app = _load_contradictory_ci(reopen(review_id))
+    assert not app.exception
+    assert not app.session_state["source_authority_guard"].allows(state)
+
+    app = _stage_criterion_save(app, save_key)
+    assert app.button(key=save_key).disabled
+    app = _submit_stale_save_click(app, save_key)
+
+    assert not app.exception
+    assert app.session_state["review_state"] == state
+    assert app.session_state["bundle"] == state.bundle
+    assert path.read_bytes() == before
+    assert store.load(review_id) == state
+    assert app.button(key=save_key).disabled
+
+    app = app.button(key="clear_criterion_detail_drafts").click().run()
+    assert not app.session_state["source_authority_guard"].allows(state)
+    app = load_matching(app, load_demo_snapshot())
+    assert not app.exception
+    assert app.session_state["source_authority_guard"].allows(state)
+    assert path.read_bytes() == before
+
+    app = _stage_criterion_save(app, save_key)
+    assert not app.button(key=save_key).disabled
+    app = app.button(key=save_key).click().run()
+    assert not app.exception
+    after = app.session_state["review_state"]
+    assert len(after.resolution_events) == 1
+    assert store.load(review_id) == after
+
+
+def test_observed_source_conflict_prevents_autosave_of_unsaved_review_state():
+    analyzed = analyzed_demo(new_app())
+    state = analyzed.session_state["review_state"].model_copy(deep=True)
+    review_id = state.review.review_id
+    store = JsonReviewStore(default_local_review_directory())
+    path = store.directory / f"{review_id}.json"
+    before = path.read_bytes()
+    app = _load_contradictory_ci(reopen(review_id))
+
+    unsaved = append_resolution(
+        state,
+        ResolutionEvent(
+            criterion_id="AC-01",
+            decision=HumanDecision.CHANGE_REQUIRED,
+            reviewer="Constructed reviewer",
+            comment="Earlier in-memory update that must not autosave after the conflict",
+        ),
+    )
+    assert not app.session_state["source_authority_guard"].allows(unsaved)
+    app.session_state["review_state"] = unsaved
+    app.session_state["bundle"] = unsaved.bundle
+    app = app.run()
+
+    assert not app.exception
+    assert path.read_bytes() == before
+    assert store.load(review_id) == state
+    assert app.session_state["review_state"] == unsaved
+    assert app.session_state["bundle"] == unsaved.bundle
+    assert app.button(key="save_review").disabled
+
+    app = _submit_stale_save_click(app, "save_review")
+    assert not app.exception
+    assert path.read_bytes() == before
+    assert store.load(review_id) == state
+    assert app.session_state["review_state"] == unsaved
 
 
 @pytest.mark.parametrize("edited_key", ["criterion_text_AC-01", "criteria_source_revision"])

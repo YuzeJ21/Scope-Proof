@@ -15,6 +15,18 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current priorities — 2026-11-07
 
+Updated 2026-11-12: Stage 2 continues on the unpublished `0.2.8.dev0` source line. PR #282
+directs reviewers with missing E3 evidence to external verification for the reviewed commit.
+The default public evaluation download is still v0.2.7.
+
+| Order | Reviewer outcome | Engineering finish line |
+| --- | --- | --- |
+| Stage 2 — source fix | Keep a saved analysis and its review history intact when fresh source observations contradict it. | Pause criterion, runtime, JUnit and file-scope submissions and local saves in the conflicted workbench context. Keep read-only history, draft recovery and explicit source recovery available. |
+| Stage 2 — next integrity investigation | Make below-level manual verification explicit when a criterion requires E4. | A constructed case reached Ready after linked E3 verification and final acceptance for an E4 criterion. Specify how new writes and earlier saved reviews should behave before changing the gate. Preserve historical records and benchmark inputs. |
+| Stage 2 — next workbench follow-up | Guide reviewers to the actual prerequisite when final acceptance is unavailable. | A constructed review showed the final-acceptance link after all criterion decisions were recorded, while failing checks disabled the form. Align the prompt with the existing eligibility check. |
+| Evaluation distribution | Keep v0.2.7 available while these fixes accumulate on source. | A new version requires a separately authorized build and public-download verification. |
+| Stage 3 — gated | Establish whether independent practitioners can complete and repeat the review workflow. | Genuine independent use and a separate owner decision. Automated checks count as engineering evidence. |
+
 Updated 2026-11-11: Stage 2 now covers source-context accuracy. A constructed multi-hunk
 diff reproduced distant lines appearing beside an exact citation in the workbench and reports.
 New automatic candidates use consecutive head lines for context. The regression covers gaps on
@@ -29,7 +41,7 @@ Updated 2026-11-10: PR #278 completed final v0.2.7 at release source
 on 2026-11-09. PR #276 completed the constructed report download at main `c749917`;
 PR #277 completed the bounded saved-history event-scan repair at main `944c791`.
 The [measurement and limits](docs/audits/2026-11-08-history-event-validation.md) remain constructed
-engineering evidence. Both implementation scopes are closed; no further feature is selected.
+engineering evidence. Both implementation scopes are complete.
 The [v0.2.7 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records
 the final wheel, source archive, checksum manifest, anonymous download checks and fresh installs
 from both public archives. Its [release-source CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42547822181)
@@ -43,7 +55,6 @@ alignment, including review, green exact-head/main checks, Pages publication and
 public verification. The [manual Pages workflow](https://github.com/YuzeJ21/Scope-Proof/actions/workflows/pages.yml)
 records the site revision separately from the package source. The previous publication at
 `388b7da` remains historical evidence; the sample retains its actual v0.2.6 producer.
-No personal testing, qualifying reviews, new package build or additional feature is selected.
 
 The product direction is **explain and revisit an acceptance decision**. Confirmed intent,
 exact-head evidence, explicit gaps, recorded decisions and later comparison form the working
