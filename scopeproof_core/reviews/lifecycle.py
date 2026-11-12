@@ -324,9 +324,9 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
         if below_required:
             raise ValueError(
                 "final acceptance prerequisites are not satisfied. "
-                "Record verification at the required evidence level for "
-                + ", ".join(below_required)
-                + "."
+                f"Review below-level manual verification for {', '.join(below_required)}. "
+                "Record verification at the required level or an explicit reviewer "
+                "decision with the applicable rationale."
             )
         raise ValueError("final acceptance prerequisites are not satisfied")
     if event.criterion_id is not None and event.criterion_id not in {

@@ -3804,14 +3804,13 @@ else:
         criteria_to_verify = ", ".join(below_required_verification)
         if final_acceptance_recorded:
             st.warning(
-                "Revoke final acceptance before recording E4 verification for "
+                "Revoke final acceptance before replacing manual verification for "
                 f"{criteria_to_verify}."
             )
-        else:
-            st.caption(
-                f"Record E4 verification for {criteria_to_verify} "
-                "before recording final acceptance."
-            )
+        st.caption(
+            f"Before new final acceptance, record E4 verification for {criteria_to_verify} "
+            "or record an explicit reviewer decision with the applicable rationale."
+        )
     elif final_acceptance_recorded and runtime_reconfirmation_required:
         st.warning(
             "Revoke final acceptance before recording new E3/E4 verification at the active "

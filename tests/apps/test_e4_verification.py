@@ -162,6 +162,15 @@ def test_reopened_linked_e3_record_is_retained_and_requires_e4_for_acceptance(
     else:
         assert app.button(key="record_final_acceptance").disabled
         assert not can_record_final_acceptance(legacy)
+        assert not any(
+            "Record final acceptance after reviewing every criterion" in item.value
+            for item in app.markdown
+        )
+    assert any(
+        "record E4 verification for AC-01" in item.value
+        and "explicit reviewer decision" in item.value
+        for item in app.caption
+    )
     assert any(
         item.value.startswith(
             "Previously recorded manual verification is below the required evidence level "
