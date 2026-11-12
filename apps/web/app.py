@@ -697,7 +697,7 @@ def _render_local_review_storage(
                 or save_conflict
             ),
         )
-        if save_clicked:
+        if save_clicked and source_authority_check(state)():
             if _persist_review_state(state, store):
                 st.session_state["review_save_notice"] = (
                     f"Review saved locally. ID: {state.review.review_id}."
@@ -1382,11 +1382,13 @@ if has_missing_active_provenance:
         "This legacy review has no criteria source provenance. Reconfirm the source "
         "snapshot before saving, exporting, or recording final acceptance."
     )
+validate_current_source_attachment(current_review_state)
+source_observation_conflict = not source_authority_guard().allows(current_review_state)
 autosaved = _autosave_review_if_eligible(
     state=current_review_state,
     store=review_store,
     store_available=review_store_available,
-    has_pending_review_input=has_pending_review_input,
+    has_pending_review_input=has_pending_review_input or source_observation_conflict,
 )
 if autosaved and current_review_state is not None:
     saved_review_ids = sorted(
@@ -1458,8 +1460,6 @@ requirements_submission_blocked = explicit_draft_resolution_required or bool(
 # Observation conflicts are separate from discardable drafts and storage conflicts.
 # Compute replacement guards from actual drafts first, so explicit re-review stays available.
 actual_pending_review_input = has_pending_review_input
-validate_current_source_attachment(current_review_state)
-source_observation_conflict = not source_authority_guard().allows(current_review_state)
 has_pending_review_input = has_pending_review_input or source_observation_conflict
 if source_observation_conflict:
     pending_storage_messages.append(
@@ -2770,6 +2770,10 @@ else:
     else:
         st.success("A current human decision is recorded for every active criterion.")
     st.header("4 · Criterion Review")
+    if source_observation_conflict:
+        st.warning(
+            "Saving decisions and evidence requires matching reviewed source or a fresh review."
+        )
     assert review_state is not None
     if overview_selection_to_restore is not None:
         st.session_state["selected_criterion"] = overview_selection_to_restore[0]
@@ -3044,9 +3048,10 @@ else:
                 decision is None
                 or not decision_reviewer_ready
                 or not resolution_note_ready
+                or source_observation_conflict
                 or _junit_audit_draft_pending()
             ),
-        ) and not _junit_audit_draft_pending():
+        ) and not (source_observation_conflict or _junit_audit_draft_pending()):
             if review_state is None:
                 st.error("Run analysis before recording a human resolution.")
             else:
@@ -3192,8 +3197,12 @@ else:
             if st.button(
                 "Save imported JUnit results",
                 key="save_junit_import",
-                disabled=junit_import_candidate is None or _junit_audit_draft_pending(),
-            ) and not _junit_audit_draft_pending():
+                disabled=(
+                    junit_import_candidate is None
+                    or source_observation_conflict
+                    or _junit_audit_draft_pending()
+                ),
+            ) and not (source_observation_conflict or _junit_audit_draft_pending()):
                 assert review_state is not None
                 assert junit_import_candidate is not None
                 try:
@@ -3410,8 +3419,12 @@ else:
             if st.button(
                 "Save external verification",
                 key="save_runtime_evidence",
-                disabled=not runtime_evidence_ready or _junit_audit_draft_pending(),
-            ) and not _junit_audit_draft_pending():
+                disabled=(
+                    not runtime_evidence_ready
+                    or source_observation_conflict
+                    or _junit_audit_draft_pending()
+                ),
+            ) and not (source_observation_conflict or _junit_audit_draft_pending()):
                 if review_state is None:
                     st.error("Run analysis before recording external verification.")
                 else:
@@ -3703,9 +3716,10 @@ else:
                     )
                     or not scope_note.strip()
                     or not decision_reviewer_ready
+                    or source_observation_conflict
                     or _junit_audit_draft_pending()
                 ),
-            ) and not _junit_audit_draft_pending():
+            ) and not (source_observation_conflict or _junit_audit_draft_pending()):
                 try:
                     assert review_state is not None
                     review_state = append_file_scope_decision(

@@ -22,6 +22,8 @@ independent-use evidence and separate authorization.
   saved evidence levels in the criteria editor.
 - The workbench points reviewers with missing E3 evidence to the external verification form
   for the reviewed PR head.
+- The workbench pauses decision and evidence submissions and local saves when fresh source
+  observations conflict with a saved analysis. Review history remains available to inspect.
 
 ## 0.2.7 — Evaluation release build
 
