@@ -38,6 +38,30 @@ class ResolutionEventStatus(StrEnum):
     PRIOR_REVISION = "prior_revision"
 
 
+class FinalAcceptanceBlocker(StrEnum):
+    """A prerequisite that prevents recording a new final acceptance."""
+
+    ANALYSIS_REQUIRED = "analysis_required"
+    ALREADY_RECORDED = "already_recorded"
+    CRITERIA_CONFIRMATION_REQUIRED = "criteria_confirmation_required"
+    INCOMPLETE_INGESTION = "incomplete_ingestion"
+    CHECKS_FAILING = "checks_failing"
+    CHECKS_PENDING = "checks_pending"
+    CHECKS_UNAVAILABLE = "checks_unavailable"
+    CHANGED_FILE_INVENTORY_UNAVAILABLE = "changed_file_inventory_unavailable"
+    UNRESOLVED_FILE_SCOPE = "unresolved_file_scope"
+    CRITERION_DECISIONS_REQUIRED = "criterion_decisions_required"
+    UNLINKED_MANUAL_VERIFICATION = "unlinked_manual_verification"
+    BELOW_REQUIRED_MANUAL_VERIFICATION = "below_required_manual_verification"
+
+
+_CHECK_ACCEPTANCE_BLOCKERS = {
+    CheckState.FAILING: FinalAcceptanceBlocker.CHECKS_FAILING,
+    CheckState.PENDING: FinalAcceptanceBlocker.CHECKS_PENDING,
+    CheckState.UNAVAILABLE: FinalAcceptanceBlocker.CHECKS_UNAVAILABLE,
+}
+
+
 def _validated_state(state: ReviewState) -> ReviewState:
     """Revalidate mutable model input before applying a lifecycle transition."""
     return validated_review_state(state)
@@ -587,39 +611,46 @@ def below_required_manual_verification_ids(bundle: ReviewBundle) -> list[str]:
     )
 
 
-def can_record_final_acceptance(state: ReviewState) -> bool:
-    """Return whether the active revision has every deterministic prerequisite."""
+def final_acceptance_blockers(state: ReviewState) -> tuple[FinalAcceptanceBlocker, ...]:
+    """Explain every unmet prerequisite for new final acceptance on the active analysis."""
 
     if not state.criteria_revision.criteria or (
         state.bundle is not None and not state.bundle.criteria
     ):
-        return False
+        return (FinalAcceptanceBlocker.ANALYSIS_REQUIRED,)
     state = _validated_state(state)
-    if state.bundle is None or state.review.final_acceptance:
-        return False
+    bundle = state.bundle
+    if bundle is None:
+        return (FinalAcceptanceBlocker.ANALYSIS_REQUIRED,)
+    review = state.review
+    if review.final_acceptance:
+        return (FinalAcceptanceBlocker.ALREADY_RECORDED,)
+
+    blockers: list[FinalAcceptanceBlocker] = []
     if (
-        state.review.criteria_source_provenance is None
+        not review.criteria_confirmed
+        or review.criteria_source_provenance is None
         or state.criteria_revision.source_provenance
-        != state.review.criteria_source_provenance
-        or state.bundle.review.criteria_source_provenance
-        != state.review.criteria_source_provenance
+        != review.criteria_source_provenance
+        or bundle.review.criteria_source_provenance != review.criteria_source_provenance
     ):
-        return False
-    if not state.review.criteria_confirmed:
-        return False
-    if state.review.ingestion_state is not IngestionState.COMPLETE:
-        return False
-    if state.review.ingestion_warnings or state.review.skipped_files:
-        return False
-    if state.review.check_state is not CheckState.PASSING:
-        return False
-    if unresolved_changed_file_paths(
-        state.review, state.bundle.findings, state.bundle.evidence,
-        state.bundle.file_scope_decisions,
-    ) != set():
-        return False
-    if below_required_manual_verification_ids(state.bundle):
-        return False
+        blockers.append(FinalAcceptanceBlocker.CRITERIA_CONFIRMATION_REQUIRED)
+    if (
+        review.ingestion_state is not IngestionState.COMPLETE
+        or review.ingestion_warnings
+        or review.skipped_files
+    ):
+        blockers.append(FinalAcceptanceBlocker.INCOMPLETE_INGESTION)
+    check_blocker = _CHECK_ACCEPTANCE_BLOCKERS.get(review.check_state)
+    if check_blocker is not None:
+        blockers.append(check_blocker)
+    scope = unresolved_changed_file_paths(
+        review, bundle.findings, bundle.evidence, bundle.file_scope_decisions,
+    )
+    if scope is None:
+        blockers.append(FinalAcceptanceBlocker.CHANGED_FILE_INVENTORY_UNAVAILABLE)
+    elif scope:
+        blockers.append(FinalAcceptanceBlocker.UNRESOLVED_FILE_SCOPE)
 
     accepted_decisions = {
         HumanDecision.ACCEPTED,
@@ -627,19 +658,21 @@ def can_record_final_acceptance(state: ReviewState) -> bool:
         HumanDecision.MANUALLY_VERIFIED,
         HumanDecision.NOT_IN_SCOPE,
     }
-    active_resolutions = {
-        resolution.criterion_id: resolution
-        for resolution in current_resolutions(
-            state.resolution_events, state.criteria_revision.number
-        )
-    }
-    return all(
-        criterion.criterion_id in active_resolutions
-        and active_resolutions[criterion.criterion_id].decision in accepted_decisions
-        and (
-            active_resolutions[criterion.criterion_id].decision
-            is not HumanDecision.MANUALLY_VERIFIED
-            or active_resolutions[criterion.criterion_id].runtime_evidence_id is not None
-        )
-        for criterion in state.bundle.criteria
-    )
+    if len(bundle.resolutions) != len(bundle.criteria) or any(
+        resolution.decision not in accepted_decisions for resolution in bundle.resolutions
+    ):
+        blockers.append(FinalAcceptanceBlocker.CRITERION_DECISIONS_REQUIRED)
+    if any(
+        resolution.decision is HumanDecision.MANUALLY_VERIFIED
+        and resolution.runtime_evidence_id is None
+        for resolution in bundle.resolutions
+    ):
+        blockers.append(FinalAcceptanceBlocker.UNLINKED_MANUAL_VERIFICATION)
+    if below_required_manual_verification_ids(bundle):
+        blockers.append(FinalAcceptanceBlocker.BELOW_REQUIRED_MANUAL_VERIFICATION)
+    return tuple(blockers)
+
+
+def can_record_final_acceptance(state: ReviewState) -> bool:
+    """Return whether the active revision has every deterministic prerequisite."""
+    return not final_acceptance_blockers(state)

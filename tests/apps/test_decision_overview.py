@@ -1,7 +1,14 @@
 from contextlib import contextmanager
 from unittest.mock import patch
 
-from scopeproof_core.reviews.lifecycle import append_resolution, revise_criteria
+import pytest
+from streamlit.testing.v1 import AppTest
+
+from scopeproof_core.reviews.lifecycle import (
+    append_resolution,
+    can_record_final_acceptance,
+    revise_criteria,
+)
 from scopeproof_core.schemas.models import (
     ChangedFile,
     CheckState,
@@ -52,6 +59,9 @@ def test_overview_excludes_unsubmitted_file_scope_draft_from_save_status() -> No
     assert "[Go to changed-file scope](#changed-file-scope)" not in [
         item.value for item in app.markdown
     ]
+    assert "Clear pending review inputs before refreshing the review." in [
+        item.value for item in app.caption
+    ]
     assert app.text_area(key="scope_note").value == "Unsubmitted scope explanation"
 
 
@@ -90,6 +100,83 @@ def test_overview_scope_preview_is_bounded_and_reopens_with_failing_checks() -> 
     assert "1 more in changed-file scope." in [item.value for item in reopened.caption]
     assert not any("a<img>.py" in item.value for item in reopened.markdown)
     assert record.read_bytes() == saved_bytes
+
+
+def _final_acceptance_panel_text(app: AppTest) -> list[str]:
+    nodes = list(app.main)
+    headings = {
+        node.value: index for index, node in enumerate(nodes) if node.type == "markdown"
+    }
+    start = headings["### Final review acceptance"]
+    end = headings["### Resolution history"]
+    return [
+        node.value for node in nodes[start + 1:end]
+        if node.type in {"caption", "info", "markdown", "text", "warning"}
+    ]
+
+
+@pytest.mark.parametrize(
+    ("checks_failing", "scope_unresolved"),
+    [
+        pytest.param(True, True, id="checks-and-scope"),
+        pytest.param(True, False, id="checks-only"),
+        pytest.param(False, True, id="scope-only"),
+        pytest.param(False, False, id="eligible"),
+    ],
+)
+def test_final_acceptance_panel_explains_blockers_after_every_criterion_decision(
+    checks_failing: bool, scope_unresolved: bool,
+) -> None:
+    app = load_demo(new_app())
+    snapshot = app.session_state["snapshot"]
+    if scope_unresolved:
+        snapshot.files.append(ChangedFile(path="src/unrelated.py", status="modified"))
+    if checks_failing:
+        snapshot.check_state = CheckState.FAILING
+        snapshot.ci_observation = CIObservation(
+            state=CheckState.FAILING,
+            reason="Constructed failing check",
+            reason_code=CIReasonCode.FAILING_CHECK_RUNS,
+            total_check_runs=1,
+            failing_check_runs=1,
+        )
+    app = app.run().button(key="confirm_criteria").click().run()
+    app = resolve_all_criteria(app.button(key="run_analysis").click().run())
+    state = app.session_state["review_state"]
+    assert len(state.bundle.resolutions) == len(state.bundle.criteria)
+    store = JsonReviewStore(default_local_review_directory())
+    record = store.directory / f"{state.review.review_id}.json"
+    saved_bytes = record.read_bytes()
+
+    app = select_saved_review(new_app(), state.review.review_id)
+    app = app.button(key="reopen_review").click().run()
+
+    assert not app.exception
+    assert app.session_state["review_state"] == store.load(state.review.review_id) == state
+    assert record.read_bytes() == saved_bytes
+    eligible = not (checks_failing or scope_unresolved)
+    assert can_record_final_acceptance(state) == eligible
+    assert app.button(key="record_final_acceptance").disabled == (not eligible)
+    panel = _final_acceptance_panel_text(app)
+    assert not any(item.startswith("Review criteria without a decision") for item in panel)
+    checks_message = (
+        "Observed GitHub checks are failing. Review them on the pull request, "
+        "then check the current head."
+    )
+    scope_message = (
+        "Changed-file scope is unresolved. Review the uncited files and record "
+        "their scope or obtain criterion evidence."
+    )
+    assert (checks_message in panel) == checks_failing
+    assert (scope_message in panel) == scope_unresolved
+    assert ("[Go to changed-file scope](#changed-file-scope)" in panel) == scope_unresolved
+
+    markdown = [item.value for item in app.markdown]
+    assert "### Changed-file scope" in markdown
+    acceptance_link = (
+        "[Record final acceptance after reviewing every criterion](#final-review-acceptance)"
+    )
+    assert (acceptance_link in markdown) == eligible
 
 
 def test_overview_opens_next_blocker_without_writing_or_discarding_inputs() -> None:

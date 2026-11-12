@@ -4161,7 +4161,8 @@ def test_final_acceptance_control_is_visible_only_after_analysis() -> None:
 
     assert app.button(key="record_final_acceptance").disabled is True
     assert (
-        "Resolve every active criterion before recording final acceptance."
+        "Review criteria without a decision or marked Change required or Rejected finding "
+        "before recording final acceptance."
         in [item.value for item in app.caption]
     )
 

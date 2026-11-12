@@ -26,6 +26,8 @@ independent-use evidence and separate authorization.
   observations conflict with a saved analysis. Review history remains available to inspect.
 - New manual verification must meet the criterion's required level. A previously recorded
   E3 verification for an E4 requirement needs correction before new final acceptance.
+- Final acceptance guidance shows applicable prerequisites together, including failing checks
+  and unresolved changed-file scope, beside the acceptance control.
 
 ## 0.2.7 — Evaluation release build
 
