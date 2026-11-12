@@ -610,6 +610,10 @@ command above that
 atomically links a human-supplied E3/E4 runtime record to its manual-verification decision. It
 does not run or independently verify the cited artifact. Final acceptance remains fail-closed
 until the deterministic prerequisites are satisfied; use `--revoke` to append a revocation.
+On the development line, new manual verification must meet the confirmed evidence level.
+An older E3 decision for an E4 criterion retains its recorded history and verdict. Before
+recording new final acceptance, replace that decision with explicit E4 verification or record
+an acceptance decision with the required reviewer rationale.
 `compare` validates both saved reviews, reports candidate changes without carrying decisions
 forward, reports imported-artifact and mapping changes separately, and refuses to overwrite an
 existing output file. Changed imported context can require a previous human decision to be

@@ -159,6 +159,7 @@ from scopeproof_core.reviews.lifecycle import (
     append_junit_evidence_import,
     append_resolution,
     attach_analysis,
+    below_required_manual_verification_ids,
     can_record_final_acceptance,
     confirm_criteria,
     new_review_state,
@@ -3409,7 +3410,15 @@ else:
             missing_runtime_fields = [
                 label for label, value in required_runtime_fields if not value.strip()
             ]
-            runtime_evidence_ready = not missing_runtime_fields
+            runtime_level_sufficient = (
+                runtime_level.rank >= selected_criterion.required_evidence_level.rank
+            )
+            if not runtime_level_sufficient:
+                st.warning(
+                    "This criterion requires E4. Select E4 only when you have explicit "
+                    "human acceptance for the reviewed commit."
+                )
+            runtime_evidence_ready = not missing_runtime_fields and runtime_level_sufficient
             if missing_runtime_fields:
                 st.caption(
                     "Complete required fields to enable Save: "
@@ -3424,7 +3433,9 @@ else:
                     or source_observation_conflict
                     or _junit_audit_draft_pending()
                 ),
-            ) and not (source_observation_conflict or _junit_audit_draft_pending()):
+            ) and runtime_evidence_ready and not (
+                source_observation_conflict or _junit_audit_draft_pending()
+            ):
                 if review_state is None:
                     st.error("Run analysis before recording external verification.")
                 else:
@@ -3775,6 +3786,7 @@ else:
     final_acceptance_eligible = bool(
         review_state is not None and can_record_final_acceptance(review_state)
     )
+    below_required_verification = below_required_manual_verification_ids(bundle)
     runtime_reconfirmation_required = bool(
         review_state is not None
         and review_state.bundle is not None
@@ -3788,12 +3800,24 @@ else:
         "or override the deterministic gate. Review every criterion and its evidence before "
         "recording final acceptance."
     )
-    if final_acceptance_recorded and runtime_reconfirmation_required:
+    if below_required_verification:
+        criteria_to_verify = ", ".join(below_required_verification)
+        if final_acceptance_recorded:
+            st.warning(
+                "Revoke final acceptance before recording E4 verification for "
+                f"{criteria_to_verify}."
+            )
+        else:
+            st.caption(
+                f"Record E4 verification for {criteria_to_verify} "
+                "before recording final acceptance."
+            )
+    elif final_acceptance_recorded and runtime_reconfirmation_required:
         st.warning(
             "Revoke final acceptance before recording new E3/E4 verification at the active "
             "head."
         )
-    if not final_acceptance_recorded and not final_acceptance_eligible:
+    elif not final_acceptance_recorded and not final_acceptance_eligible:
         st.caption("Resolve every active criterion before recording final acceptance.")
     acceptance_note_conflict = has_pending_acceptance_note and (
         st.session_state["review_save_conflict"]
@@ -3954,13 +3978,24 @@ else:
                 store_available=review_store_available,
                 has_pending_inputs=actual_pending_review_input or has_pending_scope_draft,
             )
+            if below_required_verification:
+                st.warning(
+                    "Previously recorded manual verification is below the required evidence "
+                    "level for " + ", ".join(below_required_verification) + ". "
+                    "E4 requires explicit human acceptance for the reviewed commit."
+                )
         st.header("6 · Summary & Export")
         review_status = (
             "Refresh required"
             if review_truth_conflict
             else review_status_label(bundle.gate.verdict)
         )
-        st.markdown(f"**Review status: {review_status}**")
+        status_label = (
+            "Recorded review status"
+            if below_required_verification and not review_truth_conflict
+            else "Review status"
+        )
+        st.markdown(f"**{status_label}: {review_status}**")
         if source_observation_conflict:
             st.warning(
                 "Fresh source facts conflict with this saved analysis. "
@@ -3986,12 +4021,12 @@ else:
                 "[Review next unresolved criterion]"
                 f"(#review-{unresolved_ids[0].lower()})"
             )
-        elif not final_acceptance_recorded:
+        elif final_acceptance_eligible and not record_blocked and not review_truth_conflict:
             st.markdown(
                 "[Record final acceptance after reviewing every criterion]"
                 "(#final-review-acceptance)"
             )
-        else:
+        elif final_acceptance_recorded:
             st.caption("Save the validated review locally or download an export below.")
         st.caption(
             f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
