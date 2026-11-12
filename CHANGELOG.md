@@ -24,6 +24,8 @@ independent-use evidence and separate authorization.
   for the reviewed PR head.
 - The workbench pauses decision and evidence submissions and local saves when fresh source
   observations conflict with a saved analysis. Review history remains available to inspect.
+- New manual verification must meet the criterion's required level. A previously recorded
+  E3 verification for an E4 requirement needs correction before new final acceptance.
 
 ## 0.2.7 — Evaluation release build
 

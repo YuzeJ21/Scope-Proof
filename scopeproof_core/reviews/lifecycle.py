@@ -320,6 +320,14 @@ def append_resolution(state: ReviewState, event: ResolutionEvent) -> ReviewState
                 "final acceptance must be revoked before replacing manual verification"
             )
     if event.final_acceptance is True and not can_record_final_acceptance(state):
+        below_required = below_required_manual_verification_ids(state.bundle)
+        if below_required:
+            raise ValueError(
+                "final acceptance prerequisites are not satisfied. "
+                f"Review below-level manual verification for {', '.join(below_required)}. "
+                "Record verification at the required level or an explicit reviewer "
+                "decision with the applicable rationale."
+            )
         raise ValueError("final acceptance prerequisites are not satisfied")
     if event.criterion_id is not None and event.criterion_id not in {
         criterion.criterion_id for criterion in state.bundle.criteria
@@ -502,9 +510,11 @@ def append_external_verification(
         )
     if evidence.criterion_id != event.criterion_id:
         raise ValueError("external verification inputs must reference the same active criterion")
-    if evidence.criterion_id not in {
-        criterion.criterion_id for criterion in state.bundle.criteria
-    }:
+    criterion = next(
+        (item for item in state.bundle.criteria if item.criterion_id == evidence.criterion_id),
+        None,
+    )
+    if criterion is None:
         raise ValueError("external verification inputs must reference the same active criterion")
     if evidence.reviewer != event.reviewer:
         raise ValueError("external verification inputs must use the same reviewer")
@@ -512,6 +522,12 @@ def append_external_verification(
         raise ValueError("external verification inputs must use the same evidence level")
     if evidence.evidence_level not in {EvidenceLevel.E3, EvidenceLevel.E4}:
         raise ValueError("external verification requires E3 or E4 evidence")
+    if evidence.evidence_level.rank < criterion.required_evidence_level.rank:
+        raise ValueError(
+            f"Criterion {criterion.criterion_id} requires "
+            f"{criterion.required_evidence_level.value} evidence. "
+            f"{evidence.evidence_level.value} is below the required level."
+        )
     if any(
         existing.runtime_evidence_id == evidence.runtime_evidence_id
         for existing in state.bundle.runtime_evidence
@@ -552,6 +568,25 @@ def append_external_verification(
     return validated_review_state(_recalculate(updated))
 
 
+def below_required_manual_verification_ids(bundle: ReviewBundle) -> list[str]:
+    """Find active linked decisions that fall below the confirmed requirement.
+
+    Earlier records may contain these decisions. Preserve their recorded gate and
+    use this check when deciding whether a new acceptance can be recorded.
+    """
+    required = {
+        criterion.criterion_id: criterion.required_evidence_level
+        for criterion in bundle.criteria
+    }
+    return sorted(
+        resolution.criterion_id
+        for resolution in bundle.resolutions
+        if resolution.runtime_evidence_id is not None
+        and resolution.claimed_evidence_level is not None
+        and resolution.claimed_evidence_level.rank < required[resolution.criterion_id].rank
+    )
+
+
 def can_record_final_acceptance(state: ReviewState) -> bool:
     """Return whether the active revision has every deterministic prerequisite."""
 
@@ -582,6 +617,8 @@ def can_record_final_acceptance(state: ReviewState) -> bool:
         state.review, state.bundle.findings, state.bundle.evidence,
         state.bundle.file_scope_decisions,
     ) != set():
+        return False
+    if below_required_manual_verification_ids(state.bundle):
         return False
 
     accepted_decisions = {
