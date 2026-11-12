@@ -286,6 +286,21 @@ def _main_widget_keys(app: object) -> list[str]:
     return keys
 
 
+def _criterion_card(app: AppTest, inspect_button_key: str):
+    return next(
+        block
+        for block in app.get("container")
+        if any(child.key == inspect_button_key for child in block.children.values())
+    )
+
+
+def _criterion_detail_evidence(app: AppTest):
+    return next(
+        column for column in app.columns
+        if any(item.value == "### Evidence" for item in column.markdown)
+    )
+
+
 def qualified_alpha_analyzed_app(app: AppTest) -> AppTest:
     app = app.checkbox(key="alpha_feedback_mode").check().run()
     app = app.text_input(key="pr_url").set_value(
@@ -1176,18 +1191,30 @@ def test_reopened_partial_review_keeps_ingestion_recovery_details(
     app = app.text_input(key="criteria_source_confirmer").set_value(
         "Local reviewer"
     ).run()
+    app = app.selectbox(key="criterion_level_AC-03").set_value(EvidenceLevel.E3).run()
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
     review_id = app.session_state["review_state"].review.review_id
 
     fresh = select_saved_review(new_app(), review_id)
     fresh = fresh.button(key="reopen_review").click().run()
+    fresh = fresh.selectbox(key="selected_criterion").set_value("AC-03").run()
 
     warning_text = "\n".join(item.value for item in fresh.warning)
     assert "Partial PR ingestion" in warning_text
     code_text = "\n".join(item.value for item in fresh.code)
     assert "File limit reached; skipped 1 changed files." in code_text
     assert "src/reopen-skipped.py" in code_text
+    recovery = "Review skipped content before deciding whether evidence is missing."
+    queue_card = _criterion_card(fresh, "inspect_queue_AC-03")
+    matrix_card = _criterion_card(fresh, "inspect_matrix_AC-03")
+    assert recovery in [item.value for item in queue_card.text]
+    assert recovery in [item.value for item in matrix_card.code]
+    assert recovery in [item.value for item in _criterion_detail_evidence(fresh).code]
+    assert not any(
+        "If external runtime results support verification" in item.value
+        for item in [*fresh.text, *fresh.code]
+    )
 
 
 def test_public_pr_entry_precedes_optional_start_review_controls(
@@ -2468,6 +2495,88 @@ def test_evidence_matrix_has_compact_strength_summary_and_unresolved_queue() -> 
     app = app.button(key="inspect_queue_AC-02").click().run()
 
     assert app.selectbox(key="selected_criterion").value == "AC-02"
+
+
+def test_workbench_explains_how_to_supply_missing_e3_evidence() -> None:
+    app = load_demo(new_app())
+    app = app.selectbox(key="criterion_level_AC-01").set_value(EvidenceLevel.E3).run()
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
+
+    assert not app.exception
+    bundle = app.session_state["review_state"].bundle
+    findings = {finding.criterion_id: finding for finding in bundle.findings}
+    assert bundle.review.ingestion_state is IngestionState.COMPLETE
+    assert findings["AC-01"].evidence_level is EvidenceLevel.E2
+    assert findings["AC-01"].recommended_action == (
+        "Review the candidate and provide stronger or additional evidence."
+    )
+    assert bundle.runtime_evidence == []
+
+    action = (
+        "If external runtime results support verification at the reviewed PR head, open "
+        "Record optional external verification (E3/E4) and record them at E3 for this criterion."
+    )
+    queue_card = _criterion_card(app, "inspect_queue_AC-01")
+    matrix_card = _criterion_card(app, "inspect_matrix_AC-01")
+    assert action in [item.value for item in queue_card.text]
+    assert action in [item.value for item in matrix_card.code]
+    assert action in [item.value for item in _criterion_detail_evidence(app).code]
+
+    unchanged_action = findings["AC-02"].recommended_action
+    other_queue_card = _criterion_card(app, "inspect_queue_AC-02")
+    other_matrix_card = _criterion_card(app, "inspect_matrix_AC-02")
+    assert unchanged_action in [item.value for item in other_queue_card.text]
+    assert unchanged_action in [item.value for item in other_matrix_card.code]
+
+
+def test_workbench_e3_guidance_tracks_verification_for_each_criterion_after_reopen() -> None:
+    app = load_demo(new_app())
+    app.selectbox(key="criterion_level_AC-01").set_value(EvidenceLevel.E3)
+    app.selectbox(key="criterion_level_AC-02").set_value(EvidenceLevel.E3)
+    app = app.run()
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    app = app.selectbox(key="selected_criterion").set_value("AC-02").run()
+    before = app.session_state["review_state"].bundle
+
+    app.text_input(key="runtime_artifact_reference").set_value("fixture-run-02")
+    app.text_area(key="runtime_scenario").set_value("Export with active filters")
+    app.text_input(key="runtime_environment").set_value("Controlled test environment")
+    app.text_input(key="runtime_result").set_value("Export matched active filters")
+    app.text_input(key="runtime_reviewer").set_value("Fixture reviewer")
+    app = app.run()
+    app = app.button(key="save_runtime_evidence").click().run()
+
+    review_id = app.session_state["review_state"].review.review_id
+    fresh = select_saved_review(new_app(), review_id)
+    fresh = fresh.button(key="reopen_review").click().run()
+    fresh = fresh.selectbox(key="selected_criterion").set_value("AC-02").run()
+
+    assert not fresh.exception
+    bundle = fresh.session_state["review_state"].bundle
+    assert bundle.findings == before.findings
+    assert bundle.review.final_acceptance is False
+    record, = bundle.runtime_evidence
+    assert record.criterion_id == "AC-02"
+    assert record.head_sha == bundle.review.head_sha
+    assert record.evidence_level is EvidenceLevel.E3
+    assert "inspect_queue_AC-02" not in _main_widget_keys(fresh)
+
+    record_action = (
+        "If external runtime results support verification at the reviewed PR head, open "
+        "Record optional external verification (E3/E4) and record them at E3 for this criterion."
+    )
+    review_action = "Review the recorded external verification for this criterion."
+    unresolved_card = _criterion_card(fresh, "inspect_queue_AC-01")
+    unverified_matrix_card = _criterion_card(fresh, "inspect_matrix_AC-01")
+    verified_matrix_card = _criterion_card(fresh, "inspect_matrix_AC-02")
+    assert record_action in [item.value for item in unresolved_card.text]
+    assert record_action in [item.value for item in unverified_matrix_card.code]
+    assert review_action in [item.value for item in verified_matrix_card.code]
+    assert review_action in [item.value for item in _criterion_detail_evidence(fresh).code]
+    assert record_action not in [item.value for item in verified_matrix_card.code]
 
 
 def test_summary_offers_direct_next_unresolved_action() -> None:
@@ -5090,7 +5199,10 @@ def test_runtime_evidence_record_renders_bound_identity_as_non_editable_text() -
 
 
 def test_runtime_evidence_legacy_unlinked_warning_disables_final_acceptance() -> None:
-    app = analyzed_demo(new_app())
+    app = load_demo(new_app())
+    app = app.selectbox(key="criterion_level_AC-01").set_value(EvidenceLevel.E3).run()
+    app = app.button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
     review_state = app.session_state["review_state"].model_copy(deep=True)
     runtime_item = RuntimeEvidence(
         runtime_evidence_id="migrated-runtime-id",
@@ -5129,11 +5241,18 @@ def test_runtime_evidence_legacy_unlinked_warning_disables_final_acceptance() ->
     app.session_state["review_state"] = review_state
     app.session_state["bundle"] = review_state.bundle
 
-    app = app.run()
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
 
     warning = "Legacy unlinked; re-record at the active head"
     assert warning in [item.value for item in app.warning]
     assert app.button(key="record_final_acceptance").disabled is True
+    action = (
+        "If external runtime results support verification at the reviewed PR head, open "
+        "Record optional external verification (E3/E4) and record them at E3 for this criterion."
+    )
+    matrix_card = _criterion_card(app, "inspect_matrix_AC-01")
+    assert action in [item.value for item in matrix_card.code]
+    assert action in [item.value for item in _criterion_detail_evidence(app).code]
 
 
 def test_reopened_legacy_verification_can_reverify_but_not_reaccept_without_inventory(

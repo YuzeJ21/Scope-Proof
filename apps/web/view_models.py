@@ -4,7 +4,54 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from scopeproof_core.schemas.models import EvidenceItem, EvidenceType
+from scopeproof_core.schemas.models import (
+    EvidenceItem,
+    EvidenceLevel,
+    EvidenceType,
+    IngestionState,
+    ReviewBundle,
+)
+
+EXTERNAL_VERIFICATION_LABEL = "Record optional external verification (E3/E4)"
+
+
+def criterion_next_actions(
+    bundle: ReviewBundle, *, suggest_external_verification: bool
+) -> dict[str, str]:
+    """Derive workbench guidance from findings and current verification decisions."""
+    actions = {finding.criterion_id: finding.recommended_action for finding in bundle.findings}
+    review = bundle.review
+    if (
+        review.ingestion_state is not IngestionState.COMPLETE
+        or review.ingestion_warnings
+        or review.skipped_files
+    ):
+        return actions
+
+    e3_ids = {
+        criterion.criterion_id
+        for criterion in bundle.criteria
+        if criterion.required_evidence_level is EvidenceLevel.E3
+    }
+    # The bundle validates this link at the reviewed head. Legacy observations can
+    # have migrated IDs while their decisions still require fresh verification.
+    verified_ids = {
+        resolution.criterion_id
+        for resolution in bundle.resolutions
+        if resolution.runtime_evidence_id is not None
+    }
+    for finding in bundle.findings:
+        criterion_id = finding.criterion_id
+        if criterion_id not in e3_ids or finding.evidence_level.rank >= EvidenceLevel.E3.rank:
+            continue
+        if criterion_id in verified_ids:
+            actions[criterion_id] = "Review the recorded external verification for this criterion."
+        elif suggest_external_verification and not review.final_acceptance:
+            actions[criterion_id] = (
+                "If external runtime results support verification at the reviewed PR head, "
+                f"open {EXTERNAL_VERIFICATION_LABEL} and record them at E3 for this criterion."
+            )
+    return actions
 
 
 @dataclass(frozen=True)
