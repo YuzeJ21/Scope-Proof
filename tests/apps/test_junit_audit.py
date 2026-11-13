@@ -5,7 +5,7 @@ import pytest
 from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import HumanDecision, ResolutionEvent
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
-from tests.apps.test_streamlit_app import new_app, select_saved_review
+from tests.apps.test_streamlit_app import new_app, runtime_key, select_saved_review
 from tests.junit_audit_fixture import junit_audit_state
 
 
@@ -130,9 +130,9 @@ def test_pending_withdrawal_blocks_other_detail_writes(operation):
             "runtime_result",
             "runtime_reviewer",
         ):
-            app.session_state[key] = "Constructed runtime draft"
+            app.session_state[runtime_key(app, key)] = "Constructed runtime draft"
         app = app.run()
-        control = "save_runtime_evidence"
+        control = runtime_key(app, "save_runtime_evidence")
     assert not app.exception
     assert app.button(key=control).disabled
     assert path.read_bytes() == before

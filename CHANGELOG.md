@@ -40,6 +40,8 @@ independent-use evidence and separate authorization.
   refresh the details and select it again before preparing a new download.
 - The criterion queue, detail, and evidence matrix explain how to supply missing E4 verification,
   inspect recorded E4, or correct an earlier below-level verification.
+- Delayed external verification inputs and Save actions expire when their form is retired.
+  Switching criteria cannot attach a previous form's evidence to the new criterion.
 
 ## 0.2.7 — Evaluation release build
 
