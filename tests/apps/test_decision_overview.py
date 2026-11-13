@@ -169,7 +169,11 @@ def test_final_acceptance_panel_explains_blockers_after_every_criterion_decision
     )
     assert (checks_message in panel) == checks_failing
     assert (scope_message in panel) == scope_unresolved
-    assert ("[Go to changed-file scope](#changed-file-scope)" in panel) == scope_unresolved
+    scope_link = "[Review changed-file scope before acceptance](#changed-file-scope)"
+    assert (scope_link in panel) == scope_unresolved
+    assert [item.value for item in app.markdown].count(
+        "[Go to changed-file scope](#changed-file-scope)"
+    ) == int(scope_unresolved)
 
     markdown = [item.value for item in app.markdown]
     assert "### Changed-file scope" in markdown

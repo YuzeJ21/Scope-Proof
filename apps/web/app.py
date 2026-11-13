@@ -3832,7 +3832,7 @@ else:
             has_pending_scope_draft
             or FinalAcceptanceBlocker.UNRESOLVED_FILE_SCOPE in acceptance_blockers
         ):
-            st.markdown("[Go to changed-file scope](#changed-file-scope)")
+            st.markdown("[Review changed-file scope before acceptance](#changed-file-scope)")
         if has_pending_review_drafts:
             st.caption("Submit or clear other pending review inputs before continuing.")
     if not decision_reviewer_ready:
