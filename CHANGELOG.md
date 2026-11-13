@@ -36,6 +36,8 @@ independent-use evidence and separate authorization.
   level. Cards display those levels separately and flag verification below the requirement.
 - An unsubmitted file-scope decision stays with its file until saved or discarded. Diff paging
   remains available while the file selector is paused.
+- Preparing a saved-review download checks the displayed saved details. If the record changed,
+  refresh the details and select it again before preparing a new download.
 
 ## 0.2.7 — Evaluation release build
 

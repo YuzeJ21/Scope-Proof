@@ -45,6 +45,7 @@ from apps.web.saved_discovery import (
     clear_saved_delete_confirmation,
     render_saved_discovery,
     render_saved_review_summary,
+    saved_review_target_changed,
 )
 from apps.web.scope_comparison import render_file_scope_comparison
 from apps.web.scope_file_preview import (
@@ -1791,7 +1792,7 @@ with st.expander("Resume a saved review", expanded=False):
             index=None,
             placeholder="Select a saved review",
             key="saved_reopen_review_id",
-            on_change=clear_saved_delete_confirmation,
+            on_change=saved_review_target_changed,
         )
         record_label = "review" if len(saved_review_ids) == 1 else "reviews"
         st.caption(
@@ -1799,23 +1800,26 @@ with st.expander("Resume a saved review", expanded=False):
             "The selected record is validated when opened."
         )
     else:
-        reopen_id = st.text_input("Review ID", key="reopen_review_id")
+        reopen_id = st.text_input(
+            "Review ID", key="reopen_review_id", on_change=saved_review_target_changed,
+        )
         if not saved_review_ids:
             st.caption("No saved local reviews found.")
-    render_saved_review_summary(saved_discovery_entries.get(reopen_id))
+    reopen_id = (reopen_id or "").strip()
+    selected_saved_entry = saved_discovery_entries.get(reopen_id)
+    expected_saved_fingerprint = (
+        selected_saved_entry.metadata.state_fingerprint
+        if selected_saved_entry is not None and selected_saved_entry.metadata is not None else None
+    )
+    render_saved_review_summary(selected_saved_entry)
     if st.button(
         "Reopen local review",
         key="reopen_review",
         disabled=not reopen_id or replacement_blocked or not review_store_available,
     ) and not has_pending_scope_draft:
         try:
-            preview = saved_discovery_entries.get(reopen_id.strip())
             reopened_state = load_discovered_review(
-                review_store, reopen_id.strip(),
-                expected_fingerprint=(
-                    preview.metadata.state_fingerprint
-                    if preview is not None and preview.metadata is not None else None
-                ),
+                review_store, reopen_id, expected_fingerprint=expected_saved_fingerprint,
             )
         except FileNotFoundError:
             st.error("No saved review was found for that review ID.")
@@ -1851,14 +1855,10 @@ with st.expander("Resume a saved review", expanded=False):
             disabled=not delete_enabled,
         ) and delete_enabled:
             try:
-                preview = saved_discovery_entries.get(reopen_id)
                 review_store.delete(
                     reopen_id,
                     expected_target=deletion_target,
-                    expected_fingerprint=(
-                        preview.metadata.state_fingerprint
-                        if preview is not None and preview.metadata is not None else None
-                    ),
+                    expected_fingerprint=expected_saved_fingerprint,
                 )
             except FileNotFoundError:
                 _mark_open_review_deleted(reopen_id)
@@ -1892,6 +1892,7 @@ with st.expander("Resume a saved review", expanded=False):
             st.rerun()
     render_review_transfer(
         review_store, selected_review_id=reopen_id, store_available=review_store_available,
+        expected_fingerprint=expected_saved_fingerprint,
         open_review_id=(
             current_review_state.review.review_id if current_review_state is not None else None
         ),
