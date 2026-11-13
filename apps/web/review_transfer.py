@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from threading import Event
 
 import streamlit as st
 
@@ -18,39 +19,49 @@ from scopeproof_core.storage.transfer import (
 )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ReviewTransferDownloadLease:
-    """A shared volatile lease revokes callbacks from older rendered selections."""
+    """One prepared record and its independently revocable download controls."""
 
-    review_id: str | None = None
-    record_sha256: str | None = None
-    generation: int = 0
-
-    def clear(self) -> None:
-        self.generation += 1
-        self.review_id = None
-        self.record_sha256 = None
+    preview: ReviewTransferPreview
+    revoked: Event = field(default_factory=Event)
 
 
 def deferred_record_download(
     store: JsonReviewStore, lease: ReviewTransferDownloadLease,
 ) -> Callable[[], bytes]:
-    review_id, digest, generation = lease.review_id, lease.record_sha256, lease.generation
+    receipt = lease.preview.receipt
     message = "Saved record or selection changed. Prepare the saved review download again."
 
     def render() -> bytes:
-        if (not review_id or not digest or lease.generation != generation
-                or lease.review_id != review_id or lease.record_sha256 != digest):
+        if lease.revoked.is_set():
             raise DeferredExportUnavailable(message)
         try:
-            raw, _ = read_review_transfer(store, review_id, expected_sha256=digest)
+            raw, _ = read_review_transfer(
+                store, receipt.review_id, expected_sha256=receipt.record_sha256,
+            )
         except (OSError, ValueError):
             raise DeferredExportUnavailable(message) from None
-        if lease.generation != generation:
+        if lease.revoked.is_set():
             raise DeferredExportUnavailable(message)
         return raw
 
     return render
+
+
+def _revoke_prepared_download() -> None:
+    lease = st.session_state.get("transfer_download_lease")
+    if lease is not None:
+        lease.revoked.set()
+        st.session_state.pop("transfer_download_lease", None)
+
+
+def clear_review_transfer_selection() -> None:
+    """Retire preparation and download controls when discovery changes selection."""
+    _revoke_prepared_download()
+    st.session_state["transfer_selection_generation"] = (
+        st.session_state.get("transfer_selection_generation", 0) + 1
+    )
 
 
 def _clear_import_preview() -> None:
@@ -112,25 +123,27 @@ def _render_preview(preview: ReviewTransferPreview) -> None:
 
 def render_review_transfer(
     store: JsonReviewStore, *, selected_review_id: str | None,
+    expected_fingerprint: str | None,
     store_available: bool, has_pending_inputs: bool, open_review_id: str | None,
 ) -> None:
     """Render preparation/download and inspection/import; reopening remains explicit."""
-    lease = st.session_state.setdefault("transfer_download_lease", ReviewTransferDownloadLease())
-    target = selected_review_id.strip() if selected_review_id else None
-    if lease.review_id != target or has_pending_inputs or not store_available:
-        lease.clear()
-        st.session_state["transfer_download_preview"] = None
+    target = selected_review_id
+    can_prepare = bool(target and store_available and not has_pending_inputs)
+    selection = (target, expected_fingerprint, can_prepare)
+    if st.session_state.get("transfer_selection") != selection:
+        clear_review_transfer_selection()
+        st.session_state["transfer_selection"] = selection
+    generation = st.session_state["transfer_selection_generation"]
     st.markdown("#### Transfer a saved review")
     st.caption(
         "Complete saved records include requirements, excerpts, recorded decisions and history. "
         "Only saved content is included. Import adds a local record; it never replaces open work."
     )
     if st.button(
-        "Prepare saved review download", key="prepare_transfer_download",
-        disabled=not target or not store_available or has_pending_inputs,
-    ):
-        lease.clear()
-        st.session_state["transfer_download_preview"] = None
+        "Prepare saved review download", key=f"prepare_transfer_download_{generation}",
+        disabled=not can_prepare,
+    ) and can_prepare and target is not None:
+        _revoke_prepared_download()
         try:
             _, preview = read_review_transfer(store, target)
         except (OSError, ValueError):
@@ -138,11 +151,17 @@ def render_review_transfer(
                 "Saved record could not be prepared. Check its ID and integrity, then try again."
             )
         else:
-            lease.review_id = target
-            lease.record_sha256 = preview.receipt.record_sha256
-            st.session_state["transfer_download_preview"] = preview
-    download_preview = st.session_state.get("transfer_download_preview")
-    if download_preview is not None:
+            if expected_fingerprint is not None and (
+                preview.receipt.state_fingerprint != expected_fingerprint
+            ):
+                st.error(
+                    "Saved details changed. Refresh saved details and select the review again."
+                )
+            elif st.session_state["transfer_selection_generation"] == generation:
+                st.session_state["transfer_download_lease"] = ReviewTransferDownloadLease(preview)
+    lease = st.session_state.get("transfer_download_lease")
+    if lease is not None and not lease.revoked.is_set():
+        download_preview = lease.preview
         st.caption("Complete saved record ready. Analysis report downloads are separate.")
         st.text(f"Review {download_preview.receipt.review_id}")
         st.text(f"Content SHA-256 {download_preview.receipt.record_sha256}")

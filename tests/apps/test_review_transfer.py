@@ -2,9 +2,13 @@
 
 import pytest
 
+from apps.web.deferred_exports import DeferredExportUnavailable
+from apps.web.review_transfer import deferred_record_download
+from scopeproof_core.reviews.lifecycle import revise_criteria
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
 from tests.apps.test_streamlit_app import analyzed_demo, new_app, select_saved_review
 from tests.historical_analysis_fixture import historical_analysis_state
+from tests.saved_comparison_fixture import saved_comparison_states
 
 
 def portable_record(tmp_path):
@@ -16,6 +20,10 @@ def portable_record(tmp_path):
 
 def upload(app, raw, name="review.json"):
     return app.file_uploader(key="transfer_upload").upload(name, raw, "application/json").run()
+
+
+def prepare_download(app):
+    return next(button for button in app.button if button.label == "Prepare saved review download")
 
 
 def inspect(app):
@@ -138,18 +146,54 @@ def test_saved_download_requires_explicit_preparation(tmp_path):
     before = path.read_bytes()
     app = select_saved_review(new_app(), state.review.review_id)
     assert not [b for b in app.get("download_button") if b.key == "download_saved_record"]
-    app = app.button(key="prepare_transfer_download").click().run()
+    app = prepare_download(app).click().run()
     assert not app.exception
-    preview = app.session_state["transfer_download_preview"]
+    preview = app.session_state["transfer_download_lease"].preview
     assert preview.receipt.review_id == state.review.review_id
     assert app.get("download_button")[-1].key == "download_saved_record"
     assert store.load(state.review.review_id) == state
     assert path.read_bytes() == before
 
 
+@pytest.mark.parametrize("direct_id", [False, True])
+def test_prepare_matches_displayed_saved_details(direct_id):
+    state, _ = saved_comparison_states()
+    review_id = state.review.review_id
+    store = JsonReviewStore(default_local_review_directory())
+    path = store.save(state)
+    app = new_app().button(key="load_saved_review_details").click().run()
+    if direct_id:
+        app = app.checkbox(key="saved_discovery_direct_id").check().run()
+
+    def select(app):
+        if direct_id:
+            return app.text_input(key="reopen_review_id").set_value(f" {review_id} ").run()
+        return select_saved_review(app, review_id)
+
+    app = select(app)
+    assert any("Retained historical analyses: 1" in item.value for item in app.text)
+    revised = revise_criteria(state, state.criteria_revision.criteria, "CONSTRUCTED new intent")
+    store.save(revised, expected_fingerprint=store.state_fingerprint(state))
+    replacement_bytes = path.read_bytes()
+
+    app = prepare_download(app).click().run()
+    assert not app.exception
+    assert "transfer_download_lease" not in app.session_state
+    assert not any(button.key == "download_saved_record" for button in app.download_button)
+    assert any("Refresh saved details" in item.value for item in app.error)
+    assert path.read_bytes() == replacement_bytes
+
+    app = select(app.button(key="load_saved_review_details").click().run())
+    app = prepare_download(app).click().run()
+    preview = app.session_state["transfer_download_lease"].preview
+    assert preview.criteria_revision_number == revised.criteria_revision.number
+    assert preview.receipt.analysis_history_count == len(revised.analysis_history)
+    download = deferred_record_download(store, app.session_state["transfer_download_lease"])
+    assert download() == path.read_bytes() == replacement_bytes
+    assert app.session_state["review_state"] is None
+
+
 def test_prepared_download_revalidates_bytes_and_rejects_old_selection(tmp_path):
-    from apps.web.deferred_exports import DeferredExportUnavailable
-    from apps.web.review_transfer import deferred_record_download
     from scopeproof_core.demo import build_demo_review
     from scopeproof_core.reviews.lifecycle import new_review_state
     state, _ = portable_record(tmp_path)
@@ -158,7 +202,7 @@ def test_prepared_download_revalidates_bytes_and_rejects_old_selection(tmp_path)
     other = new_review_state(build_demo_review())
     store.save(other)
     app = select_saved_review(new_app(), state.review.review_id)
-    app = app.button(key="prepare_transfer_download").click().run()
+    app = prepare_download(app).click().run()
     download = deferred_record_download(store, app.session_state["transfer_download_lease"])
     assert download() == path.read_bytes()
     before = path.read_bytes()
@@ -169,23 +213,91 @@ def test_prepared_download_revalidates_bytes_and_rejects_old_selection(tmp_path)
     app = select_saved_review(app, other.review.review_id)
     with pytest.raises(DeferredExportUnavailable):
         download()
-    assert app.session_state["transfer_download_preview"] is None
+    assert "transfer_download_lease" not in app.session_state
     assert path.read_bytes() == before
 
 
+def test_stale_prepare_click_cannot_follow_a_new_saved_selection():
+    state, other = saved_comparison_states()
+    store = JsonReviewStore(default_local_review_directory())
+    store.save(state)
+    store.save(other)
+    app = select_saved_review(new_app(), state.review.review_id)
+    old_prepare = prepare_download(app)
+    app.selectbox(key="saved_reopen_review_id").set_value(other.review.review_id)
+    app = old_prepare.click().run()
+    assert "transfer_download_lease" not in app.session_state
+    assert not any(button.key == "download_saved_record" for button in app.download_button)
+    app = prepare_download(app).click().run()
+    preview = app.session_state["transfer_download_lease"].preview
+    assert preview.receipt.review_id == other.review.review_id
+
+
+def test_refresh_revokes_download_before_loading_saved_details(monkeypatch):
+    from apps.web import saved_discovery
+
+    state, _ = saved_comparison_states()
+    store = JsonReviewStore(default_local_review_directory())
+    path = store.save(state)
+    app = select_saved_review(new_app(), state.review.review_id)
+    app = prepare_download(app).click().run()
+    download = deferred_record_download(store, app.session_state["transfer_download_lease"])
+    assert download() == path.read_bytes()
+    discover = saved_discovery.discover_saved_review_page
+    attempted = []
+
+    def refresh(*args, **kwargs):
+        with pytest.raises(DeferredExportUnavailable):
+            download()
+        attempted.append(True)
+        return discover(*args, **kwargs)
+
+    monkeypatch.setattr(saved_discovery, "discover_saved_review_page", refresh)
+    app = app.button(key="load_saved_review_details").click().run()
+    assert not app.exception
+    assert attempted == [True]
+    assert "transfer_download_lease" not in app.session_state
+    app = select_saved_review(app, state.review.review_id)
+    app = prepare_download(app).click().run()
+    preview = app.session_state["transfer_download_lease"].preview
+    assert preview.receipt.review_id == state.review.review_id
+    with pytest.raises(DeferredExportUnavailable):
+        download()
+
+
+def test_preparation_cannot_publish_after_selection_is_retired(monkeypatch):
+    from apps.web import review_transfer
+
+    state, _ = saved_comparison_states()
+    store = JsonReviewStore(default_local_review_directory())
+    store.save(state)
+    app = select_saved_review(new_app(), state.review.review_id)
+    read_transfer = review_transfer.read_review_transfer
+
+    def retire_selection(*args, **kwargs):
+        result = read_transfer(*args, **kwargs)
+        review_transfer.clear_review_transfer_selection()
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(review_transfer, "read_review_transfer", retire_selection)
+        app = prepare_download(app).click().run()
+    assert not app.exception
+    assert "transfer_download_lease" not in app.session_state
+    assert not any(button.key == "download_saved_record" for button in app.download_button)
+
+
 def test_pending_draft_revokes_prepared_saved_download(tmp_path):
-    from apps.web.deferred_exports import DeferredExportUnavailable
-    from apps.web.review_transfer import deferred_record_download
     state, _ = portable_record(tmp_path)
     store = JsonReviewStore(default_local_review_directory())
     store.save(state)
     app = select_saved_review(new_app(), state.review.review_id)
     app = app.button(key="reopen_review").click().run()
-    app = app.button(key="prepare_transfer_download").click().run()
+    app = prepare_download(app).click().run()
     download = deferred_record_download(store, app.session_state["transfer_download_lease"])
     app = app.text_area(key="requirements_input").set_value("CONSTRUCTED unsaved edit").run()
     assert not app.exception
-    assert app.button(key="prepare_transfer_download").disabled
+    assert prepare_download(app).disabled
     with pytest.raises(DeferredExportUnavailable):
         download()
 
@@ -228,8 +340,8 @@ def test_invalid_saved_download_keeps_fixed_recovery_text(tmp_path):
     path = store.save(state)
     path.write_text("CONSTRUCTED private malformed content", encoding="utf-8")
     app = select_saved_review(new_app(), state.review.review_id)
-    app = app.button(key="prepare_transfer_download").click().run()
+    app = prepare_download(app).click().run()
     assert not app.exception
     assert any("could not be prepared" in x.value for x in app.error)
     assert "private malformed content" not in " ".join(x.value for x in app.error)
-    assert app.session_state["transfer_download_preview"] is None
+    assert "transfer_download_lease" not in app.session_state

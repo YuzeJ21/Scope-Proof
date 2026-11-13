@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from apps.web.review_transfer import clear_review_transfer_selection
 from apps.web.saved_comparison import clear_saved_comparison_selection
 from scopeproof_core.storage.discovery import (
     SavedReviewDiscoveryEntry,
@@ -15,12 +16,13 @@ from scopeproof_core.storage.json_store import JsonReviewStore
 
 
 def _clear_targets() -> None:
+    clear_review_transfer_selection()
     st.session_state["saved_reopen_review_id"] = None
     st.session_state["reopen_review_id"] = ""
     clear_saved_delete_confirmation()
     clear_saved_comparison_selection()
     st.session_state["saved_discovery_notice"] = (
-        "Saved review choices cleared. Select a record again before reopening or comparing."
+        "Saved review choices cleared. Select a record again to reopen, compare, or transfer it."
     )
 
 
@@ -28,6 +30,11 @@ def clear_saved_delete_confirmation() -> None:
     """A new reopen target never inherits another target's deletion consent."""
     st.session_state["delete_saved_review_confirmed"] = False
     st.session_state["saved_review_deletion_target"] = None
+
+
+def saved_review_target_changed() -> None:
+    clear_review_transfer_selection()
+    clear_saved_delete_confirmation()
 
 
 def capture_saved_delete_confirmation(store: JsonReviewStore, review_id: str) -> None:
@@ -65,8 +72,8 @@ def render_saved_discovery(
                 "Saved record inventory changed. Select a review again; reload details if needed."
             )
         elif st.session_state.get("saved_reopen_review_id") not in saved_review_ids:
+            saved_review_target_changed()
             st.session_state["saved_reopen_review_id"] = None
-            clear_saved_delete_confirmation()
     st.session_state["saved_discovery_inventory"] = inventory
     pages = max(1, (len(saved_review_ids) + 9) // 10)
     if st.session_state.get("saved_discovery_page", 1) > pages:
@@ -123,7 +130,7 @@ def render_saved_discovery(
         f"{page.total_review_count} candidate records; {len(visible)} match on this loaded page. "
         "Search covers this page only. Metadata unavailable means preview limits or validation "
         "prevented details. Details are a loaded snapshot; refresh to update them. "
-        "Opening or comparing a record still performs full validation."
+        "Opening, comparing, or preparing a download still performs full validation."
     )
     if not visible:
         st.info(
