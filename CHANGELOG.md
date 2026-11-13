@@ -30,6 +30,8 @@ independent-use evidence and separate authorization.
   and unresolved changed-file scope, beside the acceptance control.
 - Full HTML and Markdown review reports show the same final-acceptance prerequisites.
   Previously recorded below-level verification is flagged alongside the recorded verdict.
+- A pending file-scope decision pauses local review saves and current report downloads.
+  Saving or discarding the draft restores the controls with fresh download links.
 
 ## 0.2.7 — Evaluation release build
 

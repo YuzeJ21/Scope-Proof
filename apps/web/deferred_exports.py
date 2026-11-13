@@ -197,6 +197,7 @@ def deferred_review_export(
     expected_fingerprint: str | None,
     authority_check: Callable[[], bool] | None = None,
     expired_by_acceptance_note: Callable[[], bool] | None = None,
+    expired_by_scope_draft: Callable[[], bool] | None = None,
 ) -> Callable[[], str]:
     """Return a click-time renderer that refuses stale persisted review state."""
 
@@ -207,6 +208,11 @@ def deferred_review_export(
             raise DeferredExportUnavailable(
                 "This download expired when the final acceptance note opened. "
                 "Submit or clear the note and use the current download button."
+            )
+        if expired_by_scope_draft is not None and expired_by_scope_draft():
+            raise DeferredExportUnavailable(
+                "This download expired when a file-scope decision was drafted. "
+                "Save or discard the draft and use the current download button."
             )
         if authority_check is not None and not authority_check():
             raise DeferredExportUnavailable(

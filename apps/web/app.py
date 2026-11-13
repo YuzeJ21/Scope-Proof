@@ -700,7 +700,7 @@ def _render_local_review_storage(
                 or save_conflict
             ),
         )
-        if save_clicked and source_authority_check(state)():
+        if save_clicked and not has_pending_review_input and source_authority_check(state)():
             if _persist_review_state(state, store):
                 st.session_state["review_save_notice"] = (
                     f"Review saved locally. ID: {state.review.review_id}."
@@ -1346,11 +1346,19 @@ has_pending_review_drafts = (
 has_other_pending_review_input = has_pending_review_drafts or has_missing_active_provenance
 has_pending_review_input = has_other_pending_review_input or has_pending_acceptance_note
 has_pending_scope_draft = scope_draft_pending(current_review_state)
+scope_export_expired = st.session_state.setdefault("scope_draft_export_expired", Event())
+if has_pending_scope_draft:
+    scope_export_expired.set()
+elif scope_export_expired.is_set():
+    # Replace the event so callbacks from before the draft stay expired.
+    scope_export_expired = Event()
+    st.session_state["scope_draft_export_expired"] = scope_export_expired
+has_pending_current_review = has_pending_review_input or has_pending_scope_draft
 current_review_state = _refresh_clean_review_from_local_store(
     current_review_state,
     store=review_store,
     store_available=review_store_available,
-    has_pending_review_input=has_pending_review_input or has_pending_scope_draft,
+    has_pending_review_input=has_pending_current_review,
 )
 pending_storage_messages: list[str] = []
 if has_pending_criteria_draft:
@@ -1375,6 +1383,11 @@ if has_pending_criterion_detail_draft:
     )
 if has_pending_acceptance_note:
     pending_storage_messages.append("Record the acceptance event or clear its pending note.")
+if has_pending_scope_draft:
+    pending_storage_messages.append(
+        "Save or discard the pending file-scope decision before saving or downloading "
+        "the current review."
+    )
 if has_pending_criteria_source:
     pending_storage_messages.append(
         "Pending criteria source changes are not saved or exported. Reconfirm the source "
@@ -1391,7 +1404,7 @@ autosaved = _autosave_review_if_eligible(
     state=current_review_state,
     store=review_store,
     store_available=review_store_available,
-    has_pending_review_input=has_pending_review_input or source_observation_conflict,
+    has_pending_review_input=has_pending_current_review or source_observation_conflict,
 )
 if autosaved and current_review_state is not None:
     saved_review_ids = sorted(
@@ -1464,6 +1477,7 @@ requirements_submission_blocked = explicit_draft_resolution_required or bool(
 # Compute replacement guards from actual drafts first, so explicit re-review stays available.
 actual_pending_review_input = has_pending_review_input
 has_pending_review_input = has_pending_review_input or source_observation_conflict
+has_pending_current_review = has_pending_current_review or source_observation_conflict
 if source_observation_conflict:
     pending_storage_messages.append(
         "Fresh source observations require re-review or matching source before current authority."
@@ -2488,7 +2502,7 @@ if bundle is None:
             review_state,
             store=review_store,
             store_available=review_store_available,
-            has_pending_review_input=has_pending_review_input,
+            has_pending_review_input=has_pending_current_review,
             pending_messages=pending_storage_messages,
         )
 else:
@@ -3967,7 +3981,7 @@ else:
         review_state,
         store=review_store,
         store_available=review_store_available,
-        has_pending_review_input=has_pending_review_input or has_pending_scope_draft,
+        has_pending_review_input=has_pending_current_review,
     ) as refresh_workbench:
         review_fingerprint = _review_state_fingerprint(review_state)
         revalidation_failed = (
@@ -4044,13 +4058,13 @@ else:
                 "[Record final acceptance after reviewing every criterion]"
                 "(#final-review-acceptance)"
             )
-        elif final_acceptance_recorded:
+        elif final_acceptance_recorded and not has_pending_current_review:
             st.caption("Save the validated review locally or download an export below.")
         st.caption(
             f"Head SHA {bundle.review.head_sha} · Ruleset {bundle.review.ruleset_version} · "
             "export preserves review inputs; validation uses the installed policy"
         )
-    if has_pending_review_input:
+    if has_pending_current_review:
         st.warning(
             "Resolve, submit, discard, or clear pending inputs before exporting the "
             "authoritative review."
@@ -4083,13 +4097,16 @@ else:
             expected_fingerprint=expected_export_fingerprint,
             authority_check=source_authority_check(review_state),
             expired_by_acceptance_note=acceptance_export_expired.is_set,
+            expired_by_scope_draft=scope_export_expired.is_set,
         ) if export_has_provenance else ""
         column.download_button(
             f"Download {label}",
             data,
             file_name=f"scopeproof-pr-{bundle.review.pr_number}.{extension}",
             mime=mime,
-            disabled=has_pending_review_input or review_truth_conflict or not export_has_provenance,
+            disabled=(
+                has_pending_current_review or review_truth_conflict or not export_has_provenance
+            ),
             key=f"download_{label.lower()}",
             on_click="ignore",
         )
@@ -4100,7 +4117,7 @@ else:
             review_state,
             store=review_store,
             store_available=review_store_available,
-            has_pending_review_input=has_pending_review_input,
+            has_pending_review_input=has_pending_current_review,
             pending_messages=pending_storage_messages,
         )
     if alpha_feedback_mode and st.session_state["alpha_case_id"] is not None:
@@ -4246,7 +4263,7 @@ with st.sidebar:
         )
     else:
         _render_sidebar_step("Locked — Run deterministic analysis")
-    if has_analysis and has_pending_review_input:
+    if has_analysis and has_pending_current_review:
         _render_sidebar_step("Pending — Resolve inputs before export")
     elif has_analysis:
         _render_sidebar_step("Available — Review evidence and export")

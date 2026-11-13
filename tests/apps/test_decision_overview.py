@@ -1,9 +1,12 @@
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from apps.web import deferred_exports
+from scopeproof_core.reporting.exporters import export_html
 from scopeproof_core.reviews.lifecycle import (
     append_resolution,
     can_record_final_acceptance,
@@ -63,6 +66,152 @@ def test_overview_excludes_unsubmitted_file_scope_draft_from_save_status() -> No
         item.value for item in app.caption
     ]
     assert app.text_area(key="scope_note").value == "Unsubmitted scope explanation"
+
+
+def test_file_scope_draft_pauses_current_downloads_until_discarded_or_saved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = tmp_path / "reviews"
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(storage))
+    file_path = "src/unrelated.py"
+    app = load_demo(new_app())
+    app.session_state["snapshot"].files.append(ChangedFile(path=file_path, status="modified"))
+    app = app.run().button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    before = app.session_state["review_state"].model_copy(deep=True)
+    store = JsonReviewStore(storage)
+    record = storage / f"{before.review.review_id}.json"
+    saved_bytes = record.read_bytes()
+
+    app = app.selectbox(key="scope_file_path").set_value(file_path).run()
+    assert {button.key for button in app.download_button} == {
+        "download_markdown", "download_json", "download_csv", "download_html",
+    }
+    assert all(not button.disabled for button in app.download_button)
+    assert "Saved locally — current review matches local storage." in [
+        item.value for item in app.caption
+    ]
+
+    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
+    assert all(button.disabled for button in app.download_button)
+    assert app.button(key="save_review").disabled
+    assert "Saved locally — current review matches local storage." not in [
+        item.value for item in app.caption
+    ]
+    assert "Local save: Pending inputs excluded" in [item.value for item in app.text]
+    assert (
+        "Save or discard the pending file-scope decision before saving or downloading the "
+        "current review."
+    ) in [item.value for item in app.caption]
+    assert app.session_state["review_state"] == store.load(before.review.review_id) == before
+    assert record.read_bytes() == saved_bytes
+
+    app = app.button(key="discard_scope_decision_draft").click().run()
+    assert all(not button.disabled for button in app.download_button)
+    assert "Saved locally — current review matches local storage." in [
+        item.value for item in app.caption
+    ]
+    assert record.read_bytes() == saved_bytes
+
+    app = app.selectbox(key="scope_file_path").set_value(file_path).run()
+    app = app.text_area(key="scope_note").set_value("Reviewed file against the criteria.").run()
+    assert all(button.disabled for button in app.download_button)
+    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
+    assert all(button.disabled for button in app.download_button)
+    assert app.button(key="save_review").disabled
+    assert record.read_bytes() == saved_bytes
+    app = app.button(key="save_scope_decision").click().run()
+
+    assert not app.exception
+    assert all(not button.disabled for button in app.download_button)
+    after = store.load(before.review.review_id)
+    assert after == app.session_state["review_state"]
+    assert after.resolution_events == before.resolution_events
+    decision, = after.bundle.file_scope_decisions
+    assert decision.path == file_path
+    assert decision.disposition == "outside_confirmed_criteria"
+    assert decision.note == "Reviewed file against the criteria."
+
+
+def test_file_scope_draft_expires_an_already_rendered_current_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(tmp_path / "reviews"))
+    html_callbacks = []
+    real_deferred = deferred_exports.deferred_review_export
+
+    def capture_html(source, renderer, **kwargs):
+        callback = real_deferred(source, renderer, **kwargs)
+        if renderer is export_html:
+            html_callbacks.append(callback)
+        return callback
+
+    monkeypatch.setattr(deferred_exports, "deferred_review_export", capture_html)
+    file_path = "src/unrelated.py"
+    app = load_demo(new_app())
+    app.session_state["snapshot"].files.append(ChangedFile(path=file_path, status="modified"))
+    app = app.run().button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    old_download = html_callbacks[-1]
+
+    app = app.selectbox(key="scope_file_path").set_value(file_path).run()
+    assert "ScopeProof Acceptance Review" in old_download()
+    app = app.text_area(key="scope_note").set_value("Unsubmitted scope explanation").run()
+
+    with pytest.raises(deferred_exports.DeferredExportUnavailable, match="file-scope decision"):
+        old_download()
+
+    app = app.button(key="discard_scope_decision_draft").click().run()
+    with pytest.raises(deferred_exports.DeferredExportUnavailable, match="file-scope decision"):
+        old_download()
+    assert "ScopeProof Acceptance Review" in html_callbacks[-1]()
+
+
+def test_file_scope_draft_pauses_saving_an_otherwise_writable_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = tmp_path / "reviews"
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(storage))
+    file_path = "src/unrelated.py"
+    app = load_demo(new_app())
+    app.session_state["snapshot"].files.append(ChangedFile(path=file_path, status="modified"))
+    app = app.run().button(key="confirm_criteria").click().run()
+    app = app.button(key="run_analysis").click().run()
+    original = app.session_state["review_state"].model_copy(deep=True)
+    review_id = original.review.review_id
+    store = JsonReviewStore(storage)
+    record = storage / f"{review_id}.json"
+    original_bytes = record.read_bytes()
+
+    app = app.selectbox(key="scope_file_path").set_value(file_path).run()
+    app = app.text_area(key="scope_note").set_value("Unsubmitted scope explanation").run()
+    unsaved = append_resolution(
+        original,
+        ResolutionEvent(
+            criterion_id="AC-01", decision=HumanDecision.CHANGE_REQUIRED,
+            comment="Earlier in-memory criterion decision", reviewer="Fixture reviewer",
+        ),
+    )
+    app.session_state["review_state"] = unsaved
+    app.session_state["bundle"] = unsaved.bundle
+    app = app.run()
+
+    assert not app.exception
+    save_button = app.button(key="save_review")
+    assert save_button.label == "Save now"
+    assert save_button.disabled
+    assert app.session_state["review_state"] == unsaved
+    assert store.load(review_id) == original
+    assert record.read_bytes() == original_bytes
+
+    app = app.button(key="discard_scope_decision_draft").click().run()
+
+    assert not app.exception
+    assert app.session_state["review_state"] == store.load(review_id) == unsaved
+    assert "Saved locally — current review matches local storage." in [
+        item.value for item in app.caption
+    ]
+    assert not store.load(review_id).bundle.file_scope_decisions
 
 
 def test_overview_scope_preview_is_bounded_and_reopens_with_failing_checks() -> None:
