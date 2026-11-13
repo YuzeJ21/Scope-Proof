@@ -23,17 +23,27 @@ def discard_scope_decision_draft() -> None:
     st.session_state["scope_disposition"] = None
     st.session_state["scope_criterion_id"] = None
     st.session_state["scope_note"] = ""
+    st.session_state["scope_file_path"] = st.session_state.get("scope_selected_file")
 
 
-def scope_file_changed() -> None:
-    """A note and disposition belong only to the file the operator selected."""
+def reconcile_scope_file_selection(current: ReviewState | None) -> None:
+    """Resolve an incoming widget change before using the file or draft on this rerun."""
+    requested = st.session_state.get("scope_file_path")
+    selected = st.session_state.get("scope_selected_file")
+    if requested == selected:
+        return
+    if scope_draft_pending(current):
+        st.session_state["scope_file_path"] = selected
+        return
+    st.session_state["scope_selected_file"] = requested
     discard_scope_decision_draft()
     st.session_state["scope_preview_page"] = 0
 
 
 def reset_scope_file_selection() -> None:
-    st.session_state["scope_file_path"] = None
-    scope_file_changed()
+    st.session_state["scope_selected_file"] = None
+    discard_scope_decision_draft()
+    st.session_state["scope_preview_page"] = 0
 
 
 def prepare_scope_draft_context(
@@ -51,7 +61,9 @@ def prepare_scope_draft_context(
 
 def scope_draft_pending(current: ReviewState | None) -> bool:
     """Compare scope-owned inputs with the saved decision, excluding the shared reviewer."""
-    path = st.session_state.get("scope_file_path")
+    path = st.session_state.get("scope_selected_file")
+    if path is None:
+        return False
     disposition = st.session_state.get("scope_disposition")
     note = st.session_state.get("scope_note", "")
     criterion_id = (

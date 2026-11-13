@@ -50,11 +50,11 @@ from apps.web.scope_comparison import render_file_scope_comparison
 from apps.web.scope_file_preview import (
     discard_scope_decision_draft,
     prepare_scope_draft_context,
+    reconcile_scope_file_selection,
     render_scope_file_preview,
     render_scope_overview,
     reset_scope_file_selection,
     scope_draft_pending,
-    scope_file_changed,
 )
 from apps.web.selected_reference_comparison import render_selected_reference_comparison
 from apps.web.selected_references import (
@@ -1345,6 +1345,7 @@ has_pending_review_drafts = (
 )
 has_other_pending_review_input = has_pending_review_drafts or has_missing_active_provenance
 has_pending_review_input = has_other_pending_review_input or has_pending_acceptance_note
+reconcile_scope_file_selection(current_review_state)
 has_pending_scope_draft = scope_draft_pending(current_review_state)
 scope_export_expired = st.session_state.setdefault("scope_draft_export_expired", Event())
 if has_pending_scope_draft:
@@ -3715,14 +3716,17 @@ else:
                         f"Explanation: {prior.note}"
                     )
             prepare_scope_draft_context(review_state, st.session_state["snapshot"])
-            selected_scope_path = st.selectbox(
+            selected_scope_path = st.session_state.get("scope_selected_file")
+            st.selectbox(
                 "Uncited changed file",
                 options=uncited_paths,
                 index=None,
                 placeholder="Select one changed file",
                 key="scope_file_path",
-                on_change=scope_file_changed,
+                disabled=has_pending_scope_draft,
             )
+            if has_pending_scope_draft:
+                st.caption("Save or discard this draft to select another file.")
             render_scope_file_preview(
                 review_state, st.session_state["snapshot"], selected_scope_path,
                 source_allowed=source_authority_check(review_state)(),
@@ -3734,6 +3738,7 @@ else:
                 placeholder="Select a scope decision",
                 format_func=_status_label,
                 key="scope_disposition",
+                disabled=selected_scope_path is None,
             )
             scope_criterion_id = None
             if scope_disposition == "within_confirmed_criteria":
@@ -3744,31 +3749,33 @@ else:
                     key="scope_criterion_id",
                 )
             scope_note = st.text_area(
-                "File scope explanation (required)", key="scope_note"
+                "File scope explanation (required)", key="scope_note",
+                disabled=selected_scope_path is None,
             )
             if has_pending_scope_draft:
                 st.button(
                     "Discard file-scope draft", key="discard_scope_decision_draft",
                     on_click=discard_scope_decision_draft,
                 )
+            can_save_scope_decision = (
+                review_state is not None
+                and not review_state.review.final_acceptance
+                and selected_scope_path in uncited_paths
+                and scope_disposition is not None
+                and (
+                    scope_disposition != "within_confirmed_criteria"
+                    or scope_criterion_id is not None
+                )
+                and bool(scope_note.strip())
+                and decision_reviewer_ready
+                and not source_observation_conflict
+                and not _junit_audit_draft_pending()
+            )
             if st.button(
                 "Save file scope decision",
                 key="save_scope_decision",
-                disabled=(
-                    review_state is None
-                    or review_state.review.final_acceptance
-                    or selected_scope_path is None
-                    or scope_disposition is None
-                    or (
-                        scope_disposition == "within_confirmed_criteria"
-                        and scope_criterion_id is None
-                    )
-                    or not scope_note.strip()
-                    or not decision_reviewer_ready
-                    or source_observation_conflict
-                    or _junit_audit_draft_pending()
-                ),
-            ) and not (source_observation_conflict or _junit_audit_draft_pending()):
+                disabled=not can_save_scope_decision,
+            ) and can_save_scope_decision:
                 try:
                     assert review_state is not None
                     review_state = append_file_scope_decision(

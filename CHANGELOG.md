@@ -34,6 +34,8 @@ independent-use evidence and separate authorization.
   Saving or discarding the draft restores the controls with fresh download links.
 - The evidence matrix filters by static candidate level or current linked external verification
   level. Cards display those levels separately and flag verification below the requirement.
+- An unsubmitted file-scope decision stays with its file until saved or discarded. Diff paging
+  remains available while the file selector is paused.
 
 ## 0.2.7 — Evaluation release build
 

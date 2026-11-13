@@ -340,6 +340,68 @@ def test_submitted_scope_controls_do_not_permanently_block_saved_comparison() ->
     assert not app.button(key="confirm_criteria").disabled
 
 
+@pytest.mark.parametrize("field", ["note", "disposition"])
+def test_scope_draft_stays_on_its_file_when_switch_arrives_with_first_edit(field) -> None:
+    app, store = reopened_comparison_app()
+    record = store.directory / f"{CURRENT_REVIEW_ID}.json"
+    saved = record.read_bytes()
+    app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    draft = "Constructed explanation for notes.md only."
+    if field == "note":
+        app.text_area(key="scope_note").set_value(draft)
+    else:
+        app.selectbox(key="scope_disposition").set_value("within_confirmed_criteria")
+
+    # A client can send the first edit and a previously enabled selector together.
+    app = app.selectbox(key="scope_file_path").set_value("src/unrelated.py").run()
+    assert not app.exception
+    assert app.selectbox(key="scope_file_path").value == "notes.md"
+    assert app.selectbox(key="scope_file_path").disabled
+    assert app.text_area(key="scope_note").value == (draft if field == "note" else "")
+    assert app.selectbox(key="scope_disposition").value == (
+        "within_confirmed_criteria" if field == "disposition" else None
+    )
+    assert app.button(key="reopen_review").disabled
+    assert app.download_button and all(button.disabled for button in app.download_button)
+    assert record.read_bytes() == saved
+
+    app = app.button(key="discard_scope_decision_draft").click().run()
+    assert app.selectbox(key="scope_file_path").value == "notes.md"
+    assert not app.selectbox(key="scope_file_path").disabled
+    assert all(not button.disabled for button in app.download_button)
+    app = app.selectbox(key="scope_file_path").set_value("src/unrelated.py").run()
+    assert app.selectbox(key="scope_file_path").value == "src/unrelated.py"
+    assert app.selectbox(key="scope_disposition").value is None
+    assert app.text_area(key="scope_note").value == ""
+    assert record.read_bytes() == saved
+
+
+def test_saving_scope_draft_allows_switch_with_no_retargeting() -> None:
+    app, store = reopened_comparison_app()
+    assert app.selectbox(key="scope_disposition").disabled
+    assert app.text_area(key="scope_note").disabled
+    app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    app = app.selectbox(key="scope_disposition").set_value("within_confirmed_criteria").run()
+    app = app.selectbox(key="scope_criterion_id").set_value("AC-01").run()
+    draft = "Constructed decision for notes.md only."
+    app = app.text_area(key="scope_note").set_value(draft).run()
+    assert app.selectbox(key="scope_file_path").disabled
+    app = app.button(key="save_scope_decision").click().run()
+    assert not app.exception
+    assert not app.selectbox(key="scope_file_path").disabled
+    app = app.selectbox(key="scope_file_path").set_value("src/unrelated.py").run()
+    assert app.selectbox(key="scope_disposition").value is None
+    assert app.text_area(key="scope_note").value == ""
+    assert app.button(key="save_scope_decision").disabled
+
+    saved = store.load(CURRENT_REVIEW_ID)
+    decision = saved.bundle.file_scope_decisions[-1]
+    assert decision.path == "notes.md"
+    assert decision.criterion_id == "AC-01"
+    assert decision.note == draft
+    assert all(item.path != "src/unrelated.py" for item in saved.bundle.file_scope_decisions)
+
+
 def test_pending_scope_draft_survives_until_explicit_discard_before_reopening() -> None:
     app, store = reopened_comparison_app()
     before = {path.name: path.read_bytes() for path in store.directory.glob("*.json")}

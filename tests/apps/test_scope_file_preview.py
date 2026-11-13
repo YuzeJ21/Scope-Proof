@@ -7,9 +7,11 @@ def _render(mode="available"):
     import streamlit as st
 
     from apps.web.scope_file_preview import (
+        discard_scope_decision_draft,
         prepare_scope_draft_context,
+        reconcile_scope_file_selection,
         render_scope_file_preview,
-        scope_file_changed,
+        scope_draft_pending,
     )
     from tests.scope_preview_fixture import scope_preview_context
 
@@ -37,13 +39,17 @@ def _render(mode="available"):
             st.session_state.fixture = scope_preview_context()
     state, snapshot = st.session_state.fixture
     prepare_scope_draft_context(state, snapshot)
+    reconcile_scope_file_selection(state)
+    pending = scope_draft_pending(state)
     st.selectbox("Uncited changed file", ["notes.md", "src/export.py"], index=None,
-                 key="scope_file_path", on_change=scope_file_changed)
+                 key="scope_file_path", disabled=pending)
     render_scope_file_preview(state, None if mode.endswith("missing") else snapshot,
-                             st.session_state.scope_file_path, source_allowed=mode != "blocked")
+                             st.session_state.scope_selected_file, source_allowed=mode != "blocked")
     st.selectbox("File scope decision", ["outside_confirmed_criteria", "within_confirmed_criteria"],
                  index=None, key="scope_disposition")
     st.text_area("File scope explanation (required)", key="scope_note")
+    if pending:
+        st.button("Discard file-scope draft", on_click=discard_scope_decision_draft)
 
 
 def _values(elements):
@@ -66,13 +72,25 @@ def test_selected_file_renders_inert_base_head_records_before_decision_without_m
     assert not app.button
 
 
-def test_switching_file_clears_disposition_criterion_note_and_preview_page():
+def test_draft_allows_diff_paging_and_requires_discard_before_switching_file():
     app = AppTest.from_function(_render, args=("paged",)).run()
     app.selectbox(key="scope_file_path").select("notes.md").run()
     app.selectbox(key="scope_disposition").select("outside_confirmed_criteria").run()
     app.text_area(key="scope_note").input("CONSTRUCTED prior-file note").run()
     app.session_state.scope_criterion_id = "AC-01"
     app.selectbox(key="scope_preview_page").select(1).run()
+    assert app.selectbox(key="scope_file_path").disabled
+    assert app.text_area(key="scope_note").value == "CONSTRUCTED prior-file note"
+    assert "CONSTRUCTED record 100" in _values(app.code)
+    # Simulate a delayed selector request from before it was disabled.
+    selector = app.selectbox(key="scope_file_path")
+    selector.proto.disabled = False
+    selector.select("src/export.py").run()
+    assert app.selectbox(key="scope_file_path").value == "notes.md"
+    assert app.text_area(key="scope_note").value == "CONSTRUCTED prior-file note"
+    app.button[0].click().run()
+    assert app.selectbox(key="scope_file_path").value == "notes.md"
+    assert app.selectbox(key="scope_preview_page").value == 1
     app.selectbox(key="scope_file_path").select("src/export.py").run()
     assert not app.exception
     assert app.selectbox(key="scope_disposition").value is None
