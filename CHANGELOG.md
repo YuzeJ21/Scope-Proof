@@ -38,6 +38,8 @@ independent-use evidence and separate authorization.
   remains available while the file selector is paused.
 - Preparing a saved-review download checks the displayed saved details. If the record changed,
   refresh the details and select it again before preparing a new download.
+- The criterion queue, detail, and evidence matrix explain how to supply missing E4 verification,
+  inspect recorded E4, or correct an earlier below-level verification.
 
 ## 0.2.7 — Evaluation release build
 
