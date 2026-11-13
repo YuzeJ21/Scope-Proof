@@ -36,7 +36,9 @@ def decision_guidance(decision: HumanDecision) -> str:
     return _DECISION_GUIDANCE[decision]
 
 
-def gate_guidance(gate: GateDecision) -> list[str]:
+def gate_guidance(
+    gate: GateDecision, *, include_final_acceptance: bool = True,
+) -> list[str]:
     """Explain recorded gate reasons without changing or resolving the gate."""
     messages: list[str] = []
     seen: set[str] = set()
@@ -86,6 +88,8 @@ def gate_guidance(gate: GateDecision) -> list[str]:
                 "Wait for required GitHub checks to pass or become available before acceptance."
             )
         elif code == "final_acceptance_required":
+            if not include_final_acceptance:
+                continue
             message = (
                 "Record final acceptance only after a reviewer has reviewed every criterion and "
                 "its evidence."

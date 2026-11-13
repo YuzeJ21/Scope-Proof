@@ -3937,6 +3937,15 @@ def _assert_workbench_history_html_download(page: Page, path: Path, *, head_sha:
         headings = report.get_by_role("heading", level=2).all_text_contents()
         assert headings.index("Review Status Reasons") < headings.index("Criteria Source")
         assert headings.index("What To Do Next") < headings.index("Criteria Source")
+        assert headings.index("Final Acceptance Prerequisites") < headings.index("Criteria Source")
+        acceptance_prerequisites = report.get_by_role(
+            "heading", name="Final Acceptance Prerequisites", exact=True,
+        ).locator("xpath=following-sibling::ul[1]")
+        expect(acceptance_prerequisites.get_by_text(
+            "Review criteria without a decision or marked Change required or Rejected finding "
+            "before recording final acceptance.",
+            exact=True,
+        )).to_be_visible()
         for position, fields in enumerate(_workbench_history_expected_fields(), 1):
             event = report.get_by_role("heading", name=f"Event {position}", exact=True).locator(
                 "xpath=following-sibling::dl[1]",

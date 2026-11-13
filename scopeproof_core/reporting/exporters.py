@@ -16,6 +16,7 @@ from scopeproof_core.gates.validation import (
     validated_review_state,
 )
 from scopeproof_core.presentation import (
+    FINAL_ACCEPTANCE_BLOCKER_GUIDANCE,
     candidate_selection_text,
     criterion_coverage_rows,
     evidence_status_text,
@@ -48,7 +49,12 @@ from scopeproof_core.reviews.junit_audit import (
     junit_mapping_criterion_ids,
     junit_withdrawal_fields,
 )
-from scopeproof_core.reviews.lifecycle import resolution_event_statuses
+from scopeproof_core.reviews.lifecycle import (
+    FinalAcceptanceBlocker,
+    _validated_final_acceptance_blockers,
+    below_required_manual_verification_ids,
+    resolution_event_statuses,
+)
 from scopeproof_core.reviews.reference_audit import reference_status
 from scopeproof_core.reviews.resolution_history import (
     LEGACY_RUNTIME_LINK,
@@ -206,6 +212,63 @@ def _criteria_source_provenance(bundle: ReviewBundle) -> CriteriaSourceProvenanc
     if provenance is None:  # Defensive: callers should enter through _validated_exportable.
         raise ValueError(_EXPORT_PROVENANCE_REQUIRED)
     return provenance
+
+
+def _final_acceptance_handoff(
+    bundle: ReviewBundle, state: ReviewState | None,
+) -> tuple[str, str, list[str]]:
+    """Describe new acceptance on the validated snapshot used for a full report."""
+    if state is None:
+        return "Review status", "", []
+    blockers = _validated_final_acceptance_blockers(state)
+    already_recorded = FinalAcceptanceBlocker.ALREADY_RECORDED in blockers
+    below_required = below_required_manual_verification_ids(bundle)
+    reconfirmation_required = (
+        "runtime_verification_reconfirmation_required" in bundle.gate.reason_codes
+    )
+    if already_recorded and not (below_required or reconfirmation_required):
+        return "Review status", "", []
+    if not blockers:
+        return "Review status", "Final Acceptance Guidance", [
+            "Record final acceptance after reviewing every criterion and its evidence.",
+        ]
+    messages = [
+        FINAL_ACCEPTANCE_BLOCKER_GUIDANCE[blocker]
+        for blocker in blockers
+        if blocker not in {
+            FinalAcceptanceBlocker.ALREADY_RECORDED,
+            FinalAcceptanceBlocker.BELOW_REQUIRED_MANUAL_VERIFICATION,
+        }
+    ]
+    if below_required:
+        required = {
+            item.criterion_id: item.required_evidence_level.value for item in bundle.criteria
+        }
+        recorded = {item.criterion_id: item.claimed_evidence_level for item in bundle.resolutions}
+        for criterion_id in below_required:
+            level = recorded[criterion_id]
+            assert level is not None
+            messages.append(
+                f"{criterion_id} records {level.value} verification and requires "
+                f"{required[criterion_id]}."
+            )
+        messages.append(
+            "Before new final acceptance, record verification at the required level or "
+            "record an explicit reviewer decision with the applicable rationale."
+        )
+    if already_recorded:
+        messages.insert(0, "Revoke recorded final acceptance before replacing manual verification.")
+        if reconfirmation_required:
+            messages.append(
+                FINAL_ACCEPTANCE_BLOCKER_GUIDANCE[FinalAcceptanceBlocker.UNLINKED_MANUAL_VERIFICATION]
+            )
+    heading = "Final Acceptance Guidance" if already_recorded else "Final Acceptance Prerequisites"
+    status_label = (
+        "Recorded review status"
+        if below_required or (already_recorded and reconfirmation_required)
+        else "Review status"
+    )
+    return status_label, heading, messages
 
 
 def _provenance_timestamp(provenance: CriteriaSourceProvenance) -> str:
@@ -1106,12 +1169,18 @@ def export_markdown(bundle: ExportableReview) -> str:
         diagnostic.criterion_id: diagnostic for diagnostic in bundle.retrieval_diagnostics
     }
     review_status = review_status_label(bundle.gate.verdict)
+    status_label, acceptance_heading, acceptance_messages = _final_acceptance_handoff(bundle, state)
     coverage_by_id = {row.criterion_id: row for row in criterion_coverage_rows(bundle)}
     review_created_at = bundle.review.model_dump(mode="json")["created_at"]
     lines = [
         "# ScopeProof Acceptance Review",
         "",
-        f"**Review status:** {review_status}",
+        f"**{status_label}:** {review_status}",
+        *(
+            [f"**Recorded final acceptance:** {'Yes' if bundle.review.final_acceptance else 'No'}"]
+            if state is not None
+            else []
+        ),
         f"**Review ID:** {_render_markdown_code(bundle.review.review_id)}",
         f"**Repository:** {_render_markdown_code(bundle.review.repository)}",
         "**Repository visibility:** "
@@ -1381,7 +1450,7 @@ def export_markdown(bundle: ExportableReview) -> str:
                 "",
             ]
         )
-    guidance = gate_guidance(bundle.gate)
+    guidance = gate_guidance(bundle.gate, include_final_acceptance=state is None)
     if guidance:
         lines.extend(
             [
@@ -1391,6 +1460,13 @@ def export_markdown(bundle: ExportableReview) -> str:
                 "",
             ]
         )
+    if acceptance_messages:
+        lines.extend([
+            f"## {acceptance_heading}",
+            "",
+            *[f"- {_escape_markdown_text(message)}" for message in acceptance_messages],
+            "",
+        ])
     lines.extend(_resolution_history_markdown(state))
     scope_status, changed_paths, unresolved_paths = _scope_summary(bundle)
     lines.extend([
@@ -1897,9 +1973,10 @@ def export_html(value: ExportableReview) -> str:
         )
     revision = state.criteria_revision.number if state else bundle.criteria_revision_number
     review_status = html.escape(review_status_label(bundle.gate.verdict))
+    status_label, acceptance_heading, acceptance_messages = _final_acceptance_handoff(bundle, state)
     recorded_acceptance = "Yes" if bundle.review.final_acceptance else "No"
     review_created_at = bundle.review.model_dump(mode="json")["created_at"]
-    guidance = gate_guidance(bundle.gate)
+    guidance = gate_guidance(bundle.gate, include_final_acceptance=state is None)
     linked_runtime_ids = {
         resolution.runtime_evidence_id
         for resolution in bundle.resolutions
@@ -1970,7 +2047,7 @@ def export_html(value: ExportableReview) -> str:
             ".evidence-matrix:focus-visible{outline:2px solid #2563eb}</style>",
             "</head><body>",
             "<h1>ScopeProof Acceptance Review</h1>",
-            f"<p><strong>Review status:</strong> {review_status}</p>",
+            f"<p><strong>{status_label}:</strong> {review_status}</p>",
             f"<p><strong>Recorded final acceptance:</strong> {recorded_acceptance}</p>",
             f"<p>Review ID: <code>{html.escape(bundle.review.review_id)}</code> · "
             f"Repository: <code>{html.escape(bundle.review.repository)}</code> · "
@@ -2007,6 +2084,15 @@ def export_html(value: ExportableReview) -> str:
                     "</ul>",
                 ]
                 if guidance
+                else []
+            ),
+            *(
+                [
+                    f"<h2>{acceptance_heading}</h2><ul>",
+                    *[f"<li>{html.escape(message)}</li>" for message in acceptance_messages],
+                    "</ul>",
+                ]
+                if acceptance_messages
                 else []
             ),
             "<h2>Criteria Source</h2>",

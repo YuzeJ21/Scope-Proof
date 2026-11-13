@@ -28,6 +28,8 @@ independent-use evidence and separate authorization.
   E3 verification for an E4 requirement needs correction before new final acceptance.
 - Final acceptance guidance shows applicable prerequisites together, including failing checks
   and unresolved changed-file scope, beside the acceptance control.
+- Full HTML and Markdown review reports show the same final-acceptance prerequisites.
+  Previously recorded below-level verification is flagged alongside the recorded verdict.
 
 ## 0.2.7 — Evaluation release build
 
