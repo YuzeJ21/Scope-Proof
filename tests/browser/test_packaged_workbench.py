@@ -2842,6 +2842,10 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
     # The discarded within-criteria draft does not survive visiting a different file.
     _choose_combobox_option(page, disposition, option_name="Within Confirmed Criteria")
     expect(criterion).to_have_value("")
+    expect(current_download).to_be_disabled()
+    _run_and_wait_for_streamlit_rerun(page, discard.click)
+    expect(path).to_have_value("notes.md")
+    expect(current_download).to_be_enabled()
     assert _download_review_state(page) == before
 
 
