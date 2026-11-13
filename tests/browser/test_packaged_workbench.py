@@ -3613,6 +3613,15 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                             )
                             assert_records_unchanged()
                             if generation == 0:
+                                card = page.get_by_role(
+                                    "heading", name="Evidence for AC-01", exact=True,
+                                ).locator("xpath=ancestor::div[@data-testid='stVerticalBlock'][1]")
+                                expect(card.get_by_text(
+                                    "Recorded verification level: E3", exact=True,
+                                )).to_be_visible()
+                                expect(card.get_by_text(
+                                    "Candidate evidence level: E1", exact=True,
+                                )).to_be_visible()
                                 _exercise_scope_file_inspection(page, captures)
                                 assert_records_unchanged()
                                 page.screenshot(path=str(captures / "01-before-restart.png"))

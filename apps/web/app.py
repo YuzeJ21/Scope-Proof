@@ -3585,6 +3585,7 @@ else:
             options=list(EvidenceLevel),
             format_func=lambda item: item.value,
             key="evidence_level_filter",
+            help="Match the candidate level or the level linked to the current manual decision.",
         )
     matrix = []
     for criterion in bundle.criteria:
@@ -3596,8 +3597,24 @@ else:
             continue
         if blocking_only and criterion.criterion_id not in blocking_criteria:
             continue
-        if evidence_level_filter and finding.evidence_level not in evidence_level_filter:
+        resolution = resolution_by_id.get(criterion.criterion_id)
+        # The validated bundle binds each linked decision to its runtime record at this head.
+        verification_level = (
+            resolution.claimed_evidence_level
+            if resolution is not None and resolution.runtime_evidence_id is not None
+            else None
+        )
+        if evidence_level_filter and not (
+            finding.evidence_level in evidence_level_filter
+            or verification_level in evidence_level_filter
+        ):
             continue
+        verification_label = ""
+        if verification_level is not None:
+            verification_label = verification_level.value
+            required_level = criterion.required_evidence_level
+            if verification_level.rank < required_level.rank:
+                verification_label += f" (below required {required_level.value})"
         matrix.append(
             {
                 "Criterion": criterion.criterion_id,
@@ -3605,6 +3622,8 @@ else:
                 "Priority": coverage.priority,
                 "Evidence status": evidence_status_text(coverage.evidence_status),
                 "Evidence types": ", ".join(coverage.evidence_types) or "None",
+                "Candidate evidence level": finding.evidence_level.value,
+                "Recorded verification level": verification_label,
                 "Reviewer decision": coverage.reviewer_decision,
                 "Candidate count": len(finding.evidence_ids),
                 "Rationale": finding.reason,
@@ -3627,6 +3646,9 @@ else:
                 st.text(row["Requirement"])
                 st.caption(f"Priority: {row['Priority']}")
                 st.caption(f"Evidence status: {row['Evidence status']}")
+                st.caption(f"Candidate evidence level: {row['Candidate evidence level']}")
+                if row["Recorded verification level"]:
+                    st.caption(f"Recorded verification level: {row['Recorded verification level']}")
                 st.caption(f"Evidence types: {row['Evidence types']}")
                 st.caption(f"Reviewer decision: {row['Reviewer decision']}")
                 st.caption(f"Candidate count: {row['Candidate count']}")
