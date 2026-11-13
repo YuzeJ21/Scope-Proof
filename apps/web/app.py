@@ -74,7 +74,6 @@ from apps.web.source_attachment import (
 )
 from apps.web.view_models import (
     EXTERNAL_VERIFICATION_LABEL,
-    FINAL_ACCEPTANCE_BLOCKER_GUIDANCE,
     criterion_next_actions,
     default_criterion_detail_id,
     group_candidate_evidence,
@@ -122,6 +121,7 @@ from scopeproof_core.importers.junit import (
     parse_junit_artifact,
 )
 from scopeproof_core.presentation import (
+    FINAL_ACCEPTANCE_BLOCKER_GUIDANCE,
     EvidenceStatus,
     candidate_selection_text,
     criterion_coverage_rows,

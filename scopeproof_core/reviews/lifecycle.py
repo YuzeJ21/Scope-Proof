@@ -618,9 +618,15 @@ def final_acceptance_blockers(state: ReviewState) -> tuple[FinalAcceptanceBlocke
         state.bundle is not None and not state.bundle.criteria
     ):
         return (FinalAcceptanceBlocker.ANALYSIS_REQUIRED,)
-    state = _validated_state(state)
+    return _validated_final_acceptance_blockers(_validated_state(state))
+
+
+def _validated_final_acceptance_blockers(
+    state: ReviewState,
+) -> tuple[FinalAcceptanceBlocker, ...]:
+    """Evaluate prerequisites at a boundary that has already validated the state."""
     bundle = state.bundle
-    if bundle is None:
+    if bundle is None or not bundle.criteria:
         return (FinalAcceptanceBlocker.ANALYSIS_REQUIRED,)
     review = state.review
     if review.final_acceptance:

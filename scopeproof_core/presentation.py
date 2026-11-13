@@ -7,6 +7,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopeproof_core.gates.validation import validated_review_bundle
+from scopeproof_core.reviews.lifecycle import FinalAcceptanceBlocker
 from scopeproof_core.schemas.models import (
     CriterionRetrievalDiagnostic,
     Finding,
@@ -16,6 +17,45 @@ from scopeproof_core.schemas.models import (
     HumanResolution,
     ReviewBundle,
 )
+
+FINAL_ACCEPTANCE_BLOCKER_GUIDANCE = {
+    FinalAcceptanceBlocker.ANALYSIS_REQUIRED: (
+        "Confirm criteria and run analysis before recording final acceptance."
+    ),
+    FinalAcceptanceBlocker.CRITERIA_CONFIRMATION_REQUIRED: (
+        "Confirm the criteria and their source before recording final acceptance."
+    ),
+    FinalAcceptanceBlocker.INCOMPLETE_INGESTION: (
+        "The reviewed source is incomplete. Reload the pull request and run a confirmed analysis."
+    ),
+    FinalAcceptanceBlocker.CHECKS_FAILING: (
+        "Observed GitHub checks are failing. Review them on the pull request, "
+        "then check the current head."
+    ),
+    FinalAcceptanceBlocker.CHECKS_PENDING: (
+        "Observed GitHub checks are pending. Wait for them to finish, then check the current head."
+    ),
+    FinalAcceptanceBlocker.CHECKS_UNAVAILABLE: (
+        "Passing GitHub checks could not be confirmed. Check the current head when results "
+        "are available."
+    ),
+    FinalAcceptanceBlocker.CHANGED_FILE_INVENTORY_UNAVAILABLE: (
+        "The changed-file inventory is unavailable. Check the current head and run "
+        "a new confirmed analysis."
+    ),
+    FinalAcceptanceBlocker.UNRESOLVED_FILE_SCOPE: (
+        "Changed-file scope is unresolved. Review the uncited files and record their scope "
+        "or obtain criterion evidence."
+    ),
+    FinalAcceptanceBlocker.CRITERION_DECISIONS_REQUIRED: (
+        "Review criteria without a decision or marked Change required or Rejected finding "
+        "before recording final acceptance."
+    ),
+    FinalAcceptanceBlocker.UNLINKED_MANUAL_VERIFICATION: (
+        "Record external verification at the required level for criteria with unlinked "
+        "manual verification."
+    ),
+}
 
 
 class EvidenceStatus(StrEnum):
