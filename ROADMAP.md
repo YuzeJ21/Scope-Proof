@@ -23,7 +23,7 @@ The default public evaluation download is still v0.2.7.
 | --- | --- | --- |
 | Stage 2 — source fix | Keep a saved analysis and its review history intact when fresh source observations contradict it. | Pause criterion, runtime, JUnit and file-scope submissions and local saves in the conflicted workbench context. Keep read-only history, draft recovery and explicit source recovery available. |
 | Stage 2 — source fix | Require E4 for new manual verification of an E4 criterion. | Reject E3 verification in the workbench and CLI. Earlier records remain readable and transferable with their recorded verdict. New final acceptance requires corrective verification or an explicit reviewer decision under the existing rationale rule. |
-| Stage 2 — next workbench follow-up | Guide reviewers to the actual prerequisite when final acceptance is unavailable. | The final-acceptance shortcut follows the form's eligibility. Improve the panel's recovery guidance for cases such as failing checks and unresolved file scope. |
+| Stage 2 — source fix | Guide reviewers to the actual prerequisites when final acceptance is unavailable. | Use the same eligibility rules to show applicable blockers together, including failing checks and unresolved file scope. Link to the existing scope controls. |
 | Evaluation distribution | Keep v0.2.7 available while these fixes accumulate on source. | A new version requires a separately authorized build and public-download verification. |
 | Stage 3 — gated | Establish whether independent practitioners can complete and repeat the review workflow. | Genuine independent use and a separate owner decision. Automated checks count as engineering evidence. |
 

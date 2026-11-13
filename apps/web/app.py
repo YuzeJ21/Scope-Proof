@@ -74,6 +74,7 @@ from apps.web.source_attachment import (
 )
 from apps.web.view_models import (
     EXTERNAL_VERIFICATION_LABEL,
+    FINAL_ACCEPTANCE_BLOCKER_GUIDANCE,
     criterion_next_actions,
     default_criterion_detail_id,
     group_candidate_evidence,
@@ -153,6 +154,7 @@ from scopeproof_core.reviews.junit_audit import (
 )
 from scopeproof_core.reviews.junit_correction import correct_junit_mappings
 from scopeproof_core.reviews.lifecycle import (
+    FinalAcceptanceBlocker,
     acceptance_requires_comment,
     append_external_verification,
     append_file_scope_decision,
@@ -160,8 +162,8 @@ from scopeproof_core.reviews.lifecycle import (
     append_resolution,
     attach_analysis,
     below_required_manual_verification_ids,
-    can_record_final_acceptance,
     confirm_criteria,
+    final_acceptance_blockers,
     new_review_state,
     resolution_event_statuses,
     revise_criteria,
@@ -1334,14 +1336,14 @@ has_missing_active_provenance = bool(
     current_review_state is not None
     and current_review_state.review.criteria_source_provenance is None
 )
-has_other_pending_review_input = (
+has_pending_review_drafts = (
     has_pending_criteria_draft
     or has_pending_criteria_authoring_draft
     or has_pending_requirements_draft
     or has_pending_criterion_detail_draft
     or has_pending_criteria_source
-    or has_missing_active_provenance
 )
+has_other_pending_review_input = has_pending_review_drafts or has_missing_active_provenance
 has_pending_review_input = has_other_pending_review_input or has_pending_acceptance_note
 has_pending_scope_draft = scope_draft_pending(current_review_state)
 current_review_state = _refresh_clean_review_from_local_store(
@@ -3783,9 +3785,8 @@ else:
     final_acceptance_recorded = bool(
         review_state is not None and review_state.review.final_acceptance
     )
-    final_acceptance_eligible = bool(
-        review_state is not None and can_record_final_acceptance(review_state)
-    )
+    acceptance_blockers = final_acceptance_blockers(review_state)
+    final_acceptance_eligible = not acceptance_blockers
     below_required_verification = below_required_manual_verification_ids(bundle)
     runtime_reconfirmation_required = bool(
         review_state is not None
@@ -3800,6 +3801,10 @@ else:
         "or override the deterministic gate. Review every criterion and its evidence before "
         "recording final acceptance."
     )
+    if not final_acceptance_recorded and not source_observation_conflict:
+        for blocker in acceptance_blockers:
+            if blocker is not FinalAcceptanceBlocker.BELOW_REQUIRED_MANUAL_VERIFICATION:
+                st.caption(FINAL_ACCEPTANCE_BLOCKER_GUIDANCE[blocker])
     if below_required_verification:
         criteria_to_verify = ", ".join(below_required_verification)
         if final_acceptance_recorded:
@@ -3816,8 +3821,22 @@ else:
             "Revoke final acceptance before recording new E3/E4 verification at the active "
             "head."
         )
-    elif not final_acceptance_recorded and not final_acceptance_eligible:
-        st.caption("Resolve every active criterion before recording final acceptance.")
+    if source_observation_conflict:
+        st.caption("Load matching reviewed source or check the current head before continuing.")
+        if has_pending_scope_draft or has_pending_review_drafts:
+            st.caption("Clear pending review inputs before refreshing the review.")
+    else:
+        if has_pending_scope_draft:
+            st.caption("Save or discard the pending file-scope decision before continuing.")
+        if (
+            has_pending_scope_draft
+            or FinalAcceptanceBlocker.UNRESOLVED_FILE_SCOPE in acceptance_blockers
+        ):
+            st.markdown("[Review changed-file scope before acceptance](#changed-file-scope)")
+        if has_pending_review_drafts:
+            st.caption("Submit or clear other pending review inputs before continuing.")
+    if not decision_reviewer_ready:
+        st.caption("Enter a decision reviewer before continuing.")
     acceptance_note_conflict = has_pending_acceptance_note and (
         st.session_state["review_save_conflict"]
         or st.session_state["deleted_review_save_fingerprint"] is not None
