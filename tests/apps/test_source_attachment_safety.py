@@ -25,6 +25,7 @@ from scopeproof_core.schemas.models import (
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
 from scopeproof_core.verification.service import build_findings
 from tests.apps.test_source_attachment import load_matching, reopen, saved_reference
+from tests.apps.test_streamlit_app import scope_key
 from tests.reviews.test_selected_references import append
 
 
@@ -103,23 +104,23 @@ def test_current_head_check_keeps_pending_file_scope_draft_until_cleared():
     assert not app.exception
     assert app.button(key="fetch_pr").label == "Check current head"
     assert not app.button(key="fetch_pr").disabled
-    app = app.selectbox(key="scope_file_path").set_value("notes.md").run()
+    app = app.selectbox(key=scope_key(app, "scope_file_path")).set_value("notes.md").run()
     assert not app.button(key="fetch_pr").disabled
     draft = "Constructed unsubmitted scope explanation"
-    app.text_area(key="scope_note").set_value(draft)
+    app.text_area(key=scope_key(app, "scope_note")).set_value(draft)
     with patch("scopeproof_core.github.client.GitHubClient.fetch_pull_request") as fetch:
         app = app.button(key="load_reviewed_source").click().run()
         fetch.assert_not_called()
     assert not app.exception
     assert app.button(key="fetch_pr").disabled
     assert app.button(key="load_reviewed_source").disabled
-    assert app.text_area(key="scope_note").value == draft
+    assert app.text_area(key=scope_key(app, "scope_note")).value == draft
     assert record.read_bytes() == original_bytes
 
-    app = app.button(key="clear_saved_comparison_scope_draft").click().run()
+    app = app.button(key=scope_key(app, "clear_saved_comparison_scope_draft")).click().run()
     assert not app.button(key="fetch_pr").disabled
     assert not app.button(key="load_reviewed_source").disabled
-    assert app.text_area(key="scope_note").value == ""
+    assert app.text_area(key=scope_key(app, "scope_note")).value == ""
     assert record.read_bytes() == original_bytes
 
 

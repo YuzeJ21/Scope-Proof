@@ -4,7 +4,12 @@ from scopeproof_core.github.client import GitHubNetworkError
 from scopeproof_core.schemas.models import ChangedFile, CheckState, CIObservation
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
 from tests.apps.test_source_attachment import load_matching, reopen
-from tests.apps.test_streamlit_app import analyzed_exact_head_standard_demo, load_demo, new_app
+from tests.apps.test_streamlit_app import (
+    analyzed_exact_head_standard_demo,
+    load_demo,
+    new_app,
+    scope_key,
+)
 
 
 def _contradicting_checks(snapshot):
@@ -34,17 +39,21 @@ def test_source_conflict_blocks_file_scope_save_and_allows_matching_source_recov
 
     app = load_matching(reopen(state.review.review_id), _contradicting_checks(snapshot))
     assert "**Decision status: Refresh required**" in [item.value for item in app.markdown]
-    app = app.selectbox(key="scope_file_path").set_value("src/unrelated.py").run()
-    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
-    app = app.text_area(key="scope_note").set_value("Constructed scope decision").run()
+    app = app.selectbox(key=scope_key(app, "scope_file_path")).set_value("src/unrelated.py").run()
+    app = app.selectbox(key=scope_key(app, "scope_disposition")).set_value(
+        "outside_confirmed_criteria"
+    ).run()
+    app = app.text_area(key=scope_key(app, "scope_note")).set_value(
+        "Constructed scope decision"
+    ).run()
 
-    assert app.button(key="save_scope_decision").disabled
+    assert app.button(key=scope_key(app, "save_scope_decision")).disabled
     assert not app.exception
-    assert app.text_area(key="scope_note").value == "Constructed scope decision"
+    assert app.text_area(key=scope_key(app, "scope_note")).value == "Constructed scope decision"
     assert app.session_state["review_state"] == store.load(state.review.review_id) == state
     assert path.read_bytes() == before
 
-    app = app.button(key="discard_scope_decision_draft").click().run()
+    app = app.button(key=scope_key(app, "discard_scope_decision_draft")).click().run()
     app = load_matching(app, snapshot)
     assert not app.exception
     assert app.session_state["source_authority_guard"].allows(state)

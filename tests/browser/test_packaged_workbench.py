@@ -2740,9 +2740,9 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
         exact=False,
     )).to_be_visible()
     assert page.evaluate("""() => {
-        const path = document.querySelector('.st-key-scope_file_path');
+        const path = document.querySelector('[class*="st-key-scope_file_path_"]');
         const preview = document.querySelector('.st-key-scope_file_preview');
-        const decision = document.querySelector('.st-key-scope_disposition');
+        const decision = document.querySelector('[class*="st-key-scope_disposition_"]');
         return Boolean(path && preview && decision &&
             (path.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING) &&
             (preview.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING));

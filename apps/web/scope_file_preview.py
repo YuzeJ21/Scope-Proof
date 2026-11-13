@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from unicodedata import category
+from uuid import uuid4
 
 import streamlit as st
 
@@ -18,32 +20,64 @@ from scopeproof_core.schemas.models import (
 )
 
 
-def discard_scope_decision_draft() -> None:
-    """Clear decision inputs while leaving the selected file and diff page open."""
-    st.session_state["scope_disposition"] = None
-    st.session_state["scope_criterion_id"] = None
-    st.session_state["scope_note"] = ""
-    st.session_state["scope_file_path"] = st.session_state.get("scope_selected_file")
+@dataclass(frozen=True)
+class ScopeFileSelection:
+    """Session-only identity for a file decision and its independently paged preview."""
+
+    path: str | None = None
+    generation: int = 0
+    preview_generation: int = 0
+    event_id: str = ""
+
+    def key(self, widget: str) -> str:
+        return f"{widget}_{self.generation}"
+
+    @property
+    def page_key(self) -> str:
+        return f"scope_preview_page_{self.preview_generation}"
+
+
+def scope_file_selection() -> ScopeFileSelection:
+    return st.session_state.get("scope_file_selection", ScopeFileSelection())
+
+
+def discard_scope_decision_draft(expected: ScopeFileSelection | None = None) -> None:
+    """Replace the form's widget identities, preserving the file and diff page."""
+    selected = scope_file_selection()
+    if expected is None or selected == expected:
+        st.session_state["scope_file_selection"] = replace(
+            selected, generation=selected.generation + 1, event_id=str(uuid4()),
+        )
 
 
 def reconcile_scope_file_selection(current: ReviewState | None) -> None:
     """Resolve an incoming widget change before using the file or draft on this rerun."""
-    requested = st.session_state.get("scope_file_path")
-    selected = st.session_state.get("scope_selected_file")
-    if requested == selected:
+    selected = scope_file_selection()
+    if selected.path is not None and current is not None and current.bundle is not None and any(
+        item.event_id == selected.event_id for item in current.bundle.file_scope_decisions
+    ):
+        # A rerun can interrupt a save after the new state has been assigned.
+        discard_scope_decision_draft(selected)
         return
-    if scope_draft_pending(current):
-        st.session_state["scope_file_path"] = selected
+    key = selected.key("scope_file_path")
+    requested = st.session_state.get(key, selected.path)
+    if requested == selected.path:
         return
-    st.session_state["scope_selected_file"] = requested
-    discard_scope_decision_draft()
-    st.session_state["scope_preview_page"] = 0
+    if scope_draft_pending():
+        st.session_state[key] = selected.path
+        return
+    _replace_scope_file_selection(requested)
 
 
 def reset_scope_file_selection() -> None:
-    st.session_state["scope_selected_file"] = None
-    discard_scope_decision_draft()
-    st.session_state["scope_preview_page"] = 0
+    _replace_scope_file_selection(None)
+
+
+def _replace_scope_file_selection(path: str | None) -> None:
+    generation = scope_file_selection().generation + 1
+    st.session_state["scope_file_selection"] = ScopeFileSelection(
+        path, generation, generation, str(uuid4()),
+    )
 
 
 def prepare_scope_draft_context(
@@ -59,26 +93,18 @@ def prepare_scope_draft_context(
         st.session_state["scope_draft_context"] = context
 
 
-def scope_draft_pending(current: ReviewState | None) -> bool:
-    """Compare scope-owned inputs with the saved decision, excluding the shared reviewer."""
-    path = st.session_state.get("scope_selected_file")
-    if path is None:
+def scope_draft_pending() -> bool:
+    """Read edits for this selection, excluding the shared reviewer field."""
+    selected = scope_file_selection()
+    if selected.path is None:
         return False
-    disposition = st.session_state.get("scope_disposition")
-    note = st.session_state.get("scope_note", "")
+    disposition = st.session_state.get(selected.key("scope_disposition"))
+    note = st.session_state.get(selected.key("scope_note"), "")
     criterion_id = (
-        st.session_state.get("scope_criterion_id")
+        st.session_state.get(selected.key("scope_criterion_id"))
         if disposition == "within_confirmed_criteria" else None
     )
-    if not any((disposition, note, criterion_id)):
-        return False
-    latest = (
-        {item.path: item for item in current.bundle.file_scope_decisions}.get(path)
-        if current is not None and current.bundle is not None else None
-    )
-    return latest is None or (
-        latest.disposition, latest.criterion_id, latest.note
-    ) != (disposition, criterion_id, note)
+    return bool(disposition or note or criterion_id)
 
 
 def _visible_content(content: str) -> str:
@@ -116,12 +142,13 @@ def render_scope_overview(bundle: ReviewBundle) -> None:
 def render_scope_file_preview(
     state: ReviewState | None,
     snapshot: PullRequestSnapshot | None,
-    path: str | None,
+    selection: ScopeFileSelection,
     *,
     source_allowed: bool = True,
 ) -> None:
-    if path is None:
+    if selection.path is None:
         return
+    path = selection.path
     with st.container(key="scope_file_preview"):
         st.caption("Loaded changed-file diff")
         st.caption(
@@ -160,7 +187,7 @@ def render_scope_file_preview(
             return
         try:
             preview = build_scope_file_preview(
-                state, snapshot, path, page_index=st.session_state.get("scope_preview_page", 0),
+                state, snapshot, path, page_index=st.session_state.get(selection.page_key, 0),
             )
         except ValueError:
             st.info(
@@ -181,7 +208,7 @@ def render_scope_file_preview(
         st.selectbox(
             "Changed-file diff page", options=list(range(preview.page_count)),
             format_func=lambda index: f"Page {index + 1} of {preview.page_count}",
-            key="scope_preview_page",
+            key=selection.page_key,
         )
         start = preview.page_index * 100
         st.caption(

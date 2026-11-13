@@ -63,6 +63,10 @@ def new_app() -> AppTest:
     return AppTest.from_file(str(APP_PATH)).run()
 
 
+def scope_key(app: AppTest, widget: str) -> str:
+    return app.session_state["scope_file_selection"].key(widget)
+
+
 def _filtered_app_state(app: AppTest) -> dict[str, object]:
     state = app.session_state
     if hasattr(state, "to_dict"):
@@ -133,16 +137,16 @@ def test_uncited_file_has_explicit_scope_decision_control() -> None:
         if item.path not in cited
     )
     assert uncited
-    assert app.selectbox(key="scope_file_path").options == uncited
+    assert app.selectbox(key=scope_key(app, "scope_file_path")).options == uncited
 
-    app = app.selectbox(key="scope_file_path").set_value(uncited[0]).run()
-    app = app.selectbox(key="scope_disposition").set_value(
+    app = app.selectbox(key=scope_key(app, "scope_file_path")).set_value(uncited[0]).run()
+    app = app.selectbox(key=scope_key(app, "scope_disposition")).set_value(
         "outside_confirmed_criteria"
     ).run()
-    app = app.text_area(key="scope_note").set_value(
+    app = app.text_area(key=scope_key(app, "scope_note")).set_value(
         "Reviewed this exact-head file against the confirmed criteria."
     ).run()
-    app = app.button(key="save_scope_decision").click().run()
+    app = app.button(key=scope_key(app, "save_scope_decision")).click().run()
 
     decisions = app.session_state["review_state"].bundle.file_scope_decisions
     assert decisions[-1].path == uncited[0]
@@ -180,7 +184,7 @@ def test_orphan_candidate_does_not_hide_file_scope_control() -> None:
     app.session_state["bundle"] = bundle
     app = app.run()
     assert bundle.gate.verdict is not GateVerdict.READY
-    assert "src/unrelated.py" in app.selectbox(key="scope_file_path").options
+    assert "src/unrelated.py" in app.selectbox(key=scope_key(app, "scope_file_path")).options
 
 
 def analyzed_exact_head_standard_demo(app: AppTest, *, source_revision: str = "") -> AppTest:
@@ -5120,7 +5124,9 @@ def test_manual_runtime_evidence_can_be_recorded_without_changing_static_finding
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
     finding_status = app.session_state["review_state"].bundle.findings[0].status
-    app = app.text_input(key="runtime_artifact_reference").set_value("https://example.test/run/1").run()
+    app = app.text_input(key="runtime_artifact_reference").set_value(
+        "https://example.test/run/1"
+    ).run()
     app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
     app = app.text_input(key="runtime_environment").set_value("staging").run()
     app = app.text_input(key="runtime_result").set_value("passed").run()

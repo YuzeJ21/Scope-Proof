@@ -55,6 +55,7 @@ from apps.web.scope_file_preview import (
     render_scope_overview,
     reset_scope_file_selection,
     scope_draft_pending,
+    scope_file_selection,
 )
 from apps.web.selected_reference_comparison import render_selected_reference_comparison
 from apps.web.selected_references import (
@@ -425,7 +426,7 @@ def _apply_criteria_update(
     *,
     consumed_input_keys: tuple[str, ...] = (),
 ) -> None:
-    if scope_draft_pending(st.session_state["review_state"]):
+    if scope_draft_pending():
         return
     try:
         updated_criteria = operation()
@@ -456,7 +457,7 @@ def _clear_final_acceptance_note() -> None:
 
 def _open_final_acceptance_note(state: ReviewState | None, reviewer: str) -> None:
     """Open a draft for the review and reviewer shown beside the action."""
-    if state is not None and not scope_draft_pending(state):
+    if state is not None and not scope_draft_pending():
         st.session_state.setdefault("final_acceptance_export_expired", Event()).set()
         st.session_state["final_acceptance_note_context"] = (
             _review_state_fingerprint(state), reviewer,
@@ -545,8 +546,7 @@ def _refresh_clean_review_from_local_store(
                 st.session_state["failed_review_save_fingerprint"] = current_fingerprint
                 st.session_state["review_save_conflict"] = True
                 return state
-            # Submitted scope fields belong to the previous saved state. Keep inspection
-            # when the scope context matches and let its normal binding handle source changes.
+            # Retire the previous form while keeping inspection if the scope context matches.
             discard_scope_decision_draft()
             _hydrate_reopened_review(persisted)
             st.session_state["review_save_notice"] = (
@@ -1346,7 +1346,7 @@ has_pending_review_drafts = (
 has_other_pending_review_input = has_pending_review_drafts or has_missing_active_provenance
 has_pending_review_input = has_other_pending_review_input or has_pending_acceptance_note
 reconcile_scope_file_selection(current_review_state)
-has_pending_scope_draft = scope_draft_pending(current_review_state)
+has_pending_scope_draft = scope_draft_pending()
 scope_export_expired = st.session_state.setdefault("scope_draft_export_expired", Event())
 if has_pending_scope_draft:
     scope_export_expired.set()
@@ -3716,19 +3716,23 @@ else:
                         f"Explanation: {prior.note}"
                     )
             prepare_scope_draft_context(review_state, st.session_state["snapshot"])
-            selected_scope_path = st.session_state.get("scope_selected_file")
+            scope_selection = scope_file_selection()
+            selected_scope_path = scope_selection.path
             st.selectbox(
                 "Uncited changed file",
                 options=uncited_paths,
-                index=None,
+                index=(
+                    uncited_paths.index(selected_scope_path)
+                    if selected_scope_path in uncited_paths else None
+                ),
                 placeholder="Select one changed file",
-                key="scope_file_path",
+                key=scope_selection.key("scope_file_path"),
                 disabled=has_pending_scope_draft,
             )
             if has_pending_scope_draft:
                 st.caption("Save or discard this draft to select another file.")
             render_scope_file_preview(
-                review_state, st.session_state["snapshot"], selected_scope_path,
+                review_state, st.session_state["snapshot"], scope_selection,
                 source_allowed=source_authority_check(review_state)(),
             )
             scope_disposition = st.selectbox(
@@ -3737,7 +3741,7 @@ else:
                 index=None,
                 placeholder="Select a scope decision",
                 format_func=_status_label,
-                key="scope_disposition",
+                key=scope_selection.key("scope_disposition"),
                 disabled=selected_scope_path is None,
             )
             scope_criterion_id = None
@@ -3746,16 +3750,17 @@ else:
                     "Confirmed criterion for this file",
                     options=[item.criterion_id for item in bundle.criteria],
                     index=None,
-                    key="scope_criterion_id",
+                    key=scope_selection.key("scope_criterion_id"),
                 )
             scope_note = st.text_area(
-                "File scope explanation (required)", key="scope_note",
+                "File scope explanation (required)", key=scope_selection.key("scope_note"),
                 disabled=selected_scope_path is None,
             )
             if has_pending_scope_draft:
                 st.button(
-                    "Discard file-scope draft", key="discard_scope_decision_draft",
-                    on_click=discard_scope_decision_draft,
+                    "Discard file-scope draft",
+                    key=scope_selection.key("discard_scope_decision_draft"),
+                    on_click=discard_scope_decision_draft, args=(scope_selection,),
                 )
             can_save_scope_decision = (
                 review_state is not None
@@ -3773,7 +3778,7 @@ else:
             )
             if st.button(
                 "Save file scope decision",
-                key="save_scope_decision",
+                key=scope_selection.key("save_scope_decision"),
                 disabled=not can_save_scope_decision,
             ) and can_save_scope_decision:
                 try:
@@ -3781,6 +3786,7 @@ else:
                     review_state = append_file_scope_decision(
                         review_state,
                         FileScopeDecision(
+                            event_id=scope_selection.event_id,
                             review_id=review_state.review.review_id,
                             path=selected_scope_path,
                             head_sha=review_state.review.head_sha,
@@ -3803,6 +3809,7 @@ else:
                 else:
                     st.session_state["review_state"] = review_state
                     st.session_state["bundle"] = review_state.bundle
+                    discard_scope_decision_draft(scope_selection)
                     st.session_state["scope_save_notice"] = (
                         "File scope decision appended to review history."
                     )
