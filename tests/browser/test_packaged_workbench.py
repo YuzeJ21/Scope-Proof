@@ -2713,14 +2713,17 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
     """Inspect constructed inert records and discard a draft without saving it."""
     _assert_scope_source_unavailable(page)
     before = _download_review_state(page)
+    current_download = page.get_by_role("button", name="Download JSON", exact=True)
     attach = page.get_by_role("button", name="Load matching reviewed source", exact=True)
     scope_note = page.get_by_label("File scope explanation (required)", exact=True)
     scope_note.fill("Constructed pending note before source attachment.")
     _run_and_wait_for_streamlit_rerun(page, lambda: scope_note.press("Tab"))
     expect(attach).to_be_disabled()
+    expect(current_download).to_be_disabled()
     discard = page.get_by_role("button", name="Discard file-scope draft", exact=True)
     _run_and_wait_for_streamlit_rerun(page, discard.click)
     expect(scope_note).to_have_value("")
+    expect(current_download).to_be_enabled()
     expect(page.get_by_role("combobox", name="Uncited changed file", exact=True)
            ).to_have_value("notes.md")
     attach.click()
@@ -2751,6 +2754,7 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
     assert len(code.inner_text().splitlines()) == 100
     page_picker = page.get_by_role("combobox", name="Changed-file diff page", exact=True)
     _choose_combobox_option(page, page_picker, option_name="Page 2 of 2")
+    expect(current_download).to_be_enabled()
     expect(preview.locator('[data-testid="stCode"] code').filter(
         has_text="+ head line 101 | Constructed scope preview note line 101.",
     )).to_have_count(1)

@@ -163,3 +163,37 @@ def test_deferred_export_serializes_with_concurrent_final_acceptance_revocation(
     assert exported == accepted
     assert revoked.bundle is not None
     assert revoked.bundle.gate.verdict is not GateVerdict.READY
+
+
+def test_deferred_export_rechecks_scope_draft_after_rendering(tmp_path: Path) -> None:
+    state = accepted_review_state()
+    store = JsonReviewStore(tmp_path)
+    path = store.save(state)
+    original = path.read_bytes()
+    rendering = Event()
+    finish_render = Event()
+    scope_draft_observed = Event()
+
+    def delayed_render(source: ReviewState) -> str:
+        rendering.set()
+        assert finish_render.wait(timeout=5)
+        return export_json(source)
+
+    download = deferred_review_export(
+        state,
+        delayed_render,
+        store=store,
+        expected_fingerprint=store.state_fingerprint(state),
+        expired_by_scope_draft=scope_draft_observed.is_set,
+    )
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(download)
+        try:
+            assert rendering.wait(timeout=5)
+            scope_draft_observed.set()
+        finally:
+            finish_render.set()
+        with pytest.raises(DeferredExportUnavailable, match="file-scope decision"):
+            result.result(timeout=5)
+
+    assert path.read_bytes() == original
