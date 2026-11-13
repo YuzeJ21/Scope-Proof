@@ -32,6 +32,8 @@ independent-use evidence and separate authorization.
   Previously recorded below-level verification is flagged alongside the recorded verdict.
 - A pending file-scope decision pauses local review saves and current report downloads.
   Saving or discarding the draft restores the controls with fresh download links.
+- The evidence matrix filters by static candidate level or current linked external verification
+  level. Cards display those levels separately and flag verification below the requirement.
 
 ## 0.2.7 — Evaluation release build
 
