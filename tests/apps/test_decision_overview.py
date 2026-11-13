@@ -27,6 +27,7 @@ from tests.apps.test_streamlit_app import (
     load_demo,
     new_app,
     resolve_all_criteria,
+    scope_key,
     select_saved_review,
 )
 
@@ -43,14 +44,16 @@ def test_overview_excludes_unsubmitted_file_scope_draft_from_save_status() -> No
     assert "uncited_changed_files" not in state.bundle.gate.reason_codes
     assert "Unresolved inspected changed files: 1" in [item.value for item in app.text]
     app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
-    app = app.selectbox(key="scope_file_path").set_value("src/unrelated.py").run()
+    app = app.selectbox(key=scope_key(app, "scope_file_path")).set_value("src/unrelated.py").run()
     assert "Local save: Saved locally" in [item.value for item in app.text]
     assert not app.button(key="open_next_overview_blocker").disabled
-    assert app.button(key="save_scope_decision").disabled
-    app = app.text_area(key="scope_note").set_value("Unsubmitted scope explanation").run()
+    assert app.button(key=scope_key(app, "save_scope_decision")).disabled
+    app = app.text_area(key=scope_key(app, "scope_note")).set_value(
+        "Unsubmitted scope explanation"
+    ).run()
     assert "Local save: Pending inputs excluded" in [item.value for item in app.text]
     assert app.button(key="open_next_overview_blocker").disabled
-    assert app.text_area(key="scope_note").value == "Unsubmitted scope explanation"
+    assert app.text_area(key=scope_key(app, "scope_note")).value == "Unsubmitted scope explanation"
     assert "[Go to changed-file scope](#changed-file-scope)" in [
         item.value for item in app.markdown
     ]
@@ -65,7 +68,7 @@ def test_overview_excludes_unsubmitted_file_scope_draft_from_save_status() -> No
     assert "Clear pending review inputs before refreshing the review." in [
         item.value for item in app.caption
     ]
-    assert app.text_area(key="scope_note").value == "Unsubmitted scope explanation"
+    assert app.text_area(key=scope_key(app, "scope_note")).value == "Unsubmitted scope explanation"
 
 
 def test_file_scope_draft_pauses_current_downloads_until_discarded_or_saved(
@@ -83,7 +86,7 @@ def test_file_scope_draft_pauses_current_downloads_until_discarded_or_saved(
     record = storage / f"{before.review.review_id}.json"
     saved_bytes = record.read_bytes()
 
-    app = app.selectbox(key="scope_file_path").set_value(file_path).run()
+    app = app.selectbox(key=scope_key(app, "scope_file_path")).set_value(file_path).run()
     assert {button.key for button in app.download_button} == {
         "download_markdown", "download_json", "download_csv", "download_html",
     }
@@ -92,7 +95,9 @@ def test_file_scope_draft_pauses_current_downloads_until_discarded_or_saved(
         item.value for item in app.caption
     ]
 
-    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
+    app = app.selectbox(key=scope_key(app, "scope_disposition")).set_value(
+        "outside_confirmed_criteria"
+    ).run()
     assert all(button.disabled for button in app.download_button)
     assert app.button(key="save_review").disabled
     assert "Saved locally — current review matches local storage." not in [
@@ -106,21 +111,25 @@ def test_file_scope_draft_pauses_current_downloads_until_discarded_or_saved(
     assert app.session_state["review_state"] == store.load(before.review.review_id) == before
     assert record.read_bytes() == saved_bytes
 
-    app = app.button(key="discard_scope_decision_draft").click().run()
+    app = app.button(key=scope_key(app, "discard_scope_decision_draft")).click().run()
     assert all(not button.disabled for button in app.download_button)
     assert "Saved locally — current review matches local storage." in [
         item.value for item in app.caption
     ]
     assert record.read_bytes() == saved_bytes
 
-    app = app.selectbox(key="scope_file_path").set_value(file_path).run()
-    app = app.text_area(key="scope_note").set_value("Reviewed file against the criteria.").run()
+    app = app.selectbox(key=scope_key(app, "scope_file_path")).set_value(file_path).run()
+    app = app.text_area(key=scope_key(app, "scope_note")).set_value(
+        "Reviewed file against the criteria."
+    ).run()
     assert all(button.disabled for button in app.download_button)
-    app = app.selectbox(key="scope_disposition").set_value("outside_confirmed_criteria").run()
+    app = app.selectbox(key=scope_key(app, "scope_disposition")).set_value(
+        "outside_confirmed_criteria"
+    ).run()
     assert all(button.disabled for button in app.download_button)
     assert app.button(key="save_review").disabled
     assert record.read_bytes() == saved_bytes
-    app = app.button(key="save_scope_decision").click().run()
+    app = app.button(key=scope_key(app, "save_scope_decision")).click().run()
 
     assert not app.exception
     assert all(not button.disabled for button in app.download_button)
@@ -154,14 +163,16 @@ def test_file_scope_draft_expires_an_already_rendered_current_download(
     app = app.button(key="run_analysis").click().run()
     old_download = html_callbacks[-1]
 
-    app = app.selectbox(key="scope_file_path").set_value(file_path).run()
+    app = app.selectbox(key=scope_key(app, "scope_file_path")).set_value(file_path).run()
     assert "ScopeProof Acceptance Review" in old_download()
-    app = app.text_area(key="scope_note").set_value("Unsubmitted scope explanation").run()
+    app = app.text_area(key=scope_key(app, "scope_note")).set_value(
+        "Unsubmitted scope explanation"
+    ).run()
 
     with pytest.raises(deferred_exports.DeferredExportUnavailable, match="file-scope decision"):
         old_download()
 
-    app = app.button(key="discard_scope_decision_draft").click().run()
+    app = app.button(key=scope_key(app, "discard_scope_decision_draft")).click().run()
     with pytest.raises(deferred_exports.DeferredExportUnavailable, match="file-scope decision"):
         old_download()
     assert "ScopeProof Acceptance Review" in html_callbacks[-1]()
@@ -183,8 +194,10 @@ def test_file_scope_draft_pauses_saving_an_otherwise_writable_review(
     record = storage / f"{review_id}.json"
     original_bytes = record.read_bytes()
 
-    app = app.selectbox(key="scope_file_path").set_value(file_path).run()
-    app = app.text_area(key="scope_note").set_value("Unsubmitted scope explanation").run()
+    app = app.selectbox(key=scope_key(app, "scope_file_path")).set_value(file_path).run()
+    app = app.text_area(key=scope_key(app, "scope_note")).set_value(
+        "Unsubmitted scope explanation"
+    ).run()
     unsaved = append_resolution(
         original,
         ResolutionEvent(
@@ -204,7 +217,7 @@ def test_file_scope_draft_pauses_saving_an_otherwise_writable_review(
     assert store.load(review_id) == original
     assert record.read_bytes() == original_bytes
 
-    app = app.button(key="discard_scope_decision_draft").click().run()
+    app = app.button(key=scope_key(app, "discard_scope_decision_draft")).click().run()
 
     assert not app.exception
     assert app.session_state["review_state"] == store.load(review_id) == unsaved

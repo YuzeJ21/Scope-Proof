@@ -2724,14 +2724,14 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
     _run_and_wait_for_streamlit_rerun(page, discard.click)
     expect(scope_note).to_have_value("")
     expect(current_download).to_be_enabled()
-    expect(page.get_by_role("combobox", name="Uncited changed file", exact=True)
-           ).to_have_value("notes.md")
+    path = page.get_by_role("combobox", name="Uncited changed file", exact=True)
+    expect(path).to_have_value("notes.md")
+    expect(path).to_be_enabled()
     attach.click()
     expect(page.get_by_text(
         "Matching reviewed source loaded. Saved analysis and decisions were preserved.",
         exact=True,
     )).to_be_visible()
-    path = page.get_by_role("combobox", name="Uncited changed file", exact=True)
     _choose_combobox_option(page, path, option_name="notes.md")
     preview = page.locator(".st-key-scope_file_preview")
     expect(preview.get_by_text("Loaded changed-file diff", exact=True)).to_be_visible()
@@ -2740,9 +2740,9 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
         exact=False,
     )).to_be_visible()
     assert page.evaluate("""() => {
-        const path = document.querySelector('.st-key-scope_file_path');
+        const path = document.querySelector('[class*="st-key-scope_file_path_"]');
         const preview = document.querySelector('.st-key-scope_file_preview');
-        const decision = document.querySelector('.st-key-scope_disposition');
+        const decision = document.querySelector('[class*="st-key-scope_disposition_"]');
         return Boolean(path && preview && decision &&
             (path.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING) &&
             (preview.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING));
@@ -2774,15 +2774,15 @@ def _exercise_scope_file_inspection(page: Page, captures: Path) -> None:
     expect(page).to_have_url(re.compile(r"#changed-file-scope$"))
     expect(page.locator('[id="changed-file-scope"]')).to_be_in_viewport()
     expect(path).to_have_value("notes.md")
+    expect(path).to_be_disabled()
     expect(note).to_have_value(draft_note)
+    expect(current_download).to_be_disabled()
+    expect(page_picker).to_be_enabled()
     _run_and_wait_for_streamlit_rerun(page, discard.click)
     expect(path).to_have_value("notes.md")
+    expect(path).to_be_enabled()
     expect(page_picker).to_have_value("Page 2 of 2")
     expect(note).to_have_value("")
-    _choose_combobox_option(page, disposition, option_name="Within Confirmed Criteria")
-    _choose_combobox_option(page, criterion, option_name="AC-01")
-    note.fill(draft_note)
-    _run_and_wait_for_streamlit_rerun(page, lambda: note.press("Tab"))
     _choose_combobox_option(page, path, option_name="src/unrelated.py")
     expect(disposition).to_have_value("")
     expect(criterion).to_have_count(0)

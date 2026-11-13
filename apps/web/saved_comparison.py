@@ -5,7 +5,12 @@ from __future__ import annotations
 import streamlit as st
 
 from apps.web.deferred_exports import SavedComparisonExportLease, deferred_saved_requirements_export
-from apps.web.scope_file_preview import reset_scope_file_selection, scope_draft_pending
+from apps.web.scope_file_preview import (
+    ScopeFileSelection,
+    discard_scope_decision_draft,
+    scope_draft_pending,
+    scope_file_selection,
+)
 from scopeproof_core.reporting.criteria_comparison import export_saved_requirements_markdown
 from scopeproof_core.reviews.comparison import (
     ComparisonIncompatible,
@@ -144,9 +149,10 @@ def _render_foreign_analysis_selector(
     )
 
 
-def _clear_scope_draft() -> None:
-    clear_saved_comparison_selection()
-    reset_scope_file_selection()
+def _clear_scope_draft(expected: ScopeFileSelection) -> None:
+    if scope_file_selection() == expected:
+        clear_saved_comparison_selection()
+        discard_scope_decision_draft(expected)
 
 
 def _render_saved_requirements(
@@ -217,7 +223,7 @@ def render_saved_comparison_selector(
     requirements_lease = st.session_state.setdefault(
         "saved_requirements_export_lease", SavedComparisonExportLease(),
     )
-    has_scope_draft = scope_draft_pending(current)
+    has_scope_draft = scope_draft_pending()
     eligible = (
         current is not None and current.bundle is not None
         and current_is_saved and not has_scope_draft
@@ -273,9 +279,11 @@ def render_saved_comparison_selector(
                 "Unsubmitted file-scope inputs are not part of the saved review. Save the "
                 "scope decision below or clear those inputs before comparing."
             )
+            scope_selection = scope_file_selection()
             st.button(
-                "Clear pending file-scope inputs", key="clear_saved_comparison_scope_draft",
-                on_click=_clear_scope_draft,
+                "Clear pending file-scope inputs",
+                key=scope_selection.key("clear_saved_comparison_scope_draft"),
+                on_click=_clear_scope_draft, args=(scope_selection,),
             )
         if not sources:
             st.caption("No other saved review or historical analysis is available.")
