@@ -6,6 +6,7 @@ from scopeproof_core.reviews.lifecycle import append_resolution
 from scopeproof_core.schemas.models import HumanDecision, ResolutionEvent
 from scopeproof_core.storage.json_store import JsonReviewStore
 from tests.apps.test_junit_audit import reopen
+from tests.apps.test_streamlit_app import runtime_key
 
 
 def select_import(app):
@@ -120,9 +121,9 @@ def test_pending_correction_blocks_other_detail_writes(operation):
     else:
         for field in ("runtime_artifact_reference", "runtime_scenario", "runtime_environment",
                       "runtime_result", "runtime_reviewer"):
-            app.session_state[field] = "CONSTRUCTED runtime draft"
+            app.session_state[runtime_key(app, field)] = "CONSTRUCTED runtime draft"
         app = app.run()
-        key = "save_runtime_evidence"
+        key = runtime_key(app, "save_runtime_evidence")
     assert not app.exception
     assert app.button(key=key).disabled
     assert path.read_bytes() == before

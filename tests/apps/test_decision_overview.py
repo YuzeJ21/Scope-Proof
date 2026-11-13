@@ -27,6 +27,7 @@ from tests.apps.test_streamlit_app import (
     load_demo,
     new_app,
     resolve_all_criteria,
+    runtime_key,
     scope_key,
     select_saved_review,
 )
@@ -358,14 +359,18 @@ def test_overview_opens_next_blocker_without_writing_or_discarding_inputs() -> N
     assert any("Constructed demo" in item.value for item in app.caption)
 
     app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
-    app = app.text_input(key="runtime_artifact_reference").set_value("pending-reference").run()
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
+        "pending-reference"
+    ).run()
     assert app.button(key="open_next_overview_blocker").disabled
     assert app.selectbox(key="selected_criterion").value == "AC-01"
-    assert app.text_input(key="runtime_artifact_reference").value == "pending-reference"
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == (
+        "pending-reference"
+    )
     assert "Local save: Pending inputs excluded" in [item.value for item in app.text]
     assert all(button.disabled for button in app.download_button)
 
-    app = app.text_input(key="runtime_artifact_reference").set_value("").run()
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value("").run()
     app = app.button(key="open_next_overview_blocker").click().run()
     assert not app.exception
     assert app.selectbox(key="selected_criterion").value == "AC-02"

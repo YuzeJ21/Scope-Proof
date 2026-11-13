@@ -67,6 +67,10 @@ def scope_key(app: AppTest, widget: str) -> str:
     return app.session_state["scope_file_selection"].key(widget)
 
 
+def runtime_key(app: AppTest, widget: str) -> str:
+    return f"{widget}_{app.session_state['runtime_verification_form_id']}"
+
+
 def _filtered_app_state(app: AppTest) -> dict[str, object]:
     state = app.session_state
     if hasattr(state, "to_dict"):
@@ -1357,6 +1361,8 @@ def test_pending_draft_categories_block_autosave(
     persisted_before = store.load(review_id)
     app.session_state["saved_review_fingerprint"] = None
 
+    if key.startswith("runtime_"):
+        key = runtime_key(app, key)
     with patch("scopeproof_core.storage.json_store.JsonReviewStore.save") as save:
         widget = getattr(app, widget_collection)(key=key)
         app = widget.set_value(value).run()
@@ -1645,7 +1651,7 @@ def test_symlinked_review_store_has_safe_recovery_and_disables_storage_actions(
     assert str(tmp_path) not in rendered_recovery
     assert list(outside.iterdir()) == []
 
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "pending-runtime-artifact"
     ).run()
     pending_recovery = (
@@ -2545,13 +2551,17 @@ def test_workbench_e3_guidance_tracks_verification_for_each_criterion_after_reop
     app = app.selectbox(key="selected_criterion").set_value("AC-02").run()
     before = app.session_state["review_state"].bundle
 
-    app.text_input(key="runtime_artifact_reference").set_value("fixture-run-02")
-    app.text_area(key="runtime_scenario").set_value("Export with active filters")
-    app.text_input(key="runtime_environment").set_value("Controlled test environment")
-    app.text_input(key="runtime_result").set_value("Export matched active filters")
-    app.text_input(key="runtime_reviewer").set_value("Fixture reviewer")
+    app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value("fixture-run-02")
+    app.text_area(key=runtime_key(app, "runtime_scenario")).set_value("Export with active filters")
+    app.text_input(key=runtime_key(app, "runtime_environment")).set_value(
+        "Controlled test environment"
+    )
+    app.text_input(key=runtime_key(app, "runtime_result")).set_value(
+        "Export matched active filters"
+    )
+    app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("Fixture reviewer")
     app = app.run()
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     review_id = app.session_state["review_state"].review.review_id
     fresh = select_saved_review(new_app(), review_id)
@@ -2717,7 +2727,7 @@ def test_pending_criterion_draft_is_not_claimed_saved_or_exportable(
     app, review_id = saved_demo_review(new_app())
     authoritative_state = app.session_state["review_state"].model_copy(deep=True)
 
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "pending-runtime-artifact"
     ).run()
     app = app.selectbox(key="resolution_decision").set_value(
@@ -2752,7 +2762,7 @@ def test_clear_pending_criterion_draft_restores_saved_exportable_state(
     monkeypatch.setenv("HOME", str(tmp_path))
     app, _ = saved_demo_review(new_app())
     review_state = app.session_state["review_state"].model_copy(deep=True)
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "pending-runtime-artifact"
     ).run()
     app = app.selectbox(key="resolution_decision").set_value(
@@ -2762,7 +2772,7 @@ def test_clear_pending_criterion_draft_restores_saved_exportable_state(
     app = app.button(key="clear_criterion_detail_drafts").click().run()
 
     assert app.session_state["review_state"] == review_state
-    assert app.text_input(key="runtime_artifact_reference").value == ""
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == ""
     assert app.selectbox(key="resolution_decision").value is None
     assert "Pending criterion inputs cleared without changing the review." in [
         item.value for item in app.success
@@ -2780,22 +2790,22 @@ def test_submitted_runtime_draft_restores_authoritative_save_and_export(
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     app, review_id = saved_demo_review(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "https://example.test/run/authoritative"
     ).run()
-    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
-    app = app.text_input(key="runtime_environment").set_value("staging").run()
-    app = app.text_input(key="runtime_result").set_value("passed").run()
-    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value("Export CSV").run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value("staging").run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("passed").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("QA").run()
 
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     assert len(app.session_state["review_state"].bundle.runtime_evidence) == 1
     assert (
         app.session_state["review_state"].resolution_events[-1].decision
         is HumanDecision.MANUALLY_VERIFIED
     )
-    assert app.text_input(key="runtime_artifact_reference").value == ""
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == ""
     captions = "\n".join(item.value for item in app.caption)
     assert "Pending criterion-detail inputs are not saved or exported." not in captions
     assert "Saved locally — current review matches local storage." in captions
@@ -3121,7 +3131,7 @@ def test_bundleless_revision_can_clear_criterion_draft_and_resume_autosave(
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     app, review_id = saved_demo_review(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "pending-runtime-artifact"
     ).run()
     app = app.selectbox(key="resolution_decision").set_value(
@@ -3157,8 +3167,8 @@ def test_bundleless_revision_can_clear_criterion_draft_and_resume_autosave(
     app = app.button(key="clear_criterion_detail_drafts").click().run()
 
     assert app.session_state["review_state"] == authoritative_state
-    assert app.session_state["runtime_artifact_reference"] == ""
-    assert app.session_state["runtime_evidence_level"] is EvidenceLevel.E3
+    assert runtime_key(app, "runtime_artifact_reference") not in app.session_state
+    assert runtime_key(app, "runtime_evidence_level") not in app.session_state
     assert app.session_state["resolution_decision"] is None
     assert app.session_state["resolution_note"] == ""
     assert "manual_evidence_level" not in app.session_state
@@ -3496,7 +3506,7 @@ def test_external_update_preserves_pending_input_and_blocks_stale_exports(
     app = resolve_all_criteria(analyzed_demo(new_app()))
     app = app.button(key="record_final_acceptance").click().run()
     accepted = app.session_state["review_state"]
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "pending-runtime-artifact"
     ).run()
     JsonReviewStore(default_local_review_directory()).mutate(
@@ -3515,7 +3525,7 @@ def test_external_update_preserves_pending_input_and_blocks_stale_exports(
     app = app.run()
 
     assert app.session_state["review_state"] == accepted
-    assert app.text_input(key="runtime_artifact_reference").value == (
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == (
         "pending-runtime-artifact"
     )
     assert "**Review status: Refresh required**" in [
@@ -4517,8 +4527,9 @@ def test_ordinary_resolution_precedes_optional_external_verification() -> None:
     )
 
     assert keys.index("decision_reviewer") < keys.index("resolution_decision")
-    assert keys.index("save_resolution") < keys.index("runtime_artifact_reference")
-    assert keys.index("runtime_artifact_reference") < keys.index("save_runtime_evidence")
+    artifact = runtime_key(app, "runtime_artifact_reference")
+    save_verification = runtime_key(app, "save_runtime_evidence")
+    assert keys.index("save_resolution") < keys.index(artifact) < keys.index(save_verification)
     assert optional.proto.expanded is False
 
 
@@ -4666,7 +4677,9 @@ def test_criterion_resolution_failure_preserves_retryable_state_without_raw_deta
 def test_manual_verification_is_only_available_through_external_verification() -> None:
     app = analyzed_demo(new_app())
     assert "Manually Verified" not in app.selectbox(key="resolution_decision").options
-    assert app.button(key="save_runtime_evidence").label == "Save external verification"
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).label == (
+        "Save external verification"
+    )
 
 
 def test_criterion_resolution_context_identifies_target_and_boundary() -> None:
@@ -4873,13 +4886,13 @@ def test_runtime_evidence_guidance_lists_only_missing_required_fields() -> None:
         "Complete required fields to enable Save: Artifact or URL, Runtime scenario, "
         "Environment, Observed result, Runtime reviewer."
     ]
-    assert app.button(key="save_runtime_evidence").disabled is True
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is True
 
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "https://example.test/run/1"
     ).run()
-    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
-    app = app.text_input(key="runtime_environment").set_value("staging").run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value("Export CSV").run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value("staging").run()
 
     guidance = [
         caption.value
@@ -4889,62 +4902,70 @@ def test_runtime_evidence_guidance_lists_only_missing_required_fields() -> None:
     assert guidance == [
         "Complete required fields to enable Save: Observed result, Runtime reviewer."
     ]
-    assert app.button(key="save_runtime_evidence").disabled is True
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is True
 
 
 def test_runtime_evidence_guidance_disappears_when_save_is_ready() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value("   ").run()
-    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
-    app = app.text_input(key="runtime_environment").set_value("staging").run()
-    app = app.text_input(key="runtime_result").set_value("passed").run()
-    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
-    app = app.text_area(key="runtime_limitations").set_value("Browser only").run()
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value("   ").run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value("Export CSV").run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value("staging").run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("passed").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("QA").run()
+    app = app.text_area(key=runtime_key(app, "runtime_limitations")).set_value("Browser only").run()
 
     guidance = "\n".join(caption.value for caption in app.caption)
     assert "Complete required fields to enable Save: Artifact or URL." in guidance
-    assert app.button(key="save_runtime_evidence").disabled is True
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is True
 
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "https://example.test/run/1"
     ).run()
 
     guidance = "\n".join(caption.value for caption in app.caption)
     assert "Complete required fields to enable Save:" not in guidance
-    assert app.button(key="save_runtime_evidence").disabled is False
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is False
 
 
 def test_runtime_evidence_save_requires_all_required_fields() -> None:
     app = analyzed_demo(new_app())
-    assert app.button(key="save_runtime_evidence").disabled is True
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is True
 
-    app = app.text_input(key="runtime_artifact_reference").set_value("   ").run()
-    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
-    app = app.text_input(key="runtime_environment").set_value("staging").run()
-    app = app.text_input(key="runtime_result").set_value("passed").run()
-    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
-    assert app.button(key="save_runtime_evidence").disabled is True
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value("   ").run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value("Export CSV").run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value("staging").run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("passed").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("QA").run()
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is True
 
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "https://example.test/run/1"
     ).run()
-    assert app.button(key="save_runtime_evidence").disabled is False
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is False
 
 
 def test_runtime_evidence_fields_identify_required_and_optional_status() -> None:
     app = analyzed_demo(new_app())
 
-    assert app.text_input(key="runtime_artifact_reference").label == (
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).label == (
         "Artifact or URL (required)"
     )
-    assert app.text_area(key="runtime_scenario").label == "Runtime scenario (required)"
-    assert app.text_input(key="runtime_environment").label == "Environment (required)"
-    assert app.text_input(key="runtime_result").label == "Observed result (required)"
-    assert app.text_input(key="runtime_reviewer").label == "Runtime reviewer (required)"
-    assert app.text_area(key="runtime_limitations").label == (
+    assert app.text_area(key=runtime_key(app, "runtime_scenario")).label == (
+        "Runtime scenario (required)"
+    )
+    assert app.text_input(key=runtime_key(app, "runtime_environment")).label == (
+        "Environment (required)"
+    )
+    assert app.text_input(key=runtime_key(app, "runtime_result")).label == (
+        "Observed result (required)"
+    )
+    assert app.text_input(key=runtime_key(app, "runtime_reviewer")).label == (
+        "Runtime reviewer (required)"
+    )
+    assert app.text_area(key=runtime_key(app, "runtime_limitations")).label == (
         "Runtime limitations (optional)"
     )
-    assert app.button(key="save_runtime_evidence").disabled is True
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is True
     assert (
         "This records a review-level acceptance event. It does not resolve individual criteria "
         "or override the deterministic gate. Review every criterion and its evidence before "
@@ -4971,14 +4992,14 @@ def test_runtime_evidence_validation_failure_is_safe_and_retryable() -> None:
         "runtime_result": "controlled result",
         "runtime_reviewer": "controlled reviewer",
     }
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         values["runtime_artifact_reference"]
     ).run()
-    app = app.text_area(key="runtime_scenario").set_value(
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
         values["runtime_scenario"]
     ).run()
     for key in ("runtime_environment", "runtime_result", "runtime_reviewer"):
-        app = app.text_input(key=key).set_value(values[key]).run()
+        app = app.text_input(key=runtime_key(app, key)).set_value(values[key]).run()
     review_state = app.session_state["review_state"].model_copy(deep=True)
     raw_error = "2 validation errors at /private/secret/runtime.json"
 
@@ -4986,7 +5007,7 @@ def test_runtime_evidence_validation_failure_is_safe_and_retryable() -> None:
         "scopeproof_core.reviews.lifecycle.append_external_verification",
         side_effect=ValueError(raw_error),
     ):
-        app = app.button(key="save_runtime_evidence").click().run()
+        app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     recovery = (
         "External verification could not be saved. Check every required field and select E3 or E4."
@@ -5012,13 +5033,15 @@ def test_runtime_evidence_validation_failure_is_safe_and_retryable() -> None:
         _review_fingerprint_for_test(review_state)
     )
     assert app.session_state["review_state"].bundle.runtime_evidence == []
-    assert app.text_input(key="runtime_artifact_reference").value == values[
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == values[
         "runtime_artifact_reference"
     ]
-    assert app.text_area(key="runtime_scenario").value == values["runtime_scenario"]
+    assert app.text_area(key=runtime_key(app, "runtime_scenario")).value == (
+        values["runtime_scenario"]
+    )
     for key in ("runtime_environment", "runtime_result", "runtime_reviewer"):
-        assert app.text_input(key=key).value == values[key]
-    assert app.button(key="save_runtime_evidence").disabled is False
+        assert app.text_input(key=runtime_key(app, key)).value == values[key]
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is False
     assert "Manual runtime evidence appended" not in "\n".join(
         item.value for item in app.success
     )
@@ -5066,16 +5089,18 @@ def test_runtime_evidence_context_identifies_criterion_and_explains_levels() -> 
 
 def test_criterion_change_clears_pending_target_specific_drafts() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "artifact-for-ac-01"
     ).run()
-    app = app.text_area(key="runtime_scenario").set_value(
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
         "AC-01 export scenario"
     ).run()
-    app = app.text_input(key="runtime_environment").set_value("staging").run()
-    app = app.text_input(key="runtime_result").set_value("passed").run()
-    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
-    app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value("staging").run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("passed").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("QA").run()
+    app = app.selectbox(key=runtime_key(app, "runtime_evidence_level")).set_value(
+        EvidenceLevel.E4
+    ).run()
     app = app.selectbox(key="resolution_decision").set_value(
         HumanDecision.ACCEPTED
     ).run()
@@ -5083,19 +5108,19 @@ def test_criterion_change_clears_pending_target_specific_drafts() -> None:
         "Verified AC-01 in staging."
     ).run()
 
-    assert app.button(key="save_runtime_evidence").disabled is False
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is False
     assert app.button(key="save_resolution").disabled is False
 
     app = app.selectbox(key="selected_criterion").set_value("AC-03").run()
 
-    assert app.text_input(key="runtime_artifact_reference").value == ""
-    assert app.text_area(key="runtime_scenario").value == ""
-    assert app.text_input(key="runtime_environment").value == ""
-    assert app.text_input(key="runtime_result").value == ""
-    assert app.text_input(key="runtime_reviewer").value == ""
-    assert app.text_area(key="runtime_limitations").value == ""
-    assert app.selectbox(key="runtime_evidence_level").value is EvidenceLevel.E3
-    assert app.button(key="save_runtime_evidence").disabled is True
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == ""
+    assert app.text_area(key=runtime_key(app, "runtime_scenario")).value == ""
+    assert app.text_input(key=runtime_key(app, "runtime_environment")).value == ""
+    assert app.text_input(key=runtime_key(app, "runtime_result")).value == ""
+    assert app.text_input(key=runtime_key(app, "runtime_reviewer")).value == ""
+    assert app.text_area(key=runtime_key(app, "runtime_limitations")).value == ""
+    assert app.selectbox(key=runtime_key(app, "runtime_evidence_level")).value is EvidenceLevel.E3
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is True
     assert app.selectbox(key="resolution_decision").value is None
     assert app.text_area(key="resolution_note").value == ""
     assert "manual_evidence_level" not in _filtered_app_state(app)
@@ -5124,14 +5149,14 @@ def test_manual_runtime_evidence_can_be_recorded_without_changing_static_finding
     app = app.button(key="confirm_criteria").click().run()
     app = app.button(key="run_analysis").click().run()
     finding_status = app.session_state["review_state"].bundle.findings[0].status
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "https://example.test/run/1"
     ).run()
-    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
-    app = app.text_input(key="runtime_environment").set_value("staging").run()
-    app = app.text_input(key="runtime_result").set_value("passed").run()
-    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value("Export CSV").run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value("staging").run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("passed").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("QA").run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     bundle = app.session_state["review_state"].bundle
     assert bundle.findings[0].status is finding_status
@@ -5140,15 +5165,15 @@ def test_manual_runtime_evidence_can_be_recorded_without_changing_static_finding
 
 def test_external_verification_normalizes_reviewer_for_atomic_records() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "https://example.test/run/normalized-reviewer"
     ).run()
-    app = app.text_area(key="runtime_scenario").set_value("Export CSV").run()
-    app = app.text_input(key="runtime_environment").set_value("staging").run()
-    app = app.text_input(key="runtime_result").set_value("passed").run()
-    app = app.text_input(key="runtime_reviewer").set_value("  QA  ").run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value("Export CSV").run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value("staging").run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("passed").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("  QA  ").run()
 
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     review_state = app.session_state["review_state"]
     manual_events = [
@@ -5186,13 +5211,17 @@ def test_external_verification_normalizes_reviewer_for_atomic_records() -> None:
 def test_runtime_evidence_record_renders_bound_identity_as_non_editable_text() -> None:
     app = analyzed_demo(new_app())
     review = app.session_state["review_state"].review.model_copy(deep=True)
-    app = app.text_input(key="runtime_artifact_reference").set_value("artifact-identity").run()
-    app = app.text_area(key="runtime_scenario").set_value("Identity scenario").run()
-    app = app.text_input(key="runtime_environment").set_value("staging").run()
-    app = app.text_input(key="runtime_result").set_value("observed").run()
-    app = app.text_input(key="runtime_reviewer").set_value("QA").run()
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
+        "artifact-identity"
+    ).run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
+        "Identity scenario"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value("staging").run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("observed").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("QA").run()
 
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     runtime_item = app.session_state["review_state"].bundle.runtime_evidence[0]
     assert runtime_item.runtime_evidence_id in [item.value for item in app.code]
@@ -5364,7 +5393,8 @@ def test_reopened_legacy_verification_can_reverify_but_not_reaccept_without_inve
         "  Recovery reviewer  "
     ).run()
     assert reopened.button(key="revoke_final_acceptance").disabled is False
-    reopened = reopened.text_input(key="runtime_artifact_reference").set_value(
+    artifact = runtime_key(reopened, "runtime_artifact_reference")
+    reopened = reopened.text_input(key=artifact).set_value(
         "pending-artifact"
     ).run()
     assert reopened.button(key="revoke_final_acceptance").disabled is True
@@ -5391,20 +5421,23 @@ def test_reopened_legacy_verification_can_reverify_but_not_reaccept_without_inve
     reopened = reopened.text_input(key="decision_reviewer").set_value(
         "  Recovery reviewer  "
     ).run()
-    reopened = reopened.text_input(key="runtime_artifact_reference").set_value(
+    artifact = runtime_key(reopened, "runtime_artifact_reference")
+    reopened = reopened.text_input(key=artifact).set_value(
         "https://example.test/runs/recovery"
     ).run()
-    reopened = reopened.text_area(key="runtime_scenario").set_value(
+    reopened = reopened.text_area(key=runtime_key(reopened, "runtime_scenario")).set_value(
         "Reverify export at the current head"
     ).run()
-    reopened = reopened.text_input(key="runtime_environment").set_value(
+    reopened = reopened.text_input(key=runtime_key(reopened, "runtime_environment")).set_value(
         "current staging"
     ).run()
-    reopened = reopened.text_input(key="runtime_result").set_value("passed").run()
-    reopened = reopened.text_input(key="runtime_reviewer").set_value(
+    reopened = reopened.text_input(key=runtime_key(reopened, "runtime_result")).set_value(
+        "passed"
+    ).run()
+    reopened = reopened.text_input(key=runtime_key(reopened, "runtime_reviewer")).set_value(
         "  Recovery reviewer  "
     ).run()
-    reopened = reopened.button(key="save_runtime_evidence").click().run()
+    reopened = reopened.button(key=runtime_key(reopened, "save_runtime_evidence")).click().run()
 
     reverified = reopened.session_state["review_state"]
     new_runtime = reverified.bundle.runtime_evidence[-1]
@@ -5434,12 +5467,20 @@ def test_reopened_legacy_verification_can_reverify_but_not_reaccept_without_inve
 
 def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value("artifact-42").run()
-    app = app.text_area(key="runtime_scenario").set_value("Fixture scenario").run()
-    app = app.text_input(key="runtime_environment").set_value("Fixture environment").run()
-    app = app.text_input(key="runtime_result").set_value("Fixture result").run()
-    app = app.text_input(key="runtime_reviewer").set_value("Fixture reviewer").run()
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
+        "artifact-42"
+    ).run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
+        "Fixture scenario"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value(
+        "Fixture environment"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("Fixture result").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value(
+        "Fixture reviewer"
+    ).run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     runtime_rows = [
         item.value.replace("\\", "") for item in app.markdown if "artifact\\-42" in item.value
@@ -5451,19 +5492,29 @@ def test_runtime_artifact_identifier_renders_as_plain_text() -> None:
 def test_runtime_record_shows_reviewer_and_limitations() -> None:
     app = analyzed_demo(new_app())
     app = (
-        app.text_input(key="runtime_artifact_reference").set_value("artifact-complete-record").run()
+        app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
+            "artifact-complete-record"
+        ).run()
     )
-    app = app.text_area(key="runtime_scenario").set_value("Controlled export scenario").run()
-    app = app.text_input(key="runtime_environment").set_value("Controlled environment").run()
-    app = app.text_input(key="runtime_result").set_value("Controlled observed result").run()
-    app = app.text_input(key="runtime_reviewer").set_value("Controlled reviewer").run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
+        "Controlled export scenario"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value(
+        "Controlled environment"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value(
+        "Controlled observed result"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value(
+        "Controlled reviewer"
+    ).run()
     app = (
-        app.text_area(key="runtime_limitations")
+        app.text_area(key=runtime_key(app, "runtime_limitations"))
         .set_value("Browser-only observation\nMobile behavior not observed")
         .run()
     )
 
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     rendered_markdown = [item.value.replace("\\", "") for item in app.markdown]
     rendered_text = [item.value for item in app.text]
@@ -5482,12 +5533,22 @@ def test_runtime_record_shows_reviewer_and_limitations() -> None:
 
 def test_runtime_record_shows_persisted_utc_timestamp() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value("artifact-timestamped").run()
-    app = app.text_area(key="runtime_scenario").set_value("Controlled timestamp scenario").run()
-    app = app.text_input(key="runtime_environment").set_value("Controlled environment").run()
-    app = app.text_input(key="runtime_result").set_value("Controlled observed result").run()
-    app = app.text_input(key="runtime_reviewer").set_value("Controlled reviewer").run()
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
+        "artifact-timestamped"
+    ).run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
+        "Controlled timestamp scenario"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value(
+        "Controlled environment"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value(
+        "Controlled observed result"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value(
+        "Controlled reviewer"
+    ).run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     review_state = app.session_state["review_state"].model_copy(deep=True)
     review_state.bundle.runtime_evidence[0].timestamp = datetime(2026, 7, 14, 12, 10, tzinfo=UTC)
@@ -5500,50 +5561,60 @@ def test_runtime_record_shows_persisted_utc_timestamp() -> None:
 
 def test_runtime_record_shows_explicit_empty_limitations_state() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "artifact-no-limitations"
     ).run()
-    app = app.text_area(key="runtime_scenario").set_value(
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
         "Controlled export scenario"
     ).run()
-    app = app.text_input(key="runtime_environment").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value(
         "Controlled environment"
     ).run()
-    app = app.text_input(key="runtime_result").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value(
         "Controlled observed result"
     ).run()
-    app = app.text_input(key="runtime_reviewer").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value(
         "Controlled reviewer"
     ).run()
 
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     assert "No limitations recorded." in [item.value for item in app.caption]
 
 
 def test_successful_runtime_evidence_save_clears_form_and_prevents_accidental_repeat() -> None:
     app = analyzed_demo(new_app())
-    app = app.text_input(key="runtime_artifact_reference").set_value(
+    app = app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
         "https://example.test/run/reset"
     ).run()
-    app = app.text_area(key="runtime_scenario").set_value("Fixture scenario").run()
-    app = app.text_input(key="runtime_environment").set_value("Fixture environment").run()
-    app = app.text_input(key="runtime_result").set_value("Fixture result").run()
-    app = app.text_input(key="runtime_reviewer").set_value("Fixture reviewer").run()
-    app = app.text_area(key="runtime_limitations").set_value("Fixture limitation").run()
-    app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()
+    app = app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
+        "Fixture scenario"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_environment")).set_value(
+        "Fixture environment"
+    ).run()
+    app = app.text_input(key=runtime_key(app, "runtime_result")).set_value("Fixture result").run()
+    app = app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value(
+        "Fixture reviewer"
+    ).run()
+    app = app.text_area(key=runtime_key(app, "runtime_limitations")).set_value(
+        "Fixture limitation"
+    ).run()
+    app = app.selectbox(key=runtime_key(app, "runtime_evidence_level")).set_value(
+        EvidenceLevel.E4
+    ).run()
 
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     assert len(app.session_state["review_state"].bundle.runtime_evidence) == 1
-    assert app.text_input(key="runtime_artifact_reference").value == ""
-    assert app.text_area(key="runtime_scenario").value == ""
-    assert app.text_input(key="runtime_environment").value == ""
-    assert app.text_input(key="runtime_result").value == ""
-    assert app.text_input(key="runtime_reviewer").value == ""
-    assert app.text_area(key="runtime_limitations").value == ""
-    assert app.selectbox(key="runtime_evidence_level").value is EvidenceLevel.E3
-    assert app.button(key="save_runtime_evidence").disabled is True
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == ""
+    assert app.text_area(key=runtime_key(app, "runtime_scenario")).value == ""
+    assert app.text_input(key=runtime_key(app, "runtime_environment")).value == ""
+    assert app.text_input(key=runtime_key(app, "runtime_result")).value == ""
+    assert app.text_input(key=runtime_key(app, "runtime_reviewer")).value == ""
+    assert app.text_area(key=runtime_key(app, "runtime_limitations")).value == ""
+    assert app.selectbox(key=runtime_key(app, "runtime_evidence_level")).value is EvidenceLevel.E3
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled is True
     assert "External verification and reviewer decision recorded together." in [
         item.value for item in app.success
     ]

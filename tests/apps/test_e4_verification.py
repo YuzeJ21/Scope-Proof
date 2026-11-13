@@ -1,6 +1,10 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+import streamlit as st
+from streamlit.proto.WidgetStates_pb2 import WidgetStates
+from streamlit.runtime.state.session_state_proxy import SessionStateProxy
 from streamlit.testing.v1 import AppTest
 
 from scopeproof_core.gates.evaluator import evaluate_gate
@@ -17,7 +21,7 @@ from scopeproof_core.schemas.models import (
 from scopeproof_core.storage.json_store import JsonReviewStore
 from tests.apps.test_cli_evidence_level_reopen import _save_cli_review
 from tests.apps.test_source_attachment import reopen
-from tests.apps.test_streamlit_app import _criterion_card, _criterion_detail_evidence
+from tests.apps.test_streamlit_app import _criterion_card, _criterion_detail_evidence, runtime_key
 from tests.reviews.test_runtime_evidence_level import _previous_policy_record, _review_requiring
 
 
@@ -37,12 +41,129 @@ def _e4_actions(app: AppTest) -> list[str]:
 
 
 def _fill_external_verification(app: AppTest) -> AppTest:
-    app.text_input(key="runtime_artifact_reference").set_value("fixture-run")
-    app.text_area(key="runtime_scenario").set_value("Export CSV")
-    app.text_input(key="runtime_environment").set_value("Controlled fixture environment")
-    app.text_input(key="runtime_result").set_value("Exported data matched expectations")
-    app.text_input(key="runtime_reviewer").set_value("Fixture reviewer")
+    app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value("fixture-run")
+    app.text_area(key=runtime_key(app, "runtime_scenario")).set_value("Export CSV")
+    app.text_input(key=runtime_key(app, "runtime_environment")).set_value(
+        "Controlled fixture environment"
+    )
+    app.text_input(key=runtime_key(app, "runtime_result")).set_value(
+        "Exported data matched expectations"
+    )
+    app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("Fixture reviewer")
     return app.run()
+
+
+def _verification_payload(app: AppTest) -> WidgetStates:
+    save = app.button(key=runtime_key(app, "save_runtime_evidence")).click()
+    runtime_ids = {
+        widget.id for widget in [*app.text_input, *app.text_area, *app.selectbox]
+        if widget.key and widget.key.startswith("runtime_")
+    }
+    runtime_ids.add(save.id)
+    payload = WidgetStates()
+    payload.widgets.extend(
+        widget for widget in app._tree.get_widget_states().widgets if widget.id in runtime_ids
+    )
+    return payload
+
+
+def _empty_verification_fields(app: AppTest) -> None:
+    form_id = app.session_state["runtime_verification_form_id"]
+    for widget in [*app.text_input, *app.text_area]:
+        if widget.key and widget.key.endswith(form_id):
+            widget.set_value("")
+    app.selectbox(key=runtime_key(app, "runtime_evidence_level")).set_value(EvidenceLevel.E3)
+
+
+def test_delayed_verification_cannot_save_against_another_criterion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = tmp_path / "reviews"
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(storage))
+    review_id, record = _save_cli_review(tmp_path / "delayed", storage, EvidenceLevel.E4)
+    store = JsonReviewStore(storage)
+    state = store.load(review_id)
+    original = record.read_bytes()
+    app = reopen(review_id).selectbox(key="selected_criterion").set_value("AC-01").run()
+    app = _fill_external_verification(app)
+    app = app.selectbox(key=runtime_key(app, "runtime_evidence_level")).set_value(
+        EvidenceLevel.E4
+    ).run()
+    payload = _verification_payload(app)
+    app.button(key=runtime_key(app, "save_runtime_evidence")).set_value(False)
+    _empty_verification_fields(app)
+    app = app.selectbox(key="selected_criterion").set_value("AC-02").run()
+    app = app._run(payload)
+
+    assert not app.exception
+    assert app.selectbox(key="selected_criterion").value == "AC-02"
+    assert app.session_state["review_state"] == state
+    assert store.load(review_id) == state
+    assert record.read_bytes() == original
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == ""
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled
+    app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
+    app = app._run(payload)
+    assert app.selectbox(key="selected_criterion").value == "AC-01"
+    assert app.session_state["review_state"] == state
+    assert record.read_bytes() == original
+
+
+@pytest.mark.parametrize("transition", ["clear", "reopen", "save", "interrupted_save"])
+def test_retired_verification_submission_cannot_write_on_same_criterion(
+    transition: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = tmp_path / "reviews"
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(storage))
+    review_id, record = _save_cli_review(tmp_path / "replay", storage, EvidenceLevel.E3)
+    store = JsonReviewStore(storage)
+    original = store.load(review_id)
+    app = reopen(review_id).selectbox(key="selected_criterion").set_value("AC-01").run()
+    app = _fill_external_verification(app)
+    payload = _verification_payload(app)
+    save = app.button(key=runtime_key(app, "save_runtime_evidence"))
+    if transition in {"clear", "reopen"}:
+        save.set_value(False)
+        if transition == "clear":
+            app = app.button(key="clear_criterion_detail_drafts").click().run()
+        else:
+            # Return to a clean form first so the ordinary reopen action is available.
+            _empty_verification_fields(app)
+            app = app.run().button(key="reopen_review").click().run()
+            app = app.selectbox(key="selected_criterion").set_value("AC-01").run()
+    elif transition == "interrupted_save":
+        set_state = SessionStateProxy.__setitem__
+        interrupted = False
+
+        def interrupt_after_append(proxy, key, value):
+            nonlocal interrupted
+            set_state(proxy, key, value)
+            if key == "review_state" and value.bundle.runtime_evidence and not interrupted:
+                interrupted = True
+                st.rerun()
+
+        with patch.object(SessionStateProxy, "__setitem__", interrupt_after_append):
+            app = save.run()
+        assert interrupted
+    else:
+        app = save.run()
+
+    expected = store.load(review_id)
+    if transition in {"clear", "reopen"}:
+        assert expected == original
+    else:
+        evidence, = expected.bundle.runtime_evidence
+        event, = expected.resolution_events
+        assert evidence.criterion_id == event.criterion_id == "AC-01"
+        assert event.runtime_evidence_id == evidence.runtime_evidence_id
+    saved_bytes = record.read_bytes()
+    app = app._run(payload)
+    assert not app.exception
+    assert app.selectbox(key="selected_criterion").value == "AC-01"
+    assert app.session_state["review_state"] == expected
+    assert record.read_bytes() == saved_bytes
+    assert app.text_input(key=runtime_key(app, "runtime_artifact_reference")).value == ""
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled
 
 
 def test_e4_guidance_preserves_partial_ingestion_recovery() -> None:
@@ -105,8 +226,8 @@ def test_reopened_e4_criterion_rejects_e3_but_accepts_explicit_e4(
     assert all("Record optional external verification (E3/E4)" in action for action in actions)
 
     app = _fill_external_verification(app)
-    assert app.selectbox(key="runtime_evidence_level").value is EvidenceLevel.E3
-    button = app.button(key="save_runtime_evidence")
+    assert app.selectbox(key=runtime_key(app, "runtime_evidence_level")).value is EvidenceLevel.E3
+    button = app.button(key=runtime_key(app, "save_runtime_evidence"))
     # Send a click that was queued before the disabled state reached the client.
     button.proto.disabled = False
     app = button.click().run()
@@ -115,7 +236,7 @@ def test_reopened_e4_criterion_rejects_e3_but_accepts_explicit_e4(
     assert app.session_state["review_state"] == before
     assert store.load(review_id) == before
     assert record.read_bytes() == before_bytes
-    assert app.button(key="save_runtime_evidence").disabled
+    assert app.button(key=runtime_key(app, "save_runtime_evidence")).disabled
     assert app.button(key="record_final_acceptance").disabled
     assert any(
         "This criterion requires E4. Select E4 only when you have explicit human acceptance "
@@ -123,9 +244,11 @@ def test_reopened_e4_criterion_rejects_e3_but_accepts_explicit_e4(
         for item in [*app.caption, *app.warning, *app.info]
     )
 
-    app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()
-    assert not app.button(key="save_runtime_evidence").disabled
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.selectbox(key=runtime_key(app, "runtime_evidence_level")).set_value(
+        EvidenceLevel.E4
+    ).run()
+    assert not app.button(key=runtime_key(app, "save_runtime_evidence")).disabled
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     assert not app.exception
     after = store.load(review_id)
@@ -255,8 +378,10 @@ def test_reopened_linked_e3_record_is_retained_and_requires_e4_for_acceptance(
         )
 
     app = _fill_external_verification(app)
-    app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()
-    app = app.button(key="save_runtime_evidence").click().run()
+    app = app.selectbox(key=runtime_key(app, "runtime_evidence_level")).set_value(
+        EvidenceLevel.E4
+    ).run()
+    app = app.button(key=runtime_key(app, "save_runtime_evidence")).click().run()
 
     assert not app.exception
     after = store.load(review_id)

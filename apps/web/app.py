@@ -380,6 +380,7 @@ def _reset_analysis() -> None:
     clear_saved_comparison_selection()
     clear_historical_analysis_selection()
     reset_scope_file_selection()
+    _clear_runtime_evidence_draft()
     st.session_state["criteria_confirmed"] = False
     st.session_state["bundle"] = None
     st.session_state["resolutions"] = []
@@ -785,6 +786,7 @@ def _hydrate_reopened_review(state: ReviewState) -> None:
     clear_source_attachment()
     clear_saved_comparison_selection()
     clear_historical_analysis_selection()
+    _clear_runtime_evidence_draft()
     st.session_state["snapshot"] = None
     st.session_state["staged_requirements_pr"] = None
     st.session_state["criteria"] = state.criteria_revision.criteria
@@ -1091,18 +1093,39 @@ def _junit_audit_draft_pending() -> bool:
     return junit_withdrawal_draft_pending() or junit_correction_draft_pending()
 
 
+RUNTIME_TEXT_FIELDS = (
+    "runtime_artifact_reference",
+    "runtime_scenario",
+    "runtime_environment",
+    "runtime_result",
+    "runtime_reviewer",
+    "runtime_limitations",
+)
+
+
+def _runtime_widget_key(field: str, form_id: str) -> str:
+    return f"{field}_{form_id}"
+
+
+def _runtime_draft_pending() -> bool:
+    form_id = st.session_state.get("runtime_verification_form_id")
+    if form_id is None:
+        return False
+    return any(
+        st.session_state.get(_runtime_widget_key(field, form_id), "")
+        for field in RUNTIME_TEXT_FIELDS
+    ) or (
+        st.session_state.get(
+            _runtime_widget_key("runtime_evidence_level", form_id), EvidenceLevel.E3,
+        )
+        != EvidenceLevel.E3
+    )
+
+
 def _criterion_detail_draft_pending(
     *, include_selected_reference: bool = True, include_junit_withdrawal: bool = True,
     include_junit_correction: bool = True,
 ) -> bool:
-    runtime_text_keys = (
-        "runtime_artifact_reference",
-        "runtime_scenario",
-        "runtime_environment",
-        "runtime_result",
-        "runtime_reviewer",
-        "runtime_limitations",
-    )
     junit_pending = bool(
         st.session_state.get(_junit_artifact_upload_key())
         or str(st.session_state.get("junit_importer", "")).strip()
@@ -1113,11 +1136,9 @@ def _criterion_detail_draft_pending(
     selected_pending = include_selected_reference and selected_reference_draft_pending()
     withdrawal_pending = include_junit_withdrawal and junit_withdrawal_draft_pending()
     correction_pending = include_junit_correction and junit_correction_draft_pending()
-    return selected_pending or junit_pending or withdrawal_pending or correction_pending or any(
-        bool(str(st.session_state.get(key, ""))) for key in runtime_text_keys
-    ) or (
-        st.session_state.get("runtime_evidence_level", EvidenceLevel.E3)
-        != EvidenceLevel.E3
+    return (
+        selected_pending or junit_pending or withdrawal_pending or correction_pending
+        or _runtime_draft_pending()
     ) or (
         st.session_state.get("resolution_decision") is not None
         or bool(str(st.session_state.get("resolution_note", "")))
@@ -1126,17 +1147,8 @@ def _criterion_detail_draft_pending(
 
 
 def _clear_runtime_evidence_draft() -> None:
-    runtime_text_keys = (
-        "runtime_artifact_reference",
-        "runtime_scenario",
-        "runtime_environment",
-        "runtime_result",
-        "runtime_reviewer",
-        "runtime_limitations",
-    )
-    for key in runtime_text_keys:
-        st.session_state[key] = ""
-    st.session_state["runtime_evidence_level"] = EvidenceLevel.E3
+    # A retired widget payload must never populate a later form, even on the same criterion.
+    st.session_state["runtime_verification_form_id"] = str(uuid4())
 
 
 def _clear_resolution_draft() -> None:
@@ -1274,8 +1286,6 @@ if st.session_state["delete_saved_review_reset_pending"]:
     st.session_state["delete_saved_review_reset_pending"] = False
     st.session_state["saved_reopen_review_id"] = None
     clear_saved_delete_confirmation()
-if st.session_state.pop("runtime_evidence_form_reset_pending", False):
-    _clear_runtime_evidence_draft()
 if st.session_state.pop("selected_reference_form_reset_pending", False):
     clear_selected_reference_draft()
 if st.session_state.pop("junit_import_form_reset_pending", False):
@@ -1312,6 +1322,16 @@ else:
     review_store_available = True
 
 current_review_state: ReviewState | None = st.session_state["review_state"]
+runtime_form_id = st.session_state.get("runtime_verification_form_id")
+if runtime_form_id is None or (
+    current_review_state is not None and current_review_state.bundle is not None
+    and any(
+        item.runtime_evidence_id == runtime_form_id
+        for item in current_review_state.bundle.runtime_evidence
+    )
+):
+    # A rerun may interrupt Save after the record has been appended in session.
+    _clear_runtime_evidence_draft()
 acceptance_note_context = st.session_state.get("final_acceptance_note_context")
 has_pending_acceptance_note = acceptance_note_context is not None
 acceptance_note_expired = has_pending_acceptance_note and (
@@ -2443,6 +2463,7 @@ if st.button("Run deterministic analysis", key="run_analysis", disabled=analysis
             st.session_state["review_save_conflict"] = False
             st.session_state["deleted_review_save_fingerprint"] = None
         clear_source_attachment()
+        _clear_runtime_evidence_draft()
         st.session_state["review_state"] = state
         st.session_state["bundle"] = state.bundle
         st.session_state["source_reload_notice"] = None
@@ -3386,6 +3407,8 @@ else:
             EXTERNAL_VERIFICATION_LABEL,
             expanded=False,
         ):
+            runtime_form_id = st.session_state["runtime_verification_form_id"]
+            runtime_key = partial(_runtime_widget_key, form_id=runtime_form_id)
             st.caption(
                 "Record a human-supplied observation only. ScopeProof does not run PR code or "
                 "infer runtime results. Saving records runtime evidence and its "
@@ -3396,20 +3419,28 @@ else:
                 "Runtime evidence identity is bound automatically to the active review."
             )
             runtime_artifact = st.text_input(
-                "Artifact or URL (required)", key="runtime_artifact_reference"
+                "Artifact or URL (required)", key=runtime_key("runtime_artifact_reference"),
             )
-            runtime_scenario = st.text_area("Runtime scenario (required)", key="runtime_scenario")
-            runtime_environment = st.text_input("Environment (required)", key="runtime_environment")
-            runtime_result = st.text_input("Observed result (required)", key="runtime_result")
-            runtime_reviewer = st.text_input("Runtime reviewer (required)", key="runtime_reviewer")
+            runtime_scenario = st.text_area(
+                "Runtime scenario (required)", key=runtime_key("runtime_scenario"),
+            )
+            runtime_environment = st.text_input(
+                "Environment (required)", key=runtime_key("runtime_environment"),
+            )
+            runtime_result = st.text_input(
+                "Observed result (required)", key=runtime_key("runtime_result"),
+            )
+            runtime_reviewer = st.text_input(
+                "Runtime reviewer (required)", key=runtime_key("runtime_reviewer"),
+            )
             normalized_runtime_reviewer = runtime_reviewer.strip()
             runtime_limitations = st.text_area(
-                "Runtime limitations (optional)", key="runtime_limitations"
+                "Runtime limitations (optional)", key=runtime_key("runtime_limitations"),
             )
             runtime_level = st.selectbox(
                 "Runtime evidence level",
                 options=[EvidenceLevel.E3, EvidenceLevel.E4],
-                key="runtime_evidence_level",
+                key=runtime_key("runtime_evidence_level"),
             )
             st.caption(
                 "E3 means manually recorded external runtime verification. "
@@ -3445,7 +3476,7 @@ else:
                 )
             if st.button(
                 "Save external verification",
-                key="save_runtime_evidence",
+                key=runtime_key("save_runtime_evidence"),
                 disabled=(
                     not runtime_evidence_ready
                     or source_observation_conflict
@@ -3458,9 +3489,8 @@ else:
                     st.error("Run analysis before recording external verification.")
                 else:
                     try:
-                        runtime_evidence_id = str(uuid4())
                         runtime_evidence = RuntimeEvidence(
-                            runtime_evidence_id=runtime_evidence_id,
+                            runtime_evidence_id=runtime_form_id,
                             repository=review_state.review.repository,
                             pr_number=review_state.review.pr_number,
                             head_sha=review_state.review.head_sha,
@@ -3482,7 +3512,7 @@ else:
                             decision=HumanDecision.MANUALLY_VERIFIED,
                             comment=f"Externally observed result: {runtime_result.strip()}",
                             claimed_evidence_level=runtime_level,
-                            runtime_evidence_id=runtime_evidence_id,
+                            runtime_evidence_id=runtime_form_id,
                             reviewer=normalized_runtime_reviewer,
                         )
                         review_state = append_external_verification(
@@ -3491,7 +3521,7 @@ else:
                         st.session_state["review_state"] = review_state
                         st.session_state["bundle"] = review_state.bundle
                         bundle = review_state.bundle
-                        st.session_state["runtime_evidence_form_reset_pending"] = True
+                        _clear_runtime_evidence_draft()
                         st.session_state["runtime_evidence_save_notice"] = (
                             "External verification and reviewer decision recorded together."
                         )

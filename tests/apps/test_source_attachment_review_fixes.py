@@ -13,7 +13,7 @@ from scopeproof_core.schemas.models import CheckState, CIObservation, HumanDecis
 from scopeproof_core.storage.json_store import JsonReviewStore, default_local_review_directory
 from tests.apps.test_source_attachment import load_matching, reopen, saved_reference
 from tests.apps.test_source_attachment_safety import queued_export, simulated_live_saved_source
-from tests.apps.test_streamlit_app import analyzed_demo, new_app
+from tests.apps.test_streamlit_app import analyzed_demo, new_app, runtime_key
 
 
 @pytest.mark.parametrize(
@@ -110,16 +110,29 @@ def _stage_criterion_save(app, save_key):
         app.selectbox(key="resolution_decision").set_value(HumanDecision.CHANGE_REQUIRED)
         app.text_area(key="resolution_note").set_value("Constructed reviewer decision")
     else:
-        app.text_input(key="runtime_artifact_reference").set_value("constructed-run")
-        app.text_area(key="runtime_scenario").set_value("Export configured columns")
-        app.text_input(key="runtime_environment").set_value("Controlled environment")
-        app.text_input(key="runtime_result").set_value("Observed exported columns")
-        app.text_input(key="runtime_reviewer").set_value("Constructed reviewer")
+        app.text_input(key=runtime_key(app, "runtime_artifact_reference")).set_value(
+            "constructed-run"
+        )
+        app.text_area(key=runtime_key(app, "runtime_scenario")).set_value(
+            "Export configured columns"
+        )
+        app.text_input(key=runtime_key(app, "runtime_environment")).set_value(
+            "Controlled environment"
+        )
+        app.text_input(key=runtime_key(app, "runtime_result")).set_value(
+            "Observed exported columns"
+        )
+        app.text_input(key=runtime_key(app, "runtime_reviewer")).set_value("Constructed reviewer")
     return app.run()
 
 
+def _criterion_save_button(app, save_key):
+    key = runtime_key(app, save_key) if save_key == "save_runtime_evidence" else save_key
+    return app.button(key=key)
+
+
 def _submit_stale_save_click(app, save_key):
-    button = app.button(key=save_key)
+    button = _criterion_save_button(app, save_key)
     # Model a click queued by a client before it received the new disabled state.
     button.proto.disabled = False
     return button.click().run()
@@ -138,7 +151,7 @@ def test_observed_source_conflict_rejects_criterion_save_without_mutation(save_k
     assert not app.session_state["source_authority_guard"].allows(state)
 
     app = _stage_criterion_save(app, save_key)
-    assert app.button(key=save_key).disabled
+    assert _criterion_save_button(app, save_key).disabled
     app = _submit_stale_save_click(app, save_key)
 
     assert not app.exception
@@ -146,7 +159,7 @@ def test_observed_source_conflict_rejects_criterion_save_without_mutation(save_k
     assert app.session_state["bundle"] == state.bundle
     assert path.read_bytes() == before
     assert store.load(review_id) == state
-    assert app.button(key=save_key).disabled
+    assert _criterion_save_button(app, save_key).disabled
 
     app = app.button(key="clear_criterion_detail_drafts").click().run()
     assert not app.session_state["source_authority_guard"].allows(state)
@@ -156,8 +169,8 @@ def test_observed_source_conflict_rejects_criterion_save_without_mutation(save_k
     assert path.read_bytes() == before
 
     app = _stage_criterion_save(app, save_key)
-    assert not app.button(key=save_key).disabled
-    app = app.button(key=save_key).click().run()
+    assert not _criterion_save_button(app, save_key).disabled
+    app = _criterion_save_button(app, save_key).click().run()
     assert not app.exception
     after = app.session_state["review_state"]
     assert len(after.resolution_events) == 1
