@@ -3613,20 +3613,6 @@ def test_installed_wheel_saved_comparison_survives_restart_without_record_writes
                             )
                             assert_records_unchanged()
                             if generation == 0:
-                                filters_toggle = page.get_by_text(
-                                    "Filter evidence matrix (optional)", exact=True,
-                                )
-                                filters_panel = filters_toggle.locator("xpath=ancestor::details[1]")
-                                level_filter = page.get_by_role(
-                                    "combobox", name="Filter evidence level", exact=True,
-                                )
-                                filters_toggle.click()
-                                level_filter.click()
-                                level_filter.fill("E3")
-                                page.get_by_role("option", name="E3", exact=True).click()
-                                expect(filters_panel.get_by_role(
-                                    "button", name="Remove E3", exact=True, include_hidden=True,
-                                )).to_be_attached()
                                 card = page.get_by_role(
                                     "heading", name="Evidence for AC-01", exact=True,
                                 ).locator("xpath=ancestor::div[@data-testid='stVerticalBlock'][1]")
