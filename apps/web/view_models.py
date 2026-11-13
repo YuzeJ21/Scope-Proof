@@ -8,6 +8,8 @@ from scopeproof_core.schemas.models import (
     EvidenceItem,
     EvidenceLevel,
     EvidenceType,
+    HumanDecision,
+    HumanResolution,
     IngestionState,
     ReviewBundle,
 )
@@ -28,23 +30,29 @@ def criterion_next_actions(
     ):
         return actions
 
-    e3_ids = {
-        criterion.criterion_id
-        for criterion in bundle.criteria
-        if criterion.required_evidence_level is EvidenceLevel.E3
+    required_levels = {
+        criterion.criterion_id: criterion.required_evidence_level for criterion in bundle.criteria
     }
     # The bundle validates this link at the reviewed head. Legacy observations can
     # have migrated IDs while their decisions still require fresh verification.
-    verified_ids = {
-        resolution.criterion_id
-        for resolution in bundle.resolutions
-        if resolution.runtime_evidence_id is not None
-    }
+    resolutions = {resolution.criterion_id: resolution for resolution in bundle.resolutions}
     for finding in bundle.findings:
         criterion_id = finding.criterion_id
-        if criterion_id not in e3_ids or finding.evidence_level.rank >= EvidenceLevel.E3.rank:
+        required_level = required_levels[criterion_id]
+        resolution = resolutions.get(criterion_id)
+        if required_level is EvidenceLevel.E4:
+            actions[criterion_id] = _e4_next_action(
+                resolution,
+                final_acceptance=review.final_acceptance,
+                can_record=suggest_external_verification,
+            )
             continue
-        if criterion_id in verified_ids:
+        if (
+            required_level is not EvidenceLevel.E3
+            or finding.evidence_level.rank >= EvidenceLevel.E3.rank
+        ):
+            continue
+        if resolution is not None and resolution.runtime_evidence_id is not None:
             actions[criterion_id] = "Review the recorded external verification for this criterion."
         elif suggest_external_verification and not review.final_acceptance:
             actions[criterion_id] = (
@@ -52,6 +60,31 @@ def criterion_next_actions(
                 f"open {EXTERNAL_VERIFICATION_LABEL} and record them at E3 for this criterion."
             )
     return actions
+
+
+def _e4_next_action(
+    resolution: HumanResolution | None, *, final_acceptance: bool, can_record: bool,
+) -> str:
+    linked_level = (
+        resolution.claimed_evidence_level
+        if resolution is not None and resolution.runtime_evidence_id is not None else None
+    )
+    if linked_level is EvidenceLevel.E4:
+        return "Review the recorded E4 verification for this criterion."
+    context = (
+        f"Recorded {linked_level.value} verification is below the E4 requirement. "
+        if linked_level is not None else "No current linked E4 verification is recorded. "
+    )
+    if not can_record:
+        return context + "Follow the workbench recovery guidance before recording E4 verification."
+    if final_acceptance:
+        if resolution is not None and resolution.decision is HumanDecision.MANUALLY_VERIFIED:
+            return context + "Revoke final acceptance before replacing manual verification."
+        return context + "Review the recorded criterion decision and final acceptance."
+    return (
+        context + "If you have explicit human acceptance for the reviewed PR head, open "
+        f"{EXTERNAL_VERIFICATION_LABEL} and record it at E4 for this criterion."
+    )
 
 
 @dataclass(frozen=True)

@@ -10,12 +10,30 @@ from scopeproof_core.schemas.models import (
     EvidenceLevel,
     GateVerdict,
     HumanDecision,
+    IngestionState,
     ResolutionEvent,
     RuntimeEvidence,
 )
 from scopeproof_core.storage.json_store import JsonReviewStore
 from tests.apps.test_cli_evidence_level_reopen import _save_cli_review
 from tests.apps.test_source_attachment import reopen
+from tests.apps.test_streamlit_app import _criterion_card, _criterion_detail_evidence
+from tests.reviews.test_runtime_evidence_level import _previous_policy_record, _review_requiring
+
+
+def _e4_actions(app: AppTest) -> list[str]:
+    evidence = list(_criterion_detail_evidence(app))
+    heading = next(
+        index for index, item in enumerate(evidence)
+        if item.type == "markdown" and item.value == "**Recommended next action**"
+    )
+    actions = [
+        evidence[heading + 1].value,
+        _criterion_card(app, "inspect_matrix_AC-01").code[0].value,
+    ]
+    if any(button.key == "inspect_queue_AC-01" for button in app.button):
+        actions.append(_criterion_card(app, "inspect_queue_AC-01").text[-1].value)
+    return actions
 
 
 def _fill_external_verification(app: AppTest) -> AppTest:
@@ -25,6 +43,42 @@ def _fill_external_verification(app: AppTest) -> AppTest:
     app.text_input(key="runtime_result").set_value("Exported data matched expectations")
     app.text_input(key="runtime_reviewer").set_value("Fixture reviewer")
     return app.run()
+
+
+def test_e4_guidance_preserves_partial_ingestion_recovery() -> None:
+    from apps.web.view_models import criterion_next_actions
+
+    state = _review_requiring(EvidenceLevel.E4)
+    assert state.bundle is not None
+    bundle = state.bundle
+    bundle.review.ingestion_state = IngestionState.PARTIAL
+    bundle.review.skipped_files = ["constructed/skipped.py"]
+    bundle.findings[0].recommended_action = "Review skipped content before deciding."
+    assert criterion_next_actions(bundle, suggest_external_verification=True) == {
+        "AC-01": "Review skipped content before deciding.",
+    }
+
+
+def test_e4_guidance_prioritizes_source_recovery_over_recording(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = tmp_path / "reviews"
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(storage))
+    state = _previous_policy_record(accepted=True)
+    record = JsonReviewStore(storage).save(state)
+    before = record.read_bytes()
+    app = reopen(state.review.review_id)
+    app.session_state["source_authority_guard"].block(state)
+    app = app.run()
+
+    assert not app.exception
+    actions = _e4_actions(app)
+    assert len(actions) == 2
+    assert all("workbench recovery guidance" in action for action in actions)
+    assert all("Revoke final acceptance" not in action for action in actions)
+    assert all("Record optional external verification" not in action for action in actions)
+    assert "**Decision status: Refresh required**" in [item.value for item in app.markdown]
+    assert record.read_bytes() == before
 
 
 def test_reopened_e4_criterion_rejects_e3_but_accepts_explicit_e4(
@@ -45,6 +99,10 @@ def test_reopened_e4_criterion_rejects_e3_but_accepts_explicit_e4(
     assert before.bundle.criteria[0].required_evidence_level is EvidenceLevel.E4
     assert [resolution.criterion_id for resolution in before.bundle.resolutions] == ["AC-02"]
     assert not can_record_final_acceptance(before)
+    actions = _e4_actions(app)
+    assert len(actions) == 3
+    assert all("explicit human acceptance for the reviewed PR head" in action for action in actions)
+    assert all("Record optional external verification (E3/E4)" in action for action in actions)
 
     app = _fill_external_verification(app)
     assert app.selectbox(key="runtime_evidence_level").value is EvidenceLevel.E3
@@ -83,6 +141,7 @@ def test_reopened_e4_criterion_rejects_e3_but_accepts_explicit_e4(
     assert can_record_final_acceptance(after)
     assert not app.button(key="record_final_acceptance").disabled
     assert after.review.final_acceptance is False
+    assert all("Review the recorded E4 verification" in action for action in _e4_actions(app))
 
 
 @pytest.mark.parametrize("recorded_acceptance", [False, True], ids=["pending", "recorded"])
@@ -152,7 +211,12 @@ def test_reopened_linked_e3_record_is_retained_and_requires_e4_for_acceptance(
     assert not app.exception
     assert app.session_state["review_state"] == legacy
     assert record.read_bytes() == original_bytes
+    actions = _e4_actions(app)
+    assert all(
+        "Recorded E3 verification is below the E4 requirement" in action for action in actions
+    ), actions
     if recorded_acceptance:
+        assert all("Revoke final acceptance" in action for action in actions)
         assert legacy.bundle.gate.verdict is GateVerdict.READY
         assert "**Recorded verdict: Review complete**" in [item.value for item in app.markdown]
         assert "**Recorded review status: Review complete**" in [
@@ -160,6 +224,7 @@ def test_reopened_linked_e3_record_is_retained_and_requires_e4_for_acceptance(
         ]
         assert not app.button(key="revoke_final_acceptance").disabled
     else:
+        assert all("Record optional external verification (E3/E4)" in action for action in actions)
         assert app.button(key="record_final_acceptance").disabled
         assert not can_record_final_acceptance(legacy)
         assert not any(
@@ -184,6 +249,10 @@ def test_reopened_linked_e3_record_is_retained_and_requires_e4_for_acceptance(
         assert not app.exception
         assert not store.load(review_id).review.final_acceptance
         assert app.button(key="record_final_acceptance").disabled
+        assert all(
+            "Record optional external verification (E3/E4)" in action
+            for action in _e4_actions(app)
+        )
 
     app = _fill_external_verification(app)
     app = app.selectbox(key="runtime_evidence_level").set_value(EvidenceLevel.E4).run()

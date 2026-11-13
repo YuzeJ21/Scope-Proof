@@ -29,6 +29,7 @@ The default public evaluation download is still v0.2.7.
 | Stage 2 — source fix | Find recorded E3 and E4 verification in the evidence matrix. | Match the exact candidate or current linked verification level, display them separately, and flag earlier verification below the confirmed requirement. |
 | Stage 2 — source fix | Keep a pending scope decision with the file it describes. | Require an explicit save or discard before selecting a different file. Keep diff paging available and reject stale selector requests without moving the draft or unpausing current downloads. |
 | Stage 2 — source fix | Share the saved revision and history shown in the workbench. | Bind preparation to displayed saved details, require refresh and reselection after a change, and expire earlier controls when the selection changes. Preserve direct-ID transfer and exact saved bytes. |
+| Stage 2 — source fix | See the next action for an E4 criterion wherever it is reviewed. | Point missing E4 to explicit human acceptance for the reviewed commit, distinguish current linked E4 from older below-level verification, and respect read-only and final-acceptance states. |
 | Evaluation distribution | Keep v0.2.7 available while these fixes accumulate on source. | A new version requires a separately authorized build and public-download verification. |
 | Stage 3 — gated | Establish whether independent practitioners can complete and repeat the review workflow. | Genuine independent use and a separate owner decision. Automated checks count as engineering evidence. |
 
