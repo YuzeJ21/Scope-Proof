@@ -233,6 +233,21 @@ def test_stale_prepare_click_cannot_follow_a_new_saved_selection():
     assert preview.receipt.review_id == other.review.review_id
 
 
+def test_id_only_download_survives_unrelated_inventory_change():
+    state, other = saved_comparison_states()
+    store = JsonReviewStore(default_local_review_directory())
+    path = store.save(state)
+    app = new_app().checkbox(key="saved_discovery_direct_id").check().run()
+    app = app.text_input(key="reopen_review_id").set_value(state.review.review_id).run()
+    app = prepare_download(app).click().run()
+    lease = app.session_state["transfer_download_lease"]
+    download = deferred_record_download(store, lease)
+    store.save(other)
+    app = app.run()
+    assert app.session_state["transfer_download_lease"] is lease
+    assert download() == path.read_bytes()
+
+
 def test_refresh_revokes_download_before_loading_saved_details(monkeypatch):
     from apps.web import saved_discovery
 

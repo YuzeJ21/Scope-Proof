@@ -65,13 +65,14 @@ def render_saved_discovery(
     """Default to IDs; load and search only an explicitly requested ten-record page."""
     inventory = saved_review_ids_fingerprint(saved_review_ids)
     previous = st.session_state.get("saved_discovery_inventory")
+    selected_id = st.session_state.get("saved_reopen_review_id")
     if previous is not None and previous != inventory:
         if st.session_state.get("saved_discovery_loaded_page") is not None:
             _page_changed()
             st.info(
                 "Saved record inventory changed. Select a review again; reload details if needed."
             )
-        elif st.session_state.get("saved_reopen_review_id") not in saved_review_ids:
+        elif selected_id is not None and selected_id not in saved_review_ids:
             saved_review_target_changed()
             st.session_state["saved_reopen_review_id"] = None
     st.session_state["saved_discovery_inventory"] = inventory
