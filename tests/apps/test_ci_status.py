@@ -5,6 +5,7 @@ import json
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from scopeproof_core.reviews.ci_status import MAX_CI_STATUS_BYTES
 from scopeproof_core.schemas.models import normalized_criteria_sha256
 from tests.junit_audit_fixture import junit_audit_state
 
@@ -89,15 +90,20 @@ def test_ci_display_uses_current_manifest_and_shows_explicit_run_source(
                for node in app.markdown)
 
 
-@pytest.mark.parametrize("failure", ["malformed", "different_criteria"])
+@pytest.mark.parametrize("failure", ["malformed", "different_criteria", "over_limit"])
 def test_invalid_upload_leaves_all_statuses_unknown(
     failure: str, manifest_payload: dict,
 ) -> None:
     app = AppTest.from_function(_panel).run()
     app = _upload(app, json.dumps(manifest_payload).encode())
     assert _statuses(app)[0]["CI status"] == "Failed"
-    manifest_payload["criteria_sha256"] = "f" * 64
-    bad_payload = b"{" if failure == "malformed" else json.dumps(manifest_payload).encode()
+    if failure == "malformed":
+        bad_payload = b"{"
+    elif failure == "different_criteria":
+        manifest_payload["criteria_sha256"] = "f" * 64
+        bad_payload = json.dumps(manifest_payload).encode()
+    else:
+        bad_payload = json.dumps(manifest_payload).encode().ljust(MAX_CI_STATUS_BYTES + 1)
     app = _upload(app, bad_payload)
     assert [row["CI status"] for row in _statuses(app)] == ["Unknown", "Unknown"]
     assert len(app.error) == 1

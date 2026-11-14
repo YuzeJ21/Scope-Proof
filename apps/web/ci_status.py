@@ -29,7 +29,9 @@ _STATUS_LABEL = {
 def render_criterion_ci_status(bundle: ReviewBundle, *, available: bool) -> None:
     """Display a session upload scoped to the confirmed criteria and reviewed commit."""
     review = bundle.review
-    with st.expander("CI status by criterion"):
+    with st.expander(
+        "CI status by criterion", key="criterion_ci_status_panel", on_change="rerun",
+    ):
         if not available:
             st.caption("Refresh this review to see CI status for its reviewed commit.")
             return

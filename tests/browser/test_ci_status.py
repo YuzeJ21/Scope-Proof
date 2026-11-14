@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page, expect, sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 from tests.browser.test_junit_withdrawal import _reopen, _seed_installed_review
 from tests.browser.test_packaged_workbench import (
@@ -14,19 +14,11 @@ from tests.browser.test_packaged_workbench import (
     _download_review_state,
     _installed_workbench_server,
     _route_loopback_only,
+    _run_and_wait_for_streamlit_rerun,
 )
 from tests.browser.test_packaged_workbench import installed_wheel as installed_wheel
 
 pytestmark = pytest.mark.browser
-
-
-def _ci_panel(page: Page):
-    panel = page.get_by_test_id("stExpander").filter(
-        has=page.get_by_text("CI status by criterion", exact=True),
-    )
-    if not panel.get_by_text("CI status manifest", exact=True).is_visible():
-        panel.get_by_text("CI status by criterion", exact=True).click()
-    return panel
 
 
 def test_installed_ci_manifest_changes_display_without_saving_review(
@@ -69,16 +61,23 @@ def test_installed_ci_manifest_changes_display_without_saving_review(
             page = context.new_page()
             with _capture_browser_failure(page, diagnostics, log_path):
                 _reopen(page, url)
-                panel = _ci_panel(page)
+                panel = page.get_by_test_id("stExpander").filter(
+                    has=page.get_by_text("CI status by criterion", exact=True),
+                )
+                panel.get_by_text("CI status by criterion", exact=True).click()
                 export_row = panel.get_by_role("row").filter(
                     has=page.get_by_role("cell", name="AC-01", exact=True),
                 )
                 access_row = panel.get_by_role("row").filter(
                     has=page.get_by_role("cell", name="AC-02", exact=True),
                 )
-                expect(export_row.get_by_role("cell", name="Unknown", exact=True)).to_be_visible()
+                expect(
+                    export_row.get_by_role("cell", name="Unknown", exact=True),
+                ).to_be_visible(timeout=20_000)
                 uploader = panel.locator("input[type=file]")
-                uploader.set_input_files(matching)
+                _run_and_wait_for_streamlit_rerun(
+                    page, lambda: uploader.set_input_files(matching),
+                )
                 expect(export_row.get_by_role("cell", name="Failed", exact=True)).to_be_visible()
                 expect(
                     access_row.get_by_role("cell", name="Explicitly skipped", exact=True),
@@ -87,7 +86,7 @@ def test_installed_ci_manifest_changes_display_without_saving_review(
                 assert _download_review_state(page) == original
                 assert record.read_bytes() == original_bytes
 
-                uploader.set_input_files(wrong)
+                _run_and_wait_for_streamlit_rerun(page, lambda: uploader.set_input_files(wrong))
                 expect(panel.get_by_text(
                     "The CI status manifest does not match this review or its confirmed criteria.",
                     exact=True,
