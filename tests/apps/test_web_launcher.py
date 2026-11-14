@@ -21,6 +21,25 @@ def load_launcher():
     return launcher
 
 
+def test_ci_handoff_requires_explicit_local_launch(tmp_path, monkeypatch) -> None:
+    launcher = load_launcher()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(launcher.CI_MANIFEST_DIR_ENV, "/unselected/manifests")
+    values = []
+
+    def fake_run(command, *, check, env):
+        values.append(env.get(launcher.CI_MANIFEST_DIR_ENV))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(launcher.subprocess, "run", fake_run)
+    assert launcher.main([]) == 0
+    assert launcher.main(["--host", "localhost", "--ci-manifest-dir", "ci manifests"]) == 0
+    assert launcher.main(["--host", "::1", "--ci-manifest-dir", "ci manifests"]) == 0
+    with pytest.raises(SystemExit, match="2"):
+        launcher.main(["--host", "0.0.0.0", "--ci-manifest-dir", "ci manifests"])
+    assert values == [None, str(tmp_path / "ci manifests"), str(tmp_path / "ci manifests")]
+
+
 def test_web_launcher_reports_shared_version_without_starting_streamlit(
     monkeypatch, capsys
 ) -> None:

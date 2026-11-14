@@ -149,6 +149,21 @@ def _criterion_status(tests: tuple[CITestStatus, ...]) -> _Status:
     return "unknown"
 
 
+def validate_ci_manifest_context(
+    bundle: ReviewBundle, manifest: CIStatusManifest, criteria_digest: str,
+) -> None:
+    """Require compatible repository, PR and confirmed criteria for a supplied manifest."""
+    review = bundle.review
+    criterion_ids = {criterion.criterion_id for criterion in bundle.criteria}
+    if (
+        manifest.repository.casefold() != review.repository.casefold()
+        or manifest.pr_number != review.pr_number
+        or manifest.criteria_sha256 != criteria_digest
+        or manifest.expected_tests.keys() - criterion_ids
+    ):
+        raise ValueError("CI status manifest does not match the confirmed review context")
+
+
 def criterion_ci_statuses(
     bundle: ReviewBundle, manifest: CIStatusManifest | None = None,
 ) -> list[CriterionCIStatus]:
@@ -161,14 +176,7 @@ def criterion_ci_statuses(
             CriterionCIStatus(criterion_id=criterion.criterion_id, status="unknown")
             for criterion in bundle.criteria
         ]
-    criterion_ids = {criterion.criterion_id for criterion in bundle.criteria}
-    if (
-        manifest.repository.casefold() != review.repository.casefold()
-        or manifest.pr_number != review.pr_number
-        or manifest.criteria_sha256 != normalized_criteria_sha256(bundle.criteria)
-        or manifest.expected_tests.keys() - criterion_ids
-    ):
-        raise ValueError("CI status manifest does not match the confirmed review context")
+    validate_ci_manifest_context(bundle, manifest, normalized_criteria_sha256(bundle.criteria))
     test_statuses = {
         test_id: _test_status(test_id, review.head_sha, manifest.runs)
         for test_id in {test_id for tests in manifest.expected_tests.values() for test_id in tests}
