@@ -5,10 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from os import getenv
+from pathlib import Path
 
 import streamlit as st
 
+from apps.web.launcher import CI_MANIFEST_DIR_ENV, is_ci_loopback_host
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
+from scopeproof_core.reviews.ci_handoff import load_exact_ci_manifest
 from scopeproof_core.reviews.ci_status import (
     EXACT_HEAD_PATTERN,
     MAX_CI_STATUS_BYTES,
@@ -53,6 +57,12 @@ def render_criterion_ci_status(bundle: ReviewBundle, *, available: bool) -> None
         st.text(f"Reviewed pull request · {review.repository} #{review.pr_number}")
         st.text(f"Reviewed commit · {review.head_sha}")
         st.text(f"Confirmed criteria SHA-256 · {criteria_digest}")
+        handoff_directory = (
+            getenv(CI_MANIFEST_DIR_ENV) if is_ci_loopback_host(st.get_option("server.address"))
+            else None
+        )
+        if handoff_directory:
+            st.button("Refresh CI status", key=f"criterion_ci_refresh_{widget_suffix}")
         uploaded = st.file_uploader(
             "CI status manifest",
             type=["json"],
@@ -69,6 +79,15 @@ def render_criterion_ci_status(bundle: ReviewBundle, *, available: bool) -> None
                     manifest = load_ci_status_manifest(uploaded.getvalue())
                 except ValueError:
                     st.error("The file does not match the CI status manifest format.")
+        elif handoff_directory:
+            try:
+                manifest = load_exact_ci_manifest(Path(handoff_directory), bundle)
+            except FileNotFoundError:
+                st.caption("No local CI manifest was found for this exact review.")
+            except (OSError, ValueError):
+                st.error("The local CI manifest could not be loaded for this exact review.")
+            else:
+                st.caption("CI source: configured local manifest.")
 
         try:
             statuses = criterion_ci_statuses(bundle, manifest)
@@ -78,6 +97,8 @@ def render_criterion_ci_status(bundle: ReviewBundle, *, available: bool) -> None
             )
             manifest = None
             statuses = criterion_ci_statuses(bundle)
+        if uploaded is not None and manifest is not None and handoff_directory:
+            st.caption("CI source: manual upload.")
         st.table(
             [
                 {"Criterion": item.criterion_id, "CI status": _STATUS_LABEL[item.status]}

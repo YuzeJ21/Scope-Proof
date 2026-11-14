@@ -23,8 +23,10 @@ from scopeproof_core.criteria.confirmation import (
     validate_criteria_source_confirmation,
 )
 from scopeproof_core.criteria.document import NormalizedCriteriaDocument
+from scopeproof_core.reviews.ci_handoff import ci_manifest_filename
 from scopeproof_core.reviews.ci_status import (
     EXACT_HEAD_PATTERN,
+    MAX_CI_STATUS_BYTES,
     CIStatusManifest,
     CIStatusRun,
     load_ci_status_manifest,
@@ -39,6 +41,12 @@ from scopeproof_core.schemas.models import (
     EvidenceLevel,
     PullRequestSnapshot,
     source_text_sha256,
+)
+from scopeproof_core.storage.atomic_files import (
+    atomic_create_text,
+    atomic_replace_text,
+    exclusive_path_claim,
+    read_text_no_follow,
 )
 
 _ACTOR = "CONSTRUCTED scripted actor"
@@ -270,16 +278,45 @@ def _review_fixture(snapshot: Path, base: str, run: SimulatedRun) -> PullRequest
     )
 
 
-def simulate(output: Path) -> None:
+def _handoff_target(directory: Path, payload: bytes) -> Path:
+    manifest = load_ci_status_manifest(payload)
+    return directory / ci_manifest_filename(
+        manifest.repository, manifest.pr_number, manifest.runs[-1].head_sha,
+        manifest.criteria_sha256,
+    )
+
+
+def _publish_handoff(directory: Path, payload: bytes, previous: bytes | None = None) -> None:
+    target = _handoff_target(directory, payload)
+    text = payload.decode("utf-8")
+    if previous is None:
+        atomic_create_text(target, text)
+        return
+    with exclusive_path_claim(target) as claim:
+        current = read_text_no_follow(
+            target, claim=claim, max_bytes=MAX_CI_STATUS_BYTES, preserve_newlines=True,
+        ).encode("utf-8")
+        if current == payload:
+            return
+        if current != previous:
+            raise ValueError("handoff file does not match the simulated initial build")
+        atomic_replace_text(target, text, claim=claim)
+
+
+def simulate(output: Path, *, include_targeted: bool = True) -> None:
     """Publish CI records and rolling ScopeProof manifests in a new directory."""
     output.mkdir()
+    output = output.resolve()
+    handoff = output / "manifests"
     confirmation = _write_confirmation(output)
     runs = []
     with TemporaryDirectory(prefix="scopeproof-constructed-ci-") as directory:
         scratch = Path(directory)
         base, heads, diff = _fixture_builds(scratch)
         (output / "build-A-to-B.diff").write_bytes(diff.encode("utf-8"))
-        for label, build, planned in _RUN_PLAN:
+        plan = _RUN_PLAN if include_targeted else _RUN_PLAN[:-1]
+        initial_b = None
+        for label, build, planned in plan:
             run = _run_checks(label, heads[build], scratch / build, planned)
             runs.append(run)
             manifest = build_manifest(runs, confirmation)
@@ -288,6 +325,9 @@ def simulate(output: Path) -> None:
             if label == build:
                 fixture = _review_fixture(scratch / build, base, run)
                 (output / f"{build}-fixture.json").write_bytes(_model_bytes(fixture))
+            _publish_handoff(handoff, manifest, initial_b if label == "B-targeted" else None)
+            if label == "B":
+                initial_b = manifest
     ticket = [
         "# EXP-17 · Constructed internal ticket",
         "",
@@ -304,12 +344,48 @@ def simulate(output: Path) -> None:
     (output / "ticket.md").write_bytes("\n".join(ticket).encode("utf-8"))
 
 
+def publish_targeted(output: Path) -> None:
+    """Replay the fixture and publish only the verified targeted update into the initial run."""
+    output = output.resolve(strict=True)
+    with TemporaryDirectory(prefix="scopeproof-targeted-ci-") as directory:
+        replay = Path(directory) / "replay"
+        simulate(replay)
+        for name in (
+            "ticket-requirements.txt", "criteria.json", "confirmation.json",
+            "A-fixture.json", "B-fixture.json", "A-ci.json", "B-ci.json",
+            "A-scopeproof-manifest.json", "B-scopeproof-manifest.json",
+        ):
+            previous = read_text_no_follow(output / name, preserve_newlines=True).encode("utf-8")
+            if previous != (replay / name).read_bytes():
+                raise ValueError(f"initial simulation artifact differs from replay: {name}")
+        for name in ("B-targeted-ci.json", "B-targeted-scopeproof-manifest.json"):
+            text = (replay / name).read_text(encoding="utf-8")
+            target = output / name
+            try:
+                atomic_create_text(target, text)
+            except FileExistsError as exc:
+                if read_text_no_follow(target, preserve_newlines=True) != text:
+                    raise ValueError(
+                        f"targeted simulation artifact differs from replay: {name}",
+                    ) from exc
+        _publish_handoff(
+            output / "manifests", (replay / "B-targeted-scopeproof-manifest.json").read_bytes(),
+            (replay / "B-scopeproof-manifest.json").read_bytes(),
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("output", type=Path, help="new directory for constructed CI artifacts")
-    output = parser.parse_args().output
-    simulate(output)
-    print(f"Constructed pipeline artifacts written to {output}")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--initial-only", action="store_true", help="run A and initial B")
+    mode.add_argument("--publish-targeted", action="store_true", help="refresh B in an initial run")
+    parser.add_argument("output", type=Path, help="directory for constructed CI artifacts")
+    args = parser.parse_args()
+    if args.publish_targeted:
+        publish_targeted(args.output)
+    else:
+        simulate(args.output, include_targeted=not args.initial_only)
+    print(f"Constructed pipeline artifacts written to {args.output}")
 
 
 if __name__ == "__main__":

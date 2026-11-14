@@ -61,8 +61,10 @@ share them only when those contents are appropriate to share. Recorded identity 
 In the development workbench, run analysis or reopen a saved analysis, then open
 **CI status by criterion** above **Summary & Export**. Use a JSON manifest from a CI source
 you trust. The panel supplies the review identity and confirmed criteria digest to match.
-The manifest remains in the workbench session. ScopeProof does not authenticate its producer,
+Manual uploads remain in the workbench session. ScopeProof does not authenticate the producer,
 retrieve the referenced runs, or use the manifest to verify criteria or make gate decisions.
+The [simulated CI pipeline](#open-simulated-ci-status-from-a-local-folder) can also hand off
+manifests through a trusted local folder when you explicitly enable it on a loopback workbench.
 
 ```json
 {
@@ -112,14 +114,25 @@ python -m scripts.simulate_ci_manifest ./simulated-ci-output
 The script creates two fixture Git commits and runs the category filter, row access, and
 CSV header checks against synthetic data. The criterion-to-test mapping is set before
 execution. The runner writes the raw CI records and validated ScopeProof manifests together
-with the ticket and source diff. A successful command means the rehearsal ran and produced its
-artifacts. The failed checks in the table are intentional fixture outcomes.
+with the ticket and source diff. It also stages exact-build manifests in `manifests/` for the
+optional local handoff. A successful command means the rehearsal ran and produced its artifacts.
+The failed checks in the table are intentional fixture outcomes.
 
 | Generated manifest | Included runs | Category filter | Row access | CSV header |
 | --- | --- | --- | --- | --- |
 | `A-scopeproof-manifest.json` | Build A | Passed | Passed | Passed |
 | `B-scopeproof-manifest.json` | Build A and initial Build B | Failed | Explicitly skipped | Passed |
 | `B-targeted-scopeproof-manifest.json` | Build A, initial Build B, and targeted Build B | Failed | Failed | Passed |
+
+### Open simulated CI status from a local folder
+
+To observe the targeted run arrive after opening B, start with a new output directory and run
+only the initial jobs. If you already used the default command, choose a different output path
+throughout this example.
+
+```sh
+python -m scripts.simulate_ci_manifest --initial-only ./simulated-ci-output
+```
 
 Create both constructed reviews in a separate local folder using the emitted fixtures and
 criteria confirmation. Use the same folder for the workbench.
@@ -133,13 +146,30 @@ for build in A B; do
     --confirmation ./simulated-ci-output/confirmation.json \
     --storage-dir ./simulated-ci-output/reviews
 done
-scopeproof-web --host 127.0.0.1 --port 8501 --storage-dir ./simulated-ci-output/reviews
+scopeproof-web --host 127.0.0.1 --port 8501 \
+  --storage-dir ./simulated-ci-output/reviews \
+  --ci-manifest-dir ./simulated-ci-output/manifests
 ```
 
-Reopen the matching A or B review and upload its generated manifest. The two B manifests use
-the same reviewed commit. The panel displays the confirmed criteria digest so you can verify
-that it matches the manifest. The example run links use `ci.example.invalid`. The runner
-executes outside the workbench and demonstrates a file handoff using synthetic CI data.
+Use a trusted local directory with a canonical path that does not traverse symbolic links.
+Reopen A or B and open **CI status by criterion**. The panel reads the matching build and confirmed
+criteria directly from the configured folder. A manual upload takes precedence while it is
+present. The folder handoff is available only on explicitly configured loopback workbenches.
+
+With B open, publish the targeted run from a second terminal.
+
+```sh
+python -m scripts.simulate_ci_manifest --publish-targeted ./simulated-ci-output
+```
+
+The runner rechecks the initial artifacts before publishing the targeted handoff. Select
+**Refresh CI status** in B to see row access change from **Explicitly skipped** to **Failed**.
+The filter failure and header pass remain visible at the same reviewed commit.
+
+The handoff reads only the configured local folder. The example run links use
+`ci.example.invalid`, and the simulated CI runner executes outside the workbench. The panel
+uses the manifest for session display and leaves saved reviews, verification evidence, and
+acceptance decisions untouched.
 
 ## Run the released source
 

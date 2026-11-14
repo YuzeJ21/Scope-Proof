@@ -125,6 +125,41 @@ def test_simulation_refuses_to_touch_existing_output_directory(tmp_path: Path) -
     assert prior.read_bytes() == b"previous evidence"
 
 
+def test_targeted_cli_publication_can_repeat_without_changing_initial_records(
+    tmp_path: Path, generated: Path,
+) -> None:
+    output = tmp_path / "initial"
+    simulate(output, include_targeted=False)
+    initial = {path.name: path.read_bytes() for path in output.iterdir() if path.is_file()}
+    assert "B-targeted-ci.json" not in initial
+    for _ in range(2):
+        subprocess.run(
+            [
+                sys.executable, "-m", "scripts.simulate_ci_manifest",
+                "--publish-targeted", str(output),
+            ],
+            cwd=_ROOT, check=True, capture_output=True, text=True,
+        )
+    assert all((output / name).read_bytes() == data for name, data in initial.items())
+    expected = {path.name: path.read_bytes() for path in (generated / "manifests").glob("*.json")}
+    actual = {path.name: path.read_bytes() for path in (output / "manifests").glob("*.json")}
+    assert len(actual) == 2
+    assert actual == expected
+
+
+def test_targeted_publication_refuses_to_replace_mismatched_handoff(tmp_path: Path) -> None:
+    output = tmp_path / "initial"
+    simulate(output, include_targeted=False)
+    initial = (output / "B-scopeproof-manifest.json").read_bytes()
+    target, = (
+        path for path in (output / "manifests").glob("*.json") if path.read_bytes() == initial
+    )
+    target.write_bytes(b"unexpected existing handoff")
+    with pytest.raises(ValueError, match="does not match the simulated initial build"):
+        simulate_ci_manifest.publish_targeted(output)
+    assert target.read_bytes() == b"unexpected existing handoff"
+
+
 def test_constructed_access_fix_changes_same_head_targeted_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

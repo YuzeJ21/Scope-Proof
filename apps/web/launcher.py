@@ -7,11 +7,23 @@ import os
 import subprocess
 import sys
 from importlib import resources
+from ipaddress import ip_address
 from pathlib import Path
 
 from scopeproof_core.version import __version__
 
 WORKBENCH_STORAGE_ENV = "SCOPEPROOF_WORKBENCH_STORAGE_DIR"
+CI_MANIFEST_DIR_ENV = "SCOPEPROOF_CI_MANIFEST_DIR"
+
+
+def is_ci_loopback_host(host: str | None) -> bool:
+    """Recognize the local listener addresses permitted for a configured handoff."""
+    if host == "localhost":
+        return True
+    try:
+        return ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def _port(value: str) -> int:
@@ -51,6 +63,11 @@ def _parser() -> argparse.ArgumentParser:
         help="Saved-review directory for this launch (default: ~/.scopeproof/reviews)",
     )
     parser.add_argument(
+        "--ci-manifest-dir",
+        type=_storage_path,
+        help="Trusted local CI handoff directory (loopback launches only)",
+    )
+    parser.add_argument(
         "--headless",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -60,8 +77,14 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """Run the packaged local workbench and return Streamlit's exit code."""
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
     environment = os.environ.copy()
+    environment.pop(CI_MANIFEST_DIR_ENV, None)
+    if args.ci_manifest_dir is not None:
+        if not is_ci_loopback_host(args.host):
+            parser.error("--ci-manifest-dir requires a loopback host")
+        environment[CI_MANIFEST_DIR_ENV] = str(args.ci_manifest_dir)
     if args.storage_dir is None:
         environment.pop(WORKBENCH_STORAGE_ENV, None)
     else:
