@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import streamlit as st
 
+from apps.web.ci_status import render_criterion_ci_status
 from apps.web.decision_context_comparison import render_decision_context_comparison
 from apps.web.deferred_exports import deferred_review_export, deferred_saved_comparison_export
 from apps.web.final_acceptance_comparison import render_final_acceptance_comparison
@@ -4083,6 +4084,7 @@ else:
                     "level for " + ", ".join(below_required_verification) + ". "
                     "E4 requires explicit human acceptance for the reviewed commit."
                 )
+        render_criterion_ci_status(bundle, available=not review_truth_conflict)
         st.header("6 · Summary & Export")
         review_status = (
             "Refresh required"
