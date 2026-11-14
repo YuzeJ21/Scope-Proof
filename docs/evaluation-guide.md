@@ -40,7 +40,7 @@ Follow the [README Quickstart](../README.md#quickstart) for both install paths.
 | Path | Identity and capabilities |
 | --- | --- |
 | Published **v0.2.7** — default evaluation download | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) from `e099679ed63309716a7ce4726557ef794bfd5c80`, with wheel, source archive and checksum manifest. Includes native v0.2.6 history compatibility, CSV/HTML revision labels and bounded event-scan repair, plus constructed browser/sample evidence. No new application feature or record format. Writes v9. |
-| Current development source **0.2.8.dev0**, unpublished | Separately identifies post-release entry-point documentation and website changes. It is not a new public package or evidence of a new feature. Use the v0.2.7 tag/downloads for the verified release. Writes v9. |
+| Current development source **0.2.8.dev0**, unpublished | Includes the read-only [CI status view](#inspect-ci-status-for-a-reviewed-build). Use the v0.2.7 tag/downloads for the verified release. Writes v9. |
 | Published **v0.2.6** fallback | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Includes decision overview, offline HTML, acceptance rationale, source-conflict explanations and saved requirements comparison; see [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
 | Historical private **0.2.7.dev0** candidate, unpublished | Its source, version and artifact identities remain historical; it is not final v0.2.7 or public-download verification. The no-install example separately retains its actual public v0.2.6 producer and unchanged input. See the [sample guide](examples/offline-handoff/README.md). |
 | Published **v0.2.5** earlier release | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Writes v9. |
@@ -55,6 +55,50 @@ Back up local reviews before switching versions. The default store is `~/.scopep
 Do not point an older release at newly saved v9 records or assume downgrade compatibility.
 Complete saved records can contain requirements, source excerpts and asserted reviewer details;
 share them only when those contents are appropriate to share. Recorded identity is not authentication.
+
+## Inspect CI status for a reviewed build
+
+In the development workbench, run analysis or reopen a saved analysis, then open
+**CI status by criterion** above **Summary & Export**. Use a JSON manifest from a CI source
+you trust. The panel supplies the review identity and confirmed criteria digest to match.
+The manifest remains in the workbench session. ScopeProof does not authenticate its producer,
+retrieve the referenced runs, or use the manifest to verify criteria or make gate decisions.
+
+```json
+{
+  "schema_version": "criterion-ci-status-v1",
+  "repository": "example/project",
+  "pr_number": 17,
+  "criteria_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "expected_tests": {
+    "AC-01": ["category_filter"],
+    "AC-02": ["row_entitlement"]
+  },
+  "runs": [
+    {
+      "run_id": "initial",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_url": "https://ci.example.invalid/runs/initial",
+      "outcomes": {
+        "category_filter": "passed",
+        "row_entitlement": "skipped"
+      }
+    }
+  ]
+}
+```
+
+Replace the example identity and digest with the values from the review. Map the confirmed
+criterion IDs to stable test IDs. Use a distinct run ID for every attempt, a full commit SHA,
+and an HTTPS link to the run. Omit an outcome if it is unknown. Use `skipped` only when the
+source explicitly reports the omission. The manifest is limited to 1 MiB, 100 runs,
+and 4,096 criterion-to-test mappings.
+
+An exact-build pass or failure stays visible if a targeted run skips that test. Conflicting
+exact-build results show **Unknown**. Observed results for another build show **Stale**
+when the manifest has neither an exact-build result nor an explicit skip. An unmapped
+criterion or a missing outcome is **Unknown**. Use the per-test rows to see mixed results
+and trace the source runs.
 
 ## Run the released source
 
