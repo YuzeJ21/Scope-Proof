@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-from scripts.simulate_ci_manifest import simulate
 from streamlit.testing.v1 import AppTest
 
 from apps.web.launcher import WORKBENCH_STORAGE_ENV
@@ -40,6 +39,8 @@ def _upload(app: AppTest, manifest: Path) -> AppTest:
 
 
 def test_simulated_ci_manifests_open_for_both_builds(tmp_path, monkeypatch, capsys):
+    from scripts.simulate_ci_manifest import simulate
+
     output = tmp_path / "simulated-ci"
     simulate(output)
     capsys.readouterr()
