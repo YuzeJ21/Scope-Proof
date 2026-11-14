@@ -100,6 +100,47 @@ when the manifest has neither an exact-build result nor an explicit skip. An unm
 criterion or a missing outcome is **Unknown**. Use the per-test rows to see mixed results
 and trace the source runs.
 
+### Generate manifests with the simulated CI pipeline
+
+From the development checkout with dependencies installed, run the constructed CSV export
+rehearsal. Use a new output directory.
+
+```sh
+python -m scripts.simulate_ci_manifest ./simulated-ci-output
+```
+
+The script creates two fixture Git commits and runs the category filter, row access, and
+CSV header checks against synthetic data. The criterion-to-test mapping is set before
+execution. The runner writes the raw CI records and validated ScopeProof manifests together
+with the ticket and source diff. A successful command means the rehearsal ran and produced its
+artifacts. The failed checks in the table are intentional fixture outcomes.
+
+| Generated manifest | Included runs | Category filter | Row access | CSV header |
+| --- | --- | --- | --- | --- |
+| `A-scopeproof-manifest.json` | Build A | Passed | Passed | Passed |
+| `B-scopeproof-manifest.json` | Build A and initial Build B | Failed | Explicitly skipped | Passed |
+| `B-targeted-scopeproof-manifest.json` | Build A, initial Build B, and targeted Build B | Failed | Failed | Passed |
+
+Create both constructed reviews in a separate local folder using the emitted fixtures and
+criteria confirmation. Use the same folder for the workbench.
+
+```sh
+for build in A B; do
+  scopeproof review \
+    --fixture "./simulated-ci-output/${build}-fixture.json" \
+    --requirements ./simulated-ci-output/ticket-requirements.txt \
+    --criteria ./simulated-ci-output/criteria.json \
+    --confirmation ./simulated-ci-output/confirmation.json \
+    --storage-dir ./simulated-ci-output/reviews
+done
+scopeproof-web --host 127.0.0.1 --port 8501 --storage-dir ./simulated-ci-output/reviews
+```
+
+Reopen the matching A or B review and upload its generated manifest. The two B manifests use
+the same reviewed commit. The panel displays the confirmed criteria digest so you can verify
+that it matches the manifest. The example run links use `ci.example.invalid`. The runner
+executes outside the workbench and demonstrates a file handoff using synthetic CI data.
+
 ## Run the released source
 
 For v0.2.7, first check the completed public verification and final source identity in its
