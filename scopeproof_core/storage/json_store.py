@@ -566,9 +566,12 @@ class JsonReviewStore:
             raise ValueError(
                 "record byte limit must be a positive integer within the store maximum"
             )
-        return self.decode_record(read_text_no_follow(
+        state = self.decode_record(read_text_no_follow(
             self._existing_record_path(review_id), max_bytes=limit,
         ))
+        if state.review.review_id != review_id:
+            raise ValueError("saved filename and owning review ID must match")
+        return state
 
     @classmethod
     def decode_record(cls, text: str, *, require_recorded_facts: bool = False) -> ReviewState:

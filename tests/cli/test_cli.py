@@ -1032,6 +1032,39 @@ def test_export_command_reads_saved_review_without_credentials(tmp_path: Path, c
     assert "ghp_" not in output
 
 
+def test_export_rejects_saved_record_with_mismatched_embedded_id_without_output_or_writes(
+    tmp_path: Path, capsys
+) -> None:
+    storage = tmp_path / "reviews"
+    state = new_review_state(build_demo_review())
+    record = JsonReviewStore(storage).save(state)
+    payload = json.loads(record.read_text(encoding="utf-8"))
+    payload["state"]["review"]["review_id"] = "constructed-other-review"
+    payload["state"]["bundle"]["review"]["review_id"] = "constructed-other-review"
+    record.write_text(json.dumps(payload), encoding="utf-8")
+    before = {
+        path.relative_to(storage): path.read_bytes()
+        for path in storage.rglob("*") if path.is_file()
+    }
+
+    with pytest.raises(SystemExit) as error:
+        main([
+            "export", state.review.review_id, "--storage-dir", str(storage),
+            "--format", "json",
+        ])
+
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "scopeproof: error:" in captured.err
+    assert "saved filename and owning review ID must match" in captured.err
+    assert "Traceback" not in captured.err
+    assert {
+        path.relative_to(storage): path.read_bytes()
+        for path in storage.rglob("*") if path.is_file()
+    } == before
+
+
 def test_csv_export_preserves_review_level_final_acceptance_blocker(
     tmp_path: Path, capsys
 ) -> None:

@@ -1176,7 +1176,9 @@ Deterministic gate
 Markdown / JSON / CSV / HTML
 ```
 
-`scopeproof_core` contains Pydantic contracts, ingestion, retrieval, verification, gates, reporting, fixtures, and evaluation. It has no Streamlit dependency. `apps/web/app.py` is a thin local interface over those core services.
+`scopeproof_core` contains Pydantic contracts, ingestion, retrieval, verification, gates, reporting,
+fixtures, and evaluation. It has no Streamlit dependency. The local Streamlit workbench coordinates
+review sessions, saved records, and report downloads over those core services.
 
 Every evidence item contains a file, line, immutable head SHA, GitHub permalink, excerpt, matching rule, relevance reason, deterministic score, and limitations. Deleted lines cannot become current implementation evidence. Partial ingestion cannot produce Ready.
 
