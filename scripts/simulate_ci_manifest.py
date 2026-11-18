@@ -5,10 +5,13 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import json
 import os
 import runpy
+import shlex
 import sqlite3
 import subprocess
+import sys
 from collections.abc import Sequence
 from contextlib import closing
 from datetime import UTC, datetime
@@ -374,13 +377,73 @@ def publish_targeted(output: Path) -> None:
         )
 
 
+def _seed_review(output: Path, storage: Path, build: str) -> str:
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "scopeproof_core.cli", "review",
+            "--fixture", str(output / f"{build}-fixture.json"),
+            "--requirements", str(output / "ticket-requirements.txt"),
+            "--criteria", str(output / "criteria.json"),
+            "--confirmation", str(output / "confirmation.json"),
+            "--storage-dir", str(storage),
+        ],
+        check=True, capture_output=True, text=True,
+    )
+    return json.loads(result.stdout)["review_id"]
+
+
+def prepare_workbench(output: Path) -> dict[str, str]:
+    """Prepare the initial CI run and publish its two validated saved reviews together."""
+    simulate(output, include_targeted=False)
+    output = output.resolve()
+    with TemporaryDirectory(dir=output, prefix=".scopeproof-prepare-") as directory:
+        pending_storage = Path(directory) / "reviews"
+        review_ids = {
+            build: _seed_review(output, pending_storage, build) for build in _HEAD_LABELS
+        }
+        pending_storage.rename(output / "reviews")
+    return review_ids
+
+
+def _workbench_launch_command(output: Path) -> str:
+    output = output.resolve()
+    arguments = [
+        sys.executable, "-m", "apps.web.launcher", "--host", "127.0.0.1", "--port", "8501",
+        "--storage-dir", str(output / "reviews"),
+        "--ci-manifest-dir", str(output / "manifests"),
+    ]
+    if os.name == "nt":
+        quoted = ["'" + argument.replace("'", "''") + "'" for argument in arguments]
+        return "& " + " ".join(quoted)
+    return shlex.join(arguments)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--initial-only", action="store_true", help="run A and initial B")
     mode.add_argument("--publish-targeted", action="store_true", help="refresh B in an initial run")
+    mode.add_argument(
+        "--prepare-workbench", action="store_true",
+        help="prepare initial CI and both saved reviews",
+    )
     parser.add_argument("output", type=Path, help="directory for constructed CI artifacts")
     args = parser.parse_args()
+    if args.prepare_workbench:
+        try:
+            review_ids = prepare_workbench(args.output)
+        except (OSError, subprocess.CalledProcessError, ValueError) as error:
+            detail = error.stderr if isinstance(error, subprocess.CalledProcessError) else None
+            parser.exit(
+                1, "Could not prepare the workbench. Use a fresh output directory.\n"
+                f"{(detail or str(error)).rstrip()}\n",
+            )
+        for build, review_id in review_ids.items():
+            print(f"Build {build} review: {review_id}")
+        shell = "PowerShell" if os.name == "nt" else "shell"
+        print(f"Launch the workbench with this {shell} command:")
+        print(_workbench_launch_command(args.output))
+        return
     if args.publish_targeted:
         publish_targeted(args.output)
     else:

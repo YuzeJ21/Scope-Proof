@@ -126,35 +126,31 @@ The failed checks in the table are intentional fixture outcomes.
 
 ### Open simulated CI status from a local folder
 
-To observe the targeted run arrive after opening B, start with a new output directory and run
-only the initial jobs. If you already used the default command, choose a different output path
-throughout this example.
+To observe the targeted run arrive after opening B, prepare both constructed reviews and their
+initial CI manifests with one command. Preparation requires a new output directory. If you already used the
+default command above, choose a different output path throughout this example.
 
 ```sh
-python -m scripts.simulate_ci_manifest --initial-only ./simulated-ci-output
+python -m scripts.simulate_ci_manifest --prepare-workbench ./simulated-ci-output
 ```
 
-Create both constructed reviews in a separate local folder using the emitted fixtures and
-criteria confirmation. Use the same folder for the workbench.
+This mode runs only the initial A/B jobs, uses the emitted constructed criteria confirmation,
+and saves both confirmed reviews under `reviews/`. Their initial manifests are under
+`manifests/`. The command prints the A and B review IDs and a copyable loopback launcher command
+using those two folders. Run the printed command in your shell, or in PowerShell on Windows.
+The equivalent command using the installed launcher is:
 
 ```sh
-for build in A B; do
-  scopeproof review \
-    --fixture "./simulated-ci-output/${build}-fixture.json" \
-    --requirements ./simulated-ci-output/ticket-requirements.txt \
-    --criteria ./simulated-ci-output/criteria.json \
-    --confirmation ./simulated-ci-output/confirmation.json \
-    --storage-dir ./simulated-ci-output/reviews
-done
 scopeproof-web --host 127.0.0.1 --port 8501 \
   --storage-dir ./simulated-ci-output/reviews \
   --ci-manifest-dir ./simulated-ci-output/manifests
 ```
 
 Use a trusted local directory with a canonical path that does not traverse symbolic links.
-Reopen A or B and open **CI status by criterion**. The panel reads the matching build and confirmed
-criteria directly from the configured folder. A manual upload takes precedence while it is
-present. The folder handoff is available only on explicitly configured loopback workbenches.
+Reopen A or B using its printed review ID and open **CI status by criterion**. The panel reads
+the matching build and confirmed criteria directly from the configured folder. A manual upload
+takes precedence while it is present. The folder handoff is available only on explicitly
+configured loopback workbenches.
 
 With B open, publish the targeted run from a second terminal.
 
@@ -170,6 +166,26 @@ The handoff reads only the configured local folder. The example run links use
 `ci.example.invalid`, and the simulated CI runner executes outside the workbench. The panel
 uses the manifest for session display and leaves saved reviews, verification evidence, and
 acceptance decisions untouched.
+
+The existing manual preparation path remains available. In another new output directory, run
+`--initial-only` to generate A/B artifacts without saved reviews, then create the reviews yourself:
+
+```sh
+python -m scripts.simulate_ci_manifest --initial-only ./manual-simulated-ci-output
+for build in A B; do
+  scopeproof review \
+    --fixture "./manual-simulated-ci-output/${build}-fixture.json" \
+    --requirements ./manual-simulated-ci-output/ticket-requirements.txt \
+    --criteria ./manual-simulated-ci-output/criteria.json \
+    --confirmation ./manual-simulated-ci-output/confirmation.json \
+    --storage-dir ./manual-simulated-ci-output/reviews
+done
+```
+
+Launch with that directory's `reviews/` and `manifests/` paths, and use the same directory for
+`--publish-targeted`. The default runner still generates all three runs without preparing saved
+reviews. Manual JSON upload also remains available without configuring a manifest folder.
+All these paths use simulated actors, confirmation and CI outcomes.
 
 ## Run the released source
 

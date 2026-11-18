@@ -1,6 +1,8 @@
 """Read the simulated pipeline's unedited CI artifacts in the actual workbench."""
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import streamlit as st
@@ -8,8 +10,11 @@ from streamlit.testing.v1 import AppTest
 
 from apps.web.launcher import CI_MANIFEST_DIR_ENV, WORKBENCH_STORAGE_ENV
 from scopeproof_core.cli import main
+from scopeproof_core.schemas.models import PullRequestSnapshot, ReviewInputOrigin
 from scopeproof_core.storage.json_store import JsonReviewStore
 from tests.apps.test_streamlit_app import APP_PATH, select_saved_review
+
+_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _reopen(app: AppTest, review_id: str) -> AppTest:
@@ -52,6 +57,48 @@ def _save_simulated_reviews(output: Path, storage: Path, capsys) -> dict[str, st
         ]) == 0
         review_ids[build] = json.loads(capsys.readouterr().out)["review_id"]
     return review_ids
+
+
+def _prepare_workbench_reviews(output: Path) -> tuple[Path, dict[str, str]]:
+    """Exercise one-command preparation before consuming its actual saved reviews."""
+    from scripts.simulate_ci_manifest import SimulatedRun
+
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.simulate_ci_manifest", "--prepare-workbench", str(output)],
+        cwd=_ROOT, capture_output=True, text=True, check=False, timeout=60,
+    )
+    assert result.returncode == 0, f"{result.stderr}\n{result.stdout}"
+    storage = output / "reviews"
+    store = JsonReviewStore(storage)
+    states = {review_id: store.load(review_id) for review_id in store.list_review_ids()}
+    assert len(states) == 2
+    review_ids = {}
+    for build in ("A", "B"):
+        fixture = PullRequestSnapshot.model_validate_json(
+            (output / f"{build}-fixture.json").read_bytes(),
+        )
+        matching, = [
+            review_id for review_id, state in states.items()
+            if (
+                state.review.repository, state.review.pr_number,
+                state.review.base_sha, state.review.head_sha,
+            ) == (fixture.repository, fixture.pr_number, fixture.base_sha, fixture.head_sha)
+        ]
+        state = states[matching]
+        assert state.criteria_revision.confirmed
+        assert state.bundle is not None
+        assert state.review.input_origin is ReviewInputOrigin.LOCAL_FIXTURE
+        provenance = state.review.criteria_source_provenance
+        assert provenance is not None
+        assert provenance.confirmed_by == "CONSTRUCTED scripted actor"
+        assert provenance.source_uri == "https://ticket.example.invalid/EXP-17"
+        run = SimulatedRun.model_validate_json((output / f"{build}-ci.json").read_bytes())
+        assert (run.label, run.head, run.environment) == (
+            build, fixture.head_sha, "synthetic SQLite and Python",
+        )
+        review_ids[build] = matching
+    assert review_ids["A"] != review_ids["B"]
+    return storage, review_ids
 
 
 def _assert_targeted_provenance(app: AppTest, storage: Path, b_review_id: str) -> None:
@@ -109,12 +156,12 @@ def test_simulated_ci_manifests_open_for_both_builds(tmp_path, monkeypatch, caps
     assert {path: path.read_bytes() for path in storage.glob("*.json")} == saved_records
 
 
-def test_workbench_reads_simulated_ci_handoff_before_any_upload(tmp_path, monkeypatch, capsys):
-    from scripts.simulate_ci_manifest import publish_targeted, simulate
+def test_workbench_reads_simulated_ci_handoff_before_any_upload(tmp_path, monkeypatch):
+    from scripts.simulate_ci_manifest import publish_targeted
 
-    initial = tmp_path / "initial"
-    simulate(initial, include_targeted=False)
-    storage = tmp_path / "reviews"
+    initial = tmp_path / "prepared workbench with spaces"
+    storage, review_ids = _prepare_workbench_reviews(initial)
+    assert not (initial / "B-targeted-scopeproof-manifest.json").exists()
     handoff = (initial / "manifests").resolve()
     monkeypatch.setenv(WORKBENCH_STORAGE_ENV, str(storage))
     monkeypatch.setenv(CI_MANIFEST_DIR_ENV, str(handoff))
@@ -124,7 +171,6 @@ def test_workbench_reads_simulated_ci_handoff_before_any_upload(tmp_path, monkey
         st, "get_option",
         lambda key: listener if key == "server.address" else original_get_option(key),
     )
-    review_ids = _save_simulated_reviews(initial, storage, capsys)
     saved_records = {path: path.read_bytes() for path in storage.glob("*.json")}
     assert len(saved_records) == 2
 
