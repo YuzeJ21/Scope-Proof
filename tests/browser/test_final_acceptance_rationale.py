@@ -1,6 +1,7 @@
 """Installed workbench verification using a constructed acceptance history."""
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -41,6 +42,9 @@ def test_installed_workbench_saves_rationale_on_explicit_acceptance_events(
     )
     review_id = CURRENT_REVIEW_ID + "-acceptance"
     record = store / f"{review_id}.json"
+    diagnostics = Path(
+        os.environ.get("SCOPEPROOF_BROWSER_DIAGNOSTIC_DIR", str(tmp_path / "diagnostics"))
+    ) / "final-acceptance-rationale"
     external_requests: list[str] = []
     with _installed_workbench_server(
         installed_wheel, tmp_path, home, log_name="acceptance-rationale.log",
@@ -50,7 +54,7 @@ def test_installed_workbench_saves_rationale_on_explicit_acceptance_events(
             context = browser.new_context()
             context.route("**/*", lambda route: _route_loopback_only(route, external_requests))
             page = context.new_page()
-            with _capture_browser_failure(page, tmp_path / "diagnostics", log):
+            with _capture_browser_failure(page, diagnostics, log):
                 page.goto(url, wait_until="domcontentloaded")
                 page.get_by_text("Resume a saved review", exact=True).click()
                 reopen = page.get_by_role("button", name="Reopen local review", exact=True)
@@ -68,7 +72,8 @@ def test_installed_workbench_saves_rationale_on_explicit_acceptance_events(
                 ):
                     before = record.read_bytes()
                     action = page.get_by_role("button", name=label, exact=True)
-                    _run_and_wait_for_streamlit_rerun(page, add_note.click)
+                    add_note.click()
+                    expect(note).to_be_editable(timeout=10_000)
                     expect(action).to_be_enabled()
                     expect(export).to_be_disabled()
                     note.fill(rationale)
