@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shlex
 import subprocess
 import sys
 from hashlib import sha256
@@ -11,8 +14,15 @@ import pytest
 
 from scopeproof_core.criteria.confirmation import validate_criteria_source_confirmation
 from scopeproof_core.criteria.document import NormalizedCriteriaDocument
-from scopeproof_core.reviews.ci_status import load_ci_status_manifest
-from scopeproof_core.schemas.models import CriteriaSourceProvenance, PullRequestSnapshot
+from scopeproof_core.reviews.ci_handoff import load_exact_ci_manifest
+from scopeproof_core.reviews.ci_status import criterion_ci_statuses, load_ci_status_manifest
+from scopeproof_core.schemas.models import (
+    CriteriaSourceProvenance,
+    EvidenceLevel,
+    PullRequestSnapshot,
+    ReviewInputOrigin,
+)
+from scopeproof_core.storage.json_store import JsonReviewStore
 from scripts import simulate_ci_manifest
 from scripts.simulate_ci_manifest import SimulatedRun, build_manifest, simulate
 
@@ -123,6 +133,149 @@ def test_simulation_refuses_to_touch_existing_output_directory(tmp_path: Path) -
         simulate(existing)
     assert list(existing.iterdir()) == [prior]
     assert prior.read_bytes() == b"previous evidence"
+
+
+def test_prepare_workbench_cli_creates_both_reviews_and_a_quoted_launch_command(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "prepared 'reviews' with spaces"
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.simulate_ci_manifest", "--prepare-workbench", str(output)],
+        cwd=_ROOT, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    review_ids = dict(re.findall(r"^Build ([AB]) review: (\S+)$", result.stdout, re.MULTILINE))
+    assert set(review_ids) == {"A", "B"}
+    assert len(set(review_ids.values())) == 2
+    storage = output.resolve() / "reviews"
+    handoff = output.resolve() / "manifests"
+    store = JsonReviewStore(storage)
+    assert store.list_review_ids() == sorted(review_ids.values())
+    confirmation = _confirmation(output)
+    assert confirmation.confirmed_by == "CONSTRUCTED scripted actor"
+
+    for build, head, statuses in (
+        ("A", _A_HEAD, ["passed", "passed", "passed"]),
+        ("B", _B_HEAD, ["failed", "skipped", "passed"]),
+    ):
+        state = store.load(review_ids[build])
+        assert state.bundle is not None
+        assert state.review.head_sha == head
+        assert state.review.input_origin is ReviewInputOrigin.LOCAL_FIXTURE
+        assert state.review.criteria_source_provenance == confirmation
+        assert state.criteria_revision.confirmed
+        assert [criterion.criterion_id for criterion in state.bundle.criteria] == [
+            "AC-01", "AC-02", "AC-03",
+        ]
+        assert all(
+            criterion.required_evidence_level is EvidenceLevel.E3
+            for criterion in state.bundle.criteria
+        )
+        assert state.resolution_events == []
+        assert state.bundle.resolutions == []
+        assert state.bundle.runtime_evidence == []
+        assert not state.review.final_acceptance
+        manifest = load_exact_ci_manifest(handoff, state.bundle)
+        assert [item.status for item in criterion_ci_statuses(state.bundle, manifest)] == statuses
+    assert not (output / "B-targeted-ci.json").exists()
+    assert not (output / "B-targeted-scopeproof-manifest.json").exists()
+
+    launch_line = result.stdout.splitlines()[-1]
+    if os.name == "nt":
+        assert launch_line.startswith("& ")
+        launch_arguments = [
+            argument.replace("''", "'")
+            for argument in re.findall(r"'((?:[^']|'')*)'", launch_line)
+        ]
+    else:
+        launch_arguments = shlex.split(launch_line)
+    assert launch_arguments == [
+        sys.executable, "-m", "apps.web.launcher", "--host", "127.0.0.1", "--port", "8501",
+        "--storage-dir", str(storage), "--ci-manifest-dir", str(handoff),
+    ]
+
+    saved_records = {path.name: path.read_bytes() for path in storage.glob("*.json")}
+    targeted = subprocess.run(
+        [sys.executable, "-m", "scripts.simulate_ci_manifest", "--publish-targeted", str(output)],
+        cwd=_ROOT, capture_output=True, text=True, check=False,
+    )
+    assert targeted.returncode == 0, targeted.stderr
+    assert {path.name: path.read_bytes() for path in storage.glob("*.json")} == saved_records
+    b_state = store.load(review_ids["B"])
+    manifest = load_exact_ci_manifest(handoff, b_state.bundle)
+    assert [item.status for item in criterion_ci_statuses(b_state.bundle, manifest)] == [
+        "failed", "failed", "passed",
+    ]
+
+
+def test_prepare_workbench_cli_refuses_to_regenerate_existing_output(tmp_path: Path) -> None:
+    output = tmp_path / "prepared"
+    command = [
+        sys.executable, "-m", "scripts.simulate_ci_manifest", "--prepare-workbench", str(output),
+    ]
+    prepared = subprocess.run(command, cwd=_ROOT, capture_output=True, text=True, check=False)
+    assert prepared.returncode == 0, prepared.stderr
+    original = {
+        path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()
+    }
+
+    repeated = subprocess.run(command, cwd=_ROOT, capture_output=True, text=True, check=False)
+
+    assert repeated.returncode != 0
+    assert "Traceback" not in repeated.stderr
+    assert "Build A review:" not in repeated.stdout
+    assert "apps.web.launcher" not in repeated.stdout
+    assert {
+        path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()
+    } == original
+
+
+@pytest.mark.parametrize("failure", ["oserror", "subprocess"])
+def test_prepare_workbench_failure_during_second_review_does_not_publish_ready_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, failure: str,
+) -> None:
+    output = tmp_path / "interrupted preparation"
+    real_run = subprocess.run
+    review_attempts = []
+
+    def run_with_second_review_failure(arguments, **kwargs):
+        if list(arguments[1:4]) == ["-m", "scopeproof_core.cli", "review"]:
+            fixture = Path(arguments[arguments.index("--fixture") + 1])
+            review_attempts.append(fixture.name)
+            if fixture.name == "B-fixture.json":
+                if failure == "oserror":
+                    raise OSError("Constructed second-review failure")
+                raise subprocess.CalledProcessError(
+                    1, arguments, stderr="Constructed second-review failure",
+                )
+        return real_run(arguments, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run_with_second_review_failure)
+    monkeypatch.setattr(
+        sys, "argv", ["simulate_ci_manifest", "--prepare-workbench", str(output)],
+    )
+
+    with pytest.raises(SystemExit) as error:
+        simulate_ci_manifest.main()
+
+    assert error.value.code == 1
+    assert review_attempts == ["A-fixture.json", "B-fixture.json"]
+    assert not (output / "reviews").exists()
+    captured = capsys.readouterr()
+    assert "Could not prepare the workbench. Use a fresh output directory." in captured.err
+    assert "Build A review:" not in captured.out
+    assert "Build B review:" not in captured.out
+    assert "apps.web.launcher" not in captured.out
+    remaining = {
+        path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()
+    }
+    with pytest.raises(SystemExit) as repeat_error:
+        simulate_ci_manifest.main()
+    assert repeat_error.value.code == 1
+    assert review_attempts == ["A-fixture.json", "B-fixture.json"]
+    assert {
+        path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()
+    } == remaining
 
 
 def test_targeted_cli_publication_can_repeat_without_changing_initial_records(

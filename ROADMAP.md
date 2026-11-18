@@ -28,10 +28,18 @@ Prioritize record integrity and the local evaluation workflow. The following are
 stages within owner-led productization. The limited-beta decision remains in
 [Stage 3](#stage-3--limited-beta).
 
+Engineering stage 1 merged at `62e2cc5` in
+[PR #296](https://github.com/YuzeJ21/Scope-Proof/pull/296).
+[Main CI run 44400366984](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44400366984)
+records the resulting-main verification. The Stage 2
+[preparation command](docs/evaluation-guide.md#open-simulated-ci-status-from-a-local-folder)
+creates the constructed A/B workbench inputs and prints the launch command. Publish the targeted
+run after opening Build B.
+
 | Stage | Priority and deliverable | Acceptance criteria |
 | --- | --- | --- |
-| 1 | P0 · Bind each saved-review read to the requested ID. | Direct and locked reads reject a file that carries another review ID. Mutations stop before changing either record. Detached transfer validation and supported legacy records still work. |
-| 2 | P1 · Prepare the two-build evaluation workbench with one command. | A clean output directory contains prepared A/B reviews and their initial manifests. The command prints a loopback launch command with the matching store and manifest folder. Automation opens both reviews and refreshes the same B after the targeted run. |
+| 1 — merged, PR #296 at `62e2cc5` | P0 · Bind each saved-review read to the requested ID. | Direct and locked reads reject a file that carries another review ID. Mutations stop before changing either record. Detached transfer validation and supported legacy records still work. [Main CI record](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44400366984). |
+| 2 — complete on source | P1 · Prepare the two-build evaluation workbench with one command. | `--prepare-workbench` requires a new output directory, creates confirmed A/B reviews and their initial manifests, and prints both review IDs plus a loopback launch command using the matching folders. Automation opens both reviews and refreshes the same B after the targeted command. |
 | 3 | P2 · Evaluate a portable CI context snapshot for offline review. | Reproduce the recipient's need with a constructed handoff. If the snapshot solves that gap, export the exact build, confirmed criteria and per-test outcomes with run references and an external-source label. Test stale context rejection and preserve the review decision. |
 | 4 | P2 · Verify a distribution candidate for the accumulated source changes. | On separately authorized scope, pin the version and commit, rebuild and checksum the artifacts, and verify clean installs, native v9 record reopening and the packaged browser journeys. Public distribution requires its own decision. |
 
