@@ -13,11 +13,33 @@ the separately authorized site publication is tracked by the manual Pages workfl
 These engineering outcomes do not create customer validation. Stage 3 is dormant and gated.
 The owner is not pursuing personal testing or qualifying participant reviews.
 
-## Current priorities — 2026-11-07
+<a id="current-priorities--2026-11-07"></a>
 
-Updated 2026-11-12: Stage 2 continues on the unpublished `0.2.8.dev0` source line. PR #282
-directs reviewers with missing E3 evidence to external verification for the reviewed commit.
-The default public evaluation download is still v0.2.7.
+## Current priorities — 2026-11-18
+
+The audit baseline is main `8bb9faa3e270a821377f62be3de1762e98357d07`, with
+[passing CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/43610193600/attempts/2).
+PRs #293–#295 completed criterion-level CI status, simulated manifest generation, and the
+exact-build local handoff on `0.2.8.dev0`. The public site and default evaluation download
+point to [v0.2.7](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7). Its
+release commit predates these changes and the later acceptance and stale-state fixes.
+
+Prioritize record integrity and the local evaluation workflow. The following are engineering
+stages within owner-led productization. The limited-beta decision remains in
+[Stage 3](#stage-3--limited-beta).
+
+| Stage | Priority and deliverable | Acceptance criteria |
+| --- | --- | --- |
+| 1 | P0 · Bind each saved-review read to the requested ID. | Direct and locked reads reject a file that carries another review ID. Mutations stop before changing either record. Detached transfer validation and supported legacy records still work. |
+| 2 | P1 · Prepare the two-build evaluation workbench with one command. | A clean output directory contains prepared A/B reviews and their initial manifests. The command prints a loopback launch command with the matching store and manifest folder. Automation opens both reviews and refreshes the same B after the targeted run. |
+| 3 | P2 · Evaluate a portable CI context snapshot for offline review. | Reproduce the recipient's need with a constructed handoff. If the snapshot solves that gap, export the exact build, confirmed criteria and per-test outcomes with run references and an external-source label. Test stale context rejection and preserve the review decision. |
+| 4 | P2 · Verify a distribution candidate for the accumulated source changes. | On separately authorized scope, pin the version and commit, rebuild and checksum the artifacts, and verify clean installs, native v9 record reopening and the packaged browser journeys. Public distribution requires its own decision. |
+
+Keep architecture work tied to a reproduced defect or measured constraint. Additional adapters,
+schema changes and format parity need a demonstrated reviewer outcome. Product usefulness and
+repeat use remain open research questions.
+
+### Completed development-source work through PR #295
 
 | Order | Reviewer outcome | Engineering finish line |
 | --- | --- | --- |
@@ -34,8 +56,6 @@ The default public evaluation download is still v0.2.7.
 | Stage 2 — source feature | See CI status by confirmed criterion for the reviewed build. | Show pass, fail, explicit skip, stale, or unknown from a bounded [CI manifest](docs/evaluation-guide.md#inspect-ci-status-for-a-reviewed-build). Link to the run and preserve the review and its gate. Verify the original two-build scenario with automation. |
 | Stage 2 — constructed rehearsal | Generate the manifest as part of the simulated CI run. | The [two-build runner](docs/evaluation-guide.md#generate-manifests-with-the-simulated-ci-pipeline) publishes validated JSON from executed synthetic checks and explicit omissions. Keep the targeted run bound to Build B and verify the workbench handoff with automation. |
 | Stage 2 — constructed rehearsal | Open matching simulated CI status from a trusted local folder. | [Opt in on a loopback workbench](docs/evaluation-guide.md#open-simulated-ci-status-from-a-local-folder). Read the matching build and criteria and refresh after the targeted run. Keep the view read-only and retain the manual upload path. |
-| Evaluation distribution | Keep v0.2.7 available while these fixes accumulate on source. | A new version requires a separately authorized build and public-download verification. |
-| Stage 3 — gated | Establish whether independent practitioners can complete and repeat the review workflow. | Genuine independent use and a separate owner decision. Automated checks count as engineering evidence. |
 
 Updated 2026-11-11: Stage 2 now covers source-context accuracy. A constructed multi-hunk
 diff reproduced distant lines appearing beside an exact citation in the workbench and reports.
@@ -159,7 +179,7 @@ the source and publication milestones without advancing product validation.
 | Priority | Gap and action | Completion criterion / decision |
 | --- | --- | --- |
 | Final v0.2.7 distribution complete, PR #278 | Published final `0.2.7` from `e099679ed63309716a7ce4726557ef794bfd5c80` after automatic checks and independent engineering review. | The [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) binds final source, all three assets, completed anonymous downloads and fresh isolated installs. No personal testing or qualifying reviews; package publication did not deploy Pages. |
-| Current entry-point alignment | README, evaluation guide, roadmap and existing website identify published v0.2.7 without relabelling older examples or release records. | Owner-authorized review, exact-head/main checks, manual Pages publication and public byte/link/render verification. The [Pages workflow](https://github.com/YuzeJ21/Scope-Proof/actions/workflows/pages.yml) identifies the later site revision; release artifacts and sample/media producers stay unchanged. No new feature or release follows automatically. |
+| v0.2.7 entry-point alignment complete | README, evaluation guide, roadmap and the [public site](https://yuzej21.github.io/Scope-Proof/) identify v0.2.7 as the evaluation download. | [Pages run 42841593805](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42841593805) published `e803614`. The November 18 check confirmed that the live page names and links v0.2.7. |
 | Historical final v0.2.6 distribution complete | Published the consolidated workflow from one fixed final-version source commit. | Final wheel, source archive and checksum manifest were publicly downloaded and verified. Release-source main checks passed 4,842 tests with 95.5067% coverage; installed checks passed seven CLI checks and 32 browser-suite checks. Use the Release entry for source and exact artifact identities; the historical dev0 packet is not a substitute. |
 | Lifecycle consolidation complete | Confirm intent, analyze, record decisions, save, share offline, observe source changes, prepare fresh requirements and compare. | Consequential transition checks, including stale downloads, source contradictions and pending scope drafts, are retained. The release preparation queue is closed; no additional parity feature is selected. |
 | Native released-writer compatibility complete, PR #272 | A published v0.2.6 rich saved history remains intact under the verified development reader. | Two immutable, provenance-bound actual-writer records now run in Linux/Windows CI. Complete-state and producer/history preservation, copy-only resave, transfer, reopening, active reports and pending current-report denial are covered. Exact-head and resulting-main checks passed. This closes the durable coverage gap; no current data-loss repair or further corpus generation is selected. |

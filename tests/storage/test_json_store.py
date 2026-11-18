@@ -362,6 +362,81 @@ def test_saved_review_round_trips_without_token(tmp_path: Path) -> None:
     assert "authorization" not in path.read_text(encoding="utf-8").lower()
 
 
+@pytest.fixture
+def mismatched_saved_review(tmp_path: Path):
+    """Keep a valid owner record and a differently named copy in disposable storage."""
+    store = JsonReviewStore(tmp_path)
+    state = review_state("owning-review")
+    owner = store.save(state)
+    original = owner.read_bytes()
+    selected = tmp_path / "selected-review.json"
+    selected.write_bytes(original)
+    return store, state, owner, selected, original
+
+
+@pytest.mark.parametrize("entrypoint", ["load", "locked_load", "many-first", "many-last"])
+def test_read_rejects_saved_filename_with_another_review_identity(
+    mismatched_saved_review, entrypoint: str,
+) -> None:
+    store, _state, owner, selected, original = mismatched_saved_review
+
+    with pytest.raises(ValueError, match=r"saved filename.*review"):
+        if entrypoint == "load":
+            store.load("selected-review")
+        elif entrypoint == "locked_load":
+            with store.locked_load("selected-review"):
+                pytest.fail("a mismatched record must not be yielded")
+        else:
+            review_ids = (
+                ("selected-review", "owning-review")
+                if entrypoint == "many-first"
+                else ("owning-review", "selected-review")
+            )
+            with store.locked_load_many(review_ids):
+                pytest.fail("a snapshot must not yield a mismatched record")
+
+    assert owner.read_bytes() == selected.read_bytes() == original
+
+
+def test_mutation_rejects_mismatched_owner_before_transition_and_preserves_both_records(
+    mismatched_saved_review,
+) -> None:
+    store, state, owner, selected, original = mismatched_saved_review
+    transition_called = False
+
+    def transition(current):
+        nonlocal transition_called
+        transition_called = True
+        return append_resolution(
+            current,
+            ResolutionEvent(
+                criterion_id="AC-01",
+                decision=HumanDecision.CHANGE_REQUIRED,
+                comment="Constructed identity-binding regression",
+                reviewer="Constructed reviewer",
+            ),
+        )
+
+    with pytest.raises(ValueError, match=r"saved filename.*review"):
+        store.mutate("selected-review", transition)
+
+    assert not transition_called
+    assert owner.read_bytes() == selected.read_bytes() == original
+    assert store.load("owning-review") == state
+
+
+def test_detached_record_decode_preserves_owner_without_a_filename_binding(
+    mismatched_saved_review,
+) -> None:
+    store, state, owner, selected, original = mismatched_saved_review
+
+    decoded = store.decode_record(selected.read_text(encoding="utf-8"), require_recorded_facts=True)
+
+    assert decoded == state
+    assert decoded.review.review_id == "owning-review"
+    assert owner.read_bytes() == selected.read_bytes() == original
+
+
 def test_legacy_saved_review_without_visibility_reopens_as_unverified(
     tmp_path: Path,
 ) -> None:
