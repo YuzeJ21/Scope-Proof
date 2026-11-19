@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page, expect, sync_playwright
+from playwright.sync_api import Locator, Page, expect, sync_playwright
 
 from tests.browser import test_packaged_workbench as workbench_helpers
 from tests.browser.test_packaged_workbench import (
@@ -136,10 +136,7 @@ def _saved_state(record: Path) -> dict:
     return json.loads(record.read_text(encoding="utf-8"))["state"]
 
 
-def _reopen(page: Page, base_url: str) -> None:
-    page.goto(base_url, wait_until="domcontentloaded")
-    page.get_by_text("Resume a saved review", exact=True).click()
-    page.get_by_text("Enter a review ID directly", exact=True).click()
+def _enter_review_id(page: Page) -> Locator:
     review_id = page.get_by_role("textbox", name="Review ID", exact=True)
     reopen = page.get_by_role("button", name="Reopen local review", exact=True)
     expect(review_id).to_be_editable(timeout=10_000)
@@ -151,6 +148,14 @@ def _reopen(page: Page, base_url: str) -> None:
     # This server-computed transition proves the ID committed even if the
     # generic DOM script-state observer misses its short-lived rerun signal.
     expect(reopen).to_be_enabled(timeout=10_000)
+    return reopen
+
+
+def _reopen(page: Page, base_url: str) -> None:
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.get_by_text("Resume a saved review", exact=True).click()
+    page.get_by_text("Enter a review ID directly", exact=True).click()
+    reopen = _enter_review_id(page)
     _run_and_wait_for_streamlit_rerun(
         page,
         reopen.click,
@@ -338,12 +343,15 @@ def test_installed_reopen_does_not_accept_an_enabled_button_as_validation(
     store.mkdir(parents=True)
     external_requests: list[str] = []
     browser_errors: list[str] = []
+    diagnostics = Path(os.environ.get(
+        "SCOPEPROOF_BROWSER_DIAGNOSTIC_DIR", str(tmp_path / "diagnostics"),
+    )) / "missing-review"
     with _installed_workbench_server(
         installed_wheel,
         runtime,
         home,
         log_name="missing-record.log",
-    ) as (base_url, _), sync_playwright() as playwright:
+    ) as (base_url, log_path), sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             context = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -353,25 +361,29 @@ def test_installed_reopen_does_not_accept_an_enabled_button_as_validation(
             )
             page = context.new_page()
             page.on("pageerror", lambda error: browser_errors.append(str(error)))
-            with pytest.raises(
-                AssertionError,
-                match="Review reopened from local storage after validation",
-            ):
-                _reopen(page, base_url)
-            expect(
-                page.get_by_text(
-                    "No saved review was found for that review ID.",
-                    exact=True,
-                )
-            ).to_be_visible()
-            expect(
-                page.get_by_text(
-                    "Review reopened from local storage after validation.",
-                    exact=True,
-                )
-            ).to_have_count(0)
-            assert list(store.glob("*.json")) == []
-            page.screenshot(path=str(runtime / "missing-record-rejected.png"), full_page=True)
+            with _capture_browser_failure(page, diagnostics, log_path):
+                page.goto(base_url, wait_until="domcontentloaded")
+                page.get_by_text("Resume a saved review", exact=True).click()
+                # An empty store already shows the direct-ID field. Toggling the
+                # mode here would clear the same field during its rerun.
+                expect(
+                    page.get_by_text("No saved local reviews found.", exact=True)
+                ).to_be_visible()
+                _enter_review_id(page).click()
+                expect(
+                    page.get_by_text(
+                        "No saved review was found for that review ID.",
+                        exact=True,
+                    )
+                ).to_be_visible(timeout=10_000)
+                expect(
+                    page.get_by_text(
+                        "Review reopened from local storage after validation.",
+                        exact=True,
+                    )
+                ).to_have_count(0)
+                assert list(store.glob("*.json")) == []
+                page.screenshot(path=str(runtime / "missing-record-rejected.png"), full_page=True)
         finally:
             browser.close()
     assert external_requests == []
