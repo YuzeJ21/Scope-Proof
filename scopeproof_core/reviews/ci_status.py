@@ -25,15 +25,21 @@ _Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,159}
 _CriterionId = Annotated[str, Field(pattern=r"^AC-[0-9]{2,}$", max_length=40)]
 _ReportedOutcome = Literal["passed", "failed", "skipped"]
 _Status = Literal["passed", "failed", "skipped", "stale", "unknown"]
+CI_STATUS_LABELS = {
+    "passed": "Passed",
+    "failed": "Failed",
+    "skipped": "Explicitly skipped",
+    "stale": "Stale",
+    "unknown": "Unknown",
+}
 
 
-class CIStatusRun(BaseModel):
+class CIStatusRunReference(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     run_id: _Identifier
     head_sha: str = Field(pattern=EXACT_HEAD_PATTERN)
     source_url: str = Field(max_length=2048)
-    outcomes: dict[_Identifier, _ReportedOutcome] = Field(max_length=512)
 
     @field_validator("source_url")
     @classmethod
@@ -44,6 +50,10 @@ class CIStatusRun(BaseModel):
         if url.scheme != "https" or url.username is not None:
             raise ValueError("run reference must use HTTPS without user information")
         return value
+
+
+class CIStatusRun(CIStatusRunReference):
+    outcomes: dict[_Identifier, _ReportedOutcome] = Field(max_length=512)
 
 
 class CIStatusManifest(BaseModel):

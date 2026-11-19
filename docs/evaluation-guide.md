@@ -40,7 +40,7 @@ Follow the [README Quickstart](../README.md#quickstart) for both install paths.
 | Path | Identity and capabilities |
 | --- | --- |
 | Published **v0.2.7** — default evaluation download | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) from `e099679ed63309716a7ce4726557ef794bfd5c80`, with wheel, source archive and checksum manifest. Includes native v0.2.6 history compatibility, CSV/HTML revision labels and bounded event-scan repair, plus constructed browser/sample evidence. No new application feature or record format. Writes v9. |
-| Current development source **0.2.8.dev0**, unpublished | Includes the read-only [CI status view](#inspect-ci-status-for-a-reviewed-build). Use the v0.2.7 tag/downloads for the verified release. Writes v9. |
+| Current development source **0.2.8.dev0**, unpublished | Includes the read-only [CI status view](#inspect-ci-status-for-a-reviewed-build) and [offline CI snapshot](#download-a-ci-snapshot). Use the v0.2.7 tag/downloads for the verified release. Writes v9. |
 | Published **v0.2.6** fallback | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Includes decision overview, offline HTML, acceptance rationale, source-conflict explanations and saved requirements comparison; see [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
 | Historical private **0.2.7.dev0** candidate, unpublished | Its source, version and artifact identities remain historical; it is not final v0.2.7 or public-download verification. The no-install example separately retains its actual public v0.2.6 producer and unchanged input. See the [sample guide](examples/offline-handoff/README.md). |
 | Published **v0.2.5** earlier release | [Evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.5) from `72cac01ea6abb99beaf714396eb610fa39fe84f0`. Writes v9. |
@@ -102,6 +102,24 @@ when the manifest has neither an exact-build result nor an explicit skip. An unm
 criterion or a missing outcome is **Unknown**. Use the per-test rows to see mixed results
 and trace the source runs.
 
+### Download a CI snapshot
+
+Choose **Download CI snapshot** in **CI status by criterion** when the manifest includes
+a run for the full reviewed commit and matches the confirmed criteria. Open the HTML
+file in a browser to read it offline. It includes the review identity, confirmed criteria,
+reported test results and their reasons, and links to cited CI runs. Older runs can still
+explain a result marked **Stale**. A manifest containing only older runs remains available
+for inspection in the manual upload view.
+
+The snapshot identifies the manifest by its SHA-256 and shows how it was supplied.
+The run links are provided by that external source. Opening the report loads no external
+resources. Following a run link requires network access. The snapshot does not record
+verification or acceptance. The standard acceptance report remains a separate download.
+
+If the configured manifest is replaced or removed, refresh the CI panel before downloading.
+For a manual upload, use the button shown after the upload is processed. Resolve pending
+review inputs before downloading a current snapshot.
+
 ### Generate manifests with the simulated CI pipeline
 
 From the development checkout with dependencies installed, run the constructed CSV export
@@ -160,7 +178,9 @@ python -m scripts.simulate_ci_manifest --publish-targeted ./simulated-ci-output
 
 The runner rechecks the initial artifacts before publishing the targeted handoff. Select
 **Refresh CI status** in B to see row access change from **Explicitly skipped** to **Failed**.
-The filter failure and header pass remain visible at the same reviewed commit.
+The filter failure and header pass remain visible at the same reviewed commit. Download
+the CI snapshot before and after the targeted run to compare the reported outcome and
+its cited run offline.
 
 The handoff reads only the configured local folder. The example run links use
 `ci.example.invalid`, and the simulated CI runner executes outside the workbench. The panel

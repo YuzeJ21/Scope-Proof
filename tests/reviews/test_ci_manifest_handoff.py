@@ -5,11 +5,16 @@ from __future__ import annotations
 import json
 import os
 import re
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
-from scopeproof_core.reviews.ci_handoff import ci_manifest_filename, load_exact_ci_manifest
+from scopeproof_core.reviews.ci_handoff import (
+    ci_manifest_filename,
+    load_exact_ci_manifest,
+    load_exact_ci_manifest_with_sha256,
+)
 from scopeproof_core.reviews.ci_status import MAX_CI_STATUS_BYTES
 from scopeproof_core.schemas.models import ReviewBundle, normalized_criteria_sha256
 from tests.junit_audit_fixture import junit_audit_state
@@ -80,6 +85,24 @@ def test_loads_matching_manifest_without_altering_review_or_files(
     assert loaded.model_dump(mode="json") == manifest
     assert bundle.model_dump_json() == prior
     assert path.read_bytes() == payload
+
+
+def test_handoff_digest_binds_exact_bytes_even_for_identical_parsed_content(
+    tmp_path: Path, bundle: ReviewBundle, manifest: dict,
+) -> None:
+    root = tmp_path.resolve()
+    path = _manifest_path(root, bundle)
+    first = b"\r\n" + _payload(manifest) + b"\r\n"
+    second = first.replace(b"\r\n", b"\n")
+    path.write_bytes(first)
+    manifest_first, digest_first = load_exact_ci_manifest_with_sha256(root, bundle)
+    path.write_bytes(second)
+    manifest_second, digest_second = load_exact_ci_manifest_with_sha256(root, bundle)
+
+    assert manifest_first == manifest_second == load_exact_ci_manifest(root, bundle)
+    assert digest_first == sha256(first).hexdigest()
+    assert digest_second == sha256(second).hexdigest()
+    assert digest_first != digest_second
 
 
 def test_missing_exact_filename_does_not_scan_other_manifests(

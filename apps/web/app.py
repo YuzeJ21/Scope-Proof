@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import streamlit as st
 
-from apps.web.ci_status import render_criterion_ci_status
+from apps.web.ci_status import render_criterion_ci_status, retire_ci_snapshot_download
 from apps.web.decision_context_comparison import render_decision_context_comparison
 from apps.web.deferred_exports import deferred_review_export, deferred_saved_comparison_export
 from apps.web.final_acceptance_comparison import render_final_acceptance_comparison
@@ -218,6 +218,7 @@ from scopeproof_core.storage.json_store import (
 from scopeproof_core.verification.service import build_findings
 
 st.set_page_config(page_title="ScopeProof", page_icon="🔎", layout="wide")
+retire_ci_snapshot_download()
 st.markdown(
     """
     <style>
@@ -4063,6 +4064,24 @@ else:
                 )
             st.rerun()
         review_truth_conflict = source_observation_conflict or revalidation_failed
+        export_has_provenance = bundle.review.criteria_source_provenance is not None
+        acceptance_export_expired = st.session_state.setdefault(
+            "final_acceptance_export_expired", Event(),
+        )
+        expected_export_fingerprint = (
+            st.session_state["saved_review_fingerprint"]
+            if review_state is not None and _review_matches_local_save(review_state)
+            else None
+        )
+        prepare_review_download = partial(
+            deferred_review_export,
+            review_state if review_state is not None else bundle,
+            store=review_store,
+            expected_fingerprint=expected_export_fingerprint,
+            authority_check=source_authority_check(review_state),
+            expired_by_acceptance_note=acceptance_export_expired.is_set,
+            expired_by_review_draft=draft_export_expired.is_set,
+        )
         assert decision_overview is not None
         with decision_overview.container(border=True):
             _render_decision_overview(
@@ -4084,7 +4103,15 @@ else:
                     "level for " + ", ".join(below_required_verification) + ". "
                     "E4 requires explicit human acceptance for the reviewed commit."
                 )
-        render_criterion_ci_status(bundle, available=not review_truth_conflict)
+        render_criterion_ci_status(
+            bundle,
+            available=not review_truth_conflict,
+            prepare_download=(
+                prepare_review_download
+                if export_has_provenance and not has_pending_current_review
+                else None
+            ),
+        )
         st.header("6 · Summary & Export")
         review_status = (
             "Refresh required"
@@ -4138,17 +4165,6 @@ else:
             "Resolve, submit, discard, or clear pending inputs before exporting the "
             "authoritative review."
         )
-    export_source = review_state if review_state is not None else bundle
-    export_has_provenance = bundle.review.criteria_source_provenance is not None
-    acceptance_export_expired = st.session_state.setdefault(
-        "final_acceptance_export_expired", Event(),
-    )
-    expected_export_fingerprint = (
-        st.session_state["saved_review_fingerprint"]
-        if review_state is not None
-        and _review_matches_local_save(review_state)
-        else None
-    )
     export_formats = (
         ("Markdown", "md", "text/markdown", export_markdown),
         ("JSON", "json", "application/json", export_json),
@@ -4159,15 +4175,7 @@ else:
     for column, (label, extension, mime, renderer) in zip(
         st.columns(len(export_formats)), export_formats, strict=True,
     ):
-        data = deferred_review_export(
-            export_source,
-            renderer,
-            store=review_store,
-            expected_fingerprint=expected_export_fingerprint,
-            authority_check=source_authority_check(review_state),
-            expired_by_acceptance_note=acceptance_export_expired.is_set,
-            expired_by_review_draft=draft_export_expired.is_set,
-        ) if export_has_provenance else ""
+        data = prepare_review_download(renderer) if export_has_provenance else ""
         column.download_button(
             f"Download {label}",
             data,
