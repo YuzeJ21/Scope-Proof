@@ -1369,13 +1369,13 @@ has_other_pending_review_input = has_pending_review_drafts or has_missing_active
 has_pending_review_input = has_other_pending_review_input or has_pending_acceptance_note
 reconcile_scope_file_selection(current_review_state)
 has_pending_scope_draft = scope_draft_pending()
-scope_export_expired = st.session_state.setdefault("scope_draft_export_expired", Event())
-if has_pending_scope_draft:
-    scope_export_expired.set()
-elif scope_export_expired.is_set():
-    # Replace the event so callbacks from before the draft stay expired.
-    scope_export_expired = Event()
-    st.session_state["scope_draft_export_expired"] = scope_export_expired
+draft_export_expired = st.session_state.setdefault("review_draft_export_expired", Event())
+if has_pending_review_drafts or has_pending_scope_draft:
+    draft_export_expired.set()
+elif draft_export_expired.is_set():
+    # Keep the old event set for callbacks from before the draft.
+    draft_export_expired = Event()
+    st.session_state["review_draft_export_expired"] = draft_export_expired
 has_pending_current_review = has_pending_review_input or has_pending_scope_draft
 current_review_state = _refresh_clean_review_from_local_store(
     current_review_state,
@@ -4166,7 +4166,7 @@ else:
             expected_fingerprint=expected_export_fingerprint,
             authority_check=source_authority_check(review_state),
             expired_by_acceptance_note=acceptance_export_expired.is_set,
-            expired_by_scope_draft=scope_export_expired.is_set,
+            expired_by_review_draft=draft_export_expired.is_set,
         ) if export_has_provenance else ""
         column.download_button(
             f"Download {label}",

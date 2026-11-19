@@ -15,33 +15,41 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 <a id="current-priorities--2026-11-07"></a>
 
-## Current priorities — 2026-11-18
+## Current priorities — 2026-11-19
 
-The audit baseline is main `8bb9faa3e270a821377f62be3de1762e98357d07`, with
-[passing CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/43610193600/attempts/2).
-PRs #293–#295 completed criterion-level CI status, simulated manifest generation, and the
-exact-build local handoff on `0.2.8.dev0`. The public site and default evaluation download
-point to [v0.2.7](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7). Its
-release commit predates these changes and the later acceptance and stale-state fixes.
+The audit baseline is main `d2252bd5e024ff7a0fa08b142bd79253ff2421ce`, with
+[passing CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44425049971).
+The public site and default evaluation download point to
+[v0.2.7](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7). The following completed
+items are part of the `0.2.8.dev0` development source.
 
-Prioritize record integrity and the local evaluation workflow. The following are engineering
-stages within owner-led productization. The limited-beta decision remains in
-[Stage 3](#stage-3--limited-beta).
+- PRs #293–#295 added criterion-level CI status, simulated manifest generation, and local
+  exact-build handoff. The workbench treats the manifest as external context.
+- [PR #296](https://github.com/YuzeJ21/Scope-Proof/pull/296) bound saved-review reads to the
+  requested record ID across both direct and locked reads.
+- [PR #297](https://github.com/YuzeJ21/Scope-Proof/pull/297) added the
+  [two-build preparation command](docs/evaluation-guide.md#open-simulated-ci-status-from-a-local-folder),
+  which creates both reviews and prints the matching loopback launch command.
+  [PR #298](https://github.com/YuzeJ21/Scope-Proof/pull/298) stabilized the installed
+  acceptance-note browser test.
 
-Engineering stage 1 merged at `62e2cc5` in
-[PR #296](https://github.com/YuzeJ21/Scope-Proof/pull/296).
-[Main CI run 44400366984](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44400366984)
-records the resulting-main verification. The Stage 2
-[preparation command](docs/evaluation-guide.md#open-simulated-ci-status-from-a-local-folder)
-creates the constructed A/B workbench inputs and prints the launch command. Publish the targeted
-run after opening Build B.
+Prioritize reviewer integrity first. A constructed AppTest replay showed that a saved Ready
+report could still be rendered by an earlier download callback after the workbench observed
+a criterion draft and disabled the current buttons. The callback can already be in use by a
+download in progress. A separate two-build rehearsal also showed an offline handoff gap.
+Build B's row-entitlement check went from explicitly skipped to failed after the targeted rerun.
+Its saved review and ordinary HTML acceptance report had identical bytes before and after the
+rerun, so the recipient could not see the new CI context in that report.
+
+These engineering stages are part of owner-led productization. The limited-beta decision
+remains in [Stage 3](#stage-3--limited-beta).
 
 | Stage | Priority and deliverable | Acceptance criteria |
 | --- | --- | --- |
-| 1 — merged, PR #296 at `62e2cc5` | P0 · Bind each saved-review read to the requested ID. | Direct and locked reads reject a file that carries another review ID. Mutations stop before changing either record. Detached transfer validation and supported legacy records still work. [Main CI record](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44400366984). |
-| 2 — complete on source | P1 · Prepare the two-build evaluation workbench with one command. | `--prepare-workbench` requires a new output directory, creates confirmed A/B reviews and their initial manifests, and prints both review IDs plus a loopback launch command using the matching folders. Automation opens both reviews and refreshes the same B after the targeted command. |
-| 3 | P2 · Evaluate a portable CI context snapshot for offline review. | Reproduce the recipient's need with a constructed handoff. If the snapshot solves that gap, export the exact build, confirmed criteria and per-test outcomes with run references and an external-source label. Test stale context rejection and preserve the review decision. |
-| 4 | P2 · Verify a distribution candidate for the accumulated source changes. | On separately authorized scope, pin the version and commit, rebuild and checksum the artifacts, and verify clean installs, native v9 record reopening and the packaged browser journeys. Public distribution requires its own decision. |
+| 1 — complete on development source | P0 · Retire older current-report downloads when the workbench observes a review draft. | Recheck draft authority before and after rendering. Earlier controls stay expired after discard. Fresh downloads work after resolving the draft, and discarded inputs preserve saved bytes and decisions. |
+| 2 | P1 · Share a standalone CI status snapshot for one reviewed build. | An offline recipient sees the full reviewed SHA, confirmed criteria, per-test outcomes and reasons, and cited CI runs. Label the manifest as externally supplied, reject mismatched or obsolete context, and preserve the saved review and gate. Verify A, initial B, and targeted B with constructed automation. |
+| 3 — separately authorized | P2 · Verify a downloadable candidate for the accumulated source changes. | Pin the version and commit, build and checksum the artifacts, and verify clean installs, native v9 record reopening, and packaged browser journeys against the candidate. |
+| 4 — separately authorized after candidate verification | P2 · Publish the verified evaluation candidate and align its entry points. | Match public asset bytes to the verified checksums, install from an anonymous download, and check the release links and version labels on the published entry points. |
 
 Keep architecture work tied to a reproduced defect or measured constraint. Additional adapters,
 schema changes and format parity need a demonstrated reviewer outcome. Product usefulness and
