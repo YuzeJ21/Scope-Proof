@@ -139,12 +139,10 @@ def _saved_state(record: Path) -> dict:
 def _reopen(page: Page, base_url: str) -> None:
     page.goto(base_url, wait_until="domcontentloaded")
     page.get_by_text("Resume a saved review", exact=True).click()
-    _run_and_wait_for_streamlit_rerun(
-        page,
-        page.get_by_text("Enter a review ID directly", exact=True).click,
-    )
+    page.get_by_text("Enter a review ID directly", exact=True).click()
     review_id = page.get_by_role("textbox", name="Review ID", exact=True)
     reopen = page.get_by_role("button", name="Reopen local review", exact=True)
+    expect(review_id).to_be_editable(timeout=10_000)
     expect(review_id).to_have_value("")
     expect(reopen).to_be_disabled()
     review_id.fill(REVIEW_ID)

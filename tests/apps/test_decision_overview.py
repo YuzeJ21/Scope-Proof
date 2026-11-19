@@ -170,13 +170,73 @@ def test_file_scope_draft_expires_an_already_rendered_current_download(
         "Unsubmitted scope explanation"
     ).run()
 
-    with pytest.raises(deferred_exports.DeferredExportUnavailable, match="file-scope decision"):
+    with pytest.raises(deferred_exports.DeferredExportUnavailable, match="review draft"):
         old_download()
 
     app = app.button(key=scope_key(app, "discard_scope_decision_draft")).click().run()
-    with pytest.raises(deferred_exports.DeferredExportUnavailable, match="file-scope decision"):
+    with pytest.raises(deferred_exports.DeferredExportUnavailable, match="review draft"):
         old_download()
     assert "ScopeProof Acceptance Review" in html_callbacks[-1]()
+
+
+@pytest.mark.parametrize(
+    ("widget_type", "widget_key", "discard_key"),
+    [
+        ("text_input", "criterion_text_AC-01", "discard_criteria_draft"),
+        ("text_area", "requirements_input", "discard_requirements_draft"),
+        ("text_input", "new_criterion_text", "clear_criteria_authoring_drafts"),
+        ("text_input", "criteria_source_revision", None),
+        ("text_input", "runtime_artifact_reference", "clear_criterion_detail_drafts"),
+    ],
+)
+def test_review_draft_retires_earlier_current_downloads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    widget_type: str, widget_key: str, discard_key: str | None,
+) -> None:
+    storage = tmp_path / "reviews"
+    monkeypatch.setenv("SCOPEPROOF_WORKBENCH_STORAGE_DIR", str(storage))
+    downloads = {}
+    real_deferred = deferred_exports.deferred_review_export
+
+    def capture_download(source, renderer, **kwargs):
+        callback = real_deferred(source, renderer, **kwargs)
+        downloads[renderer] = callback
+        return callback
+
+    monkeypatch.setattr(deferred_exports, "deferred_review_export", capture_download)
+    app = resolve_all_criteria(analyzed_demo(new_app()))
+    app = app.button(key="record_final_acceptance").click().run()
+    before = app.session_state["review_state"].model_copy(deep=True)
+    record = storage / f"{before.review.review_id}.json"
+    saved_bytes = record.read_bytes()
+    old_downloads = downloads.copy()
+    assert len(old_downloads) == 4
+    assert "<strong>Review status:</strong> Review complete" in old_downloads[export_html]()
+
+    if widget_key == "runtime_artifact_reference":
+        widget_key = runtime_key(app, widget_key)
+    widget = getattr(app, widget_type)(key=widget_key)
+    assert not widget.disabled
+    original_value = widget.value
+    app = widget.set_value("Unsubmitted edit").run()
+    assert not app.exception
+    assert all(button.disabled for button in app.download_button)
+    for download in old_downloads.values():
+        with pytest.raises(deferred_exports.DeferredExportUnavailable, match="review draft"):
+            download()
+
+    if discard_key is None:
+        app = getattr(app, widget_type)(key=widget_key).set_value(original_value).run()
+    else:
+        app = app.button(key=discard_key).click().run()
+    assert not app.exception
+    assert all(not button.disabled for button in app.download_button)
+    for download in old_downloads.values():
+        with pytest.raises(deferred_exports.DeferredExportUnavailable, match="review draft"):
+            download()
+    assert "<strong>Review status:</strong> Review complete" in downloads[export_html]()
+    assert app.session_state["review_state"] == before
+    assert record.read_bytes() == saved_bytes
 
 
 def test_file_scope_draft_pauses_saving_an_otherwise_writable_review(
