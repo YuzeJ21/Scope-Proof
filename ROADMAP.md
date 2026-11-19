@@ -32,6 +32,8 @@ items are part of the `0.2.8.dev0` development source.
   which creates both reviews and prints the matching loopback launch command.
   [PR #298](https://github.com/YuzeJ21/Scope-Proof/pull/298) stabilized the installed
   acceptance-note browser test.
+- [PR #299](https://github.com/YuzeJ21/Scope-Proof/pull/299) made draft invalidation
+  apply to current reports in every format.
 
 Prioritize reviewer integrity first. A constructed AppTest replay showed that a saved Ready
 report could still be rendered by an earlier download callback after the workbench observed
@@ -47,7 +49,7 @@ remains in [Stage 3](#stage-3--limited-beta).
 | Stage | Priority and deliverable | Acceptance criteria |
 | --- | --- | --- |
 | 1 — complete on development source | P0 · Retire older current-report downloads when the workbench observes a review draft. | Recheck draft authority before and after rendering. Earlier controls stay expired after discard. Fresh downloads work after resolving the draft, and discarded inputs preserve saved bytes and decisions. |
-| 2 | P1 · Share a standalone CI status snapshot for one reviewed build. | An offline recipient sees the full reviewed SHA, confirmed criteria, per-test outcomes and reasons, and cited CI runs. Label the manifest as externally supplied, reject mismatched or obsolete context, and preserve the saved review and gate. Verify A, initial B, and targeted B with constructed automation. |
+| 2 — complete on development source | P1 · Share a standalone [CI status snapshot](docs/evaluation-guide.md#download-a-ci-snapshot) for one reviewed build. | An offline recipient sees the full reviewed SHA, confirmed criteria, per-test outcomes and reasons, and cited CI runs. The report labels the manifest as externally supplied and records its digest. Stale download controls fail closed. The constructed A, initial B, and targeted B checks preserve the saved review and gate. |
 | 3 — separately authorized | P2 · Verify a downloadable candidate for the accumulated source changes. | Pin the version and commit, build and checksum the artifacts, and verify clean installs, native v9 record reopening, and packaged browser journeys against the candidate. |
 | 4 — separately authorized after candidate verification | P2 · Publish the verified evaluation candidate and align its entry points. | Match public asset bytes to the verified checksums, install from an anonymous download, and check the release links and version labels on the published entry points. |
 

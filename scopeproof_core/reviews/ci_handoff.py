@@ -29,6 +29,14 @@ def ci_manifest_filename(
 
 def load_exact_ci_manifest(directory: Path, bundle: ReviewBundle) -> CIStatusManifest:
     """Reject mismatched files even if they have the exact expected filename."""
+    manifest, _ = load_exact_ci_manifest_with_sha256(directory, bundle)
+    return manifest
+
+
+def load_exact_ci_manifest_with_sha256(
+    directory: Path, bundle: ReviewBundle,
+) -> tuple[CIStatusManifest, str]:
+    """Read and validate one matching manifest and hash the same bytes."""
     review = bundle.review
     if not review.criteria_confirmed or not re.fullmatch(EXACT_HEAD_PATTERN, review.head_sha):
         raise ValueError("automatic CI handoff requires confirmed criteria and an exact head")
@@ -39,8 +47,9 @@ def load_exact_ci_manifest(directory: Path, bundle: ReviewBundle) -> CIStatusMan
     text = read_text_no_follow(
         directory / name, max_bytes=MAX_CI_STATUS_BYTES, preserve_newlines=True,
     )
-    manifest = load_ci_status_manifest(text.encode("utf-8"))
+    payload = text.encode("utf-8")
+    manifest = load_ci_status_manifest(payload)
     if not any(run.head_sha == review.head_sha for run in manifest.runs):
         raise ValueError("automatic CI handoff requires an exact-head run")
     validate_ci_manifest_context(bundle, manifest, criteria_digest)
-    return manifest
+    return manifest, sha256(payload).hexdigest()

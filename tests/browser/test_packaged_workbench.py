@@ -1436,6 +1436,7 @@ def _installed_workbench_server(
     constructed_snapshot: Path | None = None,
     constructed_candidate_failure: bool = False,
     storage_directory: Path | None = None,
+    ci_manifest_directory: Path | None = None,
 ) -> Iterator[tuple[str, Path]]:
     port = _available_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -1451,6 +1452,9 @@ def _installed_workbench_server(
     if storage_directory is not None:
         assert constructed_snapshot is None
         command.extend(("--storage-dir", str(storage_directory)))
+    if ci_manifest_directory is not None:
+        assert constructed_snapshot is None
+        command.extend(("--ci-manifest-dir", str(ci_manifest_directory)))
     if constructed_snapshot is not None:
         # Inject validated constructed data without editing installed modules or
         # executing any source text carried by that data. Other journeys exercise
