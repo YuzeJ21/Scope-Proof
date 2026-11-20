@@ -9,14 +9,15 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
+Current development source declares `0.2.9.dev0`, unpublished, for post-release entry-point alignment.
 Stage 1 remains `closed_not_pursued_by_owner` with zero external-use evidence. Stage 3 remains
 gated by genuine independent-use evidence and separate authorization.
 
 ## 0.2.8 — Evaluation release build
 
-This source declares package version `0.2.8` for final release verification. The
-[GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) records publication and
-verification. Published v0.2.7 remains the verified evaluation download at this source revision.
+Published from `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`. The
+[v0.2.8 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) records the
+final wheel, source archive, checksum manifest and completed public verification.
 
 Changes since public v0.2.7:
 

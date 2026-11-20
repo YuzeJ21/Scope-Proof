@@ -1,8 +1,8 @@
 # Reproducible development environment
 
-Current source/package is **0.2.8**, prepared for release verification. The default evaluation
-download is published, publicly verified **v0.2.7** from `e099679ed63309716a7ce4726557ef794bfd5c80`.
-Its [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) identifies final
+Current development source/package is **0.2.9.dev0**, unpublished. The default evaluation
+download is published, publicly verified **v0.2.8** from `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`.
+Its [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) identifies final
 source, wheel, source archive, checksum manifest and completed public-download verification.
 The earlier verified v0.2.6 fallback remains at `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; its
 [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies final
