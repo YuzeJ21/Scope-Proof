@@ -43,7 +43,7 @@ The [evaluation guide](../evaluation-guide.md) identifies published, publicly ve
 `e099679ed63309716a7ce4726557ef794bfd5c80` as the default evaluation download. Its
 [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records final source,
 wheel, source archive, checksum manifest and completed public-download/fresh-install verification.
-Current development source is `0.2.8.dev0`, unpublished; the earlier verified v0.2.6 fallback
+Current source is `0.2.8`, prepared for release verification. The earlier verified v0.2.6 fallback
 retains its own source and checks. The private `0.2.7.dev0`
 candidate stays historical and unpublished; its checks do not verify final v0.2.7 bytes. The
 [v0.2.6 GitHub Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) identifies

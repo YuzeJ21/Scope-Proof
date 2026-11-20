@@ -9,13 +9,27 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Current development identity is `0.2.8.dev0`, unpublished, for post-v0.2.7 documentation and
-website alignment. Published v0.2.7 and its immutable artifacts remain the default evaluation
-download; no v0.2.8 release is selected.
+Stage 1 remains `closed_not_pursued_by_owner` with zero external-use evidence. Stage 3 remains
+gated by genuine independent-use evidence and separate authorization.
 
-No further feature or release is selected automatically. Stage 3 remains gated by genuine
-independent-use evidence and separate authorization.
+## 0.2.8 — Evaluation release build
 
+This source declares package version `0.2.8` for final release verification. The
+[GitHub Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) records publication and
+verification. Published v0.2.7 remains the verified evaluation download at this source revision.
+
+Changes since public v0.2.7:
+
+- Inspect pass, failure, explicit skip, stale and unknown CI outcomes by confirmed criterion for
+  the reviewed commit. Results come from an externally supplied manifest and leave the review and
+  gate unchanged.
+- Prepare both simulated builds with one command, then open their exact-build CI results in the
+  loopback workbench. The simulator can produce and hand off manifests from a trusted local folder.
+- Export a standalone read-only HTML CI snapshot for the reviewed commit, with the confirmed
+  criteria, run links and manifest digest. It records external CI context separately from evidence
+  and acceptance decisions.
+- Require saved-review reads to match the requested record ID. Opening a review draft invalidates
+  older download controls for current reports in every format.
 - Candidate excerpts in new analyses use consecutive lines at the cited commit. When a diff
   omits a neighboring line, the excerpt stops at that gap.
 - Reopen CLI-created reviews with E0 or E4 requirements in the workbench and display their
@@ -42,6 +56,9 @@ independent-use evidence and separate authorization.
   inspect recorded E4, or correct an earlier below-level verification.
 - Delayed external verification inputs and Save actions expire when their form is retired.
   Switching criteria cannot attach a previous form's evidence to the new criterion.
+
+Saved-review format remains v9. Frozen R-002 inputs and results are unchanged. Simulated workflows
+and package checks supply automated engineering evidence only.
 
 ## 0.2.7 — Evaluation release build
 

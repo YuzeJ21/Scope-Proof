@@ -20,7 +20,7 @@ and controlled signal-loss evidence remain distinct; the exact natural Streamlit
 remains unproven. See the [roadmap](../ROADMAP.md),
 [observer assessment](audits/2026-11-07-browser-observer-reopen.md) and
 [evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md).
-Current development source/package is **0.2.8.dev0**, unpublished. The
+Current source/package is **0.2.8**, prepared for release verification. The
 [v0.2.7 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) identifies the
 published default evaluation download, final source, wheel, source archive, checksum manifest
 and completed public-download verification. Earlier verified **v0.2.6** remains at
