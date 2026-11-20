@@ -4,8 +4,8 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current direction: align current entry points and the separately authorized website publication
-with the completed, publicly verified v0.2.7 release from `e099679ed63309716a7ce4726557ef794bfd5c80`.
+Current entry points identify the completed, publicly verified v0.2.8 release from
+`7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`. The manual Pages workflow records separate website publication.
 PR #276 completed the no-install constructed HTML repository download; its actual public
 v0.2.6 exporter provenance, unchanged input and offline checks remain intact. PR #277 completed
 the bounded saved-history event-scan repair at main `944c791`; see the
@@ -20,8 +20,8 @@ and controlled signal-loss evidence remain distinct; the exact natural Streamlit
 remains unproven. See the [roadmap](../ROADMAP.md),
 [observer assessment](audits/2026-11-07-browser-observer-reopen.md) and
 [evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md).
-Current source/package is **0.2.8**, prepared for release verification. The
-[v0.2.7 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) identifies the
+Current development source/package is **0.2.9.dev0**, unpublished. The
+[v0.2.8 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) identifies the
 published default evaluation download, final source, wheel, source archive, checksum manifest
 and completed public-download verification. Earlier verified **v0.2.6** remains at
 `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`
@@ -43,7 +43,7 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [Evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md) — current-release routing,
   saved-decision positioning and the earlier source-only preview scope. The later authorized
   [Pages publication](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672) is complete.
-- [v0.2.7 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) —
+- [v0.2.8 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) —
   fixed source, three public assets and completed public-download verification.
 - [Historical-analysis revision-label assessment](audits/2026-11-07-historical-report-revision.md) —
   completed PR #273 CSV/HTML display correction and retained current-state export guards.
