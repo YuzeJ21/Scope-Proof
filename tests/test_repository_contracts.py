@@ -216,6 +216,8 @@ class _PublicSiteParser(HTMLParser):
         super().__init__()
         self.forms = 0
         self.links: list[str] = []
+        self.canonical_links: list[str] = []
+        self.open_graph: list[tuple[str, str | None]] = []
         self.remote_scripts: list[str] = []
         self.video_tracks: list[dict[str, str | None]] = []
 
@@ -225,6 +227,11 @@ class _PublicSiteParser(HTMLParser):
             self.forms += 1
         if tag == "a" and values.get("href"):
             self.links.append(str(values["href"]))
+        if tag == "link" and values.get("rel") == "canonical":
+            self.canonical_links.append(str(values.get("href")))
+        property_name = values.get("property") or ""
+        if tag == "meta" and property_name.startswith("og:"):
+            self.open_graph.append((property_name, values.get("content")))
         if tag == "script" and str(values.get("src", "")).startswith(("http://", "https://")):
             self.remote_scripts.append(str(values["src"]))
         if tag == "track":
@@ -2575,6 +2582,32 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
         assert poster.size == (1280, 720)
     with Image.open(alpha_visual_path) as alpha_visual:
         assert alpha_visual.size == (1200, 1200)
+
+
+def test_public_site_declares_a_static_link_preview() -> None:
+    page_url = "https://yuzej21.github.io/Scope-Proof/"
+    image_path = "assets/scopeproof-demo-poster.jpg"
+    parser = _PublicSiteParser()
+    parser.feed(Path("site/index.html").read_text(encoding="utf-8"))
+    tags = dict(parser.open_graph)
+
+    assert parser.canonical_links == [page_url]
+    assert len(tags) == len(parser.open_graph)
+    assert tags["og:url"] == page_url
+    assert tags["og:type"] == "website"
+    assert tags["og:title"] == "ScopeProof | Acceptance Evidence for GitHub Pull Requests"
+    assert "reviewed commit" in (tags["og:description"] or "")
+    assert tags["og:image"] == f"{page_url}{image_path}"
+    assert tags["og:image:alt"] == "ScopeProof constructed demo cover"
+    poster_path = Path("site") / image_path
+    assert poster_path.stat().st_size <= 5_000_000
+    with Image.open(poster_path) as poster:
+        width, height = poster.size
+        assert width >= 1200 and height >= 627
+        assert tags["og:image:width"] == str(width)
+        assert tags["og:image:height"] == str(height)
+        assert poster.format == "JPEG"
+        assert tags["og:image:type"] == "image/jpeg"
 
 
 def test_public_site_desktop_hero_keeps_actions_and_safety_boundary_above_the_fold() -> None:
