@@ -17,11 +17,12 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 ## Current priorities — 2026-11-19
 
-The audit baseline is main `d2252bd5e024ff7a0fa08b142bd79253ff2421ce`, with
-[passing CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44425049971).
+The engineering baseline before release finalization is main
+`d0ded6de40034067e551919a6d4ca250761673ca`, with
+[passing CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44622878395).
 The public site and default evaluation download point to
 [v0.2.7](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7). The following completed
-items are part of the `0.2.8.dev0` development source.
+items are part of the source prepared for v0.2.8 release verification.
 
 - PRs #293–#295 added criterion-level CI status, simulated manifest generation, and local
   exact-build handoff. The workbench treats the manifest as external context.
@@ -33,7 +34,10 @@ items are part of the `0.2.8.dev0` development source.
   [PR #298](https://github.com/YuzeJ21/Scope-Proof/pull/298) stabilized the installed
   acceptance-note browser test.
 - [PR #299](https://github.com/YuzeJ21/Scope-Proof/pull/299) made draft invalidation
-  apply to current reports in every format.
+  apply to current reports in every format. [PR #300](https://github.com/YuzeJ21/Scope-Proof/pull/300)
+  added the offline CI snapshot for the exact reviewed build.
+  [PR #301](https://github.com/YuzeJ21/Scope-Proof/pull/301) repaired the browser observer's
+  empty-store Review ID field selection.
 
 Prioritize reviewer integrity first. A constructed AppTest replay showed that a saved Ready
 report could still be rendered by an earlier download callback after the workbench observed
@@ -48,10 +52,10 @@ remains in [Stage 3](#stage-3--limited-beta).
 
 | Stage | Priority and deliverable | Acceptance criteria |
 | --- | --- | --- |
-| 1 — complete on development source | P0 · Retire older current-report downloads when the workbench observes a review draft. | Recheck draft authority before and after rendering. Earlier controls stay expired after discard. Fresh downloads work after resolving the draft, and discarded inputs preserve saved bytes and decisions. |
-| 2 — complete on development source | P1 · Share a standalone [CI status snapshot](docs/evaluation-guide.md#download-a-ci-snapshot) for one reviewed build. | An offline recipient sees the full reviewed SHA, confirmed criteria, per-test outcomes and reasons, and cited CI runs. The report labels the manifest as externally supplied and records its digest. Stale download controls fail closed. The constructed A, initial B, and targeted B checks preserve the saved review and gate. |
-| 3 — separately authorized | P2 · Verify a downloadable candidate for the accumulated source changes. | Pin the version and commit, build and checksum the artifacts, and verify clean installs, native v9 record reopening, and packaged browser journeys against the candidate. |
-| 4 — separately authorized after candidate verification | P2 · Publish the verified evaluation candidate and align its entry points. | Match public asset bytes to the verified checksums, install from an anonymous download, and check the release links and version labels on the published entry points. |
+| 1 — complete on source | P0 · Retire older current-report downloads when the workbench observes a review draft. | Recheck draft authority before and after rendering. Earlier controls stay expired after discard. Fresh downloads work after resolving the draft, and discarded inputs preserve saved bytes and decisions. |
+| 2 — complete on source | P1 · Share a standalone [CI status snapshot](docs/evaluation-guide.md#download-a-ci-snapshot) for one reviewed build. | An offline recipient sees the full reviewed SHA, confirmed criteria, per-test outcomes and reasons, and cited CI runs. The report labels the manifest as externally supplied and records its digest. Stale download controls fail closed. The constructed A, initial B, and targeted B checks preserve the saved review and gate. |
+| 3 — release verification | P2 · Build and verify final v0.2.8 from reviewed main. | Pin the version and commit, build and checksum the archives, and verify clean installs, native v9 reopening, and packaged browser journeys. |
+| 4 — authorized after final verification | P2 · Publish the verified evaluation release and align its entry points. | Match public asset bytes to the verified checksums, install from anonymous downloads, and verify the updated public site, release links and LinkedIn preview. |
 
 Keep architecture work tied to a reproduced defect or measured constraint. Additional adapters,
 schema changes and format parity need a demonstrated reviewer outcome. Product usefulness and
@@ -317,8 +321,8 @@ is dated evidence; the current priorities and version guide above govern the pre
 
 ## Current operating decision
 
-**Current source/package version is 0.2.8.dev0**, unpublished. Final v0.2.7 is published and
-publicly verified from
+**Current source/package version is 0.2.8**, prepared for release verification. Final v0.2.7 is
+published and publicly verified from
 `e099679ed63309716a7ce4726557ef794bfd5c80`, separately from the historical unpublished
 `0.2.7.dev0` candidate. Its
 [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records final source,
@@ -378,8 +382,8 @@ authenticated identity and integrations remain separately scoped options.
 The GitHub Release record is authoritative for publication availability. Published `0.2.7` is
 publicly verified from `e099679ed63309716a7ce4726557ef794bfd5c80`; its
 [Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) records all three assets
-and completed public-download verification. Current development source reports `0.2.8.dev0`,
-unpublished; later documentation and website changes do not change the release tag or bytes.
+and completed public-download verification. Current source reports `0.2.8` for final release
+verification. The verified v0.2.7 release keeps its own tag and bytes.
 The earlier verified v0.2.6 fallback is from
 `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`; see the
 [v0.2.6 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).

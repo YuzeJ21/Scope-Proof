@@ -28,7 +28,7 @@ from scopeproof_core.version import __version__
 # Retain the earlier/fallback identity used by archived participant documents.
 PUBLIC_RELEASE_VERSION = "0.2.6"
 PUBLIC_RELEASE_TAG = "v0.2.6"
-SOURCE_VERSION = "0.2.8.dev0"
+SOURCE_VERSION = "0.2.8"
 RELEASE_BUILD_VERSION = "0.2.7"
 RELEASE_SOURCE_SHA = "e099679ed63309716a7ce4726557ef794bfd5c80"
 RELEASE_BUILD_TAG = "v0.2.7"

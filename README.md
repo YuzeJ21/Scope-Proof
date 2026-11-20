@@ -47,8 +47,8 @@ source, wheel, source archive, checksum manifest, anonymous download checks and 
 from both public archives. Its [release-source CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42547822181)
 passed 4,888 tests, 38 intentional skips and 95.5192% coverage, including Python/Windows lanes.
 These are automated engineering checks, not genuine-use evidence. The downloaded-archive installs
-were checked on macOS/Python 3.11, not Windows. Current development source identifies itself as
-**0.2.8.dev0**, unpublished, to distinguish post-release changes from the published bytes.
+were checked on macOS/Python 3.11, not Windows. The current source declares final package
+version **0.2.8** for release verification. The verified evaluation download remains v0.2.7.
 Public **v0.2.6** remains an earlier verified fallback. The private **0.2.7.dev0** candidate
 remains historical and unpublished.
 [PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed the permanent
@@ -210,8 +210,8 @@ only explicit success as passing.
 Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
 for the tested Python versions, platform limits, and contributor setup.
 
-**Current source/package version: 0.2.8.dev0**, unpublished. Published v0.2.7 comes from
-`e099679ed63309716a7ce4726557ef794bfd5c80`. The
+**Current source/package version: 0.2.8**, prepared for release verification. Published v0.2.7
+comes from `e099679ed63309716a7ce4726557ef794bfd5c80`. The
 [v0.2.7 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) lists
 `scopeproof-0.2.7-py3-none-any.whl`, `scopeproof-0.2.7.tar.gz`, `SHA256SUMS.txt`, and completed
 public-download verification. Use it as the default evaluation download; the verified v0.2.6
