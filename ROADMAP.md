@@ -15,14 +15,35 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 
 <a id="current-priorities--2026-11-07"></a>
 
-## Current priorities — 2026-11-19
+## Current priorities — 2026-11-23
+
+Stage 2's next outcome is an exact-build CI handoff that a reviewer can produce
+from a script and understand at a glance. The [current product and market assessment](docs/commercialization/product-direction-2026-11-23.md)
+compares this workflow with native GitHub controls, ticket-aware code review, and managed test
+traceability. The [constructed two-build rehearsal](docs/evaluation-guide.md#open-simulated-ci-status-from-a-local-folder)
+reproduces the friction: all three tests pass on A, while B has one failure and one explicit
+skip. The targeted rerun changes the skipped test to failed on the same B commit. In v0.2.8 a
+reviewer opens the workbench to export each snapshot and checks each criterion separately.
+
+| Priority | Deliverable | Acceptance criteria |
+| --- | --- | --- |
+| P0 · Implemented on development source | [Export an exact-build CI snapshot from the CLI](docs/evaluation-guide.md#export-a-ci-snapshot-from-the-cli). | Use a named saved review and bounded local manifest. Match the confirmed criteria and reviewed commit, preserve both input files, and write a new offline HTML report atomically. Refuse pending reviews, incompatible inputs and existing outputs. Verify A, initial B and targeted B with an installed wheel. |
+| P1 · Implemented on development source | Show CI follow-up in the workbench and offline snapshot. | Use the same projection for both. Show failing, skipped, stale and unknown tests once each, with all mapped criterion IDs and cited runs. Identify unmapped criteria. Keep the detailed view, externally supplied provenance, and existing gate and saved state. |
+| P2 · Private evaluation candidate | Let a reader inspect the two-build workflow before installing. | Provide a clearly labeled constructed example with both exact commits, the targeted rerun, and producer identity. Verify offline reading at desktop and phone widths. Keep the frozen v0.2.6 handoff example and R-002 intact. Review package and site publication separately. |
+| Gated · Independent use and private workflow design | Determine whether the handoff reduces work for a reviewer outside the project. | Require separate authorization and genuine independent use. A reviewer can explain what changed, decide what to check next and choose to reuse the workflow. Scope private access, provenance, retention and use rights only for a demonstrated need. |
+
+### November 19 release work
 
 The published, publicly verified `0.2.8` evaluation release was built from
 `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d` after PR #302.
 [Release-source CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44805911264) and the
 [v0.2.8 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) identify the
 checks and public archives. The website source links to that release and includes LinkedIn
-preview metadata. The manual Pages workflow identifies the deployed site revision.
+preview metadata. [Post-merge CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44811537369)
+passed at `9c530daf6a5569e1a24998d60d45e3eb3f373bbb`. The
+[Pages deployment](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44811573736) published that
+revision, and automated checks verified the public files, download links and crawler metadata.
+LinkedIn's rendered Featured preview remains unverified.
 
 - PRs #293–#295 added criterion-level CI status, simulated manifest generation, and local
   exact-build handoff. The workbench treats the manifest as external context.
@@ -55,7 +76,7 @@ remains in [Stage 3](#stage-3--limited-beta).
 | 1 — complete on source | P0 · Retire older current-report downloads when the workbench observes a review draft. | Recheck draft authority before and after rendering. Earlier controls stay expired after discard. Fresh downloads work after resolving the draft, and discarded inputs preserve saved bytes and decisions. |
 | 2 — complete on source | P1 · Share a standalone [CI status snapshot](docs/evaluation-guide.md#download-a-ci-snapshot) for one reviewed build. | An offline recipient sees the full reviewed SHA, confirmed criteria, per-test outcomes and reasons, and cited CI runs. The report labels the manifest as externally supplied and records its digest. Stale download controls fail closed. The constructed A, initial B, and targeted B checks preserve the saved review and gate. |
 | 3 — complete | P2 · Build and verify final v0.2.8 from reviewed main. | Pin the version and commit, build and checksum the archives, and verify clean installs, native v9 reopening, and packaged browser journeys. |
-| 4 — release verified and website source aligned | P2 · Publish the verified evaluation release and align its entry points. | Match public asset bytes to the verified checksums, install from anonymous downloads, and verify the updated public site, release links and LinkedIn preview. |
+| 4 — release and site verified | P2 · Publish the verified evaluation release and align its entry points. | Anonymous archive and install checks passed. The updated public site, release links and crawler metadata passed live checks. Actual LinkedIn Featured rendering remains open. |
 
 Keep architecture work tied to a reproduced defect or measured constraint. Additional adapters,
 schema changes and format parity need a demonstrated reviewer outcome. Product usefulness and

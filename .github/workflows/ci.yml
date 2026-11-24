@@ -148,6 +148,8 @@ jobs:
         run: python -m pytest -q tests/gates/test_validation.py tests/gates/test_history_event_validation.py tests/schemas/test_review_state_integrity.py
       - name: Historical CLI handoff compatibility
         run: python -m pytest -q tests/cli/test_history.py tests/cli/test_history_safety.py tests/cli/test_criteria_changes.py tests/cli/test_criteria_changes_safety.py
+      - name: Exact-build CI snapshot CLI compatibility
+        run: python -m pytest -q tests/cli/test_ci_snapshot.py
       - name: Typed criteria handoff compatibility
         run: python -m pytest -q tests/cli/test_criteria_document.py tests/cli/test_criteria_document_review_fixes.py tests/criteria/test_confirmation.py
       - name: Saved criteria revision comparison compatibility
@@ -209,6 +211,7 @@ jobs:
           Pop-Location
           $env:SCOPEPROOF_INSTALLED_PYTHON = (Get-Command python).Source
           python -m pytest -q tests/cli/test_installed_history.py tests/cli/test_installed_criteria_changes.py tests/cli/test_installed_junit_audit.py tests/cli/test_installed_junit_correction.py tests/cli/test_installed_criteria_document.py tests/cli/test_installed_transfer.py
+          python -m pytest -q tests/cli/test_installed_ci_snapshot.py
 
   locked-environment:
     runs-on: ubuntu-latest
@@ -302,6 +305,7 @@ jobs:
           (cd "$RUNNER_TEMP" && python -m scopeproof_core.evals.r002_swebench --help)
 
           SCOPEPROOF_INSTALLED_PYTHON="$(command -v python)" python -m pytest -q tests/cli/test_installed_history.py tests/cli/test_installed_criteria_changes.py tests/cli/test_installed_junit_audit.py tests/cli/test_installed_junit_correction.py tests/cli/test_installed_criteria_document.py tests/cli/test_installed_transfer.py
+          SCOPEPROOF_INSTALLED_PYTHON="$(command -v python)" python -m pytest -q tests/cli/test_installed_ci_snapshot.py
 
           web_log="$RUNNER_TEMP/scopeproof-web.log"
           web_pid=""

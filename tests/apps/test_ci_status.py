@@ -90,6 +90,32 @@ def test_ci_display_uses_current_manifest_and_shows_explicit_run_source(
                for node in app.markdown)
 
 
+def test_follow_up_showing_a_shared_failure_retains_passed_criterion_detail(
+    manifest_payload: dict,
+) -> None:
+    manifest_payload["expected_tests"]["AC-02"].append("export_rows")
+    manifest_payload["runs"][-1]["outcomes"]["row_access"] = "passed"
+    app = AppTest.from_function(_panel).run()
+    app = _upload(app, json.dumps(manifest_payload).encode())
+
+    assert _statuses(app) == [
+        {"Criterion": "AC-01", "CI status": "Failed"},
+        {"Criterion": "AC-02", "CI status": "Failed"},
+    ]
+    assert "CI follow-up" in [heading.value for heading in app.subheader]
+    assert app.table[1].value.to_dict(orient="records") == [{
+        "Expected test": "export_rows",
+        "Mapped criteria": "AC-01, AC-02",
+        "CI status": "Failed",
+        "Why": "CI reports failure for the reviewed build.",
+        "CI runs": "current",
+    }]
+    app.selectbox[0].select("AC-02").run()
+    assert [row["CI status"] for row in app.dataframe[0].value.to_dict(orient="records")] == [
+        "Passed", "Failed",
+    ]
+
+
 @pytest.mark.parametrize("failure", ["malformed", "different_criteria", "over_limit"])
 def test_invalid_upload_leaves_all_statuses_unknown(
     failure: str, manifest_payload: dict,

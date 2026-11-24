@@ -37,8 +37,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
   one constructed workflow, exact-baseline engineering evidence and remaining limits.
 - [No-install constructed HTML report](examples/offline-handoff/README.md) — download before setup,
   expected Action required, simulation boundaries, provenance and regeneration.
-- [November 2 product and market assessment](commercialization/product-direction-2026-11-02.md) —
-  official-source overlap, adoption constraints, and priorities before publication.
+- [November 23 product and market assessment](commercialization/product-direction-2026-11-23.md) —
+  current workflow, market overlap, adoption constraints, and the CI handoff priorities.
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
 - [Evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md) — current-release routing,
   saved-decision positioning and the earlier source-only preview scope. The later authorized
@@ -67,6 +67,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 ## Historical evidence records
 
+- [November 2 product and market assessment](commercialization/product-direction-2026-11-02.md) —
+  official-source overlap, adoption constraints, and priorities before publication.
 - [PR #221 private v0.2.5 candidate](releases/v0.2.5-evaluation-candidate.md) — original source,
   record-v5 scope and preparation guidance; not the later source tree despite the same version.
 - [Earlier market comparison](commercialization/market-comparison-2026-07-26.md) — refreshed

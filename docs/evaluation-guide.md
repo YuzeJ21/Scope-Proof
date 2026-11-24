@@ -119,6 +119,30 @@ If the configured manifest is replaced or removed, refresh the CI panel before d
 For a manual upload, use the button shown after the upload is processed. Resolve pending
 review inputs before downloading a current snapshot.
 
+Current development source also shows **CI follow-up** in the workbench and snapshot. It lists
+tests with a failure, explicit skip, stale result, or unknown result, along with the mapped criteria,
+reason, and cited runs. Criteria without a supplied test mapping are listed separately. Passing tests
+remain visible under their criteria.
+On narrow screens, each snapshot table scrolls horizontally within the report. Focus the table
+region to scroll it with the keyboard.
+
+### Export a CI snapshot from the CLI
+
+Current development source (`0.2.9.dev0`) supports a repeatable export for a saved active analysis.
+Use the CLI from that checkout or its installed build.
+
+```sh
+scopeproof ci-snapshot REVIEW_ID ./manifest.json \
+  --storage-dir ./.scopeproof/reviews --output ./handoff/ci-status.html
+```
+
+Supply a local JSON manifest up to 1 MiB and a new `.html` path. The repository, pull request, and
+confirmed criteria must match the saved analysis, and the manifest must contain a run for the
+reviewed commit. The snapshot identifies this source as **Local file** and hashes the supplied bytes.
+The command rejects missing or pending reviews, mismatched manifests and existing output files.
+It keeps the saved review and manifest bytes intact. Test execution and acceptance stay in their
+existing workflows.
+
 ### Generate manifests with the simulated CI pipeline
 
 From the development checkout with dependencies installed, run the constructed CSV export

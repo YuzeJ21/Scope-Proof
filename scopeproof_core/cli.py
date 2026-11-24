@@ -47,6 +47,10 @@ from scopeproof_core.importers.junit import (
     build_junit_evidence_import,
     parse_junit_artifact,
 )
+from scopeproof_core.reporting.ci_snapshot import (
+    build_ci_status_snapshot,
+    export_ci_status_snapshot_html,
+)
 from scopeproof_core.reporting.exporters import (
     export_comparison_json,
     export_comparison_markdown,
@@ -56,6 +60,7 @@ from scopeproof_core.reporting.exporters import (
     export_markdown,
 )
 from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
+from scopeproof_core.reviews.ci_status import MAX_CI_STATUS_BYTES, load_ci_status_manifest
 from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     acceptance_requires_comment,
@@ -87,6 +92,7 @@ from scopeproof_core.schemas.models import (
     require_verified_public_origin,
 )
 from scopeproof_core.storage.atomic_files import (
+    atomic_create_text,
     atomic_create_text_with_receipt,
     rollback_created_file,
 )
@@ -316,6 +322,30 @@ def _export(args: argparse.Namespace) -> int:
     store = JsonReviewStore(Path(args.storage_dir))
     with store.locked_load(args.review_id) as state:
         print(EXPORT_RENDERERS[args.format](state), end="")
+    return 0
+
+
+def _ci_snapshot(args: argparse.Namespace) -> int:
+    output = Path(args.output)
+    if output.suffix.lower() != ".html":
+        raise ValueError("CI snapshot output must end in .html")
+
+    payload = _read_bounded_regular_file(
+        Path(args.manifest), max_bytes=MAX_CI_STATUS_BYTES, label="CI status manifest",
+    )
+    try:
+        manifest = load_ci_status_manifest(payload)
+    except ValidationError:
+        raise ValueError("CI status manifest does not match the supported format") from None
+    store = JsonReviewStore(Path(args.storage_dir))
+    with store.locked_load(args.review_id) as state:
+        if state.bundle is None:
+            raise ValueError("CI snapshot requires an active analysis in the saved review")
+        snapshot = build_ci_status_snapshot(
+            state.bundle, manifest,
+            manifest_sha256=sha256(payload).hexdigest(), source="local-file",
+        )
+        atomic_create_text(output, export_ci_status_snapshot_html(snapshot))
     return 0
 
 
@@ -803,6 +833,15 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("--storage-dir", default=".scopeproof/reviews")
     export.add_argument("--format", choices=["json", "markdown", "csv", "html"], default="json")
     export.set_defaults(handler=_export)
+
+    ci_snapshot = commands.add_parser(
+        "ci-snapshot", help="Export externally supplied CI status for one saved review",
+    )
+    ci_snapshot.add_argument("review_id")
+    ci_snapshot.add_argument("manifest", help="Explicit local CI manifest JSON, up to 1 MiB")
+    ci_snapshot.add_argument("--output", required=True, help="New .html file")
+    ci_snapshot.add_argument("--storage-dir", default=".scopeproof/reviews")
+    ci_snapshot.set_defaults(handler=_ci_snapshot)
     list_reviews = commands.add_parser("list", help="List safe local saved review IDs")
     list_reviews.add_argument("--storage-dir", default=".scopeproof/reviews")
     list_reviews.set_defaults(handler=_list)

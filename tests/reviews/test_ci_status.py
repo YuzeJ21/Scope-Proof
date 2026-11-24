@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from scopeproof_core.reviews import ci_status
 from scopeproof_core.reviews.ci_status import (
     MAX_CI_STATUS_BYTES,
     criterion_ci_statuses,
@@ -102,6 +103,56 @@ def test_disagreeing_same_head_outcomes_stay_unknown(bundle, manifest_data):
     assert check.status == "unknown"
     assert check.run_ids == ("one", "two")
     assert "conflict" in check.reason.lower()
+
+
+def test_follow_up_deduplicates_tests_with_their_mapped_criteria(bundle, manifest_data):
+    manifest_data["expected_tests"] = {
+        "AC-01": ["missing", "shared", "older"],
+        "AC-02": ["shared", "skipped", "conflict", "header"],
+    }
+    manifest_data["runs"] = [
+        run("old", OTHER, older="passed"),
+        run(
+            "initial", HEAD, shared="failed", skipped="skipped", conflict="passed", header="passed",
+        ),
+        run("targeted", HEAD, conflict="failed"),
+    ]
+    checks = statuses(bundle, manifest_data)
+    follow_up = ci_status.summarize_ci_follow_up(checks)
+
+    assert not follow_up.unmapped_criterion_ids
+    assert [(test.status, test.test_id, test.criterion_ids, test.run_ids)
+            for test in follow_up.tests] == [
+        ("failed", "shared", ("AC-01", "AC-02"), ("initial",)),
+        ("skipped", "skipped", ("AC-02",), ("initial",)),
+        ("stale", "older", ("AC-01",), ("old",)),
+        ("unknown", "conflict", ("AC-02",), ("initial", "targeted")),
+        ("unknown", "missing", ("AC-01",), ()),
+    ]
+    assert "conflict" in follow_up.tests[-2].reason.lower()
+    assert "no result" in follow_up.tests[-1].reason.lower()
+    assert checks[1].tests[-1].status == "passed"
+
+
+def test_follow_up_lists_unmapped_criteria_without_inventing_tests(bundle, manifest_data):
+    manifest_data["expected_tests"].pop("AC-02")
+    manifest_data["runs"] = [run("current", HEAD, filter="passed", format="passed")]
+    follow_up = ci_status.summarize_ci_follow_up(statuses(bundle, manifest_data))
+
+    assert follow_up.tests == ()
+    assert follow_up.unmapped_criterion_ids == ("AC-02",)
+
+
+def test_follow_up_rejects_inconsistent_statuses_for_a_shared_test(bundle, manifest_data):
+    manifest_data["expected_tests"] = {"AC-01": ["shared"], "AC-02": ["shared"]}
+    manifest_data["runs"] = [run("current", HEAD, shared="passed")]
+    first, second = statuses(bundle, manifest_data)
+    contradictory = second.model_copy(update={
+        "tests": (second.tests[0].model_copy(update={"status": "failed"}),),
+    })
+
+    with pytest.raises(ValueError, match="inconsistent CI status"):
+        ci_status.summarize_ci_follow_up([first, contradictory])
 
 
 @pytest.mark.parametrize(

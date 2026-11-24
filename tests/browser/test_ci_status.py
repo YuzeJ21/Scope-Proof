@@ -37,6 +37,12 @@ def _open_ci_panel(page: Page) -> Locator:
     return panel
 
 
+def _criterion_status_table(page: Page, panel: Locator) -> Locator:
+    return panel.get_by_role("table").filter(
+        has=page.get_by_role("columnheader", name="Criterion", exact=True),
+    )
+
+
 def test_installed_ci_manifest_changes_display_without_saving_review(
     tmp_path: Path, installed_wheel: Path,
 ) -> None:
@@ -78,10 +84,11 @@ def test_installed_ci_manifest_changes_display_without_saving_review(
             with _capture_browser_failure(page, diagnostics, log_path):
                 _reopen(page, url)
                 panel = _open_ci_panel(page)
-                export_row = panel.get_by_role("row").filter(
+                criterion_table = _criterion_status_table(page, panel)
+                export_row = criterion_table.get_by_role("row").filter(
                     has=page.get_by_role("cell", name="AC-01", exact=True),
                 )
-                access_row = panel.get_by_role("row").filter(
+                access_row = criterion_table.get_by_role("row").filter(
                     has=page.get_by_role("cell", name="AC-02", exact=True),
                 )
                 expect(
@@ -95,6 +102,11 @@ def test_installed_ci_manifest_changes_display_without_saving_review(
                 expect(
                     access_row.get_by_role("cell", name="Explicitly skipped", exact=True),
                 ).to_be_visible()
+                follow_up = panel.get_by_role("table").filter(
+                    has=page.get_by_role("columnheader", name="Mapped criteria", exact=True),
+                )
+                expect(follow_up.get_by_role("cell", name="row_access")).to_be_visible()
+                expect(follow_up.get_by_role("cell", name="export_rows")).to_be_visible()
                 expect(panel.get_by_role("link", name=run_url)).to_have_attribute("href", run_url)
                 expect(panel.get_by_role("button", name="Download CI snapshot")).to_be_enabled()
                 assert _download_review_state(page) == original
@@ -128,6 +140,37 @@ def _open_build(page: Page, record: Path, head: str) -> Locator:
     return panel
 
 
+def _assert_narrow_report_tables(report: Page) -> None:
+    # Stress only the rendered layout with the longest legal test ID.
+    long_test_id = "x" * 160
+    report.evaluate("""(testId) => {
+        document.querySelectorAll('.table-scroll td code').forEach(id => id.textContent = testId);
+    }""", long_test_id)
+    for width in (390, 673):
+        report.set_viewport_size({"width": width, "height": 844})
+        assert report.evaluate("document.documentElement.scrollWidth === window.innerWidth")
+        for name in ("CI follow-up table", "CI tests for AC-01"):
+            scroller = report.get_by_role("region", name=name, exact=True)
+            expect(scroller).to_have_attribute("tabindex", "0")
+            header = scroller.get_by_role("columnheader", name="CI status", exact=True)
+            assert header.evaluate("cell => getComputedStyle(cell).overflowWrap") == "normal"
+            identifier = scroller.get_by_text(long_test_id, exact=True).first
+            assert identifier.evaluate("code => getComputedStyle(code).overflowWrap") == "anywhere"
+            status = scroller.get_by_role("cell", name="Failed", exact=True).first
+            assert status.evaluate("""cell => {
+                const text = document.createRange();
+                text.selectNodeContents(cell);
+                return text.getClientRects().length;
+            }""") == 1
+            if width == 390:
+                assert scroller.evaluate("node => node.scrollWidth > node.clientWidth")
+                scroller.focus()
+                scroller.press("ArrowRight")
+                report.wait_for_function(
+                    "node => node.scrollLeft > 0", arg=scroller.element_handle(),
+                )
+
+
 def _assert_offline_snapshot(
     page: Page, recipient: BrowserContext, destination: Path, *, state: dict, manifest: bytes,
     statuses: tuple[str, str, str], access_run: str,
@@ -158,7 +201,19 @@ def _assert_offline_snapshot(
         expect(report.get_by_text("Configured local folder", exact=True)).to_be_visible()
         criteria = state["bundle"]["criteria"]
         expected_tests = ("category_filter", "row_entitlement", "csv_header")
+        follow_up = report.get_by_role("region", name="CI follow-up")
+        if all(status == "Passed" for status in statuses):
+            expect(follow_up.get_by_text(
+                "All mapped CI tests reported a pass for this commit.", exact=True,
+            )).to_be_visible()
         for criterion, test_id, status in zip(criteria, expected_tests, statuses, strict=True):
+            follow_up_row = follow_up.get_by_role("row").filter(
+                has=report.get_by_role("cell", name=test_id, exact=True),
+            )
+            if status == "Passed":
+                expect(follow_up_row).to_have_count(0)
+            else:
+                expect(follow_up_row.get_by_role("cell", name=status, exact=True)).to_be_visible()
             section = report.get_by_role("region", name=criterion["criterion_id"], exact=True)
             expect(section.get_by_text(criterion["text"], exact=True)).to_be_visible()
             row = section.get_by_role("row").filter(
@@ -174,6 +229,8 @@ def _assert_offline_snapshot(
                 expect(run.get_by_text(access_run, exact=True)).to_be_visible()
                 expect(run.get_by_text(head, exact=True)).to_be_visible()
                 expect(run.get_by_role("link", name=run_url)).to_have_attribute("href", run_url)
+        if access_run == "B-targeted":
+            _assert_narrow_report_tables(report)
         assert requests == []
     finally:
         report.close()
@@ -229,7 +286,7 @@ def test_installed_offline_ci_snapshots_follow_the_two_build_handoff(
                 before = ordinary_html.path().read_bytes()
                 _run(python, "-I", str(recipe), "--publish-targeted", str(scenario), cwd=runtime)
                 panel.get_by_role("button", name="Refresh CI status", exact=True).click()
-                access_row = panel.get_by_role("row").filter(
+                access_row = _criterion_status_table(page, panel).get_by_role("row").filter(
                     has=page.get_by_role("cell", name="AC-02", exact=True),
                 )
                 expect(access_row.get_by_role("cell", name="Failed", exact=True)).to_be_visible()
