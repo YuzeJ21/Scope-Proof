@@ -136,6 +136,7 @@ def test_snapshot_tables_are_keyboard_focusable_and_labelled(state, manifest_dat
     assert ('role="region" tabindex="0" aria-label="CI follow-up table"' in rendered)
     assert ('role="region" tabindex="0" aria-label="CI tests for AC-01"' in rendered)
     assert 'aria-label="CI tests for AC-02"' not in rendered
+    assert rendered.count('<td class="ci-status">Failed</td>') == 2
 
 
 def test_snapshot_escapes_criterion_text_and_run_url(state, manifest_data):

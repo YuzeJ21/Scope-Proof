@@ -141,21 +141,34 @@ def _open_build(page: Page, record: Path, head: str) -> Locator:
 
 
 def _assert_narrow_report_tables(report: Page) -> None:
-    report.set_viewport_size({"width": 390, "height": 844})
-    assert report.evaluate("document.documentElement.scrollWidth === window.innerWidth")
-    for name in ("CI follow-up table", "CI tests for AC-01"):
-        scroller = report.get_by_role("region", name=name, exact=True)
-        expect(scroller).to_have_attribute("tabindex", "0")
-        assert scroller.evaluate("node => node.scrollWidth > node.clientWidth")
-        status = scroller.get_by_role("cell", name="Failed", exact=True).first
-        assert status.evaluate("""cell => {
-            const text = document.createRange();
-            text.selectNodeContents(cell);
-            return text.getClientRects().length;
-        }""") == 1
-        scroller.focus()
-        scroller.press("ArrowRight")
-        report.wait_for_function("node => node.scrollLeft > 0", arg=scroller.element_handle())
+    # Stress only the rendered layout with the longest legal test ID.
+    long_test_id = "x" * 160
+    report.evaluate("""(testId) => {
+        document.querySelectorAll('.table-scroll td code').forEach(id => id.textContent = testId);
+    }""", long_test_id)
+    for width in (390, 673):
+        report.set_viewport_size({"width": width, "height": 844})
+        assert report.evaluate("document.documentElement.scrollWidth === window.innerWidth")
+        for name in ("CI follow-up table", "CI tests for AC-01"):
+            scroller = report.get_by_role("region", name=name, exact=True)
+            expect(scroller).to_have_attribute("tabindex", "0")
+            header = scroller.get_by_role("columnheader", name="CI status", exact=True)
+            assert header.evaluate("cell => getComputedStyle(cell).overflowWrap") == "normal"
+            identifier = scroller.get_by_text(long_test_id, exact=True).first
+            assert identifier.evaluate("code => getComputedStyle(code).overflowWrap") == "anywhere"
+            status = scroller.get_by_role("cell", name="Failed", exact=True).first
+            assert status.evaluate("""cell => {
+                const text = document.createRange();
+                text.selectNodeContents(cell);
+                return text.getClientRects().length;
+            }""") == 1
+            if width == 390:
+                assert scroller.evaluate("node => node.scrollWidth > node.clientWidth")
+                scroller.focus()
+                scroller.press("ArrowRight")
+                report.wait_for_function(
+                    "node => node.scrollLeft > 0", arg=scroller.element_handle(),
+                )
 
 
 def _assert_offline_snapshot(

@@ -60,7 +60,7 @@ def test_installed_ci_snapshot_follows_two_builds_without_mutating_reviews(tmp_p
         for name, status in zip(
             ("category_filter", "row_entitlement", "csv_header"), statuses, strict=True,
         ):
-            assert f"<code>{name}</code></td><td>{status}</td>" in report
+            assert f'<code>{name}</code></td><td class="ci-status">{status}</td>' in report
         return head, report
 
     a_head, _ = verify_snapshot("A", ("Passed", "Passed", "Passed"))

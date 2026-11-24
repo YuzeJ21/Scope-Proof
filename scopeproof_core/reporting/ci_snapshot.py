@@ -134,8 +134,8 @@ def _follow_up_html(follow_up: CIFollowUpSummary, run_numbers: dict[str, int]) -
             criteria = escape(", ".join(test.criterion_ids))
             lines.append(
                 f"<tr><td><code>{escape(test.test_id)}</code></td><td>{criteria}</td>"
-                f"<td>{CI_STATUS_LABELS[test.status]}</td><td>{escape(test.reason)}</td>"
-                f"<td>{_test_run_links(test, run_numbers)}</td></tr>"
+                f'<td class="ci-status">{CI_STATUS_LABELS[test.status]}</td>'
+                f"<td>{escape(test.reason)}</td><td>{_test_run_links(test, run_numbers)}</td></tr>"
             )
         lines.append("</tbody></table></div>")
     else:
@@ -173,7 +173,7 @@ def _criterion_html(
     for test in criterion.tests:
         lines.append(
             f"<tr><td><code>{escape(test.test_id)}</code></td>"
-            f"<td>{CI_STATUS_LABELS[test.status]}</td>"
+            f'<td class="ci-status">{CI_STATUS_LABELS[test.status]}</td>'
             f"<td>{escape(test.reason)}</td><td>{_test_run_links(test, run_numbers)}</td></tr>"
         )
     lines.extend(["</tbody></table></div>", "</section>"])
@@ -202,10 +202,11 @@ def export_ci_status_snapshot_html(snapshot: CIStatusSnapshot) -> str:
         "padding:1.25rem;overflow-wrap:anywhere}section{margin:2rem 0}"
         "table{width:100%;border-collapse:collapse}td,th{border:1px solid gray;"
         "padding:.4rem;text-align:left;vertical-align:top}"
+        ".table-scroll th,.ci-status{overflow-wrap:normal}"
         "dt{font-weight:700}dd{margin:0 0 .5rem}"
         ".criterion-text{white-space:pre-wrap}"
         "@media screen and (max-width:42rem){.table-scroll{overflow-x:auto}"
-        ".table-scroll table{min-width:36rem}.table-scroll th{overflow-wrap:normal}}"
+        ".table-scroll table{min-width:36rem}}"
         "</style>",
         "</head><body><main>",
         f"<h1>{_TITLE}</h1><p>{_EVIDENCE_BOUNDARY}</p>",
