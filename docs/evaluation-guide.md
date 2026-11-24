@@ -123,6 +123,8 @@ Current development source also shows **CI follow-up** in the workbench and snap
 tests with a failure, explicit skip, stale result, or unknown result, along with the mapped criteria,
 reason, and cited runs. Criteria without a supplied test mapping are listed separately. Passing tests
 remain visible under their criteria.
+On narrow screens, each snapshot table scrolls horizontally within the report. Focus the table
+region to scroll it with the keyboard.
 
 ### Export a CI snapshot from the CLI
 

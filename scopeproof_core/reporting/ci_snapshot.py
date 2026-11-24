@@ -124,6 +124,7 @@ def _follow_up_html(follow_up: CIFollowUpSummary, run_numbers: dict[str, int]) -
     lines = ['<section aria-labelledby="ci-follow-up"><h2 id="ci-follow-up">CI follow-up</h2>']
     if follow_up.tests:
         lines.extend([
+            '<div class="table-scroll" role="region" tabindex="0" aria-label="CI follow-up table">',
             '<table aria-label="CI tests needing follow-up">',
             '<thead><tr><th scope="col">Expected test</th><th scope="col">Mapped criteria</th>',
             '<th scope="col">CI status</th><th scope="col">Why</th>',
@@ -136,7 +137,7 @@ def _follow_up_html(follow_up: CIFollowUpSummary, run_numbers: dict[str, int]) -
                 f"<td>{CI_STATUS_LABELS[test.status]}</td><td>{escape(test.reason)}</td>"
                 f"<td>{_test_run_links(test, run_numbers)}</td></tr>"
             )
-        lines.append("</tbody></table>")
+        lines.append("</tbody></table></div>")
     else:
         lines.append("<p>All mapped CI tests reported a pass for this commit.</p>")
     if follow_up.unmapped_criterion_ids:
@@ -163,6 +164,8 @@ def _criterion_html(
         ])
         return lines
     lines.extend([
+        '<div class="table-scroll" role="region" tabindex="0" '
+        f'aria-label="CI tests for {escape(criterion.criterion_id)}">',
         '<table aria-label="Expected CI tests">',
         '<thead><tr><th scope="col">Expected test</th><th scope="col">CI status</th>',
         '<th scope="col">Why</th><th scope="col">CI runs</th></tr></thead><tbody>',
@@ -173,7 +176,7 @@ def _criterion_html(
             f"<td>{CI_STATUS_LABELS[test.status]}</td>"
             f"<td>{escape(test.reason)}</td><td>{_test_run_links(test, run_numbers)}</td></tr>"
         )
-    lines.extend(["</tbody></table>", "</section>"])
+    lines.extend(["</tbody></table></div>", "</section>"])
     return lines
 
 
@@ -200,7 +203,10 @@ def export_ci_status_snapshot_html(snapshot: CIStatusSnapshot) -> str:
         "table{width:100%;border-collapse:collapse}td,th{border:1px solid gray;"
         "padding:.4rem;text-align:left;vertical-align:top}"
         "dt{font-weight:700}dd{margin:0 0 .5rem}"
-        ".criterion-text{white-space:pre-wrap}</style>",
+        ".criterion-text{white-space:pre-wrap}"
+        "@media screen and (max-width:42rem){.table-scroll{overflow-x:auto}"
+        ".table-scroll table{min-width:36rem}.table-scroll th{overflow-wrap:normal}}"
+        "</style>",
         "</head><body><main>",
         f"<h1>{_TITLE}</h1><p>{_EVIDENCE_BOUNDARY}</p>",
         "<dl>",

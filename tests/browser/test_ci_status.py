@@ -140,6 +140,24 @@ def _open_build(page: Page, record: Path, head: str) -> Locator:
     return panel
 
 
+def _assert_narrow_report_tables(report: Page) -> None:
+    report.set_viewport_size({"width": 390, "height": 844})
+    assert report.evaluate("document.documentElement.scrollWidth === window.innerWidth")
+    for name in ("CI follow-up table", "CI tests for AC-01"):
+        scroller = report.get_by_role("region", name=name, exact=True)
+        expect(scroller).to_have_attribute("tabindex", "0")
+        assert scroller.evaluate("node => node.scrollWidth > node.clientWidth")
+        status = scroller.get_by_role("cell", name="Failed", exact=True).first
+        assert status.evaluate("""cell => {
+            const text = document.createRange();
+            text.selectNodeContents(cell);
+            return text.getClientRects().length;
+        }""") == 1
+        scroller.focus()
+        scroller.press("ArrowRight")
+        report.wait_for_function("node => node.scrollLeft > 0", arg=scroller.element_handle())
+
+
 def _assert_offline_snapshot(
     page: Page, recipient: BrowserContext, destination: Path, *, state: dict, manifest: bytes,
     statuses: tuple[str, str, str], access_run: str,
@@ -198,6 +216,8 @@ def _assert_offline_snapshot(
                 expect(run.get_by_text(access_run, exact=True)).to_be_visible()
                 expect(run.get_by_text(head, exact=True)).to_be_visible()
                 expect(run.get_by_role("link", name=run_url)).to_have_attribute("href", run_url)
+        if access_run == "B-targeted":
+            _assert_narrow_report_tables(report)
         assert requests == []
     finally:
         report.close()

@@ -130,6 +130,14 @@ def test_offline_snapshot_has_unmapped_criteria_in_its_follow_up(state, manifest
     assert "No CI tests are mapped to AC-02." in follow_up.split("</section>", 1)[0]
 
 
+def test_snapshot_tables_are_keyboard_focusable_and_labelled(state, manifest_data):
+    rendered = export_ci_status_snapshot_html(_build(state.bundle, manifest_data))
+
+    assert ('role="region" tabindex="0" aria-label="CI follow-up table"' in rendered)
+    assert ('role="region" tabindex="0" aria-label="CI tests for AC-01"' in rendered)
+    assert 'aria-label="CI tests for AC-02"' not in rendered
+
+
 def test_snapshot_escapes_criterion_text_and_run_url(state, manifest_data):
     criterion, other = state.bundle.criteria
     changed = criterion.model_copy(update={"text": '<img src="outside" onerror="oops"> &'})

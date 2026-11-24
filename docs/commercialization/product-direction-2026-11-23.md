@@ -55,9 +55,9 @@ benchmark and leaves general retrieval performance open.
    follow-up summary. In the constructed rehearsal, the second build initially shows a filter
    failure and a row-access skip. The targeted rerun changes the skip to failed without changing
    the reviewed commit or rewriting either review.
-3. **Make the workflow inspectable before installation.** Prepare a candidate no-install two-build
-   sample with labeled synthetic status changes and a clear explanation of the evidence boundary.
-   Keep its producer and source identities explicit.
+3. **Make the workflow inspectable before installation.** The private no-install candidate walks
+   through both builds and the targeted rerun. It labels synthetic outcomes and records the
+   producing source and wheel. Public evaluation packaging is a separate decision.
 4. **Gate adoption and private architecture on independent use.** Stage 2 remains owner-led. Stage 1
    is closed with zero external evidence, and Stage 3 remains dormant. If separately authorized,
    look for one independent reviewer who can explain what changed, make a decision, and choose to

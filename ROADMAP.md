@@ -22,14 +22,14 @@ from a script and understand at a glance. The [current product and market assess
 compares this workflow with native GitHub controls, ticket-aware code review, and managed test
 traceability. The [constructed two-build rehearsal](docs/evaluation-guide.md#open-simulated-ci-status-from-a-local-folder)
 reproduces the friction: all three tests pass on A, while B has one failure and one explicit
-skip. The targeted rerun changes the skipped test to failed on the same B commit. A reviewer
-currently opens the workbench to export each snapshot and checks each criterion separately.
+skip. The targeted rerun changes the skipped test to failed on the same B commit. In v0.2.8 a
+reviewer opens the workbench to export each snapshot and checks each criterion separately.
 
 | Priority | Deliverable | Acceptance criteria |
 | --- | --- | --- |
 | P0 · Implemented on development source | [Export an exact-build CI snapshot from the CLI](docs/evaluation-guide.md#export-a-ci-snapshot-from-the-cli). | Use a named saved review and bounded local manifest. Match the confirmed criteria and reviewed commit, preserve both input files, and write a new offline HTML report atomically. Refuse pending reviews, incompatible inputs and existing outputs. Verify A, initial B and targeted B with an installed wheel. |
 | P1 · Implemented on development source | Show CI follow-up in the workbench and offline snapshot. | Use the same projection for both. Show failing, skipped, stale and unknown tests once each, with all mapped criterion IDs and cited runs. Identify unmapped criteria. Keep the detailed view, externally supplied provenance, and existing gate and saved state. |
-| P2 · Next evaluation improvement | Let a reader inspect the two-build workflow before installing. | Provide a clearly labeled constructed example with both exact commits, the targeted rerun, and producer identity. Keep the frozen v0.2.6 handoff example and R-002 intact. Review package and site publication separately. |
+| P2 · Private evaluation candidate | Let a reader inspect the two-build workflow before installing. | Provide a clearly labeled constructed example with both exact commits, the targeted rerun, and producer identity. Verify offline reading at desktop and phone widths. Keep the frozen v0.2.6 handoff example and R-002 intact. Review package and site publication separately. |
 | Gated · Independent use and private workflow design | Determine whether the handoff reduces work for a reviewer outside the project. | Require separate authorization and genuine independent use. A reviewer can explain what changed, decide what to check next and choose to reuse the workflow. Scope private access, provenance, retention and use rights only for a demonstrated need. |
 
 ### November 19 release work
