@@ -26,7 +26,7 @@ ScopeProof is an evidence assistant. It does not replace QA, engineering review,
 
 The product direction is to **explain and revisit an acceptance decision**: retain the confirmed
 intent, reviewed head, evidence gaps and recorded decisions as work changes. The
-[November 2 product and market review](docs/commercialization/product-direction-2026-11-02.md) finds
+[November 23 product and market review](docs/commercialization/product-direction-2026-11-23.md) finds
 substantial overlap elsewhere; this direction is a usefulness hypothesis, not a novelty claim.
 
 Readable Markdown and HTML reports retain the saved review's decision audit: recorded actors,

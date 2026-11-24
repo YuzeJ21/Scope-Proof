@@ -25,6 +25,8 @@ _Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,159}
 _CriterionId = Annotated[str, Field(pattern=r"^AC-[0-9]{2,}$", max_length=40)]
 _ReportedOutcome = Literal["passed", "failed", "skipped"]
 _Status = Literal["passed", "failed", "skipped", "stale", "unknown"]
+_FollowUpStatus = Literal["failed", "skipped", "stale", "unknown"]
+_FOLLOW_UP_ORDER = {"failed": 0, "skipped": 1, "stale": 2, "unknown": 3}
 CI_STATUS_LABELS = {
     "passed": "Passed",
     "failed": "Failed",
@@ -95,6 +97,50 @@ class CriterionCIStatus(BaseModel, frozen=True):
     criterion_id: str
     status: _Status
     tests: tuple[CITestStatus, ...] = ()
+
+
+class CITestFollowUp(CITestStatus):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    status: _FollowUpStatus
+    criterion_ids: tuple[str, ...] = Field(min_length=1)
+
+
+class CIFollowUpSummary(BaseModel, frozen=True):
+    tests: tuple[CITestFollowUp, ...]
+    unmapped_criterion_ids: tuple[str, ...]
+
+
+def summarize_ci_follow_up(statuses: Sequence[CriterionCIStatus]) -> CIFollowUpSummary:
+    """Collect unresolved tests once without changing their reported status or citations."""
+    tests: dict[str, CITestStatus] = {}
+    criteria_by_test: dict[str, list[str]] = {}
+    unmapped = []
+    for criterion in statuses:
+        if not criterion.tests:
+            unmapped.append(criterion.criterion_id)
+        for test in criterion.tests:
+            if test != tests.setdefault(test.test_id, test):
+                raise ValueError("inconsistent CI status for the same expected test")
+            if test.status != "passed":
+                criteria_by_test.setdefault(test.test_id, []).append(criterion.criterion_id)
+
+    return CIFollowUpSummary(
+        tests=tuple(
+            CITestFollowUp(
+                test_id=test.test_id,
+                status=test.status,
+                run_ids=test.run_ids,
+                reason=test.reason,
+                criterion_ids=tuple(criteria_by_test[test.test_id]),
+            )
+            for test in sorted(
+                (tests[test_id] for test_id in criteria_by_test),
+                key=lambda item: (_FOLLOW_UP_ORDER[item.status], item.test_id),
+            )
+        ),
+        unmapped_criterion_ids=tuple(unmapped),
+    )
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:

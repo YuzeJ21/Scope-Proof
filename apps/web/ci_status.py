@@ -24,9 +24,11 @@ from scopeproof_core.reviews.ci_status import (
     CI_STATUS_LABELS,
     EXACT_HEAD_PATTERN,
     MAX_CI_STATUS_BYTES,
+    CIFollowUpSummary,
     CIStatusManifest,
     criterion_ci_statuses,
     load_ci_status_manifest,
+    summarize_ci_follow_up,
 )
 from scopeproof_core.schemas.models import ReviewBundle, ReviewState, normalized_criteria_sha256
 
@@ -95,6 +97,29 @@ def _render_snapshot_download(
         key="download_ci_snapshot",
         on_click="ignore",
     )
+
+
+def _render_ci_follow_up(follow_up: CIFollowUpSummary) -> None:
+    st.subheader("CI follow-up")
+    if follow_up.tests:
+        st.table(
+            [
+                {
+                    "Expected test": test.test_id,
+                    "Mapped criteria": ", ".join(test.criterion_ids),
+                    "CI status": CI_STATUS_LABELS[test.status],
+                    "Why": test.reason,
+                    "CI runs": ", ".join(test.run_ids),
+                }
+                for test in follow_up.tests
+            ],
+            hide_index=True,
+        )
+    else:
+        st.caption("All mapped CI tests reported a pass for this commit.")
+    if follow_up.unmapped_criterion_ids:
+        criteria = ", ".join(follow_up.unmapped_criterion_ids)
+        st.caption(f"No CI tests are mapped to {criteria}.")
 
 
 def render_criterion_ci_status(
@@ -189,6 +214,8 @@ def render_criterion_ci_status(
             return
         if not statuses:
             return
+        follow_up = summarize_ci_follow_up(statuses)
+        _render_ci_follow_up(follow_up)
         if prepare_download is not None:
             assert manifest_sha256 is not None
             _render_snapshot_download(
@@ -204,20 +231,20 @@ def render_criterion_ci_status(
         tests = by_criterion[criterion_id].tests
         if not tests:
             st.caption("The manifest does not identify expected tests for this criterion.")
-            return
-        st.dataframe(
-            [
-                {
-                    "Expected test": test.test_id,
-                    "CI status": CI_STATUS_LABELS[test.status],
-                    "Why": test.reason,
-                    "CI runs": ", ".join(test.run_ids),
-                }
-                for test in tests
-            ],
-            hide_index=True,
-        )
-        run_ids = {run_id for test in tests for run_id in test.run_ids}
+        else:
+            st.dataframe(
+                [
+                    {
+                        "Expected test": test.test_id,
+                        "CI status": CI_STATUS_LABELS[test.status],
+                        "Why": test.reason,
+                        "CI runs": ", ".join(test.run_ids),
+                    }
+                    for test in tests
+                ],
+                hide_index=True,
+            )
+        run_ids = {run_id for test in (*follow_up.tests, *tests) for run_id in test.run_ids}
         for run in manifest.runs:
             if run.run_id in run_ids:
                 st.text(f"CI run {run.run_id} · {run.head_sha}")

@@ -9,7 +9,12 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Current development source declares `0.2.9.dev0`, unpublished, for post-release entry-point alignment.
+Current development source declares `0.2.9.dev0`, unpublished.
+
+- Export a CI snapshot from a saved review and an explicit local manifest with `scopeproof ci-snapshot`.
+- See CI follow-up in the workbench and offline snapshot, with one row per unresolved test and
+  separate identification of criteria without a test mapping.
+
 Stage 1 remains `closed_not_pursued_by_owner` with zero external-use evidence. Stage 3 remains
 gated by genuine independent-use evidence and separate authorization.
 

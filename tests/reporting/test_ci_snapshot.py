@@ -105,6 +105,31 @@ def test_snapshot_cites_both_conflicting_exact_head_runs(state, manifest_data):
     assert "irrelevant" not in rendered
 
 
+def test_offline_snapshot_has_a_deduplicated_ci_follow_up_with_cited_runs(state, manifest_data):
+    manifest_data["expected_tests"]["AC-02"] = ["filter", "passed"]
+    manifest_data["runs"][1]["outcomes"]["passed"] = "passed"
+    snapshot = _build(state.bundle, manifest_data, source="local-file")
+    rendered = export_ci_status_snapshot_html(snapshot)
+
+    follow_up = rendered.split('<section aria-labelledby="ci-follow-up">', 1)[1]
+    summary, details = follow_up.split("</section>", 1)
+    assert "Local file" in rendered
+    assert summary.count("<code>filter</code>") == 1
+    assert "AC-01, AC-02" in summary
+    assert "CI reports failure for the reviewed build." in summary
+    assert '<a href="#ci-run-1">[1]</a>' in summary
+    assert "<code>passed</code>" not in summary
+    assert "<code>passed</code>" in details
+
+
+def test_offline_snapshot_has_unmapped_criteria_in_its_follow_up(state, manifest_data):
+    snapshot = _build(state.bundle, manifest_data)
+    rendered = export_ci_status_snapshot_html(snapshot)
+
+    follow_up = rendered.split('<section aria-labelledby="ci-follow-up">', 1)[1]
+    assert "No CI tests are mapped to AC-02." in follow_up.split("</section>", 1)[0]
+
+
 def test_snapshot_escapes_criterion_text_and_run_url(state, manifest_data):
     criterion, other = state.bundle.criteria
     changed = criterion.model_copy(update={"text": '<img src="outside" onerror="oops"> &'})

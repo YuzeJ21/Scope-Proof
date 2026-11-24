@@ -61,7 +61,7 @@ def _assert_expired(download: Callable[[], str]) -> None:
 
 
 def _assert_statuses(app: AppTest, expected: tuple[str, str, str]) -> None:
-    table, = _panel(app).get("table")
+    table, = (table for table in _panel(app).get("table") if "Criterion" in table.value.columns)
     assert table.value.to_dict(orient="records") == [
         {"Criterion": f"AC-0{index}", "CI status": status}
         for index, status in enumerate(expected, 1)

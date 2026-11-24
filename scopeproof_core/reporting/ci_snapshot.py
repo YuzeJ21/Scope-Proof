@@ -10,21 +10,25 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from scopeproof_core.reviews.ci_status import (
     CI_STATUS_LABELS,
     EXACT_HEAD_PATTERN,
+    CIFollowUpSummary,
     CIStatusManifest,
     CIStatusRunReference,
+    CITestStatus,
     CriterionCIStatus,
     criterion_ci_statuses,
+    summarize_ci_follow_up,
 )
 from scopeproof_core.schemas.models import (
     GITHUB_REPOSITORY_PATTERN,
     ReviewBundle,
 )
 
-CIStatusSnapshotSource = Literal["manual-upload", "configured-local"]
+CIStatusSnapshotSource = Literal["manual-upload", "configured-local", "local-file"]
 _SHA256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 _SOURCE_LABELS = {
     "manual-upload": "Manual upload",
     "configured-local": "Configured local folder",
+    "local-file": "Local file",
 }
 _TITLE = "ScopeProof CI Status Snapshot"
 _EVIDENCE_BOUNDARY = (
@@ -109,6 +113,39 @@ def build_ci_status_snapshot(
     )
 
 
+def _test_run_links(test: CITestStatus, run_numbers: dict[str, int]) -> str:
+    return ", ".join(
+        f'<a href="#ci-run-{run_numbers[run_id]}">[{run_numbers[run_id]}]</a>'
+        for run_id in test.run_ids
+    ) or "None"
+
+
+def _follow_up_html(follow_up: CIFollowUpSummary, run_numbers: dict[str, int]) -> list[str]:
+    lines = ['<section aria-labelledby="ci-follow-up"><h2 id="ci-follow-up">CI follow-up</h2>']
+    if follow_up.tests:
+        lines.extend([
+            '<table aria-label="CI tests needing follow-up">',
+            '<thead><tr><th scope="col">Expected test</th><th scope="col">Mapped criteria</th>',
+            '<th scope="col">CI status</th><th scope="col">Why</th>',
+            '<th scope="col">CI runs</th></tr></thead><tbody>',
+        ])
+        for test in follow_up.tests:
+            criteria = escape(", ".join(test.criterion_ids))
+            lines.append(
+                f"<tr><td><code>{escape(test.test_id)}</code></td><td>{criteria}</td>"
+                f"<td>{CI_STATUS_LABELS[test.status]}</td><td>{escape(test.reason)}</td>"
+                f"<td>{_test_run_links(test, run_numbers)}</td></tr>"
+            )
+        lines.append("</tbody></table>")
+    else:
+        lines.append("<p>All mapped CI tests reported a pass for this commit.</p>")
+    if follow_up.unmapped_criterion_ids:
+        criteria = escape(", ".join(follow_up.unmapped_criterion_ids))
+        lines.append(f"<p>No CI tests are mapped to {criteria}.</p>")
+    lines.append("</section>")
+    return lines
+
+
 def _criterion_html(
     criterion: CIStatusSnapshotCriterion, number: int, run_numbers: dict[str, int],
 ) -> list[str]:
@@ -131,14 +168,10 @@ def _criterion_html(
         '<th scope="col">Why</th><th scope="col">CI runs</th></tr></thead><tbody>',
     ])
     for test in criterion.tests:
-        references = ", ".join(
-            f'<a href="#ci-run-{run_numbers[run_id]}">[{run_numbers[run_id]}]</a>'
-            for run_id in test.run_ids
-        )
         lines.append(
             f"<tr><td><code>{escape(test.test_id)}</code></td>"
             f"<td>{CI_STATUS_LABELS[test.status]}</td>"
-            f"<td>{escape(test.reason)}</td><td>{references or 'None'}</td></tr>"
+            f"<td>{escape(test.reason)}</td><td>{_test_run_links(test, run_numbers)}</td></tr>"
         )
     lines.extend(["</tbody></table>", "</section>"])
     return lines
@@ -175,6 +208,7 @@ def export_ci_status_snapshot_html(snapshot: CIStatusSnapshot) -> str:
         "</dl>",
     ]
     run_numbers = {run.run_id: index for index, run in enumerate(snapshot.cited_runs, 1)}
+    lines.extend(_follow_up_html(summarize_ci_follow_up(snapshot.criteria), run_numbers))
     for index, criterion in enumerate(snapshot.criteria, 1):
         lines.extend(_criterion_html(criterion, index, run_numbers))
     lines.append('<section aria-labelledby="cited-runs"><h2 id="cited-runs">Cited CI runs</h2>')
