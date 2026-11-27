@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
@@ -95,16 +96,29 @@ def render_ci_comparison(
         }
         for row in comparison.test_changes()
     ], hide_index=True)
-    st.dataframe([
-        {
-            "Run assertion": row.run_id, "Context change": _CHANGES[row.change],
-            "Previous commit": row.previous.head_sha if row.previous else "",
-            "Current commit": row.current.head_sha if row.current else "",
-            "Previous source": row.previous.source_url if row.previous else "",
-            "Current source": row.current.source_url if row.current else "",
-        }
-        for row in comparison.run_changes()
-    ], hide_index=True)
+    with st.container(key="ci_comparison_runs"):
+        st.dataframe([
+            {
+                "Run assertion": row.run_id, "Context change": _CHANGES[row.change],
+                "Previous commit": row.previous.head_sha if row.previous else "",
+                "Current commit": row.current.head_sha if row.current else "",
+                "Previous source": row.previous.source_url if row.previous else "",
+                "Current source": row.current.source_url if row.current else "",
+                "Previous outcomes": (
+                    json.dumps(row.previous.outcomes, sort_keys=True)
+                    if row.previous else "No previous run"
+                ),
+                "Current outcomes": (
+                    json.dumps(row.current.outcomes, sort_keys=True)
+                    if row.current else "No current run"
+                ),
+            }
+            for row in comparison.run_changes()
+        ], hide_index=True)
+    st.caption(
+        "Run outcomes are reported assertions. A changed run record can leave the "
+        "effective test result unchanged; an empty outcome map is shown as {}."
+    )
     if prepare_download is None:
         st.caption("Resolve pending review inputs before downloading the CI comparison.")
         return

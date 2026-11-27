@@ -205,7 +205,10 @@ The previous input is never selected automatically. Both inputs must match the s
 confirmed criteria and exact reviewed commit; each is limited to 1 MiB.
 
 The workbench shows each test's previous/current result, mappings and supplying runs,
-along with run-record changes and both input digests. Choose **Download CI comparison**
+along with run-record changes and both input digests. Run records include both reported
+outcome maps: `{}` means an empty map; **No previous run** or **No current run** means the
+record is absent on that side. A changed assertion can retain the effective result supplied
+by another run. Choose **Download CI comparison**
 to open the complete HTML report offline. The report includes both source assertions
 and the recorded acceptance state, with the same boundaries as the CLI comparison.
 
@@ -214,6 +217,9 @@ older downloads. The configured current file is checked again when downloading. 
 review drafts and conflicting source observations keep the existing export safeguards.
 Resolve those inputs and use a fresh download; neither comparison nor download saves a
 new review decision. This control is absent from the published v0.2.8 package.
+
+The [consolidated development candidate guide](releases/v0.2.9-dev0-consolidated-candidate.md)
+describes the separately retained, unpublished CI package and its exact-source bindings.
 
 See the [comparison boundary and example](development/ci-context-comparison.md).
 
