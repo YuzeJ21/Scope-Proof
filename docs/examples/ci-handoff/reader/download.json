@@ -1,0 +1,12 @@
+{
+  "archive": {
+    "name": "constructed-ci-walkthrough.zip",
+    "bytes": 19899,
+    "sha256": "827679498935d839be05ac14dd3382b186daefa9b4936853122cc33a31ba8582"
+  },
+  "provenance": {
+    "name": "provenance.json",
+    "bytes": 8814,
+    "sha256": "cfe1a484ce7e200f17dc7cc5e7ecaf68025b784e2b7f899b08299d2518318da1"
+  }
+}

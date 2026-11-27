@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScopeProof CI Status Snapshot</title>
+<style>body{font:1rem/1.55 system-ui,sans-serif;max-width:70rem;margin:auto;padding:1.25rem;overflow-wrap:anywhere}section{margin:2rem 0}table{width:100%;border-collapse:collapse}td,th{border:1px solid gray;padding:.4rem;text-align:left;vertical-align:top}.table-scroll th,.ci-status{overflow-wrap:normal}dt{font-weight:700}dd{margin:0 0 .5rem}.criterion-text{white-space:pre-wrap}@media screen and (max-width:42rem){.table-scroll{overflow-x:auto}.table-scroll table{min-width:36rem}}</style>
+</head><body><aside aria-label="Constructed example" style="border:2px solid #9a4b0a;padding:1rem;margin-bottom:1.5rem"><strong>CONSTRUCTED EXAMPLE</strong><p>These are synthetic builds and fixture checks, not a real pull-request review. Ticket, actor and CI links are illustrative. No target-runtime verification, human acceptance or customer use is established. This example uses unpublished ScopeProof 0.2.9.dev0; the public evaluation release remains v0.2.8.</p></aside><main>
+<h1>ScopeProof CI Status Snapshot</h1><p>Externally supplied CI results. ScopeProof does not authenticate the manifest or run the tests. This snapshot does not record an acceptance decision.</p>
+<dl>
+<dt>Review ID</dt><dd>ba4a60eb-1682-4382-8b35-93d5ff5dae21</dd>
+<dt>Repository</dt><dd>constructed/export</dd>
+<dt>Pull request</dt><dd>#1</dd>
+<dt>Reviewed commit</dt><dd>2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942</dd>
+<dt>Confirmed criteria revision</dt><dd>1</dd>
+<dt>Confirmed criteria SHA-256</dt><dd>6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89</dd>
+<dt>CI manifest SHA-256</dt><dd>434a1346dc21e7217bbcdc7796a059e28112f91dde25592522e3288b645c24bf</dd>
+<dt>Manifest source</dt><dd>Local file</dd>
+</dl>
+<section aria-labelledby="ci-follow-up"><h2 id="ci-follow-up">CI follow-up</h2>
+<p>All mapped CI tests reported a pass for this commit.</p>
+</section>
+<section aria-labelledby="criterion-1">
+<h2 id="criterion-1">AC-01</h2>
+<p class="criterion-text">Export only records matching the selected category filter.</p>
+<p>CI status <strong>Passed</strong></p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="CI tests for AC-01">
+<table aria-label="Expected CI tests">
+<thead><tr><th scope="col">Expected test</th><th scope="col">CI status</th>
+<th scope="col">Why</th><th scope="col">CI runs</th></tr></thead><tbody>
+<tr><td><code>category_filter</code></td><td class="ci-status">Passed</td><td>CI reports a pass for the reviewed build.</td><td><a href="#ci-run-1">[1]</a></td></tr>
+</tbody></table></div>
+</section>
+<section aria-labelledby="criterion-2">
+<h2 id="criterion-2">AC-02</h2>
+<p class="criterion-text">Export only records the current analyst is authorized to access.</p>
+<p>CI status <strong>Passed</strong></p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="CI tests for AC-02">
+<table aria-label="Expected CI tests">
+<thead><tr><th scope="col">Expected test</th><th scope="col">CI status</th>
+<th scope="col">Why</th><th scope="col">CI runs</th></tr></thead><tbody>
+<tr><td><code>row_entitlement</code></td><td class="ci-status">Passed</td><td>CI reports a pass for the reviewed build.</td><td><a href="#ci-run-1">[1]</a></td></tr>
+</tbody></table></div>
+</section>
+<section aria-labelledby="criterion-3">
+<h2 id="criterion-3">AC-03</h2>
+<p class="criterion-text">Use the CSV header id,category,amount in that order.</p>
+<p>CI status <strong>Passed</strong></p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="CI tests for AC-03">
+<table aria-label="Expected CI tests">
+<thead><tr><th scope="col">Expected test</th><th scope="col">CI status</th>
+<th scope="col">Why</th><th scope="col">CI runs</th></tr></thead><tbody>
+<tr><td><code>csv_header</code></td><td class="ci-status">Passed</td><td>CI reports a pass for the reviewed build.</td><td><a href="#ci-run-1">[1]</a></td></tr>
+</tbody></table></div>
+</section>
+<section aria-labelledby="cited-runs"><h2 id="cited-runs">Cited CI runs</h2>
+<ol>
+<li id="ci-run-1"><strong>A</strong> · Commit <code>2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942</code> · <a href="https://ci.example.invalid/builds/A">https://ci.example.invalid/builds/A</a></li>
+</ol>
+</section>
+</main></body></html>

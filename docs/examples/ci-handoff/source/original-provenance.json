@@ -1,0 +1,68 @@
+{
+  "kind": "Private no-install candidate using constructed inputs",
+  "source_commit": "f8be51021bb95c596802426ef05c15fabf393975",
+  "source_tree": "08b3456367a5f50ed5c31c492d642d5c80d80ca8",
+  "tool_version": "0.2.9.dev0",
+  "python_version": "3.11.15",
+  "wheel_name": "scopeproof-0.2.9.dev0-py3-none-any.whl",
+  "wheel_sha256": "62eb1fdcb25c2b63d74acd26cdba06c8556537c0cda5d78022cfc1a3a86ad1ef",
+  "wheel_payload_files_matched": 148,
+  "simulator_sha256": "8fd8979f03fff249f3a83e93f7087c6cf0123c6cda3db1b8af4dbe6a41ad9272",
+  "inputs_unchanged": true,
+  "reports": [
+    {
+      "case": "A",
+      "report": "build-a.html",
+      "report_sha256": "8637add0e124ad0c578294b25830bd1b4c24896dfefb71048af02c14b8f6fd30",
+      "review_id": "ba4a60eb-1682-4382-8b35-93d5ff5dae21",
+      "reviewed_head_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+      "review_record_version": 9,
+      "review_record_sha256": "af0c5aa8682b23b8de99a021da6c81624a3db754a3e5d9955dc5de149bc64aea",
+      "confirmed_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+      "manifest_name": "A-scopeproof-manifest.json",
+      "manifest_sha256": "434a1346dc21e7217bbcdc7796a059e28112f91dde25592522e3288b645c24bf",
+      "raw_ci_sha256": "983e0a1c1addaabccd1f6f318c52db47be4a34c6e448b6d556991ef8070ceeba",
+      "outcomes": {
+        "category_filter": "Passed",
+        "row_entitlement": "Passed",
+        "csv_header": "Passed"
+      }
+    },
+    {
+      "case": "B",
+      "report": "build-b-initial.html",
+      "report_sha256": "eb9fae21a04f467b3b0ce41d0d89aa1795058ee1c6da4b411fae140e1b70c968",
+      "review_id": "c643e15d-4fce-45f6-975d-eff780a093d9",
+      "reviewed_head_sha": "aac2fb06cb315a392e91e432f3d862607c7e9856",
+      "review_record_version": 9,
+      "review_record_sha256": "5fa494a541cf9667be904f0d60fc0b793f48a1502f179c1e919b8d1b7b2f9185",
+      "confirmed_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+      "manifest_name": "B-scopeproof-manifest.json",
+      "manifest_sha256": "4a8a7b76dd025858e32652a998acf71cc4985108d9d3049e0adda96acc567ac9",
+      "raw_ci_sha256": "0807f4aee54414567887045e8e62009029309e75b0d1d1bb9fc282640b4680a9",
+      "outcomes": {
+        "category_filter": "Failed",
+        "row_entitlement": "Explicitly skipped",
+        "csv_header": "Passed"
+      }
+    },
+    {
+      "case": "B-targeted",
+      "report": "build-b-targeted.html",
+      "report_sha256": "62fc0289927ca959ba8c3534ebd3663aa4eebdf32faa0d68a02834576a2a9734",
+      "review_id": "c643e15d-4fce-45f6-975d-eff780a093d9",
+      "reviewed_head_sha": "aac2fb06cb315a392e91e432f3d862607c7e9856",
+      "review_record_version": 9,
+      "review_record_sha256": "5fa494a541cf9667be904f0d60fc0b793f48a1502f179c1e919b8d1b7b2f9185",
+      "confirmed_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+      "manifest_name": "B-targeted-scopeproof-manifest.json",
+      "manifest_sha256": "95fdca9e60ad7f9148c2153e638515dbe7f533fb62f9004608cae945a7044d59",
+      "raw_ci_sha256": "aae1fa152f3bea3e5537b9b75d642bca46c2fa15178c62fb72190c6b5a506549",
+      "outcomes": {
+        "category_filter": "Failed",
+        "row_entitlement": "Failed",
+        "csv_header": "Passed"
+      }
+    }
+  ]
+}

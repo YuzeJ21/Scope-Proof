@@ -14,3 +14,8 @@ docs/examples/offline-handoff/*.html -text
 docs/examples/offline-handoff/*.json -text
 docs/examples/offline-handoff/*.zip -text
 scripts/build_offline_handoff_sample.py -text
+
+# Preserve the reused candidate and deterministic CI walkthrough on Windows checkouts.
+docs/examples/ci-handoff/source/** -text
+docs/examples/ci-handoff/reader/** -text
+scripts/build_ci_walkthrough.py -text

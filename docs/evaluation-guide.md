@@ -27,6 +27,31 @@ or supply qualifying reviews. All verification cited below is automated engineer
 
 ## Choose the right version
 
+### Follow the constructed two-build handoff before installing
+
+[Download the two-build walkthrough ZIP](examples/ci-handoff/reader/constructed-ci-walkthrough.zip?raw=true),
+extract it, and open `index.html`. Compare the supplied CI results, inspect their exact-build
+snapshots and manifests, and read the next reviewer action. All three moments retain
+**Action required** and recorded final acceptance **No** in their saved reviews.
+
+| Moment | Category filter | Row access | CSV header |
+| --- | --- | --- | --- |
+| Build A | Passed | Passed | Passed |
+| Initial Build B | Failed | Explicitly skipped | Passed |
+| Build B after the targeted run | Failed | Failed | Passed |
+
+These are the effective results for each build at each moment. The targeted run executes
+only row access. The filter failure and header pass retain their initial Build B run citations.
+
+The snapshots came from the existing private `0.2.9.dev0` candidate at `f8be510`.
+Every presented page identifies the constructed example. The original report, input and
+producer bytes are preserved beneath a documented presentation disclosure. The
+[walkthrough guide](examples/ci-handoff/README.md) explains provenance and reproducible packaging.
+These fixture results establish no target-runtime verification, human acceptance or customer use.
+The older v0.2.6 report above is unchanged. This example is separate from package and site publication.
+
+### Published and development packages
+
 **v0.2.8 is published and publicly verified**, built from
 `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d` after PR #302. The
 [v0.2.8 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) records the final

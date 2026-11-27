@@ -11,6 +11,9 @@ its linked release entry for the exact published source and assets.
 
 Current development source declares `0.2.9.dev0`, unpublished.
 
+- Inspect the two-build CI handoff without installing. The maintained constructed example
+  reuses the private candidate's original snapshots and inputs, adds explicit simulation labels
+  and next reviewer actions, and retains acceptance status separately from CI results.
 - Export a CI snapshot from a saved review and an explicit local manifest with `scopeproof ci-snapshot`.
 - See CI follow-up in the workbench and offline snapshot, with one row per unresolved test and
   separate identification of criteria without a test mapping.

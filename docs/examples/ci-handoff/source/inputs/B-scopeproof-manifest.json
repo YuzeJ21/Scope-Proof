@@ -1,0 +1,39 @@
+{
+  "schema_version": "criterion-ci-status-v1",
+  "repository": "constructed/export",
+  "pr_number": 1,
+  "criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+  "expected_tests": {
+    "AC-01": [
+      "category_filter"
+    ],
+    "AC-02": [
+      "row_entitlement"
+    ],
+    "AC-03": [
+      "csv_header"
+    ]
+  },
+  "runs": [
+    {
+      "run_id": "A",
+      "head_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+      "source_url": "https://ci.example.invalid/builds/A",
+      "outcomes": {
+        "category_filter": "passed",
+        "row_entitlement": "passed",
+        "csv_header": "passed"
+      }
+    },
+    {
+      "run_id": "B",
+      "head_sha": "aac2fb06cb315a392e91e432f3d862607c7e9856",
+      "source_url": "https://ci.example.invalid/builds/B",
+      "outcomes": {
+        "category_filter": "failed",
+        "row_entitlement": "skipped",
+        "csv_header": "passed"
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "label": "B",
+  "head": "aac2fb06cb315a392e91e432f3d862607c7e9856",
+  "environment": "synthetic SQLite and Python",
+  "checks": [
+    {
+      "criterion": "AC-01",
+      "test": "category_filter",
+      "outcome": "failed",
+      "observed": "Expected ['A']; observed ['A', 'B']."
+    },
+    {
+      "criterion": "AC-02",
+      "test": "row_entitlement",
+      "outcome": "not_run",
+      "observed": "Expected check absent from this run."
+    },
+    {
+      "criterion": "AC-03",
+      "test": "csv_header",
+      "outcome": "passed",
+      "observed": "Expected ['id', 'category', 'amount']; observed ['id', 'category', 'amount']."
+    }
+  ]
+}
