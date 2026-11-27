@@ -35,6 +35,9 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 
 - [Start here: evaluation guide](evaluation-guide.md) — published/source/candidate capability map,
   one constructed workflow, exact-baseline engineering evidence and remaining limits.
+- [Two-build offline CI walkthrough](examples/ci-handoff/README.md) — reuse the existing
+  development candidate's exact reports and inputs, see the next reviewer action, and inspect
+  permanent provenance and packaging checks. The package release remains v0.2.8.
 - [No-install constructed HTML report](examples/offline-handoff/README.md) — download before setup,
   expected Action required, simulation boundaries, provenance and regeneration.
 - [November 23 product and market assessment](commercialization/product-direction-2026-11-23.md) —

@@ -1,0 +1,242 @@
+{
+  "schema_version": "scopeproof-ci-walkthrough-v1",
+  "boundary": "Constructed example; no target runtime, human acceptance or customer use.",
+  "original_producer": {
+    "kind": "Private no-install candidate using constructed inputs",
+    "source_commit": "f8be51021bb95c596802426ef05c15fabf393975",
+    "source_tree": "08b3456367a5f50ed5c31c492d642d5c80d80ca8",
+    "tool_version": "0.2.9.dev0",
+    "python_version": "3.11.15",
+    "wheel_name": "scopeproof-0.2.9.dev0-py3-none-any.whl",
+    "wheel_sha256": "62eb1fdcb25c2b63d74acd26cdba06c8556537c0cda5d78022cfc1a3a86ad1ef",
+    "wheel_payload_files_matched": 148,
+    "simulator_sha256": "8fd8979f03fff249f3a83e93f7087c6cf0123c6cda3db1b8af4dbe6a41ad9272",
+    "inputs_unchanged": true,
+    "reports": [
+      {
+        "case": "A",
+        "report": "build-a.html",
+        "report_sha256": "8637add0e124ad0c578294b25830bd1b4c24896dfefb71048af02c14b8f6fd30",
+        "review_id": "ba4a60eb-1682-4382-8b35-93d5ff5dae21",
+        "reviewed_head_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+        "review_record_version": 9,
+        "review_record_sha256": "af0c5aa8682b23b8de99a021da6c81624a3db754a3e5d9955dc5de149bc64aea",
+        "confirmed_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+        "manifest_name": "A-scopeproof-manifest.json",
+        "manifest_sha256": "434a1346dc21e7217bbcdc7796a059e28112f91dde25592522e3288b645c24bf",
+        "raw_ci_sha256": "983e0a1c1addaabccd1f6f318c52db47be4a34c6e448b6d556991ef8070ceeba",
+        "outcomes": {
+          "category_filter": "Passed",
+          "row_entitlement": "Passed",
+          "csv_header": "Passed"
+        }
+      },
+      {
+        "case": "B",
+        "report": "build-b-initial.html",
+        "report_sha256": "eb9fae21a04f467b3b0ce41d0d89aa1795058ee1c6da4b411fae140e1b70c968",
+        "review_id": "c643e15d-4fce-45f6-975d-eff780a093d9",
+        "reviewed_head_sha": "aac2fb06cb315a392e91e432f3d862607c7e9856",
+        "review_record_version": 9,
+        "review_record_sha256": "5fa494a541cf9667be904f0d60fc0b793f48a1502f179c1e919b8d1b7b2f9185",
+        "confirmed_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+        "manifest_name": "B-scopeproof-manifest.json",
+        "manifest_sha256": "4a8a7b76dd025858e32652a998acf71cc4985108d9d3049e0adda96acc567ac9",
+        "raw_ci_sha256": "0807f4aee54414567887045e8e62009029309e75b0d1d1bb9fc282640b4680a9",
+        "outcomes": {
+          "category_filter": "Failed",
+          "row_entitlement": "Explicitly skipped",
+          "csv_header": "Passed"
+        }
+      },
+      {
+        "case": "B-targeted",
+        "report": "build-b-targeted.html",
+        "report_sha256": "62fc0289927ca959ba8c3534ebd3663aa4eebdf32faa0d68a02834576a2a9734",
+        "review_id": "c643e15d-4fce-45f6-975d-eff780a093d9",
+        "reviewed_head_sha": "aac2fb06cb315a392e91e432f3d862607c7e9856",
+        "review_record_version": 9,
+        "review_record_sha256": "5fa494a541cf9667be904f0d60fc0b793f48a1502f179c1e919b8d1b7b2f9185",
+        "confirmed_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+        "manifest_name": "B-targeted-scopeproof-manifest.json",
+        "manifest_sha256": "95fdca9e60ad7f9148c2153e638515dbe7f533fb62f9004608cae945a7044d59",
+        "raw_ci_sha256": "aae1fa152f3bea3e5537b9b75d642bca46c2fa15178c62fb72190c6b5a506549",
+        "outcomes": {
+          "category_filter": "Failed",
+          "row_entitlement": "Failed",
+          "csv_header": "Passed"
+        }
+      }
+    ]
+  },
+  "original_provenance_sha256": "128e2fa3c6358c513624ec4f3a20a640a3411f65052930cb6268a5e51140a6c7",
+  "presentation_recipe": {
+    "name": "scripts/build_ci_walkthrough.py",
+    "bytes": 15513,
+    "sha256": "657eb3a18a4a1b28ff6e9675e2b3e3d177001f6a1e6019cb85c872bcd12aea8a"
+  },
+  "steps": [
+    {
+      "label": "A",
+      "head_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+      "report": "build-a.html",
+      "original_report_sha256": "8637add0e124ad0c578294b25830bd1b4c24896dfefb71048af02c14b8f6fd30",
+      "review_sha256": "af0c5aa8682b23b8de99a021da6c81624a3db754a3e5d9955dc5de149bc64aea",
+      "manifest_sha256": "434a1346dc21e7217bbcdc7796a059e28112f91dde25592522e3288b645c24bf",
+      "outcomes": {
+        "category_filter": "Passed",
+        "row_entitlement": "Passed",
+        "csv_header": "Passed"
+      },
+      "result_runs": {
+        "category_filter": [
+          "A"
+        ],
+        "row_entitlement": [
+          "A"
+        ],
+        "csv_header": [
+          "A"
+        ]
+      },
+      "executed_tests": [
+        "category_filter",
+        "row_entitlement",
+        "csv_header"
+      ],
+      "gate": "blocked",
+      "review_status": "Action required",
+      "final_acceptance": false
+    },
+    {
+      "label": "B",
+      "head_sha": "aac2fb06cb315a392e91e432f3d862607c7e9856",
+      "report": "build-b-initial.html",
+      "original_report_sha256": "eb9fae21a04f467b3b0ce41d0d89aa1795058ee1c6da4b411fae140e1b70c968",
+      "review_sha256": "5fa494a541cf9667be904f0d60fc0b793f48a1502f179c1e919b8d1b7b2f9185",
+      "manifest_sha256": "4a8a7b76dd025858e32652a998acf71cc4985108d9d3049e0adda96acc567ac9",
+      "outcomes": {
+        "category_filter": "Failed",
+        "row_entitlement": "Explicitly skipped",
+        "csv_header": "Passed"
+      },
+      "result_runs": {
+        "category_filter": [
+          "B"
+        ],
+        "row_entitlement": [
+          "B"
+        ],
+        "csv_header": [
+          "B"
+        ]
+      },
+      "executed_tests": [
+        "category_filter",
+        "csv_header"
+      ],
+      "gate": "blocked",
+      "review_status": "Action required",
+      "final_acceptance": false
+    },
+    {
+      "label": "B-targeted",
+      "head_sha": "aac2fb06cb315a392e91e432f3d862607c7e9856",
+      "report": "build-b-targeted.html",
+      "original_report_sha256": "62fc0289927ca959ba8c3534ebd3663aa4eebdf32faa0d68a02834576a2a9734",
+      "review_sha256": "5fa494a541cf9667be904f0d60fc0b793f48a1502f179c1e919b8d1b7b2f9185",
+      "manifest_sha256": "95fdca9e60ad7f9148c2153e638515dbe7f533fb62f9004608cae945a7044d59",
+      "outcomes": {
+        "category_filter": "Failed",
+        "row_entitlement": "Failed",
+        "csv_header": "Passed"
+      },
+      "result_runs": {
+        "category_filter": [
+          "B"
+        ],
+        "row_entitlement": [
+          "B-targeted"
+        ],
+        "csv_header": [
+          "B"
+        ]
+      },
+      "executed_tests": [
+        "row_entitlement"
+      ],
+      "gate": "blocked",
+      "review_status": "Action required",
+      "final_acceptance": false
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "build-a.html",
+      "bytes": 4364,
+      "sha256": "f5898f1d1a48e94fe0738bee1c401bcb16776e62edf08b1079f852864be31b9d"
+    },
+    {
+      "name": "build-b-initial.html",
+      "bytes": 5055,
+      "sha256": "9707dad059a42a4404357524a585a49117eb10138fb371349d98409453b205aa"
+    },
+    {
+      "name": "build-b-targeted.html",
+      "bytes": 5233,
+      "sha256": "4924337283a57f9e9f208ab85a03916c635cc1e381857591ea8f1769061fec45"
+    },
+    {
+      "name": "index.html",
+      "bytes": 5802,
+      "sha256": "36f0dc204da19ea0fdf310400a311c63dac8482312cfb7fa3bcab6000cda93f3"
+    },
+    {
+      "name": "inputs/A-ci.json",
+      "bytes": 633,
+      "sha256": "983e0a1c1addaabccd1f6f318c52db47be4a34c6e448b6d556991ef8070ceeba"
+    },
+    {
+      "name": "inputs/A-review.json",
+      "bytes": 22187,
+      "sha256": "af0c5aa8682b23b8de99a021da6c81624a3db754a3e5d9955dc5de149bc64aea"
+    },
+    {
+      "name": "inputs/A-scopeproof-manifest.json",
+      "bytes": 657,
+      "sha256": "434a1346dc21e7217bbcdc7796a059e28112f91dde25592522e3288b645c24bf"
+    },
+    {
+      "name": "inputs/B-ci.json",
+      "bytes": 650,
+      "sha256": "0807f4aee54414567887045e8e62009029309e75b0d1d1bb9fc282640b4680a9"
+    },
+    {
+      "name": "inputs/B-review.json",
+      "bytes": 21224,
+      "sha256": "5fa494a541cf9667be904f0d60fc0b793f48a1502f179c1e919b8d1b7b2f9185"
+    },
+    {
+      "name": "inputs/B-scopeproof-manifest.json",
+      "bytes": 946,
+      "sha256": "4a8a7b76dd025858e32652a998acf71cc4985108d9d3049e0adda96acc567ac9"
+    },
+    {
+      "name": "inputs/B-targeted-ci.json",
+      "bytes": 609,
+      "sha256": "aae1fa152f3bea3e5537b9b75d642bca46c2fa15178c62fb72190c6b5a506549"
+    },
+    {
+      "name": "inputs/B-targeted-scopeproof-manifest.json",
+      "bytes": 1254,
+      "sha256": "95fdca9e60ad7f9148c2153e638515dbe7f533fb62f9004608cae945a7044d59"
+    },
+    {
+      "name": "original-provenance.json",
+      "bytes": 3293,
+      "sha256": "128e2fa3c6358c513624ec4f3a20a640a3411f65052930cb6268a5e51140a6c7"
+    }
+  ],
+  "human_use": false,
+  "target_runtime_verified": false
+}

@@ -29,10 +29,17 @@ reviewer opens the workbench to export each snapshot and checks each criterion s
 | --- | --- | --- |
 | P0 · Implemented on development source | [Export an exact-build CI snapshot from the CLI](docs/evaluation-guide.md#export-a-ci-snapshot-from-the-cli). | Use a named saved review and bounded local manifest. Match the confirmed criteria and reviewed commit, preserve both input files, and write a new offline HTML report atomically. Refuse pending reviews, incompatible inputs and existing outputs. Verify A, initial B and targeted B with an installed wheel. |
 | P1 · Implemented on development source | Show CI follow-up in the workbench and offline snapshot. | Use the same projection for both. Show failing, skipped, stale and unknown tests once each, with all mapped criterion IDs and cited runs. Identify unmapped criteria. Keep the detailed view, externally supplied provenance, and existing gate and saved state. |
-| P2 · Private evaluation candidate | Let a reader inspect the two-build workflow before installing. | Provide a clearly labeled constructed example with both exact commits, the targeted rerun, and producer identity. Verify offline reading at desktop and phone widths. Keep the frozen v0.2.6 handoff example and R-002 intact. Review package and site publication separately. |
+| P2 · Maintained example on development source | [Inspect the two-build workflow before installing](docs/examples/ci-handoff/README.md). | Reuse the completed private candidate's exact reports and constructed inputs. Show both exact commits, the targeted rerun, next reviewer actions and original producer identity. Verify reproducible packaging and offline desktop/phone reading. Keep the v0.2.6 example and R-002 intact. Package and site publication remain separate. |
 | Gated · Independent use and private workflow design | Determine whether the handoff reduces work for a reviewer outside the project. | Require separate authorization and genuine independent use. A reviewer can explain what changed, decide what to check next and choose to reuse the workflow. Scope private access, provenance, retention and use rights only for a demonstrated need. |
 
 ### November 19 release work
+
+The November 26 review located the completed private v0.2.9.dev0 candidate outside the
+checkout. Its two-build reports are reused, not rebuilt. The maintained repository example
+adds upfront simulation labels, recorded review status, next reviewer actions, inspectable
+input files and permanent provenance/reproducibility regressions. It changes no core evidence
+rule or gate. This closes the no-install evaluation path on development source; it does not
+establish independent usefulness or authorize another feature queue, release or deployment.
 
 The published, publicly verified `0.2.8` evaluation release was built from
 `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d` after PR #302.

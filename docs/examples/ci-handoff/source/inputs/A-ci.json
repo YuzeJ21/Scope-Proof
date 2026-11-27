@@ -1,0 +1,25 @@
+{
+  "label": "A",
+  "head": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+  "environment": "synthetic SQLite and Python",
+  "checks": [
+    {
+      "criterion": "AC-01",
+      "test": "category_filter",
+      "outcome": "passed",
+      "observed": "Expected ['A']; observed ['A']."
+    },
+    {
+      "criterion": "AC-02",
+      "test": "row_entitlement",
+      "outcome": "passed",
+      "observed": "Expected []; observed []."
+    },
+    {
+      "criterion": "AC-03",
+      "test": "csv_header",
+      "outcome": "passed",
+      "observed": "Expected ['id', 'category', 'amount']; observed ['id', 'category', 'amount']."
+    }
+  ]
+}

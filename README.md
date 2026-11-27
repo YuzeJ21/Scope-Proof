@@ -3,6 +3,9 @@
 **See which acceptance criteria have credible PR evidence—and which still need review.**
 
 **Start here:** [Choose a version and follow one short evaluation workflow](docs/evaluation-guide.md).
+**Follow a CI handoff without installing:** [Open the two-build walkthrough](docs/examples/ci-handoff/README.md).
+It reuses the existing `0.2.9.dev0` candidate reports, shows the next reviewer action at each
+moment, and keeps passing CI separate from acceptance. This example does not publish a package.
 **Inspect the output first:** [Download the constructed report ZIP](https://github.com/YuzeJ21/Scope-Proof/raw/refs/heads/main/docs/examples/offline-handoff/constructed-v026-review.zip),
 extract it and open the HTML file in a browser; no ScopeProof installation is needed. It stays **Action required**.
 All actors, decisions, CI/runtime statements and source links are simulated. See the

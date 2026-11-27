@@ -175,6 +175,7 @@ jobs:
           tests/storage/test_released_v023_upgrade.py
           tests/storage/test_released_v026_upgrade.py
           tests/test_offline_handoff_sample.py
+          tests/test_ci_walkthrough.py
       - name: Saved comparison compatibility
         run: python -m pytest -q tests/reviews/test_saved_comparison.py tests/reviews/test_foreign_history_comparison.py tests/apps/test_saved_comparison_exports.py
       - name: Reviewer-selected reference compatibility
@@ -346,7 +347,7 @@ jobs:
       - name: Packaged browser regression
         env:
           SCOPEPROOF_BROWSER_DIAGNOSTIC_DIR: ${{ runner.temp }}/scopeproof-browser-diagnostics
-        run: python -m pytest -q -m browser tests/browser
+        run: python -m pytest -q -m browser tests/browser tests/test_ci_walkthrough.py
       - name: Upload constructed browser failure diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

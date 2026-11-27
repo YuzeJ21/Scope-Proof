@@ -1,0 +1,553 @@
+{
+  "record_version": 9,
+  "saved_at": "2026-11-24T13:41:31.158907+00:00",
+  "state": {
+    "analysis_history": [],
+    "bundle": {
+      "active_junit_import_ids": [],
+      "active_reviewer_selected_reference_ids": [],
+      "candidate_evidence_proves_correctness": false,
+      "criteria": [
+        {
+          "criterion_id": "AC-01",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E3",
+          "source_span": null,
+          "text": "Export only records matching the selected category filter."
+        },
+        {
+          "criterion_id": "AC-02",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E3",
+          "source_span": null,
+          "text": "Export only records the current analyst is authorized to access."
+        },
+        {
+          "criterion_id": "AC-03",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E3",
+          "source_span": null,
+          "text": "Use the CSV header id,category,amount in that order."
+        }
+      ],
+      "criteria_revision_number": 1,
+      "effective_junit_mappings": {},
+      "evidence": [
+        {
+          "commit_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+          "context_excerpt": "def select_export_rows(db, analyst, category):\n    # Apply category filter and analyst authorization to each export row.",
+          "criterion_id": "AC-01",
+          "evidence_id": "EV-AC-01-01",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "def select_export_rows(db, analyst, category):",
+          "file_path": "export_query.py",
+          "limitations": [
+            "Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 1,
+          "line_start": 1,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/constructed/export/blob/2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942/export_query.py#L1-L1",
+          "relevance_reason": "Matched terms: category, export, select",
+          "relevance_score": 0.429,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+          "context_excerpt": "def select_export_rows(db, analyst, category):\n    # Apply category filter and analyst authorization to each export row.\n    return db.execute(",
+          "criterion_id": "AC-01",
+          "evidence_id": "EV-AC-01-02",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "# Apply category filter and analyst authorization to each export row.",
+          "file_path": "export_query.py",
+          "limitations": [
+            "Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 2,
+          "line_start": 2,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/constructed/export/blob/2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942/export_query.py#L2-L2",
+          "relevance_reason": "Matched terms: category, export, filter",
+          "relevance_score": 0.429,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+          "context_excerpt": "    return db.execute(\n        \"SELECT id, category, amount FROM records WHERE analyst = ? AND category = ? ORDER BY id\",\n        (analyst, category),",
+          "criterion_id": "AC-01",
+          "evidence_id": "EV-AC-01-03",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "\"SELECT id, category, amount FROM records WHERE analyst = ? AND category = ? ORDER BY id\",",
+          "file_path": "export_query.py",
+          "limitations": [
+            "Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 4,
+          "line_start": 4,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/constructed/export/blob/2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942/export_query.py#L4-L4",
+          "relevance_reason": "Matched terms: category, record, select",
+          "relevance_score": 0.429,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+          "context_excerpt": "def select_export_rows(db, analyst, category):\n    # Apply category filter and analyst authorization to each export row.",
+          "criterion_id": "AC-02",
+          "evidence_id": "EV-AC-02-01",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "def select_export_rows(db, analyst, category):",
+          "file_path": "export_query.py",
+          "limitations": [
+            "Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 1,
+          "line_start": 1,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/constructed/export/blob/2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942/export_query.py#L1-L1",
+          "relevance_reason": "Matched terms: analyst, export",
+          "relevance_score": 0.333,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+          "context_excerpt": "def select_export_rows(db, analyst, category):\n    # Apply category filter and analyst authorization to each export row.\n    return db.execute(",
+          "criterion_id": "AC-02",
+          "evidence_id": "EV-AC-02-02",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "# Apply category filter and analyst authorization to each export row.",
+          "file_path": "export_query.py",
+          "limitations": [
+            "Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 2,
+          "line_start": 2,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/constructed/export/blob/2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942/export_query.py#L2-L2",
+          "relevance_reason": "Matched terms: analyst, export",
+          "relevance_score": 0.333,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+          "context_excerpt": "    return db.execute(\n        \"SELECT id, category, amount FROM records WHERE analyst = ? AND category = ? ORDER BY id\",\n        (analyst, category),",
+          "criterion_id": "AC-02",
+          "evidence_id": "EV-AC-02-03",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "\"SELECT id, category, amount FROM records WHERE analyst = ? AND category = ? ORDER BY id\",",
+          "file_path": "export_query.py",
+          "limitations": [
+            "Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 4,
+          "line_start": 4,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/constructed/export/blob/2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942/export_query.py#L4-L4",
+          "relevance_reason": "Matched terms: analyst, record",
+          "relevance_score": 0.333,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+          "context_excerpt": "    return db.execute(\n        \"SELECT id, category, amount FROM records WHERE analyst = ? AND category = ? ORDER BY id\",\n        (analyst, category),",
+          "criterion_id": "AC-03",
+          "evidence_id": "EV-AC-03-01",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "\"SELECT id, category, amount FROM records WHERE analyst = ? AND category = ? ORDER BY id\",",
+          "file_path": "export_query.py",
+          "limitations": [
+            "Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 4,
+          "line_start": 4,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/constructed/export/blob/2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942/export_query.py#L4-L4",
+          "relevance_reason": "Matched terms: amount, category, id, order",
+          "relevance_score": 0.444,
+          "source_scope": "changed_file"
+        },
+        {
+          "commit_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+          "context_excerpt": "    writer = csv.writer(output, lineterminator=\"\\n\")\n    writer.writerow((\"id\", \"category\", \"amount\"))\n    writer.writerows(rows)",
+          "criterion_id": "AC-03",
+          "evidence_id": "EV-AC-03-02",
+          "evidence_level": "E1",
+          "evidence_type": "implementation",
+          "excerpt": "writer.writerow((\"id\", \"category\", \"amount\"))",
+          "file_path": "export_format.py",
+          "limitations": [
+            "Candidate evidence does not prove the criterion is satisfied"
+          ],
+          "line_end": 7,
+          "line_start": 7,
+          "matching_rule": "keyword_overlap",
+          "permalink": "https://github.com/constructed/export/blob/2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942/export_format.py#L7-L7",
+          "relevance_reason": "Matched terms: amount, category, id",
+          "relevance_score": 0.333,
+          "source_scope": "changed_file"
+        }
+      ],
+      "file_scope_decisions": [],
+      "findings": [
+        {
+          "confidence_band": "low",
+          "contradictions": [],
+          "criterion_id": "AC-01",
+          "evidence_ids": [
+            "EV-AC-01-01",
+            "EV-AC-01-02",
+            "EV-AC-01-03"
+          ],
+          "evidence_level": "E1",
+          "missing_evidence": [
+            "Evidence at required level E3"
+          ],
+          "reason": "Candidate evidence covers only part of the wording or is below the required level.",
+          "recommended_action": "Review the candidate and provide stronger or additional evidence.",
+          "status": "partial"
+        },
+        {
+          "confidence_band": "low",
+          "contradictions": [],
+          "criterion_id": "AC-02",
+          "evidence_ids": [
+            "EV-AC-02-01",
+            "EV-AC-02-02",
+            "EV-AC-02-03"
+          ],
+          "evidence_level": "E1",
+          "missing_evidence": [
+            "Evidence at required level E3"
+          ],
+          "reason": "Candidate evidence covers only part of the wording or is below the required level.",
+          "recommended_action": "Review the candidate and provide stronger or additional evidence.",
+          "status": "partial"
+        },
+        {
+          "confidence_band": "low",
+          "contradictions": [],
+          "criterion_id": "AC-03",
+          "evidence_ids": [
+            "EV-AC-03-01",
+            "EV-AC-03-02"
+          ],
+          "evidence_level": "E1",
+          "missing_evidence": [
+            "Evidence at required level E3"
+          ],
+          "reason": "Candidate evidence covers only part of the wording or is below the required level.",
+          "recommended_action": "Review the candidate and provide stronger or additional evidence.",
+          "status": "partial"
+        }
+      ],
+      "gate": {
+        "blocking_criteria": [
+          "AC-01",
+          "AC-02",
+          "AC-03"
+        ],
+        "conditional_criteria": [],
+        "reason_codes": [
+          "blocking_criteria"
+        ],
+        "resolved_exceptions": [],
+        "unresolved_criteria": [],
+        "verdict": "blocked"
+      },
+      "junit_evidence_imports": [],
+      "junit_import_events": [],
+      "research_context": null,
+      "resolutions": [],
+      "retrieval_diagnostics": [
+        {
+          "accepted_candidate_count": 3,
+          "below_threshold_line_count": 2,
+          "candidate_limit": 8,
+          "changed_file_count": 2,
+          "criterion_id": "AC-01",
+          "eligible_candidate_count": 3,
+          "exact_identifier_match_line_count": 0,
+          "exact_identifiers": [],
+          "inspectable_line_count": 15,
+          "omitted_candidate_count": 0,
+          "outcome": "candidates_found",
+          "searched_evidence_types": [
+            "implementation"
+          ],
+          "searched_paths": [
+            "export_format.py",
+            "export_query.py"
+          ],
+          "searched_terms": [
+            "category",
+            "export",
+            "filter",
+            "match",
+            "only",
+            "record",
+            "select"
+          ],
+          "term_overlap_line_count": 5,
+          "unchanged_candidate_file_count": 0
+        },
+        {
+          "accepted_candidate_count": 3,
+          "below_threshold_line_count": 1,
+          "candidate_limit": 8,
+          "changed_file_count": 2,
+          "criterion_id": "AC-02",
+          "eligible_candidate_count": 3,
+          "exact_identifier_match_line_count": 0,
+          "exact_identifiers": [],
+          "inspectable_line_count": 15,
+          "omitted_candidate_count": 0,
+          "outcome": "candidates_found",
+          "searched_evidence_types": [
+            "implementation"
+          ],
+          "searched_paths": [
+            "export_format.py",
+            "export_query.py"
+          ],
+          "searched_terms": [
+            "acces",
+            "analyst",
+            "authoriz",
+            "export",
+            "only",
+            "record"
+          ],
+          "term_overlap_line_count": 4,
+          "unchanged_candidate_file_count": 0
+        },
+        {
+          "accepted_candidate_count": 2,
+          "below_threshold_line_count": 6,
+          "candidate_limit": 8,
+          "changed_file_count": 2,
+          "criterion_id": "AC-03",
+          "eligible_candidate_count": 2,
+          "exact_identifier_match_line_count": 0,
+          "exact_identifiers": [],
+          "inspectable_line_count": 15,
+          "omitted_candidate_count": 0,
+          "outcome": "candidates_found",
+          "searched_evidence_types": [
+            "implementation"
+          ],
+          "searched_paths": [
+            "export_format.py",
+            "export_query.py"
+          ],
+          "searched_terms": [
+            "amount",
+            "category",
+            "csv",
+            "header",
+            "id",
+            "in",
+            "order",
+            "that",
+            "use"
+          ],
+          "term_overlap_line_count": 8,
+          "unchanged_candidate_file_count": 0
+        }
+      ],
+      "review": {
+        "analysis_source_identity": {
+          "scheme": "core-python-source-v1",
+          "sha256": "38297453e9cef186ed8b00cbeddf84b355a7e80888dafee1763e3273d12793df"
+        },
+        "base_sha": "46ad004749f9f94bf1a64255003f243c7291159c",
+        "can_analyze": true,
+        "changed_file_inventory": {
+          "files": [
+            {
+              "path": "export_format.py",
+              "previous_path": null,
+              "status": "added"
+            },
+            {
+              "path": "export_query.py",
+              "previous_path": null,
+              "status": "added"
+            }
+          ],
+          "head_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942"
+        },
+        "check_state": "passing",
+        "ci_observation": {
+          "collection_complete": true,
+          "collection_notes": [],
+          "concrete_legacy_status_count": 0,
+          "failing_check_runs": 0,
+          "failing_legacy_statuses": 0,
+          "neutral_check_runs": 0,
+          "neutral_legacy_statuses": 0,
+          "pending_check_runs": 0,
+          "pending_legacy_statuses": 0,
+          "reason": "Observed 1 successful completed check run; no concrete legacy statuses.",
+          "reason_code": "successful_check_runs",
+          "skipped_check_names": [],
+          "skipped_check_runs": 0,
+          "state": "passing",
+          "successful_check_runs": 1,
+          "successful_legacy_statuses": 0,
+          "total_check_runs": 1
+        },
+        "created_at": "2026-11-24T13:41:31.156323Z",
+        "criteria_confirmed": true,
+        "criteria_source_provenance": {
+          "confirmed_at": "2026-11-01T00:00:00Z",
+          "confirmed_by": "CONSTRUCTED scripted actor",
+          "normalized_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+          "source_revision": "ticket-revision-1",
+          "source_text_sha256": "b63df8490bb9ef7286d0aabd41050e9b17dd26c449bc2f341f2294e15b3a8def",
+          "source_uri": "https://ticket.example.invalid/EXP-17"
+        },
+        "final_acceptance": false,
+        "head_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+        "ingestion_state": "complete",
+        "ingestion_warnings": [],
+        "input_origin": "local_fixture",
+        "pr_number": 1,
+        "repository": "constructed/export",
+        "repository_visibility": "unverified",
+        "review_id": "ba4a60eb-1682-4382-8b35-93d5ff5dae21",
+        "ruleset_version": "2.0.0",
+        "skipped_files": [],
+        "tool_version": "0.2.9.dev0"
+      },
+      "reviewer_decision_state": "unresolved",
+      "reviewer_selected_references": [],
+      "runtime_evidence": [],
+      "runtime_verification_state": "not_recorded",
+      "selected_reference_events": [],
+      "source_text": "Export only records matching the selected category filter.\nExport only records the current analyst is authorized to access.\nUse the CSV header id,category,amount in that order.\n"
+    },
+    "criteria_revision": {
+      "confirmed": true,
+      "confirmed_at": "2026-11-01T00:00:00Z",
+      "created_at": "2026-11-24T13:41:31.157918Z",
+      "criteria": [
+        {
+          "criterion_id": "AC-01",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E3",
+          "source_span": null,
+          "text": "Export only records matching the selected category filter."
+        },
+        {
+          "criterion_id": "AC-02",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E3",
+          "source_span": null,
+          "text": "Export only records the current analyst is authorized to access."
+        },
+        {
+          "criterion_id": "AC-03",
+          "criterion_source": "user_confirmed",
+          "criterion_type": "behavior",
+          "priority": "must_have",
+          "required_evidence_level": "E3",
+          "source_span": null,
+          "text": "Use the CSV header id,category,amount in that order."
+        }
+      ],
+      "number": 1,
+      "source_provenance": {
+        "confirmed_at": "2026-11-01T00:00:00Z",
+        "confirmed_by": "CONSTRUCTED scripted actor",
+        "normalized_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+        "source_revision": "ticket-revision-1",
+        "source_text_sha256": "b63df8490bb9ef7286d0aabd41050e9b17dd26c449bc2f341f2294e15b3a8def",
+        "source_uri": "https://ticket.example.invalid/EXP-17"
+      },
+      "source_text": "Export only records matching the selected category filter.\nExport only records the current analyst is authorized to access.\nUse the CSV header id,category,amount in that order.\n"
+    },
+    "resolution_events": [],
+    "review": {
+      "analysis_source_identity": {
+        "scheme": "core-python-source-v1",
+        "sha256": "38297453e9cef186ed8b00cbeddf84b355a7e80888dafee1763e3273d12793df"
+      },
+      "base_sha": "46ad004749f9f94bf1a64255003f243c7291159c",
+      "can_analyze": true,
+      "changed_file_inventory": {
+        "files": [
+          {
+            "path": "export_format.py",
+            "previous_path": null,
+            "status": "added"
+          },
+          {
+            "path": "export_query.py",
+            "previous_path": null,
+            "status": "added"
+          }
+        ],
+        "head_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942"
+      },
+      "check_state": "passing",
+      "ci_observation": {
+        "collection_complete": true,
+        "collection_notes": [],
+        "concrete_legacy_status_count": 0,
+        "failing_check_runs": 0,
+        "failing_legacy_statuses": 0,
+        "neutral_check_runs": 0,
+        "neutral_legacy_statuses": 0,
+        "pending_check_runs": 0,
+        "pending_legacy_statuses": 0,
+        "reason": "Observed 1 successful completed check run; no concrete legacy statuses.",
+        "reason_code": "successful_check_runs",
+        "skipped_check_names": [],
+        "skipped_check_runs": 0,
+        "state": "passing",
+        "successful_check_runs": 1,
+        "successful_legacy_statuses": 0,
+        "total_check_runs": 1
+      },
+      "created_at": "2026-11-24T13:41:31.156323Z",
+      "criteria_confirmed": true,
+      "criteria_source_provenance": {
+        "confirmed_at": "2026-11-01T00:00:00Z",
+        "confirmed_by": "CONSTRUCTED scripted actor",
+        "normalized_criteria_sha256": "6d91bc9a2bd6f7a2ae8df11b71740a4d2262246e008b98fafad440083b5ada89",
+        "source_revision": "ticket-revision-1",
+        "source_text_sha256": "b63df8490bb9ef7286d0aabd41050e9b17dd26c449bc2f341f2294e15b3a8def",
+        "source_uri": "https://ticket.example.invalid/EXP-17"
+      },
+      "final_acceptance": false,
+      "head_sha": "2a95b61bcbbf2f3a07bc0ee8bde09dd4c58cb942",
+      "ingestion_state": "complete",
+      "ingestion_warnings": [],
+      "input_origin": "local_fixture",
+      "pr_number": 1,
+      "repository": "constructed/export",
+      "repository_visibility": "unverified",
+      "review_id": "ba4a60eb-1682-4382-8b35-93d5ff5dae21",
+      "ruleset_version": "2.0.0",
+      "skipped_files": [],
+      "tool_version": "0.2.9.dev0"
+    }
+  }
+}
