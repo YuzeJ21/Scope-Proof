@@ -12,6 +12,7 @@ from threading import Event
 
 import streamlit as st
 
+from apps.web.ci_comparison import render_ci_comparison, retire_ci_comparison_download
 from apps.web.deferred_exports import DeferredExportUnavailable, ExportRenderer, ExportSource
 from apps.web.launcher import CI_MANIFEST_DIR_ENV, is_ci_loopback_host
 from scopeproof_core.reporting.ci_snapshot import (
@@ -19,7 +20,10 @@ from scopeproof_core.reporting.ci_snapshot import (
     export_ci_status_snapshot_html,
 )
 from scopeproof_core.reporting.references import render_artifact_reference_markdown
-from scopeproof_core.reviews.ci_handoff import load_exact_ci_manifest_with_sha256
+from scopeproof_core.reviews.ci_handoff import (
+    load_exact_ci_manifest_with_payload,
+    load_exact_ci_manifest_with_sha256,
+)
 from scopeproof_core.reviews.ci_status import (
     CI_STATUS_LABELS,
     EXACT_HEAD_PATTERN,
@@ -40,6 +44,7 @@ _SNAPSHOT_EXPIRED = (
 
 def retire_ci_snapshot_download() -> None:
     """Revoke the visible download before a new review or upload can replace it."""
+    retire_ci_comparison_download()
     lease = st.session_state.get("ci_snapshot_download_expired")
     if lease is not None:
         lease.set()
@@ -169,6 +174,7 @@ def render_criterion_ci_status(
         )
         manifest = None
         manifest_sha256 = None
+        manifest_payload = None
         if uploaded is not None:
             if uploaded.size > MAX_CI_STATUS_BYTES:
                 st.error("The CI status manifest exceeds the 1 MiB limit.")
@@ -180,11 +186,13 @@ def render_criterion_ci_status(
                     st.error("The file does not match the CI status manifest format.")
                 else:
                     manifest_sha256 = hashlib.sha256(payload).hexdigest()
+                    manifest_payload = payload
         elif handoff_directory:
             try:
-                manifest, manifest_sha256 = load_exact_ci_manifest_with_sha256(
+                manifest, manifest_payload = load_exact_ci_manifest_with_payload(
                     handoff_directory, bundle,
                 )
+                manifest_sha256 = hashlib.sha256(manifest_payload).hexdigest()
             except FileNotFoundError:
                 st.caption("No local CI manifest was found for this exact review.")
             except (OSError, ValueError):
@@ -223,6 +231,13 @@ def render_criterion_ci_status(
                 handoff_directory=handoff_directory if uploaded is None else None,
                 prepare_download=prepare_download,
             )
+
+        assert manifest_payload is not None
+        render_ci_comparison(
+            bundle, current_payload=manifest_payload, current_upload=uploaded,
+            handoff_directory=handoff_directory if uploaded is None else None,
+            widget_suffix=widget_suffix, prepare_download=prepare_download,
+        )
 
         by_criterion = {item.criterion_id: item for item in statuses}
         criterion_id = st.selectbox(

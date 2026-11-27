@@ -37,6 +37,14 @@ def load_exact_ci_manifest_with_sha256(
     directory: Path, bundle: ReviewBundle,
 ) -> tuple[CIStatusManifest, str]:
     """Read and validate one matching manifest and hash the same bytes."""
+    manifest, payload = load_exact_ci_manifest_with_payload(directory, bundle)
+    return manifest, sha256(payload).hexdigest()
+
+
+def load_exact_ci_manifest_with_payload(
+    directory: Path, bundle: ReviewBundle,
+) -> tuple[CIStatusManifest, bytes]:
+    """Retain the exact bounded bytes used to validate the current CI context."""
     review = bundle.review
     if not review.criteria_confirmed or not re.fullmatch(EXACT_HEAD_PATTERN, review.head_sha):
         raise ValueError("automatic CI handoff requires confirmed criteria and an exact head")
@@ -52,4 +60,4 @@ def load_exact_ci_manifest_with_sha256(
     if not any(run.head_sha == review.head_sha for run in manifest.runs):
         raise ValueError("automatic CI handoff requires an exact-head run")
     validate_ci_manifest_context(bundle, manifest, criteria_digest)
-    return manifest, sha256(payload).hexdigest()
+    return manifest, payload

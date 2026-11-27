@@ -194,7 +194,26 @@ For the existing simulated B review, compare `B-scopeproof-manifest.json` with
 failed. The category-filter failure and header pass retain their initial-B citations;
 the targeted run's explicit skips do not erase those earlier exact-build results.
 An A-only manifest cannot serve as the previous input for a B review. Cross-head
-comparison and workbench comparison controls are outside this change.
+comparison remains outside this workflow.
+
+#### Compare from the workbench
+
+On current development source, open **CI status by criterion** for the reviewed build
+and load its current CI manifest, either by upload or from the configured local folder.
+Select **Compare with a previous CI manifest**, then upload **Previous CI status manifest**.
+The previous input is never selected automatically. Both inputs must match the same
+confirmed criteria and exact reviewed commit; each is limited to 1 MiB.
+
+The workbench shows each test's previous/current result, mappings and supplying runs,
+along with run-record changes and both input digests. Choose **Download CI comparison**
+to open the complete HTML report offline. The report includes both source assertions
+and the recorded acceptance state, with the same boundaries as the CLI comparison.
+
+Replacing or removing either input, changing reviews or leaving comparison mode expires
+older downloads. The configured current file is checked again when downloading. Pending
+review drafts and conflicting source observations keep the existing export safeguards.
+Resolve those inputs and use a fresh download; neither comparison nor download saves a
+new review decision. This control is absent from the published v0.2.8 package.
 
 See the [comparison boundary and example](development/ci-context-comparison.md).
 

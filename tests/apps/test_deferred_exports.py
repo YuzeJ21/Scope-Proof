@@ -72,6 +72,33 @@ def test_deferred_export_renders_the_click_time_validated_saved_review(
     assert exported == state
 
 
+@pytest.mark.parametrize("exporter", [export_json, export_html])
+def test_deferred_export_rechecks_saved_record_after_external_atomic_replacement(
+    tmp_path: Path, exporter,
+) -> None:
+    state = accepted_review_state()
+    store = JsonReviewStore(tmp_path / "reviews")
+    record = store.save(state)
+    revoked = append_resolution(state, ResolutionEvent(
+        event_id="external-during-render", final_acceptance=False,
+        comment="Constructed later revocation", reviewer="Constructed reviewer",
+    ))
+    replacement = JsonReviewStore(tmp_path / "external-writer").save(revoked)
+
+    def replace_after_render(source):
+        report = exporter(source)
+        replacement.replace(record)
+        return report
+
+    download = deferred_review_export(
+        state, replace_after_render, store=store,
+        expected_fingerprint=store.state_fingerprint(state),
+    )
+    with pytest.raises(DeferredExportUnavailable, match="saved review could not be revalidated"):
+        download()
+    assert store.load(state.review.review_id) == revoked
+
+
 @pytest.mark.parametrize("renderer", [export_json, export_html])
 def test_deferred_export_blocks_external_final_acceptance_revocation(
     tmp_path: Path,

@@ -228,6 +228,9 @@ def deferred_review_export(
                     if JsonReviewStore.state_fingerprint(persisted) != expected_fingerprint:
                         raise DeferredExportUnavailable(_EXPORT_REVALIDATION_MESSAGE)
                     rendered = renderer(persisted)
+                    latest = store.load(captured.review.review_id)
+                    if JsonReviewStore.state_fingerprint(latest) != expected_fingerprint:
+                        raise DeferredExportUnavailable(_EXPORT_REVALIDATION_MESSAGE)
                     require_authority()
                     return rendered
             except (OSError, ValueError):

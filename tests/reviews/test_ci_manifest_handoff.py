@@ -105,6 +105,25 @@ def test_handoff_digest_binds_exact_bytes_even_for_identical_parsed_content(
     assert digest_first != digest_second
 
 
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n", b"\r"])
+def test_comparison_reader_preserves_the_exact_bounded_input_bytes(
+    tmp_path: Path, bundle: ReviewBundle, manifest: dict, newline: bytes,
+) -> None:
+    from scopeproof_core.reviews.ci_handoff import load_exact_ci_manifest_with_payload
+
+    path = _manifest_path(tmp_path.resolve(), bundle)
+    payload = newline + _payload(manifest) + newline
+    path.write_bytes(payload)
+    before = bundle.model_dump_json()
+
+    loaded, raw = load_exact_ci_manifest_with_payload(tmp_path.resolve(), bundle)
+
+    assert raw == payload
+    assert loaded.model_dump(mode="json") == manifest
+    assert path.read_bytes() == payload
+    assert bundle.model_dump_json() == before
+
+
 def test_missing_exact_filename_does_not_scan_other_manifests(
     tmp_path: Path, bundle: ReviewBundle, manifest: dict,
 ) -> None:
