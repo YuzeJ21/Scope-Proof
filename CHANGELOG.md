@@ -11,6 +11,9 @@ its linked release entry for the exact published source and assets.
 
 Current development source declares `0.2.9.dev0`, unpublished.
 
+- Compare two supplied CI manifests for the same saved review with
+  `ci-snapshot --previous-manifest`. The separate offline report shows changed effective
+  results, test mappings and run records, cites both inputs, and leaves acceptance unchanged.
 - Inspect the two-build CI handoff without installing. The maintained constructed example
   reuses the private candidate's original snapshots and inputs, adds explicit simulation labels
   and next reviewer actions, and retains acceptance status separately from CI results.

@@ -41,10 +41,11 @@ def test_installed_ci_snapshot_follows_two_builds_without_mutating_reviews(tmp_p
         for path, payload in reviewed.items()
     }
 
-    def emit(review_id, manifest, output, *, expected=0):
+    def emit(review_id, manifest, output, *, expected=0, previous=None):
+        comparison = ["--previous-manifest", str(previous)] if previous is not None else []
         return installed(
             "-m", "scopeproof_core.cli", "ci-snapshot", review_id, str(manifest),
-            "--storage-dir", str(storage), "--output", str(output), expected=expected,
+            "--storage-dir", str(storage), "--output", str(output), *comparison, expected=expected,
         )
 
     def verify_snapshot(label, statuses):
@@ -70,6 +71,31 @@ def test_installed_ci_snapshot_follows_two_builds_without_mutating_reviews(tmp_p
     targeted_head, targeted_report = verify_snapshot("B-targeted", ("Failed", "Failed", "Passed"))
     assert targeted_head == b_head
     assert "https://ci.example.invalid/builds/B-targeted" in targeted_report
+
+    supplied = {
+        path: path.read_bytes() for path in scenario.glob("*-scopeproof-manifest.json")
+    }
+    comparison = tmp_path / "comparison.html"
+    emit(
+        records[b_head], scenario / "B-targeted-scopeproof-manifest.json", comparison,
+        previous=scenario / "B-scopeproof-manifest.json",
+    )
+    compared = comparison.read_text(encoding="utf-8")
+    assert "ScopeProof CI Context Comparison" in compared
+    assert "Explicitly skipped" in compared and "Failed" in compared
+    assert "not verified chronology" in compared
+    for label in ("B", "B-targeted"):
+        payload = supplied[scenario / f"{label}-scopeproof-manifest.json"]
+        assert sha256(payload).hexdigest() in compared
+    assert {path: path.read_bytes() for path in supplied} == supplied
+
+    invalid_comparison = tmp_path / "wrong-previous.html"
+    failure = emit(
+        records[b_head], scenario / "B-targeted-scopeproof-manifest.json", invalid_comparison,
+        previous=scenario / "A-scopeproof-manifest.json", expected=2,
+    )
+    assert "exact-head run" in failure.stderr
+    assert not invalid_comparison.exists()
 
     wrong_output = tmp_path / "wrong.html"
     failure = emit(

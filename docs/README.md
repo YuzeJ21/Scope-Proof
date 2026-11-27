@@ -43,6 +43,8 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [November 23 product and market assessment](commercialization/product-direction-2026-11-23.md) —
   current workflow, market overlap, adoption constraints, and the CI handoff priorities.
 - [Product roadmap](../ROADMAP.md) — current stage decisions, boundaries, and next owner gates.
+- [CI context comparison](development/ci-context-comparison.md) — the development-source
+  optional CLI comparison, exact-review limits and supplied-result attribution.
 - [Evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md) — current-release routing,
   saved-decision positioning and the earlier source-only preview scope. The later authorized
   [Pages publication](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672) is complete.
