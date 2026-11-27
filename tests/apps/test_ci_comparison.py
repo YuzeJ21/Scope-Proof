@@ -154,7 +154,9 @@ def test_run_outcome_changes_are_visible_when_effective_test_result_is_retained(
     assert (header["Context change"], header["Previous result"], header["Current result"]) == (
         "Retained", "Passed", "Passed",
     )
-    run_table, = (t for t in _panel(app).get("dataframe") if "Run assertion" in t.value.columns)
+    run_view, = (block for block in _panel(app).get("flex_container")
+                 if block.key == "ci_comparison_runs")
+    run_table, = run_view.get("dataframe")
     rows = {row["Run assertion"]: row for row in run_table.value.to_dict(orient="records")}
     assert rows["extra-skip"]["Context change"] == "Changed"
     assert rows["extra-skip"]["Previous outcomes"] == '{"csv_header": "skipped"}'
