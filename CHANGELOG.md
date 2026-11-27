@@ -11,6 +11,10 @@ its linked release entry for the exact published source and assets.
 
 Current development source declares `0.2.9.dev0`, unpublished.
 
+- Inspect previous/current reported outcomes directly in the workbench's CI run comparison,
+  including empty or absent run assertions and changes that retain an effective test result.
+- Retain an unpublished consolidated evaluation candidate from successful CI, with exact
+  source/archive identities, source-built wheel parity and bindings to tested package bytes.
 - Compare the workbench's displayed CI manifest with an explicitly uploaded previous
   manifest, then download the same offline comparison as the CLI. Both inputs and the
   active review bind the download; changes or pending review drafts expire older controls.

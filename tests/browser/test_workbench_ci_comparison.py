@@ -97,6 +97,12 @@ def test_installed_workbench_exports_explicit_ci_comparison_without_saving_revie
                 expect(table.get_by_role("cell", name="suite/_smoke_", exact=True)).to_have_count(1)
                 expect(table.get_by_role("cell", name="suite/smoke", exact=True)).to_have_count(1)
                 expect(table.get_by_role("cell", name="run/_initial_", exact=True)).to_have_count(5)
+                expect(panel.locator(".st-key-ci_comparison_runs")).to_be_visible()
+                expect(panel.get_by_text(
+                    "Run outcomes are reported assertions. A changed run record can leave the "
+                    "effective test result unchanged; an empty outcome map is shown as {}.",
+                    exact=True,
+                )).to_be_visible()
                 access = table.get_by_role("row").filter(
                     has=page.get_by_role("cell", name="row_access", exact=True),
                 )

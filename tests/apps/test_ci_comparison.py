@@ -133,6 +133,38 @@ def test_comparison_displays_effective_changes_with_original_run_citations(workb
     assert app.session_state["review_state"] == state
 
 
+def test_run_outcome_changes_are_visible_when_effective_test_result_is_retained(workbench):
+    app, _, state, previous, _ = workbench
+    before = json.loads(previous)
+    extra = {
+        "run_id": "extra-skip", "head_sha": state.review.head_sha,
+        "source_url": "https://ci.example.invalid/runs/extra",
+        "outcomes": {"csv_header": "skipped"},
+    }
+    before["runs"].extend([extra, {**extra, "run_id": "removed", "outcomes": {}}])
+    after = json.loads(json.dumps(before))
+    after["runs"][-2]["outcomes"] = {}
+    after["runs"][-1] = {**extra, "run_id": "introduced"}
+    app = _upload(_enable(_upload(app, json.dumps(after).encode())),
+                  json.dumps(before).encode(), previous=True)
+
+    result_table, = (t for t in _panel(app).get("table") if "Previous result" in t.value.columns)
+    header, = [row for row in result_table.value.to_dict(orient="records")
+               if row["Expected test"] == "`csv_header`"]
+    assert (header["Context change"], header["Previous result"], header["Current result"]) == (
+        "Retained", "Passed", "Passed",
+    )
+    run_table, = (t for t in _panel(app).get("dataframe") if "Run assertion" in t.value.columns)
+    rows = {row["Run assertion"]: row for row in run_table.value.to_dict(orient="records")}
+    assert rows["extra-skip"]["Context change"] == "Changed"
+    assert rows["extra-skip"]["Previous outcomes"] == '{"csv_header": "skipped"}'
+    assert rows["extra-skip"]["Current outcomes"] == "{}"
+    assert rows["removed"]["Previous outcomes"] == "{}"
+    assert rows["removed"]["Current outcomes"] == "No current run"
+    assert rows["introduced"]["Previous outcomes"] == "No previous run"
+    assert rows["introduced"]["Current outcomes"] == '{"csv_header": "skipped"}'
+
+
 @pytest.mark.parametrize("bad", ["malformed", "oversize", "criteria", "head", "repository"])
 def test_invalid_previous_input_removes_output_and_expires_earlier_download(
     workbench, downloads, bad,
