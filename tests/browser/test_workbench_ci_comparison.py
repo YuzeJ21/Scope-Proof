@@ -78,10 +78,13 @@ def test_installed_workbench_exports_explicit_ci_comparison_without_saving_revie
                 download = panel.get_by_role("button", name="Download CI comparison", exact=True)
                 expect(download).to_have_count(0)
                 _run_and_wait_for_streamlit_rerun(
-                    page, lambda: panel.get_by_role(
-                        "checkbox", name="Compare with a previous CI manifest", exact=True,
-                    ).check(),
+                    page, lambda: panel.get_by_text(
+                        "Compare with a previous CI manifest", exact=True,
+                    ).click(),
                 )
+                expect(panel.get_by_role(
+                    "checkbox", name="Compare with a previous CI manifest", exact=True,
+                )).to_be_checked()
                 prior_upload = panel.get_by_test_id("stFileUploader").filter(
                     has=page.get_by_text("Previous CI status manifest", exact=True),
                 ).locator("input[type=file]")

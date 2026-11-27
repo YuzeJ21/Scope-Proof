@@ -65,3 +65,9 @@ demonstrated needs. No participant contact or personal testing is initiated.
 
 After the review fixes, 294 focused checks passed with two intentional browser skips.
 Whole-repository Ruff, whitespace and frozen-path checks passed before sync.
+
+The first hosted run passed its source, coverage, installed CLI, Python and Windows checks,
+and 38 browser cases. The new browser journey stopped at `Locator.check`: Streamlit's visible
+label intercepted the hidden input's pointer target. The journey now activates that visible
+label, as existing workbench tests do, and asserts the actual checked state before continuing.
+The corrected exact-head run must verify the remaining installed comparison journey.
