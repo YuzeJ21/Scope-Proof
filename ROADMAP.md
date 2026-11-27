@@ -30,20 +30,21 @@ reviewer opens the workbench to export each snapshot and checks each criterion s
 | P0 · Implemented on development source | [Export an exact-build CI snapshot from the CLI](docs/evaluation-guide.md#export-a-ci-snapshot-from-the-cli). | Use a named saved review and bounded local manifest. Match the confirmed criteria and reviewed commit, preserve both input files, and write a new offline HTML report atomically. Refuse pending reviews, incompatible inputs and existing outputs. Verify A, initial B and targeted B with an installed wheel. |
 | P1 · Implemented on development source | Show CI follow-up in the workbench and offline snapshot. | Use the same projection for both. Show failing, skipped, stale and unknown tests once each, with all mapped criterion IDs and cited runs. Identify unmapped criteria. Keep the detailed view, externally supplied provenance, and existing gate and saved state. |
 | P2 · Maintained example on development source | [Inspect the two-build workflow before installing](docs/examples/ci-handoff/README.md). | Reuse the completed private candidate's exact reports and constructed inputs. Show both exact commits, the targeted rerun, next reviewer actions and original producer identity. Verify reproducible packaging and offline desktop/phone reading. Keep the v0.2.6 example and R-002 intact. Package and site publication remain separate. |
-| P3 · Implemented in the follow-on review branch | [Compare supplied CI context for one reviewed commit](docs/evaluation-guide.md#compare-two-ci-contexts-for-the-same-reviewed-commit). | An explicit previous-manifest flag produces one offline comparison of effective results, mappings and run records. Both inputs match the same confirmed saved review and exact head. Preserve input bytes, decisions and gate; cite both digests; distinguish retained results from introduced or modified assertions. Verify source, installed CLI and offline browser behavior. |
-| Next bounded option · Workbench CI comparison | Expose the same comparison outcome in the reviewer workbench. | Reuse the core projection, require explicit prior/current inputs, bind downloads to both input fingerprints and active review context, and keep changed-source/draft guards. Scope and review this separately; do not start another feature queue automatically. |
+| P3 · Implemented on development source | [Compare supplied CI context for one reviewed commit](docs/evaluation-guide.md#compare-two-ci-contexts-for-the-same-reviewed-commit). | An explicit previous-manifest flag produces one offline comparison of effective results, mappings and run records. Both inputs match the same confirmed saved review and exact head. Preserve input bytes, decisions and gate; cite both digests; distinguish retained results from introduced or modified assertions. Verify source, installed CLI and offline browser behavior. |
+| P4 · Implemented on development source | [Compare CI contexts in the workbench](docs/evaluation-guide.md#compare-from-the-workbench). | Explicitly compare the displayed current manifest with an uploaded previous manifest using the same core. Bind downloads to both exact inputs and active review context, recheck configured inputs before/after rendering, and preserve changed-source, saved-record and pending-draft guards. Verify source, Windows and installed browser behavior. |
 | Gated · Independent use and private workflow design | Determine whether the handoff reduces work for a reviewer outside the project. | Require separate authorization and genuine independent use. A reviewer can explain what changed, decide what to check next and choose to reuse the workflow. Scope private access, provenance, retention and use rights only for a demonstrated need. |
 
 ### Next stages after this source milestone
 
-1. **Integration and distribution decision.** PR #305 is implemented and verified but remains
-   unmerged at the November 27 review. The CI comparison follows its exact source tree and is
-   reviewed as a dependent change. Integrate only with owner authorization and successful
-   resulting-main checks. A package release, tag or Pages publication is a separate decision;
-   the published evaluation package remains v0.2.8.
-2. **Stage 2 workbench option.** If continued engineering is requested, let a reviewer compare
-   supplied CI contexts from the workbench using the same core. The CLI outcome is complete
-   without that UI extension. Keep the task bounded by explicit input and stale-download guards.
+1. **Source integration and distribution decision.** In this continuation the owner authorized
+   integrating #305, #306 and the bounded workbench follow-on after review and protected checks.
+   Their PR records identify exact heads and resulting-main verification. A package release,
+   tag or Pages publication remains a separate decision; the published evaluation package is
+   v0.2.8 and does not contain these later source changes.
+2. **Stage 2 completion check.** The CLI, no-install example and workbench now address the
+   named same-commit CI handoff outcome on development source. Finish review and resulting-main
+   verification before calling integration complete. Further engineering needs a reproduced
+   reviewer problem; do not generate another feature queue merely because checks are green.
 3. **Stage 3 adoption decision.** Independent usefulness and repeat use remain unmeasured.
    No participant contact or personal testing is initiated. A limited beta requires a separately
    authorized plan and genuine observations; constructed checks supply no validation credit.
@@ -54,6 +55,8 @@ The owner asked for a fresh project review and movement to the next roadmap prio
 November 27. The reproduced gap was manual comparison of before/after CI snapshots in the
 existing guide. P3 addresses that named reviewer outcome; it was not added merely because prior
 checks were green. It changes no gate/evidence rule and does not reopen closed candidate work.
+The subsequent request to execute the next stages authorized source integration and P4's
+workbench controls. It did not create independent-use evidence or authorize publication/outreach.
 
 ### November 19 release work
 
