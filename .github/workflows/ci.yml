@@ -149,7 +149,7 @@ jobs:
       - name: Historical CLI handoff compatibility
         run: python -m pytest -q tests/cli/test_history.py tests/cli/test_history_safety.py tests/cli/test_criteria_changes.py tests/cli/test_criteria_changes_safety.py
       - name: Exact-build CI snapshot CLI compatibility
-        run: python -m pytest -q tests/cli/test_ci_snapshot.py
+        run: python -m pytest -q tests/cli/test_ci_snapshot.py tests/cli/test_ci_snapshot_comparison.py tests/reviews/test_ci_comparison.py tests/reporting/test_ci_comparison.py
       - name: Typed criteria handoff compatibility
         run: python -m pytest -q tests/cli/test_criteria_document.py tests/cli/test_criteria_document_review_fixes.py tests/criteria/test_confirmation.py
       - name: Saved criteria revision comparison compatibility

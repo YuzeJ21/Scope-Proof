@@ -47,6 +47,7 @@ from scopeproof_core.importers.junit import (
     build_junit_evidence_import,
     parse_junit_artifact,
 )
+from scopeproof_core.reporting.ci_comparison import export_ci_comparison_html
 from scopeproof_core.reporting.ci_snapshot import (
     build_ci_status_snapshot,
     export_ci_status_snapshot_html,
@@ -60,7 +61,12 @@ from scopeproof_core.reporting.exporters import (
     export_markdown,
 )
 from scopeproof_core.retrieval.engine import retrieve_evidence_with_diagnostics
-from scopeproof_core.reviews.ci_status import MAX_CI_STATUS_BYTES, load_ci_status_manifest
+from scopeproof_core.reviews.ci_comparison import compare_ci_status
+from scopeproof_core.reviews.ci_status import (
+    MAX_CI_STATUS_BYTES,
+    CIStatusManifest,
+    load_ci_status_manifest,
+)
 from scopeproof_core.reviews.comparison import compare_reviews
 from scopeproof_core.reviews.lifecycle import (
     acceptance_requires_comment,
@@ -325,27 +331,40 @@ def _export(args: argparse.Namespace) -> int:
     return 0
 
 
-def _ci_snapshot(args: argparse.Namespace) -> int:
-    output = Path(args.output)
-    if output.suffix.lower() != ".html":
-        raise ValueError("CI snapshot output must end in .html")
-
+def _read_ci_snapshot_manifest(path: Path) -> tuple[CIStatusManifest, bytes]:
     payload = _read_bounded_regular_file(
-        Path(args.manifest), max_bytes=MAX_CI_STATUS_BYTES, label="CI status manifest",
+        path, max_bytes=MAX_CI_STATUS_BYTES, label="CI status manifest",
     )
     try:
         manifest = load_ci_status_manifest(payload)
     except ValidationError:
         raise ValueError("CI status manifest does not match the supported format") from None
+    return manifest, payload
+
+
+def _ci_snapshot(args: argparse.Namespace) -> int:
+    output = Path(args.output)
+    if output.suffix.lower() != ".html":
+        raise ValueError("CI snapshot output must end in .html")
+
+    manifest, payload = _read_ci_snapshot_manifest(Path(args.manifest))
+    previous_payload = None
+    if args.previous_manifest is not None:
+        _, previous_payload = _read_ci_snapshot_manifest(Path(args.previous_manifest))
     store = JsonReviewStore(Path(args.storage_dir))
     with store.locked_load(args.review_id) as state:
         if state.bundle is None:
             raise ValueError("CI snapshot requires an active analysis in the saved review")
-        snapshot = build_ci_status_snapshot(
-            state.bundle, manifest,
-            manifest_sha256=sha256(payload).hexdigest(), source="local-file",
-        )
-        atomic_create_text(output, export_ci_status_snapshot_html(snapshot))
+        if previous_payload is None:
+            snapshot = build_ci_status_snapshot(
+                state.bundle, manifest,
+                manifest_sha256=sha256(payload).hexdigest(), source="local-file",
+            )
+            report = export_ci_status_snapshot_html(snapshot)
+        else:
+            comparison = compare_ci_status(state.bundle, previous_payload, payload)
+            report = export_ci_comparison_html(comparison)
+        atomic_create_text(output, report)
     return 0
 
 
@@ -839,6 +858,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     ci_snapshot.add_argument("review_id")
     ci_snapshot.add_argument("manifest", help="Explicit local CI manifest JSON, up to 1 MiB")
+    ci_snapshot.add_argument(
+        "--previous-manifest",
+        help="Compare an earlier supplied local manifest for the same review and exact commit",
+    )
     ci_snapshot.add_argument("--output", required=True, help="New .html file")
     ci_snapshot.add_argument("--storage-dir", default=".scopeproof/reviews")
     ci_snapshot.set_defaults(handler=_ci_snapshot)

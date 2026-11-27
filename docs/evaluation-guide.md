@@ -168,6 +168,36 @@ The command rejects missing or pending reviews, mismatched manifests and existin
 It keeps the saved review and manifest bytes intact. Test execution and acceptance stay in their
 existing workflows.
 
+### Compare two CI contexts for the same reviewed commit
+
+Current development source supports an explicit previous input on `ci-snapshot`:
+
+```sh
+scopeproof ci-snapshot REVIEW_ID ./current-manifest.json \
+  --previous-manifest ./previous-manifest.json \
+  --storage-dir ./reviews --output ./handoff/ci-comparison.html
+```
+
+Both local JSON files must match the same saved active review, confirmed criteria and
+reviewed commit. Each is limited to 1 MiB. Omitting `--previous-manifest` keeps the
+ordinary single-snapshot export. Existing output files and pending reviews are refused.
+
+The comparison shows each test once, with previous/current mappings, effective status
+and cited runs. It also shows introduced, absent, changed and retained run records,
+including each record's reported commit, URL and outcomes. A reused run ID with different
+data is a changed assertion. Previous/current mean the supplied file order, not verified
+execution chronology. The report records both manifest digests and the unchanged saved
+acceptance status; it does not authenticate results or alter review evidence or gates.
+
+For the existing simulated B review, compare `B-scopeproof-manifest.json` with
+`B-targeted-scopeproof-manifest.json`. Row access changes from explicitly skipped to
+failed. The category-filter failure and header pass retain their initial-B citations;
+the targeted run's explicit skips do not erase those earlier exact-build results.
+An A-only manifest cannot serve as the previous input for a B review. Cross-head
+comparison and workbench comparison controls are outside this change.
+
+See the [comparison boundary and example](development/ci-context-comparison.md).
+
 ### Generate manifests with the simulated CI pipeline
 
 From the development checkout with dependencies installed, run the constructed CSV export
