@@ -314,7 +314,9 @@ def prepare_candidate(
         "or a beta. The source-install probe inherits tested CI runtime dependencies; browser "
         "journeys use their own fresh environments. Current/future dependency combinations "
         "are not universally verified. Public v0.2.8 remains current. No publication, tag or "
-        "deployment follows from this packet; final-version packages require a fresh build.\n",
+        "deployment follows from this packet. Publication requires a separate decision and "
+        "public-download verification. Development archives must never be renamed to a final "
+        "version.\n",
         encoding="utf-8",
     )
     return manifest

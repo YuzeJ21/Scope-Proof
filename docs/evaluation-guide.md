@@ -56,14 +56,14 @@ The older v0.2.6 report above is unchanged. This example is separate from packag
 `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d` after PR #302. The
 [v0.2.8 Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) records the final
 source, wheel, source archive, checksum manifest and completed anonymous-download and
-fresh-installation checks. Use v0.2.8 as the default evaluation download. Current development
-source reports **0.2.9.dev0**, unpublished. Follow the [README Quickstart](../README.md#quickstart)
-for installation.
+fresh-installation checks. Use v0.2.8 as the default evaluation download. Current
+source reports **0.2.9**, prepared for publication review and unpublished. Follow the
+[README Quickstart](../README.md#quickstart) for installation.
 
 | Path | Identity and capabilities |
 | --- | --- |
 | Published **v0.2.8** — default evaluation download | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) from `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`. Adds the read-only [CI status view](#inspect-ci-status-for-a-reviewed-build) and [offline CI snapshot](#download-a-ci-snapshot) for the reviewed build. Writes v9. |
-| Current development source **0.2.9.dev0**, unpublished | Later development checkout. Use the v0.2.8 tag or downloads for the verified release. Writes v9. |
+| Current source **0.2.9**, unpublished final-version preparation | Fresh final-version build for publication review; not a public release. Use the v0.2.8 tag or downloads for the verified release. Writes v9. |
 | Published **v0.2.7** — earlier verified release | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) from `e099679ed63309716a7ce4726557ef794bfd5c80`. Includes native v0.2.6 history compatibility, CSV/HTML revision labels and bounded event-scan repair. Writes v9. |
 | Published **v0.2.6** fallback | [Publicly verified release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) from `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`. Includes decision overview, offline HTML, acceptance rationale, source-conflict explanations and saved requirements comparison; see [v0.2.6 changes](../CHANGELOG.md#026--evaluation-release-build). Writes v9. |
 | Historical private **0.2.7.dev0** candidate, unpublished | Its source, version and artifact identities remain historical; it is not final v0.2.7 or public-download verification. The no-install example separately retains its actual public v0.2.6 producer and unchanged input. See the [sample guide](examples/offline-handoff/README.md). |
@@ -153,7 +153,7 @@ region to scroll it with the keyboard.
 
 ### Export a CI snapshot from the CLI
 
-Current development source (`0.2.9.dev0`) supports a repeatable export for a saved active analysis.
+Current source (`0.2.9`, unpublished) supports a repeatable export for a saved active analysis.
 Use the CLI from that checkout or its installed build.
 
 ```sh
