@@ -29,7 +29,7 @@ or supply qualifying reviews. All verification cited below is automated engineer
 
 ### Follow the constructed two-build handoff before installing
 
-[Download the two-build walkthrough ZIP](examples/ci-handoff/reader/constructed-ci-walkthrough.zip?raw=true),
+[Download the two-build walkthrough ZIP](https://github.com/YuzeJ21/Scope-Proof/raw/refs/heads/main/docs/examples/ci-handoff/reader/constructed-ci-walkthrough.zip),
 extract it, and open `index.html`. Compare the supplied CI results, inspect their exact-build
 snapshots and manifests, and read the next reviewer action. All three moments retain
 **Action required** and recorded final acceptance **No** in their saved reviews.

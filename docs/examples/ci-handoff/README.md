@@ -1,6 +1,6 @@
 # Follow a CI handoff without installing
 
-[Download the walkthrough ZIP](reader/constructed-ci-walkthrough.zip?raw=true),
+[Download the walkthrough ZIP](https://github.com/YuzeJ21/Scope-Proof/raw/refs/heads/main/docs/examples/ci-handoff/reader/constructed-ci-walkthrough.zip),
 extract it to one directory, and open `index.html`. The HTML pages and local JSON links
 work offline. Following an illustrative external run link requires a connection and
 does not reach a genuine CI run.
