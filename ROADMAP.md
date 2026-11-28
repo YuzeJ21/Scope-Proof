@@ -23,7 +23,7 @@ consolidated `0.2.9.dev0` candidate. PR #309 prepared the final-version source.
 and fresh installs. The site was not redeployed.
 The [current product and market assessment](docs/commercialization/product-direction-2026-11-23.md)
 compares this workflow with native GitHub controls, ticket-aware code review, and managed test
-traceability. The [constructed two-build rehearsal](docs/evaluation-guide.md#open-simulated-ci-status-from-a-local-folder)
+traceability. The [constructed two-build walkthrough](docs/evaluation-guide.md#follow-the-constructed-two-build-handoff-before-installing)
 reproduces the friction: all three tests pass on A, while B has one failure and one explicit
 skip. The targeted rerun changes the skipped test to failed on the same B commit. In v0.2.8 a
 reviewer opens the workbench to export each snapshot and checks each criterion separately.
@@ -50,10 +50,15 @@ reviewer opens the workbench to export each snapshot and checks each criterion s
    points to `33e4a714305b6fadfbe503484eda06215a04c6c2`. The [public verification record](docs/evaluation-guide.md#what-is-verified-and-what-is-missing)
    binds all three downloads and both installed checks. Use the existing [no-install walkthrough](docs/examples/ci-handoff/README.md)
    as the first evaluation path. Fix only friction reproduced against the released workflow.
-3. **Stage 3 adoption decision.** Independent usefulness and repeat use remain unmeasured.
+3. **No-install evaluation path verified on November 28.** [PR #311](https://github.com/YuzeJ21/Scope-Proof/pull/311)
+   fixed the ZIP links. Both links delivered the existing archive byte for byte when followed
+   from `main` while signed out. The [rehearsal](docs/audits/2026-11-27-v029-no-install-rehearsal.md)
+   identified what changed, the recorded acceptance status, and the two failures to inspect.
+   Stage 2 stays in maintenance. Reopen feature work when a specific blocker is reproducible.
+4. **Stage 3 adoption decision.** Independent usefulness and repeat use remain unmeasured.
    No participant contact or personal testing is initiated. A limited beta requires a separately
    authorized plan and genuine observations; constructed checks supply no validation credit.
-4. **Stage 4 expansion decision.** Use recurring, demonstrated access or handoff constraints to
+5. **Stage 4 expansion decision.** Use recurring, demonstrated access or handoff constraints to
    scope private access, sharing, retention or integrations. These remain gated options.
 
 The owner asked for a fresh project review and movement to the next roadmap priority on

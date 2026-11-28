@@ -35,7 +35,8 @@ The existing private **0.2.9.dev0** candidate produced these snapshots from sour
 `62eb1fdcb25c2b63d74acd26cdba06c8556537c0cda5d78022cfc1a3a86ad1ef`.
 The recorded wheel's 108 core/UI Python files were compared with that exact Git
 source during this integration. The candidate and its package bytes were not rebuilt.
-The public evaluation package remains [v0.2.8](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8).
+See the [evaluation guide](../../evaluation-guide.md#published-and-development-packages) for the
+separately published evaluation package.
 
 `source/` retains the exact original reports as `.html.txt`, original producer record,
 CI manifests, raw synthetic check results and two saved reviews. All JSON inputs pass
