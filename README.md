@@ -51,8 +51,7 @@ recorded offsets or missing timezones remain explicit. See the
 source, wheel, source archive, checksum manifest and the completed anonymous-download and
 fresh-install checks. See the
 [release-source CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44805911264)
-for the automated engineering checks. Current source is **0.2.9**, prepared for publication
-review and unpublished.
+for the automated engineering checks. Current source is **0.2.10.dev0**, unpublished.
 Public v0.2.7 and v0.2.6 remain earlier verified releases. The private **0.2.7.dev0** candidate
 remains historical and unpublished.
 [PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed the permanent
@@ -214,52 +213,50 @@ only explicit success as passing.
 Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
 for the tested Python versions, platform limits, and contributor setup.
 
-**Current source/package version: 0.2.9**, unpublished final-version preparation. Published v0.2.8
-comes from `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`. The
-[v0.2.8 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) lists
-`scopeproof-0.2.8-py3-none-any.whl`, `scopeproof-0.2.8.tar.gz`, `SHA256SUMS.txt`, and completed
-public-download verification. Use it as the default evaluation download. Earlier verified
-downloads are available from the [v0.2.7 Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7)
-and the v0.2.6 fallback below. A later source checkout is separate from the immutable release.
-The historical private `0.2.7.dev0` candidate is a different artifact and remains unpublished.
-The [v0.2.9 publication-review notes](docs/releases/v0.2.9-publication-review.md) describe the
-fresh final-version preparation and its separate publication decision.
+**Current source/package version: 0.2.10.dev0**, unpublished. Published v0.2.9
+comes from `33e4a714305b6fadfbe503484eda06215a04c6c2`. The
+[v0.2.9 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.9) lists
+`scopeproof-0.2.9-py3-none-any.whl`, `scopeproof-0.2.9.tar.gz`, and `SHA256SUMS.txt`.
+See the [completed public-download verification](docs/evaluation-guide.md#what-is-verified-and-what-is-missing).
+Use v0.2.9 as the default evaluation download. Earlier verified downloads are available from
+the [Releases page](https://github.com/YuzeJ21/Scope-Proof/releases) and the v0.2.6 fallback below.
+A development checkout has its own version and is separate from the v0.2.9 release.
 
 No personal testing or qualifying review is required to download or evaluate the package.
 See the [documentation map](docs/README.md) for related guides and dated records.
 
-### Published v0.2.8
+### Published v0.2.9
 
 After checking the release entry above, install in a fresh environment:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.8/scopeproof-0.2.8-py3-none-any.whl
-curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.8/SHA256SUMS.txt
+curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.9/scopeproof-0.2.9-py3-none-any.whl
+curl -fLO https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.9/SHA256SUMS.txt
 ```
 
 Select the wheel entry from the published manifest and use the command for your platform:
 
 ```bash
 # macOS
-grep " scopeproof-0.2.8-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && shasum -a 256 -c wheel.SHA256
+grep " scopeproof-0.2.9-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && shasum -a 256 -c wheel.SHA256
 
 # Linux
-grep " scopeproof-0.2.8-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && sha256sum -c wheel.SHA256
+grep " scopeproof-0.2.9-py3-none-any.whl$" SHA256SUMS.txt > wheel.SHA256 && sha256sum -c wheel.SHA256
 ```
 
 Continue only after the checksum check succeeds:
 
 ```bash
-python -m pip install ./scopeproof-0.2.8-py3-none-any.whl
+python -m pip install ./scopeproof-0.2.9-py3-none-any.whl
 python -m pip check
 scopeproof --version
 scopeproof benchmark
 scopeproof-web --host 127.0.0.1 --port 8501
 ```
 
-The launcher must report version `0.2.8`. Use an archive linked from its release record.
+The launcher must report version `0.2.9`. Use an archive linked from its release record.
 
 ### Verified v0.2.6 fallback
 
@@ -318,7 +315,7 @@ See the [release verification](docs/releases/v0.2.5-public-verification.md).
 
 ### Public PR CLI workflow
 
-The examples use the installed v0.2.8 CLI from the publicly verified release; the
+The examples use the installed v0.2.9 CLI from the publicly verified release; the
 verified v0.2.6 fallback also supports these commands. In a source checkout, prefix `scopeproof` with
 `uv run` after [locked source setup](docs/development-environment.md#create-or-refresh-the-environment).
 The CLI reads public PRs and runs the deterministic review without starting Streamlit.

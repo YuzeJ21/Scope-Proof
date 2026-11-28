@@ -313,8 +313,8 @@ def prepare_candidate(
         "This is constructed engineering evidence, not signed provenance, customer validation "
         "or a beta. The source-install probe inherits tested CI runtime dependencies; browser "
         "journeys use their own fresh environments. Current/future dependency combinations "
-        "are not universally verified. Public v0.2.8 remains current. No publication, tag or "
-        "deployment follows from this packet. Publication requires a separate decision and "
+        "are not universally verified. GitHub Releases records public downloads. No publication, "
+        "tag or deployment follows from this packet. Publication requires a separate decision and "
         "public-download verification. Development archives must never be renamed to a final "
         "version.\n",
         encoding="utf-8",

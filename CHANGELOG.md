@@ -9,14 +9,13 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-No additional changes are recorded beyond the unpublished final-version preparation below.
+Development source is `0.2.10.dev0`. No additional product changes are recorded.
 
-## 0.2.9 — Unpublished final-version preparation
+## 0.2.9 — Evaluation release
 
-Source/package identity: `0.2.9`. Prepared for publication review; no v0.2.9 tag, Release or
-public-download verification is created by this work. Public v0.2.8 remains the default evaluation
-download. The [publication-review packet](docs/releases/v0.2.9-publication-review.md) records the
-release notes, verification boundaries and remaining publication decision. The completed
+[Published v0.2.9](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.9) from
+`33e4a714305b6fadfbe503484eda06215a04c6c2`. See the [public verification record](docs/evaluation-guide.md#what-is-verified-and-what-is-missing)
+for anonymous downloads, exact hashes and fresh installation results. The earlier
 `0.2.9.dev0` candidates retain their own original versions and archive identities.
 
 Changes since public v0.2.8:
