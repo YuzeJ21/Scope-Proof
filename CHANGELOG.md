@@ -9,7 +9,17 @@ its linked release entry for the exact published source and assets.
 
 ## Unreleased
 
-Current development source declares `0.2.9.dev0`, unpublished.
+No additional changes are recorded beyond the unpublished final-version preparation below.
+
+## 0.2.9 — Unpublished final-version preparation
+
+Source/package identity: `0.2.9`. Prepared for publication review; no v0.2.9 tag, Release or
+public-download verification is created by this work. Public v0.2.8 remains the default evaluation
+download. The [publication-review packet](docs/releases/v0.2.9-publication-review.md) records the
+release notes, verification boundaries and remaining publication decision. The completed
+`0.2.9.dev0` candidates retain their own original versions and archive identities.
+
+Changes since public v0.2.8:
 
 - Inspect previous/current reported outcomes directly in the workbench's CI run comparison,
   including empty or absent run assertions and changes that retain an effective test result.

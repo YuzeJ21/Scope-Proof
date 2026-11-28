@@ -14,15 +14,17 @@ import pytest
 from pydantic import ValidationError
 
 from scopeproof_core.build_identity import core_source_identity
+from scopeproof_core.version import __version__
 
 
 @pytest.fixture
-def candidate_inputs(tmp_path):
+def candidate_inputs(tmp_path, request):
+    fixture_version = getattr(request, "param", __version__)
     source = tmp_path / "source"
     source.mkdir()
     files = {
         "scopeproof_core/__init__.py": b"value = 1\n",
-        "scopeproof_core/version.py": b'__version__ = "0.2.9.dev0"\n',
+        "scopeproof_core/version.py": f'__version__ = "{fixture_version}"\n'.encode(),
         "apps/__init__.py": b"value = 2\n",
         "scripts/recipe.py": b"recipe = 3\n",
         "tests/fixture.py": b"fixture = 4\n",
@@ -45,17 +47,17 @@ def candidate_inputs(tmp_path):
         subprocess.run(["git", "-C", str(source), *args], check=True, capture_output=True)
     dist = tmp_path / "dist"
     dist.mkdir()
-    wheel = dist / "scopeproof-0.2.9.dev0-py3-none-any.whl"
-    metadata = b"Metadata-Version: 2.1\nName: scopeproof\nVersion: 0.2.9.dev0\n"
+    wheel = dist / f"scopeproof-{fixture_version}-py3-none-any.whl"
+    metadata = f"Metadata-Version: 2.1\nName: scopeproof\nVersion: {fixture_version}\n".encode()
     with ZipFile(wheel, "w") as archive:
         for name, data in files.items():
             if name.startswith(("scopeproof_core/", "apps/")):
                 archive.writestr(name, data)
-        archive.writestr("scopeproof-0.2.9.dev0.dist-info/METADATA", metadata)
-    sdist = dist / "scopeproof-0.2.9.dev0.tar.gz"
+        archive.writestr(f"scopeproof-{fixture_version}.dist-info/METADATA", metadata)
+    sdist = dist / f"scopeproof-{fixture_version}.tar.gz"
     with tarfile.open(sdist, "w:gz") as archive:
         for name, data in {**files, "PKG-INFO": metadata}.items():
-            info = tarfile.TarInfo("scopeproof-0.2.9.dev0/" + name)
+            info = tarfile.TarInfo(f"scopeproof-{fixture_version}/" + name)
             info.size = len(data)
             archive.addfile(info, io.BytesIO(data))
     rebuilt = tmp_path / "rebuilt"
@@ -75,7 +77,7 @@ def candidate_inputs(tmp_path):
         )
     probe = tmp_path / "probe.json"
     probe.write_text(json.dumps({
-        "version": "0.2.9.dev0",
+        "version": fixture_version,
         "core_sha256": core_source_identity(source / "scopeproof_core").sha256,
         "wheel_sha256": sha256(wheel.read_bytes()).hexdigest(),
         "isolated_package_paths": True, "benchmark_passed": True,
@@ -104,6 +106,8 @@ def test_packet_binds_archives_source_tests_and_installed_wheels(candidate_input
     output = args["output"]
     read_back = CandidateManifest.model_validate_json((output / "candidate.json").read_bytes())
     assert read_back == manifest
+    assert manifest.version == __version__
+    assert manifest.publication == "unpublished"
     assert manifest.source_kind == "main"
     assert manifest.workflow_event_commit == manifest.source_commit
     assert manifest.source_tests.passed == manifest.browser_tests.passed == 2
@@ -123,8 +127,61 @@ def test_packet_binds_archives_source_tests_and_installed_wheels(candidate_input
     assert "unpublished" in (output / "README.md").read_text().lower()
     assert set(p.name for p in output.iterdir()) == {
         "candidate.json", "README.md", "SHA256SUMS.txt",
-        "scopeproof-0.2.9.dev0-py3-none-any.whl", "scopeproof-0.2.9.dev0.tar.gz",
+        f"scopeproof-{__version__}-py3-none-any.whl", f"scopeproof-{__version__}.tar.gz",
     }
+
+
+@pytest.mark.parametrize("candidate_inputs", ["0.2.9.dev0"], indirect=True)
+def test_final_builder_refuses_development_archives_without_changing_inputs(candidate_inputs):
+    from scripts.prepare_evaluation_candidate import prepare_candidate
+
+    original = {path: path.read_bytes() for path in candidate_inputs["dist"].iterdir()}
+    with pytest.raises(ValueError, match="archive"):
+        prepare_candidate(**candidate_inputs)
+    assert not candidate_inputs["output"].exists()
+    assert {path: path.read_bytes() for path in candidate_inputs["dist"].iterdir()} == original
+
+
+@pytest.mark.parametrize("kind", ["wheel", "sdist"])
+def test_final_archive_headers_cannot_keep_a_development_version(candidate_inputs, kind):
+    from scripts.prepare_evaluation_candidate import prepare_candidate
+
+    args = candidate_inputs
+    expected = f"Version: {__version__}\n".encode()
+    old = b"Version: 0.2.9.dev0\n"
+    if kind == "wheel":
+        wheel, = args["dist"].glob("*.whl")
+        with ZipFile(wheel) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        metadata = f"scopeproof-{__version__}.dist-info/METADATA"
+        assert expected in entries[metadata]
+        entries[metadata] = entries[metadata].replace(expected, old)
+        with ZipFile(wheel, "w") as archive:
+            for name, raw in entries.items():
+                archive.writestr(name, raw)
+        for directory in (args["rebuilt_dist"], args["installed_wheel_dir"], args["browser_root"]):
+            for tested in directory.rglob("*.whl"):
+                tested.write_bytes(wheel.read_bytes())
+        probe = json.loads(args["probe"].read_bytes())
+        probe["wheel_sha256"] = sha256(wheel.read_bytes()).hexdigest()
+        args["probe"].write_text(json.dumps(probe))
+    else:
+        sdist, = args["dist"].glob("*.tar.gz")
+        with tarfile.open(sdist) as archive:
+            members = [(member, archive.extractfile(member).read())
+                       for member in archive.getmembers()]
+        with tarfile.open(sdist, "w:gz") as archive:
+            for member, raw in members:
+                if member.name == f"scopeproof-{__version__}/PKG-INFO":
+                    assert expected in raw
+                    raw = raw.replace(expected, old)
+                    member.size = len(raw)
+                archive.addfile(member, io.BytesIO(raw))
+    original = {path: path.read_bytes() for path in args["dist"].iterdir()}
+    with pytest.raises(ValueError, match="archive metadata differs"):
+        prepare_candidate(**args)
+    assert not args["output"].exists()
+    assert {path: path.read_bytes() for path in args["dist"].iterdir()} == original
 
 
 @pytest.mark.parametrize("binding", ["rebuilt_dist", "installed_wheel_dir", "browser_root"])
@@ -228,7 +285,7 @@ def test_source_archive_cannot_hide_an_extra_package_python_file(candidate_input
     with tarfile.open(path, "w:gz") as archive:
         for member, data in members:
             archive.addfile(member, io.BytesIO(data))
-        extra = tarfile.TarInfo("scopeproof-0.2.9.dev0/apps/unexpected.py")
+        extra = tarfile.TarInfo(f"scopeproof-{__version__}/apps/unexpected.py")
         extra.size = 4
         archive.addfile(extra, io.BytesIO(b"x=1\n"))
     with pytest.raises(ValueError, match="inventory"):

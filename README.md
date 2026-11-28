@@ -51,7 +51,8 @@ recorded offsets or missing timezones remain explicit. See the
 source, wheel, source archive, checksum manifest and the completed anonymous-download and
 fresh-install checks. See the
 [release-source CI](https://github.com/YuzeJ21/Scope-Proof/actions/runs/44805911264)
-for the automated engineering checks. Current development source is **0.2.9.dev0**, unpublished.
+for the automated engineering checks. Current source is **0.2.9**, prepared for publication
+review and unpublished.
 Public v0.2.7 and v0.2.6 remain earlier verified releases. The private **0.2.7.dev0** candidate
 remains historical and unpublished.
 [PR #272](https://github.com/YuzeJ21/Scope-Proof/pull/272) completed the permanent
@@ -213,7 +214,7 @@ only explicit success as passing.
 Python 3.11 is the declared minimum. See the [supported environment and engineering coverage](docs/development-environment.md)
 for the tested Python versions, platform limits, and contributor setup.
 
-**Current source/package version: 0.2.9.dev0**, unpublished. Published v0.2.8
+**Current source/package version: 0.2.9**, unpublished final-version preparation. Published v0.2.8
 comes from `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`. The
 [v0.2.8 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) lists
 `scopeproof-0.2.8-py3-none-any.whl`, `scopeproof-0.2.8.tar.gz`, `SHA256SUMS.txt`, and completed
@@ -221,6 +222,8 @@ public-download verification. Use it as the default evaluation download. Earlier
 downloads are available from the [v0.2.7 Release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7)
 and the v0.2.6 fallback below. A later source checkout is separate from the immutable release.
 The historical private `0.2.7.dev0` candidate is a different artifact and remains unpublished.
+The [v0.2.9 publication-review notes](docs/releases/v0.2.9-publication-review.md) describe the
+fresh final-version preparation and its separate publication decision.
 
 No personal testing or qualifying review is required to download or evaluate the package.
 See the [documentation map](docs/README.md) for related guides and dated records.

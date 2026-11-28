@@ -1,6 +1,6 @@
 # Reproducible development environment
 
-Current development source/package is **0.2.9.dev0**, unpublished. The default evaluation
+Current source/package is **0.2.9**, prepared for publication review and unpublished. The default evaluation
 download is published, publicly verified **v0.2.8** from `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`.
 Its [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) identifies final
 source, wheel, source archive, checksum manifest and completed public-download verification.

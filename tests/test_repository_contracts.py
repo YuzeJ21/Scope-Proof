@@ -28,7 +28,7 @@ from scopeproof_core.version import __version__
 # Retain the earlier/fallback identity used by archived participant documents.
 PUBLIC_RELEASE_VERSION = "0.2.6"
 PUBLIC_RELEASE_TAG = "v0.2.6"
-SOURCE_VERSION = "0.2.9.dev0"
+SOURCE_VERSION = "0.2.9"
 RELEASE_BUILD_VERSION = "0.2.8"
 RELEASE_SOURCE_SHA = "7c5603fc59b1e33b199a4f9b3219f11b47eeec7d"
 RELEASE_BUILD_TAG = "v0.2.8"
@@ -1801,8 +1801,29 @@ def test_active_docs_distinguish_post_v023_engineering_from_release_and_stage_pr
     evaluation = Path("docs/evaluation-guide.md").read_text(encoding="utf-8")
     for active_surface in (readme, roadmap, evaluation):
         assert PUBLIC_RELEASE_TAG in active_surface
-        assert SOURCE_VERSION in active_surface
         assert "v0.2.5-public-verification.md" in active_surface
+    current_surfaces = {
+        "readme": readme, "roadmap": roadmap, "evaluation": evaluation,
+        "environment": environment,
+        "stage2": Path("docs/commercialization/stage2-readiness-packet.md").read_text(
+            encoding="utf-8",
+        ),
+        "design_partner": Path("docs/commercialization/design-partner-sprint.md").read_text(
+            encoding="utf-8",
+        ),
+        "documentation_map": Path("docs/README.md").read_text(encoding="utf-8"),
+    }
+    current_versions = {}
+    for name, surface in current_surfaces.items():
+        match = re.search(
+            r"Current(?: development)? source(?:/package)?(?: version)?"
+            r"(?: is| reports|:)?\s+[*`]*(\d+\.\d+\.\d+(?:\.dev\d+)?)"
+            r"(?=[*`,\s])",
+            " ".join(surface.split()),
+        )
+        assert match is not None, name
+        current_versions[name] = match.group(1)
+    assert current_versions == dict.fromkeys(current_surfaces, SOURCE_VERSION)
     for earlier_surface in (environment, status):
         assert "v0.2.4-public-verification.md" in earlier_surface
     for dated_surface in (platform, market):
