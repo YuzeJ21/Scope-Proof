@@ -28,12 +28,12 @@ from scopeproof_core.version import __version__
 # Retain the earlier/fallback identity used by archived participant documents.
 PUBLIC_RELEASE_VERSION = "0.2.6"
 PUBLIC_RELEASE_TAG = "v0.2.6"
-SOURCE_VERSION = "0.2.9"
-RELEASE_BUILD_VERSION = "0.2.8"
-RELEASE_SOURCE_SHA = "7c5603fc59b1e33b199a4f9b3219f11b47eeec7d"
-RELEASE_BUILD_TAG = "v0.2.8"
-RELEASE_BUILD_WHEEL_FILENAME = "scopeproof-0.2.8-py3-none-any.whl"
-RELEASE_BUILD_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.8"
+SOURCE_VERSION = "0.2.10.dev0"
+RELEASE_BUILD_VERSION = "0.2.9"
+RELEASE_SOURCE_SHA = "33e4a714305b6fadfbe503484eda06215a04c6c2"
+RELEASE_BUILD_TAG = "v0.2.9"
+RELEASE_BUILD_WHEEL_FILENAME = "scopeproof-0.2.9-py3-none-any.whl"
+RELEASE_BUILD_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.9"
 PUBLIC_RELEASE_WHEEL_FILENAME = "scopeproof-0.2.6-py3-none-any.whl"
 PUBLIC_RELEASE_DOWNLOAD_ROOT = "https://github.com/YuzeJ21/Scope-Proof/releases/download/v0.2.6"
 V023_RELEASE_WHEEL = "scopeproof-0.2.3-py3-none-any.whl"
@@ -713,6 +713,7 @@ def _assert_published_version_matches_repository(*, repository: Path, current_ve
         "0.2.3": "v0.2.3", "0.2.4": "v0.2.4", "0.2.5": "v0.2.5", "0.2.6": "v0.2.6",
         "0.2.7": "v0.2.7",
         "0.2.8": "v0.2.8",
+        "0.2.9": "v0.2.9",
     }
     published_tag = published_final_tags.get(current_version)
 
@@ -825,7 +826,7 @@ def test_divergent_tree_cannot_reuse_a_published_final_version() -> None:
 
 
 @pytest.mark.parametrize(
-    "final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7", "0.2.8"]
+    "final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7", "0.2.8", "0.2.9"]
 )
 def test_published_final_contract_rejects_dirty_tracked_tree(
     tmp_path: Path, final_version: str
@@ -858,7 +859,7 @@ def test_published_final_contract_rejects_dirty_tracked_tree(
 
 
 @pytest.mark.parametrize(
-    "final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7", "0.2.8"]
+    "final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7", "0.2.8", "0.2.9"]
 )
 def test_published_final_contract_rejects_untracked_package_input(
     tmp_path: Path, final_version: str
@@ -896,7 +897,7 @@ def test_published_final_contract_rejects_untracked_package_input(
 
 
 @pytest.mark.parametrize(
-    "final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7", "0.2.8"]
+    "final_version", ["0.2.3", "0.2.4", "0.2.5", "0.2.6", "0.2.7", "0.2.8", "0.2.9"]
 )
 def test_published_final_contract_rejects_ignored_force_included_input(
     tmp_path: Path,
@@ -2561,13 +2562,14 @@ def test_public_pages_site_and_captioned_demo_are_truthful_and_self_contained() 
     assert html.count("<h1") == 1
     assert disclosure in html
     assert disclosure in transcript
-    assert f"published {RELEASE_BUILD_TAG} workflow" in transcript
+    assert "published v0.2.8 workflow" in transcript
     assert "offline CI snapshot of externally reported check results" in html
     assert "Confirm intent → Inspect evidence → Record decisions → Share → Revisit" in html
-    assert f"Published evaluation download: {RELEASE_BUILD_TAG}" in html
-    assert f"View {RELEASE_BUILD_TAG} release" in html
-    assert f"{PUBLIC_RELEASES_INDEX}/tag/{RELEASE_BUILD_TAG}" in parser.links
-    assert f"https://github.com/YuzeJ21/Scope-Proof/commit/{RELEASE_SOURCE_SHA}" in parser.links
+    assert "Published evaluation download: v0.2.8" in html
+    assert "View v0.2.8 release" in html
+    assert f"{PUBLIC_RELEASES_INDEX}/tag/v0.2.8" in parser.links
+    site_source = "7c5603fc59b1e33b199a4f9b3219f11b47eeec7d"
+    assert f"https://github.com/YuzeJ21/Scope-Proof/commit/{site_source}" in parser.links
     assert "Development source: 0.2.7.dev0, unpublished" not in html
     assert (
         "https://github.com/YuzeJ21/Scope-Proof/blob/main/docs/evaluation-guide.md"

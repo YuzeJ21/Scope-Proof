@@ -4,8 +4,8 @@ Use current operating documents for product decisions. Historical records are im
 snapshots: they preserve what was observed at a named commit or release and must not be read as the
 current product state.
 
-Current entry points identify the completed, publicly verified v0.2.8 release from
-`7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`. The manual Pages workflow records separate website publication.
+Current entry points identify the completed, publicly verified v0.2.9 release from
+`33e4a714305b6fadfbe503484eda06215a04c6c2`. The manual Pages workflow records separate website publication.
 PR #276 completed the no-install constructed HTML repository download; its actual public
 v0.2.6 exporter provenance, unchanged input and offline checks remain intact. PR #277 completed
 the bounded saved-history event-scan repair at main `944c791`; see the
@@ -20,10 +20,10 @@ and controlled signal-loss evidence remain distinct; the exact natural Streamlit
 remains unproven. See the [roadmap](../ROADMAP.md),
 [observer assessment](audits/2026-11-07-browser-observer-reopen.md) and
 [evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md).
-Current source/package is **0.2.9**, prepared for publication review and unpublished. The
-[v0.2.8 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) identifies the
-published default evaluation download, final source, wheel, source archive, checksum manifest
-and completed public-download verification. Earlier verified **v0.2.6** remains at
+Current source/package is **0.2.10.dev0**, unpublished. The
+[v0.2.9 Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.9) identifies the
+published default evaluation download, final source, wheel, source archive and checksum manifest.
+The [evaluation guide](evaluation-guide.md#what-is-verified-and-what-is-missing) records public verification. Earlier verified **v0.2.6** remains at
 `68f5c7af9cdaafe97ab72c1a7f6c8784f65a44e1`
 with its [Release record](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6).
 The private `0.2.7.dev0` candidate remains historical and unpublished; it does not establish final
@@ -37,7 +37,7 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
   one constructed workflow, exact-baseline engineering evidence and remaining limits.
 - [Two-build offline CI walkthrough](examples/ci-handoff/README.md) — reuse the existing
   development candidate's exact reports and inputs, see the next reviewer action, and inspect
-  permanent provenance and packaging checks. The package release remains v0.2.8.
+  permanent provenance and packaging checks. The package release remains v0.2.9.
 - [No-install constructed HTML report](examples/offline-handoff/README.md) — download before setup,
   expected Action required, simulation boundaries, provenance and regeneration.
 - [November 23 product and market assessment](commercialization/product-direction-2026-11-23.md) —
@@ -48,7 +48,7 @@ for evaluation distribution. Begin with the roadmap's finish line before startin
 - [Evaluation-page assessment](audits/2026-11-08-evaluation-page-alignment.md) — current-release routing,
   saved-decision positioning and the earlier source-only preview scope. The later authorized
   [Pages publication](https://github.com/YuzeJ21/Scope-Proof/actions/runs/42494611672) is complete.
-- [v0.2.8 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) —
+- [v0.2.9 published evaluation release](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.9) —
   fixed source, three public assets and completed public-download verification.
 - [Historical-analysis revision-label assessment](audits/2026-11-07-historical-report-revision.md) —
   completed PR #273 CSV/HTML display correction and retained current-state export guards.

@@ -7,7 +7,7 @@ runtime correctness, adoption, or beta readiness.
 
 This roadmap separates owner-led productization from external validation. Stage 1 is
 `closed_not_pursued_by_owner` with all external-evidence counts at zero. Stage 2 is
-`owner_led_productization_active`, with v0.2.8 published and publicly verified. Current entry
+`owner_led_productization_active`, with v0.2.9 published and publicly verified. Current entry
 points identify that release. The separately authorized website publication uses the manual
 Pages workflow.
 These engineering outcomes do not create customer validation. Stage 3 is dormant and gated.
@@ -18,8 +18,9 @@ The owner is not pursuing personal testing or qualifying participant reviews.
 ## Current priorities — 2026-11-27
 
 Stage 2's CI handoff source is integrated through #308. Its main CI passed and retained the
-consolidated `0.2.9.dev0` candidate. The current authorized goal prepares fresh final-version
-`0.2.9` packages and release notes for publication review; publication remains a separate decision.
+consolidated `0.2.9.dev0` candidate. PR #309 prepared the final-version source.
+[Published v0.2.9](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.9) now has verified anonymous downloads
+and fresh installs. The site was not redeployed.
 The [current product and market assessment](docs/commercialization/product-direction-2026-11-23.md)
 compares this workflow with native GitHub controls, ticket-aware code review, and managed test
 traceability. The [constructed two-build rehearsal](docs/evaluation-guide.md#open-simulated-ci-status-from-a-local-folder)
@@ -29,14 +30,14 @@ reviewer opens the workbench to export each snapshot and checks each criterion s
 
 | Priority | Deliverable | Acceptance criteria |
 | --- | --- | --- |
-| P0 · Implemented on development source | [Export an exact-build CI snapshot from the CLI](docs/evaluation-guide.md#export-a-ci-snapshot-from-the-cli). | Use a named saved review and bounded local manifest. Match the confirmed criteria and reviewed commit, preserve both input files, and write a new offline HTML report atomically. Refuse pending reviews, incompatible inputs and existing outputs. Verify A, initial B and targeted B with an installed wheel. |
-| P1 · Implemented on development source | Show CI follow-up in the workbench and offline snapshot. | Use the same projection for both. Show failing, skipped, stale and unknown tests once each, with all mapped criterion IDs and cited runs. Identify unmapped criteria. Keep the detailed view, externally supplied provenance, and existing gate and saved state. |
-| P2 · Maintained example on development source | [Inspect the two-build workflow before installing](docs/examples/ci-handoff/README.md). | Reuse the completed private candidate's exact reports and constructed inputs. Show both exact commits, the targeted rerun, next reviewer actions and original producer identity. Verify reproducible packaging and offline desktop/phone reading. Keep the v0.2.6 example and R-002 intact. Package and site publication remain separate. |
-| P3 · Implemented on development source | [Compare supplied CI context for one reviewed commit](docs/evaluation-guide.md#compare-two-ci-contexts-for-the-same-reviewed-commit). | An explicit previous-manifest flag produces one offline comparison of effective results, mappings and run records. Both inputs match the same confirmed saved review and exact head. Preserve input bytes, decisions and gate; cite both digests; distinguish retained results from introduced or modified assertions. Verify source, installed CLI and offline browser behavior. |
-| P4 · Implemented on development source | [Compare CI contexts in the workbench](docs/evaluation-guide.md#compare-from-the-workbench). | Explicitly compare the displayed current manifest with an uploaded previous manifest using the same core. Bind downloads to both exact inputs and active review context, recheck configured inputs before/after rendering, and preserve changed-source, saved-record and pending-draft guards. Verify source, Windows and installed browser behavior. |
+| P0 · Shipped in v0.2.9 | [Export an exact-build CI snapshot from the CLI](docs/evaluation-guide.md#export-a-ci-snapshot-from-the-cli). | Use a named saved review and bounded local manifest. Match the confirmed criteria and reviewed commit, preserve both input files, and write a new offline HTML report atomically. Refuse pending reviews, incompatible inputs and existing outputs. Verify A, initial B and targeted B with an installed wheel. |
+| P1 · Shipped in v0.2.9 | Show CI follow-up in the workbench and offline snapshot. | Use the same projection for both. Show failing, skipped, stale and unknown tests once each, with all mapped criterion IDs and cited runs. Identify unmapped criteria. Keep the detailed view, externally supplied provenance, and existing gate and saved state. |
+| P2 · Maintained no-install example | [Inspect the two-build workflow before installing](docs/examples/ci-handoff/README.md). | Reuse the completed private candidate's exact reports and constructed inputs. Show both exact commits, the targeted rerun, next reviewer actions and original producer identity. Verify reproducible packaging and offline desktop/phone reading. Keep the v0.2.6 example and R-002 intact. Package and site publication remain separate. |
+| P3 · Shipped in v0.2.9 | [Compare supplied CI context for one reviewed commit](docs/evaluation-guide.md#compare-two-ci-contexts-for-the-same-reviewed-commit). | An explicit previous-manifest flag produces one offline comparison of effective results, mappings and run records. Both inputs match the same confirmed saved review and exact head. Preserve input bytes, decisions and gate; cite both digests; distinguish retained results from introduced or modified assertions. Verify source, installed CLI and offline browser behavior. |
+| P4 · Shipped in v0.2.9 | [Compare CI contexts in the workbench](docs/evaluation-guide.md#compare-from-the-workbench). | Explicitly compare the displayed current manifest with an uploaded previous manifest using the same core. Bind downloads to both exact inputs and active review context, recheck configured inputs before/after rendering, and preserve changed-source, saved-record and pending-draft guards. Verify source, Windows and installed browser behavior. |
 | P5 · Integrated in #308 | Explain changed CI run outcomes inline. | Show both reported outcome maps, preserve literal identifiers and deterministic ordering, distinguish empty maps from absent records, and explain outcome-only changes that retain an effective result. No saved decision or gate change. |
 | P6 · Completed in #308 | [Retain a consolidated unpublished evaluation candidate](docs/releases/v0.2.9-dev0-consolidated-candidate.md). | Build/rebuild wheel and source archive from the clean checkout. Require exact agreement with installed CLI and browser-fixture wheels, validated source inventories, passed test observations and an isolated source-wheel probe. Preserve a strict manifest, checksums and both archives; distinguish PR previews from the separately rebuilt main artifact. |
-| P7 · Final-version source preparation | [Prepare v0.2.9 for publication review](docs/releases/v0.2.9-publication-review.md). | Freshly build final-version archives, verify source/rebuilt/installed wheel bindings and all existing checks, and record exact main artifact identities and release notes in the PR. Keep publication separate and preserve development candidates. |
+| P7 · Published and publicly verified | [Prepare v0.2.9 for publication review](docs/releases/v0.2.9-publication-review.md). | Freshly build final-version archives, verify source/rebuilt/installed wheel bindings and all existing checks, and record exact main artifact identities and release notes in the PR. Keep publication separate and preserve development candidates. |
 | Gated · Independent use and private workflow design | Determine whether the handoff reduces work for a reviewer outside the project. | Require separate authorization and genuine independent use. A reviewer can explain what changed, decide what to check next and choose to reuse the workflow. Scope private access, provenance, retention and use rights only for a demonstrated need. |
 
 ### Next stages after this source milestone
@@ -45,11 +46,10 @@ reviewer opens the workbench to export each snapshot and checks each criterion s
    `f13370dbd1543dffde44e20b6441e0b376fa349b` passed full verification and retained the
    [0.2.9.dev0 packet](https://github.com/YuzeJ21/Scope-Proof/actions/runs/46085238542/artifacts/15239509431).
    Its archives, producer and recorded observations remain unchanged.
-2. **Final-version preparation and publication decision.** The owner asked to execute the
-   next goal: prepare fresh `0.2.9` archives and publication-review notes. Use the resulting-main
-   CI/artifact identities recorded in the preparation PR. Public v0.2.8 remains current;
-   tag/Release publication and public-download verification require a separate decision.
-   A development candidate must not be renamed to look like a final build.
+2. **Distribution completed.** The published, publicly verified `0.2.9` evaluation release
+   points to `33e4a714305b6fadfbe503484eda06215a04c6c2`. The [public verification record](docs/evaluation-guide.md#what-is-verified-and-what-is-missing)
+   binds all three downloads and both installed checks. Use the existing [no-install walkthrough](docs/examples/ci-handoff/README.md)
+   as the first evaluation path. Fix only friction reproduced against the released workflow.
 3. **Stage 3 adoption decision.** Independent usefulness and repeat use remain unmeasured.
    No participant contact or personal testing is initiated. A limited beta requires a separately
    authorized plan and genuine observations; constructed checks supply no validation credit.
@@ -380,11 +380,11 @@ is dated evidence; the current priorities and version guide above govern the pre
 
 ## Current operating decision
 
-**Current source/package version is 0.2.9**, unpublished final-version preparation. Final v0.2.8
-was published and
-publicly verified from `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`. Its
-[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) records final source,
-the wheel, source archive, checksum manifest and completed public verification. Earlier verified
+**Current source/package version is 0.2.10.dev0**, unpublished. The published, publicly verified
+`0.2.9` evaluation release comes from `33e4a714305b6fadfbe503484eda06215a04c6c2`. Its
+[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.9) records the final source and archives. The
+[evaluation guide](docs/evaluation-guide.md#what-is-verified-and-what-is-missing) records completed
+public-download and installation verification. Earlier verified
 [v0.2.7](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) and
 [v0.2.6](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) retain their own release
 sources and checks. The private `0.2.7.dev0` candidate remains historical and unpublished.
@@ -438,11 +438,10 @@ authenticated identity and integrations remain separately scoped options.
 
 ## Current release and validation state
 
-The GitHub Release record is authoritative for publication availability. Published `0.2.8` is
-publicly verified from `7c5603fc59b1e33b199a4f9b3219f11b47eeec7d`. Its
-[Release entry](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.8) records all three
-assets and completed automated public verification. Current source reports
-`0.2.9`, unpublished final-version preparation. Earlier verified
+The GitHub Release record is authoritative for publication availability.
+[Published v0.2.9](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.9) points to `33e4a714305b6fadfbe503484eda06215a04c6c2`.
+The [evaluation guide](docs/evaluation-guide.md#what-is-verified-and-what-is-missing) records
+completed public verification. Current source reports `0.2.10.dev0`, unpublished. Earlier verified
 [v0.2.7](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.7) and
 [v0.2.6](https://github.com/YuzeJ21/Scope-Proof/releases/tag/v0.2.6) retain their own sources and
 checks. ScopeProof v0.2.5 is published as an earlier verified release. Historical private
